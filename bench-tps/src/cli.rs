@@ -51,6 +51,7 @@ pub struct Config {
     pub target_slots_per_epoch: u64,
     pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
+    pub use_quic: bool,
 }
 
 impl Default for Config {
@@ -76,6 +77,7 @@ impl Default for Config {
             target_slots_per_epoch: 0,
             target_node: None,
             external_client_type: ExternalClientType::default(),
+            use_quic: false,
         }
     }
 }
@@ -264,6 +266,13 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .takes_value(false)
                 .help("Submit transactions with a TpuClient")
         )
+        .arg(
+            Arg::with_name("tpu_use_quic")
+                .long("tpu-use-quic")
+                .takes_value(false)
+                .help("Submit transactions via QUIC; only affects ThinClient (default) \
+                    or TpuClient sends"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -303,6 +312,10 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         args.external_client_type = ExternalClientType::TpuClient;
     } else if matches.is_present("rpc_client") {
         args.external_client_type = ExternalClientType::RpcClient;
+    }
+
+    if matches.is_present("tpu_use_quic") {
+        args.use_quic = true;
     }
 
     if let Some(addr) = matches.value_of("entrypoint") {
