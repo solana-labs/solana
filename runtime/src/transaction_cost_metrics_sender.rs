@@ -16,7 +16,8 @@ pub enum TransactionCostMetrics {
         signature_cost: u64,
         write_lock_cost: u64,
         data_bytes_cost: u64,
-        execution_cost: u64,
+        builtins_execution_cost: u64,
+        bpf_execution_cost: u64,
     },
 }
 
@@ -51,7 +52,8 @@ impl TransactionCostMetricsSender {
                     signature_cost: cost.signature_cost,
                     write_lock_cost: cost.write_lock_cost,
                     data_bytes_cost: cost.data_bytes_cost,
-                    execution_cost: cost.execution_cost,
+                    builtins_execution_cost: cost.builtins_execution_cost,
+                    bpf_execution_cost: cost.bpf_execution_cost,
                 })
                 .unwrap_or_else(|err| {
                     warn!(
@@ -92,7 +94,8 @@ impl TransactionCostMetricsService {
                     signature_cost,
                     write_lock_cost,
                     data_bytes_cost,
-                    execution_cost,
+                    builtins_execution_cost,
+                    bpf_execution_cost,
                 } => {
                     // report transaction cost details per slot|signature
                     datapoint_trace!(
@@ -102,7 +105,12 @@ impl TransactionCostMetricsService {
                         ("signature_cost", signature_cost as i64, i64),
                         ("write_lock_cost", write_lock_cost as i64, i64),
                         ("data_bytes_cost", data_bytes_cost as i64, i64),
-                        ("execution_cost", execution_cost as i64, i64),
+                        (
+                            "builtins_execution_cost",
+                            builtins_execution_cost as i64,
+                            i64
+                        ),
+                        ("bpf_execution_cost", bpf_execution_cost as i64, i64),
                     );
                 }
             }

@@ -253,7 +253,7 @@ impl QosService {
             Ordering::Relaxed,
         );
         self.metrics.stats.estimated_execute_cu.fetch_add(
-            batched_transaction_details.costs.batched_execute_cost,
+            batched_transaction_details.costs.batched_bpf_execute_cost,
             Ordering::Relaxed,
         );
 

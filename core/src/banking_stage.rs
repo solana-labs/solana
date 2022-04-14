@@ -334,7 +334,8 @@ pub struct BatchedTransactionCostDetails {
     pub batched_signature_cost: u64,
     pub batched_write_lock_cost: u64,
     pub batched_data_bytes_cost: u64,
-    pub batched_execute_cost: u64,
+    pub batched_builtins_execute_cost: u64,
+    pub batched_bpf_execute_cost: u64,
 }
 
 #[derive(Debug, Default)]
@@ -1461,8 +1462,14 @@ impl BankingStage {
                         cost.data_bytes_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_execute_cost,
-                        cost.execution_cost
+                        batched_transaction_details
+                            .costs
+                            .batched_builtins_execute_cost,
+                        cost.builtins_execution_cost
+                    );
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_bpf_execute_cost,
+                        cost.bpf_execution_cost
                     );
                 }
                 Err(transaction_error) => match transaction_error {
@@ -4367,21 +4374,21 @@ mod tests {
                 signature_cost: 1,
                 write_lock_cost: 2,
                 data_bytes_cost: 3,
-                execution_cost: 10,
+                bpf_execution_cost: 10,
                 ..TransactionCost::default()
             },
             TransactionCost {
                 signature_cost: 4,
                 write_lock_cost: 5,
                 data_bytes_cost: 6,
-                execution_cost: 20,
+                bpf_execution_cost: 20,
                 ..TransactionCost::default()
             },
             TransactionCost {
                 signature_cost: 7,
                 write_lock_cost: 8,
                 data_bytes_cost: 9,
-                execution_cost: 40,
+                bpf_execution_cost: 40,
                 ..TransactionCost::default()
             },
         ];
@@ -4411,7 +4418,7 @@ mod tests {
         );
         assert_eq!(
             expected_executions,
-            batched_transaction_details.costs.batched_execute_cost
+            batched_transaction_details.costs.batched_bpf_execute_cost
         );
     }
 
