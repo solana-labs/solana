@@ -5,8 +5,8 @@ import {
   NameRegistryState,
   getFilteredProgramAccounts,
   NAME_PROGRAM_ID,
+  performReverseLookup,
 } from "@bonfida/spl-name-service";
-import BN from "bn.js";
 import { useState, useEffect } from "react";
 import { Cluster, useCluster } from "providers/cluster";
 
@@ -55,7 +55,35 @@ export async function findOwnedNameAccountsForUser(
   return accounts.map((a) => a.publicKey);
 }
 
-export async function performReverseLookup(
+async function getDomainInfo(
+  nameAccount: PublicKey,
+  centralState: PublicKey,
+  connection: Connection
+) {
+  const domainKey = await getDomainKey(nameAccount.toBase58(), centralState);
+  let nameRegistry;
+  try {
+    const nameRegistryState = await NameRegistryState.retrieve(
+      connection,
+      domainKey
+    );
+    nameRegistry = nameRegistryState.registry;
+  } catch {}
+
+  if (!nameRegistry?.data) {
+    return;
+  }
+
+  const name = await performReverseLookup(connection, nameAccount);
+
+  return {
+    name: name + ".sol",
+    address: domainKey,
+    class: nameRegistry.class,
+  };
+}
+
+async function getMultipleDomainsInfo(
   connection: Connection,
   nameAccounts: PublicKey[]
 ): Promise<DomainInfo[]> {
@@ -64,28 +92,13 @@ export async function performReverseLookup(
     PROGRAM_ID
   );
 
-  const reverseLookupAccounts = await Promise.all(
-    nameAccounts.map((name) => getDomainKey(name.toBase58(), centralState))
+  const domainData = await Promise.all(
+    nameAccounts.map((nameAccount) =>
+      getDomainInfo(nameAccount, centralState, connection)
+    )
   );
 
-  let names = await NameRegistryState.retrieveBatch(
-    connection,
-    reverseLookupAccounts
-  );
-
-  return names
-    .map((name) => {
-      if (!name?.data) {
-        return undefined;
-      }
-      const nameLength = new BN(name!.data.slice(0, 4), "le").toNumber();
-      return {
-        name: name.data.slice(4, 4 + nameLength).toString() + ".sol",
-        address: name.address,
-        class: name.class,
-      };
-    })
-    .filter((e) => !!e) as DomainInfo[];
+  return domainData.filter((e) => !!e) as DomainInfo[];
 }
 
 export const useUserDomains = (
@@ -103,7 +116,7 @@ export const useUserDomains = (
       try {
         setLoading(true);
         const domains = await findOwnedNameAccountsForUser(connection, address);
-        let names = await performReverseLookup(connection, domains);
+        let names = await getMultipleDomainsInfo(connection, domains);
         names.sort((a, b) => {
           return a.name.localeCompare(b.name);
         });
