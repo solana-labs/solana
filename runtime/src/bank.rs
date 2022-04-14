@@ -5815,8 +5815,15 @@ impl Bank {
         self.rc
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
-
+        let mut m = Measure::start("stakes_cache.check_and_store");
         self.stakes_cache.check_and_store(pubkey, account);
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -6543,12 +6550,20 @@ impl Bank {
                 load_result,
                 execution_results[i].was_executed_successfully(),
             ) {
+                let mut m = Measure::start("stakes_cache.check_and_store");
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
                     (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter())
                 {
                     self.stakes_cache.check_and_store(pubkey, account);
                 }
+                m.stop();
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .stats
+                    .stakes_cache_check_and_store_us
+                    .fetch_add(m.as_us(), Relaxed);
             }
         }
     }
