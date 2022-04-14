@@ -369,6 +369,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                             "root",
                             "skip-rate",
                             "stake",
+                            "version",
                             "vote-account",
                         ])
                         .default_value("stake")
@@ -638,6 +639,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
         "skip-rate" => CliValidatorsSortOrder::SkipRate,
         "stake" => CliValidatorsSortOrder::Stake,
         "vote-account" => CliValidatorsSortOrder::VoteAccount,
+        "version" => CliValidatorsSortOrder::Version,
         _ => unreachable!(),
     };
 
