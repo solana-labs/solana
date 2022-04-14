@@ -2,7 +2,7 @@
 
 use {
     crate::{counter::CounterPoint, datapoint::DataPoint},
-    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    crossbeam_channel::{bounded, Receiver, RecvTimeoutError, Sender, TrySendError},
     gethostname::gethostname,
     lazy_static::lazy_static,
     log::*,
@@ -153,7 +153,8 @@ impl MetricsAgent {
         write_frequency: Duration,
         max_points_per_sec: usize,
     ) -> Self {
-        let (sender, receiver) = unbounded::<MetricsCommand>();
+        const MAX_METRIC_COMMAND_QUEUE_SIZE: usize = 2000;
+        let (sender, receiver) = bounded::<MetricsCommand>(MAX_METRIC_COMMAND_QUEUE_SIZE);
         thread::spawn(move || Self::run(&receiver, &writer, write_frequency, max_points_per_sec));
 
         Self { sender }
@@ -288,16 +289,26 @@ impl MetricsAgent {
         trace!("run: exit");
     }
 
+    fn send(&self, command: MetricsCommand) {
+        error!("haha command queue size: {}", self.sender.len());
+        match self.sender.try_send(command) {
+            Err(TrySendError::Full(_)) => {
+                warn!("metric queue full, point dropped.");
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                warn!("metric queue disconnected.");
+            }
+            // success
+            Ok(_) => {}
+        }
+    }
+
     pub fn submit(&self, point: DataPoint, level: log::Level) {
-        self.sender
-            .send(MetricsCommand::Submit(point, level))
-            .unwrap();
+        self.send(MetricsCommand::Submit(point, level));
     }
 
     pub fn submit_counter(&self, counter: CounterPoint, level: log::Level, bucket: u64) {
-        self.sender
-            .send(MetricsCommand::SubmitCounter(counter, level, bucket))
-            .unwrap();
+        self.send(MetricsCommand::SubmitCounter(counter, level, bucket))
     }
 
     pub fn flush(&self) {
