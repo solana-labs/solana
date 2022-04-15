@@ -306,7 +306,11 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         matches.value_of("identity").unwrap_or(""),
         &config.keypair_path,
     );
-    args.id = read_keypair_file(id_path).expect("could not parse identity path");
+    if let Ok(id) = read_keypair_file(id_path) {
+        args.id = id;
+    } else if matches.is_present("identity") {
+        panic!("could not parse identity path");
+    }
 
     if matches.is_present("tpu_client") {
         args.external_client_type = ExternalClientType::TpuClient;
