@@ -538,6 +538,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             sysvar_cache_override,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -6077,6 +6078,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             None,
+            None,
             Ok(()),
             |first_instruction_account, invoke_context| {
                 super::process_instruction(first_instruction_account, invoke_context)?;
@@ -6199,6 +6201,13 @@ mod tests {
                 Err(InstructionError::NotEnoughAccountKeys),
             ),
         ] {
+            let mut feature_set = FeatureSet::all_enabled();
+            if !is_feature_enabled {
+                feature_set.deactivate(
+                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+                );
+            }
+
             mock_process_instruction(
                 &id(),
                 Vec::new(),
@@ -6206,19 +6215,9 @@ mod tests {
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 None,
+                Some(Arc::new(feature_set)),
                 expected_result,
-                if is_feature_enabled {
-                    |first_instruction_account, invoke_context| {
-                        super::process_instruction(first_instruction_account, invoke_context)
-                    }
-                } else {
-                    |first_instruction_account, invoke_context| {
-                        let mut feature_set = FeatureSet::all_enabled();
-                        feature_set.deactivate(&feature_set::add_get_minimum_delegation_instruction_to_stake_program::id());
-                        invoke_context.feature_set = Arc::new(feature_set);
-                        super::process_instruction(first_instruction_account, invoke_context)
-                    }
-                },
+                super::process_instruction,
             );
         }
     }
