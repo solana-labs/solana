@@ -435,9 +435,10 @@ fn process_loader_upgradeable_instruction(
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let mut buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
 
-            if UpgradeableLoaderState::Uninitialized != buffer.state()? {
+            if UpgradeableLoaderState::Uninitialized != buffer.get_state()? {
                 ic_logger_msg!(log_collector, "Buffer account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
@@ -455,9 +456,10 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::Write { offset, bytes } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let buffer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
 
-            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
+            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.get_state()? {
                 if authority_address.is_none() {
                     ic_logger_msg!(log_collector, "Buffer is immutable");
                     return Err(InstructionError::Immutable); // TODO better error code
@@ -510,32 +512,28 @@ fn process_loader_upgradeable_instruction(
 
             // Verify Program account
 
-            let program = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(2),
-            )?;
-            if UpgradeableLoaderState::Uninitialized != program.state()? {
+            let program =
+                instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+            if UpgradeableLoaderState::Uninitialized != program.get_state()? {
                 ic_logger_msg!(log_collector, "Program account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
-            if program.data_len()? < UpgradeableLoaderState::program_len()? {
+            if program.get_data().len() < UpgradeableLoaderState::program_len()? {
                 ic_logger_msg!(log_collector, "Program account too small");
                 return Err(InstructionError::AccountDataTooSmall);
             }
-            if program.lamports()? < rent.minimum_balance(program.data_len()?) {
+            if program.get_lamports() < rent.minimum_balance(program.get_data().len()) {
                 ic_logger_msg!(log_collector, "Program account not rent-exempt");
                 return Err(InstructionError::ExecutableAccountNotRentExempt);
             }
-            let new_program_id = *program.unsigned_key();
+            let new_program_id = *program.get_key();
             drop(program);
 
             // Verify Buffer account
 
-            let buffer = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(3),
-            )?;
-            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
+            let buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.get_state()? {
                 if authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
@@ -548,13 +546,13 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Invalid Buffer account");
                 return Err(InstructionError::InvalidArgument);
             }
-            let buffer_key = *buffer.unsigned_key();
-            let buffer_lamports = buffer.lamports()?;
+            let buffer_key = *buffer.get_key();
+            let buffer_lamports = buffer.get_lamports();
             let buffer_data_offset = UpgradeableLoaderState::buffer_data_offset()?;
-            let buffer_data_len = buffer.data_len()?.saturating_sub(buffer_data_offset);
+            let buffer_data_len = buffer.get_data().len().saturating_sub(buffer_data_offset);
             let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
             let programdata_len = UpgradeableLoaderState::programdata_len(max_data_len)?;
-            if buffer.data_len()? < UpgradeableLoaderState::buffer_data_offset()?
+            if buffer.get_data().len() < UpgradeableLoaderState::buffer_data_offset()?
                 || buffer_data_len == 0
             {
                 ic_logger_msg!(log_collector, "Buffer account too small");
@@ -587,16 +585,13 @@ fn process_loader_upgradeable_instruction(
                 .is_active(&reduce_required_deploy_balance::id());
             if predrain_buffer {
                 // Drain the Buffer account to payer before paying for programdata account
-                let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-                payer
-                    .try_account_ref_mut()?
-                    .checked_add_lamports(buffer_lamports)?;
+                let mut payer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+                payer.checked_add_lamports(buffer_lamports)?;
                 drop(payer);
-                let buffer = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(3),
-                )?;
-                buffer.try_account_ref_mut()?.set_lamports(0);
+                let mut buffer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+                buffer.set_lamports(0);
             }
 
             let mut instruction = system_instruction::create_account(
@@ -632,60 +627,51 @@ fn process_loader_upgradeable_instruction(
             invoke_context.update_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
 
             // Update the ProgramData account and record the program bits
             {
-                let programdata = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(1),
-                )?;
+                let mut programdata =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
                 programdata.set_state(&UpgradeableLoaderState::ProgramData {
                     slot: clock.slot,
                     upgrade_authority_address: authority_key,
                 })?;
-                let mut programdata_account = programdata.try_account_ref_mut()?;
-                let dst_slice = programdata_account
-                    .data_as_mut_slice()
+                let dst_slice = programdata
+                    .get_data_mut()
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
                     )
                     .ok_or(InstructionError::AccountDataTooSmall)?;
-                let buffer = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(3),
-                )?;
-                let buffer_account = buffer.try_account_ref()?;
-                let src_slice = buffer_account
-                    .data()
+                let buffer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+                let src_slice = buffer
+                    .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
             }
 
             // Update the Program account
-            let program = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(2),
-            )?;
+            let mut program =
+                instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: programdata_key,
             })?;
-            program.try_account_ref_mut()?.set_executable(true);
+            program.set_executable(true);
             drop(program);
 
             if !predrain_buffer {
                 // Drain the Buffer account back to the payer
-                let payer = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-                payer
-                    .try_account_ref_mut()?
-                    .checked_add_lamports(buffer_lamports)?;
+                let mut payer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+                payer.checked_add_lamports(buffer_lamports)?;
                 drop(payer);
-                let buffer = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(3),
-                )?;
-                buffer.try_account_ref_mut()?.set_lamports(0);
+                let mut buffer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+                buffer.set_lamports(0);
             }
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
@@ -708,11 +694,9 @@ fn process_loader_upgradeable_instruction(
 
             // Verify Program account
 
-            let program = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(1),
-            )?;
-            if !program.executable()? {
+            let program =
+                instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+            if !program.is_executable() {
                 ic_logger_msg!(log_collector, "Program account not executable");
                 return Err(InstructionError::AccountNotExecutable);
             }
@@ -720,13 +704,13 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Program account not writeable");
                 return Err(InstructionError::InvalidArgument);
             }
-            if &program.owner()? != program_id {
+            if program.get_owner() != program_id {
                 ic_logger_msg!(log_collector, "Program account not owned by loader");
                 return Err(InstructionError::IncorrectProgramId);
             }
             if let UpgradeableLoaderState::Program {
                 programdata_address,
-            } = program.state()?
+            } = program.get_state()?
             {
                 if programdata_address != programdata_key {
                     ic_logger_msg!(log_collector, "Program and ProgramData account mismatch");
@@ -736,16 +720,14 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Invalid Program account");
                 return Err(InstructionError::InvalidAccountData);
             }
-            let new_program_id = *program.unsigned_key();
+            let new_program_id = *program.get_key();
             drop(program);
 
             // Verify Buffer account
 
-            let buffer = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(2),
-            )?;
-            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.state()? {
+            let buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+            if let UpgradeableLoaderState::Buffer { authority_address } = buffer.get_state()? {
                 if authority_address != authority_key {
                     ic_logger_msg!(log_collector, "Buffer and upgrade authority don't match");
                     return Err(InstructionError::IncorrectAuthority);
@@ -758,10 +740,10 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Invalid Buffer account");
                 return Err(InstructionError::InvalidArgument);
             }
-            let buffer_lamports = buffer.lamports()?;
+            let buffer_lamports = buffer.get_lamports();
             let buffer_data_offset = UpgradeableLoaderState::buffer_data_offset()?;
-            let buffer_data_len = buffer.data_len()?.saturating_sub(buffer_data_offset);
-            if buffer.data_len()? < UpgradeableLoaderState::buffer_data_offset()?
+            let buffer_data_len = buffer.get_data().len().saturating_sub(buffer_data_offset);
+            if buffer.get_data().len() < UpgradeableLoaderState::buffer_data_offset()?
                 || buffer_data_len == 0
             {
                 ic_logger_msg!(log_collector, "Buffer account too small");
@@ -771,14 +753,18 @@ fn process_loader_upgradeable_instruction(
 
             // Verify ProgramData account
 
-            let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let programdata =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
-            let programdata_balance_required = 1.max(rent.minimum_balance(programdata.data_len()?));
-            if programdata.data_len()? < UpgradeableLoaderState::programdata_len(buffer_data_len)? {
+            let programdata_balance_required =
+                1.max(rent.minimum_balance(programdata.get_data().len()));
+            if programdata.get_data().len()
+                < UpgradeableLoaderState::programdata_len(buffer_data_len)?
+            {
                 ic_logger_msg!(log_collector, "ProgramData account not large enough");
                 return Err(InstructionError::AccountDataTooSmall);
             }
-            if programdata.lamports()?.saturating_add(buffer_lamports)
+            if programdata.get_lamports().saturating_add(buffer_lamports)
                 < programdata_balance_required
             {
                 ic_logger_msg!(
@@ -790,7 +776,7 @@ fn process_loader_upgradeable_instruction(
             if let UpgradeableLoaderState::ProgramData {
                 slot: _,
                 upgrade_authority_address,
-            } = programdata.state()?
+            } = programdata.get_state()?
             {
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(log_collector, "Program not upgradeable");
@@ -821,61 +807,53 @@ fn process_loader_upgradeable_instruction(
             invoke_context.update_executor(&new_program_id, executor);
 
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
 
             // Update the ProgramData account, record the upgraded data, and zero
             // the rest
-            let programdata = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let mut programdata =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             {
                 programdata.set_state(&UpgradeableLoaderState::ProgramData {
                     slot: clock.slot,
                     upgrade_authority_address: authority_key,
                 })?;
-                let mut programdata_account = programdata.try_account_ref_mut()?;
-                let dst_slice = programdata_account
-                    .data_as_mut_slice()
+                let dst_slice = programdata
+                    .get_data_mut()
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
                     )
                     .ok_or(InstructionError::AccountDataTooSmall)?;
-                let buffer = keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(2),
-                )?;
-                let buffer_account = buffer.try_account_ref()?;
-                let src_slice = buffer_account
-                    .data()
+                let buffer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+                let src_slice = buffer
+                    .get_data()
                     .get(buffer_data_offset..)
                     .ok_or(InstructionError::AccountDataTooSmall)?;
                 dst_slice.copy_from_slice(src_slice);
             }
             programdata
-                .try_account_ref_mut()?
-                .data_as_mut_slice()
+                .get_data_mut()
                 .get_mut(programdata_data_offset.saturating_add(buffer_data_len)..)
                 .ok_or(InstructionError::AccountDataTooSmall)?
                 .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
 
-            let programdata_lamports = programdata.lamports()?;
-            programdata
-                .try_account_ref_mut()?
-                .set_lamports(programdata_balance_required);
+            let programdata_lamports = programdata.get_lamports();
+            programdata.set_lamports(programdata_balance_required);
             drop(programdata);
 
-            let buffer = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(2),
-            )?;
-            buffer.try_account_ref_mut()?.set_lamports(0);
+            let mut buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+            buffer.set_lamports(0);
             drop(buffer);
 
-            let spill = keyed_account_at_index(
-                keyed_accounts,
-                first_instruction_account.saturating_add(3),
-            )?;
-            spill.try_account_ref_mut()?.checked_add_lamports(
+            let mut spill =
+                instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+            spill.checked_add_lamports(
                 programdata_lamports
                     .saturating_add(buffer_lamports)
                     .saturating_sub(programdata_balance_required),
@@ -885,7 +863,8 @@ fn process_loader_upgradeable_instruction(
         }
         UpgradeableLoaderInstruction::SetAuthority => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let present_authority_key = transaction_context.get_key_of_account_at_index(
                 instruction_context
                     .get_index_in_transaction(first_instruction_account.saturating_add(1))?,
@@ -897,7 +876,7 @@ fn process_loader_upgradeable_instruction(
                 })
                 .ok();
 
-            match account.state()? {
+            match account.get_state()? {
                 UpgradeableLoaderState::Buffer { authority_address } => {
                     if new_authority.is_none() {
                         ic_logger_msg!(log_collector, "Buffer authority is not optional");
@@ -964,20 +943,17 @@ fn process_loader_upgradeable_instruction(
                 );
                 return Err(InstructionError::InvalidArgument);
             }
-            let close_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let close_key = *close_account.unsigned_key();
-            match close_account.state()? {
+            let mut close_account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            let close_key = *close_account.get_key();
+            match close_account.get_state()? {
                 UpgradeableLoaderState::Uninitialized => {
-                    let close_lamports = close_account.lamports()?;
-                    close_account.try_account_ref_mut()?.set_lamports(0);
+                    let close_lamports = close_account.get_lamports();
+                    close_account.set_lamports(0);
                     drop(close_account);
-                    let recipient_account = keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account.saturating_add(1),
-                    )?;
-                    recipient_account
-                        .try_account_ref_mut()?
-                        .checked_add_lamports(close_lamports)?;
+                    let mut recipient_account = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 1)?;
+                    recipient_account.checked_add_lamports(close_lamports)?;
 
                     ic_logger_msg!(log_collector, "Closed Uninitialized {}", close_key);
                 }
@@ -999,22 +975,20 @@ fn process_loader_upgradeable_instruction(
                 } => {
                     instruction_context.check_number_of_instruction_accounts(4)?;
                     drop(close_account);
-                    let program_account = keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account.saturating_add(3),
-                    )?;
-                    let program_key = *program_account.unsigned_key();
+                    let program_account = instruction_context
+                        .try_borrow_instruction_account(transaction_context, 3)?;
+                    let program_key = *program_account.get_key();
 
                     if !program_account.is_writable() {
                         ic_logger_msg!(log_collector, "Program account is not writable");
                         return Err(InstructionError::InvalidArgument);
                     }
-                    if &program_account.owner()? != program_id {
+                    if program_account.get_owner() != program_id {
                         ic_logger_msg!(log_collector, "Program account not owned by loader");
                         return Err(InstructionError::IncorrectProgramId);
                     }
 
-                    match program_account.state()? {
+                    match program_account.get_state()? {
                         UpgradeableLoaderState::Program {
                             programdata_address,
                         } => {
@@ -1098,15 +1072,15 @@ fn process_loader_instruction(
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    if program.owner()? != *program_id {
+    let program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    if program.get_owner() != program_id {
         ic_msg!(
             invoke_context,
             "Executable account not owned by the BPF loader"
         );
         return Err(InstructionError::IncorrectProgramId);
     }
-    let is_program_signer = program.signer_key().is_some();
+    let is_program_signer = program.is_signer();
     drop(program);
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
@@ -1129,14 +1103,13 @@ fn process_loader_instruction(
             let executor =
                 create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            invoke_context.update_executor(program.unsigned_key(), executor);
-            program.try_account_ref_mut()?.set_executable(true);
-            ic_msg!(
-                invoke_context,
-                "Finalized account {:?}",
-                program.unsigned_key()
-            );
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let mut program =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            invoke_context.update_executor(program.get_key(), executor);
+            program.set_executable(true);
+            ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
     }
 
