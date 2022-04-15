@@ -3,12 +3,12 @@ use {
     futures_util::stream::StreamExt,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
-    quinn::{Endpoint, EndpointConfig, IncomingUniStreams, ServerConfig},
+    quinn::{Endpoint, EndpointConfig, IdleTimeout, IncomingUniStreams, ServerConfig, VarInt},
     rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
-        quic::QUIC_MAX_CONCURRENT_STREAMS,
+        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
         signature::Keypair,
         timing,
     },
@@ -55,6 +55,8 @@ fn configure_server(
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
     config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
+    let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+    config.max_idle_timeout(Some(timeout));
 
     // disable bidi & datagrams
     const MAX_CONCURRENT_BIDI_STREAMS: u32 = 0;
@@ -484,6 +486,7 @@ mod test {
         super::*,
         crossbeam_channel::unbounded,
         quinn::{ClientConfig, NewConnection},
+        solana_sdk::quic::QUIC_KEEP_ALIVE_MS,
         std::{net::SocketAddr, time::Instant},
     };
 
@@ -514,7 +517,14 @@ mod test {
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        ClientConfig::new(Arc::new(crypto))
+        let mut config = ClientConfig::new(Arc::new(crypto));
+
+        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        transport_config.max_idle_timeout(Some(timeout));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+
+        config
     }
 
     #[test]
@@ -538,6 +548,45 @@ mod test {
         runtime
             .block_on(endpoint.connect(*addr, "localhost").unwrap())
             .unwrap()
+    }
+
+    #[test]
+    fn test_quic_timeout() {
+        solana_logger::setup();
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
+
+        let runtime = rt();
+        let _rt_guard = runtime.enter();
+        let conn1 = make_client_endpoint(&runtime, &server_address);
+        let total = 30;
+        let handle = runtime.spawn(async move {
+            for i in 0..total {
+                let mut s1 = conn1.connection.open_uni().await.unwrap();
+                s1.write_all(&[0u8]).await.unwrap();
+                s1.finish().await.unwrap();
+                info!("done {}", i);
+                std::thread::sleep(Duration::from_millis(1000));
+            }
+        });
+        let mut received = 0;
+        loop {
+            if let Ok(_x) = receiver.recv_timeout(Duration::from_millis(500)) {
+                received += 1;
+                info!("got {}", received);
+            }
+            if received >= total {
+                break;
+            }
+        }
+        runtime.block_on(handle).unwrap();
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
     }
 
     #[test]
