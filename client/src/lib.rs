@@ -2,6 +2,9 @@
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate solana_metrics;
+
 pub mod blockhash_query;
 pub mod client_error;
 pub mod connection_cache;
@@ -26,9 +29,6 @@ pub mod tpu_client;
 pub mod tpu_connection;
 pub mod transaction_executor;
 pub mod udp_client;
-
-#[macro_use]
-extern crate solana_metrics;
 
 pub mod mock_sender_for_cli {
     /// Magic `SIGNATURE` value used by `solana-cli` unit tests.

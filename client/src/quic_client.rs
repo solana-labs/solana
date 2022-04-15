@@ -119,16 +119,31 @@ impl TpuConnection for QuicTpuConnection {
         stats: Arc<ClientStats>,
     ) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
-        //drop and detach the task
         let client = self.client.clone();
-        inc_new_counter_info!("send_wire_transaction_async", 1);
+        //drop and detach the task
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction, &stats);
             if let Err(e) = send_buffer.await {
-                inc_new_counter_warn!("send_wire_transaction_async_fail", 1);
                 warn!("Failed to send transaction async to {:?}", e);
-            } else {
-                inc_new_counter_info!("send_wire_transaction_async_pass", 1);
+                datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+            }
+        });
+        Ok(())
+    }
+
+    fn send_wire_transaction_batch_async(
+        &self,
+        buffers: Vec<Vec<u8>>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
+        let _guard = RUNTIME.enter();
+        let client = self.client.clone();
+        //drop and detach the task
+        let _ = RUNTIME.spawn(async move {
+            let send_batch = client.send_batch(&buffers, &stats);
+            if let Err(e) = send_batch.await {
+                warn!("Failed to send transaction batch async to {:?}", e);
+                datapoint_warn!("send-wire-batch-async", ("failure", 1, i64),);
             }
         });
         Ok(())
@@ -269,13 +284,16 @@ impl QuicClient {
             .iter()
             .chunks(QUIC_MAX_CONCURRENT_STREAMS);
 
-        let futures = chunks.into_iter().map(|buffs| {
-            join_all(
-                buffs
-                    .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
-            )
-        });
+        let futures: Vec<_> = chunks
+            .into_iter()
+            .map(|buffs| {
+                join_all(
+                    buffs
+                        .into_iter()
+                        .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
+                )
+            })
+            .collect();
 
         for f in futures {
             f.await.into_iter().try_for_each(|res| res)?;
