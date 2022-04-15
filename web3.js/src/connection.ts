@@ -1,6 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import fetch from 'cross-fetch';
+import crossFetch from 'cross-fetch';
 import {
   type as pick,
   number,
@@ -814,9 +814,11 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
+  customFetch?: typeof crossFetch,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
+  const fetch = customFetch ? customFetch : crossFetch;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
@@ -2108,6 +2110,8 @@ export type ConnectionConfig = {
   wsEndpoint?: string;
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
+  /** Optional custom fetch function */
+  fetch?: typeof crossFetch;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
   /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
@@ -2200,6 +2204,7 @@ export class Connection {
 
     let wsEndpoint;
     let httpHeaders;
+    let fetch;
     let fetchMiddleware;
     let disableRetryOnRateLimit;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
@@ -2210,6 +2215,7 @@ export class Connection {
         commitmentOrConfig.confirmTransactionInitialTimeout;
       wsEndpoint = commitmentOrConfig.wsEndpoint;
       httpHeaders = commitmentOrConfig.httpHeaders;
+      fetch = commitmentOrConfig.fetch;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
@@ -2221,6 +2227,7 @@ export class Connection {
       url.toString(),
       useHttps,
       httpHeaders,
+      fetch,
       fetchMiddleware,
       disableRetryOnRateLimit,
     );
