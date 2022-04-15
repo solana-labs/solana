@@ -3486,7 +3486,7 @@ mod tests {
         super::*,
         solana_program_runtime::{
             invoke_context::InvokeContext,
-            sysvar_cache::{SysvarCache, SysvarWithLamports},
+            sysvar_cache::{SysvarCache, SysvarWithAccount},
         },
         solana_rbpf::{
             ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
@@ -4443,10 +4443,22 @@ mod tests {
         };
 
         let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_clock(SysvarWithLamports::new(src_clock.clone(), 0));
-        sysvar_cache.set_epoch_schedule(SysvarWithLamports::new(src_epochschedule, 0));
-        sysvar_cache.set_fees(SysvarWithLamports::new(src_fees.clone(), 0));
-        sysvar_cache.set_rent(SysvarWithLamports::new(src_rent, 0));
+        sysvar_cache.set_clock(SysvarWithAccount::new(
+            src_clock.clone(),
+            AccountSharedData::default(),
+        ));
+        sysvar_cache.set_epoch_schedule(SysvarWithAccount::new(
+            src_epochschedule,
+            AccountSharedData::default(),
+        ));
+        sysvar_cache.set_fees(SysvarWithAccount::new(
+            src_fees.clone(),
+            AccountSharedData::default(),
+        ));
+        sysvar_cache.set_rent(SysvarWithAccount::new(
+            src_rent,
+            AccountSharedData::default(),
+        ));
 
         prepare_mockup!(
             invoke_context,

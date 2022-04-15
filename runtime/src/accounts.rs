@@ -231,7 +231,7 @@ impl Accounts {
         })
     }
 
-    fn construct_sysvar_account(
+    fn load_sysvar_account(
         &self,
         pubkey: &Pubkey,
         ancestors: &Ancestors,
@@ -287,7 +287,7 @@ impl Accounts {
                                 ),
                             )
                         } else {
-                            self.construct_sysvar_account(key, ancestors, sysvar_cache)
+                            self.load_sysvar_account(key, ancestors, sysvar_cache)
                         }
                     } else {
                         let (account, rent) = self

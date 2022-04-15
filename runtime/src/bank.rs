@@ -1725,7 +1725,7 @@ impl Bank {
                     .is_active(&feature_set::cap_accounts_data_len::id())
                     .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
             )),
-            sysvar_cache: RwLock::new(SysvarCache::new(epoch)),
+            sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: parent.fee_structure.clone(),
         };
@@ -2045,7 +2045,7 @@ impl Bank {
                     .is_active(&feature_set::cap_accounts_data_len::id())
                     .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
             )),
-            sysvar_cache: RwLock::new(SysvarCache::new(fields.epoch)),
+            sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_len: AtomicU64::new(accounts_data_len),
             fee_structure: FeeStructure::default(),
         };
@@ -2228,7 +2228,7 @@ impl Bank {
             self.sysvar_cache
                 .write()
                 .unwrap()
-                .set_account(pubkey, &new_account)
+                .set_account(pubkey, new_account)
                 .unwrap();
         }
     }
@@ -10823,11 +10823,6 @@ pub(crate) mod tests {
                     },
                     true,
                 );
-                bank1
-                    .sysvar_cache
-                    .write()
-                    .unwrap()
-                    .set_rent_epoch(rent_epoch);
                 let current_account = bank1.get_account(&clock_id).unwrap();
                 assert_eq!(
                     expected_previous_slot,
@@ -10876,11 +10871,6 @@ pub(crate) mod tests {
             },
             true,
         );
-        bank2
-            .sysvar_cache
-            .write()
-            .unwrap()
-            .set_rent_epoch(rent_epoch);
         let current_account = bank2.get_account(&clock_id).unwrap();
         assert_eq!(
             expected_next_slot,

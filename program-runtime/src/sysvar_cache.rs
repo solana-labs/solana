@@ -3,8 +3,7 @@ use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
-        account::{create_account_with_fields, Account, AccountSharedData, ReadableAccount},
-        clock::Epoch,
+        account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
@@ -25,85 +24,63 @@ impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
 }
 
 #[derive(Clone, Debug)]
-pub struct SysvarWithLamports<T: Sysvar> {
+pub struct SysvarWithAccount<T: Sysvar> {
     value: Arc<T>,
-    lamports: u64,
+    account: AccountSharedData,
 }
-impl<T: Sysvar> SysvarWithLamports<T> {
-    pub fn new(value: T, lamports: u64) -> Self {
+impl<T: Sysvar> SysvarWithAccount<T> {
+    pub fn new(value: T, account: AccountSharedData) -> Self {
         Self {
             value: Arc::new(value),
-            lamports,
+            account,
         }
     }
-    pub fn into_account(&self, rent_epoch: Epoch) -> Account {
-        create_account_with_fields(&*self.value, (self.lamports, rent_epoch))
-    }
 }
-impl<'a, T: Sysvar> TryFrom<&'a AccountSharedData> for SysvarWithLamports<T> {
+impl<T: Sysvar> TryFrom<AccountSharedData> for SysvarWithAccount<T> {
     type Error = InstructionError;
-    fn try_from(account: &'a AccountSharedData) -> Result<Self, Self::Error> {
+    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         let value = bincode::deserialize(account.data())
             .map_err(|_| InstructionError::UnsupportedSysvar)?;
-        Ok(SysvarWithLamports {
-            value,
-            lamports: account.lamports(),
-        })
+        Ok(SysvarWithAccount { value, account })
     }
 }
 
 #[derive(Default, Clone, Debug)]
 pub struct SysvarCache {
     /// Used to simulate the rent_epoch on real accounts
-    rent_epoch: Epoch,
-    clock: Option<SysvarWithLamports<Clock>>,
-    epoch_schedule: Option<SysvarWithLamports<EpochSchedule>>,
+    clock: Option<SysvarWithAccount<Clock>>,
+    epoch_schedule: Option<SysvarWithAccount<EpochSchedule>>,
     #[allow(deprecated)]
-    fees: Option<SysvarWithLamports<Fees>>,
-    rent: Option<SysvarWithLamports<Rent>>,
-    slot_hashes: Option<SysvarWithLamports<SlotHashes>>,
+    fees: Option<SysvarWithAccount<Fees>>,
+    rent: Option<SysvarWithAccount<Rent>>,
+    slot_hashes: Option<SysvarWithAccount<SlotHashes>>,
     #[allow(deprecated)]
-    recent_blockhashes: Option<SysvarWithLamports<RecentBlockhashes>>,
-    stake_history: Option<SysvarWithLamports<StakeHistory>>,
+    recent_blockhashes: Option<SysvarWithAccount<RecentBlockhashes>>,
+    stake_history: Option<SysvarWithAccount<StakeHistory>>,
 }
 
 impl SysvarCache {
-    pub fn new(rent_epoch: Epoch) -> Self {
-        Self {
-            rent_epoch,
-            ..Self::default()
-        }
-    }
-
     pub fn get_account(&self, pubkey: &Pubkey) -> Result<AccountSharedData, InstructionError> {
         #[allow(deprecated)]
         let maybe_account = if pubkey == &Clock::id() {
-            self.clock.as_ref().map(|v| v.into_account(self.rent_epoch))
+            self.clock.as_ref().map(|v| v.account.clone())
         } else if pubkey == &EpochSchedule::id() {
-            self.epoch_schedule
-                .as_ref()
-                .map(|v| v.into_account(self.rent_epoch))
+            self.epoch_schedule.as_ref().map(|v| v.account.clone())
         } else if pubkey == &Fees::id() {
-            self.fees.as_ref().map(|v| v.into_account(self.rent_epoch))
+            self.fees.as_ref().map(|v| v.account.clone())
         } else if pubkey == &Rent::id() {
-            self.rent.as_ref().map(|v| v.into_account(self.rent_epoch))
+            self.rent.as_ref().map(|v| v.account.clone())
         } else if pubkey == &SlotHashes::id() {
-            self.slot_hashes
-                .as_ref()
-                .map(|v| v.into_account(self.rent_epoch))
+            self.slot_hashes.as_ref().map(|v| v.account.clone())
         } else if pubkey == &RecentBlockhashes::id() {
-            self.recent_blockhashes
-                .as_ref()
-                .map(|v| v.into_account(self.rent_epoch))
+            self.recent_blockhashes.as_ref().map(|v| v.account.clone())
         } else if pubkey == &StakeHistory::id() {
-            self.stake_history
-                .as_ref()
-                .map(|v| v.into_account(self.rent_epoch))
+            self.stake_history.as_ref().map(|v| v.account.clone())
         } else {
             None
         };
         if let Some(account) = maybe_account {
-            Ok(AccountSharedData::from(account))
+            Ok(account)
         } else {
             Err(InstructionError::UnsupportedSysvar)
         }
@@ -112,7 +89,7 @@ impl SysvarCache {
     pub fn set_account(
         &mut self,
         pubkey: &Pubkey,
-        account: &AccountSharedData,
+        account: AccountSharedData,
     ) -> Result<(), InstructionError> {
         #[allow(deprecated)]
         if pubkey == &Clock::id() {
@@ -141,10 +118,6 @@ impl SysvarCache {
         }
     }
 
-    pub fn set_rent_epoch(&mut self, epoch: Epoch) {
-        self.rent_epoch = epoch;
-    }
-
     pub fn get_clock(&self) -> Result<Arc<Clock>, InstructionError> {
         self.clock
             .as_ref()
@@ -152,7 +125,7 @@ impl SysvarCache {
             .ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    pub fn set_clock(&mut self, clock: SysvarWithLamports<Clock>) {
+    pub fn set_clock(&mut self, clock: SysvarWithAccount<Clock>) {
         self.clock = Some(clock);
     }
 
@@ -163,7 +136,7 @@ impl SysvarCache {
             .ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    pub fn set_epoch_schedule(&mut self, epoch_schedule: SysvarWithLamports<EpochSchedule>) {
+    pub fn set_epoch_schedule(&mut self, epoch_schedule: SysvarWithAccount<EpochSchedule>) {
         self.epoch_schedule = Some(epoch_schedule);
     }
 
@@ -178,7 +151,7 @@ impl SysvarCache {
 
     #[deprecated]
     #[allow(deprecated)]
-    pub fn set_fees(&mut self, fees: SysvarWithLamports<Fees>) {
+    pub fn set_fees(&mut self, fees: SysvarWithAccount<Fees>) {
         self.fees = Some(fees);
     }
 
@@ -189,7 +162,7 @@ impl SysvarCache {
             .ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    pub fn set_rent(&mut self, rent: SysvarWithLamports<Rent>) {
+    pub fn set_rent(&mut self, rent: SysvarWithAccount<Rent>) {
         self.rent = Some(rent);
     }
 
@@ -200,7 +173,7 @@ impl SysvarCache {
             .ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    pub fn set_slot_hashes(&mut self, slot_hashes: SysvarWithLamports<SlotHashes>) {
+    pub fn set_slot_hashes(&mut self, slot_hashes: SysvarWithAccount<SlotHashes>) {
         self.slot_hashes = Some(slot_hashes);
     }
 
@@ -217,7 +190,7 @@ impl SysvarCache {
     #[allow(deprecated)]
     pub fn set_recent_blockhashes(
         &mut self,
-        recent_blockhashes: SysvarWithLamports<RecentBlockhashes>,
+        recent_blockhashes: SysvarWithAccount<RecentBlockhashes>,
     ) {
         self.recent_blockhashes = Some(recent_blockhashes);
     }
@@ -229,7 +202,7 @@ impl SysvarCache {
             .ok_or(InstructionError::UnsupportedSysvar)
     }
 
-    pub fn set_stake_history(&mut self, stake_history: SysvarWithLamports<StakeHistory>) {
+    pub fn set_stake_history(&mut self, stake_history: SysvarWithAccount<StakeHistory>) {
         self.stake_history = Some(stake_history);
     }
 
@@ -238,16 +211,14 @@ impl SysvarCache {
         mut load_sysvar_account: F,
     ) {
         if self.get_clock().is_err() {
-            if let Some(clock) = load_sysvar_account(&Clock::id())
-                .as_ref()
-                .and_then(|account| account.try_into().ok())
+            if let Some(clock) =
+                load_sysvar_account(&Clock::id()).and_then(|account| account.try_into().ok())
             {
                 self.set_clock(clock);
             }
         }
         if self.get_epoch_schedule().is_err() {
             if let Some(epoch_schedule) = load_sysvar_account(&EpochSchedule::id())
-                .as_ref()
                 .and_then(|account| account.try_into().ok())
             {
                 self.set_epoch_schedule(epoch_schedule);
@@ -255,25 +226,22 @@ impl SysvarCache {
         }
         #[allow(deprecated)]
         if self.get_fees().is_err() {
-            if let Some(fees) = load_sysvar_account(&Fees::id())
-                .as_ref()
-                .and_then(|account| account.try_into().ok())
+            if let Some(fees) =
+                load_sysvar_account(&Fees::id()).and_then(|account| account.try_into().ok())
             {
                 self.set_fees(fees);
             }
         }
         if self.get_rent().is_err() {
-            if let Some(rent) = load_sysvar_account(&Rent::id())
-                .as_ref()
-                .and_then(|account| account.try_into().ok())
+            if let Some(rent) =
+                load_sysvar_account(&Rent::id()).and_then(|account| account.try_into().ok())
             {
                 self.set_rent(rent);
             }
         }
         if self.get_slot_hashes().is_err() {
-            if let Some(slot_hashes) = load_sysvar_account(&SlotHashes::id())
-                .as_ref()
-                .and_then(|account| account.try_into().ok())
+            if let Some(slot_hashes) =
+                load_sysvar_account(&SlotHashes::id()).and_then(|account| account.try_into().ok())
             {
                 self.set_slot_hashes(slot_hashes);
             }
@@ -281,16 +249,14 @@ impl SysvarCache {
         #[allow(deprecated)]
         if self.get_recent_blockhashes().is_err() {
             if let Some(recent_blockhashes) = load_sysvar_account(&RecentBlockhashes::id())
-                .as_ref()
                 .and_then(|account| account.try_into().ok())
             {
                 self.set_recent_blockhashes(recent_blockhashes);
             }
         }
         if self.get_stake_history().is_err() {
-            if let Some(stake_history) = load_sysvar_account(&StakeHistory::id())
-                .as_ref()
-                .and_then(|account| account.try_into().ok())
+            if let Some(stake_history) =
+                load_sysvar_account(&StakeHistory::id()).and_then(|account| account.try_into().ok())
             {
                 self.set_stake_history(stake_history);
             }
