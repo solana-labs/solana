@@ -4398,6 +4398,7 @@ mod tests {
             ],
             Ok(()),
         );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         process_instruction(
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
