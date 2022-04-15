@@ -559,11 +559,11 @@ impl CrdsGossipPull {
                 .map(|(caller, filter)| apply_filter(caller, filter))
                 .collect()
         });
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "gossip_filter_crds_values-dropped_requests",
             dropped_requests.into_inner()
         );
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "gossip_filter_crds_values-dropped_values",
             total_skipped.into_inner()
         );
