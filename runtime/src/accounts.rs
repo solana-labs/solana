@@ -43,7 +43,10 @@ use {
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
+        sysvar::{
+            self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data,
+            SysvarType,
+        },
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
@@ -233,11 +236,12 @@ impl Accounts {
 
     fn load_sysvar_account(
         &self,
+        sysvar_type: &SysvarType,
         pubkey: &Pubkey,
         ancestors: &Ancestors,
         sysvar_cache: &SysvarCache,
     ) -> AccountSharedData {
-        sysvar_cache.get_account(pubkey).unwrap_or_else(|_| {
+        sysvar_cache.get_account(sysvar_type).unwrap_or_else(|_| {
             self.accounts_db
                 .load_with_fixed_root(ancestors, pubkey)
                 .map(|(account, _)| account)
@@ -278,8 +282,8 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if sysvar::is_sysvar_id(key) {
-                        if sysvar::instructions::check_id(key) {
+                    if let Some(sysvar_type) = SysvarType::from_pubkey(key) {
+                        if sysvar_type == SysvarType::Instructions {
                             Self::construct_instructions_account(
                                 message,
                                 feature_set.is_active(
@@ -287,7 +291,7 @@ impl Accounts {
                                 ),
                             )
                         } else {
-                            self.load_sysvar_account(key, ancestors, sysvar_cache)
+                            self.load_sysvar_account(&sysvar_type, key, ancestors, sysvar_cache)
                         }
                     } else {
                         let (account, rent) = self

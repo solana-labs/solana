@@ -33,6 +33,67 @@ lazy_static! {
     ];
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SysvarType {
+    Clock,
+    EpochSchedule,
+    #[deprecated]
+    Fees,
+    #[deprecated]
+    RecentBlockhashes,
+    Rent,
+    Rewards,
+    SlotHashes,
+    SlotHistory,
+    StakeHistory,
+    Instructions,
+}
+impl SysvarType {
+    pub fn from_pubkey(pubkey: &Pubkey) -> Option<Self> {
+        #[allow(deprecated)]
+        if pubkey == &clock::id() {
+            Some(Self::Clock)
+        } else if pubkey == &epoch_schedule::id() {
+            Some(Self::EpochSchedule)
+        } else if pubkey == &fees::id() {
+            Some(Self::Fees)
+        } else if pubkey == &recent_blockhashes::id() {
+            Some(Self::RecentBlockhashes)
+        } else if pubkey == &rent::id() {
+            Some(Self::Rent)
+        } else if pubkey == &rewards::id() {
+            Some(Self::Rewards)
+        } else if pubkey == &slot_hashes::id() {
+            Some(Self::SlotHashes)
+        } else if pubkey == &slot_history::id() {
+            Some(Self::SlotHistory)
+        } else if pubkey == &stake_history::id() {
+            Some(Self::StakeHistory)
+        } else if pubkey == &instructions::id() {
+            Some(Self::Instructions)
+        } else {
+            None
+        }
+    }
+
+    pub fn id(&self) -> Pubkey {
+        match self {
+            Self::Clock => clock::id(),
+            Self::EpochSchedule => epoch_schedule::id(),
+            #[allow(deprecated)]
+            Self::Fees => fees::id(),
+            #[allow(deprecated)]
+            Self::RecentBlockhashes => recent_blockhashes::id(),
+            Self::Rent => rent::id(),
+            Self::Rewards => rewards::id(),
+            Self::SlotHashes => slot_hashes::id(),
+            Self::SlotHistory => slot_history::id(),
+            Self::StakeHistory => stake_history::id(),
+            Self::Instructions => instructions::id(),
+        }
+    }
+}
+
 pub fn is_sysvar_id(id: &Pubkey) -> bool {
     ALL_IDS.iter().any(|key| key == id)
 }
@@ -98,6 +159,7 @@ pub trait SysvarId {
 pub trait Sysvar:
     SysvarId + Default + Sized + serde::Serialize + serde::de::DeserializeOwned
 {
+    const TYPE: SysvarType;
     fn size_of() -> usize {
         bincode::serialized_size(&Self::default()).unwrap() as usize
     }
@@ -170,7 +232,9 @@ mod tests {
             check_id(pubkey)
         }
     }
-    impl Sysvar for TestSysvar {}
+    impl Sysvar for TestSysvar {
+        const TYPE: SysvarType = SysvarType::Instructions;
+    }
 
     #[test]
     fn test_sysvar_account_info_to_from() {
@@ -204,5 +268,53 @@ mod tests {
         let mut small_data = vec![];
         account_info.data = Rc::new(RefCell::new(&mut small_data));
         assert_eq!(test_sysvar.to_account_info(&mut account_info), None);
+    }
+
+    #[test]
+    fn test_sysvar_type_from_pubkey() {
+        assert_eq!(
+            SysvarType::from_pubkey(&clock::id()).unwrap(),
+            SysvarType::Clock
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&epoch_schedule::id()).unwrap(),
+            SysvarType::EpochSchedule
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&rent::id()).unwrap(),
+            SysvarType::Rent
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&rewards::id()).unwrap(),
+            SysvarType::Rewards
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&slot_hashes::id()).unwrap(),
+            SysvarType::SlotHashes
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&slot_history::id()).unwrap(),
+            SysvarType::SlotHistory
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&stake_history::id()).unwrap(),
+            SysvarType::StakeHistory
+        );
+        assert_eq!(
+            SysvarType::from_pubkey(&instructions::id()).unwrap(),
+            SysvarType::Instructions
+        );
+        #[allow(deprecated)]
+        {
+            assert_eq!(
+                SysvarType::from_pubkey(&fees::id()).unwrap(),
+                SysvarType::Fees
+            );
+            assert_eq!(
+                SysvarType::from_pubkey(&recent_blockhashes::id()).unwrap(),
+                SysvarType::RecentBlockhashes
+            );
+        }
+        assert_eq!(SysvarType::from_pubkey(&Pubkey::new_unique()), None);
     }
 }

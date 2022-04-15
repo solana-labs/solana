@@ -3,7 +3,7 @@
 //! this account carries a bitvector of slots present over the past
 //! epoch
 //!
-use crate::sysvar::Sysvar;
+use crate::sysvar::{Sysvar, SysvarType};
 pub use crate::{
     account_info::AccountInfo, program_error::ProgramError, slot_history::SlotHistory,
 };
@@ -11,6 +11,7 @@ pub use crate::{
 crate::declare_sysvar_id!("SysvarS1otHistory11111111111111111111111111", SlotHistory);
 
 impl Sysvar for SlotHistory {
+    const TYPE: SysvarType = SysvarType::SlotHistory;
     // override
     fn size_of() -> usize {
         // hard-coded so that we don't have to construct an empty

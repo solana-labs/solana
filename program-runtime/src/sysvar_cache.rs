@@ -1,5 +1,5 @@
 #[allow(deprecated)]
-use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
+use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes, SysvarType};
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
@@ -60,24 +60,23 @@ pub struct SysvarCache {
 }
 
 impl SysvarCache {
-    pub fn get_account(&self, pubkey: &Pubkey) -> Result<AccountSharedData, InstructionError> {
-        #[allow(deprecated)]
-        let maybe_account = if pubkey == &Clock::id() {
-            self.clock.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &EpochSchedule::id() {
-            self.epoch_schedule.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &Fees::id() {
-            self.fees.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &Rent::id() {
-            self.rent.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &SlotHashes::id() {
-            self.slot_hashes.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &RecentBlockhashes::id() {
-            self.recent_blockhashes.as_ref().map(|v| v.account.clone())
-        } else if pubkey == &StakeHistory::id() {
-            self.stake_history.as_ref().map(|v| v.account.clone())
-        } else {
-            None
+    pub fn get_account(
+        &self,
+        sysvar_type: &SysvarType,
+    ) -> Result<AccountSharedData, InstructionError> {
+        let maybe_account = match sysvar_type {
+            SysvarType::Clock => self.clock.as_ref().map(|v| v.account.clone()),
+            SysvarType::EpochSchedule => self.epoch_schedule.as_ref().map(|v| v.account.clone()),
+            #[allow(deprecated)]
+            SysvarType::Fees => self.fees.as_ref().map(|v| v.account.clone()),
+            #[allow(deprecated)]
+            SysvarType::RecentBlockhashes => {
+                self.recent_blockhashes.as_ref().map(|v| v.account.clone())
+            }
+            SysvarType::Rent => self.rent.as_ref().map(|v| v.account.clone()),
+            SysvarType::SlotHashes => self.slot_hashes.as_ref().map(|v| v.account.clone()),
+            SysvarType::StakeHistory => self.stake_history.as_ref().map(|v| v.account.clone()),
+            SysvarType::SlotHistory | SysvarType::Rewards | SysvarType::Instructions => None,
         };
         if let Some(account) = maybe_account {
             Ok(account)
@@ -88,33 +87,43 @@ impl SysvarCache {
 
     pub fn set_account(
         &mut self,
-        pubkey: &Pubkey,
+        sysvar_type: &SysvarType,
         account: AccountSharedData,
     ) -> Result<(), InstructionError> {
-        #[allow(deprecated)]
-        if pubkey == &Clock::id() {
-            self.set_clock(account.try_into()?);
-            Ok(())
-        } else if pubkey == &EpochSchedule::id() {
-            self.set_epoch_schedule(account.try_into()?);
-            Ok(())
-        } else if pubkey == &Fees::id() {
-            self.set_fees(account.try_into()?);
-            Ok(())
-        } else if pubkey == &Rent::id() {
-            self.set_rent(account.try_into()?);
-            Ok(())
-        } else if pubkey == &SlotHashes::id() {
-            self.set_slot_hashes(account.try_into()?);
-            Ok(())
-        } else if pubkey == &RecentBlockhashes::id() {
-            self.set_recent_blockhashes(account.try_into()?);
-            Ok(())
-        } else if pubkey == &StakeHistory::id() {
-            self.set_stake_history(account.try_into()?);
-            Ok(())
-        } else {
-            Err(InstructionError::UnsupportedSysvar)
+        match sysvar_type {
+            SysvarType::Clock => {
+                self.set_clock(account.try_into()?);
+                Ok(())
+            }
+            SysvarType::EpochSchedule => {
+                self.set_epoch_schedule(account.try_into()?);
+                Ok(())
+            }
+            #[allow(deprecated)]
+            SysvarType::Fees => {
+                self.set_fees(account.try_into()?);
+                Ok(())
+            }
+            #[allow(deprecated)]
+            SysvarType::RecentBlockhashes => {
+                self.set_recent_blockhashes(account.try_into()?);
+                Ok(())
+            }
+            SysvarType::Rent => {
+                self.set_rent(account.try_into()?);
+                Ok(())
+            }
+            SysvarType::SlotHashes => {
+                self.set_slot_hashes(account.try_into()?);
+                Ok(())
+            }
+            SysvarType::StakeHistory => {
+                self.set_stake_history(account.try_into()?);
+                Ok(())
+            }
+            SysvarType::SlotHistory | SysvarType::Rewards | SysvarType::Instructions => {
+                Err(InstructionError::UnsupportedSysvar)
+            }
         }
     }
 

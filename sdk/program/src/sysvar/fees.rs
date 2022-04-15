@@ -3,7 +3,10 @@
 #![allow(deprecated)]
 
 use crate::{
-    fee_calculator::FeeCalculator, impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar,
+    fee_calculator::FeeCalculator,
+    impl_sysvar_get,
+    program_error::ProgramError,
+    sysvar::{Sysvar, SysvarType},
 };
 
 crate::declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
@@ -27,5 +30,6 @@ impl Fees {
 }
 
 impl Sysvar for Fees {
+    const TYPE: SysvarType = SysvarType::Fees;
     impl_sysvar_get!(sol_get_fees_sysvar);
 }

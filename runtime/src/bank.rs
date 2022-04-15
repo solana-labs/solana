@@ -125,7 +125,7 @@ use {
         slot_hashes::SlotHashes,
         slot_history::SlotHistory,
         system_transaction,
-        sysvar::{self, Sysvar, SysvarId},
+        sysvar::{self, Sysvar, SysvarId, SysvarType},
         timing::years_as_slots,
         transaction::{
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
@@ -1955,7 +1955,7 @@ impl Bank {
         clock.epoch_start_timestamp = parent_timestamp;
         clock.unix_timestamp = parent_timestamp;
         new.update_sysvar_account(
-            &sysvar::clock::id(),
+            &SysvarType::Clock,
             |account| {
                 create_account(
                     &clock,
@@ -2206,11 +2206,12 @@ impl Bank {
         self.genesis_creation_time + ((self.slot as u128 * self.ns_per_slot) / 1_000_000_000) as i64
     }
 
-    fn update_sysvar_account<F>(&self, pubkey: &Pubkey, updater: F, update_cache: bool)
+    fn update_sysvar_account<F>(&self, sysvar_type: &SysvarType, updater: F, update_cache: bool)
     where
         F: Fn(&Option<AccountSharedData>) -> AccountSharedData,
     {
-        let old_account = self.get_account_with_fixed_root(pubkey);
+        let pubkey = sysvar_type.id();
+        let old_account = self.get_account_with_fixed_root(&pubkey);
         let mut new_account = updater(&old_account);
 
         // When new sysvar comes into existence (with RENT_UNADJUSTED_INITIAL_BALANCE lamports),
@@ -2219,7 +2220,7 @@ impl Bank {
         // More generally, this code always re-calculates for possible sysvar data size change,
         // although there is no such sysvars currently.
         self.adjust_sysvar_balance_for_rent(&mut new_account);
-        self.store_account_and_update_capitalization(pubkey, &new_account);
+        self.store_account_and_update_capitalization(&pubkey, &new_account);
 
         if update_cache {
             // This looks like overkill since we're deserializing after serializing,
@@ -2228,7 +2229,7 @@ impl Bank {
             self.sysvar_cache
                 .write()
                 .unwrap()
-                .set_account(pubkey, new_account)
+                .set_account(sysvar_type, new_account)
                 .unwrap();
         }
     }
@@ -2322,7 +2323,7 @@ impl Bank {
             unix_timestamp,
         };
         self.update_sysvar_account(
-            &sysvar::clock::id(),
+            &SysvarType::Clock,
             |account| {
                 create_account(
                     &clock,
@@ -2338,7 +2339,7 @@ impl Bank {
         T: Sysvar + SysvarId,
     {
         self.update_sysvar_account(
-            &T::id(),
+            &T::TYPE,
             |account| {
                 create_account(
                     sysvar,
@@ -2357,7 +2358,7 @@ impl Bank {
         // slot history is only updated during bank freeze, so no need for the
         // cache to be updated too
         self.update_sysvar_account(
-            &sysvar::slot_history::id(),
+            &SysvarType::SlotHistory,
             |account| {
                 let mut slot_history = account
                     .as_ref()
@@ -2375,7 +2376,7 @@ impl Bank {
 
     fn update_slot_hashes(&self) {
         self.update_sysvar_account(
-            &sysvar::slot_hashes::id(),
+            &SysvarType::SlotHashes,
             |account| {
                 let mut slot_hashes = account
                     .as_ref()
@@ -2433,7 +2434,7 @@ impl Bank {
             .is_active(&feature_set::disable_fees_sysvar::id())
         {
             self.update_sysvar_account(
-                &sysvar::fees::id(),
+                &SysvarType::Fees,
                 |account| {
                     create_account(
                         &sysvar::fees::Fees::new(&self.fee_rate_governor.create_fee_calculator()),
@@ -2447,7 +2448,7 @@ impl Bank {
 
     fn update_rent(&self) {
         self.update_sysvar_account(
-            &sysvar::rent::id(),
+            &SysvarType::Rent,
             |account| {
                 create_account(
                     &self.rent_collector.rent,
@@ -2460,7 +2461,7 @@ impl Bank {
 
     fn update_epoch_schedule(&self) {
         self.update_sysvar_account(
-            &sysvar::epoch_schedule::id(),
+            &SysvarType::EpochSchedule,
             |account| {
                 create_account(
                     &self.epoch_schedule,
@@ -2477,7 +2478,7 @@ impl Bank {
         }
         // if I'm the first Bank in an epoch, ensure stake_history is updated
         self.update_sysvar_account(
-            &sysvar::stake_history::id(),
+            &SysvarType::StakeHistory,
             |account| {
                 create_account::<sysvar::stake_history::StakeHistory>(
                     self.stakes_cache.stakes().history(),
@@ -2573,7 +2574,7 @@ impl Bank {
         {
             // this sysvar can be retired once `pico_inflation` is enabled on all clusters
             self.update_sysvar_account(
-                &sysvar::rewards::id(),
+                &SysvarType::Rewards,
                 |account| {
                     create_account(
                         &sysvar::rewards::Rewards::new(validator_point_value),
@@ -2956,7 +2957,7 @@ impl Bank {
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
         #[allow(deprecated)]
         self.update_sysvar_account(
-            &sysvar::recent_blockhashes::id(),
+            &SysvarType::RecentBlockhashes,
             |account| {
                 let recent_blockhash_iter = locked_blockhash_queue.get_recent_blockhashes();
                 recent_blockhashes_account::create_account_with_data_and_fields(
@@ -10642,23 +10643,25 @@ pub(crate) mod tests {
     fn test_bank_create_and_update_sysvar_account() {
         use sysvar::clock::Clock;
 
-        let dummy_clock_id = Pubkey::new_unique();
+        let clock_type = SysvarType::Clock;
+        let clock_id = clock_type.id();
         let dummy_rent_epoch = 44;
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
         let expected_previous_slot = 3;
         let mut expected_next_slot = expected_previous_slot + 1;
 
-        // First, initialize the clock sysvar
         activate_all_features(&mut genesis_config);
         let bank1 = Arc::new(Bank::new_for_tests(&genesis_config));
+        // Clear the clock account, so that the new clock can affect capitalization
+        bank1.store_account_and_update_capitalization(&clock_id, &AccountSharedData::default());
         assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
 
         assert_capitalization_diff(
             &bank1,
             || {
                 bank1.update_sysvar_account(
-                    &dummy_clock_id,
+                    &clock_type,
                     |optional_account| {
                         assert!(optional_account.is_none());
 
@@ -10674,7 +10677,7 @@ pub(crate) mod tests {
                     },
                     false,
                 );
-                let current_account = bank1.get_account(&dummy_clock_id).unwrap();
+                let current_account = bank1.get_account(&clock_id).unwrap();
                 assert_eq!(
                     expected_previous_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
@@ -10693,7 +10696,7 @@ pub(crate) mod tests {
             &bank1,
             || {
                 bank1.update_sysvar_account(
-                    &dummy_clock_id,
+                    &clock_type,
                     |optional_account| {
                         assert!(optional_account.is_some());
 
@@ -10714,19 +10717,15 @@ pub(crate) mod tests {
             },
         );
 
-        // Updating should increment the clock's slot
+        // Updating will reset the clock's slot to the bank's slot
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
         assert_capitalization_diff(
             &bank2,
             || {
                 bank2.update_sysvar_account(
-                    &dummy_clock_id,
+                    &clock_type,
                     |optional_account| {
-                        let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
-                            .unwrap()
-                            .slot
-                            + 1;
-
+                        let slot = expected_next_slot;
                         create_account(
                             &Clock {
                                 slot,
@@ -10737,7 +10736,7 @@ pub(crate) mod tests {
                     },
                     false,
                 );
-                let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                let current_account = bank2.get_account(&clock_id).unwrap();
                 assert_eq!(
                     expected_next_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
@@ -10757,7 +10756,7 @@ pub(crate) mod tests {
             &bank2,
             || {
                 bank2.update_sysvar_account(
-                    &dummy_clock_id,
+                    &clock_type,
                     |optional_account| {
                         let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
                             .unwrap()
@@ -10774,7 +10773,7 @@ pub(crate) mod tests {
                     },
                     false,
                 );
-                let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                let current_account = bank2.get_account(&clock_id).unwrap();
                 assert_eq!(
                     expected_next_slot,
                     from_account::<Clock, _>(&current_account).unwrap().slot
@@ -10807,7 +10806,7 @@ pub(crate) mod tests {
             &bank1,
             || {
                 bank1.update_sysvar_account(
-                    &clock_id,
+                    &SysvarType::Clock,
                     |optional_account| {
                         assert!(optional_account.is_some());
 
@@ -10833,7 +10832,7 @@ pub(crate) mod tests {
                     .sysvar_cache
                     .read()
                     .unwrap()
-                    .get_account(&sysvar::clock::id())
+                    .get_account(&SysvarType::Clock)
                     .unwrap();
                 assert_eq!(
                     expected_previous_slot,
@@ -10854,7 +10853,7 @@ pub(crate) mod tests {
             expected_previous_slot,
         ));
         bank2.update_sysvar_account(
-            &clock_id,
+            &SysvarType::Clock,
             |optional_account| {
                 let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
                     .unwrap()
@@ -10881,7 +10880,7 @@ pub(crate) mod tests {
             .sysvar_cache
             .read()
             .unwrap()
-            .get_account(&sysvar::clock::id())
+            .get_account(&SysvarType::Clock)
             .unwrap();
         assert_eq!(
             expected_next_slot,
@@ -10893,7 +10892,7 @@ pub(crate) mod tests {
         // Thus, increment expected_next_slot accordingly
         expected_next_slot += 1;
         bank2.update_sysvar_account(
-            &clock_id,
+            &SysvarType::Clock,
             |optional_account| {
                 let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
                     .unwrap()
