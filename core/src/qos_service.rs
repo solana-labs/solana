@@ -206,12 +206,8 @@ impl QosService {
             .for_each(|((tx_cost, qos_inclusion_result), was_committed)| {
                 // Only transactions that the qos service included have to be
                 // checked for update
-                if qos_inclusion_result.is_ok() {
-                    if *was_committed {
-                        cost_tracker.update_execution_cost(tx_cost, None);
-                    } else {
-                        cost_tracker.remove(tx_cost);
-                    }
+                if qos_inclusion_result.is_ok() && !*was_committed {
+                    cost_tracker.remove(tx_cost);
                 }
             });
     }
