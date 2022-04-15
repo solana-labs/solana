@@ -1,4 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
+use {crate::fast_int_math::log2_floor, solana_sdk::pubkey::Pubkey};
 
 #[derive(Debug)]
 pub struct PubkeyBinCalculator24 {
@@ -7,14 +7,6 @@ pub struct PubkeyBinCalculator24 {
 }
 
 impl PubkeyBinCalculator24 {
-    const fn num_bits<T>() -> usize {
-        std::mem::size_of::<T>() * 8
-    }
-
-    pub fn log_2(x: u32) -> u32 {
-        assert!(x > 0);
-        Self::num_bits::<u32>() as u32 - x.leading_zeros() - 1
-    }
 
     pub fn new(bins: usize) -> Self {
         const MAX_BITS: u32 = 24;
@@ -22,7 +14,7 @@ impl PubkeyBinCalculator24 {
         let max_plus_1 = 1 << MAX_BITS;
         assert!(bins <= max_plus_1);
         assert!(bins.is_power_of_two());
-        let bits = Self::log_2(bins as u32);
+        let bits = log2_floor(bins as u32);
         Self {
             shift_bits: MAX_BITS - bits,
         }
@@ -47,14 +39,14 @@ impl PubkeyBinCalculator24 {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use {super::*, crate::fast_int_math::num_bits};
 
     #[test]
     fn test_pubkey_bins_log2() {
-        assert_eq!(PubkeyBinCalculator24::num_bits::<u8>(), 8);
-        assert_eq!(PubkeyBinCalculator24::num_bits::<u32>(), 32);
+        assert_eq!(num_bits::<u8>(), 8);
+        assert_eq!(num_bits::<u32>(), 32);
         for i in 0..32 {
-            assert_eq!(PubkeyBinCalculator24::log_2(2u32.pow(i)), i);
+            assert_eq!(log2_floor(2u32.pow(i)), i);
         }
     }
 
