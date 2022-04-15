@@ -497,8 +497,9 @@ impl SendTransactionService {
     fn send_transactions_with_metrics(tpu_address: &SocketAddr, wire_transactions: &[&[u8]]) {
         let mut measure = Measure::start("send_transaction_service-batch-us");
 
+        let wire_transactions = wire_transactions.iter().map(|t| t.to_vec()).collect();
         let send_result =
-            connection_cache::send_wire_transaction_batch(wire_transactions, tpu_address);
+            connection_cache::send_wire_transaction_batch_async(wire_transactions, tpu_address);
         if let Err(err) = send_result {
             warn!(
                 "Failed to send transaction batch to {}: {:?}",
