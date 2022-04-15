@@ -5,7 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, num_utils::*, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::collections::HashMap,
 };
 
@@ -85,36 +85,6 @@ impl CostTracker {
         self.would_fit(tx_cost)?;
         self.add_transaction_cost(tx_cost);
         Ok(self.block_cost)
-    }
-
-    pub fn update_execution_cost(
-        &mut self,
-        estimated_tx_cost: &TransactionCost,
-        actual_execution_units: Option<u64>,
-    ) {
-        if let Some(actual_execution_units) = actual_execution_units {
-            let estimated_execution_units = estimated_tx_cost.execution_cost;
-            if actual_execution_units == estimated_execution_units {
-                return;
-            }
-
-            if let Some(adjustment) =
-                Self::checked_diff_unsigned(actual_execution_units, estimated_execution_units)
-            {
-                self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
-            } else {
-                // handle adjustment too big to fit in `i64` error, log event as error,
-                // set block_cost to limit to prevent more transactions being added into
-                // curernt block.
-                log::error!(
-                    "cost_tracker detected erroneous attemopt to adjust execution cost, \
-                        estimated transactino cost {:?}, actual execution units {}",
-                    estimated_tx_cost,
-                    actual_execution_units
-                );
-                self.block_cost = self.block_cost_limit;
-            }
-        }
     }
 
     pub fn remove(&mut self, tx_cost: &TransactionCost) {
@@ -239,6 +209,7 @@ impl CostTracker {
             .saturating_sub(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
+<<<<<<< HEAD
 
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -286,6 +257,8 @@ impl CostTracker {
             IntUtil::checked_sub_unsigned(0i64, rhs - lhs)
         }
     }
+=======
+>>>>>>> 578d59c80 (Remove the code that handles cost update for separate pr)
 }
 
 #[cfg(test)]
@@ -598,123 +571,5 @@ mod tests {
             assert_eq!(cost * 2, costliest_account_cost);
             assert_eq!(acct2, costliest_account);
         }
-    }
-
-    #[test]
-    fn test_adjust_transaction_execution_cost() {
-        let acct1 = Pubkey::new_unique();
-        let acct2 = Pubkey::new_unique();
-        let acct3 = Pubkey::new_unique();
-        let cost = 100;
-        let account_max = cost * 2;
-        let block_max = account_max * 3; // for three accts
-
-        let mut testee = CostTracker::new(account_max, block_max, block_max, None);
-        let tx_cost = TransactionCost {
-            writable_accounts: vec![acct1, acct2, acct3],
-            execution_cost: cost,
-            ..TransactionCost::default()
-        };
-        let mut expected_block_cost = tx_cost.sum();
-        let expected_tx_count = 1;
-        assert!(testee.try_add(&tx_cost).is_ok());
-        assert_eq!(expected_block_cost, testee.block_cost());
-        assert_eq!(expected_tx_count, testee.transaction_count());
-        testee
-            .cost_by_writable_accounts
-            .iter()
-            .for_each(|(_key, units)| {
-                assert_eq!(expected_block_cost, *units);
-            });
-
-        // adjust up
-        {
-            let adjustment = 50i64;
-            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
-            expected_block_cost += 50;
-            assert_eq!(expected_block_cost, testee.block_cost());
-            assert_eq!(expected_tx_count, testee.transaction_count());
-            testee
-                .cost_by_writable_accounts
-                .iter()
-                .for_each(|(_key, units)| {
-                    assert_eq!(expected_block_cost, *units);
-                });
-        }
-
-        // adjust down
-        {
-            let adjustment = -50i64;
-            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
-            expected_block_cost -= 50;
-            assert_eq!(expected_block_cost, testee.block_cost());
-            assert_eq!(expected_tx_count, testee.transaction_count());
-            testee
-                .cost_by_writable_accounts
-                .iter()
-                .for_each(|(_key, units)| {
-                    assert_eq!(expected_block_cost, *units);
-                });
-        }
-
-        // adjust overflow up
-        {
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MAX);
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MAX);
-            // expect block cost set to limit
-            assert_eq!(block_max, testee.block_cost());
-            assert_eq!(expected_tx_count, testee.transaction_count());
-            testee
-                .cost_by_writable_accounts
-                .iter()
-                .for_each(|(_key, units)| {
-                    assert_eq!(account_max, *units);
-                });
-        }
-
-        // adjust overflow down
-        {
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MIN);
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MIN);
-            // expect block cost set to limit
-            assert_eq!(block_max, testee.block_cost());
-            assert_eq!(expected_tx_count, testee.transaction_count());
-            testee
-                .cost_by_writable_accounts
-                .iter()
-                .for_each(|(_key, units)| {
-                    assert_eq!(account_max, *units);
-                });
-        }
-    }
-
-    #[test]
-    fn test_checked_diff_unsigned() {
-        solana_logger::setup();
-
-        // no diff
-        assert_eq!(0, CostTracker::checked_diff_unsigned(10u64, 10u64).unwrap());
-        assert_eq!(
-            0,
-            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX).unwrap()
-        );
-
-        // positive diff
-        assert_eq!(2, CostTracker::checked_diff_unsigned(10u64, 8u64).unwrap());
-        assert_eq!(
-            8,
-            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX - 8u64).unwrap()
-        );
-
-        // negative diff
-        assert_eq!(-2, CostTracker::checked_diff_unsigned(8u64, 10u64).unwrap());
-        assert_eq!(
-            -10,
-            CostTracker::checked_diff_unsigned(u64::MIN, 10u64).unwrap()
-        );
-
-        // diff too big for i64 (overflow)
-        assert_eq!(None, CostTracker::checked_diff_unsigned(u64::MAX, 0u64));
-        assert_eq!(None, CostTracker::checked_diff_unsigned(0u64, u64::MAX));
     }
 }
