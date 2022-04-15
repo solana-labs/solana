@@ -935,9 +935,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.3"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdbfe11fe19ff083c48923cf179540e8cd0535903dc35e178a1fdeeb59aef51f"
+checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
@@ -6179,9 +6179,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.25"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccd266a6c58aa37380b52e6ee627762d794840116d796879867e7419445e6fe5"
+checksum = "bec5c1525c69ec74323d6a2d145a29b51844c4153a2cd5e4ac0d08b3fe81c806"
 dependencies = [
  "byteorder",
  "combine",
