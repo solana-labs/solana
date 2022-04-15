@@ -2,7 +2,7 @@
 //! node stakes
 use {
     crate::{
-        stake_account::{self, StakeAccount},
+        stake_account,
         stake_history::StakeHistory,
         vote_account::{VoteAccount, VoteAccounts},
     },
@@ -42,6 +42,8 @@ pub enum InvalidCacheEntryReason {
     BadState,
     WrongOwner,
 }
+
+type StakeAccount = stake_account::StakeAccount<Delegation>;
 
 #[derive(Default, Debug, AbiExample)]
 pub(crate) struct StakesCache(RwLock<Stakes<StakeAccount>>);
@@ -200,7 +202,7 @@ impl Stakes<StakeAccount> {
             let stake_account = StakeAccount::try_from(stake_account)?;
             // Sanity check that the delegation is consistent with what is
             // stored in the account.
-            if stake_account.delegation() == Some(*delegation) {
+            if stake_account.delegation() == *delegation {
                 Ok((*pubkey, stake_account))
             } else {
                 Err(Error::InvalidDelegation(*pubkey))
@@ -237,7 +239,7 @@ impl Stakes<StakeAccount> {
             stake_delegations
                 .par_iter()
                 .fold(StakeActivationStatus::default, |acc, stake_account| {
-                    let delegation = stake_account.delegation().unwrap();
+                    let delegation = stake_account.delegation();
                     acc + delegation
                         .stake_activating_and_deactivating(self.epoch, Some(&self.stake_history))
                 })
@@ -251,7 +253,7 @@ impl Stakes<StakeAccount> {
             stake_delegations
                 .par_iter()
                 .fold(HashMap::default, |mut delegated_stakes, stake_account| {
-                    let delegation = stake_account.delegation().unwrap();
+                    let delegation = stake_account.delegation();
                     let entry = delegated_stakes.entry(delegation.voter_pubkey).or_default();
                     *entry += delegation.stake(self.epoch, Some(&self.stake_history));
                     delegated_stakes
@@ -280,7 +282,7 @@ impl Stakes<StakeAccount> {
     ) -> u64 {
         self.stake_delegations
             .values()
-            .map(|stake_account| stake_account.delegation().unwrap())
+            .map(StakeAccount::delegation)
             .filter(|delegation| &delegation.voter_pubkey == voter_pubkey)
             .map(|delegation| delegation.stake(epoch, Some(stake_history)))
             .sum()
@@ -288,7 +290,7 @@ impl Stakes<StakeAccount> {
 
     /// Sum the lamports of the vote accounts and the delegated stake
     pub fn vote_balance_and_staked(&self) -> u64 {
-        let get_stake = |stake_account: &StakeAccount| stake_account.delegation().unwrap().stake;
+        let get_stake = |stake_account: &StakeAccount| stake_account.delegation().stake;
         let get_lamports = |(_, (_, vote_account)): (_, &(_, VoteAccount))| vote_account.lamports();
 
         self.stake_delegations.values().map(get_stake).sum::<u64>()
@@ -301,7 +303,7 @@ impl Stakes<StakeAccount> {
 
     pub fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
         if let Some(stake_account) = self.stake_delegations.remove(stake_pubkey) {
-            let removed_delegation = stake_account.delegation().unwrap();
+            let removed_delegation = stake_account.delegation();
             let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
             self.vote_accounts
                 .sub_stake(&removed_delegation.voter_pubkey, removed_stake);
@@ -339,15 +341,13 @@ impl Stakes<StakeAccount> {
             .stake_delegations
             .get(stake_pubkey)
             .map(|stake_account| {
-                let delegation = stake_account.delegation().unwrap();
+                let delegation = stake_account.delegation();
                 (
                     delegation.voter_pubkey,
                     delegation.stake(self.epoch, Some(&self.stake_history)),
                 )
             });
-        let new_delegation = new_stake_account
-            .as_ref()
-            .and_then(StakeAccount::delegation);
+        let new_delegation = new_stake_account.as_ref().map(StakeAccount::delegation);
         let new_stake = new_stake_account.as_ref().and_then(|new_stake_account| {
             let new_delegation = new_delegation?;
             // When account is removed (lamports == 0), this check ensures
@@ -408,24 +408,20 @@ impl StakesEnum {
     }
 }
 
-impl TryFrom<Stakes<StakeAccount>> for Stakes<Delegation> {
-    type Error = Error;
-    fn try_from(stakes: Stakes<StakeAccount>) -> Result<Self, Self::Error> {
+impl From<Stakes<StakeAccount>> for Stakes<Delegation> {
+    fn from(stakes: Stakes<StakeAccount>) -> Self {
         let stake_delegations = stakes
             .stake_delegations
             .into_iter()
-            .map(|(pubkey, stake_account)| match stake_account.delegation() {
-                None => Err(Error::InvalidDelegation(pubkey)),
-                Some(delegation) => Ok((pubkey, delegation)),
-            })
-            .collect::<Result<_, _>>()?;
-        Ok(Self {
+            .map(|(pubkey, stake_account)| (pubkey, stake_account.delegation()))
+            .collect();
+        Self {
             vote_accounts: stakes.vote_accounts,
             stake_delegations,
             unused: stakes.unused,
             epoch: stakes.epoch,
             stake_history: stakes.stake_history,
-        })
+        }
     }
 }
 
@@ -451,16 +447,12 @@ impl PartialEq<StakesEnum> for StakesEnum {
         match (self, other) {
             (Self::Accounts(stakes), Self::Accounts(other)) => stakes == other,
             (Self::Accounts(stakes), Self::Delegations(other)) => {
-                match Stakes::<Delegation>::try_from(stakes.clone()) {
-                    Ok(stakes) => stakes == *other,
-                    Err(_) => false,
-                }
+                let stakes = Stakes::<Delegation>::from(stakes.clone());
+                &stakes == other
             }
             (Self::Delegations(stakes), Self::Accounts(other)) => {
-                match Stakes::<Delegation>::try_from(other.clone()) {
-                    Ok(other) => *stakes == other,
-                    Err(_) => false,
-                }
+                let other = Stakes::<Delegation>::from(other.clone());
+                stakes == &other
             }
             (Self::Delegations(stakes), Self::Delegations(other)) => stakes == other,
         }
@@ -481,13 +473,7 @@ pub(crate) mod serde_stakes_enum_compat {
     {
         match stakes {
             StakesEnum::Accounts(stakes) => {
-                let stakes = match Stakes::<Delegation>::try_from(stakes.clone()) {
-                    Ok(stakes) => stakes,
-                    Err(err) => {
-                        let err = format!("{:?}", err);
-                        return Err(serde::ser::Error::custom(err));
-                    }
-                };
+                let stakes = Stakes::<Delegation>::from(stakes.clone());
                 stakes.serialize(serializer)
             }
             StakesEnum::Delegations(stakes) => stakes.serialize(serializer),
@@ -966,7 +952,7 @@ pub mod tests {
         let data = bincode::serialize(&dummy).unwrap();
         let other: Dummy = bincode::deserialize(&data).unwrap();
         assert_eq!(other, dummy);
-        let stakes = Stakes::<Delegation>::try_from(stakes).unwrap();
+        let stakes = Stakes::<Delegation>::from(stakes);
         assert!(stakes.vote_accounts.as_ref().len() >= 5);
         assert!(stakes.stake_delegations.len() >= 50);
         let other = match &*other.stakes {

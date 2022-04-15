@@ -8,39 +8,54 @@ use {
         pubkey::Pubkey,
         stake::state::{Delegation, StakeState},
     },
+    std::marker::PhantomData,
     thiserror::Error,
 };
 
 /// An account and a stake state deserialized from the account.
+/// Generic type T enforces type-saftey so that StakeAccount<Delegation> can
+/// only wrap a stake-state which is a Delegation; whereas StakeAccount<()>
+/// wraps any account with stake state.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct StakeAccount(AccountSharedData, StakeState);
+pub struct StakeAccount<T> {
+    account: AccountSharedData,
+    stake_state: StakeState,
+    _phantom: PhantomData<T>,
+}
 
 #[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[error(transparent)]
     InstructionError(#[from] InstructionError),
+    #[error("Invalid delegation: {0:?}")]
+    InvalidDelegation(StakeState),
     #[error("Invalid stake account owner: {owner:?}")]
     InvalidOwner { owner: Pubkey },
 }
 
-impl StakeAccount {
+impl<T> StakeAccount<T> {
     #[inline]
     pub(crate) fn lamports(&self) -> u64 {
-        self.0.lamports()
+        self.account.lamports()
     }
 
     #[inline]
     pub(crate) fn stake_state(&self) -> &StakeState {
-        &self.1
-    }
-
-    #[inline]
-    pub(crate) fn delegation(&self) -> Option<Delegation> {
-        self.1.delegation()
+        &self.stake_state
     }
 }
 
-impl TryFrom<AccountSharedData> for StakeAccount {
+impl StakeAccount<Delegation> {
+    #[inline]
+    pub(crate) fn delegation(&self) -> Delegation {
+        // Safe to unwrap here becasue StakeAccount<Delegation> will always
+        // only wrap a stake-state which is a delegation.
+        self.stake_state.delegation().unwrap()
+    }
+}
+
+impl TryFrom<AccountSharedData> for StakeAccount<()> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if account.owner() != &solana_stake_program::id() {
@@ -49,18 +64,49 @@ impl TryFrom<AccountSharedData> for StakeAccount {
             });
         }
         let stake_state = account.state()?;
-        Ok(Self(account, stake_state))
+        Ok(Self {
+            account,
+            stake_state,
+            _phantom: PhantomData::default(),
+        })
     }
 }
 
-impl From<StakeAccount> for (AccountSharedData, StakeState) {
-    fn from(stake_account: StakeAccount) -> Self {
-        (stake_account.0, stake_account.1)
+impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
+    type Error = Error;
+    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
+        let stake_account = StakeAccount::<()>::try_from(account)?;
+        if stake_account.stake_state.delegation().is_none() {
+            return Err(Error::InvalidDelegation(stake_account.stake_state));
+        }
+        Ok(Self {
+            account: stake_account.account,
+            stake_state: stake_account.stake_state,
+            _phantom: PhantomData::default(),
+        })
+    }
+}
+
+impl From<StakeAccount<Delegation>> for StakeAccount<()> {
+    #[inline]
+    fn from(stake_account: StakeAccount<Delegation>) -> Self {
+        Self {
+            account: stake_account.account,
+            stake_state: stake_account.stake_state,
+            _phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
+    #[inline]
+    fn from(stake_account: StakeAccount<T>) -> Self {
+        (stake_account.account, stake_account.stake_state)
     }
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for StakeAccount {
+impl AbiExample for StakeAccount<Delegation> {
     fn example() -> Self {
         use solana_sdk::{
             account::Account,
