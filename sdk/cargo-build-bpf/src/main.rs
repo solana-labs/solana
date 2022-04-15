@@ -29,6 +29,7 @@ struct Config<'a> {
     offline: bool,
     verbose: bool,
     workspace: bool,
+    jobs: Option<String>,
 }
 
 impl Default for Config<'_> {
@@ -51,6 +52,7 @@ impl Default for Config<'_> {
             offline: false,
             verbose: false,
             workspace: false,
+            jobs: None,
         }
     }
 }
@@ -545,6 +547,10 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     if config.verbose {
         cargo_build_args.push("--verbose");
     }
+    if let Some(jobs) = &config.jobs {
+        cargo_build_args.push("--jobs");
+        cargo_build_args.push(jobs);
+    }
     if let Some(args) = &config.cargo_args {
         for arg in args {
             cargo_build_args.push(arg);
@@ -793,6 +799,15 @@ fn main() {
                 .alias("all")
                 .help("Build all BPF packages in the workspace"),
         )
+        .arg(
+            Arg::new("jobs")
+                .short('j')
+                .long("jobs")
+                .takes_value(true)
+                .value_name("N")
+                .validator(|val| val.parse::<usize>().map_err(|e| e.to_string()))
+                .help("Number of parallel jobs, defaults to # of CPUs"),
+        )
         .get_matches_from(args);
 
     let bpf_sdk: PathBuf = matches.value_of_t_or_exit("bpf_sdk");
@@ -827,6 +842,7 @@ fn main() {
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
+        jobs: matches.value_of_t("jobs").ok(),
     };
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
     build_bpf(config, manifest_path);
