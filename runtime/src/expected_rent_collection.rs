@@ -347,13 +347,13 @@ impl ExpectedRentCollection {
                     .contains_key(pubkey)
             };
             let rent_epoch = account.rent_epoch();
-            if possibly_update
-                && rent_epoch == 0
-                && current_epoch > 1
-                && !rewrites_skipped_this_pubkey_this_slot()
-            {
-                // we know we're done
-                return None;
+            if possibly_update && rent_epoch == 0 && current_epoch > 1 {
+                if rewrites_skipped_this_pubkey_this_slot() {
+                    return Some(next_epoch);
+                } else {
+                    // we know we're done
+                    return None;
+                }
             }
 
             // if an account was written >= its rent collection slot within the last epoch worth of slots, then we don't want to update it here
