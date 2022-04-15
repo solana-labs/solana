@@ -84,6 +84,21 @@ fn main() {
     info!("Connecting to the cluster");
 
     match external_client_type {
+        ExternalClientType::RpcClient => {
+            let client = Arc::new(RpcClient::new_with_commitment(
+                json_rpc_url.to_string(),
+                CommitmentConfig::confirmed(),
+            ));
+            let keypairs = get_keypairs(
+                client.clone(),
+                id,
+                keypair_count,
+                *num_lamports_per_account,
+                client_ids_and_stake_file,
+                *read_from_client_file,
+            );
+            do_bench_tps(client, cli_config, keypairs);
+        }
         ExternalClientType::ThinClient => {
             let nodes = discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
                 .unwrap_or_else(|err| {

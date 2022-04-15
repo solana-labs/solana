@@ -13,6 +13,8 @@ use {
 const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 
 pub enum ExternalClientType {
+    // Submits transactions to an Rpc node using an RpcClient
+    RpcClient,
     // Submits transactions directly to leaders using a ThinClient, broadcasting to multiple
     // leaders when num_nodes > 1
     ThinClient,
@@ -251,8 +253,16 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 ),
         )
         .arg(
+            Arg::with_name("rpc_client")
+                .long("use-rpc-client")
+                .conflicts_with("tpu_client")
+                .takes_value(false)
+                .help("Submit transactions with a RpcClient")
+        )
+        .arg(
             Arg::with_name("tpu_client")
                 .long("use-tpu-client")
+                .conflicts_with("rpc_client")
                 .takes_value(false)
                 .help("Submit transactions with a TpuClient")
         )
@@ -296,10 +306,16 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         matches.value_of("identity").unwrap_or(""),
         &config.keypair_path,
     );
-    args.id = read_keypair_file(id_path).expect("could not parse identity path");
+    if let Ok(id) = read_keypair_file(id_path) {
+        args.id = id;
+    } else if matches.is_present("identity") {
+        panic!("could not parse identity path");
+    }
 
     if matches.is_present("tpu_client") {
         args.external_client_type = ExternalClientType::TpuClient;
+    } else if matches.is_present("rpc_client") {
+        args.external_client_type = ExternalClientType::RpcClient;
     }
 
     if matches.is_present("tpu_use_quic") {

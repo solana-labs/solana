@@ -23,5 +23,6 @@ pub(crate) fn get_minimum_delegation(_feature_set: &FeatureSet) -> u64 {
     // If/when the minimum delegation amount is changed, the `feature_set` parameter will be used
     // to chose the correct value.  And since the MINIMUM_STAKE_DELEGATION constant cannot be
     // removed, use it here as to not duplicate magic constants.
+    #[allow(deprecated)]
     solana_sdk::stake::MINIMUM_STAKE_DELEGATION
 }

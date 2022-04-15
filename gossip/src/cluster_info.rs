@@ -1114,7 +1114,7 @@ impl ClusterInfo {
                 transaction
             })
             .collect();
-        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
+        inc_new_counter_debug!("cluster_info-get_votes-count", txs.len());
         txs
     }
 
@@ -1134,7 +1134,7 @@ impl ClusterInfo {
                 (vote.value.label(), transaction)
             })
             .unzip();
-        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
+        inc_new_counter_debug!("cluster_info-get_votes-count", txs.len());
         (labels, txs)
     }
 
@@ -1668,7 +1668,7 @@ impl ClusterInfo {
             self.gossip
                 .purge(&self_pubkey, thread_pool, timestamp(), &timeouts)
         };
-        inc_new_counter_info!("cluster_info-purge-count", num_purged);
+        inc_new_counter_debug!("cluster_info-purge-count", num_purged);
     }
 
     // Trims the CRDS table by dropping all values associated with the pubkeys

@@ -341,14 +341,15 @@ impl AbsRequestHandler {
             })
     }
 
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn handle_pruned_banks(&self, bank: &Bank, is_from_abs: bool) -> usize {
+    pub fn handle_pruned_banks(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
         let mut count = 0;
         for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
-            bank.rc
-                .accounts
-                .purge_slot(pruned_slot, pruned_bank_id, is_from_abs);
+            bank.rc.accounts.accounts_db.purge_slot(
+                pruned_slot,
+                pruned_bank_id,
+                is_serialized_with_abs,
+            );
         }
 
         count

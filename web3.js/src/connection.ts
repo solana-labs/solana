@@ -3878,7 +3878,14 @@ export class Connection {
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
     let transaction;
     if (transactionOrMessage instanceof Transaction) {
-      transaction = transactionOrMessage;
+      let originalTx: Transaction = transactionOrMessage;
+      transaction = new Transaction({
+        recentBlockhash: originalTx.recentBlockhash,
+        nonceInfo: originalTx.nonceInfo,
+        feePayer: originalTx.feePayer,
+        signatures: [...originalTx.signatures],
+      });
+      transaction.instructions = transactionOrMessage.instructions;
     } else {
       transaction = Transaction.populate(transactionOrMessage);
     }
@@ -3888,11 +3895,7 @@ export class Connection {
     } else {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        if (!transaction.recentBlockhash) {
-          transaction.recentBlockhash = await this._recentBlockhash(
-            disableCache,
-          );
-        }
+        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
 
         if (!signers) break;
 

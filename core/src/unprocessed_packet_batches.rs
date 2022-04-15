@@ -15,14 +15,9 @@ use {
 /// SanitizedTransaction
 #[derive(Debug, Default)]
 pub struct DeserializedPacket {
-    #[allow(dead_code)]
-    versioned_transaction: VersionedTransaction,
-
-    #[allow(dead_code)]
-    message_hash: Hash,
-
-    #[allow(dead_code)]
-    is_simple_vote: bool,
+    pub versioned_transaction: VersionedTransaction,
+    pub message_hash: Hash,
+    pub is_simple_vote: bool,
 }
 
 /// Defines the type of entry in `UnprocessedPacketBatches`, it holds original packet_batch

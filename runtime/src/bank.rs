@@ -178,7 +178,7 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
-pub type Rewrites = DashMap<Pubkey, Hash>;
+pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RentDebit {
@@ -1233,6 +1233,7 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
+    /// callback function only to be called when dropping and should only be called once
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
@@ -1384,7 +1385,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
@@ -3782,79 +3783,79 @@ impl Bank {
     #[allow(clippy::cognitive_complexity)]
     fn update_error_counters(error_counters: &ErrorCounters) {
         if 0 != error_counters.total {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error_count",
                 error_counters.total
             );
         }
         if 0 != error_counters.account_not_found {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-account_not_found",
                 error_counters.account_not_found
             );
         }
         if 0 != error_counters.account_in_use {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-account_in_use",
                 error_counters.account_in_use
             );
         }
         if 0 != error_counters.account_loaded_twice {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-account_loaded_twice",
                 error_counters.account_loaded_twice
             );
         }
         if 0 != error_counters.blockhash_not_found {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-blockhash_not_found",
                 error_counters.blockhash_not_found
             );
         }
         if 0 != error_counters.blockhash_too_old {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-blockhash_too_old",
                 error_counters.blockhash_too_old
             );
         }
         if 0 != error_counters.invalid_account_index {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-invalid_account_index",
                 error_counters.invalid_account_index
             );
         }
         if 0 != error_counters.invalid_account_for_fee {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-invalid_account_for_fee",
                 error_counters.invalid_account_for_fee
             );
         }
         if 0 != error_counters.insufficient_funds {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-insufficient_funds",
                 error_counters.insufficient_funds
             );
         }
         if 0 != error_counters.instruction_error {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-instruction_error",
                 error_counters.instruction_error
             );
         }
         if 0 != error_counters.already_processed {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-already_processed",
                 error_counters.already_processed
             );
         }
         if 0 != error_counters.not_allowed_during_cluster_maintenance {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-cluster-maintenance",
                 error_counters.not_allowed_during_cluster_maintenance
             );
         }
         if 0 != error_counters.invalid_writable_account {
-            inc_new_counter_info!(
+            inc_new_counter_debug!(
                 "bank-process_transactions-error-invalid_writable_account",
                 error_counters.invalid_writable_account
             );
@@ -4072,8 +4073,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
-        debug!("processing transactions: {}", sanitized_txs.len());
-        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
+        inc_new_counter_debug!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = ErrorCounters::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -4495,7 +4495,7 @@ impl Bank {
             "bank-process_transactions-txs",
             committed_transactions_count as usize
         );
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
+        inc_new_counter_debug!("bank-process_transactions-sigs", signature_count as usize);
 
         if committed_with_failure_result_count > 0 {
             self.transaction_error_count
@@ -6807,6 +6807,7 @@ impl Drop for Bank {
             // Default case for tests
             self.rc
                 .accounts
+                .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
@@ -14777,9 +14778,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts(false, false, None);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        let is_abs_service = true;
-                        abs_request_handler
-                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
+                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(
