@@ -34,7 +34,6 @@ pub mod keyed_account;
 pub mod log;
 pub mod native_loader;
 pub mod nonce_account;
-pub mod num_utils;
 pub mod packet;
 pub mod poh_config;
 pub mod precompiles;
