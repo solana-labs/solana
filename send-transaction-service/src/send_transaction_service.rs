@@ -126,6 +126,7 @@ impl SendTransactionService {
         Self { thread }
     }
 
+    // send the transaction and handle retry
     fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
