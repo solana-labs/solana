@@ -60,7 +60,7 @@ pub fn process_instruction(
             vote_state::update_commission(&mut me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
-            inc_new_counter_info!("vote-native", 1);
+            inc_new_counter_debug!("vote-native", 1);
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
