@@ -53,6 +53,7 @@ pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
 
 /// Bank drop signal queue events
+#[allow(dead_code)]
 enum BankDropQueueEvent {
     Full,
     Disconnected,
