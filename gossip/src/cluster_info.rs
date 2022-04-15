@@ -286,7 +286,7 @@ impl Protocol {
                 if caller.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    inc_new_counter_debug!("cluster_info-gossip_pull_request_verify_fail", 1);
                     None
                 }
             }
@@ -294,7 +294,7 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "cluster_info-gossip_pull_response_verify_fail",
                         size - data.len()
                     );
@@ -309,7 +309,7 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_info!(
+                    inc_new_counter_debug!(
                         "cluster_info-gossip_push_msg_verify_fail",
                         size - data.len()
                     );
@@ -332,7 +332,7 @@ impl Protocol {
                 if ping.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
+                    inc_new_counter_debug!("cluster_info-gossip_ping_msg_verify_fail", 1);
                     None
                 }
             }
@@ -340,7 +340,7 @@ impl Protocol {
                 if pong.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
+                    inc_new_counter_debug!("cluster_info-gossip_pong_msg_verify_fail", 1);
                     None
                 }
             }
@@ -2033,7 +2033,7 @@ impl ClusterInfo {
                         packet_batch.packets.push(packet);
                         sent += 1;
                     } else {
-                        inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                        inc_new_counter_debug!("gossip_pull_request-no_budget", 1);
                         break;
                     }
                 }
@@ -2041,8 +2041,8 @@ impl ClusterInfo {
         }
         time.stop();
         let dropped_responses = responses.len() - sent;
-        inc_new_counter_info!("gossip_pull_request-sent_requests", sent);
-        inc_new_counter_info!("gossip_pull_request-dropped_requests", dropped_responses);
+        inc_new_counter_debug!("gossip_pull_request-sent_requests", sent);
+        inc_new_counter_debug!("gossip_pull_request-dropped_requests", dropped_responses);
         debug!(
             "handle_pull_requests: {} sent: {} total: {} total_bytes: {}",
             time,
