@@ -2275,7 +2275,7 @@ mod rocks_metrics_utils {
     };
     const METRIC_SAMPLES_1K: i32 = 1000;
     // The default number of rocksdb perf samples in 1K
-    const ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT: i32 = 10;
+    const ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K_DEFAULT: i32 = 0;
     lazy_static! {
     // The number of RocksDB performance counter samples in 1000.
     static ref ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K: i32 =
@@ -2295,6 +2295,9 @@ mod rocks_metrics_utils {
     ///
     /// Returns true if the PerfContext is enabled.
     pub fn maybe_collect_perf_context() -> bool {
+        if *ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K <= 0 {
+            return false;
+        }
         if thread_rng().gen_range(0, METRIC_SAMPLES_1K) > *ROCKSDB_PERF_CONTEXT_SAMPLES_IN_1K {
             return false;
         }

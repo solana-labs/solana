@@ -317,6 +317,8 @@ async function fetchAccountInfo(
   });
 }
 
+const IMAGE_MIME_TYPE_REGEX = /data:image\/(svg\+xml|png|jpeg|gif)/g;
+
 const getMetaDataJSON = async (
   id: string,
   metadata: programs.metadata.MetadataData
@@ -331,9 +333,11 @@ const getMetaDataJSON = async (
       }
 
       if (extended?.image) {
-        extended.image = extended.image.startsWith("http")
-          ? extended.image
-          : `${metadata.data.uri}/${extended.image}`;
+        extended.image =
+          extended.image.startsWith("http") ||
+          IMAGE_MIME_TYPE_REGEX.test(extended.image)
+            ? extended.image
+            : `${metadata.data.uri}/${extended.image}`;
       }
 
       return extended;

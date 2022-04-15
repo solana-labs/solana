@@ -22,6 +22,7 @@ solana-gossip = { path = "../gossip", version = "=1.11.0" }
 solana-ledger = { path = "../ledger", version = "=1.11.0" }
 solana-logger = { path = "../logger", version = "=1.11.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-program-test = { path = "../program-test", version = "=1.11.0" }
 solana-rpc = { path = "../rpc", version = "=1.11.0" }
 solana-runtime = { path = "../runtime", version = "=1.11.0" }

@@ -3569,7 +3569,7 @@ pub mod rpc_full {
                             logs: Some(logs),
                             accounts: None,
                             units_consumed: Some(units_consumed),
-                            return_data,
+                            return_data: return_data.map(|return_data| return_data.into()),
                         },
                     }
                     .into());
@@ -3679,7 +3679,7 @@ pub mod rpc_full {
                     logs: Some(logs),
                     accounts,
                     units_consumed: Some(units_consumed),
-                    return_data,
+                    return_data: return_data.map(|return_data| return_data.into()),
                 },
             ))
         }

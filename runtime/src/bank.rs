@@ -178,6 +178,8 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RentDebit {
     rent_collected: u64,
@@ -234,7 +236,7 @@ pub type BankSlotDelta = SlotDelta<Result<()>>;
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
-type PartitionIndex = u64;
+pub(crate) type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
 type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
 type RentCollectionCycleParams = (
@@ -709,7 +711,7 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an IntrustionTrace to InnerInstructionsList
+/// Convert from an InstructionTrace to InnerInstructionsList
 pub fn inner_instructions_list_from_instruction_trace(
     instruction_trace: &InstructionTrace,
 ) -> InnerInstructionsList {
@@ -1231,6 +1233,7 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
+    /// callback function only to be called when dropping and should only be called once
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
@@ -1382,7 +1385,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
@@ -4837,7 +4840,6 @@ impl Bank {
 
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
-    #[cfg(test)]
     pub fn partition_from_pubkey(
         pubkey: &Pubkey,
         partition_count: PartitionsPerCycle,
@@ -6806,6 +6808,7 @@ impl Drop for Bank {
             // Default case for tests
             self.rc
                 .accounts
+                .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
@@ -14667,7 +14670,9 @@ pub(crate) mod tests {
         // Let threads run for a while, check the scans didn't see any mixed slots
         let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
-        let mut remaining_loops = 1000;
+        // This can be reduced when you are running this test locally to deal with hangs
+        // But, if it is too low, the ci fails intermittently.
+        let mut remaining_loops = 2000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
@@ -14774,9 +14779,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts(false, false, None);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        let is_abs_service = true;
-                        abs_request_handler
-                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
+                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(

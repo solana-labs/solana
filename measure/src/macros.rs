@@ -1,19 +1,66 @@
-/// Use `measure!()` macro when you have an expression that you want to measure.
+/// Measure this expression
 ///
-/// It has similar functionality to the Measure::this() call.
-/// It will start a new `Measure`, call your expression, stop the measure, then return the `Measure`
-/// object along with your expression's return value.
+/// Use `measure!()` when you have an expression that you want to measure.  `measure!()` will start
+/// a new [`Measure`], evaluate your expression, stop the [`Measure`], and then return the
+/// [`Measure`] object along with your expression's return value.
+///
+/// [`Measure`]: crate::measure::Measure
 ///
 /// # Examples
-/// ```
-/// // With macro
-/// # use solana_measure::measure;
-/// # fn zero() {};
-/// let (result, measure) = measure!(zero(), "zero params");
 ///
-/// // Without macro
-/// # use solana_measure::measure::Measure;
-/// let (result, measure) = Measure::this(|_| zero(), (), "zero params");
+/// ```
+/// // Measure functions
+/// # use solana_measure::measure;
+/// # fn foo() {}
+/// # fn bar(x: i32) {}
+/// # fn add(x: i32, y: i32) -> i32 {x + y}
+/// let (result, measure) = measure!(foo(), "foo takes no parameters");
+/// let (result, measure) = measure!(bar(42), "bar takes one parameter");
+/// let (result, measure) = measure!(add(1, 2), "add takes two parameters and returns a value");
+/// # assert_eq!(result, 1 + 2);
+/// ```
+///
+/// ```
+/// // Measure methods
+/// # use solana_measure::measure;
+/// # struct Foo {
+/// #     f: i32,
+/// # }
+/// # impl Foo {
+/// #     fn frobnicate(&self, bar: i32) -> i32 {
+/// #         self.f * bar
+/// #     }
+/// # }
+/// let foo = Foo { f: 42 };
+/// let (result, measure) = measure!(foo.frobnicate(2), "measure methods");
+/// # assert_eq!(result, 42 * 2);
+/// ```
+///
+/// ```
+/// // Measure expression blocks
+/// # use solana_measure::measure;
+/// # fn complex_calculation() -> i32 { 42 }
+/// # fn complex_transform(x: i32) -> i32 { x + 3 }
+/// # fn record_result(y: i32) {}
+/// let (result, measure) = measure!(
+///     {
+///         let x = complex_calculation();
+///         # assert_eq!(x, 42);
+///         let y = complex_transform(x);
+///         # assert_eq!(y, 42 + 3);
+///         record_result(y);
+///         y
+///     },
+///     "measure a block of many operations",
+/// );
+/// # assert_eq!(result, 42 + 3);
+/// ```
+///
+/// ```
+/// // The `name` parameter is optional
+/// # use solana_measure::measure;
+/// # fn meow() {};
+/// let (result, measure) = measure!(meow());
 /// ```
 #[macro_export]
 macro_rules! measure {
@@ -59,30 +106,26 @@ mod tests {
             assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
         }
 
-        // Ensure that the macro can be called with a simple block
-        {
-            let expected = 1;
-            let (actual, _measure) = measure!({ expected }, "test");
-            assert_eq!(actual, expected);
-        }
-
-        // Ensure that the macro can be called with a normal function
+        // Ensure that the macro can be called with functions
         {
             let (result, _measure) = measure!(my_multiply(3, 4), "test");
             assert_eq!(result, 3 * 4);
-        }
 
-        // Ensure that the macro can be called with a normal function with one argument
-        {
             let (result, _measure) = measure!(square(5), "test");
             assert_eq!(result, 5 * 5)
         }
 
-        // Ensure that the macro can be called with a method (and self)
+        // Ensure that the macro can be called with methods
         {
             let some_struct = SomeStruct { x: 42 };
             let (result, _measure) = measure!(some_struct.add_to(4), "test");
             assert_eq!(result, 42 + 4);
+        }
+
+        // Ensure that the macro can be called with blocks
+        {
+            let (result, _measure) = measure!({ 1 + 2 }, "test");
+            assert_eq!(result, 3);
         }
 
         // Ensure that the macro can be called with a trailing comma

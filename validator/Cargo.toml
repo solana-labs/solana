@@ -16,7 +16,7 @@ clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-fd-lock = "3.0.4"
+fd-lock = "3.0.5"
 indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }

@@ -1090,6 +1090,7 @@ pub struct AccountsDb {
     #[cfg(test)]
     load_limit: AtomicU64,
 
+    /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
@@ -1160,7 +1161,7 @@ struct PurgeStats {
     total_removed_cached_bytes: AtomicU64,
     total_removed_stored_bytes: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
-    scan_storages_elasped: AtomicU64,
+    scan_storages_elapsed: AtomicU64,
     purge_accounts_index_elapsed: AtomicU64,
     handle_reclaims_elapsed: AtomicU64,
 }
@@ -1227,8 +1228,8 @@ impl PurgeStats {
                     i64
                 ),
                 (
-                    "scan_storages_elasped",
-                    self.scan_storages_elasped.swap(0, Ordering::Relaxed) as i64,
+                    "scan_storages_elapsed",
+                    self.scan_storages_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -4037,17 +4038,23 @@ impl AccountsDb {
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
         self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
+            .store(true, Ordering::Release);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
     /// comment below for more explanation.
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
-            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
+    ///   * `is_serialized_with_abs` - indicates whehter this call runs sequentially with all other
+    ///        accounts_db relevant calls, such as shrinking, purging etc., in account background
+    ///        service.
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_serialized_with_abs: bool) {
+        if self.is_bank_drop_callback_enabled.load(Ordering::Acquire) && !is_serialized_with_abs {
+            panic!(
+                "bad drop callpath detected; Bank::drop() must run serially with other logic in
+                ABS like clean_accounts()"
+            )
         }
+
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
         // we know that there are no longer any ongoing scans on this bank, because scans require
         // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
@@ -4268,7 +4275,7 @@ impl AccountsDb {
         );
         scan_storages_elasped.stop();
         purge_stats
-            .scan_storages_elasped
+            .scan_storages_elapsed
             .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
@@ -4761,9 +4768,8 @@ impl AccountsDb {
             // Regardless of whether this slot was *just* flushed from the cache by the above
             // `flush_slot_cache()`, we should update the `max_flush_root`.
             // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-            // This can occur for instance when:
-            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-            // 2) Random evictions
+            // This can occur for instance when
+            //  the cache is overwhelmed, we flushed some yet to be rooted frozen slots
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
             self.accounts_cache.set_max_flush_root(root);
@@ -5142,7 +5148,7 @@ impl AccountsDb {
 
     fn calculate_accounts_hash(
         &self,
-        slot: Slot,
+        max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
@@ -5176,7 +5182,7 @@ impl AccountsDb {
                                 return None;
                             }
                             if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, config.ancestors, Some(slot))
+                                self.accounts_index.get(pubkey, config.ancestors, Some(max_slot))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -5534,6 +5540,7 @@ impl AccountsDb {
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
@@ -5577,7 +5584,6 @@ impl AccountsDb {
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         let (hash, total_lamports) =
             self.calculate_accounts_hash_helper(use_index, slot, &config)?;
         if debug_verify {
@@ -7583,6 +7589,7 @@ pub mod tests {
         std::{
             iter::FromIterator,
             str::FromStr,
+            sync::atomic::AtomicBool,
             thread::{self, Builder, JoinHandle},
         },
     };
@@ -13600,8 +13607,7 @@ pub mod tests {
             .is_some());
 
         // Simulate purge_slot() all from AccountsBackgroundService
-        let is_from_abs = true;
-        accounts.purge_slot(slot0, 0, is_from_abs);
+        accounts.purge_slot(slot0, 0, true);
 
         // Now clean should clean up the remaining key
         accounts.clean_accounts(None, false, None);

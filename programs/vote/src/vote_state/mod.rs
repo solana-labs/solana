@@ -316,7 +316,7 @@ pub struct VoteState {
 
     /// history of how many credits earned by the end of each epoch
     ///  each tuple is (Epoch, credits, prev_credits)
-    pub(crate) epoch_credits: Vec<(Epoch, u64, u64)>,
+    pub epoch_credits: Vec<(Epoch, u64, u64)>,
 
     /// most recent timestamp submitted with a vote
     pub last_timestamp: BlockTimestamp,
@@ -1013,7 +1013,7 @@ impl VoteState {
         self.votes.iter().map(|v| v.slot).collect()
     }
 
-    fn current_epoch(&self) -> Epoch {
+    pub fn current_epoch(&self) -> Epoch {
         if self.epoch_credits.is_empty() {
             0
         } else {

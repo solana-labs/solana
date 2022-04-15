@@ -15,6 +15,8 @@ log = "0.4.14"
 rayon = "1.5.1"
 serde_json = "1.0.79"
 serde_yaml = "0.8.23"
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
+solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-client = { path = "../client", version = "=1.11.0" }
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-faucet = { path = "../faucet", version = "=1.11.0" }
@@ -34,6 +36,7 @@ thiserror = "1.0"
 [dev-dependencies]
 serial_test = "0.6.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.11.0" }
+solana-test-validator = { path = "../test-validator", version = "=1.11.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

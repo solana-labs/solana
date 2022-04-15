@@ -1,49 +1,38 @@
 import { PublicKey, Connection } from "@solana/web3.js";
 import {
-  getHashedName,
-  getNameAccountKey,
-  NameRegistryState,
   getFilteredProgramAccounts,
   NAME_PROGRAM_ID,
+  performReverseLookup,
 } from "@bonfida/spl-name-service";
-import BN from "bn.js";
 import { useState, useEffect } from "react";
 import { Cluster, useCluster } from "providers/cluster";
 
-// Name auctionning Program ID
-export const PROGRAM_ID = new PublicKey(
-  "jCebN34bUfdeUYJT13J1yG16XWQpt5PDx6Mse9GUqhR"
+// Address of the SOL TLD
+const SOL_TLD_AUTHORITY = new PublicKey(
+  "58PwtjSDuFHuUkYjH9BYnnQKHfwo9reZhC2zMJv9JPkx"
 );
-
 export interface DomainInfo {
   name: string;
   address: PublicKey;
-  class: PublicKey;
 }
 
-async function getDomainKey(
-  name: string,
-  nameClass?: PublicKey,
-  nameParent?: PublicKey
-) {
-  const hashedDomainName = await getHashedName(name);
-  const nameKey = await getNameAccountKey(
-    hashedDomainName,
-    nameClass,
-    nameParent
-  );
-  return nameKey;
-}
-
-export async function findOwnedNameAccountsForUser(
+async function getUserDomainAddresses(
   connection: Connection,
-  userAccount: PublicKey
+  userAddress: PublicKey
 ): Promise<PublicKey[]> {
   const filters = [
+    // parent
+    {
+      memcmp: {
+        offset: 0,
+        bytes: SOL_TLD_AUTHORITY.toBase58(),
+      },
+    },
+    // owner
     {
       memcmp: {
         offset: 32,
-        bytes: userAccount.toBase58(),
+        bytes: userAddress.toBase58(),
       },
     },
   ];
@@ -55,41 +44,8 @@ export async function findOwnedNameAccountsForUser(
   return accounts.map((a) => a.publicKey);
 }
 
-export async function performReverseLookup(
-  connection: Connection,
-  nameAccounts: PublicKey[]
-): Promise<DomainInfo[]> {
-  let [centralState] = await PublicKey.findProgramAddress(
-    [PROGRAM_ID.toBuffer()],
-    PROGRAM_ID
-  );
-
-  const reverseLookupAccounts = await Promise.all(
-    nameAccounts.map((name) => getDomainKey(name.toBase58(), centralState))
-  );
-
-  let names = await NameRegistryState.retrieveBatch(
-    connection,
-    reverseLookupAccounts
-  );
-
-  return names
-    .map((name) => {
-      if (!name?.data) {
-        return undefined;
-      }
-      const nameLength = new BN(name!.data.slice(0, 4), "le").toNumber();
-      return {
-        name: name.data.slice(4, 4 + nameLength).toString() + ".sol",
-        address: name.address,
-        class: name.class,
-      };
-    })
-    .filter((e) => !!e) as DomainInfo[];
-}
-
 export const useUserDomains = (
-  address: PublicKey
+  userAddress: PublicKey
 ): [DomainInfo[] | null, boolean] => {
   const { url, cluster } = useCluster();
   const [result, setResult] = useState<DomainInfo[] | null>(null);
@@ -102,12 +58,21 @@ export const useUserDomains = (
       const connection = new Connection(url, "confirmed");
       try {
         setLoading(true);
-        const domains = await findOwnedNameAccountsForUser(connection, address);
-        let names = await performReverseLookup(connection, domains);
-        names.sort((a, b) => {
-          return a.name.localeCompare(b.name);
-        });
-        setResult(names);
+        const userDomainAddresses = await getUserDomainAddresses(
+          connection,
+          userAddress
+        );
+        const userDomains = await Promise.all(
+          userDomainAddresses.map(async (address) => {
+            const domainName = await performReverseLookup(connection, address);
+            return {
+              name: `${domainName}.sol`,
+              address,
+            };
+          })
+        );
+        userDomains.sort((a, b) => a.name.localeCompare(b.name));
+        setResult(userDomains);
       } catch (err) {
         console.log(`Error fetching user domains ${err}`);
       } finally {
@@ -115,7 +80,7 @@ export const useUserDomains = (
       }
     };
     resolve();
-  }, [address, url]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userAddress, url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return [result, loading];
 };
