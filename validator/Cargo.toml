@@ -25,7 +25,7 @@ jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
 log = "0.4.14"
 num_cpus = "1.13.1"
-rand = "0.7.0"
+rand = "0.8.5"
 serde = "1.0.136"
 serde_json = "1.0.79"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }

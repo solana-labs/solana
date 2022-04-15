@@ -15,7 +15,7 @@ clap = { version = "3.1.5", features = ["cargo"] }
 crossbeam-channel = "0.5"
 log = "0.4.14"
 nix = "0.23.1"
-rand = "0.7.0"
+rand = "0.8.5"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 socket2 = "0.4.4"

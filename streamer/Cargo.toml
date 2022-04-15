@@ -20,7 +20,7 @@ nix = "0.23.1"
 pem = "1.0.2"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
 quinn = "0.8.1"
-rand = "0.7.0"
+rand = "0.8.5"
 rcgen = "0.9.2"
 rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
