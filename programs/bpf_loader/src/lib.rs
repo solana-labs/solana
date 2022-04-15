@@ -36,8 +36,6 @@ use {
         vm::{Config, EbpfVm, InstructionMeter},
     },
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
-        account_utils::State,
         bpf_loader, bpf_loader_deprecated,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
@@ -48,7 +46,6 @@ use {
             reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
-        keyed_account::keyed_account_at_index,
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
         program_error::MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
@@ -430,7 +427,6 @@ fn process_loader_upgradeable_instruction(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_program_key(transaction_context)?;
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
         UpgradeableLoaderInstruction::InitializeBuffer => {
@@ -626,7 +622,6 @@ fn process_loader_upgradeable_instruction(
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -806,7 +801,6 @@ fn process_loader_upgradeable_instruction(
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
 
@@ -1071,7 +1065,6 @@ fn process_loader_instruction(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_program_key(transaction_context)?;
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if program.get_owner() != program_id {
         ic_msg!(
@@ -1102,7 +1095,6 @@ fn process_loader_instruction(
             }
             let executor =
                 create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
@@ -1290,6 +1282,7 @@ mod tests {
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
+                ReadableAccount, WritableAccount,
             },
             account_utils::StateMut,
             client::SyncClient,
