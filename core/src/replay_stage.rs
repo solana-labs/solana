@@ -6001,13 +6001,19 @@ pub mod tests {
         assert_eq!(tower.last_voted_slot().unwrap(), 1);
 
         // Create a bank where the last vote transaction will have expired
-        let expired_bank = Arc::new(Bank::new_from_parent(
-            &bank2,
-            &Pubkey::default(),
-            bank2.slot() + MAX_PROCESSING_AGE as Slot,
-        ));
-        expired_bank.fill_bank_with_ticks();
-        expired_bank.freeze();
+        let expired_bank = {
+            let mut parent_bank = bank2.clone();
+            for _ in 0..MAX_PROCESSING_AGE {
+                parent_bank = Arc::new(Bank::new_from_parent(
+                    &parent_bank,
+                    &Pubkey::default(),
+                    parent_bank.slot() + 1,
+                ));
+                parent_bank.fill_bank_with_ticks();
+                parent_bank.freeze();
+            }
+            parent_bank
+        };
 
         // Now trying to refresh the vote for slot 1 will succeed because the recent blockhash
         // of the last vote transaction has expired

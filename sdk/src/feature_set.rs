@@ -355,6 +355,10 @@ pub mod executables_incur_cpi_data_cost {
     solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
 }
 
+pub mod fix_recent_blockhashes {
+    solana_sdk::declare_id!("6iyggb5MTcsvdcugX7bEKbHV8c6jdLbpHwkncrgLMhfo");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -438,6 +442,7 @@ lazy_static! {
         (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
         (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
+        (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
