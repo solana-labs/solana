@@ -3895,6 +3895,8 @@ export class Connection {
       transaction.instructions = transactionOrMessage.instructions;
     } else {
       transaction = Transaction.populate(transactionOrMessage);
+      // HACK: this function relies on mutating the populated transaction
+      transaction._message = transaction._json = undefined;
     }
 
     if (transaction.nonceInfo && signers) {
