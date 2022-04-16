@@ -18,7 +18,7 @@ use {
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         thread,
         time::{Duration, Instant},
@@ -28,6 +28,9 @@ use {
         time::timeout,
     },
 };
+
+pub const MAX_STAKED_CONNECTIONS: usize = 2000;
+pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
@@ -401,6 +404,9 @@ pub fn spawn_server(
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
+    staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
+    max_staked_connections: usize,
+    max_unstaked_connections: usize,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -417,6 +423,8 @@ pub fn spawn_server(
             debug!("spawn quic server");
             let mut last_datapoint = Instant::now();
             let connection_table: Arc<Mutex<ConnectionTable>> =
+                Arc::new(Mutex::new(ConnectionTable::default()));
+            let staked_connection_table: Arc<Mutex<ConnectionTable>> =
                 Arc::new(Mutex::new(ConnectionTable::default()));
             while !exit.load(Ordering::Relaxed) {
                 const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
@@ -443,10 +451,21 @@ pub fn spawn_server(
 
                         let remote_addr = connection.remote_address();
 
-                        let mut connection_table_l = connection_table.lock().unwrap();
-                        const MAX_CONNECTION_TABLE_SIZE: usize = 5000;
-                        let num_pruned = connection_table_l.prune_oldest(MAX_CONNECTION_TABLE_SIZE);
-                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                        let mut connection_table_l =
+                            if staked_nodes.read().unwrap().contains_key(&remote_addr.ip()) {
+                                let mut connection_table_l =
+                                    staked_connection_table.lock().unwrap();
+                                let num_pruned =
+                                    connection_table_l.prune_oldest(max_staked_connections);
+                                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                                connection_table_l
+                            } else {
+                                let mut connection_table_l = connection_table.lock().unwrap();
+                                let num_pruned =
+                                    connection_table_l.prune_oldest(max_unstaked_connections);
+                                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                                connection_table_l
+                            };
 
                         if let Some((last_update, stream_exit)) = connection_table_l
                             .try_add_connection(
@@ -529,12 +548,8 @@ mod test {
 
     #[test]
     fn test_quic_server_exit() {
-        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let exit = Arc::new(AtomicBool::new(false));
-        let (sender, _receiver) = unbounded();
-        let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
+        let (t, exit, _receiver, _server_address) = setup_quic_server();
+
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }
@@ -592,13 +607,7 @@ mod test {
     #[test]
     fn test_quic_server_block_multiple_connections() {
         solana_logger::setup();
-        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let exit = Arc::new(AtomicBool::new(false));
-        let (sender, _receiver) = unbounded();
-        let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
-        let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
+        let (t, exit, _receiver, server_address) = setup_quic_server();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
@@ -627,7 +636,19 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 2).unwrap();
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            2,
+            staked_nodes,
+            10,
+            10,
+        )
+        .unwrap();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
@@ -673,16 +694,38 @@ mod test {
         t.join().unwrap();
     }
 
-    #[test]
-    fn test_quic_server_multiple_writes() {
-        solana_logger::setup();
+    fn setup_quic_server() -> (
+        std::thread::JoinHandle<()>,
+        Arc<AtomicBool>,
+        crossbeam_channel::Receiver<PacketBatch>,
+        SocketAddr,
+    ) {
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), 1).unwrap();
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+        )
+        .unwrap();
+        (t, exit, receiver, server_address)
+    }
+
+    #[test]
+    fn test_quic_server_multiple_writes() {
+        solana_logger::setup();
+        let (t, exit, receiver, server_address) = setup_quic_server();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
