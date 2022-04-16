@@ -30,7 +30,7 @@ JOBS=$((JOBS>NPROC ? NPROC : JOBS))
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ "$cargo" stable test --jobs "$JOBS" --all --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   ;;
 test-stable-bpf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
@@ -128,6 +128,10 @@ test-wasm)
       popd
     fi
   done
+  exit 0
+  ;;
+test-docs)
+  _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   exit 0
   ;;
 *)
