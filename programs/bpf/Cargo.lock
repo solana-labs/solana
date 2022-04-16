@@ -2934,6 +2934,7 @@ dependencies = [
  "solana-cli-output",
  "solana-logger 1.11.0",
  "solana-measure",
+ "solana-metrics",
  "solana-program-runtime",
  "solana-runtime",
  "solana-sdk",
@@ -3682,6 +3683,7 @@ dependencies = [
  "solana-frozen-abi 1.11.0",
  "solana-frozen-abi-macro 1.11.0",
  "solana-measure",
+ "solana-metrics",
  "solana-sdk",
  "thiserror",
 ]

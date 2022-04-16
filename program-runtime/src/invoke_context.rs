@@ -212,7 +212,7 @@ pub struct InstructionProcessingStats {
 impl InstructionProcessingStats {
     fn is_empty(&self) -> bool {
         0 == self.vote_native_count.load(Ordering::Relaxed) as u64
-            + self.vote_state_native_count.load(Ordering::Relaxed) as u64
+            && 0 == self.vote_state_native_count.load(Ordering::Relaxed) as u64
     }
 
     pub fn inc_vote_native(&mut self) {
