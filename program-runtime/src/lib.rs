@@ -4,6 +4,10 @@
 
 pub mod accounts_data_meter;
 pub mod compute_budget;
+
+#[macro_use]
+extern crate solana_metrics;
+
 pub mod invoke_context;
 pub mod log_collector;
 pub mod neon_evm_program;
