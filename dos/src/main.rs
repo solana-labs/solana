@@ -12,18 +12,30 @@
 //! These options allow to compose transaction which fails at
 //! a particular stage of the processing pipeline.
 //!
-//! Example 1: send random transactions to TPU
+//! To limit the number of possible options and simplify the usage of the tool,
+//! The following configurations are suggested:
+//! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
+//! 1. Without blockhash and payer:
+//! 1.1 With invalid signatures
 //! ```bash
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
+//! solana-dos $COMMON --num-signatures 8
 //! ```
-//!
-//! Example 2: send unique transactions with valid recent blockhash to TPU
+//! 1.2 With valid signatures
 //! ```bash
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu \
-//!     --data-type transaction --generate-unique-transactions
-//!     --payer config/bootstrap-validator/identity.json \
-//!     --generate-valid-blockhash
+//! solana-dos $COMMON --valid-signatures --num-signatures 8
+//! ```
+//! 2. With blockhash and payer:
+//! 2.1 Single instruction transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type single-transfer
+//! ```
+//! 2.2 Multi instruction transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type multi-transfer
+//! ```
+//! 2.3 Account creation transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
 //!
 #![allow(clippy::integer_arithmetic)]
