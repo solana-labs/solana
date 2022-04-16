@@ -187,7 +187,7 @@ function buildTokenOptions(
   if (matchedTokens.length > 0) {
     return {
       label: "Tokens",
-      options: matchedTokens.map(([id, details]) => ({
+      options: matchedTokens.slice(0, 10).map(([id, details]) => ({
         label: details.name,
         value: [details.name, details.symbol, id],
         pathname: "/address/" + id,
