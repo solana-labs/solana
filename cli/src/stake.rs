@@ -41,6 +41,7 @@ use {
             self,
             instruction::{self as stake_instruction, LockupArgs, StakeError},
             state::{Authorized, Lockup, Meta, StakeActivationStatus, StakeAuthorize, StakeState},
+            tools::{acceptable_reference_epoch_credits, eligible_for_deactivate_delinquent},
         },
         stake_history::StakeHistory,
         system_instruction::SystemError,
@@ -378,6 +379,13 @@ impl StakeSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account \
                                will be at a derived address of STAKE_ACCOUNT_ADDRESS")
+                )
+                .arg(
+                    Arg::with_name("delinquent")
+                        .long("delinquent")
+                        .takes_value(false)
+                        .conflicts_with(SIGN_ONLY_ARG.name)
+                        .help("Deactivate abandoned stake that is currently delegated to a delinquent vote account")
                 )
                 .arg(stake_authority_arg())
                 .offline_args()
@@ -995,11 +1003,13 @@ pub fn parse_stake_deactivate_stake(
     let stake_account_pubkey =
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+    let deactivate_delinquent = matches.is_present("delinquent");
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
     let blockhash_query = BlockhashQuery::new_from_matches(matches);
     let nonce_account = pubkey_of(matches, NONCE_ARG.name);
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let seed = value_t!(matches, "seed", String).ok();
+
     let (stake_authority, stake_authority_pubkey) =
         signer_of(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
     let (nonce_authority, nonce_authority_pubkey) =
@@ -1018,6 +1028,7 @@ pub fn parse_stake_deactivate_stake(
             stake_account_pubkey,
             stake_authority: signer_info.index_of(stake_authority_pubkey).unwrap(),
             sign_only,
+            deactivate_delinquent,
             dump_transaction_message,
             blockhash_query,
             nonce_account,
@@ -1477,6 +1488,7 @@ pub fn process_deactivate_stake_account(
     stake_account_pubkey: &Pubkey,
     stake_authority: SignerIndex,
     sign_only: bool,
+    deactivate_delinquent: bool,
     dump_transaction_message: bool,
     blockhash_query: &BlockhashQuery,
     nonce_account: Option<Pubkey>,
@@ -1486,7 +1498,6 @@ pub fn process_deactivate_stake_account(
     fee_payer: SignerIndex,
 ) -> ProcessResult {
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
-    let stake_authority = config.signers[stake_authority];
 
     let stake_account_address = if let Some(seed) = seed {
         Pubkey::create_with_seed(stake_account_pubkey, seed, &stake::program::id())?
@@ -1494,11 +1505,77 @@ pub fn process_deactivate_stake_account(
         *stake_account_pubkey
     };
 
-    let ixs = vec![stake_instruction::deactivate_stake(
-        &stake_account_address,
-        &stake_authority.pubkey(),
-    )]
+    let ixs = vec![if deactivate_delinquent {
+        let stake_account = rpc_client.get_account(&stake_account_address)?;
+        if stake_account.owner != stake::program::id() {
+            return Err(CliError::BadParameter(format!(
+                "{} is not a stake account",
+                stake_account_address,
+            ))
+            .into());
+        }
+
+        let vote_account_address = match stake_account.state() {
+            Ok(stake_state) => match stake_state {
+                StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
+                _ => {
+                    return Err(CliError::BadParameter(format!(
+                        "{} is not a delegated stake account",
+                        stake_account_address,
+                    ))
+                    .into())
+                }
+            },
+            Err(err) => {
+                return Err(CliError::RpcRequestError(format!(
+                    "Account data could not be deserialized to stake state: {}",
+                    err
+                ))
+                .into())
+            }
+        };
+
+        let current_epoch = rpc_client.get_epoch_info()?.epoch;
+
+        let (_, vote_state) = crate::vote::get_vote_account(
+            rpc_client,
+            &vote_account_address,
+            rpc_client.commitment(),
+        )?;
+        if !eligible_for_deactivate_delinquent(&vote_state.epoch_credits, current_epoch) {
+            return Err(CliError::BadParameter(format!(
+                "Stake has not been delinquent for {} epochs",
+                stake::MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
+            ))
+            .into());
+        }
+
+        // Search for a reference vote account
+        let reference_vote_account_address = rpc_client
+            .get_vote_accounts()?
+            .current
+            .into_iter()
+            .find(|vote_account_info| {
+                acceptable_reference_epoch_credits(&vote_account_info.epoch_credits, current_epoch)
+            });
+        let reference_vote_account_address = reference_vote_account_address
+            .ok_or_else(|| {
+                CliError::RpcRequestError("Unable to find a reference vote account".into())
+            })?
+            .vote_pubkey
+            .parse()?;
+
+        stake_instruction::deactivate_delinquent_stake(
+            &stake_account_address,
+            &vote_account_address,
+            &reference_vote_account_address,
+        )
+    } else {
+        let stake_authority = config.signers[stake_authority];
+        stake_instruction::deactivate_stake(&stake_account_address, &stake_authority.pubkey())
+    }]
     .with_memo(memo);
+
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -4174,6 +4251,34 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    deactivate_delinquent: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    seed: None,
+                    fee_payer: 0,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test DeactivateStake Subcommand with delinquent flag
+        let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "deactivate-stake",
+            &stake_account_string,
+            "--delinquent",
+        ]);
+        assert_eq!(
+            parse_command(&test_deactivate_stake, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DeactivateStake {
+                    stake_account_pubkey,
+                    stake_authority: 0,
+                    sign_only: false,
+                    deactivate_delinquent: true,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
@@ -4201,6 +4306,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 1,
                     sign_only: false,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::default(),
                     nonce_account: None,
@@ -4235,6 +4341,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
@@ -4265,6 +4372,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: true,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::None(blockhash),
                     nonce_account: None,
@@ -4299,6 +4407,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::Cluster,
@@ -4345,6 +4454,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::FeeCalculator(
                         blockhash_query::Source::NonceAccount(nonce_account),
@@ -4379,6 +4489,7 @@ mod tests {
                     stake_account_pubkey,
                     stake_authority: 0,
                     sign_only: false,
+                    deactivate_delinquent: false,
                     dump_transaction_message: false,
                     blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
                     nonce_account: None,

@@ -93,8 +93,8 @@ use {
         account_utils::StateMut,
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
-            MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
+            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -161,6 +161,14 @@ use {
     },
 };
 
+#[derive(Debug, Default)]
+struct RewardsMetrics {
+    load_vote_and_stake_accounts_us: AtomicU64,
+    calculate_points_us: AtomicU64,
+    store_stake_accounts_us: AtomicU64,
+    store_vote_accounts_us: AtomicU64,
+}
+
 mod address_lookup_table;
 mod builtin_programs;
 mod sysvar_cache;
@@ -169,6 +177,8 @@ mod transaction_account_state_info;
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
+
+pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RentDebit {
@@ -226,7 +236,7 @@ pub type BankSlotDelta = SlotDelta<Result<()>>;
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
-type PartitionIndex = u64;
+pub(crate) type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
 type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
 type RentCollectionCycleParams = (
@@ -701,7 +711,7 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an IntrustionTrace to InnerInstructionsList
+/// Convert from an InstructionTrace to InnerInstructionsList
 pub fn inner_instructions_list_from_instruction_trace(
     instruction_trace: &InstructionTrace,
 ) -> InnerInstructionsList {
@@ -894,7 +904,7 @@ impl NonceInfo for NonceFull {
 // Bank's common fields shared by all supported snapshot versions for deserialization.
 // Sync fields with BankFieldsToSerialize! This is paired with it.
 // All members are made public to remain Bank's members private and to make versioned deserializer workable on this
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
@@ -1223,6 +1233,7 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
+    /// callback function only to be called when dropping and should only be called once
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
@@ -1239,12 +1250,6 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
-}
-
-impl Default for BlockhashQueue {
-    fn default() -> Self {
-        Self::new(MAX_RECENT_BLOCKHASHES)
-    }
 }
 
 struct VoteWithStakeDelegations {
@@ -1374,7 +1379,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
@@ -1769,6 +1774,7 @@ impl Bank {
                         "update_epoch_stakes",
                     );
 
+                    let metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
                     let (_, update_rewards_with_thread_pool_time) = Measure::this(
                         |_| {
@@ -1776,6 +1782,7 @@ impl Bank {
                                 parent_epoch,
                                 reward_calc_tracer,
                                 &thread_pool,
+                                &metrics,
                             )
                         },
                         (),
@@ -1802,6 +1809,26 @@ impl Bank {
                         (
                             "update_rewards_with_thread_pool_us",
                             update_rewards_with_thread_pool_time.as_us(),
+                            i64
+                        ),
+                        (
+                            "load_vote_and_stake_accounts_us",
+                            metrics.load_vote_and_stake_accounts_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "calculate_points_us",
+                            metrics.calculate_points_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "store_stake_accounts_us",
+                            metrics.store_stake_accounts_us.load(Relaxed),
+                            i64
+                        ),
+                        (
+                            "store_vote_accounts_us",
+                            metrics.store_vote_accounts_us.load(Relaxed),
                             i64
                         ),
                     );
@@ -2460,6 +2487,7 @@ impl Bank {
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
+        metrics: &RewardsMetrics,
     ) {
         let slot_in_year = self.slot_in_year_for_inflation();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
@@ -2484,6 +2512,7 @@ impl Bank {
             reward_calc_tracer,
             self.stake_program_advance_activating_credits_observed(),
             thread_pool,
+            metrics,
         );
 
         if !self
@@ -2672,9 +2701,11 @@ impl Bank {
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         fix_activating_credits_observed: bool,
         thread_pool: &ThreadPool,
+        metrics: &RewardsMetrics,
     ) -> f64 {
         let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = {
+            let mut m = Measure::start("load_vote_and_stake_accounts_us");
             let LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
                 invalid_stake_keys,
@@ -2683,6 +2714,10 @@ impl Bank {
                 thread_pool,
                 reward_calc_tracer.as_ref(),
             );
+            m.stop();
+            metrics
+                .load_vote_and_stake_accounts_us
+                .fetch_add(m.as_us(), Relaxed);
 
             let evict_invalid_stakes_cache_entries = self
                 .feature_set
@@ -2696,6 +2731,7 @@ impl Bank {
             vote_with_stake_delegations_map
         };
 
+        let mut m = Measure::start("calculate_points");
         let points: u128 = thread_pool.install(|| {
             vote_with_stake_delegations_map
                 .par_iter()
@@ -2720,6 +2756,8 @@ impl Bank {
                 })
                 .sum()
         });
+        m.stop();
+        metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
 
         if points == 0 {
             return 0.0;
@@ -2746,6 +2784,7 @@ impl Bank {
             },
         );
 
+        let mut m = Measure::start("redeem_rewards");
         let mut stake_rewards = thread_pool.install(|| {
             stake_delegation_iterator
                 .filter_map(
@@ -2810,7 +2849,12 @@ impl Bank {
                 )
                 .collect()
         });
+        m.stop();
+        metrics
+            .store_stake_accounts_us
+            .fetch_add(m.as_us(), Relaxed);
 
+        let mut m = Measure::start("store_vote_accounts");
         let mut vote_rewards = vote_account_rewards
             .into_iter()
             .filter_map(
@@ -2840,6 +2884,9 @@ impl Bank {
                 },
             )
             .collect();
+
+        m.stop();
+        metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
 
         {
             let mut rewards = self.rewards.write().unwrap();
@@ -3339,7 +3386,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.slot + blockhash_queue.len() as u64 - age)
+            .map(|age| self.slot + blockhash_queue.get_max_age() as u64 - age)
     }
 
     pub fn get_blockhash_last_valid_block_height(&self, blockhash: &Hash) -> Option<Slot> {
@@ -3348,7 +3395,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.block_height + blockhash_queue.len() as u64 - age)
+            .map(|age| self.block_height + blockhash_queue.get_max_age() as u64 - age)
     }
 
     pub fn confirmed_last_blockhash(&self) -> Hash {
@@ -3492,7 +3539,7 @@ impl Bank {
     pub fn prepare_sanitized_batch_with_results<'a, 'b>(
         &'a self,
         transactions: &'b [SanitizedTransaction],
-        transaction_results: impl Iterator<Item = Result<()>>,
+        transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let lock_results = self.rc.accounts.lock_accounts_with_results(
@@ -3675,6 +3722,10 @@ impl Bank {
                 (lock_result, nonce)
             })
             .collect()
+    }
+
+    pub fn get_hash_age(&self, hash: &Hash) -> Option<u64> {
+        self.blockhash_queue.read().unwrap().get_hash_age(hash)
     }
 
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
@@ -4787,7 +4838,6 @@ impl Bank {
 
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
-    #[cfg(test)]
     pub fn partition_from_pubkey(
         pubkey: &Pubkey,
         partition_count: PartitionsPerCycle,
@@ -6105,8 +6155,8 @@ impl Bank {
         *self.inflation.read().unwrap()
     }
 
-    pub fn rent_collector(&self) -> RentCollector {
-        self.rent_collector.clone()
+    pub fn rent_collector(&self) -> &RentCollector {
+        &self.rent_collector
     }
 
     /// Return the total capitalization of the Bank
@@ -6753,25 +6803,27 @@ impl Drop for Bank {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
-            // Default case
-            // 1. Tests
-            // 2. At startup when replaying blockstore and there's no
-            // AccountsBackgroundService to perform cleanups yet.
+            // Default case for tests
             self.rc
                 .accounts
+                .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
 }
 
-pub fn goto_end_of_slot(bank: &mut Bank) {
-    let mut tick_hash = bank.last_blockhash();
-    loop {
-        tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
-        bank.register_tick(&tick_hash);
-        if tick_hash == bank.last_blockhash() {
-            bank.freeze();
-            return;
+/// utility function used for testing and benchmarking.
+pub mod test_utils {
+    use {super::Bank, solana_sdk::hash::hashv};
+    pub fn goto_end_of_slot(bank: &mut Bank) {
+        let mut tick_hash = bank.last_blockhash();
+        loop {
+            tick_hash = hashv(&[tick_hash.as_ref(), &[42]]);
+            bank.register_tick(&tick_hash);
+            if tick_hash == bank.last_blockhash() {
+                bank.freeze();
+                return;
+            }
         }
     }
 }
@@ -6800,7 +6852,7 @@ pub(crate) mod tests {
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
             feature::Feature,
@@ -6833,6 +6885,7 @@ pub(crate) mod tests {
             },
         },
         std::{result, thread::Builder, time::Duration},
+        test_utils::goto_end_of_slot,
     };
 
     fn new_sanitized_message(
@@ -14615,7 +14668,9 @@ pub(crate) mod tests {
         // Let threads run for a while, check the scans didn't see any mixed slots
         let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
-        let mut remaining_loops = 1000;
+        // This can be reduced when you are running this test locally to deal with hangs
+        // But, if it is too low, the ci fails intermittently.
+        let mut remaining_loops = 2000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
@@ -14722,9 +14777,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts(false, false, None);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        let is_abs_service = true;
-                        abs_request_handler
-                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
+                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(

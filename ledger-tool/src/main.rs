@@ -5,7 +5,6 @@ use {
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
     },
-    crossbeam_channel::unbounded,
     dashmap::DashMap,
     itertools::Itertools,
     log::*,
@@ -33,16 +32,18 @@ use {
     },
     solana_measure::measure::Measure,
     solana_runtime::{
-        accounts_db::AccountsDbConfig,
-        accounts_index::{AccountsIndexConfig, ScanConfig},
+        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
+        accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         bank::{Bank, RewardCalculationEvent},
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
+        snapshot_package::PendingAccountsPackage,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -768,7 +769,6 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    let (accounts_package_sender, _) = unbounded();
     bank_forks_utils::load(
         genesis_config,
         blockstore,
@@ -778,7 +778,7 @@ fn load_bank_forks(
         process_options,
         None,
         None,
-        accounts_package_sender,
+        PendingAccountsPackage::default(),
         None,
     )
     .map(|(bank_forks, .., starting_snapshot_hashes)| (bank_forks, starting_snapshot_hashes))
@@ -823,7 +823,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                 num_programs += transaction.message().instructions().len();
 
                 let tx_cost = cost_model.calculate_cost(&transaction);
-                let result = cost_tracker.try_add(&transaction, &tx_cost);
+                let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(
                         "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
@@ -881,7 +881,7 @@ fn main() {
 
     let starting_slot_arg = Arg::with_name("starting_slot")
         .long("starting-slot")
-        .value_name("NUM")
+        .value_name("SLOT")
         .takes_value(true)
         .default_value("0")
         .help("Start at this slot");
@@ -929,7 +929,16 @@ fn main() {
         .value_name("COUNT")
         .validator(is_parsable::<usize>)
         .takes_value(true)
+        .default_value("0")
         .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness.");
+    let accounts_filler_size = Arg::with_name("accounts_filler_size")
+        .long("accounts-filler-size")
+        .value_name("BYTES")
+        .validator(is_parsable::<usize>)
+        .takes_value(true)
+        .default_value("0")
+        .requires("accounts_filler_count")
+        .help("Size per filler account in bytes.");
     let account_paths_arg = Arg::with_name("account_paths")
         .long("accounts")
         .value_name("PATHS")
@@ -1120,7 +1129,7 @@ fn main() {
             .arg(
                 Arg::with_name("target_db")
                     .long("target-db")
-                    .value_name("PATH")
+                    .value_name("DIR")
                     .takes_value(true)
                     .help("Target db"),
             )
@@ -1284,6 +1293,7 @@ fn main() {
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
             .arg(&accounts_filler_count)
+            .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -1776,9 +1786,12 @@ fn main() {
             }
             ("shred-version", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: Some(0),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: Some(0),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1853,9 +1866,12 @@ fn main() {
             }
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: Some(0),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: Some(0),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2043,13 +2059,15 @@ fn main() {
                 let system_monitor_service =
                     SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
 
-                if let Some(limit) =
+                accounts_index_config.index_limit_mb = if let Some(limit) =
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
-                    accounts_index_config.index_limit_mb = Some(limit);
+                    IndexLimitMb::Limit(limit)
                 } else if arg_matches.is_present("disable_accounts_disk_index") {
-                    accounts_index_config.index_limit_mb = None;
-                }
+                    IndexLimitMb::InMemOnly
+                } else {
+                    IndexLimitMb::Unspecified
+                };
 
                 {
                     let mut accounts_index_paths: Vec<PathBuf> =
@@ -2067,21 +2085,21 @@ fn main() {
                     accounts_index_config.drives = Some(accounts_index_paths);
                 }
 
-                let filler_account_count =
-                    value_t!(arg_matches, "accounts_filler_count", usize).ok();
+                let filler_accounts_config = FillerAccountsConfig {
+                    count: value_t_or_exit!(arg_matches, "accounts_filler_count", usize),
+                    size: value_t_or_exit!(arg_matches, "accounts_filler_size", usize),
+                };
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
-                    filler_account_count,
+                    filler_accounts_config,
                     ..AccountsDbConfig::default()
                 });
 
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
-                    bpf_jit: !matches.is_present("no_bpf_jit"),
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
@@ -2095,6 +2113,11 @@ fn main() {
                     accounts_db_test_hash_calculation: arg_matches
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                        bpf_jit: !matches.is_present("no_bpf_jit"),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2131,9 +2154,12 @@ fn main() {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
 
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
 
@@ -2257,9 +2283,12 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
-                        dev_halt_at_slot: Some(snapshot_slot),
                         new_hard_forks,
                         poh_verify: false,
+                        runtime_config: RuntimeConfig {
+                            dev_halt_at_slot: Some(snapshot_slot),
+                            ..RuntimeConfig::default()
+                        },
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
@@ -2554,9 +2583,12 @@ fn main() {
             ("accounts", Some(arg_matches)) => {
                 let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot,
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot,
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2617,9 +2649,12 @@ fn main() {
             ("capitalization", Some(arg_matches)) => {
                 let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
-                    dev_halt_at_slot,
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: false,
+                    runtime_config: RuntimeConfig {
+                        dev_halt_at_slot,
+                        ..RuntimeConfig::default()
+                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);

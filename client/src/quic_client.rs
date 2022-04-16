@@ -2,18 +2,29 @@
 //! an interface for sending transactions which is restricted by the server's flow control.
 
 use {
-    crate::{client_error::ClientErrorKind, tpu_connection::TpuConnection},
+    crate::{
+        client_error::ClientErrorKind,
+        tpu_connection::{ClientStats, TpuConnection},
+    },
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
-    quinn::{ClientConfig, Endpoint, EndpointConfig, NewConnection, WriteError},
+    lazy_static::lazy_static,
+    log::*,
+    quinn::{
+        ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
+    },
+    quinn_proto::ConnectionStats,
     solana_sdk::{
-        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_PORT_OFFSET},
+        quic::{
+            QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
+        },
         transport::Result as TransportResult,
     },
     std::{
         net::{SocketAddr, UdpSocket},
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
+        time::Duration,
     },
     tokio::runtime::Runtime,
 };
@@ -39,16 +50,32 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
         Ok(rustls::client::ServerCertVerified::assertion())
     }
 }
+lazy_static! {
+    static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+}
 
 struct QuicClient {
-    runtime: Runtime,
     endpoint: Endpoint,
     connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
     addr: SocketAddr,
+    stats: Arc<ClientStats>,
 }
 
 pub struct QuicTpuConnection {
     client: Arc<QuicClient>,
+}
+
+impl QuicTpuConnection {
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        self.client.stats()
+    }
+
+    pub fn base_stats(&self) -> Arc<ClientStats> {
+        self.client.stats.clone()
+    }
 }
 
 impl TpuConnection for QuicTpuConnection {
@@ -63,35 +90,74 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    fn send_wire_transaction<T>(
+        &self,
+        wire_transaction: T,
+        stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
-        let _guard = self.client.runtime.enter();
-        let send_buffer = self.client.send_buffer(wire_transaction);
-        self.client.runtime.block_on(send_buffer)?;
+        let _guard = RUNTIME.enter();
+        let send_buffer = self.client.send_buffer(wire_transaction, stats);
+        RUNTIME.block_on(send_buffer)?;
         Ok(())
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(
+        &self,
+        buffers: &[T],
+        stats: &ClientStats,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
-        let _guard = self.client.runtime.enter();
-        let send_batch = self.client.send_batch(buffers);
-        self.client.runtime.block_on(send_batch)?;
+        let _guard = RUNTIME.enter();
+        let send_batch = self.client.send_batch(buffers, stats);
+        RUNTIME.block_on(send_batch)?;
+        Ok(())
+    }
+
+    fn send_wire_transaction_async(
+        &self,
+        wire_transaction: Vec<u8>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
+        let _guard = RUNTIME.enter();
+        let client = self.client.clone();
+        //drop and detach the task
+        let _ = RUNTIME.spawn(async move {
+            let send_buffer = client.send_buffer(wire_transaction, &stats);
+            if let Err(e) = send_buffer.await {
+                warn!("Failed to send transaction async to {:?}", e);
+                datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+            }
+        });
+        Ok(())
+    }
+
+    fn send_wire_transaction_batch_async(
+        &self,
+        buffers: Vec<Vec<u8>>,
+        stats: Arc<ClientStats>,
+    ) -> TransportResult<()> {
+        let _guard = RUNTIME.enter();
+        let client = self.client.clone();
+        //drop and detach the task
+        let _ = RUNTIME.spawn(async move {
+            let send_batch = client.send_batch(&buffers, &stats);
+            if let Err(e) = send_batch.await {
+                warn!("Failed to send transaction batch async to {:?}", e);
+                datapoint_warn!("send-wire-batch-async", ("failure", 1, i64),);
+            }
+        });
         Ok(())
     }
 }
 
 impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let _guard = runtime.enter();
+        let _guard = RUNTIME.enter();
 
         let crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -100,16 +166,28 @@ impl QuicClient {
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
-        let mut endpoint = runtime.block_on(create_endpoint);
+        let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        endpoint.set_default_client_config(ClientConfig::new(Arc::new(crypto)));
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        transport_config.max_idle_timeout(Some(timeout));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+
+        endpoint.set_default_client_config(config);
 
         Self {
-            runtime,
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
+            stats: Arc::new(ClientStats::default()),
         }
+    }
+
+    pub fn stats(&self) -> Option<ConnectionStats> {
+        let conn_guard = self.connection.lock();
+        let x = RUNTIME.block_on(conn_guard);
+        x.as_ref().map(|c| c.connection.stats())
     }
 
     // If this function becomes public, it should be changed to
@@ -128,18 +206,35 @@ impl QuicClient {
         Ok(())
     }
 
+    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connecting_result = connecting.await;
+        if connecting_result.is_err() {
+            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+        }
+        let connection = connecting_result?;
+        Ok(Arc::new(connection))
+    }
+
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
-    async fn _send_buffer(&self, data: &[u8]) -> Result<Arc<NewConnection>, WriteError> {
+    async fn _send_buffer(
+        &self,
+        data: &[u8],
+        stats: &ClientStats,
+    ) -> Result<Arc<NewConnection>, WriteError> {
         let connection = {
             let mut conn_guard = self.connection.lock().await;
 
             let maybe_conn = (*conn_guard).clone();
             match maybe_conn {
-                Some(conn) => conn.clone(),
+                Some(conn) => {
+                    stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                    conn.clone()
+                }
                 None => {
-                    let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-                    let connection = Arc::new(connecting.await?);
+                    let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
                     connection
                 }
@@ -149,8 +244,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-                    let connection = Arc::new(connecting.await?);
+                    let connection = self.make_connection(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
@@ -161,15 +255,19 @@ impl QuicClient {
         }
     }
 
-    pub async fn send_buffer<T>(&self, data: T) -> Result<(), ClientErrorKind>
+    pub async fn send_buffer<T>(&self, data: T, stats: &ClientStats) -> Result<(), ClientErrorKind>
     where
         T: AsRef<[u8]>,
     {
-        self._send_buffer(data.as_ref()).await?;
+        self._send_buffer(data.as_ref(), stats).await?;
         Ok(())
     }
 
-    pub async fn send_batch<T>(&self, buffers: &[T]) -> Result<(), ClientErrorKind>
+    pub async fn send_batch<T>(
+        &self,
+        buffers: &[T],
+        stats: &ClientStats,
+    ) -> Result<(), ClientErrorKind>
     where
         T: AsRef<[u8]>,
     {
@@ -187,7 +285,7 @@ impl QuicClient {
         if buffers.is_empty() {
             return Ok(());
         }
-        let connection = self._send_buffer(buffers[0].as_ref()).await?;
+        let connection = self._send_buffer(buffers[0].as_ref(), stats).await?;
 
         // Used to avoid dereferencing the Arc multiple times below
         // by just getting a reference to the NewConnection once
@@ -197,13 +295,16 @@ impl QuicClient {
             .iter()
             .chunks(QUIC_MAX_CONCURRENT_STREAMS);
 
-        let futures = chunks.into_iter().map(|buffs| {
-            join_all(
-                buffs
-                    .into_iter()
-                    .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
-            )
-        });
+        let futures: Vec<_> = chunks
+            .into_iter()
+            .map(|buffs| {
+                join_all(
+                    buffs
+                        .into_iter()
+                        .map(|buf| Self::_send_buffer_using_conn(buf.as_ref(), connection_ref)),
+                )
+            })
+            .collect();
 
         for f in futures {
             f.await.into_iter().try_for_each(|res| res)?;

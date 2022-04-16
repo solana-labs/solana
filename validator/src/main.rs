@@ -36,21 +36,21 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
-    solana_replica_lib::accountsdb_repl_server::AccountsDbReplServiceConfig,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
     },
     solana_runtime::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE,
-            DEFAULT_ACCOUNTS_SHRINK_RATIO,
+            AccountShrinkThreshold, AccountsDbConfig, FillerAccountsConfig,
+            DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE, DEFAULT_ACCOUNTS_SHRINK_RATIO,
         },
         accounts_index::{
             AccountIndex, AccountSecondaryIndexes, AccountSecondaryIndexesIncludeExclude,
-            AccountsIndexConfig,
+            AccountsIndexConfig, IndexLimitMb,
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
+        runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -1171,7 +1171,7 @@ pub fn main() {
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
-                .help("When this is set to true, the system will use QUIC to send transactions."),
+                .help("Use QUIC to send transactions."),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
@@ -1601,7 +1601,16 @@ pub fn main() {
             .value_name("COUNT")
             .validator(is_parsable::<usize>)
             .takes_value(true)
+            .default_value("0")
             .help("How many accounts to add to stress the system. Accounts are ignored in operations related to correctness."))
+         .arg(Arg::with_name("accounts_filler_size")
+            .long("accounts-filler-size")
+            .value_name("BYTES")
+            .validator(is_parsable::<usize>)
+            .takes_value(true)
+            .default_value("0")
+            .requires("accounts_filler_count")
+            .help("Size per filler account in bytes."))
          .arg(
             Arg::with_name("accounts_db_test_hash_calculation")
                 .long("accounts-db-test-hash-calculation")
@@ -2225,11 +2234,14 @@ pub fn main() {
         accounts_index_config.bins = Some(bins);
     }
 
-    if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
-        accounts_index_config.index_limit_mb = Some(limit);
-    } else if matches.is_present("disable_accounts_disk_index") {
-        accounts_index_config.index_limit_mb = None;
-    }
+    accounts_index_config.index_limit_mb =
+        if let Some(limit) = value_t!(matches, "accounts_index_memory_limit_mb", usize).ok() {
+            IndexLimitMb::Limit(limit)
+        } else if matches.is_present("disable_accounts_disk_index") {
+            IndexLimitMb::InMemOnly
+        } else {
+            IndexLimitMb::Unspecified
+        };
 
     {
         let mut accounts_index_paths: Vec<PathBuf> = if matches.is_present("accounts_index_path") {
@@ -2252,11 +2264,15 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB);
 
-    let filler_account_count = value_t!(matches, "accounts_filler_count", usize).ok();
+    let filler_accounts_config = FillerAccountsConfig {
+        count: value_t_or_exit!(matches, "accounts_filler_count", usize),
+        size: value_t_or_exit!(matches, "accounts_filler_size", usize),
+    };
+
     let mut accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
-        filler_account_count,
+        filler_accounts_config,
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
@@ -2267,26 +2283,6 @@ pub fn main() {
         accounts_db_config.hash_calc_num_passes = Some(passes);
     }
     let accounts_db_config = Some(accounts_db_config);
-
-    let accountsdb_repl_service_config = if matches.is_present("enable_accountsdb_repl") {
-        let accountsdb_repl_bind_address = if matches.is_present("accountsdb_repl_bind_address") {
-            solana_net_utils::parse_host(matches.value_of("accountsdb_repl_bind_address").unwrap())
-                .expect("invalid accountsdb_repl_bind_address")
-        } else {
-            bind_address
-        };
-        let accountsdb_repl_port = value_t_or_exit!(matches, "accountsdb_repl_port", u16);
-
-        Some(AccountsDbReplServiceConfig {
-            worker_threads: value_t_or_exit!(matches, "accountsdb_repl_threads", usize),
-            replica_server_addr: SocketAddr::new(
-                accountsdb_repl_bind_address,
-                accountsdb_repl_port,
-            ),
-        })
-    } else {
-        None
-    };
 
     let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
         Some(
@@ -2334,7 +2330,6 @@ pub fn main() {
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
-        dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
@@ -2368,7 +2363,6 @@ pub fn main() {
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
         },
-        accountsdb_repl_service_config,
         geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
@@ -2412,7 +2406,6 @@ pub fn main() {
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
         contact_debug_interval,
-        bpf_jit: !matches.is_present("no_bpf_jit"),
         send_transaction_service_config: send_transaction_service::Config {
             retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
             leader_forward_count: value_t_or_exit!(
@@ -2448,6 +2441,11 @@ pub fn main() {
         tpu_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
+        runtime_config: RuntimeConfig {
+            dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
+            bpf_jit: !matches.is_present("no_bpf_jit"),
+            ..RuntimeConfig::default()
+        },
         ..ValidatorConfig::default()
     };
 

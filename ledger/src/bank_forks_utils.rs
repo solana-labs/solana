@@ -7,14 +7,16 @@ use {
         },
         leader_schedule_cache::LeaderScheduleCache,
     },
+    crossbeam_channel::unbounded,
     log::*,
     solana_runtime::{
+        accounts_background_service::DroppedSlotsReceiver,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
-        snapshot_package::AccountsPackageSender,
+        snapshot_package::PendingAccountsPackage,
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
@@ -44,19 +46,20 @@ pub fn load(
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    accounts_package_sender: AccountsPackageSender,
+    pending_accounts_package: PendingAccountsPackage,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
-    let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes) = load_bank_forks(
-        genesis_config,
-        blockstore,
-        account_paths,
-        shrink_paths,
-        snapshot_config,
-        &process_options,
-        cache_block_meta_sender,
-        accounts_update_notifier,
-    );
+    let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
+        load_bank_forks(
+            genesis_config,
+            blockstore,
+            account_paths,
+            shrink_paths,
+            snapshot_config,
+            &process_options,
+            cache_block_meta_sender,
+            accounts_update_notifier,
+        );
 
     blockstore_processor::process_blockstore_from_root(
         blockstore,
@@ -66,7 +69,8 @@ pub fn load(
         transaction_status_sender,
         cache_block_meta_sender,
         snapshot_config,
-        accounts_package_sender,
+        pending_accounts_package,
+        pruned_banks_receiver,
     )
     .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
@@ -85,6 +89,7 @@ pub fn load_bank_forks(
     BankForks,
     LeaderScheduleCache,
     Option<StartingSnapshotHashes>,
+    DroppedSlotsReceiver,
 ) {
     let snapshot_present = if let Some(snapshot_config) = snapshot_config {
         info!(
@@ -120,13 +125,12 @@ pub fn load_bank_forks(
             accounts_update_notifier,
         )
     } else {
-        if process_options
+        let maybe_filler_accounts = process_options
             .accounts_db_config
             .as_ref()
-            .and_then(|config| config.filler_account_count)
-            .unwrap_or_default()
-            > 0
-        {
+            .map(|config| config.filler_accounts_config.count > 0);
+
+        if let Some(true) = maybe_filler_accounts {
             panic!("filler accounts specified, but not loading from snapshot");
         }
 
@@ -144,12 +148,30 @@ pub fn load_bank_forks(
         )
     };
 
-    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank_forks.root_bank());
+    // Before replay starts, set the callbacks in each of the banks in BankForks so that
+    // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank
+    // drop behavior can be safely synchronized with any other ongoing accounts activity like
+    // cache flush, clean, shrink, as long as the same thread performing those activities also
+    // is processing the dropped banks from the `pruned_banks_receiver` channel.
+
+    // There should only be one bank, the root bank in BankForks. Thus all banks added to
+    // BankForks from now on will be descended from the root bank and thus will inherit
+    // the bank drop callback.
+    assert_eq!(bank_forks.banks().len(), 1);
+    let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+    let root_bank = bank_forks.root_bank();
+    let callback = root_bank
+        .rc
+        .accounts
+        .accounts_db
+        .create_drop_bank_callback(pruned_banks_sender);
+    root_bank.set_callback(Some(Box::new(callback)));
+
+    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&root_bank);
     if process_options.full_leader_cache {
         leader_schedule_cache.set_max_schedules(std::usize::MAX);
     }
 
-    assert_eq!(bank_forks.banks().len(), 1);
     if let Some(ref new_hard_forks) = process_options.new_hard_forks {
         let root_bank = bank_forks.root_bank();
         let hard_forks = root_bank.hard_forks();
@@ -166,7 +188,12 @@ pub fn load_bank_forks(
         }
     }
 
-    (bank_forks, leader_schedule_cache, starting_snapshot_hashes)
+    (
+        bank_forks,
+        leader_schedule_cache,
+        starting_snapshot_hashes,
+        pruned_banks_receiver,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -184,14 +211,16 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.snapshot_archives_dir,
             &account_paths,
             genesis_config,
             process_options.debug_keys.clone(),
-            Some(&crate::builtins::get(process_options.bpf_jit)),
+            Some(&crate::builtins::get(
+                process_options.runtime_config.bpf_jit,
+            )),
             process_options.account_indexes.clone(),
             process_options.accounts_db_caching_enabled,
             process_options.limit_load_slot_count_from_snapshot,
@@ -207,6 +236,8 @@ fn bank_forks_from_snapshot(
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
+
+    deserialized_bank.set_compute_budget(process_options.runtime_config.compute_budget);
 
     let full_snapshot_hash = FullSnapshotHash {
         hash: (

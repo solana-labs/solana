@@ -59,8 +59,6 @@ members = [
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
-    "replica-lib",
-    "replica-node",
     "rpc",
     "rpc-test",
     "runtime",
@@ -88,3 +86,6 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+# This prevents a Travis CI error when building for Windows.
+resolver = "2"

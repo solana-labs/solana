@@ -195,7 +195,7 @@
 //! In user-written Solana program code, serialization is primarily used for
 //! accessing [`AccountInfo`] data and [`Instruction`] data, both of which are
 //! program-specific binary data. Every program is free to decide their own
-//! serialization format, but data recieved from other sources &mdash;
+//! serialization format, but data received from other sources &mdash;
 //! [sysvars][sysvar] for example &mdash; must be deserialized using the methods
 //! indicated by the documentation for that data or data type.
 //!
@@ -316,7 +316,7 @@
 //! }
 //! ```
 //!
-//! Solana also includes a mechinasm to let programs control and sign for
+//! Solana also includes a mechanism to let programs control and sign for
 //! accounts without needing to protect a corresponding secret key, called
 //! [_program derived addresses_][pdas]. PDAs are derived with the
 //! [`Pubkey::find_program_address`] function. With a PDA, a program can call

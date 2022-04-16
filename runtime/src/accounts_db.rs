@@ -65,6 +65,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
+        rent::Rent,
         timing::AtomicInterval,
     },
     std::{
@@ -128,14 +129,14 @@ const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
-    filler_account_count: None,
+    filler_accounts_config: FillerAccountsConfig::const_default(),
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
-    filler_account_count: None,
+    filler_accounts_config: FillerAccountsConfig::const_default(),
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
 };
@@ -148,11 +149,31 @@ pub struct AccountsAddRootTiming {
     pub store_us: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FillerAccountsConfig {
+    /// Number of filler accounts
+    pub count: usize,
+    /// Data size per account, in bytes
+    pub size: usize,
+}
+
+impl FillerAccountsConfig {
+    pub const fn const_default() -> Self {
+        Self { count: 0, size: 0 }
+    }
+}
+
+impl Default for FillerAccountsConfig {
+    fn default() -> Self {
+        Self::const_default()
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
-    pub filler_account_count: Option<usize>,
+    pub filler_accounts_config: FillerAccountsConfig,
     pub hash_calc_num_passes: Option<usize>,
     pub write_cache_limit_bytes: Option<u64>,
 }
@@ -496,9 +517,11 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey) -> Hash {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => {
-                AccountsDb::hash_stored_account(slot, stored_account_meta)
-            }
+            LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
+                slot,
+                stored_account_meta,
+                &stored_account_meta.meta.pubkey,
+            ),
             LoadedAccount::Cached(cached_account) => {
                 AccountsDb::hash_account(slot, &cached_account.account, pubkey)
             }
@@ -1067,6 +1090,7 @@ pub struct AccountsDb {
     #[cfg(test)]
     load_limit: AtomicU64,
 
+    /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
@@ -1088,7 +1112,7 @@ pub struct AccountsDb {
     /// GeyserPlugin accounts update notifier
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 
-    filler_account_count: usize,
+    filler_accounts_config: FillerAccountsConfig,
     pub filler_account_suffix: Option<Pubkey>,
 
     active_stats: ActiveStats,
@@ -1137,7 +1161,7 @@ struct PurgeStats {
     total_removed_cached_bytes: AtomicU64,
     total_removed_stored_bytes: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
-    scan_storages_elasped: AtomicU64,
+    scan_storages_elapsed: AtomicU64,
     purge_accounts_index_elapsed: AtomicU64,
     handle_reclaims_elapsed: AtomicU64,
 }
@@ -1204,8 +1228,8 @@ impl PurgeStats {
                     i64
                 ),
                 (
-                    "scan_storages_elasped",
-                    self.scan_storages_elasped.swap(0, Ordering::Relaxed) as i64,
+                    "scan_storages_elapsed",
+                    self.scan_storages_elapsed.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -1631,7 +1655,7 @@ impl AccountsDb {
             dirty_stores: DashMap::default(),
             zero_lamport_accounts_to_purge_after_full_snapshot: DashSet::default(),
             accounts_update_notifier: None,
-            filler_account_count: 0,
+            filler_accounts_config: FillerAccountsConfig::default(),
             filler_account_suffix: None,
             num_hash_scan_passes,
         }
@@ -1675,11 +1699,13 @@ impl AccountsDb {
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
-        let filler_account_count = accounts_db_config
+
+        let filler_accounts_config = accounts_db_config
             .as_ref()
-            .and_then(|cfg| cfg.filler_account_count)
+            .map(|config| config.filler_accounts_config)
             .unwrap_or_default();
-        let filler_account_suffix = if filler_account_count > 0 {
+
+        let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
             None
@@ -1692,7 +1718,7 @@ impl AccountsDb {
             caching_enabled,
             shrink_ratio,
             accounts_update_notifier,
-            filler_account_count,
+            filler_accounts_config,
             filler_account_suffix,
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
@@ -2950,8 +2976,8 @@ impl AccountsDb {
         self.storage.all_slots()
     }
 
-    fn all_root_slots_in_index(&self) -> Vec<Slot> {
-        self.accounts_index.all_roots()
+    fn all_alive_roots_in_index(&self) -> Vec<Slot> {
+        self.accounts_index.all_alive_roots()
     }
 
     /// Given the input `ShrinkCandidates`, this function sorts the stores by their alive ratio
@@ -4012,17 +4038,23 @@ impl AccountsDb {
         pruned_banks_sender: DroppedSlotsSender,
     ) -> SendDroppedBankCallback {
         self.is_bank_drop_callback_enabled
-            .store(true, Ordering::SeqCst);
+            .store(true, Ordering::Release);
         SendDroppedBankCallback::new(pruned_banks_sender)
     }
 
     /// This should only be called after the `Bank::drop()` runs in bank.rs, See BANK_DROP_SAFETY
     /// comment below for more explanation.
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        if self.is_bank_drop_callback_enabled.load(Ordering::SeqCst) && !is_from_abs {
-            panic!("bad drop callpath detected; Bank::drop() must run serially with other logic in ABS like clean_accounts()")
+    ///   * `is_serialized_with_abs` - indicates whehter this call runs sequentially with all other
+    ///        accounts_db relevant calls, such as shrinking, purging etc., in account background
+    ///        service.
+    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_serialized_with_abs: bool) {
+        if self.is_bank_drop_callback_enabled.load(Ordering::Acquire) && !is_serialized_with_abs {
+            panic!(
+                "bad drop callpath detected; Bank::drop() must run serially with other logic in
+                ABS like clean_accounts()"
+            )
         }
+
         // BANK_DROP_SAFETY: Because this function only runs once the bank is dropped,
         // we know that there are no longer any ongoing scans on this bank, because scans require
         // and hold a reference to the bank at the tip of the fork they're scanning. Hence it's
@@ -4243,7 +4275,7 @@ impl AccountsDb {
         );
         scan_storages_elasped.stop();
         purge_stats
-            .scan_storages_elasped
+            .scan_storages_elapsed
             .fetch_add(scan_storages_elasped.as_us(), Ordering::Relaxed);
 
         let mut purge_accounts_index_elapsed = Measure::start("purge_accounts_index_elapsed");
@@ -4296,7 +4328,7 @@ impl AccountsDb {
             // Also note roots are never removed via `remove_unrooted_slot()`, so
             // it's safe to filter them out here as they won't need deletion from
             // self.accounts_index.removed_bank_ids in `purge_slots_from_cache_and_store()`.
-            .filter(|slot| !self.accounts_index.is_root(**slot));
+            .filter(|slot| !self.accounts_index.is_alive_root(**slot));
         safety_checks_elapsed.stop();
         self.external_purge_slots_stats
             .safety_checks_elapsed
@@ -4400,15 +4432,20 @@ impl AccountsDb {
         }
     }
 
-    pub fn hash_stored_account(slot: Slot, account: &StoredAccountMeta) -> Hash {
+    pub fn hash_account_with_rent_epoch<T: ReadableAccount>(
+        slot: Slot,
+        account: &T,
+        pubkey: &Pubkey,
+        rent_epoch: Epoch,
+    ) -> Hash {
         Self::hash_account_data(
             slot,
-            account.account_meta.lamports,
-            &account.account_meta.owner,
-            account.account_meta.executable,
-            account.account_meta.rent_epoch,
-            account.data,
-            &account.meta.pubkey,
+            account.lamports(),
+            account.owner(),
+            account.executable(),
+            rent_epoch,
+            account.data(),
+            pubkey,
         )
     }
 
@@ -4731,9 +4768,8 @@ impl AccountsDb {
             // Regardless of whether this slot was *just* flushed from the cache by the above
             // `flush_slot_cache()`, we should update the `max_flush_root`.
             // This is because some rooted slots may be flushed to storage *before* they are marked as root.
-            // This can occur for instance when:
-            // 1) The cache is overwhelmed, we we flushed some yet to be rooted frozen slots
-            // 2) Random evictions
+            // This can occur for instance when
+            //  the cache is overwhelmed, we flushed some yet to be rooted frozen slots
             // These slots may then *later* be marked as root, so we still need to handle updating the
             // `max_flush_root` in the accounts cache.
             self.accounts_cache.set_max_flush_root(root);
@@ -5112,7 +5148,7 @@ impl AccountsDb {
 
     fn calculate_accounts_hash(
         &self,
-        slot: Slot,
+        max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
@@ -5146,7 +5182,7 @@ impl AccountsDb {
                                 return None;
                             }
                             if let AccountIndexGetResult::Found(lock, index) =
-                                self.accounts_index.get(pubkey, config.ancestors, Some(slot))
+                                self.accounts_index.get(pubkey, config.ancestors, Some(max_slot))
                             {
                                 let (slot, account_info) = &lock.slot_list()[index];
                                 if !account_info.is_zero_lamport() {
@@ -5437,7 +5473,7 @@ impl AccountsDb {
                         if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
                             if valid_slot
                                 || ancestors.contains_key(&slot)
-                                || self.accounts_index.is_root(slot)
+                                || self.accounts_index.is_alive_root(slot)
                             {
                                 let keys = slot_cache.get_all_pubkeys();
                                 for key in keys {
@@ -5498,19 +5534,20 @@ impl AccountsDb {
         }
     }
 
-    fn calculate_accounts_hash_helper(
+    pub(crate) fn calculate_accounts_hash_helper(
         &self,
         use_index: bool,
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();
 
             let mut sort_time = Measure::start("sort_storages");
-            let min_root = self.accounts_index.min_root();
+            let min_root = self.accounts_index.min_alive_root();
             let storages = SortedStorages::new_with_slots(
                 combined_maps.iter().zip(slots.into_iter()),
                 min_root,
@@ -5529,8 +5566,8 @@ impl AccountsDb {
 
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
-            // now that calculate_accounts_hash_without_index is complete, we can remove old roots
-            self.remove_old_roots(slot);
+            // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
+            self.remove_old_historical_roots(slot, &HashSet::default());
 
             result
         } else {
@@ -5547,7 +5584,6 @@ impl AccountsDb {
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         let (hash, total_lamports) =
             self.calculate_accounts_hash_helper(use_index, slot, &config)?;
         if debug_verify {
@@ -5593,10 +5629,15 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
+        self.set_accounts_hash(slot, hash);
+        (hash, total_lamports)
+    }
+
+    /// update hash for this slot in the 'bank_hashes' map
+    pub(crate) fn set_accounts_hash(&self, slot: Slot, hash: Hash) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
         bank_hash_info.snapshot_hash = hash;
-        (hash, total_lamports)
     }
 
     fn scan_snapshot_stores_with_cache(
@@ -5729,7 +5770,7 @@ impl AccountsDb {
                 };
 
                 let hash = AccountsHash {
-                    filler_account_suffix: if self.filler_account_count > 0 {
+                    filler_account_suffix: if self.filler_accounts_config.count > 0 {
                         self.filler_account_suffix
                     } else {
                         None
@@ -5771,15 +5812,15 @@ impl AccountsDb {
         }
     }
 
-    /// get rid of old original_roots
-    fn remove_old_roots(&self, slot: Slot) {
+    /// get rid of old historical roots
+    /// except keep those in 'keep'
+    fn remove_old_historical_roots(&self, current_max_root_inclusive: Slot, keep: &HashSet<Slot>) {
         // epoch_schedule::DEFAULT_SLOTS_PER_EPOCH is a sufficient approximation for now
         let width = solana_sdk::epoch_schedule::DEFAULT_SLOTS_PER_EPOCH * 11 / 10; // a buffer
-        if slot > width {
-            let min_root = slot - width;
-            let valid_slots = HashSet::default();
+        if current_max_root_inclusive > width {
+            let min_root = current_max_root_inclusive - width;
             self.accounts_index
-                .remove_old_original_roots(min_root, &valid_slots);
+                .remove_old_historical_roots(min_root, keep);
         }
     }
 
@@ -6630,7 +6671,7 @@ impl AccountsDb {
                             if *slot <= snapshot_slot
                                 && snapshot_base_slot
                                     .map_or(true, |snapshot_base_slot| *slot > snapshot_base_slot)
-                                && (self.accounts_index.is_root(*slot)
+                                && (self.accounts_index.is_alive_root(*slot)
                                     || ancestors
                                         .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
@@ -6845,15 +6886,18 @@ impl AccountsDb {
     /// The filler accounts are added to each slot in the snapshot after index generation.
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule) {
-        if self.filler_account_count == 0 {
+    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule, rent: &Rent) {
+        if self.filler_accounts_config.count == 0 {
             return;
         }
 
         let max_root_inclusive = self.accounts_index.max_root_inclusive();
         let epoch = epoch_schedule.get_epoch(max_root_inclusive);
 
-        info!("adding {} filler accounts", self.filler_account_count);
+        info!(
+            "adding {} filler accounts with size {}",
+            self.filler_accounts_config.count, self.filler_accounts_config.size,
+        );
         // break this up to force the accounts out of memory after each pass
         let passes = 100;
         let mut roots = self.storage.all_slots();
@@ -6867,8 +6911,9 @@ impl AccountsDb {
         let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
         let hash = Hash::from_str(string).unwrap();
         let owner = Pubkey::from_str(string).unwrap();
-        let lamports = 100_000_000;
-        let space = 0;
+        let space = self.filler_accounts_config.size;
+        let rent_exempt_reserve = rent.minimum_balance(space);
+        let lamports = rent_exempt_reserve;
         let account = AccountSharedData::new(lamports, space, &owner);
         let added = AtomicUsize::default();
         for pass in 0..=passes {
@@ -6895,8 +6940,8 @@ impl AccountsDb {
                 let subrange = crate::bank::Bank::pubkey_range_from_partition(partition);
 
                 let idx = overall_index.fetch_add(1, Ordering::Relaxed);
-                let filler_entries = (idx + 1) * self.filler_account_count / root_count
-                    - idx * self.filler_account_count / root_count;
+                let filler_entries = (idx + 1) * self.filler_accounts_config.count / root_count
+                    - idx * self.filler_accounts_config.count / root_count;
                 let accounts = (0..filler_entries)
                     .map(|_| {
                         let my_id = added.fetch_add(1, Ordering::Relaxed);
@@ -7130,6 +7175,8 @@ impl AccountsDb {
             timings.report();
         }
 
+        self.accounts_index.log_secondary_indexes();
+
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
         }
@@ -7274,10 +7321,10 @@ impl AccountsDb {
     }
 
     fn print_index(&self, label: &str) {
-        let mut roots: Vec<_> = self.accounts_index.all_roots();
+        let mut alive_roots: Vec<_> = self.accounts_index.all_alive_roots();
         #[allow(clippy::stable_sort_primitive)]
-        roots.sort();
-        info!("{}: accounts_index roots: {:?}", label, roots,);
+        alive_roots.sort();
+        info!("{}: accounts_index alive_roots: {:?}", label, alive_roots,);
         let full_pubkey_range = Pubkey::new(&[0; 32])..=Pubkey::new(&[0xff; 32]);
 
         self.accounts_index.account_maps.iter().for_each(|map| {
@@ -7449,7 +7496,7 @@ impl AccountsDb {
         let mut shrunken_account_total = 0;
         let mut shrunk_slot_count = 0;
         let start = Instant::now();
-        let num_roots = self.accounts_index.num_roots();
+        let num_roots = self.accounts_index.num_alive_roots();
         loop {
             if let Some(slot) = self.do_next_shrink_slot_v1(candidates) {
                 shrunken_account_total += self.do_shrink_stale_slot_v1(slot);
@@ -7480,7 +7527,7 @@ impl AccountsDb {
         if next.is_some() {
             next
         } else {
-            let mut new_all_slots = self.all_root_slots_in_index();
+            let mut new_all_slots = self.all_alive_roots_in_index();
             let next = new_all_slots.pop();
             // refresh candidates for later calls!
             **candidates = new_all_slots;
@@ -7544,6 +7591,7 @@ pub mod tests {
         std::{
             iter::FromIterator,
             str::FromStr,
+            sync::atomic::AtomicBool,
             thread::{self, Builder, JoinHandle},
         },
     };
@@ -9942,7 +9990,7 @@ pub mod tests {
 
     #[test]
     fn test_hash_stored_account() {
-        // This test uses some UNSAFE trick to detect most of account's field
+        // This test uses some UNSAFE tricks to detect most of account's field
         // addition and deletion without changing the hash code
 
         const ACCOUNT_DATA_LEN: usize = 3;
@@ -9986,7 +10034,7 @@ pub mod tests {
         };
 
         assert_eq!(
-            AccountsDb::hash_stored_account(slot, &stored_account),
+            AccountsDb::hash_account(slot, &stored_account, &stored_account.meta.pubkey),
             expected_account_hash,
             "StoredAccountMeta's data layout might be changed; update hashing if needed."
         );
@@ -13561,8 +13609,7 @@ pub mod tests {
             .is_some());
 
         // Simulate purge_slot() all from AccountsBackgroundService
-        let is_from_abs = true;
-        accounts.purge_slot(slot0, 0, is_from_abs);
+        accounts.purge_slot(slot0, 0, true);
 
         // Now clean should clean up the remaining key
         accounts.clean_accounts(None, false, None);
@@ -13750,6 +13797,21 @@ pub mod tests {
                 max_clean_root: None,
                 should_contain: false,
             });
+        }
+    }
+
+    #[test]
+    fn test_hash_account_with_rent_epoch() {
+        let owner = solana_sdk::pubkey::new_rand();
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let slot = 9;
+        let mut account = AccountSharedData::new(2, 1, &owner);
+        for rent in 0..3 {
+            account.set_rent_epoch(rent);
+            assert_eq!(
+                AccountsDb::hash_account(slot, &account, &pubkey),
+                AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
+            );
         }
     }
 }

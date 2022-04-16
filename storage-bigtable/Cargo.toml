@@ -17,8 +17,8 @@ enum-iterator = "0.7.0"
 flate2 = "1.0.22"
 goauth = "0.11.1"
 log = "0.4.14"
-prost = "0.9.0"
-prost-types = "0.9.0"
+prost = "0.10.0"
+prost-types = "0.10.0"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 smpl_jwt = "0.6.1"
@@ -27,7 +27,7 @@ solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
 thiserror = "1.0"
-tonic = { version = "0.6.2", features = ["tls", "transport"] }
+tonic = { version = "0.7.1", features = ["tls", "transport"] }
 zstd = "0.11.1"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly

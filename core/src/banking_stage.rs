@@ -23,7 +23,7 @@ use {
     solana_perf::{
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
-        packet::{limited_deserialize, Packet, PacketBatch, PACKETS_PER_BATCH},
+        packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
@@ -45,13 +45,10 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         feature_set,
-        message::Message,
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
-        transaction::{
-            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
-        },
+        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
         transport::TransportError,
     },
     solana_transaction_status::token_balances::{
@@ -558,7 +555,6 @@ impl BankingStage {
         let mut reached_end_of_slot: Option<EndOfSlot> = None;
 
         RetainMut::retain_mut(buffered_packet_batches, |deserialized_packet_batch| {
-            let packet_batch = &deserialized_packet_batch.packet_batch;
             let original_unprocessed_indexes = deserialized_packet_batch
                 .unprocessed_packets
                 .keys()
@@ -572,8 +568,7 @@ impl BankingStage {
                 let should_retain = if let Some(bank) = &end_of_slot.working_bank {
                     let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
                         bank,
-                        packet_batch,
-                        &original_unprocessed_indexes,
+                        &deserialized_packet_batch.unprocessed_packets,
                         my_pubkey,
                         end_of_slot.next_slot_leader,
                         banking_stage_stats,
@@ -624,8 +619,7 @@ impl BankingStage {
                                     &working_bank,
                                     &bank_creation_time,
                                     recorder,
-                                    packet_batch,
-                                    original_unprocessed_indexes.to_owned(),
+                                    &deserialized_packet_batch.unprocessed_packets,
                                     transaction_status_sender.clone(),
                                     gossip_vote_sender,
                                     banking_stage_stats,
@@ -1351,38 +1345,28 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
     ) -> ProcessTransactionBatchOutput {
-        let ((transactions_qos_results, cost_model_throttled_transactions_count), cost_model_time) =
-            Measure::this(
-                |_| {
-                    let tx_costs = qos_service.compute_transaction_costs(txs.iter());
+        let mut cost_model_time = Measure::start("cost_model");
 
-                    let (transactions_qos_results, num_included) =
-                        qos_service.select_transactions_per_cost(txs.iter(), tx_costs.iter(), bank);
+        let transaction_costs = qos_service.compute_transaction_costs(txs.iter());
 
-                    let cost_model_throttled_transactions_count =
-                        txs.len().saturating_sub(num_included);
+        let (transactions_qos_results, num_included) =
+            qos_service.select_transactions_per_cost(txs.iter(), transaction_costs.iter(), bank);
 
-                    qos_service.accumulate_estimated_transaction_costs(
-                        &Self::accumulate_batched_transaction_costs(
-                            tx_costs.iter(),
-                            transactions_qos_results.iter(),
-                        ),
-                    );
-                    (
-                        transactions_qos_results,
-                        cost_model_throttled_transactions_count,
-                    )
-                },
-                (),
-                "cost_model",
-            );
+        let cost_model_throttled_transactions_count = txs.len().saturating_sub(num_included);
+
+        qos_service.accumulate_estimated_transaction_costs(
+            &Self::accumulate_batched_transaction_costs(
+                transaction_costs.iter(),
+                transactions_qos_results.iter(),
+            ),
+        );
+        cost_model_time.stop();
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
         let mut lock_time = Measure::start("lock_time");
-        let batch =
-            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.into_iter());
+        let batch = bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter());
         lock_time.stop();
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
@@ -1397,20 +1381,30 @@ impl BankingStage {
                 gossip_vote_sender,
             );
 
+        let mut unlock_time = Measure::start("unlock_time");
+        // Once the accounts are new transactions can enter the pipeline to process them
+        drop(batch);
+        unlock_time.stop();
+
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
             ref execute_and_commit_timings,
             ..
         } = execute_and_commit_transactions_output;
 
+        // TODO: This does not revert the cost tracker changes from all unexecuted transactions
+        // yet: For example tx that are too old will not be included in the block, but are not
+        // retryable.
+        QosService::update_or_remove_transaction_costs(
+            transaction_costs.iter(),
+            transactions_qos_results.iter(),
+            retryable_transaction_indexes,
+            bank,
+        );
+
         retryable_transaction_indexes
             .iter_mut()
             .for_each(|x| *x += chunk_offset);
-
-        let mut unlock_time = Measure::start("unlock_time");
-        // Once the accounts are new transactions can enter the pipeline to process them
-        drop(batch);
-        unlock_time.stop();
 
         let (cu, us) =
             Self::accumulate_execute_units_and_time(&execute_and_commit_timings.execute_timings);
@@ -1685,32 +1679,27 @@ impl BankingStage {
     // with their packet indexes.
     #[allow(clippy::needless_collect)]
     fn transactions_from_packets(
-        packet_batch: &PacketBatch,
-        transaction_indexes: &[usize],
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         address_loader: impl AddressLoader,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
-        transaction_indexes
+        deserialized_packet_batch
             .iter()
-            .filter_map(|tx_index| {
-                let p = &packet_batch.packets[*tx_index];
-                if votes_only && !p.meta.is_simple_vote_tx() {
+            .filter_map(|(&tx_index, deserialized_packet)| {
+                if votes_only && !deserialized_packet.is_simple_vote {
                     return None;
                 }
 
-                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                let message_bytes = DeserializedPacketBatch::packet_message(p)?;
-                let message_hash = Message::hash_raw_message(message_bytes);
                 let tx = SanitizedTransaction::try_create(
-                    tx,
-                    message_hash,
-                    Some(p.meta.is_simple_vote_tx()),
+                    deserialized_packet.versioned_transaction.clone(),
+                    deserialized_packet.message_hash,
+                    Some(deserialized_packet.is_simple_vote),
                     address_loader.clone(),
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
-                Some((tx, *tx_index))
+                Some((tx, tx_index))
             })
             .unzip()
     }
@@ -1759,8 +1748,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &TransactionRecorder,
-        packet_batch: &PacketBatch,
-        packet_indexes: Vec<usize>,
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -1771,8 +1759,7 @@ impl BankingStage {
         let ((transactions, transaction_to_packet_indexes), packet_conversion_time) = Measure::this(
             |_| {
                 Self::transactions_from_packets(
-                    packet_batch,
-                    &packet_indexes,
+                    deserialized_packet_batch,
                     &bank.feature_set,
                     bank.vote_only_bank(),
                     bank.as_ref(),
@@ -1860,8 +1847,7 @@ impl BankingStage {
 
     fn filter_unprocessed_packets_at_end_of_slot(
         bank: &Arc<Bank>,
-        packet_batch: &PacketBatch,
-        transaction_indexes: &[usize],
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
         banking_stage_stats: &BankingStageStats,
@@ -1871,15 +1857,17 @@ impl BankingStage {
         // Filtering helps if we were going to forward the packets to some other node
         if let Some(leader) = next_leader {
             if leader == *my_pubkey {
-                return transaction_indexes.to_vec();
+                return deserialized_packet_batch
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<usize>>();
             }
         }
 
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
-            packet_batch,
-            transaction_indexes,
+            deserialized_packet_batch,
             &bank.feature_set,
             bank.vote_only_bank(),
             bank.as_ref(),
@@ -2113,7 +2101,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::{to_packet_batches, PacketFlags},
+        solana_perf::packet::{limited_deserialize, to_packet_batches, PacketFlags},
         solana_poh::{
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
@@ -2133,7 +2121,10 @@ mod tests {
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
-            transaction::{MessageHash, SimpleAddressLoader, Transaction, TransactionError},
+            transaction::{
+                MessageHash, SimpleAddressLoader, Transaction, TransactionError,
+                VersionedTransaction,
+            },
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
@@ -2889,6 +2880,131 @@ mod tests {
             let _ = poh_simulator.join();
 
             assert_eq!(bank.get_balance(&pubkey), 1);
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    #[test]
+    fn test_bank_process_and_record_transactions_cost_tracker() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let blockstore = Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger");
+            let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+            let recorder = poh_recorder.recorder();
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+
+            poh_recorder.lock().unwrap().set_bank(&bank);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+
+            let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
+            let get_tx_count = || bank.read_cost_tracker().unwrap().transaction_count();
+            assert_eq!(get_block_cost(), 0);
+            assert_eq!(get_tx_count(), 0);
+
+            //
+            // TEST: cost tracker's block cost increases when successfully processing a tx
+            //
+
+            let transactions = sanitize_transactions(vec![system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )]);
+
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &recorder,
+                0,
+                None,
+                &gossip_vote_sender,
+                &qos_service,
+            );
+
+            let ExecuteAndCommitTransactionsOutput {
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+            assert_eq!(executed_with_successful_result_count, 1);
+            assert!(commit_transactions_result.is_ok());
+
+            let single_transfer_cost = get_block_cost();
+            assert_ne!(single_transfer_cost, 0);
+            assert_eq!(get_tx_count(), 1);
+
+            //
+            // TEST: When a tx in a batch can't be executed (here because of account
+            // locks), then its cost does not affect the cost tracker.
+            //
+
+            let allocate_keypair = Keypair::new();
+            let transactions = sanitize_transactions(vec![
+                system_transaction::transfer(&mint_keypair, &pubkey, 2, genesis_config.hash()),
+                // intentionally use a tx that has a different cost
+                system_transaction::allocate(
+                    &mint_keypair,
+                    &allocate_keypair,
+                    genesis_config.hash(),
+                    1,
+                ),
+            ]);
+
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &recorder,
+                0,
+                None,
+                &gossip_vote_sender,
+                &qos_service,
+            );
+
+            let ExecuteAndCommitTransactionsOutput {
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                retryable_transaction_indexes,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+            assert_eq!(executed_with_successful_result_count, 1);
+            assert!(commit_transactions_result.is_ok());
+            assert_eq!(retryable_transaction_indexes, vec![1]);
+
+            assert_eq!(get_block_cost(), 2 * single_transfer_cost);
+            assert_eq!(get_tx_count(), 2);
+
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
@@ -4115,7 +4231,7 @@ mod tests {
     fn make_test_packets(
         transactions: Vec<Transaction>,
         vote_indexes: Vec<usize>,
-    ) -> (PacketBatch, Vec<usize>) {
+    ) -> DeserializedPacketBatch {
         let capacity = transactions.len();
         let mut packet_batch = PacketBatch::with_capacity(capacity);
         let mut packet_indexes = Vec::with_capacity(capacity);
@@ -4127,7 +4243,7 @@ mod tests {
         for index in vote_indexes.iter() {
             packet_batch.packets[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
-        (packet_batch, packet_indexes)
+        DeserializedPacketBatch::new(packet_batch, packet_indexes, false)
     }
 
     #[test]
@@ -4145,28 +4261,30 @@ mod tests {
             &keypair,
             None,
         );
+        let sorted = |mut v: Vec<usize>| {
+            v.sort_unstable();
+            v
+        };
 
         // packets with no votes
         {
             let vote_indexes = vec![];
-            let (packet_batch, packet_indexes) =
+            let deserialized_packet_batch =
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
-            assert_eq!(vec![0, 1], tx_packet_index);
+            assert_eq!(vec![0, 1], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
@@ -4178,63 +4296,59 @@ mod tests {
         // packets with some votes
         {
             let vote_indexes = vec![0, 2];
-            let (packet_batch, packet_indexes) = make_test_packets(
+            let deserialized_packet_batch = make_test_packets(
                 vec![vote_tx.clone(), transfer_tx, vote_tx.clone()],
                 vote_indexes,
             );
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
-            assert_eq!(vec![0, 2], tx_packet_index);
+            assert_eq!(vec![0, 2], sorted(tx_packet_index));
         }
 
         // packets with all votes
         {
             let vote_indexes = vec![0, 1, 2];
-            let (packet_batch, packet_indexes) = make_test_packets(
+            let deserialized_packet_batch = make_test_packets(
                 vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
                 vote_indexes,
             );
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
         }
     }
 

@@ -133,7 +133,7 @@ impl QosService {
         let mut num_included = 0;
         let select_results = transactions
             .zip(transactions_costs)
-            .map(|(tx, cost)| match cost_tracker.try_add(tx, cost) {
+            .map(|(tx, cost)| match cost_tracker.try_add(cost) {
                 Ok(current_block_cost) => {
                     debug!("slot {:?}, transaction {:?}, cost {:?}, fit into current block, current block cost {}", bank.slot(), tx, cost, current_block_cost);
                     self.metrics.stats.selected_txs_count.fetch_add(1, Ordering::Relaxed);
@@ -168,6 +168,35 @@ impl QosService {
             .cost_tracking_time
             .fetch_add(cost_tracking_time.as_us(), Ordering::Relaxed);
         (select_results, num_included)
+    }
+
+    /// Update the transaction cost in the cost_tracker with the real cost for
+    /// transactions that were executed successfully;
+    /// Otherwise remove the cost from the cost tracker, therefore preventing cost_tracker
+    /// being inflated with unsuccessfully executed transactions.
+    pub fn update_or_remove_transaction_costs<'a>(
+        transaction_costs: impl Iterator<Item = &'a TransactionCost>,
+        transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
+        retryable_transaction_indexes: &[usize],
+        bank: &Arc<Bank>,
+    ) {
+        let mut cost_tracker = bank.write_cost_tracker().unwrap();
+        transaction_costs
+            .zip(transaction_qos_results)
+            .enumerate()
+            .for_each(|(index, (tx_cost, qos_inclusion_result))| {
+                // Only transactions that the qos service incuded have been added to the
+                // cost tracker.
+                if qos_inclusion_result.is_ok() && retryable_transaction_indexes.contains(&index) {
+                    cost_tracker.remove(tx_cost);
+                } else {
+                    // TODO: Update the cost tracker with the actual execution compute units.
+                    // Will have to plumb it in next; For now, keep estimated costs.
+                    //
+                    // let actual_execution_cost = 0;
+                    // cost_tracker.update_execution_cost(tx_cost, actual_execution_cost);
+                }
+            });
     }
 
     // metrics are reported by bank slot

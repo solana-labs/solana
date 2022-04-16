@@ -455,6 +455,8 @@ impl AppendVec {
             next,
         ))
     }
+
+    #[cfg(test)]
     pub fn get_account_test(&self, offset: usize) -> Option<(StoredMeta, AccountSharedData)> {
         let (stored_account, _) = self.get_account(offset)?;
         let meta = stored_account.meta.clone();

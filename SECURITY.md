@@ -11,7 +11,7 @@
 email to security@solana.com and provide your github username so we can add you
 to a new draft security advisory for further discussion.
 
-Expect a response as fast as possible, within one business day at the latest.
+Expect a response as fast as possible, typically within 72 hours.
 
 <a name="bounty"></a>
 ## Security Bug Bounties

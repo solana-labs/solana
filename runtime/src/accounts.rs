@@ -1069,14 +1069,14 @@ impl Accounts {
     pub fn lock_accounts_with_results<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = Result<()>>,
+        results: impl Iterator<Item = &'a Result<()>>,
         feature_set: &FeatureSet,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
                 Ok(()) => tx.get_account_locks(feature_set),
-                Err(err) => Err(err),
+                Err(err) => Err(err.clone()),
             })
             .collect();
         self.lock_accounts_inner(tx_account_locks_results)
@@ -1154,13 +1154,6 @@ impl Accounts {
             leave_nonce_on_success,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
-    }
-
-    /// Purge a slot if it is not a root
-    /// Root slots cannot be purged
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -1311,28 +1304,33 @@ pub fn prepare_if_nonce_account<'a>(
     }
 }
 
-pub fn create_test_accounts(
-    accounts: &Accounts,
-    pubkeys: &mut Vec<Pubkey>,
-    num: usize,
-    slot: Slot,
-) {
-    for t in 0..num {
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let account =
-            AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, &pubkey, &account);
-        pubkeys.push(pubkey);
-    }
-}
+/// A set of utility functions used for testing and benchmarking
+pub mod test_utils {
+    use super::*;
 
-// Only used by bench, not safe to call otherwise accounts can conflict with the
-// accounts cache!
-pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
-    for pubkey in pubkeys {
-        let amount = thread_rng().gen_range(0, 10);
-        let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, pubkey, &account);
+    pub fn create_test_accounts(
+        accounts: &Accounts,
+        pubkeys: &mut Vec<Pubkey>,
+        num: usize,
+        slot: Slot,
+    ) {
+        for t in 0..num {
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account =
+                AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, &pubkey, &account);
+            pubkeys.push(pubkey);
+        }
+    }
+
+    // Only used by bench, not safe to call otherwise accounts can conflict with the
+    // accounts cache!
+    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+        for pubkey in pubkeys {
+            let amount = thread_rng().gen_range(0, 10);
+            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, pubkey, &account);
+        }
     }
 }
 
@@ -2831,7 +2829,7 @@ mod tests {
 
         let results = accounts.lock_accounts_with_results(
             txs.iter(),
-            qos_results.into_iter(),
+            qos_results.iter(),
             &FeatureSet::all_enabled(),
         );
 

@@ -13,8 +13,9 @@ use {
         find_packet_sender_stake_stage::FindPacketSenderStakeStage,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
+        staked_nodes_updater_service::StakedNodesUpdaterService,
     },
-    crossbeam_channel::{unbounded, Receiver},
+    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -28,14 +29,20 @@ use {
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::signature::Keypair,
+    solana_streamer::quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
     std::{
+        collections::HashMap,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
+        time::Duration,
     },
 };
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
+
+/// Timeout interval when joining threads during TPU close
+const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
 // allow multiple connections for NAT and any open/close overlap
 pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
@@ -58,6 +65,7 @@ pub struct Tpu {
     tpu_quic_t: thread::JoinHandle<()>,
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    staked_nodes_updater_service: StakedNodesUpdaterService,
 }
 
 impl Tpu {
@@ -128,13 +136,23 @@ impl Tpu {
 
         let (verified_sender, verified_receiver) = unbounded();
 
-        let tpu_quic_t = solana_streamer::quic::spawn_server(
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes_updater_service = StakedNodesUpdaterService::new(
+            exit.clone(),
+            cluster_info.clone(),
+            bank_forks.clone(),
+            staked_nodes.clone(),
+        );
+        let tpu_quic_t = spawn_server(
             transactions_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
         )
         .unwrap();
 
@@ -204,10 +222,27 @@ impl Tpu {
             tpu_quic_t,
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
+            staked_nodes_updater_service,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
+        // spawn a new thread to wait for tpu close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            let _ = self.do_join();
+            sender.send(()).unwrap();
+        });
+
+        // exit can deadlock. put an upper-bound on how long we wait for it
+        let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            error!("timeout for closing tvu");
+        }
+        Ok(())
+    }
+
+    fn do_join(self) -> thread::Result<()> {
         let results = vec![
             self.fetch_stage.join(),
             self.sigverify_stage.join(),
@@ -216,6 +251,7 @@ impl Tpu {
             self.banking_stage.join(),
             self.find_packet_sender_stake_stage.join(),
             self.vote_find_packet_sender_stake_stage.join(),
+            self.staked_nodes_updater_service.join(),
         ];
         self.tpu_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();

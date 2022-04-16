@@ -68,12 +68,12 @@ use {
     thiserror::Error,
     trees::{Tree, TreeWalk},
 };
+pub mod blockstore_purge;
 pub use {
     crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
@@ -90,6 +90,7 @@ thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::ne
                     .build()
                     .unwrap()));
 
+pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
@@ -107,20 +108,6 @@ type CompletedRanges = Vec<(u32, u32)>;
 pub struct SignatureInfosForAddress {
     pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
     pub found_before: bool,
-}
-
-#[derive(Clone, Copy)]
-/// Controls how `blockstore::purge_slots` purges the data.
-pub enum PurgeType {
-    /// A slower but more accurate way to purge slots by also ensuring higher
-    /// level of consistency between data during the clean up process.
-    Exact,
-    /// A faster approximation of `Exact` where the purge process only takes
-    /// care of the primary index and does not update the associated entries.
-    PrimaryIndex,
-    /// The fastest purge mode that relies on the slot-id based TTL
-    /// compaction filter to do the cleanup.
-    CompactionFilter,
 }
 
 #[derive(Error, Debug)]
@@ -174,12 +161,12 @@ pub struct Blockstore {
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
-    pub new_shreds_signals: Vec<Sender<bool>>,
-    pub completed_slots_senders: Vec<CompletedSlotsSender>,
+    new_shreds_signals: Mutex<Vec<Sender<bool>>>,
+    completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
-    slots_stats: Mutex<SlotsStats>,
+    pub slots_stats: SlotsStats,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -444,14 +431,14 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
-            new_shreds_signals: vec![],
-            completed_slots_senders: vec![],
+            new_shreds_signals: Mutex::default(),
+            completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             no_compaction: false,
-            slots_stats: Mutex::<SlotsStats>::default(),
+            slots_stats: SlotsStats::default(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -463,13 +450,13 @@ impl Blockstore {
         ledger_path: &Path,
         options: BlockstoreOptions,
     ) -> Result<BlockstoreSignals> {
-        let mut blockstore = Self::open_with_options(ledger_path, options)?;
-        let (ledger_signal_sender, ledger_signal_receiver) = bounded(1);
+        let blockstore = Self::open_with_options(ledger_path, options)?;
+        let (ledger_signal_sender, ledger_signal_receiver) = bounded(MAX_REPLAY_WAKE_UP_SIGNALS);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
 
-        blockstore.new_shreds_signals = vec![ledger_signal_sender];
-        blockstore.completed_slots_senders = vec![completed_slots_sender];
+        blockstore.add_new_shred_signal(ledger_signal_sender);
+        blockstore.add_completed_slots_signal(completed_slots_sender);
 
         Ok(BlockstoreSignals {
             blockstore,
@@ -1027,7 +1014,7 @@ impl Blockstore {
         let mut start = Measure::start("Commit Working Sets");
         let (should_signal, newly_completed_slots) = commit_slot_meta_working_set(
             &slot_meta_working_set,
-            &self.completed_slots_senders,
+            &self.completed_slots_senders.lock().unwrap(),
             &mut write_batch,
         )?;
 
@@ -1049,8 +1036,8 @@ impl Blockstore {
         metrics.write_batch_elapsed += start.as_us();
 
         send_signals(
-            &self.new_shreds_signals,
-            &self.completed_slots_senders,
+            &self.new_shreds_signals.lock().unwrap(),
+            &self.completed_slots_senders.lock().unwrap(),
             should_signal,
             newly_completed_slots,
         );
@@ -1061,6 +1048,27 @@ impl Blockstore {
         metrics.index_meta_time += index_meta_time;
 
         Ok((newly_completed_data_sets, inserted_indices))
+    }
+
+    pub fn add_new_shred_signal(&self, s: Sender<bool>) {
+        self.new_shreds_signals.lock().unwrap().push(s);
+    }
+
+    pub fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
+        self.completed_slots_senders.lock().unwrap().push(s);
+    }
+
+    pub fn get_new_shred_signals_len(&self) -> usize {
+        self.new_shreds_signals.lock().unwrap().len()
+    }
+
+    pub fn get_new_shred_signal(&self, index: usize) -> Option<Sender<bool>> {
+        self.new_shreds_signals.lock().unwrap().get(index).cloned()
+    }
+
+    pub fn drop_signal(&self) {
+        self.new_shreds_signals.lock().unwrap().clear();
+        self.completed_slots_senders.lock().unwrap().clear();
     }
 
     /// Range-delete all entries which prefix matches the specified `slot` and
@@ -1196,10 +1204,10 @@ impl Blockstore {
 
             return false;
         }
+
         self.slots_stats
-            .lock()
-            .unwrap()
-            .add_shred(slot, shred_source);
+            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+
         // insert coding shred into rocks
         let result = self
             .insert_coding_shred(index_meta, &shred, write_batch)
@@ -1631,13 +1639,13 @@ impl Blockstore {
             end_index,
         })
         .collect();
-        {
-            let mut slots_stats = self.slots_stats.lock().unwrap();
-            slots_stats.add_shred(slot_meta.slot, shred_source);
-            if slot_meta.is_full() {
-                slots_stats.set_full(slot_meta);
-            }
-        }
+
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.fec_set_index(),
+            shred_source,
+            Some(slot_meta),
+        );
 
         // slot is full, send slot full timing to poh_timing_report service.
         if slot_meta.is_full() {
@@ -3406,7 +3414,15 @@ fn send_signals(
 ) {
     if should_signal {
         for signal in new_shreds_signals {
-            let _ = signal.try_send(true);
+            match signal.try_send(true) {
+                Ok(_) => {}
+                Err(TrySendError::Full(_)) => {
+                    trace!("replay wake up signal channel is full.")
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    trace!("replay wake up signal channel is disconnected.")
+                }
+            }
         }
     }
 
