@@ -3,7 +3,7 @@ import {
   getFilteredProgramAccounts,
   getHashedName,
   getNameAccountKey,
-  NameRegistryState,
+  getNameOwner,
   NAME_PROGRAM_ID,
   performReverseLookup,
 } from "@bonfida/spl-name-service";
@@ -20,11 +20,42 @@ export interface DomainInfo {
   address: PublicKey;
 }
 export const hasDomainSyntax = (value: string) => {
-  if (value.length >= 4 && value.substring(value.length - 4) === ".sol")
-    return true;
-  return false;
+  return value.length > 4 && value.substring(value.length - 4) === ".sol";
 };
 
+async function getDomainKey(
+  name: string,
+  nameClass?: PublicKey,
+  nameParent?: PublicKey
+) {
+  const hashedDomainName = await getHashedName(name);
+  const nameKey = await getNameAccountKey(
+    hashedDomainName,
+    nameClass,
+    nameParent
+  );
+  return nameKey;
+}
+
+// returns non empty wallet string if a given .sol domain is owned by a wallet
+export async function getDomainOwner(domain: string, connection: Connection) {
+  const domainKey = await getDomainKey(
+    domain.slice(0, -4), // remove .sol
+    undefined,
+    SOL_TLD_AUTHORITY
+  );
+  try {
+    const registry = await getNameOwner(connection, domainKey);
+    return registry && registry.registry.owner
+      ? {
+          owner: registry.registry.owner.toString(),
+          address: domainKey.toString(),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 async function getUserDomainAddresses(
   connection: Connection,

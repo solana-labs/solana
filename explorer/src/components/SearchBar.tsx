@@ -16,7 +16,7 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
 import { getDomainOwner, hasDomainSyntax } from "utils/name-service";
 
-interface BuildOptions {
+interface SearchOptions {
   label: string;
   options: {
     label: string;
@@ -25,10 +25,19 @@ interface BuildOptions {
   }[];
 }
 
+interface TempSearchOptions {
+  searchOptions: SearchOptions[];
+  searchTerm: string;
+}
+
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
-  const [currentBuildOptions, setCurrentBuildOptions] =
-    React.useState<BuildOptions[]>();
+  const [searchOptions, setSearchOptions] = React.useState<SearchOptions[]>([]);
+  const [tempSearchOptions, setTempSearchOptions] =
+    React.useState<TempSearchOptions>({ searchOptions: [], searchTerm: "" });
+  const [loadingSearch, setLoadingSearch] = React.useState<boolean>(false);
+  const [loadingSearchMessage, setLoadingSearchMessage] =
+    React.useState<string>("loading...");
   const selectRef = React.useRef<StateManager<any> | null>(null);
   const history = useHistory();
   const location = useLocation();
@@ -52,19 +61,61 @@ export function SearchBar() {
   };
 
   React.useEffect(() => {
-    const _buildOptions = async () => {
-      const options = await buildOptions(
-        search,
-        cluster,
-        tokenRegistry,
-        url,
-        clusterInfo?.epochInfo.epoch
-      );
-      setCurrentBuildOptions(options);
-    };
-    _buildOptions();
+    setLoadingSearchMessage("Loading...");
+    setLoadingSearch(true);
+
+    // builds and sets local search output
+    const options = buildOptions(
+      search,
+      cluster,
+      tokenRegistry,
+      url,
+      clusterInfo?.epochInfo.epoch
+    );
+
+    setTempSearchOptions({
+      searchOptions: options,
+      searchTerm: search,
+    });
+
+    // checking for non local search output
+    if (hasDomainSyntax(search)) {
+      // if search input is a potential domain we continue the loading state
+      domainSearch(options);
+    } else {
+      // if search input is not a potential domain we can conclude the search has finished
+      setLoadingSearch(false);
+    }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // appends domain lookup results to the local search state
+  const domainSearch = async (options: SearchOptions[]) => {
+    setLoadingSearchMessage("Looking up domain...");
+    const connection = new Connection(url);
+    const searchTerm = search;
+    const updatedOptions = await buildDomainOptions(
+      connection,
+      search,
+      options
+    );
+
+    setTempSearchOptions({
+      searchOptions: updatedOptions,
+      searchTerm: searchTerm,
+    });
+    // after attempting to fetch the domain name we can conclude the loading state
+    setLoadingSearch(false);
+    setLoadingSearchMessage("Loading...");
+  };
+
+  React.useEffect(() => {
+    if (tempSearchOptions.searchTerm === search) {
+      setSearchOptions(tempSearchOptions.searchOptions);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tempSearchOptions, tempSearchOptions.searchOptions]);
 
   const resetValue = "" as any;
   return (
@@ -74,8 +125,9 @@ export function SearchBar() {
           <Select
             autoFocus
             ref={(ref) => (selectRef.current = ref)}
-            options={currentBuildOptions}
+            options={searchOptions}
             noOptionsMessage={() => "No Results"}
+            loadingMessage={() => loadingSearchMessage}
             placeholder="Search for blocks, accounts, transactions, programs, and tokens"
             value={resetValue}
             inputValue={search}
@@ -90,6 +142,7 @@ export function SearchBar() {
             onInputChange={onInputChange}
             components={{ DropdownIndicator }}
             classNamePrefix="search-bar"
+            isLoading={loadingSearch}
           />
         </div>
       </div>
@@ -221,7 +274,40 @@ function buildTokenOptions(
   }
 }
 
-async function buildOptions(
+async function buildDomainOptions(
+  connection: Connection,
+  search: string,
+  options: SearchOptions[]
+) {
+  const domainInfo = await getDomainOwner(search, connection);
+  const updatedOptions: SearchOptions[] = [...options];
+  if (domainInfo && domainInfo.owner && domainInfo.address) {
+    updatedOptions.push({
+      label: "Domain Owner",
+      options: [
+        {
+          label: domainInfo.owner,
+          value: [search],
+          pathname: "/address/" + domainInfo.owner,
+        },
+      ],
+    });
+    updatedOptions.push({
+      label: "Name Service Account",
+      options: [
+        {
+          label: search,
+          value: [search],
+          pathname: "/address/" + domainInfo.address,
+        },
+      ],
+    });
+  }
+  return updatedOptions;
+}
+
+// builds local search options
+function buildOptions(
   rawSearch: string,
   cluster: Cluster,
   tokenRegistry: TokenInfoMap,
@@ -313,33 +399,6 @@ async function buildOptions(
       });
     }
   } catch (err) {}
-
-  if (hasDomainSyntax(search)) {
-    const connection = new Connection(url);
-    const domainOwner = await getDomainOwner(search, connection);
-    if (domainOwner) {
-      options.push({
-        label: "Domain Owner",
-        options: [
-          {
-            label: domainOwner,
-            value: [search],
-            pathname: "/address/" + domainOwner,
-          },
-        ],
-      });
-      options.push({
-        label: "Name Service Account",
-        options: [
-          {
-            label: search,
-            value: [search],
-            pathname: "/address/" + domainOwner,
-          },
-        ],
-      });
-    }
-  }
 
   return options;
 }
