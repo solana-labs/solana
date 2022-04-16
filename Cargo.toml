@@ -76,6 +76,7 @@ members = [
     "tokens",
     "transaction-dos",
     "transaction-status",
+    "transaction-pool",
     "upload-perf",
     "validator",
     "version",
