@@ -1,4 +1,7 @@
-use solana::sdk::Pubkey;
+use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::collections::VecDeque;
+use solana_sdk::pubkey::Pubkey;
 
 struct Item {
     priority: u64,
@@ -9,21 +12,21 @@ struct Item {
 
 struct Pool {
     max_age: u64,
-    max_bucket_cu, u64,
-    max_block_cu, u64,
+    max_bucket_cu: u64,
+    max_block_cu: u64,
     items: BTreeMap<u64, VecDeque<Item>>,
 }
 
 trait Table {
-    fn keys(&self, item: &Item) -> &[&Pubkey],
+    fn keys(&self, item: &Item) -> &[&Pubkey];
 }
 
 impl Pool {
     pub fn insert(&mut self, item: Item) {
-        let bucket = self.items.entry(item.priority).or_insert_with(VecDqueue::new);
+        let bucket = self.items.entry(item.priority).or_insert_with(VecDeque::new);
         bucket.push_back(item);
     }
-    pub fn pop_block<T: Table>(&mut self, time: u64, table: &Table) -> VecDeque<Item> {
+    pub fn pop_block<T: Table>(&mut self, time: u64, table: &T) -> VecDeque<Item> {
         let mut rv = VecDeque::new();
         let mut total_cu = 0;
         let mut buckets: HashMap<Pubkey, u64> = HashMap::new();
