@@ -38,6 +38,19 @@ example_helloworld() {
 
 spl() {
   (
+  # Mind the order!
+    PROGRAMS=(
+      token/program
+      token/program-2022
+      token/program-2022-test
+      associated-token-account/program
+      feature-proposal/program
+      governance/addin-mock/program
+      governance/program
+      memo/program
+      name-service/program
+      stake-pool/program
+      )
     set -x
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
@@ -45,10 +58,15 @@ spl() {
 
     ./patch.crates-io.sh "$solana_dir"
 
+    for program in "${PROGRAMS[@]}"; do
+      $cargo_test_bpf --manifest-path "$program"/Cargo.toml
+    done
+
+    # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
+    # the required programs to run the tests, so instead we run the tests
+    # after we know programs have been built
     $cargo build
     $cargo test
-    $cargo_build_bpf
-    $cargo_test_bpf
   )
 }
 
