@@ -25,16 +25,10 @@ interface SearchOptions {
   }[];
 }
 
-interface TempSearchOptions {
-  searchOptions: SearchOptions[];
-  searchTerm: string;
-}
-
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
+  const searchRef = React.useRef("");
   const [searchOptions, setSearchOptions] = React.useState<SearchOptions[]>([]);
-  const [tempSearchOptions, setTempSearchOptions] =
-    React.useState<TempSearchOptions>({ searchOptions: [], searchTerm: "" });
   const [loadingSearch, setLoadingSearch] = React.useState<boolean>(false);
   const [loadingSearchMessage, setLoadingSearchMessage] =
     React.useState<string>("loading...");
@@ -61,6 +55,7 @@ export function SearchBar() {
   };
 
   React.useEffect(() => {
+    searchRef.current = search;
     setLoadingSearchMessage("Loading...");
     setLoadingSearch(true);
 
@@ -72,10 +67,7 @@ export function SearchBar() {
       clusterInfo?.epochInfo.epoch
     );
 
-    setTempSearchOptions({
-      searchOptions: options,
-      searchTerm: search,
-    });
+    setSearchOptions(options);
 
     // checking for non local search output
     if (hasDomainSyntax(search)) {
@@ -99,22 +91,13 @@ export function SearchBar() {
       search,
       options
     );
-
-    setTempSearchOptions({
-      searchOptions: updatedOptions,
-      searchTerm: searchTerm,
-    });
-    // after attempting to fetch the domain name we can conclude the loading state
-    setLoadingSearch(false);
-    setLoadingSearchMessage("Loading...");
-  };
-
-  React.useEffect(() => {
-    if (tempSearchOptions.searchTerm === search) {
-      setSearchOptions(tempSearchOptions.searchOptions);
+    if (searchRef.current === searchTerm) {
+      setSearchOptions(updatedOptions);
+      // after attempting to fetch the domain name we can conclude the loading state
+      setLoadingSearch(false);
+      setLoadingSearchMessage("Loading...");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tempSearchOptions, tempSearchOptions.searchOptions]);
+  };
 
   const resetValue = "" as any;
   return (
