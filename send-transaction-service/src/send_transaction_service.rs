@@ -162,6 +162,7 @@ impl SendTransactionService {
             leader_info.clone(),
             config.clone(),
             retry_transactions.clone(),
+            exit.clone(),
         );
 
         let retry_thread = Self::retry_thread(
@@ -186,6 +187,7 @@ impl SendTransactionService {
         mut leader_info: Option<T>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
+        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut last_batch_sent = Instant::now();
         let mut last_leader_refresh = Instant::now();
@@ -204,7 +206,11 @@ impl SendTransactionService {
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
-                    Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Disconnected) => {
+                        info!("Terminating send-transaction-service.");
+                        exit.store(true, Ordering::Relaxed);
+                        break;
+                    }
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
