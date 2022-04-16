@@ -38,7 +38,7 @@ async function getDomainKey(
 }
 
 // returns non empty wallet string if a given .sol domain is owned by a wallet
-export async function getDomainOwner(domain: string, connection: Connection) {
+export async function getDomainInfo(domain: string, connection: Connection) {
   const domainKey = await getDomainKey(
     domain.slice(0, -4), // remove .sol
     undefined,

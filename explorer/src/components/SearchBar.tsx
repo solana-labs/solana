@@ -14,7 +14,7 @@ import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
-import { getDomainOwner, hasDomainSyntax } from "utils/name-service";
+import { getDomainInfo, hasDomainSyntax } from "utils/name-service";
 
 interface SearchOptions {
   label: string;
@@ -69,7 +69,6 @@ export function SearchBar() {
       search,
       cluster,
       tokenRegistry,
-      url,
       clusterInfo?.epochInfo.epoch
     );
 
@@ -279,7 +278,7 @@ async function buildDomainOptions(
   search: string,
   options: SearchOptions[]
 ) {
-  const domainInfo = await getDomainOwner(search, connection);
+  const domainInfo = await getDomainInfo(search, connection);
   const updatedOptions: SearchOptions[] = [...options];
   if (domainInfo && domainInfo.owner && domainInfo.address) {
     updatedOptions.push({
@@ -311,7 +310,6 @@ function buildOptions(
   rawSearch: string,
   cluster: Cluster,
   tokenRegistry: TokenInfoMap,
-  url: string,
   currentEpoch?: number
 ) {
   const search = rawSearch.trim();
