@@ -55,7 +55,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
-        clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+        clock::{BankId, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -1969,11 +1969,13 @@ impl ReplayStage {
             );
         }
         if my_latest_landed_vote >= last_voted_slot
-            || heaviest_bank_on_same_fork
-                .check_hash_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
-                .unwrap_or(false)
-            // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
-            // include the last voted blockhash
+            || {
+                // check if the vote could still land on the heaviest fork
+                let max_age = heaviest_bank_on_same_fork.get_max_transaction_blockhash_age();
+                let vote_can_still_land = heaviest_bank_on_same_fork.check_hash_age(&tower.last_vote_tx_blockhash(), max_age);
+                vote_can_still_land.unwrap_or(false)
+            }
+            // In order to avoid voting on multiple forks that don't include the last voted blockhash
             || last_vote_refresh_time.last_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
         {
             return;
@@ -3149,7 +3151,7 @@ pub mod tests {
             genesis_utils::{GenesisConfigInfo, ValidatorVoteKeypairs},
         },
         solana_sdk::{
-            clock::NUM_CONSECUTIVE_LEADER_SLOTS,
+            clock::{MAX_TRANSACTION_BLOCKHASH_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
             genesis_config,
             hash::{hash, Hash},
             instruction::InstructionError,
@@ -6005,7 +6007,7 @@ pub mod tests {
         let expired_bank = Arc::new(Bank::new_from_parent(
             &bank2,
             &Pubkey::default(),
-            bank2.slot() + MAX_PROCESSING_AGE as Slot,
+            bank2.slot() + MAX_TRANSACTION_BLOCKHASH_AGE as Slot,
         ));
         expired_bank.fill_bank_with_ticks();
         expired_bank.freeze();

@@ -44,7 +44,6 @@ use {
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         client::SyncClient,
-        clock::MAX_PROCESSING_AGE,
         compute_budget::ComputeBudgetInstruction,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
@@ -318,7 +317,6 @@ fn process_transaction_and_record_inner(
     let mut results = bank
         .load_execute_and_commit_transactions(
             &tx_batch,
-            MAX_PROCESSING_AGE,
             false,
             true,
             false,
@@ -358,15 +356,7 @@ fn execute_transactions(
             post_balances,
             ..
         },
-    ) = bank.load_execute_and_commit_transactions(
-        &batch,
-        std::usize::MAX,
-        true,
-        true,
-        true,
-        true,
-        &mut timings,
-    );
+    ) = bank.load_execute_and_commit_transactions(&batch, true, true, true, true, &mut timings);
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
 
     izip!(

@@ -34,7 +34,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 #[allow(deprecated)]
-use solana_sdk::recent_blockhashes_account;
+use solana_sdk::{clock::MAX_PROCESSING_AGE, recent_blockhashes_account};
 use {
     crate::{
         accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
@@ -93,7 +93,7 @@ use {
         account_utils::StateMut,
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            INITIAL_RENT_EPOCH, MAX_TRANSACTION_BLOCKHASH_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             SECONDS_PER_DAY,
         },
         ed25519_program,
@@ -101,8 +101,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            self, disable_fee_calculator, double_max_transaction_blockhash_age,
+            nonce_must_be_writable, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3323,7 +3323,10 @@ impl Bank {
 
     pub fn is_blockhash_valid(&self, hash: &Hash) -> bool {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
-        blockhash_queue.check_hash(hash)
+        let max_age = self.get_max_transaction_blockhash_age();
+        blockhash_queue
+            .check_hash_age(hash, max_age)
+            .unwrap_or(false)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
@@ -3386,7 +3389,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.slot + blockhash_queue.get_max_age() as u64 - age)
+            .map(|age| self.slot + self.get_max_transaction_blockhash_age() as u64 - age)
     }
 
     pub fn get_blockhash_last_valid_block_height(&self, blockhash: &Hash) -> Option<Slot> {
@@ -3395,7 +3398,7 @@ impl Bank {
         // length is made variable by epoch
         blockhash_queue
             .get_hash_age(blockhash)
-            .map(|age| self.block_height + blockhash_queue.get_max_age() as u64 - age)
+            .map(|age| self.block_height + self.get_max_transaction_blockhash_age() as u64 - age)
     }
 
     pub fn confirmed_last_blockhash(&self) -> Hash {
@@ -3582,21 +3585,36 @@ impl Bank {
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
+        // After simulation, transactions will need to be forwarded to the leader
+        // for processing. During forwarding, the transaction could expire if the
+        // delay is not accounted for.
+        let max_age_for_simulation = self
+            .get_max_transaction_blockhash_age()
+            .saturating_sub(MAX_TRANSACTION_FORWARDING_DELAY);
+        let (check_result, ..) = self
+            .check_age(
+                batch.sanitized_transactions().iter(),
+                batch.lock_results(),
+                max_age_for_simulation,
+                &mut ErrorCounters::default(),
+            )
+            .pop()
+            .unwrap();
+        if let Err(err) = check_result {
+            return TransactionSimulationResult {
+                result: Err(err),
+                logs: vec![],
+                post_simulation_accounts: vec![],
+                units_consumed: 0,
+                return_data: None,
+            };
+        }
+
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             mut execution_results,
             ..
-        } = self.load_and_execute_transactions(
-            &batch,
-            // After simulation, transactions will need to be forwarded to the leader
-            // for processing. During forwarding, the transaction could expire if the
-            // delay is not accounted for.
-            MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-            false,
-            true,
-            true,
-            &mut timings,
-        );
+        } = self.load_and_execute_transactions(&batch, false, true, true, &mut timings);
 
         let post_simulation_accounts = loaded_transactions
             .into_iter()
@@ -3752,6 +3770,18 @@ impl Bank {
         tx: &SanitizedTransaction,
     ) -> Option<TransactionAccount> {
         self.check_message_for_nonce(tx.message())
+    }
+
+    pub fn get_max_transaction_blockhash_age(&self) -> usize {
+        if self
+            .feature_set
+            .is_active(&double_max_transaction_blockhash_age::ID)
+        {
+            MAX_TRANSACTION_BLOCKHASH_AGE
+        } else {
+            #[allow(deprecated)]
+            MAX_PROCESSING_AGE
+        }
     }
 
     pub fn check_transactions(
@@ -4064,7 +4094,6 @@ impl Bank {
     pub fn load_and_execute_transactions(
         &self,
         batch: &TransactionBatch,
-        max_age: usize,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
         enable_return_data_recording: bool,
@@ -4094,6 +4123,7 @@ impl Bank {
             .collect();
 
         let mut check_time = Measure::start("check_transactions");
+        let max_age = self.get_max_transaction_blockhash_age();
         let check_results = self.check_transactions(
             sanitized_txs,
             batch.lock_results(),
@@ -5318,7 +5348,6 @@ impl Bank {
     pub fn load_execute_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
-        max_age: usize,
         collect_balances: bool,
         enable_cpi_recording: bool,
         enable_log_recording: bool,
@@ -5340,7 +5369,6 @@ impl Bank {
             ..
         } = self.load_and_execute_transactions(
             batch,
-            max_age,
             enable_cpi_recording,
             enable_log_recording,
             enable_return_data_recording,
@@ -5426,7 +5454,6 @@ impl Bank {
     fn process_transaction_batch(&self, batch: &TransactionBatch) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
-            MAX_PROCESSING_AGE,
             false,
             false,
             false,
@@ -10037,7 +10064,6 @@ pub(crate) mod tests {
         let results_alice = bank
             .load_execute_and_commit_transactions(
                 &lock_result,
-                MAX_PROCESSING_AGE,
                 false,
                 false,
                 false,
@@ -12568,7 +12594,6 @@ pub(crate) mod tests {
         let (transaction_results, transaction_balances_set) = bank0
             .load_execute_and_commit_transactions(
                 &lock_result,
-                MAX_PROCESSING_AGE,
                 true,
                 false,
                 false,
@@ -15488,7 +15513,6 @@ pub(crate) mod tests {
         let execution_results = bank
             .load_execute_and_commit_transactions(
                 &batch,
-                MAX_PROCESSING_AGE,
                 false,
                 false,
                 true,
@@ -15596,7 +15620,6 @@ pub(crate) mod tests {
             let return_data = bank
                 .load_execute_and_commit_transactions(
                     &batch,
-                    MAX_PROCESSING_AGE,
                     false,
                     false,
                     false,

@@ -61,9 +61,17 @@ static_assertions::const_assert_eq!(MAX_RECENT_BLOCKHASHES, 300);
 pub const MAX_RECENT_BLOCKHASHES: usize =
     MAX_HASH_AGE_IN_SECONDS * DEFAULT_TICKS_PER_SECOND as usize / DEFAULT_TICKS_PER_SLOT as usize;
 
+/// The maximum age of a transaction's blockhash
+pub const MAX_TRANSACTION_BLOCKHASH_AGE: usize = MAX_RECENT_BLOCKHASHES;
+
 #[cfg(test)]
-static_assertions::const_assert_eq!(MAX_PROCESSING_AGE, 150);
+mod max_processing_age {
+    #![allow(deprecated)]
+    static_assertions::const_assert_eq!(super::MAX_PROCESSING_AGE, 150);
+}
+
 // The maximum age of a blockhash that will be accepted by the leader
+#[deprecated]
 pub const MAX_PROCESSING_AGE: usize = MAX_RECENT_BLOCKHASHES / 2;
 
 /// This is maximum time consumed in forwarding a transaction from one node to next, before

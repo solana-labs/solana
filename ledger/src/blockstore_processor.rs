@@ -40,7 +40,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::Slot,
         feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -179,7 +179,6 @@ fn execute_batch(
 
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
-        MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
@@ -3570,7 +3569,6 @@ pub mod tests {
             _balances,
         ) = batch.bank().load_execute_and_commit_transactions(
             &batch,
-            MAX_PROCESSING_AGE,
             false,
             false,
             false,

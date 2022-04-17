@@ -31,7 +31,7 @@ use {
     },
     solana_runtime::vote_parser,
     solana_sdk::{
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::{Slot, MAX_TRANSACTION_BLOCKHASH_AGE},
         hash::Hash,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -130,8 +130,9 @@ fn test_fork_choice_refresh_old_votes() {
     let ticks_per_slot = 8;
     let on_before_partition_resolved =
         |cluster: &mut LocalCluster, context: &mut PartitionContext| {
-            // Equal to ms_per_slot * MAX_PROCESSING_AGE, rounded up
-            let sleep_time_ms = ms_for_n_slots(MAX_PROCESSING_AGE as u64, ticks_per_slot);
+            // Equal to ms_per_slot * MAX_TRANSACTION_BLOCKHASH_AGE, rounded up
+            let sleep_time_ms =
+                ms_for_n_slots(MAX_TRANSACTION_BLOCKHASH_AGE as u64, ticks_per_slot);
             info!("Wait for blockhashes to expire, {} ms", sleep_time_ms);
 
             // Wait for blockhashes to expire

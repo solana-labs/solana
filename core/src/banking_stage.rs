@@ -41,7 +41,7 @@ use {
     },
     solana_sdk::{
         clock::{
-            Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            Slot, DEFAULT_TICKS_PER_SLOT, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         feature_set,
@@ -1182,7 +1182,6 @@ impl BankingStage {
             |_| {
                 bank.load_and_execute_transactions(
                     batch,
-                    MAX_PROCESSING_AGE,
                     transaction_status_sender.is_some(),
                     transaction_status_sender.is_some(),
                     transaction_status_sender.is_some(),
@@ -1731,12 +1730,14 @@ impl BankingStage {
             MAX_TRANSACTION_FORWARDING_DELAY_GPU
         };
 
+        let max_age_for_forwarding = bank
+            .get_max_transaction_blockhash_age()
+            .saturating_sub(max_tx_fwd_delay)
+            .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize);
         let results = bank.check_transactions(
             transactions,
             &filter,
-            (MAX_PROCESSING_AGE)
-                .saturating_sub(max_tx_fwd_delay)
-                .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
+            max_age_for_forwarding,
             &mut error_counters,
         );
 

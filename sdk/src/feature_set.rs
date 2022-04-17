@@ -343,6 +343,10 @@ pub mod reject_callx_r10 {
     solana_sdk::declare_id!("3NKRSwpySNwD3TvP5pHnRmkAQRsdkXWRr1WaQh8p4PWX");
 }
 
+pub mod double_max_transaction_blockhash_age {
+    solana_sdk::declare_id!("AzwYx8kfjfi3wC4yw2txXWijQ4TN15xweXXD4yBqhxZ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -423,6 +427,7 @@ lazy_static! {
         (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
         (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
         (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
+        (double_max_transaction_blockhash_age::id(), "increase max allowed age of transaction recent blockhashes"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

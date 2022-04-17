@@ -44,7 +44,7 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         client::{AsyncClient, SyncClient},
-        clock::{self, Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+        clock::{self, Slot, DEFAULT_TICKS_PER_SLOT, MAX_TRANSACTION_BLOCKHASH_AGE},
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::ClusterType,
@@ -2620,7 +2620,7 @@ fn test_votes_land_in_fork_during_long_partition() {
     let on_partition_resolved = |cluster: &mut LocalCluster, context: &mut PartitionContext| {
         let lighter_validator_ledger_path = cluster.ledger_path(&context.lighter_validator_key);
         let start = Instant::now();
-        let max_wait = ms_for_n_slots(MAX_PROCESSING_AGE as u64, DEFAULT_TICKS_PER_SLOT);
+        let max_wait = ms_for_n_slots(MAX_TRANSACTION_BLOCKHASH_AGE as u64, DEFAULT_TICKS_PER_SLOT);
         // Wait for the lighter node to switch over and root the `context.heavier_fork_slot`
         loop {
             assert!(

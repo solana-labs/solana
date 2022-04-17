@@ -163,13 +163,12 @@ pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::clock::MAX_PROCESSING_AGE};
+    use {super::*, crate::clock::MAX_RECENT_BLOCKHASHES};
 
     #[test]
     #[allow(clippy::assertions_on_constants)]
-    fn test_sysvar_can_hold_all_active_blockhashes() {
-        // Ensure we can still hold all of the active entries in `BlockhashQueue`
-        assert!(MAX_PROCESSING_AGE <= MAX_ENTRIES);
+    fn test_sysvar_size_doesnt_exceed_blockhash_queue_size() {
+        assert!(MAX_ENTRIES <= MAX_RECENT_BLOCKHASHES);
     }
 
     #[test]

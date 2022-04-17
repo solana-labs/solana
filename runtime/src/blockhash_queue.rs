@@ -142,10 +142,6 @@ impl BlockhashQueue {
             recent_blockhashes::IterItem(v.hash_height, k, v.fee_calculator.lamports_per_signature)
         })
     }
-
-    pub(crate) fn get_max_age(&self) -> usize {
-        self.max_age
-    }
 }
 #[cfg(test)]
 mod tests {

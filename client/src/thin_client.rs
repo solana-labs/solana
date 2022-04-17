@@ -17,7 +17,7 @@ use {
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::{Slot, MAX_TRANSACTION_BLOCKHASH_AGE},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -206,7 +206,7 @@ impl ThinClient {
         for x in 0..tries {
             let now = Instant::now();
             let mut num_confirmed = 0;
-            let mut wait_time = MAX_PROCESSING_AGE;
+            let mut wait_time = MAX_TRANSACTION_BLOCKHASH_AGE;
             // resend the same transaction until the transaction has no chance of succeeding
             let wire_transaction =
                 bincode::serialize(&transaction).expect("transaction serialization failed");
@@ -228,7 +228,8 @@ impl ThinClient {
                     // all pending confirmations. Resending the transaction could result into
                     // extra transaction fees
                     wait_time = wait_time.max(
-                        MAX_PROCESSING_AGE * pending_confirmations.saturating_sub(num_confirmed),
+                        MAX_TRANSACTION_BLOCKHASH_AGE
+                            * pending_confirmations.saturating_sub(num_confirmed),
                     );
                 }
             }
