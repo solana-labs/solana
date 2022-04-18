@@ -20,7 +20,7 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
     std::collections::HashSet,
 };
@@ -71,7 +71,7 @@ impl Address {
 }
 
 fn allocate(
-    account: &mut AccountSharedData,
+    account: &mut BorrowedAccount,
     address: &Address,
     space: u64,
     signers: &HashSet<Pubkey>,
@@ -88,7 +88,7 @@ fn allocate(
 
     // if it looks like the `to` account is already in use, bail
     //   (note that the id check is also enforced by message_processor)
-    if !account.data().is_empty() || !system_program::check_id(account.owner()) {
+    if !account.get_data().is_empty() || !system_program::check_id(account.get_owner()) {
         ic_msg!(
             invoke_context,
             "Allocate: account {:?} already in use",
@@ -107,20 +107,20 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(vec![0; space as usize]);
+    account.set_data(&vec![0; space as usize]);
 
     Ok(())
 }
 
 fn assign(
-    account: &mut AccountSharedData,
+    account: &mut BorrowedAccount,
     address: &Address,
     owner: &Pubkey,
     signers: &HashSet<Pubkey>,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
     // no work to do, just return
-    if account.owner() == owner {
+    if account.get_owner() == owner {
         return Ok(());
     }
 
@@ -129,12 +129,12 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(*owner);
+    account.set_owner(&owner.to_bytes());
     Ok(())
 }
 
 fn allocate_and_assign(
-    to: &mut AccountSharedData,
+    to: &mut BorrowedAccount,
     to_address: &Address,
     space: u64,
     owner: &Pubkey,
@@ -145,6 +145,7 @@ fn allocate_and_assign(
     assign(to, to_address, owner, signers, invoke_context)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_account(
     from_account_index: usize,
     to_account_index: usize,
@@ -160,9 +161,9 @@ fn create_account(
     // if it looks like the `to` account is already in use, bail
     {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
-        let to = keyed_account_at_index(keyed_accounts, to_account_index)?;
-        let to = &mut to.try_account_ref_mut()?;
-        if to.lamports() > 0 {
+        let mut to =
+            instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+        if to.get_lamports() > 0 {
             ic_msg!(
                 invoke_context,
                 "Create Account: account {:?} already in use",
@@ -171,7 +172,7 @@ fn create_account(
             return Err(SystemError::AccountAlreadyInUse.into());
         }
 
-        allocate_and_assign(to, to_address, space, owner, signers, invoke_context)?;
+        allocate_and_assign(&mut to, to_address, space, owner, signers, invoke_context)?;
     }
     transfer(
         from_account_index,
@@ -188,27 +189,30 @@ fn transfer_verified(
     to_account_index: usize,
     lamports: u64,
     invoke_context: &InvokeContext,
+    transaction_context: &TransactionContext,
+    instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
-    if !from.data_is_empty()? {
+    let mut from =
+        instruction_context.try_borrow_account(transaction_context, from_account_index)?;
+    if !from.get_data().is_empty() {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
     }
-    if lamports > from.lamports()? {
+    if lamports > from.get_lamports() {
         ic_msg!(
             invoke_context,
             "Transfer: insufficient lamports {}, need {}",
-            from.lamports()?,
+            from.get_lamports(),
             lamports
         );
         return Err(SystemError::ResultWithNegativeLamports.into());
     }
 
-    from.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
+    from.checked_sub_lamports(lamports)?;
     drop(from);
-    let to = keyed_account_at_index(keyed_accounts, to_account_index)?;
-    to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
+    let mut to = instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    to.checked_add_lamports(lamports)?;
     Ok(())
 }
 
@@ -244,6 +248,8 @@ fn transfer(
         to_account_index,
         lamports,
         invoke_context,
+        transaction_context,
+        instruction_context,
     )
 }
 
@@ -302,6 +308,8 @@ fn transfer_with_seed(
         to_account_index,
         lamports,
         invoke_context,
+        transaction_context,
+        instruction_context,
     )
 }
 
@@ -378,7 +386,8 @@ pub fn process_instruction(
         SystemInstruction::Assign { owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context
+                .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_in_transaction(first_instruction_account)?,
@@ -485,7 +494,8 @@ pub fn process_instruction(
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context
+                .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_in_transaction(first_instruction_account)?,
@@ -503,7 +513,8 @@ pub fn process_instruction(
         } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context
+                .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_in_transaction(first_instruction_account)?,
@@ -523,7 +534,8 @@ pub fn process_instruction(
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let mut account = keyed_account.try_account_ref_mut()?;
+            let mut account = instruction_context
+                .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
                     instruction_context.get_index_in_transaction(first_instruction_account)?,
