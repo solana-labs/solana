@@ -98,30 +98,28 @@ impl CostTracker {
     pub fn update_execution_cost(
         &mut self,
         estimated_tx_cost: &TransactionCost,
-        actual_execution_units: Option<u64>,
+        actual_execution_units: u64,
     ) {
-        if let Some(actual_execution_units) = actual_execution_units {
-            let estimated_execution_units = estimated_tx_cost.bpf_execution_cost;
-            if actual_execution_units == estimated_execution_units {
-                return;
-            }
+        let estimated_execution_units = estimated_tx_cost.bpf_execution_cost;
+        if actual_execution_units == estimated_execution_units {
+            return;
+        }
 
-            if let Some(adjustment) =
-                Self::checked_diff_unsigned(actual_execution_units, estimated_execution_units)
-            {
-                self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
-            } else {
-                // handle adjustment too big to fit in `i64` error, log event as error,
-                // set block_cost to limit to prevent more transactions being added into
-                // curernt block.
-                log::error!(
-                    "cost_tracker detected erroneous attemopt to adjust execution cost, \
-                        estimated transactino cost {:?}, actual execution units {}",
-                    estimated_tx_cost,
-                    actual_execution_units
-                );
-                self.block_cost = self.block_cost_limit;
-            }
+        if let Some(adjustment) =
+            Self::checked_diff_unsigned(actual_execution_units, estimated_execution_units)
+        {
+            self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
+        } else {
+            // handle adjustment too big to fit in `i64` error, log event as error,
+            // set block_cost to limit to prevent more transactions being added into
+            // curernt block.
+            log::error!(
+                "cost_tracker detected erroneous attemopt to adjust execution cost, \
+                    estimated transactino cost {:?}, actual execution units {}",
+                estimated_tx_cost,
+                actual_execution_units
+            );
+            self.block_cost = self.block_cost_limit;
         }
     }
 

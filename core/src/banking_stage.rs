@@ -100,19 +100,10 @@ struct RecordTransactionsSummary {
     retryable_indexes: Vec<usize>,
 }
 
-#[derive(Debug, Default)]
-pub struct CommitTransactionDetails {
-    // If committed successfully
-    pub was_committed: bool,
-    // Sum of consumed compute units for execution
-    pub executed_units: Option<u64>,
-}
-
-impl CommitTransactionDetails {
-    fn clear(&mut self) {
-        self.was_committed = false;
-        self.executed_units = None;
-    }
+#[derive(Debug)]
+pub enum CommitTransactionDetails {
+    Committed { compute_units: u64 },
+    NotCommitted,
 }
 
 pub struct ExecuteAndCommitTransactionsOutput {
@@ -1222,12 +1213,13 @@ impl BankingStage {
         let mut transactions_execute_and_record_status: Vec<_> = execution_results
             .iter()
             .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(details) => CommitTransactionDetails {
-                    was_committed: true,
-                    executed_units: Some(details.executed_units),
-                },
+                TransactionExecutionResult::Executed(details) => {
+                    CommitTransactionDetails::Committed {
+                        compute_units: details.executed_units,
+                    }
+                }
                 TransactionExecutionResult::NotExecuted { .. } => {
-                    CommitTransactionDetails::default()
+                    CommitTransactionDetails::NotCommitted
                 }
             })
             .collect();
@@ -1259,7 +1251,7 @@ impl BankingStage {
 
         // mark transactions that were executed but not recorded
         retryable_record_transaction_indexes.iter().for_each(|i| {
-            transactions_execute_and_record_status[*i].clear();
+            transactions_execute_and_record_status[*i] = CommitTransactionDetails::NotCommitted;
         });
 
         inc_new_counter_info!(

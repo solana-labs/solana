@@ -208,13 +208,11 @@ impl QosService {
                     // Only transactions that the qos service included have to be
                     // checked for update
                     if qos_inclusion_result.is_ok() {
-                        if transaction_committed_details.was_committed {
-                            cost_tracker.update_execution_cost(
-                                tx_cost,
-                                transaction_committed_details.executed_units,
-                            );
-                        } else {
-                            cost_tracker.remove(tx_cost);
+                        match transaction_committed_details {
+                            CommitTransactionDetails::Committed { compute_units } => {
+                                cost_tracker.update_execution_cost(tx_cost, *compute_units)
+                            }
+                            CommitTransactionDetails::NotCommitted => cost_tracker.remove(tx_cost),
                         }
                     }
                 },
@@ -686,9 +684,8 @@ mod tests {
             // all transactions are committed with actual units more than estimated
             let commited_status: Vec<CommitTransactionDetails> = txs_costs
                 .iter()
-                .map(|tx_cost| CommitTransactionDetails {
-                    was_committed: true,
-                    executed_units: Some(tx_cost.bpf_execution_cost + execute_units_adjustment),
+                .map(|tx_cost| CommitTransactionDetails::Committed {
+                    compute_units: tx_cost.bpf_execution_cost + execute_units_adjustment,
                 })
                 .collect();
             let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
@@ -783,13 +780,10 @@ mod tests {
                 .enumerate()
                 .map(|(n, tx_cost)| {
                     if n % 2 == 0 {
-                        CommitTransactionDetails::default()
+                        CommitTransactionDetails::NotCommitted
                     } else {
-                        CommitTransactionDetails {
-                            was_committed: true,
-                            executed_units: Some(
-                                tx_cost.bpf_execution_cost + execute_units_adjustment,
-                            ),
+                        CommitTransactionDetails::Committed {
+                            compute_units: tx_cost.bpf_execution_cost + execute_units_adjustment,
                         }
                     }
                 })
