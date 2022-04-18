@@ -5,7 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, num_utils::*, pubkey::Pubkey},
     std::collections::HashMap,
 };
 
@@ -263,6 +263,42 @@ impl CostTracker {
             .account_data_size
             .saturating_sub(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_sub(1);
+    }
+
+    /// Apply execution units adjustment to cost-tracker.
+    /// If adjustment causes arithmetic overflow, it bumps costs to their limits to
+    /// prevent adding further transactions into current block.
+    fn adjust_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: i64) {
+        for account_key in tx_cost.writable_accounts.iter() {
+            let account_cost = self
+                .cost_by_writable_accounts
+                .entry(*account_key)
+                .or_insert(0);
+            match UintUtil::checked_add_signed(*account_cost, adjustment) {
+                Some(adjusted_cost) => *account_cost = adjusted_cost,
+                None => *account_cost = self.account_cost_limit,
+            }
+        }
+        match UintUtil::checked_add_signed(self.block_cost, adjustment) {
+            Some(adjusted_cost) => self.block_cost = adjusted_cost,
+            None => self.block_cost = self.block_cost_limit,
+        }
+        if tx_cost.is_simple_vote {
+            match UintUtil::checked_add_signed(self.vote_cost, adjustment) {
+                Some(adjusted_cost) => self.vote_cost = adjusted_cost,
+                None => self.vote_cost = self.vote_cost_limit,
+            }
+        }
+    }
+
+    /// Checked get deltai as `i64` of two `u64`, computes `lhs - rhs`,
+    /// returning `None` if delta overflows `i64`
+    fn checked_diff_unsigned(lhs: u64, rhs: u64) -> Option<i64> {
+        if lhs >= rhs {
+            IntUtil::checked_add_unsigned(0i64, lhs - rhs)
+        } else {
+            IntUtil::checked_sub_unsigned(0i64, rhs - lhs)
+        }
     }
 }
 
