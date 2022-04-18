@@ -145,8 +145,8 @@ fn allocate_and_assign(
 }
 
 fn create_account(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from_account_index: usize,
+    to_account_index: usize,
     to_address: &Address,
     lamports: u64,
     space: u64,
@@ -156,6 +156,8 @@ fn create_account(
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
+        let keyed_accounts = invoke_context.get_keyed_accounts()?;
+        let to = keyed_account_at_index(keyed_accounts, to_account_index)?;
         let to = &mut to.try_account_ref_mut()?;
         if to.lamports() > 0 {
             ic_msg!(
@@ -168,15 +170,22 @@ fn create_account(
 
         allocate_and_assign(to, to_address, space, owner, signers, invoke_context)?;
     }
-    transfer(from, to, lamports, invoke_context)
+    transfer(
+        from_account_index,
+        to_account_index,
+        lamports,
+        invoke_context,
+    )
 }
 
 fn transfer_verified(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from_account_index: usize,
+    to_account_index: usize,
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
     if !from.data_is_empty()? {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
@@ -192,13 +201,15 @@ fn transfer_verified(
     }
 
     from.try_account_ref_mut()?.checked_sub_lamports(lamports)?;
+    drop(from);
+    let to = keyed_account_at_index(keyed_accounts, to_account_index)?;
     to.try_account_ref_mut()?.checked_add_lamports(lamports)?;
     Ok(())
 }
 
 fn transfer(
-    from: &KeyedAccount,
-    to: &KeyedAccount,
+    from_account_index: usize,
+    to_account_index: usize,
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -210,6 +221,8 @@ fn transfer(
         return Ok(());
     }
 
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
     if from.signer_key().is_none() {
         ic_msg!(
             invoke_context,
@@ -218,16 +231,22 @@ fn transfer(
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
+    drop(from);
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(
+        from_account_index,
+        to_account_index,
+        lamports,
+        invoke_context,
+    )
 }
 
 fn transfer_with_seed(
-    from: &KeyedAccount,
-    from_base: &KeyedAccount,
+    from_account_index: usize,
+    from_base_account_index: usize,
     from_seed: &str,
     from_owner: &Pubkey,
-    to: &KeyedAccount,
+    to_account_index: usize,
     lamports: u64,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
@@ -239,6 +258,8 @@ fn transfer_with_seed(
         return Ok(());
     }
 
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let from_base = keyed_account_at_index(keyed_accounts, from_base_account_index)?;
     if from_base.signer_key().is_none() {
         ic_msg!(
             invoke_context,
@@ -247,9 +268,11 @@ fn transfer_with_seed(
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
-
     let address_from_seed =
         Pubkey::create_with_seed(from_base.unsigned_key(), from_seed, from_owner)?;
+    drop(from_base);
+
+    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
     if *from.unsigned_key() != address_from_seed {
         ic_msg!(
             invoke_context,
@@ -259,8 +282,14 @@ fn transfer_with_seed(
         );
         return Err(SystemError::AddressWithSeedMismatch.into());
     }
+    drop(from);
 
-    transfer_verified(from, to, lamports, invoke_context)
+    transfer_verified(
+        from_account_index,
+        to_account_index,
+        lamports,
+        invoke_context,
+    )
 }
 
 pub fn process_instruction(
@@ -285,12 +314,12 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(to.unsigned_key(), None, invoke_context)?;
+            drop(to);
             create_account(
-                from,
-                to,
+                first_instruction_account,
+                first_instruction_account + 1,
                 &to_address,
                 lamports,
                 space,
@@ -307,16 +336,16 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let to_address = Address::create(
                 to.unsigned_key(),
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
+            drop(to);
             create_account(
-                from,
-                to,
+                first_instruction_account,
+                first_instruction_account + 1,
                 &to_address,
                 lamports,
                 space,
@@ -334,9 +363,12 @@ pub fn process_instruction(
         }
         SystemInstruction::Transfer { lamports } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            transfer(from, to, lamports, invoke_context)
+            transfer(
+                first_instruction_account,
+                first_instruction_account + 1,
+                lamports,
+                invoke_context,
+            )
         }
         SystemInstruction::TransferWithSeed {
             lamports,
@@ -344,15 +376,12 @@ pub fn process_instruction(
             from_owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(3)?;
-            let from = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let base = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            let to = keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
             transfer_with_seed(
-                from,
-                base,
+                first_instruction_account,
+                first_instruction_account + 1,
                 &from_seed,
                 &from_owner,
-                to,
+                first_instruction_account + 2,
                 lamports,
                 invoke_context,
             )
