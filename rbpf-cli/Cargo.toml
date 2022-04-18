@@ -10,7 +10,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-clap = { version = "3.1.5", features = ["cargo"] }
+clap = { version = "3.1.8", features = ["cargo"] }
 serde = "1.0.136"
 serde_json = "1.0.79"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.0" }
