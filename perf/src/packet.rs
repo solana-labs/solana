@@ -81,13 +81,14 @@ impl PacketBatch {
     }
 }
 
-pub fn to_packet_batches<T: Serialize>(xs: &[T], chunks: usize) -> Vec<PacketBatch> {
-    xs.chunks(chunks)
-        .map(|x| {
-            let mut batch = PacketBatch::with_capacity(x.len());
-            batch.packets.resize(x.len(), Packet::default());
-            for (i, packet) in x.iter().zip(batch.packets.iter_mut()) {
-                Packet::populate_packet(packet, None, i).expect("serialize request");
+pub fn to_packet_batches<T: Serialize>(items: &[T], chunk_size: usize) -> Vec<PacketBatch> {
+    items
+        .chunks(chunk_size)
+        .map(|batch_items| {
+            let mut batch = PacketBatch::with_capacity(batch_items.len());
+            batch.packets.resize(batch_items.len(), Packet::default());
+            for (item, packet) in batch_items.iter().zip(batch.packets.iter_mut()) {
+                Packet::populate_packet(packet, None, item).expect("serialize request");
             }
             batch
         })
@@ -95,23 +96,25 @@ pub fn to_packet_batches<T: Serialize>(xs: &[T], chunks: usize) -> Vec<PacketBat
 }
 
 #[cfg(test)]
-pub fn to_packet_batches_for_tests<T: Serialize>(xs: &[T]) -> Vec<PacketBatch> {
-    to_packet_batches(xs, NUM_PACKETS)
+pub fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch> {
+    to_packet_batches(items, NUM_PACKETS)
 }
 
 pub fn to_packet_batch_with_destination<T: Serialize>(
     recycler: PacketBatchRecycler,
     dests_and_data: &[(SocketAddr, T)],
 ) -> PacketBatch {
-    let mut out = PacketBatch::new_unpinned_with_recycler(
+    let mut batch = PacketBatch::new_unpinned_with_recycler(
         recycler,
         dests_and_data.len(),
         "to_packet_batch_with_destination",
     );
-    out.packets.resize(dests_and_data.len(), Packet::default());
-    for (dest_and_data, o) in dests_and_data.iter().zip(out.packets.iter_mut()) {
-        if !dest_and_data.0.ip().is_unspecified() && dest_and_data.0.port() != 0 {
-            if let Err(e) = Packet::populate_packet(o, Some(&dest_and_data.0), &dest_and_data.1) {
+    batch
+        .packets
+        .resize(dests_and_data.len(), Packet::default());
+    for ((addr, data), packet) in dests_and_data.iter().zip(batch.packets.iter_mut()) {
+        if !addr.ip().is_unspecified() && addr.port() != 0 {
+            if let Err(e) = Packet::populate_packet(packet, Some(addr), &data) {
                 // TODO: This should never happen. Instead the caller should
                 // break the payload into smaller messages, and here any errors
                 // should be propagated.
@@ -121,7 +124,7 @@ pub fn to_packet_batch_with_destination<T: Serialize>(
             trace!("Dropping packet, as destination is unknown");
         }
     }
-    out
+    batch
 }
 
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
