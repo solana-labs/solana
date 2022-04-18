@@ -5399,9 +5399,19 @@ impl AccountsDb {
                     return after_func(retval);
                 }
 
+                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data();
+
+                let eligible_for_caching =
+                    !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
+
+                if eligible_for_caching && retval.is_empty() {
+                    let range = bin_range.end - bin_range.start;
+                    retval.append(&mut vec![Vec::new(); range]);
+                }
+
                 let mut file_name = String::default();
                 // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
-                if !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK {
+                if should_cache_hash_data && eligible_for_caching {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
@@ -5443,10 +5453,6 @@ impl AccountsDb {
                             "{}.{}.{}.{}.{}",
                             start, end, bin_range.start, bin_range.end, hash
                         );
-                        if retval.is_empty() {
-                            let range = bin_range.end - bin_range.start;
-                            retval.append(&mut vec![Vec::new(); range]);
-                        }
                         if cache_hash_data
                             .load(
                                 &Path::new(&file_name),
