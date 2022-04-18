@@ -286,7 +286,7 @@ impl Protocol {
                 if caller.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_debug!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
                     None
                 }
             }
@@ -294,7 +294,7 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_debug!(
+                    inc_new_counter_info!(
                         "cluster_info-gossip_pull_response_verify_fail",
                         size - data.len()
                     );
@@ -309,7 +309,7 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_debug!(
+                    inc_new_counter_info!(
                         "cluster_info-gossip_push_msg_verify_fail",
                         size - data.len()
                     );
@@ -324,7 +324,7 @@ impl Protocol {
                 if data.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
+                    inc_new_counter_info!("cluster_info-gossip_prune_msg_verify_fail", 1);
                     None
                 }
             }
@@ -332,7 +332,7 @@ impl Protocol {
                 if ping.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_debug!("cluster_info-gossip_ping_msg_verify_fail", 1);
+                    inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
                     None
                 }
             }
@@ -340,7 +340,7 @@ impl Protocol {
                 if pong.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_debug!("cluster_info-gossip_pong_msg_verify_fail", 1);
+                    inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
                     None
                 }
             }
