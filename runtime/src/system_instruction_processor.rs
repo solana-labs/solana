@@ -228,9 +228,7 @@ fn transfer(
         return Ok(());
     }
 
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
-    if from.signer_key().is_none() {
+    if !instruction_context.is_signer(from_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: `from` account {} must sign",
@@ -240,7 +238,6 @@ fn transfer(
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
-    drop(from);
 
     transfer_verified(
         from_account_index,
@@ -269,9 +266,7 @@ fn transfer_with_seed(
         return Ok(());
     }
 
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
-    let from_base = keyed_account_at_index(keyed_accounts, from_base_account_index)?;
-    if from_base.signer_key().is_none() {
+    if !instruction_context.is_signer(from_base_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: 'from' account {:?} must sign",
@@ -288,7 +283,6 @@ fn transfer_with_seed(
         from_seed,
         from_owner,
     )?;
-    drop(from_base);
 
     let from_key = transaction_context.get_key_of_account_at_index(
         instruction_context.get_index_in_transaction(from_account_index)?,
