@@ -177,7 +177,7 @@ impl QosService {
     fn update_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_committed_status: &Vec<bool>,
+        transaction_committed_status: &[bool],
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
@@ -193,8 +193,6 @@ impl QosService {
             });
     }
 
-<<<<<<< HEAD
-=======
     fn remove_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
@@ -212,14 +210,6 @@ impl QosService {
         );
     }
 
-    // metrics are reported by bank slot
-    pub fn report_metrics(&self, bank: Arc<Bank>) {
-        self.report_sender
-            .send(QosMetrics::BlockBatchUpdate { bank })
-            .unwrap_or_else(|err| warn!("qos service report metrics failed: {:?}", err));
-    }
-
->>>>>>> 6bc6384f8 (refactor to consolidate info into single return field)
     pub fn accumulate_estimated_transaction_costs(
         &self,
         cost_details: &BatchedTransactionCostDetails,
@@ -477,32 +467,16 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-<<<<<<< HEAD
     fn test_async_report_metrics() {
         solana_logger::setup();
         //solana_logger::setup_with_default("solana=info");
 
         // make a vec of txs
         let txs_count = 128usize;
-=======
-    fn test_update_or_remove_transaction_costs_executed() {
-=======
-    fn test_update_or_remove_transaction_costs_commited() {
->>>>>>> 6bc6384f8 (refactor to consolidate info into single return field)
-        solana_logger::setup();
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-        // make some transfer transactions
-        // calculate their costs, apply to cost_tracker
-        let transaction_count = 5;
->>>>>>> 29ca21ed7 (undo transaction cost from cost_tracker if it was not executed successfully)
         let keypair = Keypair::new();
         let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
             system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
         );
-<<<<<<< HEAD
         let mut txs_1 = Vec::with_capacity(txs_count);
         let mut txs_2 = Vec::with_capacity(txs_count);
         for _i in 0..txs_count {
@@ -569,14 +543,28 @@ mod tests {
                 .compute_cost_count
                 .load(Ordering::Relaxed)
         );
-=======
+    }
+
+    #[test]
+    fn test_update_or_remove_transaction_costs_commited() {
+        solana_logger::setup();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        // make some transfer transactions
+        // calculate their costs, apply to cost_tracker
+        let transaction_count = 5;
+        let keypair = Keypair::new();
+        let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
+            system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default()),
+        );
         let txs: Vec<SanitizedTransaction> = (0..transaction_count)
             .map(|_| transfer_tx.clone())
             .collect();
 
         // assert all tx_costs should be applied to cost_tracker if all execution_results are all commited
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())));
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_costs: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
@@ -622,7 +610,7 @@ mod tests {
 
         // assert all tx_costs should be removed from cost_tracker if all execution_results are all NotExecuted
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())));
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
@@ -656,7 +644,7 @@ mod tests {
 
         // assert only commited tx_costs are applied cost_tracker
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())));
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
@@ -681,6 +669,5 @@ mod tests {
                 bank.read_cost_tracker().unwrap().transaction_count()
             );
         }
->>>>>>> 29ca21ed7 (undo transaction cost from cost_tracker if it was not executed successfully)
     }
 }
