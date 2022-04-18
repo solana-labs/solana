@@ -338,7 +338,7 @@ impl DefaultSigner {
     ///     .offline_args();
     ///
     /// let clap_matches = clap_app.get_matches();
-    /// let keypair_str = clap_matches.value_of_t_or_exit("keypair");
+    /// let keypair_str: String = clap_matches.value_of_t_or_exit("keypair");
     /// let default_signer = DefaultSigner::new("keypair", &keypair_str);
     /// let mut wallet_manager = None;
     ///
@@ -846,7 +846,7 @@ pub fn signer_from_path_with_config(
 ///         .help("The default signer"));
 ///
 /// let clap_matches = clap_app.get_matches();
-/// let keypair_str = clap_matches.value_of_t_or_exit("keypair");
+/// let keypair_str: String = clap_matches.value_of_t_or_exit("keypair");
 /// let mut wallet_manager = None;
 /// let pubkey = pubkey_from_path(
 ///     &clap_matches,
