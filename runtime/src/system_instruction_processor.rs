@@ -8,11 +8,10 @@ use {
         ic_msg, invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::AccountSharedData,
         account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
-        keyed_account::{keyed_account_at_index, KeyedAccount},
         nonce,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
@@ -160,7 +159,6 @@ fn create_account(
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
-        let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let mut to =
             instruction_context.try_borrow_account(transaction_context, to_account_index)?;
         if to.get_lamports() > 0 {
@@ -192,7 +190,6 @@ fn transfer_verified(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let mut from =
         instruction_context.try_borrow_account(transaction_context, from_account_index)?;
     if !from.get_data().is_empty() {
@@ -321,12 +318,9 @@ pub fn process_instruction(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let instruction = limited_deserialize(instruction_data)?;
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", instruction);
-    trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let _ = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     let signers = instruction_context.get_signers(transaction_context);
     match instruction {
         SystemInstruction::CreateAccount {
@@ -385,7 +379,6 @@ pub fn process_instruction(
         }
         SystemInstruction::Assign { owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = instruction_context
                 .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
@@ -493,7 +486,6 @@ pub fn process_instruction(
         }
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = instruction_context
                 .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
@@ -512,7 +504,6 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = instruction_context
                 .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
@@ -533,7 +524,6 @@ pub fn process_instruction(
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             let mut account = instruction_context
                 .try_borrow_account(transaction_context, first_instruction_account)?;
             let address = Address::create(
@@ -555,6 +545,7 @@ pub enum SystemAccountKind {
 }
 
 pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
+    use solana_sdk::account::ReadableAccount;
     if system_program::check_id(account.owner()) {
         if account.data().is_empty() {
             Some(SystemAccountKind::System)
@@ -577,7 +568,7 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
 mod tests {
     #[allow(deprecated)]
     use solana_sdk::{
-        account::{self, Account, AccountSharedData},
+        account::{self, Account, AccountSharedData, ReadableAccount},
         client::SyncClient,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
