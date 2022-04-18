@@ -1,5 +1,4 @@
 use {
-    super::Versions,
     crate::{fee_calculator::FeeCalculator, hash::Hash, pubkey::Pubkey},
     serde_derive::{Deserialize, Serialize},
 };
@@ -60,18 +59,24 @@ impl State {
     }
 
     /// Get the serialized size of the nonce state.
-    pub fn size() -> usize {
-        let data = Versions::new_current(State::Initialized(Data::default()));
-        bincode::serialized_size(&data).unwrap() as usize
+    pub const fn size() -> usize {
+        80 // see test_nonce_state_size.
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, crate::nonce::state::Versions};
 
     #[test]
     fn default_is_uninitialized() {
         assert_eq!(State::default(), State::Uninitialized)
+    }
+
+    #[test]
+    fn test_nonce_state_size() {
+        let data = Versions::new_current(State::Initialized(Data::default()));
+        let size = bincode::serialized_size(&data).unwrap();
+        assert_eq!(State::size() as u64, size);
     }
 }
