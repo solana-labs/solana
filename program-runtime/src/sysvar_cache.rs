@@ -2,13 +2,14 @@
 use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes, SysvarType};
 use {
     crate::invoke_context::InvokeContext,
+    serde::de::DeserializeOwned,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
             clock::Clock, epoch_schedule::EpochSchedule, rent::Rent, slot_hashes::SlotHashes,
-            stake_history::StakeHistory, Sysvar, SysvarId,
+            stake_history::StakeHistory, SysvarId,
         },
         transaction_context::{InstructionContext, TransactionContext},
     },
@@ -24,11 +25,11 @@ impl ::solana_frozen_abi::abi_example::AbiExample for SysvarCache {
 }
 
 #[derive(Clone, Debug)]
-pub struct SysvarWithAccount<T: Sysvar> {
+pub struct SysvarWithAccount<T> {
     value: Arc<T>,
     account: AccountSharedData,
 }
-impl<T: Sysvar> SysvarWithAccount<T> {
+impl<T> SysvarWithAccount<T> {
     pub fn new(value: T, account: AccountSharedData) -> Self {
         Self {
             value: Arc::new(value),
@@ -36,11 +37,11 @@ impl<T: Sysvar> SysvarWithAccount<T> {
         }
     }
 }
-impl<T: Sysvar> TryFrom<AccountSharedData> for SysvarWithAccount<T> {
+impl<T: DeserializeOwned> TryFrom<AccountSharedData> for SysvarWithAccount<T> {
     type Error = InstructionError;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         let value = bincode::deserialize(account.data())
-            .map_err(|_| InstructionError::UnsupportedSysvar)?;
+            .map_err(|_| InstructionError::InvalidAccountData)?;
         Ok(SysvarWithAccount { value, account })
     }
 }
@@ -65,24 +66,24 @@ impl SysvarCache {
         sysvar_type: &SysvarType,
     ) -> Result<AccountSharedData, InstructionError> {
         let maybe_account = match sysvar_type {
-            SysvarType::Clock => self.clock.as_ref().map(|v| v.account.clone()),
-            SysvarType::EpochSchedule => self.epoch_schedule.as_ref().map(|v| v.account.clone()),
+            SysvarType::Clock => Ok(self.clock.as_ref().map(|v| v.account.clone())),
+            SysvarType::EpochSchedule => {
+                Ok(self.epoch_schedule.as_ref().map(|v| v.account.clone()))
+            }
             #[allow(deprecated)]
-            SysvarType::Fees => self.fees.as_ref().map(|v| v.account.clone()),
+            SysvarType::Fees => Ok(self.fees.as_ref().map(|v| v.account.clone())),
             #[allow(deprecated)]
             SysvarType::RecentBlockhashes => {
-                self.recent_blockhashes.as_ref().map(|v| v.account.clone())
+                Ok(self.recent_blockhashes.as_ref().map(|v| v.account.clone()))
             }
-            SysvarType::Rent => self.rent.as_ref().map(|v| v.account.clone()),
-            SysvarType::SlotHashes => self.slot_hashes.as_ref().map(|v| v.account.clone()),
-            SysvarType::StakeHistory => self.stake_history.as_ref().map(|v| v.account.clone()),
-            SysvarType::SlotHistory | SysvarType::Rewards | SysvarType::Instructions => None,
-        };
-        if let Some(account) = maybe_account {
-            Ok(account)
-        } else {
-            Err(InstructionError::UnsupportedSysvar)
-        }
+            SysvarType::Rent => Ok(self.rent.as_ref().map(|v| v.account.clone())),
+            SysvarType::SlotHashes => Ok(self.slot_hashes.as_ref().map(|v| v.account.clone())),
+            SysvarType::StakeHistory => Ok(self.stake_history.as_ref().map(|v| v.account.clone())),
+            SysvarType::SlotHistory | SysvarType::Rewards | SysvarType::Instructions => {
+                Err(InstructionError::UnsupportedSysvar)
+            }
+        }?;
+        maybe_account.ok_or(InstructionError::MissingAccount)
     }
 
     pub fn set_account(
@@ -285,7 +286,7 @@ impl SysvarCache {
 pub mod get_sysvar_with_account_check {
     use super::*;
 
-    fn check_sysvar_account<S: Sysvar>(
+    fn check_sysvar_account<S: SysvarId>(
         transaction_context: &TransactionContext,
         instruction_context: &InstructionContext,
         instruction_account_index: usize,

@@ -240,12 +240,11 @@ impl Accounts {
         pubkey: &Pubkey,
         ancestors: &Ancestors,
         sysvar_cache: &SysvarCache,
-    ) -> AccountSharedData {
-        sysvar_cache.get_account(sysvar_type).unwrap_or_else(|_| {
+    ) -> Option<AccountSharedData> {
+        sysvar_cache.get_account(sysvar_type).ok().or_else(|| {
             self.accounts_db
                 .load_with_fixed_root(ancestors, pubkey)
                 .map(|(account, _)| account)
-                .unwrap_or_default()
         })
     }
 
@@ -291,7 +290,7 @@ impl Accounts {
                                 ),
                             )
                         } else {
-                            self.load_sysvar_account(&sysvar_type, key, ancestors, sysvar_cache)
+                            self.load_sysvar_account(&sysvar_type, key, ancestors, sysvar_cache).unwrap_or_default()
                         }
                     } else {
                         let (account, rent) = self
