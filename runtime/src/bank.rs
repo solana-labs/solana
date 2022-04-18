@@ -43,7 +43,6 @@ use {
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
-        accounts_index_storage::Startup,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
@@ -6087,11 +6086,6 @@ impl Bank {
         }
         clean_time.stop();
 
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Startup);
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
@@ -6103,11 +6097,6 @@ impl Bank {
         let mut verify_time = Measure::start("verify_bank_hash");
         let mut verify = self.verify_bank_hash(test_hash_calculation);
         verify_time.stop();
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Normal);
 
         info!("verify_hash..");
         let mut verify2_time = Measure::start("verify_hash");
