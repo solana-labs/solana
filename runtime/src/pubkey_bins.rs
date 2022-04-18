@@ -1,4 +1,4 @@
-use {crate::fast_int_math::log2_floor, solana_sdk::pubkey::Pubkey};
+use solana_sdk::{fast_int_math::log2_floor_u32 as log2_floor, pubkey::Pubkey};
 
 #[derive(Debug)]
 pub struct PubkeyBinCalculator24 {
@@ -7,7 +7,6 @@ pub struct PubkeyBinCalculator24 {
 }
 
 impl PubkeyBinCalculator24 {
-
     pub fn new(bins: usize) -> Self {
         const MAX_BITS: u32 = 24;
         assert!(bins > 0);

@@ -45,7 +45,6 @@ pub mod loader_utils;
 pub mod message_processor;
 pub mod non_circulating_supply;
 mod nonce_keyed_account;
-pub mod fast_int_math;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;

@@ -7,7 +7,7 @@ use {
         RefCount,
     },
     modular_bitfield::prelude::*,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, fast_int_math::log2_ceil_u64 as log2_ceil, pubkey::Pubkey},
     std::{
         collections::hash_map::DefaultHasher,
         fmt::Debug,
@@ -68,7 +68,7 @@ impl IndexEntry {
         if num_slots == 0 {
             0
         } else {
-            (Slot::BITS - (num_slots - 1).leading_zeros()) as u64
+            log2_ceil(num_slots)
         }
     }
 

@@ -23,6 +23,7 @@ pub mod entrypoint_deprecated;
 pub mod epoch_info;
 pub mod example_mocks;
 pub mod exit;
+pub mod fast_int_math;
 pub mod feature;
 pub mod feature_set;
 pub mod fee;
