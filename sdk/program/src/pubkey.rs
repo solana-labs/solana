@@ -110,6 +110,12 @@ impl FromStr for Pubkey {
     }
 }
 
+impl From<[u8; 32]> for Pubkey {
+    fn from(from: [u8; 32]) -> Self {
+        Self(from)
+    }
+}
+
 impl TryFrom<&str> for Pubkey {
     type Error = ParsePubkeyError;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
