@@ -5222,7 +5222,7 @@ impl AccountsDb {
                                                 *slot,
                                                 config.rent_collector,
                                                 &stats,
-                                                max_slot + 1, // this wants an 'exclusive' number
+                                                max_slot,
                                                 find_unskipped_slot,
                                                 self.filler_account_suffix.as_ref(),
                                             );
@@ -5728,7 +5728,7 @@ impl AccountsDb {
                     slot,
                     config.rent_collector,
                     stats,
-                    storage.range().end,
+                    storage.range().end.saturating_sub(1), // 'end' is exclusive, convert to inclusive
                     find_unskipped_slot,
                     filler_account_suffix,
                 );
