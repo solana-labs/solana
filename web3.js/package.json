@@ -95,7 +95,7 @@
     "@types/express-serve-static-core": "^4.17.21",
     "@types/mocha": "^9.0.0",
     "@types/mz": "^2.7.3",
-    "@types/node": "^16.0.0",
+    "@types/node": "^17.0.24",
     "@types/secp256k1": "^4.0.1",
     "@types/sinon": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^4.14.2",
