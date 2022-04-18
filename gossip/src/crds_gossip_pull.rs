@@ -470,7 +470,7 @@ impl CrdsGossipPull {
     }
 
     // build a set of filters of the current crds table
-    // num_filters - used to increase the likelyhood of a value in crds being added to some filter
+    // num_filters - used to increase the likelihood of a value in crds being added to some filter
     pub fn build_crds_filters(
         &self,
         thread_pool: &ThreadPool,
