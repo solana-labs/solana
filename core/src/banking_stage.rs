@@ -118,7 +118,7 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream. If so, the result tells us
     // how many such transactions were committed
-    commit_transactions_result: Result<(), PohRecorderError>,
+    commit_transactions_result: Result<Vec<bool>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
 }
 
@@ -1212,6 +1212,11 @@ impl BankingStage {
             ..
         } = load_and_execute_transactions_output;
 
+        let mut transactions_execute_and_record_status: Vec<bool> = execution_results
+            .iter()
+            .map(|execution_result| execution_result.was_executed())
+            .collect();
+
         let (freeze_lock, freeze_lock_time) =
             Measure::this(|_| bank.freeze_lock(), (), "freeze_lock");
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
@@ -1236,6 +1241,11 @@ impl BankingStage {
             record_transactions_timings,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = record_transactions_timings;
+
+        // mark transactions that were executed but not recorded
+        retryable_record_transaction_indexes.iter().for_each(|i| {
+            transactions_execute_and_record_status[*i] = false;
+        });
 
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
@@ -1339,7 +1349,7 @@ impl BankingStage {
             executed_transactions_count,
             executed_with_successful_result_count,
             retryable_transaction_indexes,
-            commit_transactions_result: Ok(()),
+            commit_transactions_result: Ok(transactions_execute_and_record_status),
             execute_and_commit_timings,
         }
     }
@@ -1397,16 +1407,14 @@ impl BankingStage {
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
             ref execute_and_commit_timings,
+            ref commit_transactions_result,
             ..
         } = execute_and_commit_transactions_output;
 
-        // TODO: This does not revert the cost tracker changes from all unexecuted transactions
-        // yet: For example tx that are too old will not be included in the block, but are not
-        // retryable.
         QosService::update_or_remove_transaction_costs(
             transaction_costs.iter(),
             transactions_qos_results.iter(),
-            retryable_transaction_indexes,
+            commit_transactions_result.as_ref().ok(),
             bank,
         );
 
