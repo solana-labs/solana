@@ -289,15 +289,19 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, point: DataPoint, level: log::Level) {
-        self.sender
-            .send(MetricsCommand::Submit(point, level))
-            .unwrap();
+        if log_enabled!($level) {
+            self.sender
+                .send(MetricsCommand::Submit(point, level))
+                .unwrap();
+        }
     }
 
     pub fn submit_counter(&self, counter: CounterPoint, level: log::Level, bucket: u64) {
-        self.sender
-            .send(MetricsCommand::SubmitCounter(counter, level, bucket))
-            .unwrap();
+        if log_enabled!($level) {
+            self.sender
+                .send(MetricsCommand::SubmitCounter(counter, level, bucket))
+                .unwrap();
+        }
     }
 
     pub fn flush(&self) {
