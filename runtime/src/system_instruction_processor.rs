@@ -359,7 +359,8 @@ pub fn process_instruction(
         }
         SystemInstruction::AdvanceNonceAccount => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let mut me =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
@@ -373,12 +374,10 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            advance_nonce_account(me, &signers, invoke_context)
+            advance_nonce_account(&mut me, &signers, invoke_context)
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
@@ -386,11 +385,21 @@ pub fn process_instruction(
                 2,
             )?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
-            withdraw_nonce_account(me, lamports, to, &rent, &signers, invoke_context)
+            withdraw_nonce_account(
+                first_instruction_account,
+                lamports,
+                first_instruction_account + 1,
+                &rent,
+                &signers,
+                invoke_context,
+                transaction_context,
+                instruction_context,
+            )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            let mut me =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
@@ -405,12 +414,13 @@ pub fn process_instruction(
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 2)?;
-            initialize_nonce_account(me, &authorized, &rent, invoke_context)
+            initialize_nonce_account(&mut me, &authorized, &rent, invoke_context)
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            authorize_nonce_account(me, &nonce_authority, &signers, invoke_context)
+            let mut me =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            authorize_nonce_account(&mut me, &nonce_authority, &signers, invoke_context)
         }
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
