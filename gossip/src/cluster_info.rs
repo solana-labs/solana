@@ -3343,9 +3343,12 @@ mod tests {
         let keypair = Keypair::new();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen();
+        let next_shred_index = rng.gen_range(0, 32_000);
         let shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
-        let other_payload = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader).payload;
+        let other_payload = {
+            let other_shred = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+            other_shred.into_payload()
+        };
         let leader_schedule = |s| {
             if s == slot {
                 Some(leader.pubkey())

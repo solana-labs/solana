@@ -193,8 +193,8 @@ pub(crate) fn should_retransmit_and_persist(
         } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
             inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
             false
-        } else if shred.data_header.size as usize > shred.payload.len() {
-            inc_new_counter_warn!("streamer-recv_window-shred_bad_meta_size", 1);
+        } else if !shred.sanitize() {
+            inc_new_counter_warn!("streamer-recv_window-invalid-shred", 1);
             false
         } else {
             true
@@ -215,13 +215,13 @@ fn run_check_duplicate(
         let shred_slot = shred.slot();
         if !blockstore.has_duplicate_shreds_in_slot(shred_slot) {
             if let Some(existing_shred_payload) =
-                blockstore.is_shred_duplicate(shred.id(), shred.payload.clone())
+                blockstore.is_shred_duplicate(shred.id(), shred.payload().clone())
             {
                 cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(
                     shred_slot,
                     existing_shred_payload,
-                    shred.payload,
+                    shred.into_payload(),
                 )?;
 
                 duplicate_slot_sender.send(shred_slot)?;
@@ -717,7 +717,7 @@ mod test {
             blockstore::{make_many_slot_entries, Blockstore},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
-            shred::{DataShredHeader, Shredder},
+            shred::Shredder,
         },
         solana_sdk::{
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -825,21 +825,9 @@ mod test {
             0
         ));
 
-        // with a bad header size
-        let mut bad_header_shred = shreds[0].clone();
-        bad_header_shred.data_header.size = (bad_header_shred.payload.len() + 1) as u16;
-        assert!(!should_retransmit_and_persist(
-            &bad_header_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-            0
-        ));
-
         // with an invalid index, shred gets thrown out
         let mut bad_index_shred = shreds[0].clone();
-        bad_index_shred.common_header.index = (MAX_DATA_SHREDS_PER_SLOT + 1) as u32;
+        bad_index_shred.set_index((MAX_DATA_SHREDS_PER_SLOT + 1) as u32);
         assert!(!should_retransmit_and_persist(
             &bad_index_shred,
             Some(bank.clone()),
@@ -875,7 +863,7 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let (common, coding) = Shred::new_coding_shred_header(
+        let mut coding_shred = Shred::new_empty_coding(
             5, // slot
             5, // index
             5, // fec_set_index
@@ -884,8 +872,6 @@ mod test {
             3, // position
             0, // version
         );
-        let mut coding_shred =
-            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
         assert!(should_retransmit_and_persist(
@@ -959,7 +945,7 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let (common, coding) = Shred::new_coding_shred_header(
+        let shred = Shred::new_empty_coding(
             5, // slot
             5, // index
             5, // fec_set_index
@@ -968,7 +954,6 @@ mod test {
             4, // position
             0, // version
         );
-        let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let repair_meta = RepairMeta {

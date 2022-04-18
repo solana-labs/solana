@@ -1095,11 +1095,12 @@ mod tests {
             // Create slots [1, 2] with 1 shred apiece
             let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
 
-            // Make shred for slot 1 too large
             assert_eq!(shreds[0].slot(), 1);
             assert_eq!(shreds[0].index(), 0);
-            shreds[0].payload.push(10);
-            shreds[0].data_header.size = shreds[0].payload.len() as u16;
+            // TODO: The test previously relied on corrupting shred payload
+            // size which we no longer want to expose. Current test no longer
+            // covers packet size check in repair_response_packet_from_bytes.
+            shreds.remove(0);
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");

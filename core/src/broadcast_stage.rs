@@ -424,7 +424,7 @@ pub fn broadcast_shreds(
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             let root_bank = root_bank.clone();
             shreds.flat_map(move |shred| {
-                repeat(&shred.payload).zip(cluster_nodes.get_broadcast_addrs(
+                repeat(shred.payload()).zip(cluster_nodes.get_broadcast_addrs(
                     shred,
                     &root_bank,
                     DATA_PLANE_FANOUT,
