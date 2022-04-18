@@ -40,9 +40,7 @@ gen_pow2_unchecked!(pow2_unchecked_u64, u64);
 macro_rules! gen_pow2_checked {
     ($n: ident, $t: ty) => {
         pub fn $n(exponent: $t) -> Option<$t> {
-            1_u64
-                .checked_shl(exponent as u32)
-                .and_then(|x| Some(x as $t))
+            1_u64.checked_shl(exponent as u32).map(|x| x as $t)
         }
     };
 }
