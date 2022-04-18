@@ -7,7 +7,7 @@ use {
         },
         leader_schedule_cache::LeaderScheduleCache,
     },
-    crossbeam_channel::unbounded,
+    crossbeam_channel::bounded,
     log::*,
     solana_runtime::{
         accounts_background_service::DroppedSlotsReceiver,
@@ -31,6 +31,9 @@ pub type LoadResult = result::Result<
     ),
     BlockstoreProcessorError,
 >;
+
+/// maximum drop bank signal queue length
+const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
 
 /// Load the banks via genesis or a snapshot then processes all full blocks in blockstore
 ///
@@ -158,7 +161,7 @@ pub fn load_bank_forks(
     // BankForks from now on will be descended from the root bank and thus will inherit
     // the bank drop callback.
     assert_eq!(bank_forks.banks().len(), 1);
-    let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
+    let (pruned_banks_sender, pruned_banks_receiver) = bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
     let root_bank = bank_forks.root_bank();
     let callback = root_bank
         .rc
