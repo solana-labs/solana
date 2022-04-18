@@ -118,13 +118,13 @@ impl TransactionGenerator {
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
             // kpvals must be Some and contain at least one element
-            if kpvals.is_none() || kpvals.as_ref().unwrap().len() == 0 {
+            if kpvals.is_none() || kpvals.as_ref().unwrap().is_empty() {
                 panic!("Expected at least one destination keypair to create transaction");
             }
             let client = client.as_ref().unwrap();
             let kpvals = kpvals.unwrap();
             let payer = payer.as_ref().unwrap();
-            self.generate_with_blockhash(payer, kpvals, &client)
+            self.generate_with_blockhash(payer, kpvals, client)
         } else {
             self.generate_without_blockhash(kpvals)
         }
@@ -166,11 +166,7 @@ impl TransactionGenerator {
     }
 
     /// Creates a transaction which transfers some lamports from payer to several destinations
-    fn create_multi_transfer_transaction(
-        &self,
-        payer: &Keypair,
-        to: &Vec<&Keypair>,
-    ) -> Transaction {
+    fn create_multi_transfer_transaction(&self, payer: &Keypair, to: &[&Keypair]) -> Transaction {
         let to_transfer: u64 = 500_000_000; // specify amount which will cause error
         let to: Vec<(Pubkey, u64)> = to.iter().map(|to| (to.pubkey(), to_transfer)).collect();
         let instructions = system_instruction::transfer_many(&payer.pubkey(), to.as_slice());
@@ -339,7 +335,7 @@ fn run_dos_rpc_mode(
 }
 
 /// Apply given permutation to the vector of items
-fn apply_permutation<'a, T>(permutation: Vec<&usize>, items: &'a Vec<T>) -> Vec<&'a T> {
+fn apply_permutation<'a, T>(permutation: Vec<&usize>, items: &'a [T]) -> Vec<&'a T> {
     let mut res = Vec::with_capacity(permutation.len());
     for i in permutation {
         res.push(&items[*i]);
@@ -368,7 +364,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
             eprintln!("Error could not fund keys: {:?}", e);
             exit(1);
         });
-        res.into_iter().map(|keypair| Some(keypair)).collect()
+        res.into_iter().map(Some).collect()
     } else {
         std::iter::repeat_with(|| None).take(size).collect()
     }
@@ -423,7 +419,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             None
         };
 
-        let tx = transaction_generator.generate(&payer, chunk_keypairs, &client);
+        let tx = transaction_generator.generate(payer, chunk_keypairs, &client);
 
         let data = bincode::serialize(&tx).unwrap();
         let res = socket.send_to(&data, target);
@@ -502,13 +498,13 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                     (0..tp.num_signatures).map(|_| Keypair::new()).collect();
                 let keypairs_chunk: Option<Vec<&Keypair>> =
                     if tp.valid_signatures || tp.valid_blockhash {
-                        Some(keypairs.iter().map(|kp| kp).collect())
+                        Some(keypairs.iter().collect())
                     } else {
                         None
                     };
 
                 let mut transaction_generator = TransactionGenerator::new(tp);
-                let tx = transaction_generator.generate(&payer, keypairs_chunk, &client);
+                let tx = transaction_generator.generate(payer, keypairs_chunk, &client);
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
             }
@@ -685,8 +681,12 @@ pub mod test {
         );
     }
 
+    // Ignore tests which are using LocalCluster due to known
+    // problem with several such tests running in parallel
+    // TODO(klykov): remove ignore and serial after fix of the issue
     #[test]
     #[serial]
+    #[ignore]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -718,6 +718,7 @@ pub mod test {
 
     #[test]
     #[serial]
+    #[ignore]
     fn test_dos_without_blockhash() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -784,7 +785,7 @@ pub mod test {
         run_dos(
             &nodes_slice,
             10,
-            Some(client.clone()),
+            Some(client),
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
@@ -933,7 +934,7 @@ pub mod test {
         run_dos(
             &nodes_slice,
             10,
-            Some(client.clone()),
+            Some(client),
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
