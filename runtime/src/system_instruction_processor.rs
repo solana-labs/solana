@@ -377,8 +377,6 @@ pub fn process_instruction(
         }
         SystemInstruction::WithdrawNonceAccount(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-            let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
                 invoke_context,
@@ -386,7 +384,14 @@ pub fn process_instruction(
                 2,
             )?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
-            withdraw_nonce_account(me, lamports, to, &rent, &signers, invoke_context)
+            withdraw_nonce_account(
+                first_instruction_account,
+                lamports,
+                first_instruction_account + 1,
+                &rent,
+                &signers,
+                invoke_context,
+            )
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             instruction_context.check_number_of_instruction_accounts(1)?;

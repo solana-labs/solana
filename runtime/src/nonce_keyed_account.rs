@@ -5,6 +5,7 @@ use {
         account_utils::State as AccountUtilsState,
         feature_set::{self, nonce_must_be_writable},
         instruction::{checked_add, InstructionError},
+        keyed_account::keyed_account_at_index,
         keyed_account::KeyedAccount,
         nonce::{self, state::Versions, State},
         pubkey::Pubkey,
@@ -81,13 +82,15 @@ pub fn advance_nonce_account(
 }
 
 pub fn withdraw_nonce_account(
-    from: &KeyedAccount,
+    from_account_index: usize,
     lamports: u64,
-    to: &KeyedAccount,
+    to_account_index: usize,
     rent: &Rent,
     signers: &HashSet<Pubkey>,
     invoke_context: &InvokeContext,
 ) -> Result<(), InstructionError> {
+    let keyed_accounts = invoke_context.get_keyed_accounts()?;
+    let from = keyed_account_at_index(keyed_accounts, from_account_index)?;
     let merge_nonce_error_into_system_error = invoke_context
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -163,6 +166,8 @@ pub fn withdraw_nonce_account(
             .checked_sub(lamports)
             .ok_or(InstructionError::ArithmeticOverflow)?,
     );
+    drop(from);
+    let to = keyed_account_at_index(keyed_accounts, to_account_index)?;
     let to_balance = to.try_account_ref_mut()?.lamports();
     to.try_account_ref_mut()?.set_lamports(
         to_balance
@@ -463,9 +468,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -696,9 +701,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -745,9 +750,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -778,9 +783,9 @@ mod test {
         let withdraw_lamports = nonce_account.get_lamports() + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -812,9 +817,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -839,9 +844,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -912,9 +917,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -945,9 +950,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -1002,9 +1007,9 @@ mod test {
         let withdraw_lamports = nonce_account.get_lamports();
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -1043,9 +1048,9 @@ mod test {
         let withdraw_lamports = nonce_account.get_lamports() + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -1084,9 +1089,9 @@ mod test {
         let withdraw_lamports = 42 + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -1125,9 +1130,9 @@ mod test {
         let withdraw_lamports = u64::MAX - 54;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            &invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX],
+            1 + NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            &invoke_context.get_keyed_accounts().unwrap()[1 + WITHDRAW_TO_ACCOUNT_INDEX],
+            1 + WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
