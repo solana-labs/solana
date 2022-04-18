@@ -7175,6 +7175,8 @@ impl AccountsDb {
             timings.report();
         }
 
+        self.accounts_index.log_secondary_indexes();
+
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
         }

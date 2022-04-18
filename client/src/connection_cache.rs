@@ -20,10 +20,10 @@ use {
 };
 
 // Should be non-zero
-static MAX_CONNECTIONS: usize = 64;
+static MAX_CONNECTIONS: usize = 1024;
 
 #[derive(Clone)]
-enum Connection {
+pub enum Connection {
     Udp(Arc<UdpTpuConnection>),
     Quic(Arc<QuicTpuConnection>),
 }
@@ -117,14 +117,14 @@ impl ConnectionCacheStats {
     }
 }
 
-struct ConnMap {
+struct ConnectionMap {
     map: LruCache<SocketAddr, Connection>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
 }
 
-impl ConnMap {
+impl ConnectionMap {
     pub fn new() -> Self {
         Self {
             map: LruCache::new(MAX_CONNECTIONS),
@@ -140,7 +140,7 @@ impl ConnMap {
 }
 
 lazy_static! {
-    static ref CONNECTION_MAP: Mutex<ConnMap> = Mutex::new(ConnMap::new());
+    static ref CONNECTION_MAP: Mutex<ConnectionMap> = Mutex::new(ConnectionMap::new());
 }
 
 pub fn set_use_quic(use_quic: bool) {
@@ -346,6 +346,7 @@ mod tests {
 
     #[test]
     fn test_connection_cache() {
+        solana_logger::setup();
         // Allow the test to run deterministically
         // with the same pseudorandom sequence between runs
         // and on different platforms - the cryptographic security

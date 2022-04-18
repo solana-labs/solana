@@ -3,9 +3,6 @@
 //! cores.  When perf-libs are available signature verification is offloaded
 //! to the GPU.
 //!
-
-#[cfg(test)]
-use solana_sdk::transaction::Transaction;
 use {
     crate::{
         cuda_runtime::PinnedVec,
@@ -712,17 +709,6 @@ pub fn ed25519_verify(
 }
 
 #[cfg(test)]
-pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
-    use bincode::serialize;
-
-    let tx_bytes = serialize(&tx).unwrap();
-    let mut packet = Packet::default();
-    packet.meta.size = tx_bytes.len();
-    packet.data[..packet.meta.size].copy_from_slice(&tx_bytes);
-    packet
-}
-
-#[cfg(test)]
 #[allow(clippy::integer_arithmetic)]
 mod tests {
     use {
@@ -780,7 +766,7 @@ mod tests {
         let tx = test_tx();
         let tx_bytes = serialize(&tx).unwrap();
         let message_data = tx.message_data();
-        let mut packet = sigverify::make_packet_from_transaction(tx.clone());
+        let mut packet = Packet::from_data(None, tx.clone()).unwrap();
 
         let packet_offsets = sigverify::get_packet_offsets(&mut packet, 0, false);
 
@@ -816,7 +802,7 @@ mod tests {
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.signatures = vec![Signature::default(); actual_num_sigs as usize];
-        sigverify::make_packet_from_transaction(tx)
+        Packet::from_data(None, tx).unwrap()
     }
 
     #[test]
@@ -837,7 +823,7 @@ mod tests {
     #[test]
     fn test_small_packet() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         packet.data[0] = 0xff;
         packet.data[1] = 0xff;
@@ -856,7 +842,7 @@ mod tests {
         tx.signatures = vec![sig; NUM_SIG];
         tx.message.account_keys = vec![];
         tx.message.header.num_required_signatures = NUM_SIG as u8;
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
@@ -892,7 +878,7 @@ mod tests {
         let sig = keypair1.try_sign_message(&tx.message_data()).unwrap();
         tx.signatures = vec![sig; NUM_SIG];
 
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
@@ -909,7 +895,7 @@ mod tests {
     #[test]
     fn test_large_sig_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         // Make the signatures len huge
         packet.data[0] = 0x7f;
@@ -921,7 +907,7 @@ mod tests {
     #[test]
     fn test_really_large_sig_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         // Make the signatures len huge
         packet.data[0] = 0xff;
@@ -936,7 +922,7 @@ mod tests {
     #[test]
     fn test_invalid_pubkey_len() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
@@ -961,7 +947,7 @@ mod tests {
         };
         let mut tx = Transaction::new_unsigned(message);
         tx.signatures = vec![Signature::default()];
-        let packet = sigverify::make_packet_from_transaction(tx);
+        let packet = Packet::from_data(None, tx).unwrap();
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         assert_eq!(res, Err(PacketError::PayerNotWritable));
@@ -970,7 +956,7 @@ mod tests {
     #[test]
     fn test_unsupported_version() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
@@ -984,7 +970,7 @@ mod tests {
     #[test]
     fn test_versioned_message() {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let mut legacy_offsets = sigverify::do_get_packet_offsets(&packet, 0).unwrap();
 
@@ -1027,7 +1013,7 @@ mod tests {
 
     // Just like get_packet_offsets, but not returning redundant information.
     fn get_packet_offsets_from_tx(tx: Transaction, current_offset: u32) -> PacketOffsets {
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
         let packet_offsets =
             sigverify::get_packet_offsets(&mut packet, current_offset as usize, false);
         PacketOffsets::new(
@@ -1110,7 +1096,7 @@ mod tests {
 
     fn test_verify_n(n: usize, modify_data: bool) {
         let tx = test_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         // jumble some data to test failure
         if modify_data {
@@ -1142,7 +1128,7 @@ mod tests {
         let mut tx = test_tx();
         // pretend malicious leader dropped a signature...
         tx.signatures.pop();
-        let packet = sigverify::make_packet_from_transaction(tx);
+        let packet = Packet::from_data(None, tx).unwrap();
 
         let mut batches = generate_packet_batches(&packet, 1, 1);
 
@@ -1174,7 +1160,7 @@ mod tests {
         solana_logger::setup();
 
         let tx = test_multisig_tx();
-        let mut packet = sigverify::make_packet_from_transaction(tx);
+        let mut packet = Packet::from_data(None, tx).unwrap();
 
         let n = 4;
         let num_batches = 3;
@@ -1210,7 +1196,7 @@ mod tests {
         solana_logger::setup();
 
         let tx = test_multisig_tx();
-        let packet = sigverify::make_packet_from_transaction(tx);
+        let packet = Packet::from_data(None, tx).unwrap();
 
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
@@ -1354,7 +1340,7 @@ mod tests {
         {
             let mut tx = test_tx();
             tx.message.instructions[0].data = vec![1, 2, 3];
-            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let mut packet = Packet::from_data(None, tx).unwrap();
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(!packet.meta.is_simple_vote_tx());
@@ -1364,7 +1350,7 @@ mod tests {
         {
             let mut tx = new_test_vote_tx(&mut rng);
             tx.message.instructions[0].data = vec![1, 2, 3];
-            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let mut packet = Packet::from_data(None, tx).unwrap();
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(packet.meta.is_simple_vote_tx());
@@ -1385,7 +1371,7 @@ mod tests {
                     CompiledInstruction::new(4, &(), vec![0, 2]),
                 ],
             );
-            let mut packet = sigverify::make_packet_from_transaction(tx);
+            let mut packet = Packet::from_data(None, tx).unwrap();
             let packet_offsets = do_get_packet_offsets(&packet, 0).unwrap();
             check_for_simple_vote_transaction(&mut packet, &packet_offsets, 0).ok();
             assert!(!packet.meta.is_simple_vote_tx());
@@ -1401,11 +1387,9 @@ mod tests {
         let mut batch = PacketBatch::default();
         batch
             .packets
-            .push(sigverify::make_packet_from_transaction(test_tx()));
+            .push(Packet::from_data(None, test_tx()).unwrap());
         let tx = new_test_vote_tx(&mut rng);
-        batch
-            .packets
-            .push(sigverify::make_packet_from_transaction(tx));
+        batch.packets.push(Packet::from_data(None, tx).unwrap());
         batch
             .packets
             .iter_mut()

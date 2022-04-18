@@ -1199,6 +1199,7 @@ pub fn mock_process_instruction(
     transaction_accounts: Vec<TransactionAccount>,
     instruction_accounts: Vec<AccountMeta>,
     sysvar_cache_override: Option<&SysvarCache>,
+    feature_set_override: Option<Arc<FeatureSet>>,
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
 ) -> Vec<AccountSharedData> {
@@ -1217,6 +1218,9 @@ pub fn mock_process_instruction(
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     if let Some(sysvar_cache) = sysvar_cache_override {
         invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
+    }
+    if let Some(feature_set) = feature_set_override {
+        invoke_context.feature_set = feature_set;
     }
     let result = invoke_context
         .push(

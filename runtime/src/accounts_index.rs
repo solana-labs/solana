@@ -1408,6 +1408,22 @@ impl<T: IndexValue> AccountsIndex<T> {
         }
     }
 
+    /// log any secondary index counts, if non-zero
+    pub(crate) fn log_secondary_indexes(&self) {
+        if !self.program_id_index.index.is_empty() {
+            info!("secondary index: {:?}", AccountIndex::ProgramId);
+            self.program_id_index.log_contents();
+        }
+        if !self.spl_token_mint_index.index.is_empty() {
+            info!("secondary index: {:?}", AccountIndex::SplTokenMint);
+            self.spl_token_mint_index.log_contents();
+        }
+        if !self.spl_token_owner_index.index.is_empty() {
+            info!("secondary index: {:?}", AccountIndex::SplTokenOwner);
+            self.spl_token_owner_index.log_contents();
+        }
+    }
+
     pub(crate) fn update_secondary_indexes(
         &self,
         pubkey: &Pubkey,

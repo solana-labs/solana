@@ -892,7 +892,7 @@ pub fn confirm_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
-    let (entries, num_shreds, slot_full) = {
+    let slot_entries_load_result = {
         let mut load_elapsed = Measure::start("load_elapsed");
         let load_result = blockstore
             .get_slot_entries_with_shred_info(slot, progress.num_shreds, allow_dead_slots)
@@ -906,6 +906,35 @@ pub fn confirm_slot(
         load_result
     }?;
 
+    confirm_slot_entries(
+        bank,
+        slot_entries_load_result,
+        timing,
+        progress,
+        skip_verification,
+        transaction_status_sender,
+        replay_vote_sender,
+        transaction_cost_metrics_sender,
+        entry_callback,
+        recyclers,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn confirm_slot_entries(
+    bank: &Arc<Bank>,
+    slot_entries_load_result: (Vec<Entry>, u64, bool),
+    timing: &mut ConfirmationTiming,
+    progress: &mut ConfirmationProgress,
+    skip_verification: bool,
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    replay_vote_sender: Option<&ReplayVoteSender>,
+    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
+    entry_callback: Option<&ProcessCallback>,
+    recyclers: &VerifyRecyclers,
+) -> result::Result<(), BlockstoreProcessorError> {
+    let slot = bank.slot();
+    let (entries, num_shreds, slot_full) = slot_entries_load_result;
     let num_entries = entries.len();
     let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
     trace!(
@@ -3879,5 +3908,109 @@ pub mod tests {
             supermajority_root_from_vote_accounts(slot, total_stake, &accounts).unwrap(),
             8
         );
+    }
+
+    fn confirm_slot_entries_for_tests(
+        bank: &Arc<Bank>,
+        slot_entries: Vec<Entry>,
+        slot_full: bool,
+        prev_entry_hash: Hash,
+    ) -> result::Result<(), BlockstoreProcessorError> {
+        confirm_slot_entries(
+            bank,
+            (slot_entries, 0, slot_full),
+            &mut ConfirmationTiming::default(),
+            &mut ConfirmationProgress::new(prev_entry_hash),
+            false,
+            None,
+            None,
+            None,
+            None,
+            &VerifyRecyclers::default(),
+        )
+    }
+
+    #[test]
+    fn test_confirm_slot_entries() {
+        const HASHES_PER_TICK: u64 = 10;
+        const TICKS_PER_SLOT: u64 = 2;
+
+        let collector_id = Pubkey::new_unique();
+
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
+        genesis_config.ticks_per_slot = TICKS_PER_SLOT;
+        let genesis_hash = genesis_config.hash();
+
+        let slot_0_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(slot_0_bank.slot(), 0);
+        assert_eq!(slot_0_bank.tick_height(), 0);
+        assert_eq!(slot_0_bank.max_tick_height(), 2);
+        assert_eq!(slot_0_bank.last_blockhash(), genesis_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(0));
+
+        let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
+        let slot_0_hash = slot_0_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
+        assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
+        assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
+        assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
+
+        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
+        assert_eq!(slot_2_bank.slot(), 2);
+        assert_eq!(slot_2_bank.tick_height(), 2);
+        assert_eq!(slot_2_bank.max_tick_height(), 6);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
+
+        let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
+        let slot_1_hash = slot_1_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
+        assert_eq!(slot_2_bank.tick_height(), 4);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_1_hash);
+        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(2));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(1));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(0));
+
+        // Check that slot 2 transactions can use any previous slot hash, including the
+        // hash for slot 1 which is just ticks.
+        let slot_2_entries = {
+            let to_pubkey = Pubkey::new_unique();
+            let mut prev_entry_hash = slot_1_hash;
+            let mut remaining_entry_hashes = HASHES_PER_TICK;
+            let mut entries: Vec<Entry> = [genesis_hash, slot_0_hash, slot_1_hash]
+                .into_iter()
+                .map(|recent_hash| {
+                    let tx =
+                        system_transaction::transfer(&mint_keypair, &to_pubkey, 1, recent_hash);
+                    remaining_entry_hashes = remaining_entry_hashes.checked_sub(1).unwrap();
+                    next_entry_mut(&mut prev_entry_hash, 1, vec![tx])
+                })
+                .collect();
+
+            entries.push(next_entry_mut(
+                &mut prev_entry_hash,
+                remaining_entry_hashes,
+                vec![],
+            ));
+            entries.push(next_entry_mut(
+                &mut prev_entry_hash,
+                HASHES_PER_TICK,
+                vec![],
+            ));
+            entries
+        };
+        let slot_2_hash = slot_2_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash).unwrap();
+        assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
+        assert_eq!(slot_2_bank.last_blockhash(), slot_2_hash);
+        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(3));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
     }
 }

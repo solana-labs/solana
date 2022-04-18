@@ -69,9 +69,9 @@ pub fn sol_memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
 
 /// Memset
 ///
-/// @param s1 - Slice to be compared
-/// @param s2 - Slice to be compared
-/// @param n - Number of bytes to compare
+/// @param s - Slice to be set
+/// @param c - Repeated byte to set
+/// @param n - Number of bytes to set
 #[inline]
 pub fn sol_memset(s: &mut [u8], c: u8, n: usize) {
     #[cfg(target_arch = "bpf")]
