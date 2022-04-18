@@ -64,7 +64,7 @@ impl MessageProcessor {
         blockhash: Hash,
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
-        consumed_compute_units: &mut Option<&mut u64>,
+        accumulated_consumed_units: &mut Option<&mut u64>,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
@@ -135,9 +135,9 @@ impl MessageProcessor {
                 timings,
             );
             time.stop();
-            if let Some(consumed_compute_units) = consumed_compute_units {
-                **consumed_compute_units =
-                    consumed_compute_units.saturating_add(compute_units_consumed);
+            if let Some(accumulated_consumed_units) = accumulated_consumed_units {
+                **accumulated_consumed_units =
+                    accumulated_consumed_units.saturating_add(compute_units_consumed);
             }
             timings.details.accumulate_program(
                 program_id,
