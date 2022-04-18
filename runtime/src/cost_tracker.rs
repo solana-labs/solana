@@ -5,7 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, num_utils::*, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::collections::HashMap,
 };
 
@@ -105,21 +105,16 @@ impl CostTracker {
             return;
         }
 
-        if let Some(adjustment) =
-            Self::checked_diff_unsigned(actual_execution_units, estimated_execution_units)
-        {
-            self.adjust_transaction_execution_cost(estimated_tx_cost, adjustment);
-        } else {
-            // handle adjustment too big to fit in `i64` error, log event as error,
-            // set block_cost to limit to prevent more transactions being added into
-            // curernt block.
-            log::error!(
-                "cost_tracker detected erroneous attemopt to adjust execution cost, \
-                    estimated transactino cost {:?}, actual execution units {}",
+        if actual_execution_units > estimated_execution_units {
+            self.add_transaction_execution_cost(
                 estimated_tx_cost,
-                actual_execution_units
+                actual_execution_units - estimated_execution_units,
             );
-            self.block_cost = self.block_cost_limit;
+        } else {
+            self.sub_transaction_execution_cost(
+                estimated_tx_cost,
+                estimated_execution_units - actual_execution_units,
+            );
         }
     }
 
@@ -227,17 +222,7 @@ impl CostTracker {
 
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
-        for account_key in tx_cost.writable_accounts.iter() {
-            let account_cost = self
-                .cost_by_writable_accounts
-                .entry(*account_key)
-                .or_insert(0);
-            *account_cost = account_cost.saturating_add(cost);
-        }
-        self.block_cost = self.block_cost.saturating_add(cost);
-        if tx_cost.is_simple_vote {
-            self.vote_cost = self.vote_cost.saturating_add(cost);
-        }
+        self.add_transaction_execution_cost(tx_cost, cost);
         self.account_data_size = self
             .account_data_size
             .saturating_add(tx_cost.account_data_size);
@@ -246,56 +231,58 @@ impl CostTracker {
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
-        for account_key in tx_cost.writable_accounts.iter() {
-            let account_cost = self
-                .cost_by_writable_accounts
-                .entry(*account_key)
-                .or_insert(0);
-            *account_cost = account_cost.saturating_sub(cost);
-        }
-        self.block_cost = self.block_cost.saturating_sub(cost);
-        if tx_cost.is_simple_vote {
-            self.vote_cost = self.vote_cost.saturating_sub(cost);
-        }
+        self.sub_transaction_execution_cost(tx_cost, cost);
         self.account_data_size = self
             .account_data_size
             .saturating_sub(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 
-    /// Apply execution units adjustment to cost-tracker.
-    /// If adjustment causes arithmetic overflow, it bumps costs to their limits to
-    /// prevent adding further transactions into current block.
-    fn adjust_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: i64) {
+    /// Apply additional actual execution units to cost_tracker
+    fn add_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            match UintUtil::checked_add_signed(*account_cost, adjustment) {
+            match account_cost.checked_add(adjustment) {
                 Some(adjusted_cost) => *account_cost = adjusted_cost,
                 None => *account_cost = self.account_cost_limit,
             }
         }
-        match UintUtil::checked_add_signed(self.block_cost, adjustment) {
+        match self.block_cost.checked_add(adjustment) {
             Some(adjusted_cost) => self.block_cost = adjusted_cost,
             None => self.block_cost = self.block_cost_limit,
         }
         if tx_cost.is_simple_vote {
-            match UintUtil::checked_add_signed(self.vote_cost, adjustment) {
+            match self.vote_cost.checked_add(adjustment) {
                 Some(adjusted_cost) => self.vote_cost = adjusted_cost,
                 None => self.vote_cost = self.vote_cost_limit,
             }
         }
     }
 
-    /// Checked get deltai as `i64` of two `u64`, computes `lhs - rhs`,
-    /// returning `None` if delta overflows `i64`
-    fn checked_diff_unsigned(lhs: u64, rhs: u64) -> Option<i64> {
-        if lhs >= rhs {
-            IntUtil::checked_add_unsigned(0i64, lhs - rhs)
-        } else {
-            IntUtil::checked_sub_unsigned(0i64, rhs - lhs)
+    /// Substract extra execution units from cost_tracker
+    fn sub_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
+        for account_key in tx_cost.writable_accounts.iter() {
+            let account_cost = self
+                .cost_by_writable_accounts
+                .entry(*account_key)
+                .or_insert(0);
+            match account_cost.checked_sub(adjustment) {
+                Some(adjusted_cost) => *account_cost = adjusted_cost,
+                None => *account_cost = self.account_cost_limit,
+            }
+        }
+        match self.block_cost.checked_sub(adjustment) {
+            Some(adjusted_cost) => self.block_cost = adjusted_cost,
+            None => self.block_cost = self.block_cost_limit,
+        }
+        if tx_cost.is_simple_vote {
+            match self.vote_cost.checked_sub(adjustment) {
+                Some(adjusted_cost) => self.vote_cost = adjusted_cost,
+                None => self.vote_cost = self.vote_cost_limit,
+            }
         }
     }
 }
@@ -770,8 +757,8 @@ mod tests {
 
         // adjust up
         {
-            let adjustment = 50i64;
-            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
+            let adjustment = 50u64;
+            testee.add_transaction_execution_cost(&tx_cost, adjustment);
             expected_block_cost += 50;
             assert_eq!(expected_block_cost, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
@@ -785,8 +772,8 @@ mod tests {
 
         // adjust down
         {
-            let adjustment = -50i64;
-            testee.adjust_transaction_execution_cost(&tx_cost, adjustment);
+            let adjustment = 50u64;
+            testee.sub_transaction_execution_cost(&tx_cost, adjustment);
             expected_block_cost -= 50;
             assert_eq!(expected_block_cost, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
@@ -800,8 +787,7 @@ mod tests {
 
         // adjust overflow up
         {
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MAX);
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MAX);
+            testee.add_transaction_execution_cost(&tx_cost, u64::MAX);
             // expect block cost set to limit
             assert_eq!(block_max, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
@@ -815,8 +801,7 @@ mod tests {
 
         // adjust overflow down
         {
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MIN);
-            testee.adjust_transaction_execution_cost(&tx_cost, i64::MIN);
+            testee.sub_transaction_execution_cost(&tx_cost, u64::MAX);
             // expect block cost set to limit
             assert_eq!(block_max, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
@@ -827,35 +812,5 @@ mod tests {
                     assert_eq!(account_max, *units);
                 });
         }
-    }
-
-    #[test]
-    fn test_checked_diff_unsigned() {
-        solana_logger::setup();
-
-        // no diff
-        assert_eq!(0, CostTracker::checked_diff_unsigned(10u64, 10u64).unwrap());
-        assert_eq!(
-            0,
-            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX).unwrap()
-        );
-
-        // positive diff
-        assert_eq!(2, CostTracker::checked_diff_unsigned(10u64, 8u64).unwrap());
-        assert_eq!(
-            8,
-            CostTracker::checked_diff_unsigned(u64::MAX, u64::MAX - 8u64).unwrap()
-        );
-
-        // negative diff
-        assert_eq!(-2, CostTracker::checked_diff_unsigned(8u64, 10u64).unwrap());
-        assert_eq!(
-            -10,
-            CostTracker::checked_diff_unsigned(u64::MIN, 10u64).unwrap()
-        );
-
-        // diff too big for i64 (overflow)
-        assert_eq!(None, CostTracker::checked_diff_unsigned(u64::MAX, 0u64));
-        assert_eq!(None, CostTracker::checked_diff_unsigned(0u64, u64::MAX));
     }
 }
