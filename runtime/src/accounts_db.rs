@@ -38,6 +38,7 @@ use {
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
+        bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
         expected_rent_collection::ExpectedRentCollection,
@@ -5992,6 +5993,13 @@ impl AccountsDb {
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+        self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
+    }
+    pub fn get_accounts_delta_hash_with_rewrites(
+        &self,
+        slot: Slot,
+        skipped_rewrites: &Rewrites,
+    ) -> Hash {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -6035,6 +6043,8 @@ impl AccountsDb {
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
 
+        Self::extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
+
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
@@ -6052,6 +6062,18 @@ impl AccountsDb {
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         ret
+    }
+
+    /// add all items from 'skipped_rewrites' to 'hashes' where the pubkey doesn't already exist in 'hashes'
+    fn extend_hashes_with_skipped_rewrites(
+        hashes: &mut Vec<(Pubkey, Hash)>,
+        skipped_rewrites: &Rewrites,
+    ) {
+        let mut skipped_rewrites = skipped_rewrites.read().unwrap().clone();
+        hashes.iter().for_each(|(key, _)| {
+            skipped_rewrites.remove(key);
+        });
+        hashes.extend(skipped_rewrites.into_iter());
     }
 
     // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
@@ -13824,5 +13846,26 @@ pub mod tests {
                 AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
             );
         }
+    }
+
+    #[test]
+    fn test_extend_hashes_with_skipped_rewrites() {
+        let mut hashes = Vec::default();
+        let rewrites = Rewrites::default();
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert!(hashes.is_empty());
+        let pubkey = Pubkey::new(&[1; 32]);
+        let hash = Hash::new(&[2; 32]);
+        rewrites.write().unwrap().insert(pubkey, hash);
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash)]);
+        // pubkey is already in hashes, will not be added a second time
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash)]);
+        let pubkey2 = Pubkey::new(&[2; 32]);
+        let hash2 = Hash::new(&[3; 32]);
+        rewrites.write().unwrap().insert(pubkey2, hash2);
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash), (pubkey2, hash2)]);
     }
 }
