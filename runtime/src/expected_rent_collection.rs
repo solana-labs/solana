@@ -215,7 +215,6 @@ Every highest_root >= 432k * 2 + 80 and < 432k * 3 + 80 is this same result
 /// There are 2 slots required for rent collection algorithms. Some callers have storage slot fixed
 ///  while others have max/bank slot fixed. 'epoch_info' isn't always needed, so it is optionally
 ///  specified by caller and only used by callee if necessary.
-#[allow(dead_code)]
 #[derive(Default, Copy, Clone)]
 pub struct SlotInfoInEpoch {
     /// the slot
@@ -225,7 +224,6 @@ pub struct SlotInfoInEpoch {
 }
 
 /// epoch info for a slot
-#[allow(dead_code)]
 #[derive(Default, Copy, Clone)]
 pub struct SlotInfoInEpochInner {
     /// epoch of the slot
@@ -236,9 +234,9 @@ pub struct SlotInfoInEpochInner {
     slots_in_epoch: Slot,
 }
 
-#[allow(dead_code)]
 impl SlotInfoInEpoch {
     /// create, populating epoch info
+    #[allow(dead_code)]
     pub fn new(slot: Slot, epoch_schedule: &EpochSchedule) -> Self {
         let mut result = Self::new_small(slot);
         result.epoch_info = Some(result.get_epoch_info(epoch_schedule));
@@ -267,7 +265,6 @@ impl SlotInfoInEpoch {
 }
 
 impl ExpectedRentCollection {
-    #[allow(dead_code)]
     /// 'account' is being loaded from 'storage_slot' in 'bank_slot'
     /// adjusts 'account.rent_epoch' if we skipped the last rewrite on this account
     pub fn maybe_update_rent_epoch_on_load(
@@ -380,7 +377,6 @@ impl ExpectedRentCollection {
         None
     }
 
-    #[allow(dead_code)]
     #[allow(clippy::too_many_arguments)]
     /// it is possible 0.. rewrites were skipped on this account
     /// if so, return Some(correct hash as of 'storage_slot')
