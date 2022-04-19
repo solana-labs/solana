@@ -448,21 +448,22 @@ impl ExpectedRentCollection {
             .get_slots_in_epoch(rent_collector.epoch);
 
         assert!(max_slot_in_storages_exclusive > 0);
-        let max_slot_in_storages = max_slot_in_storages_exclusive.saturating_sub(1);
+        let max_slot_in_storages_inclusive = max_slot_in_storages_exclusive.saturating_sub(1);
 
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
         let (epoch_of_max_storage_slot, partition_index_from_max_slot) = rent_collector
             .epoch_schedule
-            .get_epoch_and_slot_index(max_slot_in_storages);
+            .get_epoch_and_slot_index(max_slot_in_storages_inclusive);
 
         // now, we have to find the root that is >= the slot where this pubkey's rent would have been collected
-        let first_slot_in_max_epoch = max_slot_in_storages - partition_index_from_max_slot;
+        let first_slot_in_max_epoch =
+            max_slot_in_storages_inclusive - partition_index_from_max_slot;
         let mut expected_rent_collection_slot_max_epoch =
             first_slot_in_max_epoch + partition_from_pubkey;
         let calculated_from_index_expected_rent_collection_slot_max_epoch =
             expected_rent_collection_slot_max_epoch;
-        if expected_rent_collection_slot_max_epoch <= max_slot_in_storages {
+        if expected_rent_collection_slot_max_epoch <= max_slot_in_storages_inclusive {
             // may need to find a valid root
             if let Some(find) =
                 find_unskipped_slot(calculated_from_index_expected_rent_collection_slot_max_epoch)
@@ -471,7 +472,7 @@ impl ExpectedRentCollection {
                 expected_rent_collection_slot_max_epoch = find;
             }
         }
-        if expected_rent_collection_slot_max_epoch > max_slot_in_storages {
+        if expected_rent_collection_slot_max_epoch > max_slot_in_storages_inclusive {
             // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
             expected_rent_collection_slot_max_epoch =
                 calculated_from_index_expected_rent_collection_slot_max_epoch
