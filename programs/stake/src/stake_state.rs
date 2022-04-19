@@ -15,7 +15,7 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
+            self, stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
             stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
@@ -1033,7 +1033,8 @@ fn validate_delegated_amount(
     // With the `stake_allow_zero_undelegated_amount` feature, stake accounts
     // may be initialized with a lower balance, so check the minimum in this
     // function, on delegation.
-    if feature_set.is_active(&stake_allow_zero_undelegated_amount::id())
+    if (feature_set.is_active(&stake_allow_zero_undelegated_amount::id())
+        || feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()))
         && stake_amount < crate::get_minimum_delegation(feature_set)
     {
         return Err(StakeError::InsufficientStake.into());
