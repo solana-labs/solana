@@ -2113,7 +2113,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => std::mem::size_of::<StakeState>(),
+            Self::Stake => StakeState::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,

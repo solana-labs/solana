@@ -328,7 +328,7 @@ pub fn create_account_with_seed(
             base,
             seed,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -347,7 +347,7 @@ pub fn create_account(
             from_pubkey,
             stake_pubkey,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -369,7 +369,7 @@ pub fn create_account_with_seed_checked(
             base,
             seed,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -387,7 +387,7 @@ pub fn create_account_checked(
             from_pubkey,
             stake_pubkey,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -416,7 +416,7 @@ pub fn split(
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(split_stake_pubkey, std::mem::size_of::<StakeState>() as u64),
+        system_instruction::allocate(split_stake_pubkey, StakeState::size_of() as u64),
         system_instruction::assign(split_stake_pubkey, &id()),
         _split(
             stake_pubkey,
@@ -440,7 +440,7 @@ pub fn split_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         _split(
