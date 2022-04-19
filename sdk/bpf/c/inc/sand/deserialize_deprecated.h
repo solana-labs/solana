@@ -4,9 +4,9 @@
  * a program with `BPFLoader1111111111111111111111111111111111`
  */
 
- #include <sol/types.h>
- #include <sol/pubkey.h>
- #include <sol/entrypoint.h>
+ #include <sand/types.h>
+ #include <sand/pubkey.h>
+ #include <sand/entrypoint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,7 @@ extern "C" {
  * @param params Pointer to a SolParameters structure
  * @return Boolean true if successful.
  */
-static bool sol_deserialize_deprecated(
+static bool sand_deserialize_deprecated(
   const uint8_t *input,
   SolParameters *params,
   uint64_t ka_num

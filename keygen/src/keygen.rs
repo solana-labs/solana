@@ -412,7 +412,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_starts_with)
-                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
+                        .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sand:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::with_name("ends_with")
@@ -432,7 +432,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple(true)
                         .validator(grind_validator_starts_and_ends_with)
-                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
+                        .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sand:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
                     Arg::with_name("num_threads")

@@ -111,28 +111,28 @@ colo_instance_run_foreach() {
 }
 
 colo_whoami() {
-  declare ME LINE SOL_USER EOL
+  declare ME LINE SAND_USER EOL
   while read -r LINE; do
     declare IP RC
-    IFS=$'\x1f' read -r IP RC SOL_USER EOL <<< "${LINE}"
+    IFS=$'\x1f' read -r IP RC SAND_USER EOL <<< "${LINE}"
     if [ "${RC}" -eq 0 ]; then
       [[ "${EOL}" = "EOL" ]] || echo "${FUNCNAME[0]}: Unexpected input \"${LINE}\"" 1>&2
-      if [ -z "${ME}" ] || [ "${ME}" = "${SOL_USER}" ]; then
-        ME="${SOL_USER}"
+      if [ -z "${ME}" ] || [ "${ME}" = "${SAND_USER}" ]; then
+        ME="${SAND_USER}"
       else
-        echo "Found conflicting username \"${SOL_USER}\" on ${IP}, expected \"${ME}\"" 1>&2
+        echo "Found conflicting username \"${SAND_USER}\" on ${IP}, expected \"${ME}\"" 1>&2
       fi
     fi
   done < <(colo_instance_run_foreach "[ -n \"\${SOLANA_USER}\" ] && echo -e \"\${SOLANA_USER}\\x1fEOL\"")
   echo "${ME}"
 }
 
-COLO_SOLANA_USER=""
-colo_get_solana_user() {
-  if [ -z "${COLO_SOLANA_USER}" ]; then
-    COLO_SOLANA_USER=$(colo_whoami)
+COLO_SANDANA_USER=""
+colo_get_sandana_user() {
+  if [ -z "${COLO_SANDANA_USER}" ]; then
+    COLO_SANDANA_USER=$(colo_whoami)
   fi
-  echo "${COLO_SOLANA_USER}"
+  echo "${COLO_SANDANA_USER}"
 }
 
 __colo_node_status_script() {

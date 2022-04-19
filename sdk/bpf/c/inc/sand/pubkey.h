@@ -3,7 +3,7 @@
  * @brief Solana Public key
  */
 
-#include <sol/types.h>
+#include <sand/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,7 @@ typedef struct {
  *
  * @param key The public key to print
  */
-void sol_log_pubkey(
+void sand_log_pubkey(
   const SolPubkey *pubkey
 );
 
@@ -47,7 +47,7 @@ static bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
 }
 
 /**
- * Seed used to create a program address or passed to sol_invoke_signed
+ * Seed used to create a program address or passed to sand_invoke_signed
  */
 typedef struct {
   const uint8_t *addr; /** Seed bytes */
@@ -56,7 +56,7 @@ typedef struct {
 
 /**
  * Seeds used by a signer to create a program address or passed to
- * sol_invoke_signed
+ * sand_invoke_signed
  */
 typedef struct {
   const SolSignerSeed *addr; /** An array of a signer's seeds */
@@ -71,7 +71,7 @@ typedef struct {
  * @param program_id Program id of the signer
  * @param program_address Program address created, filled on return
  */
-uint64_t sol_create_program_address(
+uint64_t sand_create_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
     const SolPubkey *program_id,
@@ -87,7 +87,7 @@ uint64_t sol_create_program_address(
  * @param program_address Program address created, filled on return
  * @param bump_seed Bump seed required to create a valid program address
  */
-uint64_t sol_try_find_program_address(
+uint64_t sand_try_find_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
     const SolPubkey *program_id,
@@ -95,13 +95,13 @@ uint64_t sol_try_find_program_address(
     uint8_t *bump_seed
 );
 
-#ifdef SOL_TEST
+#ifdef SAND_TEST
 /**
  * Stub functions when building tests
  */
 #include <stdio.h>
 
-void sol_log_pubkey(
+void sand_log_pubkey(
   const SolPubkey *pubkey
 ) {
   printf("Program log: ");

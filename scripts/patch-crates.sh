@@ -1,6 +1,6 @@
 # source this file
 
-update_solana_dependencies() {
+update_sandana_dependencies() {
   declare project_root="$1"
   declare solana_ver="$2"
   declare tomls=()
@@ -20,7 +20,7 @@ update_solana_dependencies() {
   sed -i -e "s#\(solana-faucet = { version = \"\)[^\"]*\(\"\)#\1=$solana_ver\2#g" "${tomls[@]}" || return $?
 }
 
-patch_crates_io_solana() {
+patch_crates_io_sandana() {
   declare Cargo_toml="$1"
   declare solana_dir="$2"
   cat >> "$Cargo_toml" <<EOF

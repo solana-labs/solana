@@ -67,13 +67,13 @@ A transaction is used to interact with programs on the Solana blockchain. These 
 const web3 = require('@solana/web3.js');
 const nacl = require('tweetnacl');
 
-// Airdrop SOL for paying transactions
+// Airdrop SAND for paying transactions
 let payer = web3.Keypair.generate();
 let connection = new web3.Connection(web3.clusterApiUrl('devnet'), 'confirmed');
 
 let airdropSignature = await connection.requestAirdrop(
     payer.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);
@@ -231,13 +231,13 @@ The SystemProgram grants the ability to create accounts, allocate account data, 
 ```javascript
 const web3 = require("@solana/web3.js");
 
-// Airdrop SOL for paying transactions
+// Airdrop SAND for paying transactions
 let payer = web3.Keypair.generate();
 let connection = new web3.Connection(web3.clusterApiUrl('devnet'), 'confirmed');
 
 let airdropSignature = await connection.requestAirdrop(
     payer.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);
@@ -336,7 +336,7 @@ let connection = new web3.Connection(web3.clusterApiUrl('devnet'), 'confirmed');
 
 let airdropSignature = await connection.requestAirdrop(
     fromPublicKey.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 await connection.confirmTransaction(airdropSignature);
 
@@ -385,7 +385,7 @@ let connection = new web3.Connection(
 
 let airdropSignature = await connection.requestAirdrop(
     fromPublicKey.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);
@@ -505,7 +505,7 @@ let nonceAccount = web3.Keypair.generate();
 // Fund account
 let airdropSignature = await connection.requestAirdrop(
     account.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);
@@ -641,7 +641,7 @@ VoteAccount {
 
 [SourceDocumentation](https://solana-labs.github.io/solana-web3.js/classes/StakeProgram.html)
 
-The StakeProgram facilitates staking SOL and delegating them to any validators on the network. You can use StakeProgram to create a stake account, stake some SOL, authorize accounts for withdrawal of your stake, deactivate your stake, and withdraw your funds. The StakeInstruction class is used to decode and read more instructions from transactions calling the StakeProgram
+The StakeProgram facilitates staking SAND and delegating them to any validators on the network. You can use StakeProgram to create a stake account, stake some SAND, authorize accounts for withdrawal of your stake, deactivate your stake, and withdraw your funds. The StakeInstruction class is used to decode and read more instructions from transactions calling the StakeProgram
 
 #### Example Usage
 
@@ -654,7 +654,7 @@ let connection = new web3.Connection(web3.clusterApiUrl('devnet'), 'confirmed');
 
 let airdropSignature = await connection.requestAirdrop(
     fromPublicKey.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
 );
 await connection.confirmTransaction(airdropSignature);
 

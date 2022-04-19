@@ -134,11 +134,11 @@ pub fn hashv(vals: &[&[u8]]) -> Hash {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
+            fn sand_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
         }
         let mut hash_result = [0; HASH_BYTES];
         unsafe {
-            sol_keccak256(
+            sand_keccak256(
                 vals as *const _ as *const u8,
                 vals.len() as u64,
                 &mut hash_result as *mut _ as *mut u8,

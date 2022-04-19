@@ -49,7 +49,7 @@ export enum PROGRAM_NAMES {
   // other
   ACUMEN = "Acumen Program",
   BONFIDA_POOL = "Bonfida Pool Program",
-  BREAK_SOLANA = "Break Solana Program",
+  BREAK_SANDANA = "Break Solana Program",
   CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
   CHAINLINK_STORE = "Chainlink Store Program",
   MANGO_GOVERNANCE = "Mango Governance Program",
@@ -197,7 +197,7 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     deployments: [Cluster.MainnetBeta],
   },
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: {
-    name: PROGRAM_NAMES.BREAK_SOLANA,
+    name: PROGRAM_NAMES.BREAK_SANDANA,
     deployments: LIVE_CLUSTERS,
   },
   cjg3oHmg9uuPsP8D6g29NWvhySJkdYdAo9D25PRbKXJ: {

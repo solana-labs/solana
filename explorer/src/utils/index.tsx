@@ -6,7 +6,7 @@ import {
 import { PublicKey } from "@solana/web3.js";
 
 // Switch to web3 constant when web3 updates superstruct
-export const LAMPORTS_PER_SOL = 1000000000;
+export const LAMPORTS_PER_SAND = 1000000000;
 
 export const NUM_TICKS_PER_SECOND = 160;
 export const DEFAULT_TICKS_PER_SLOT = 64;
@@ -30,7 +30,7 @@ export function normalizeTokenAmount(
 
 export function lamportsToSol(lamports: number | BN): number {
   if (typeof lamports === "number") {
-    return Math.abs(lamports) / LAMPORTS_PER_SOL;
+    return Math.abs(lamports) / LAMPORTS_PER_SAND;
   }
 
   let signMultiplier = 1;
@@ -52,8 +52,8 @@ export function lamportsToSolString(
   lamports: number | BN,
   maximumFractionDigits: number = 9
 ): string {
-  const sol = lamportsToSol(lamports);
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
+  const sand = lamportsToSol(lamports);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sand);
 }
 
 export function numberWithSeparator(s: string) {

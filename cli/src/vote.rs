@@ -31,7 +31,7 @@ use {
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, message::Message,
-        native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
+        native_token::lamports_to_sand, pubkey::Pubkey, system_instruction::SystemError,
         transaction::Transaction,
     },
     solana_vote_program::{
@@ -317,7 +317,7 @@ impl VoteSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAND"),
                 )
                 .arg(
                     Arg::with_name("with_rewards")
@@ -351,7 +351,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of withdrawn SOL. "),
+                        "The recipient of withdrawn SAND. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -360,7 +360,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to withdraw, in SOL; accepts keyword ALL, which for this command means account balance minus rent-exempt minimum"),
+                        .help("The amount to withdraw, in SAND; accepts keyword ALL, which for this command means account balance minus rent-exempt minimum"),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -391,7 +391,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The recipient of all withdrawn SOL. "),
+                        "The recipient of all withdrawn SAND. "),
                 )
                 .arg(
                     Arg::with_name("authorized_withdrawer")
@@ -1290,7 +1290,7 @@ pub fn process_withdraw_from_vote_account(
             let balance_remaining = current_balance.saturating_sub(withdraw_amount);
             if balance_remaining < minimum_balance && balance_remaining != 0 {
                 return Err(CliError::BadParameter(format!(
-                    "Withdraw amount too large. The vote account balance must be at least {} SOL to remain rent exempt", lamports_to_sol(minimum_balance)
+                    "Withdraw amount too large. The vote account balance must be at least {} SAND to remain rent exempt", lamports_to_sand(minimum_balance)
                 ))
                 .into());
             }

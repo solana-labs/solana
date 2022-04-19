@@ -659,7 +659,7 @@ impl CompiledInstruction {
 }
 
 /// Use to query and convey information about the sibling instruction components
-/// when calling the `sol_get_processed_sibling_instruction` syscall.
+/// when calling the `sand_get_processed_sibling_instruction` syscall.
 #[repr(C)]
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ProcessedSiblingInstruction {
@@ -685,7 +685,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_get_processed_sibling_instruction(
+            fn sand_get_processed_sibling_instruction(
                 index: u64,
                 meta: *mut ProcessedSiblingInstruction,
                 program_id: *mut Pubkey,
@@ -698,7 +698,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
         let mut program_id = Pubkey::default();
 
         if 1 == unsafe {
-            sol_get_processed_sibling_instruction(
+            sand_get_processed_sibling_instruction(
                 index as u64,
                 &mut meta,
                 &mut program_id,
@@ -712,7 +712,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
             accounts.resize_with(meta.accounts_len, AccountMeta::default);
 
             let _ = unsafe {
-                sol_get_processed_sibling_instruction(
+                sand_get_processed_sibling_instruction(
                     index as u64,
                     &mut meta,
                     &mut program_id,
@@ -728,7 +728,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::sol_get_processed_sibling_instruction(index)
+    crate::program_stubs::sand_get_processed_sibling_instruction(index)
 }
 
 // Stack height when processing transaction-level instructions
@@ -741,15 +741,15 @@ pub fn get_stack_height() -> usize {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_get_stack_height() -> u64;
+            fn sand_get_stack_height() -> u64;
         }
 
-        unsafe { sol_get_stack_height() as usize }
+        unsafe { sand_get_stack_height() as usize }
     }
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        crate::program_stubs::sol_get_stack_height() as usize
+        crate::program_stubs::sand_get_stack_height() as usize
     }
 }
 

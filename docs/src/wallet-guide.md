@@ -4,7 +4,7 @@ title: Solana Wallet Guide
 
 This document describes the different wallet options that are available to users
 of Solana who want to be able to send, receive and interact with
-SOL tokens on the Solana blockchain.
+SAND tokens on the Solana blockchain.
 
 ## What is a Wallet?
 
@@ -44,7 +44,7 @@ Some store and back up private keys more securely.
 Solana supports multiple types of wallets so you can choose the right balance
 of security and convenience.
 
-**If you want to be able to receive SOL tokens on the Solana blockchain,
+**If you want to be able to receive SAND tokens on the Solana blockchain,
 you first will need to create a wallet.**
 
 ## Supported Wallets

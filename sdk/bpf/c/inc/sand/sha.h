@@ -1,30 +1,30 @@
 #pragma once
 /**
- * @brief Solana Blake3 system call
+ * @brief Solana sha system call
  */
 
-#include <sol/types.h>
+#include <sand/types.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Length of a Blake3 hash result
+ * Length of a sha256 hash result
  */
-#define BLAKE3_RESULT_LENGTH 32
+#define SHA256_RESULT_LENGTH 32
 
 /**
- * Blake3
+ * Sha256
  *
  * @param bytes Array of byte arrays
  * @param bytes_len Number of byte arrays
  * @param result 32 byte array to hold the result
  */
-uint64_t sol_blake3(
+uint64_t sand_sha256(
     const SolBytes *bytes,
     int bytes_len,
-    const uint8_t *result
+    uint8_t *result
 );
 
 #ifdef __cplusplus

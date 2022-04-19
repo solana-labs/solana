@@ -32,10 +32,10 @@ function get_cluster_version {
 
 function get_token_capitalization {
   totalSupplyLamports="$(curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getTotalSupply"}' "$url" | cut -d , -f 2 | cut -d : -f 2)"
-  totalSupplySol=$((totalSupplyLamports / LAMPORTS_PER_SOL))
+  totalSupplySol=$((totalSupplyLamports / LAMPORTS_PER_SAND))
 
   printf "\n--- Token Capitalization ---\n"
-  printf "Total token capitalization %'d SOL\n" "$totalSupplySol"
+  printf "Total token capitalization %'d SAND\n" "$totalSupplySol"
   printf "Total token capitalization %'d Lamports\n" "$totalSupplyLamports"
 
 }
@@ -55,11 +55,11 @@ function get_program_account_balance_totals {
     totalAccountBalancesLamports=$((totalAccountBalancesLamports + account))
     numberOfAccounts=$((numberOfAccounts + 1))
   done
-  totalAccountBalancesSol=$((totalAccountBalancesLamports / LAMPORTS_PER_SOL))
+  totalAccountBalancesSol=$((totalAccountBalancesLamports / LAMPORTS_PER_SAND))
 
   printf "\n--- %s Account Balance Totals ---\n" "$PROGRAM_NAME"
   printf "Number of %s Program accounts: %'.f\n" "$PROGRAM_NAME" "$numberOfAccounts"
-  printf "Total token balance in all %s accounts: %'d SOL\n" "$PROGRAM_NAME" "$totalAccountBalancesSol"
+  printf "Total token balance in all %s accounts: %'d SAND\n" "$PROGRAM_NAME" "$totalAccountBalancesSol"
   printf "Total token balance in all %s accounts: %'d Lamports\n" "$PROGRAM_NAME" "$totalAccountBalancesLamports"
 
   case $PROGRAM_NAME in
@@ -91,7 +91,7 @@ function sum_account_balances_totals {
   grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
 
   printf "\n--- Total Token Distribution in all Account Balances ---\n"
-  printf "Total SOL in all Account Balances: %'d\n" "$grandTotalAccountBalancesSol"
+  printf "Total SAND in all Account Balances: %'d\n" "$grandTotalAccountBalancesSol"
   printf "Total Lamports in all Account Balances: %'d\n" "$grandTotalAccountBalancesLamports"
 }
 
@@ -99,7 +99,7 @@ url=$1
 [[ -n $url ]] || usage "Missing required RPC URL"
 shift
 
-LAMPORTS_PER_SOL=1000000000 # 1 billion
+LAMPORTS_PER_SAND=1000000000 # 1 billion
 
 stakeAccountBalanceTotalSol=
 systemAccountBalanceTotalSol=

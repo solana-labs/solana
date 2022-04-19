@@ -473,7 +473,7 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_try_find_program_address(
+                fn sand_try_find_program_address(
                     seeds_addr: *const u8,
                     seeds_len: u64,
                     program_id_addr: *const u8,
@@ -484,7 +484,7 @@ impl Pubkey {
             let mut bytes = [0; 32];
             let mut bump_seed = std::u8::MAX;
             let result = unsafe {
-                sol_try_find_program_address(
+                sand_try_find_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -575,7 +575,7 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_create_program_address(
+                fn sand_create_program_address(
                     seeds_addr: *const u8,
                     seeds_len: u64,
                     program_id_addr: *const u8,
@@ -584,7 +584,7 @@ impl Pubkey {
             }
             let mut bytes = [0; 32];
             let result = unsafe {
-                sol_create_program_address(
+                sand_create_program_address(
                     seeds as *const _ as *const u8,
                     seeds.len() as u64,
                     program_id as *const _ as *const u8,
@@ -611,13 +611,13 @@ impl Pubkey {
         #[cfg(target_arch = "bpf")]
         {
             extern "C" {
-                fn sol_log_pubkey(pubkey_addr: *const u8);
+                fn sand_log_pubkey(pubkey_addr: *const u8);
             }
-            unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
+            unsafe { sand_log_pubkey(self.as_ref() as *const _ as *const u8) };
         }
 
         #[cfg(not(target_arch = "bpf"))]
-        crate::program_stubs::sol_log(&self.to_string());
+        crate::program_stubs::sand_log(&self.to_string());
     }
 }
 

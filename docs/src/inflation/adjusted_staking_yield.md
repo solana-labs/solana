@@ -16,12 +16,12 @@ Due to this relative change in representation, the proportion of stake of any to
 
 Of initial interest, however, is the _dilution of **un-staked** tokens_, or $D_{us}$. In the case of un-staked tokens, token dilution is only a function of the _Inflation Schedule_ because the amount of un-staked tokens doesn't change over time.
 
-This can be seen by explicitly calculating un-staked dilution as $D_{us}$. The un-staked proportion of the token pool at time $t$ is $P_{us}(t_{N})$ and $I_{t}$ is the incremental inflation rate applied between any two consecutive time points. $SOL_{us}(t)$ and $SOL_{total}(t)$ is the amount of un-staked and total SOL on the network, respectively, at time $t$. Therefore $P_{us}(t) = SOL_{us}(t)/SOL_{total}(t)$.
+This can be seen by explicitly calculating un-staked dilution as $D_{us}$. The un-staked proportion of the token pool at time $t$ is $P_{us}(t_{N})$ and $I_{t}$ is the incremental inflation rate applied between any two consecutive time points. $SAND_{us}(t)$ and $SAND_{total}(t)$ is the amount of un-staked and total SAND on the network, respectively, at time $t$. Therefore $P_{us}(t) = SAND_{us}(t)/SAND_{total}(t)$.
 
 $$
 \begin{aligned}
 	D_{us} &= \left( \frac{P_{us}(t_{1}) - P_{us}(t_{0})}{P_{us}(t_{0})} \right)\\
-		&= \left( \frac{ \left( \frac{SOL_{us}(t_{2})}{SOL_{total}(t_{2})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
+		&= \left( \frac{ \left( \frac{SAND_{us}(t_{2})}{SAND_{total}(t_{2})} \right) - \left( \frac{SAND_{us}(t_{1})}{SAND_{total}(t_{1})} \right)}{ \left( \frac{SAND_{us}(t_{1})}{SAND_{total}(t_{1})} \right) } \right)\\
 
 \end{aligned}
 $$
@@ -30,8 +30,8 @@ However, because inflation issuance only increases the total amount and the un-s
 
 $$
 \begin{aligned}
-	SOL_{us}(t_2) &= SOL_{us}(t_1)\\
-	SOL_{total}(t_2) &= SOL_{total}(t_1)\times (1 + I_{t_1})\\
+	SAND_{us}(t_2) &= SAND_{us}(t_1)\\
+	SAND_{total}(t_2) &= SAND_{total}(t_1)\times (1 + I_{t_1})\\
 \end{aligned}
 $$
 
@@ -39,7 +39,7 @@ So $D_{us}$ becomes:
 
 $$
 \begin{aligned}
-	D_{us} &= \left( \frac{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})\times (1 + I_{1})} \right) - \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right)}{ \left( \frac{SOL_{us}(t_{1})}{SOL_{total}(t_{1})} \right) } \right)\\
+	D_{us} &= \left( \frac{ \left( \frac{SAND_{us}(t_{1})}{SAND_{total}(t_{1})\times (1 + I_{1})} \right) - \left( \frac{SAND_{us}(t_{1})}{SAND_{total}(t_{1})} \right)}{ \left( \frac{SAND_{us}(t_{1})}{SAND_{total}(t_{1})} \right) } \right)\\
 	D_{us} &= \frac{1}{(1 + I_{1})} - 1\\
 \end{aligned}
 $$
@@ -64,18 +64,18 @@ $$
 	Y_{adj} = \frac{P_s(t_2) - P_s(t_1)}{P_s(t_1)}\\
 $$
 
-As seen in the plot above, the proportion of staked tokens increases with inflation issuance. Letting $SOL_s(t)$ and $SOL_{\text{total}}(t)$ represent the amount of staked and total SOL at time $t$ respectively:
+As seen in the plot above, the proportion of staked tokens increases with inflation issuance. Letting $SAND_s(t)$ and $SAND_{\text{total}}(t)$ represent the amount of staked and total SAND at time $t$ respectively:
 
 $$
-	P_s(t_2) = \frac{SOL_s(t_1) + SOL_{\text{total}}(t_1)\times I(t_1)}{SOL_{\text{total}}(t_1)\times (1 + I(t_1))}\\
+	P_s(t_2) = \frac{SAND_s(t_1) + SAND_{\text{total}}(t_1)\times I(t_1)}{SAND_{\text{total}}(t_1)\times (1 + I(t_1))}\\
 $$
 
-Where $SOL_{\text{total}}(t_1)\times I(t_1)$ is the additional inflation issuance added to the staked token pool. Now we can write $Y_{adj}$ in common terms $t_1 = t$:
+Where $SAND_{\text{total}}(t_1)\times I(t_1)$ is the additional inflation issuance added to the staked token pool. Now we can write $Y_{adj}$ in common terms $t_1 = t$:
 
 $$
 \begin{aligned}
-Y_{adj} &= \frac{\frac{SOL_s(t) + SOL_{\text{total}}(t)\times I(t)}{SOL_{\text{total}}(t)\times (1 + I(t))} - \frac{SOL_s(t)}{SOL_{\text{total}}(t)} }{ \frac{SOL_s(t)}{SOL_{\text{total}}(t)} }  \\
-	&= \frac{ SOL_{\text{total}}(t)\times (SOL_s(t) + SOL_{\text{total}}(t)\times I(t)) }{ SOL_s(t)\times SOL_{\text{total}}\times (1 + I(t)) } -1 \\
+Y_{adj} &= \frac{\frac{SAND_s(t) + SAND_{\text{total}}(t)\times I(t)}{SAND_{\text{total}}(t)\times (1 + I(t))} - \frac{SAND_s(t)}{SAND_{\text{total}}(t)} }{ \frac{SAND_s(t)}{SAND_{\text{total}}(t)} }  \\
+	&= \frac{ SAND_{\text{total}}(t)\times (SAND_s(t) + SAND_{\text{total}}(t)\times I(t)) }{ SAND_s(t)\times SAND_{\text{total}}\times (1 + I(t)) } -1 \\
 \end{aligned}
 $$
 

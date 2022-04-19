@@ -1289,7 +1289,7 @@ mod tests {
             genesis_config::create_genesis_config,
             instruction::{AccountMeta, Instruction, InstructionError},
             message::Message,
-            native_token::LAMPORTS_PER_SOL,
+            native_token::LAMPORTS_PER_SAND,
             pubkey::Pubkey,
             rent::Rent,
             signature::{Keypair, Signer},
@@ -2079,7 +2079,7 @@ mod tests {
         );
 
         // Test successful deploy
-        let payer_base_balance = LAMPORTS_PER_SOL;
+        let payer_base_balance = LAMPORTS_PER_SAND;
         let deploy_fees = {
             let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
             3 * fee_calculator.lamports_per_signature

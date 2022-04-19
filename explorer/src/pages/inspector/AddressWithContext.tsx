@@ -94,7 +94,7 @@ function AccountInfo({
       {ownerAddress
         ? `Owned by ${
             ownerLabel || ownerAddress
-          }. Balance is ${lamportsToSolString(info.data.lamports)} SOL`
+          }. Balance is ${lamportsToSolString(info.data.lamports)} SAND`
         : "Account doesn't exist"}
     </span>
   );

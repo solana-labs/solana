@@ -54,7 +54,7 @@ struct SolSignerSeedsC {
 }
 
 extern "C" {
-    fn sol_invoke_signed_c(
+    fn sand_invoke_signed_c(
         instruction_addr: *const SolInstruction,
         account_infos_addr: *const SolAccountInfo,
         account_infos_len: u64,
@@ -142,7 +142,7 @@ fn process_instruction(
             unsafe {
                 check!(
                     0,
-                    sol_invoke_signed_c(
+                    sand_invoke_signed_c(
                         &instruction as *const _,
                         READONLY_ACCOUNTS.as_ptr(),
                         READONLY_ACCOUNTS.len() as u64,
@@ -177,7 +177,7 @@ fn process_instruction(
             unsafe {
                 check!(
                     0,
-                    sol_invoke_signed_c(
+                    sand_invoke_signed_c(
                         &instruction as *const _,
                         new_accounts.as_ptr(),
                         new_accounts.len() as u64,

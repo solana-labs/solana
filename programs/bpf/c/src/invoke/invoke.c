@@ -2,13 +2,13 @@
  * @brief Example C-based BPF program that tests cross-program invocations
  */
 #include "../invoked/instruction.h"
-#include <sol/entrypoint.h>
-#include <sol/cpi.h>
-#include <sol/pubkey.h>
-#include <sol/log.h>
-#include <sol/assert.h>
-#include <sol/deserialize.h>
-#include <sol/return_data.h>
+#include <sand/entrypoint.h>
+#include <sand/cpi.h>
+#include <sand/pubkey.h>
+#include <sand/log.h>
+#include <sand/assert.h>
+#include <sand/deserialize.h>
+#include <sand/return_data.h>
 
 static const uint8_t TEST_SUCCESS = 1;
 static const uint8_t TEST_PRIVILEGE_ESCALATION_SIGNER = 2;
@@ -48,7 +48,7 @@ static const int INVOKE_PROGRAM_INDEX = 12;
 
 uint64_t do_nested_invokes(uint64_t num_nested_invokes,
                            SolAccountInfo *accounts, uint64_t num_accounts) {
-  sol_assert(accounts[ARGUMENT_INDEX].is_signer);
+  sand_assert(accounts[ARGUMENT_INDEX].is_signer);
 
   *accounts[ARGUMENT_INDEX].lamports -= 5;
   *accounts[INVOKED_ARGUMENT_INDEX].lamports += 5;
@@ -59,29 +59,29 @@ uint64_t do_nested_invokes(uint64_t num_nested_invokes,
       {accounts[INVOKED_PROGRAM_INDEX].key, false, false}};
   uint8_t data[] = {NESTED_INVOKE, num_nested_invokes};
   const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                      arguments, SOL_ARRAY_SIZE(arguments),
-                                      data, SOL_ARRAY_SIZE(data)};
+                                      arguments, SAND_ARRAY_SIZE(arguments),
+                                      data, SAND_ARRAY_SIZE(data)};
 
-  sol_log("First invoke");
-  sol_assert(SUCCESS == sol_invoke(&instruction, accounts, num_accounts));
-  sol_log("2nd invoke from first program");
-  sol_assert(SUCCESS == sol_invoke(&instruction, accounts, num_accounts));
+  sand_log("First invoke");
+  sand_assert(SUCCESS == sand_invoke(&instruction, accounts, num_accounts));
+  sand_log("2nd invoke from first program");
+  sand_assert(SUCCESS == sand_invoke(&instruction, accounts, num_accounts));
 
-  sol_assert(*accounts[ARGUMENT_INDEX].lamports ==
+  sand_assert(*accounts[ARGUMENT_INDEX].lamports ==
              42 - 5 + (2 * num_nested_invokes));
-  sol_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports ==
+  sand_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports ==
              10 + 5 - (2 * num_nested_invokes));
 
   return SUCCESS;
 }
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  sol_log("Invoke C program");
+  sand_log("Invoke C program");
 
   SolAccountInfo accounts[13];
   SolParameters params = (SolParameters){.ka = accounts};
 
-  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(accounts))) {
+  if (!sand_deserialize(input, &params, SAND_ARRAY_SIZE(accounts))) {
     return ERROR_INVALID_ARGUMENT;
   }
 
@@ -91,7 +91,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
   switch (params.data[0]) {
   case TEST_SUCCESS: {
-    sol_log("Call system program create account");
+    sand_log("Call system program create account");
     {
       uint64_t from_lamports = *accounts[FROM_INDEX].lamports;
       uint64_t to_lamports = *accounts[DERIVED_KEY1_INDEX].lamports;
@@ -101,30 +101,30 @@ extern uint64_t entrypoint(const uint8_t *input) {
       uint8_t data[4 + 8 + 8 + 32];
       *(uint64_t *)(data + 4) = 42;
       *(uint64_t *)(data + 4 + 8) = MAX_PERMITTED_DATA_INCREASE;
-      sol_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
+      sand_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
       const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
-      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+      const SolSignerSeed seeds1[] = {{seed1, SAND_ARRAY_SIZE(seed1)},
                                       {&bump_seed1, 1}};
-      const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
-      sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
-                                              SOL_ARRAY_SIZE(accounts),
+      const SolSignerSeeds signers_seeds[] = {{seeds1, SAND_ARRAY_SIZE(seeds1)}};
+      sand_assert(SUCCESS == sand_invoke_signed(&instruction, accounts,
+                                              SAND_ARRAY_SIZE(accounts),
                                               signers_seeds,
-                                              SOL_ARRAY_SIZE(signers_seeds)));
-      sol_assert(*accounts[FROM_INDEX].lamports == from_lamports - 42);
-      sol_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 42);
-      sol_assert(SolPubkey_same(accounts[DERIVED_KEY1_INDEX].owner,
+                                              SAND_ARRAY_SIZE(signers_seeds)));
+      sand_assert(*accounts[FROM_INDEX].lamports == from_lamports - 42);
+      sand_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 42);
+      sand_assert(SolPubkey_same(accounts[DERIVED_KEY1_INDEX].owner,
                                 params.program_id));
-      sol_assert(accounts[DERIVED_KEY1_INDEX].data_len ==
+      sand_assert(accounts[DERIVED_KEY1_INDEX].data_len ==
                  MAX_PERMITTED_DATA_INCREASE);
-      sol_assert(
+      sand_assert(
           accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
           0);
       accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] = 0x0f;
-      sol_assert(
+      sand_assert(
           accounts[DERIVED_KEY1_INDEX].data[MAX_PERMITTED_DATA_INCREASE - 1] ==
           0x0f);
       for (uint8_t i = 0; i < 20; i++) {
@@ -132,7 +132,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       }
     }
 
-    sol_log("Call system program transfer");
+    sand_log("Call system program transfer");
     {
       uint64_t from_lamports = *accounts[FROM_INDEX].lamports;
       uint64_t to_lamports = *accounts[DERIVED_KEY1_INDEX].lamports;
@@ -141,15 +141,15 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[DERIVED_KEY1_INDEX].key, true, false}};
       uint8_t data[] = {2, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
       const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
-      sol_assert(*accounts[FROM_INDEX].lamports == from_lamports - 1);
-      sol_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 1);
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
+      sand_assert(*accounts[FROM_INDEX].lamports == from_lamports - 1);
+      sand_assert(*accounts[DERIVED_KEY1_INDEX].lamports == to_lamports + 1);
     }
 
-    sol_log("Test data translation");
+    sand_log("Test data translation");
     {
       for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
         accounts[ARGUMENT_INDEX].data[i] = i;
@@ -162,83 +162,83 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false}};
       uint8_t data[] = {VERIFY_TRANSLATIONS, 1, 2, 3, 4, 5};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
 
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     }
 
-    sol_log("Test no instruction data");
+    sand_log("Test no instruction data");
     {
       SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
       uint8_t data[] = {};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
 
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     }
 
-    sol_log("Test return data");
+    sand_log("Test return data");
     {
       SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, true, true}};
       uint8_t data[] = { SET_RETURN_DATA };
       uint8_t buf[100];
 
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
 
       // set some return data, so that the callee can check it is cleared
-      sol_set_return_data((uint8_t[]){1, 2, 3, 4}, 4);
+      sand_set_return_data((uint8_t[]){1, 2, 3, 4}, 4);
 
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
       SolPubkey setter;
 
-      uint64_t ret = sol_get_return_data(data, sizeof(data), &setter);
+      uint64_t ret = sand_get_return_data(data, sizeof(data), &setter);
 
-      sol_assert(ret == sizeof(RETURN_DATA_VAL));
+      sand_assert(ret == sizeof(RETURN_DATA_VAL));
 
-      sol_assert(sol_memcmp(data, RETURN_DATA_VAL, sizeof(RETURN_DATA_VAL)));
-      sol_assert(SolPubkey_same(&setter, accounts[INVOKED_PROGRAM_INDEX].key));
+      sand_assert(sand_memcmp(data, RETURN_DATA_VAL, sizeof(RETURN_DATA_VAL)));
+      sand_assert(SolPubkey_same(&setter, accounts[INVOKED_PROGRAM_INDEX].key));
     }
 
-    sol_log("Test create_program_address");
+    sand_log("Test create_program_address");
     {
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
-      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+      const SolSignerSeed seeds1[] = {{seed1, SAND_ARRAY_SIZE(seed1)},
                                       {&bump_seed1, 1}};
       SolPubkey address;
-      sol_assert(SUCCESS ==
-                 sol_create_program_address(seeds1, SOL_ARRAY_SIZE(seeds1),
+      sand_assert(SUCCESS ==
+                 sand_create_program_address(seeds1, SAND_ARRAY_SIZE(seeds1),
                                             params.program_id, &address));
-      sol_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
+      sand_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
     }
 
-    sol_log("Test try_find_program_address");
+    sand_log("Test try_find_program_address");
     {
       uint8_t seed[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                         ' ', 'b', 'u', 't', 't', 'e', 'r'};
-      const SolSignerSeed seeds[] = {{seed, SOL_ARRAY_SIZE(seed)}};
+      const SolSignerSeed seeds[] = {{seed, SAND_ARRAY_SIZE(seed)}};
       SolPubkey address;
       uint8_t bump_seed;
-      sol_assert(SUCCESS == sol_try_find_program_address(
-                                seeds, SOL_ARRAY_SIZE(seeds), params.program_id,
+      sand_assert(SUCCESS == sand_try_find_program_address(
+                                seeds, SAND_ARRAY_SIZE(seeds), params.program_id,
                                 &address, &bump_seed));
-      sol_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
-      sol_assert(bump_seed == bump_seed1);
+      sand_assert(SolPubkey_same(&address, accounts[DERIVED_KEY1_INDEX].key));
+      sand_assert(bump_seed == bump_seed1);
     }
 
-    sol_log("Test derived signers");
+    sand_log("Test derived signers");
     {
-      sol_assert(!accounts[DERIVED_KEY1_INDEX].is_signer);
-      sol_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
-      sol_assert(!accounts[DERIVED_KEY3_INDEX].is_signer);
+      sand_assert(!accounts[DERIVED_KEY1_INDEX].is_signer);
+      sand_assert(!accounts[DERIVED_KEY2_INDEX].is_signer);
+      sand_assert(!accounts[DERIVED_KEY3_INDEX].is_signer);
 
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_PROGRAM_INDEX].key, false, false},
@@ -247,60 +247,60 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[DERIVED_KEY3_INDEX].key, false, false}};
       uint8_t data[] = {DERIVED_SIGNERS, bump_seed2, bump_seed3};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
       uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                          ' ', 'b', 'u', 't', 't', 'e', 'r'};
-      const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+      const SolSignerSeed seeds1[] = {{seed1, SAND_ARRAY_SIZE(seed1)},
                                       {&bump_seed1, 1}};
-      const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
-      sol_assert(SUCCESS == sol_invoke_signed(&instruction, accounts,
-                                              SOL_ARRAY_SIZE(accounts),
+      const SolSignerSeeds signers_seeds[] = {{seeds1, SAND_ARRAY_SIZE(seeds1)}};
+      sand_assert(SUCCESS == sand_invoke_signed(&instruction, accounts,
+                                              SAND_ARRAY_SIZE(accounts),
                                               signers_seeds,
-                                              SOL_ARRAY_SIZE(signers_seeds)));
+                                              SAND_ARRAY_SIZE(signers_seeds)));
     }
 
-    sol_log("Test readonly with writable account");
+    sand_log("Test readonly with writable account");
     {
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
       uint8_t data[] = {VERIFY_WRITER};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
 
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     }
 
-    sol_log("Test nested invoke");
+    sand_log("Test nested invoke");
     {
-      sol_assert(SUCCESS == do_nested_invokes(4, accounts, params.ka_num));
+      sand_assert(SUCCESS == do_nested_invokes(4, accounts, params.ka_num));
     }
 
-    sol_log("Test privilege deescalation");
+    sand_log("Test privilege deescalation");
     {
-      sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
-      sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+      sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+      sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
       SolAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
       uint8_t data[] = {VERIFY_PRIVILEGE_DEESCALATION};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     }
 
-    sol_log("Verify data values are retained and updated");
+    sand_log("Verify data values are retained and updated");
     for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
-      sol_assert(accounts[ARGUMENT_INDEX].data[i] == i);
+      sand_assert(accounts[ARGUMENT_INDEX].data[i] == i);
     }
     for (int i = 0; i < accounts[INVOKED_ARGUMENT_INDEX].data_len; i++) {
-      sol_assert(accounts[INVOKED_ARGUMENT_INDEX].data[i] == i);
+      sand_assert(accounts[INVOKED_ARGUMENT_INDEX].data[i] == i);
     }
 
-    sol_log("Verify data write before ro cpi call");
+    sand_log("Verify data write before ro cpi call");
     {
       for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
         accounts[ARGUMENT_INDEX].data[i] = 0;
@@ -310,154 +310,154 @@ extern uint64_t entrypoint(const uint8_t *input) {
           {accounts[ARGUMENT_INDEX].key, false, false}};
       uint8_t data[] = {VERIFY_PRIVILEGE_DEESCALATION};
       const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                          arguments, SOL_ARRAY_SIZE(arguments),
-                                          data, SOL_ARRAY_SIZE(data)};
-      sol_assert(SUCCESS ==
-                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                          arguments, SAND_ARRAY_SIZE(arguments),
+                                          data, SAND_ARRAY_SIZE(data)};
+      sand_assert(SUCCESS ==
+                 sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
       for (int i = 0; i < accounts[ARGUMENT_INDEX].data_len; i++) {
-        sol_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
+        sand_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
       }
     }
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_SIGNER: {
-    sol_log("Test privilege escalation signer");
+    sand_log("Test privilege escalation signer");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
     // Signer privilege escalation will always fail the whole transaction
     instruction.accounts[0].is_signer = true;
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_WRITABLE: {
-    sol_log("Test privilege escalation writable");
+    sand_log("Test privilege escalation writable");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
     // Writable privilege escalation will always fail the whole transaction
     instruction.accounts[0].is_writable = true;
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
   case TEST_PPROGRAM_NOT_EXECUTABLE: {
-    sol_log("Test program not executable");
+    sand_log("Test program not executable");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[ARGUMENT_INDEX].key, arguments,
-                                        SOL_ARRAY_SIZE(arguments), data,
-                                        SOL_ARRAY_SIZE(data)};
-    return sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+                                        SAND_ARRAY_SIZE(arguments), data,
+                                        SAND_ARRAY_SIZE(data)};
+    return sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
   }
   case TEST_EMPTY_ACCOUNTS_SLICE: {
-    sol_log("Empty accounts slice");
+    sand_log("Empty accounts slice");
 
     SolAccountMeta arguments[] = {
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
 
-    sol_assert(SUCCESS == sol_invoke(&instruction, 0, 0));
+    sand_assert(SUCCESS == sand_invoke(&instruction, 0, 0));
     break;
   }
   case TEST_CAP_SEEDS: {
-    sol_log("Test cap seeds");
+    sand_log("Test cap seeds");
     SolAccountMeta arguments[] = {};
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
     uint8_t seed[] = {"seed"};
     const SolSignerSeed seeds[] = {
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)}, {seed, SOL_ARRAY_SIZE(seed)},
-        {seed, SOL_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)}, {seed, SAND_ARRAY_SIZE(seed)},
+        {seed, SAND_ARRAY_SIZE(seed)},
     };
-    const SolSignerSeeds signers_seeds[] = {{seeds, SOL_ARRAY_SIZE(seeds)}};
-    sol_assert(SUCCESS == sol_invoke_signed(
-                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
-                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    const SolSignerSeeds signers_seeds[] = {{seeds, SAND_ARRAY_SIZE(seeds)}};
+    sand_assert(SUCCESS == sand_invoke_signed(
+                              &instruction, accounts, SAND_ARRAY_SIZE(accounts),
+                              signers_seeds, SAND_ARRAY_SIZE(signers_seeds)));
     break;
   }
   case TEST_CAP_SIGNERS: {
-    sol_log("Test cap signers");
+    sand_log("Test cap signers");
     SolAccountMeta arguments[] = {};
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
     uint8_t seed[] = {"seed"};
-    const SolSignerSeed seed1[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed2[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed3[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed4[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed5[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed6[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed7[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed8[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed9[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed10[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed11[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed12[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed13[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed14[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed15[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed16[] = {{seed, SOL_ARRAY_SIZE(seed)}};
-    const SolSignerSeed seed17[] = {{seed, SOL_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed1[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed2[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed3[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed4[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed5[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed6[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed7[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed8[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed9[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed10[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed11[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed12[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed13[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed14[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed15[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed16[] = {{seed, SAND_ARRAY_SIZE(seed)}};
+    const SolSignerSeed seed17[] = {{seed, SAND_ARRAY_SIZE(seed)}};
     const SolSignerSeeds signers_seeds[] = {
-        {seed1, SOL_ARRAY_SIZE(seed1)},   {seed2, SOL_ARRAY_SIZE(seed2)},
-        {seed3, SOL_ARRAY_SIZE(seed3)},   {seed4, SOL_ARRAY_SIZE(seed4)},
-        {seed5, SOL_ARRAY_SIZE(seed5)},   {seed6, SOL_ARRAY_SIZE(seed6)},
-        {seed7, SOL_ARRAY_SIZE(seed7)},   {seed8, SOL_ARRAY_SIZE(seed8)},
-        {seed9, SOL_ARRAY_SIZE(seed9)},   {seed10, SOL_ARRAY_SIZE(seed10)},
-        {seed11, SOL_ARRAY_SIZE(seed11)}, {seed12, SOL_ARRAY_SIZE(seed12)},
-        {seed13, SOL_ARRAY_SIZE(seed13)}, {seed14, SOL_ARRAY_SIZE(seed14)},
-        {seed15, SOL_ARRAY_SIZE(seed15)}, {seed16, SOL_ARRAY_SIZE(seed16)},
-        {seed17, SOL_ARRAY_SIZE(seed17)}};
-    sol_assert(SUCCESS == sol_invoke_signed(
-                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
-                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+        {seed1, SAND_ARRAY_SIZE(seed1)},   {seed2, SAND_ARRAY_SIZE(seed2)},
+        {seed3, SAND_ARRAY_SIZE(seed3)},   {seed4, SAND_ARRAY_SIZE(seed4)},
+        {seed5, SAND_ARRAY_SIZE(seed5)},   {seed6, SAND_ARRAY_SIZE(seed6)},
+        {seed7, SAND_ARRAY_SIZE(seed7)},   {seed8, SAND_ARRAY_SIZE(seed8)},
+        {seed9, SAND_ARRAY_SIZE(seed9)},   {seed10, SAND_ARRAY_SIZE(seed10)},
+        {seed11, SAND_ARRAY_SIZE(seed11)}, {seed12, SAND_ARRAY_SIZE(seed12)},
+        {seed13, SAND_ARRAY_SIZE(seed13)}, {seed14, SAND_ARRAY_SIZE(seed14)},
+        {seed15, SAND_ARRAY_SIZE(seed15)}, {seed16, SAND_ARRAY_SIZE(seed16)},
+        {seed17, SAND_ARRAY_SIZE(seed17)}};
+    sand_assert(SUCCESS == sand_invoke_signed(
+                              &instruction, accounts, SAND_ARRAY_SIZE(accounts),
+                              signers_seeds, SAND_ARRAY_SIZE(signers_seeds)));
     break;
   }
   case TEST_ALLOC_ACCESS_VIOLATION: {
-    sol_log("Test resize violation");
+    sand_log("Test resize violation");
     SolAccountMeta arguments[] = {
         {accounts[FROM_INDEX].key, true, true},
         {accounts[DERIVED_KEY1_INDEX].key, true, true}};
     uint8_t data[4 + 8 + 8 + 32];
     *(uint64_t *)(data + 4) = 42;
     *(uint64_t *)(data + 4 + 8) = MAX_PERMITTED_DATA_INCREASE;
-    sol_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
+    sand_memcpy(data + 4 + 8 + 8, params.program_id, SIZE_PUBKEY);
     const SolInstruction instruction = {accounts[SYSTEM_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
     uint8_t seed1[] = {'Y', 'o', 'u', ' ', 'p', 'a', 's', 's',
                        ' ', 'b', 'u', 't', 't', 'e', 'r'};
-    const SolSignerSeed seeds1[] = {{seed1, SOL_ARRAY_SIZE(seed1)},
+    const SolSignerSeed seeds1[] = {{seed1, SAND_ARRAY_SIZE(seed1)},
                                     {&bump_seed1, 1}};
-    const SolSignerSeeds signers_seeds[] = {{seeds1, SOL_ARRAY_SIZE(seeds1)}};
+    const SolSignerSeeds signers_seeds[] = {{seeds1, SAND_ARRAY_SIZE(seeds1)}};
 
     SolAccountInfo derived_account = {
         .key = accounts[DERIVED_KEY1_INDEX].key,
@@ -474,85 +474,85 @@ extern uint64_t entrypoint(const uint8_t *input) {
     };
     const SolAccountInfo invoke_accounts[] = {
         accounts[FROM_INDEX], accounts[SYSTEM_PROGRAM_INDEX], derived_account};
-    sol_assert(SUCCESS ==
-               sol_invoke_signed(&instruction,
+    sand_assert(SUCCESS ==
+               sand_invoke_signed(&instruction,
                                  (const SolAccountInfo *)invoke_accounts, 3,
-                                 signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+                                 signers_seeds, SAND_ARRAY_SIZE(signers_seeds)));
     break;
   }
   case TEST_INSTRUCTION_DATA_TOO_LARGE: {
-    sol_log("Test instruction data too large");
+    sand_log("Test instruction data too large");
     SolAccountMeta arguments[] = {};
-    uint8_t *data = sol_calloc(1500, 1);
+    uint8_t *data = sand_calloc(1500, 1);
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        arguments, SAND_ARRAY_SIZE(arguments),
                                         data, 1500};
     const SolSignerSeeds signers_seeds[] = {};
-    sol_assert(SUCCESS == sol_invoke_signed(
-                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
-                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    sand_assert(SUCCESS == sand_invoke_signed(
+                              &instruction, accounts, SAND_ARRAY_SIZE(accounts),
+                              signers_seeds, SAND_ARRAY_SIZE(signers_seeds)));
 
     break;
   }
   case TEST_INSTRUCTION_META_TOO_LARGE: {
-    sol_log("Test instruction meta too large");
-    SolAccountMeta *arguments = sol_calloc(40, sizeof(SolAccountMeta));
-    sol_log_64(0, 0, 0, 0, (uint64_t)arguments);
-    sol_assert(0 != arguments);
+    sand_log("Test instruction meta too large");
+    SolAccountMeta *arguments = sand_calloc(40, sizeof(SolAccountMeta));
+    sand_log_64(0, 0, 0, 0, (uint64_t)arguments);
+    sand_assert(0 != arguments);
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, 40, data,
-                                        SOL_ARRAY_SIZE(data)};
+                                        SAND_ARRAY_SIZE(data)};
     const SolSignerSeeds signers_seeds[] = {};
-    sol_assert(SUCCESS == sol_invoke_signed(
-                              &instruction, accounts, SOL_ARRAY_SIZE(accounts),
-                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+    sand_assert(SUCCESS == sand_invoke_signed(
+                              &instruction, accounts, SAND_ARRAY_SIZE(accounts),
+                              signers_seeds, SAND_ARRAY_SIZE(signers_seeds)));
 
     break;
   }
   case TEST_RETURN_ERROR: {
-    sol_log("Test return error");
+    sand_log("Test return error");
     SolAccountMeta arguments[] = {{accounts[ARGUMENT_INDEX].key, false, true}};
     uint8_t data[] = {RETURN_ERROR};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
 
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
   case TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER: {
-    sol_log("Test privilege deescalation escalation signer");
-    sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
-    sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+    sand_log("Test privilege deescalation escalation signer");
+    sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+    sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
     SolAccountMeta arguments[] = {
         {accounts[INVOKED_PROGRAM_INDEX].key, false, false},
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     break;
   }
   case TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE: {
-    sol_log("Test privilege deescalation escalation writable");
-    sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
-    sol_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
+    sand_log("Test privilege deescalation escalation writable");
+    sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
+    sand_assert(true == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
     SolAccountMeta arguments[] = {
         {accounts[INVOKED_PROGRAM_INDEX].key, false, false},
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
     break;
   }
   case TEST_WRITABLE_DEESCALATION_WRITABLE: {
-    sol_log("Test writable deescalation");
+    sand_log("Test writable deescalation");
     uint8_t buffer[10];
     for (int i = 0; i < 10; i++) {
       buffer[i] = accounts[INVOKED_ARGUMENT_INDEX].data[i];
@@ -561,12 +561,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, false}};
     uint8_t data[] = {WRITE_ACCOUNT, 10};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
 
     for (int i = 0; i < 10; i++) {
-      sol_assert(buffer[i] == accounts[INVOKED_ARGUMENT_INDEX].data[i]);
+      sand_assert(buffer[i] == accounts[INVOKED_ARGUMENT_INDEX].data[i]);
     }
     break;
   }
@@ -575,7 +575,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     break;
   }
   case TEST_EXECUTABLE_LAMPORTS: {
-    sol_log("Test executable lamports");
+    sand_log("Test executable lamports");
     accounts[ARGUMENT_INDEX].executable = true;
     *accounts[ARGUMENT_INDEX].lamports -= 1;
     *accounts[DERIVED_KEY1_INDEX].lamports +=1;
@@ -585,22 +585,22 @@ extern uint64_t entrypoint(const uint8_t *input) {
     };
     uint8_t data[] = {ADD_LAMPORTS, 0, 0, 0};
     SolPubkey program_id;
-    sol_memcpy(&program_id, params.program_id, sizeof(SolPubkey));
+    sand_memcpy(&program_id, params.program_id, sizeof(SolPubkey));
     const SolInstruction instruction = {&program_id,
-					arguments, SOL_ARRAY_SIZE(arguments),
-					data, SOL_ARRAY_SIZE(data)};
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+					arguments, SAND_ARRAY_SIZE(arguments),
+					data, SAND_ARRAY_SIZE(data)};
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     *accounts[ARGUMENT_INDEX].lamports += 1;
     break;
   }
   case TEST_CALL_PRECOMPILE: {
-    sol_log("Test calling precompile from cpi");
+    sand_log("Test calling precompile from cpi");
     SolAccountMeta arguments[] = {};
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[ED25519_PROGRAM_INDEX].key,
-					arguments, SOL_ARRAY_SIZE(arguments),
-					data, SOL_ARRAY_SIZE(data)};
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+					arguments, SAND_ARRAY_SIZE(arguments),
+					data, SAND_ARRAY_SIZE(data)};
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
   case ADD_LAMPORTS: {
@@ -608,50 +608,50 @@ extern uint64_t entrypoint(const uint8_t *input) {
      break;
   }
   case TEST_RETURN_DATA_TOO_LARGE: {
-    sol_log("Test setting return data too long");
+    sand_log("Test setting return data too long");
     // The actual buffer doesn't matter, just pass null
-    sol_set_return_data(NULL, 1027);
+    sand_set_return_data(NULL, 1027);
     break;
   }
   case TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER: {
-    sol_log("Test duplicate privilege escalation signer");
+    sand_log("Test duplicate privilege escalation signer");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false},
         {accounts[DERIVED_KEY3_INDEX].key, false, false},
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
     // Signer privilege escalation will always fail the whole transaction
     instruction.accounts[1].is_signer = true;
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
   case TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE: {
-    sol_log("Test duplicate privilege escalation writable");
+    sand_log("Test duplicate privilege escalation writable");
     SolAccountMeta arguments[] = {
         {accounts[DERIVED_KEY3_INDEX].key, false, false},
         {accounts[DERIVED_KEY3_INDEX].key, false, false},
         {accounts[DERIVED_KEY3_INDEX].key, false, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, SOL_ARRAY_SIZE(data)};
-    sol_assert(SUCCESS ==
-               sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+                                        arguments, SAND_ARRAY_SIZE(arguments),
+                                        data, SAND_ARRAY_SIZE(data)};
+    sand_assert(SUCCESS ==
+               sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts)));
 
     // Writable privilege escalation will always fail the whole transaction
     instruction.accounts[1].is_writable = true;
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
+    sand_invoke(&instruction, accounts, SAND_ARRAY_SIZE(accounts));
     break;
   }
 
   default:
-    sol_panic();
+    sand_panic();
   }
 
   return SUCCESS;

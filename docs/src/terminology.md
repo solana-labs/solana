@@ -148,7 +148,7 @@ A [public key](#public-key-pubkey) and corresponding [private key](#private-key)
 
 ## lamport
 
-A fractional [native token](#native-token) with the value of 0.000000001 [sol](#sol).
+A fractional [native token](#native-token) with the value of 0.000000001 [sand](#sand).
 
 ## leader
 
@@ -261,7 +261,7 @@ Collectively, slots create a logical clock. Slots are ordered sequentially and n
 
 A program on a blockchain that can read and modify accounts over which it has control.
 
-## sol
+## sand
 
 The [native token](#native-token) of a Solana [cluster](#cluster).
 

@@ -23,35 +23,35 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
 
 #[allow(clippy::integer_arithmetic)]
 pub trait SyscallStubs: Sync + Send {
-    fn sol_log(&self, message: &str) {
+    fn sand_log(&self, message: &str) {
         println!("{}", message);
     }
-    fn sol_log_compute_units(&self) {
-        sol_log("SyscallStubs: sol_log_compute_units() not available");
+    fn sand_log_compute_units(&self) {
+        sand_log("SyscallStubs: sand_log_compute_units() not available");
     }
-    fn sol_invoke_signed(
+    fn sand_invoke_signed(
         &self,
         _instruction: &Instruction,
         _account_infos: &[AccountInfo],
         _signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
-        sol_log("SyscallStubs: sol_invoke_signed() not available");
+        sand_log("SyscallStubs: sand_invoke_signed() not available");
         Ok(())
     }
-    fn sol_get_clock_sysvar(&self, _var_addr: *mut u8) -> u64 {
+    fn sand_get_clock_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
-    fn sol_get_epoch_schedule_sysvar(&self, _var_addr: *mut u8) -> u64 {
+    fn sand_get_epoch_schedule_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
-    fn sol_get_fees_sysvar(&self, _var_addr: *mut u8) -> u64 {
+    fn sand_get_fees_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
-    fn sol_get_rent_sysvar(&self, _var_addr: *mut u8) -> u64 {
+    fn sand_get_rent_sysvar(&self, _var_addr: *mut u8) -> u64 {
         UNSUPPORTED_SYSVAR
     }
     /// # Safety
-    unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
+    unsafe fn sand_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
         assert!(
             is_nonoverlapping(src as usize, dst as usize, n),
@@ -60,11 +60,11 @@ pub trait SyscallStubs: Sync + Send {
         std::ptr::copy_nonoverlapping(src, dst, n as usize);
     }
     /// # Safety
-    unsafe fn sol_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
+    unsafe fn sand_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
         std::ptr::copy(src, dst, n as usize);
     }
     /// # Safety
-    unsafe fn sol_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
+    unsafe fn sand_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
         let mut i = 0;
         while i < n {
             let a = *s1.add(i);
@@ -78,23 +78,23 @@ pub trait SyscallStubs: Sync + Send {
         *result = 0
     }
     /// # Safety
-    unsafe fn sol_memset(&self, s: *mut u8, c: u8, n: usize) {
+    unsafe fn sand_memset(&self, s: *mut u8, c: u8, n: usize) {
         let s = std::slice::from_raw_parts_mut(s, n);
         for val in s.iter_mut().take(n) {
             *val = c;
         }
     }
-    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+    fn sand_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         None
     }
-    fn sol_set_return_data(&self, _data: &[u8]) {}
-    fn sol_log_data(&self, fields: &[&[u8]]) {
+    fn sand_set_return_data(&self, _data: &[u8]) {}
+    fn sand_log_data(&self, fields: &[&[u8]]) {
         println!("data: {}", fields.iter().map(base64::encode).join(" "));
     }
-    fn sol_get_processed_sibling_instruction(&self, _index: usize) -> Option<Instruction> {
+    fn sand_get_processed_sibling_instruction(&self, _index: usize) -> Option<Instruction> {
         None
     }
-    fn sol_get_stack_height(&self) -> u64 {
+    fn sand_get_stack_height(&self) -> u64 {
         0
     }
 }
@@ -102,22 +102,22 @@ pub trait SyscallStubs: Sync + Send {
 struct DefaultSyscallStubs {}
 impl SyscallStubs for DefaultSyscallStubs {}
 
-pub(crate) fn sol_log(message: &str) {
-    SYSCALL_STUBS.read().unwrap().sol_log(message);
+pub(crate) fn sand_log(message: &str) {
+    SYSCALL_STUBS.read().unwrap().sand_log(message);
 }
 
-pub(crate) fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
-    sol_log(&format!(
+pub(crate) fn sand_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
+    sand_log(&format!(
         "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     ));
 }
 
-pub(crate) fn sol_log_compute_units() {
-    SYSCALL_STUBS.read().unwrap().sol_log_compute_units();
+pub(crate) fn sand_log_compute_units() {
+    SYSCALL_STUBS.read().unwrap().sand_log_compute_units();
 }
 
-pub(crate) fn sol_invoke_signed(
+pub(crate) fn sand_invoke_signed(
     instruction: &Instruction,
     account_infos: &[AccountInfo],
     signers_seeds: &[&[&[u8]]],
@@ -125,73 +125,73 @@ pub(crate) fn sol_invoke_signed(
     SYSCALL_STUBS
         .read()
         .unwrap()
-        .sol_invoke_signed(instruction, account_infos, signers_seeds)
+        .sand_invoke_signed(instruction, account_infos, signers_seeds)
 }
 
-pub(crate) fn sol_get_clock_sysvar(var_addr: *mut u8) -> u64 {
-    SYSCALL_STUBS.read().unwrap().sol_get_clock_sysvar(var_addr)
+pub(crate) fn sand_get_clock_sysvar(var_addr: *mut u8) -> u64 {
+    SYSCALL_STUBS.read().unwrap().sand_get_clock_sysvar(var_addr)
 }
 
-pub(crate) fn sol_get_epoch_schedule_sysvar(var_addr: *mut u8) -> u64 {
+pub(crate) fn sand_get_epoch_schedule_sysvar(var_addr: *mut u8) -> u64 {
     SYSCALL_STUBS
         .read()
         .unwrap()
-        .sol_get_epoch_schedule_sysvar(var_addr)
+        .sand_get_epoch_schedule_sysvar(var_addr)
 }
 
-pub(crate) fn sol_get_fees_sysvar(_var_addr: *mut u8) -> u64 {
+pub(crate) fn sand_get_fees_sysvar(_var_addr: *mut u8) -> u64 {
     UNSUPPORTED_SYSVAR
 }
 
-pub(crate) fn sol_get_rent_sysvar(var_addr: *mut u8) -> u64 {
-    SYSCALL_STUBS.read().unwrap().sol_get_rent_sysvar(var_addr)
+pub(crate) fn sand_get_rent_sysvar(var_addr: *mut u8) -> u64 {
+    SYSCALL_STUBS.read().unwrap().sand_get_rent_sysvar(var_addr)
 }
 
-pub(crate) fn sol_memcpy(dst: *mut u8, src: *const u8, n: usize) {
+pub(crate) fn sand_memcpy(dst: *mut u8, src: *const u8, n: usize) {
     unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memcpy(dst, src, n);
+        SYSCALL_STUBS.read().unwrap().sand_memcpy(dst, src, n);
     }
 }
 
-pub(crate) fn sol_memmove(dst: *mut u8, src: *const u8, n: usize) {
+pub(crate) fn sand_memmove(dst: *mut u8, src: *const u8, n: usize) {
     unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memmove(dst, src, n);
+        SYSCALL_STUBS.read().unwrap().sand_memmove(dst, src, n);
     }
 }
 
-pub(crate) fn sol_memcmp(s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
+pub(crate) fn sand_memcmp(s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
     unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memcmp(s1, s2, n, result);
+        SYSCALL_STUBS.read().unwrap().sand_memcmp(s1, s2, n, result);
     }
 }
 
-pub(crate) fn sol_memset(s: *mut u8, c: u8, n: usize) {
+pub(crate) fn sand_memset(s: *mut u8, c: u8, n: usize) {
     unsafe {
-        SYSCALL_STUBS.read().unwrap().sol_memset(s, c, n);
+        SYSCALL_STUBS.read().unwrap().sand_memset(s, c, n);
     }
 }
 
-pub(crate) fn sol_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
-    SYSCALL_STUBS.read().unwrap().sol_get_return_data()
+pub(crate) fn sand_get_return_data() -> Option<(Pubkey, Vec<u8>)> {
+    SYSCALL_STUBS.read().unwrap().sand_get_return_data()
 }
 
-pub(crate) fn sol_set_return_data(data: &[u8]) {
-    SYSCALL_STUBS.read().unwrap().sol_set_return_data(data)
+pub(crate) fn sand_set_return_data(data: &[u8]) {
+    SYSCALL_STUBS.read().unwrap().sand_set_return_data(data)
 }
 
-pub(crate) fn sol_log_data(data: &[&[u8]]) {
-    SYSCALL_STUBS.read().unwrap().sol_log_data(data)
+pub(crate) fn sand_log_data(data: &[&[u8]]) {
+    SYSCALL_STUBS.read().unwrap().sand_log_data(data)
 }
 
-pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
+pub(crate) fn sand_get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
     SYSCALL_STUBS
         .read()
         .unwrap()
-        .sol_get_processed_sibling_instruction(index)
+        .sand_get_processed_sibling_instruction(index)
 }
 
-pub(crate) fn sol_get_stack_height() -> u64 {
-    SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
+pub(crate) fn sand_get_stack_height() -> u64 {
+    SYSCALL_STUBS.read().unwrap().sand_get_stack_height()
 }
 
 /// Check that two regions do not overlap.

@@ -15,7 +15,7 @@ use {
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        native_token::Sol,
+        native_token::Sand,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction, system_transaction,
@@ -884,8 +884,8 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
         if funding_key_balance < total + rent {
             error!(
                 "funder has {}, needed {}",
-                Sol(funding_key_balance),
-                Sol(total)
+                Sand(funding_key_balance),
+                Sand(total)
             );
             let latest_blockhash = get_latest_blockhash(client.as_ref());
             if client
@@ -919,13 +919,13 @@ mod tests {
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             fee_calculator::FeeRateGovernor, genesis_config::create_genesis_config,
-            native_token::sol_to_lamports,
+            native_token::sand_to_lamports,
         },
     };
 
     #[test]
     fn test_bench_tps_bank_client() {
-        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let (genesis_config, id) = create_genesis_config(sand_to_lamports(10_000.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
 
@@ -945,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_bench_tps_fund_keys() {
-        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let (genesis_config, id) = create_genesis_config(sand_to_lamports(10_000.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let client = Arc::new(BankClient::new(bank));
         let keypair_count = 20;
@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     fn test_bench_tps_fund_keys_with_fees() {
-        let (mut genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let (mut genesis_config, id) = create_genesis_config(sand_to_lamports(10_000.0));
         let fee_rate_governor = FeeRateGovernor::new(11, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let bank = Bank::new_for_tests(&genesis_config);

@@ -4,7 +4,7 @@ static const char msg[] = "This is a message";
 static const char msg2[] = "This is a different message";
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  sol_log((char*)msg);
-  sol_log((char*)msg2);
+  sand_log((char*)msg);
+  sand_log((char*)msg2);
   return SUCCESS;
 }

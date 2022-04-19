@@ -1,9 +1,9 @@
-//! Example Rust-based BPF program that uses sol_log_data syscall
+//! Example Rust-based BPF program that uses sand_log_data syscall
 
 #![cfg(feature = "program")]
 
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_data,
+    account_info::AccountInfo, entrypoint::ProgramResult, log::sand_log_data,
     program::set_return_data, pubkey::Pubkey,
 };
 
@@ -18,7 +18,7 @@ fn process_instruction(
 
     set_return_data(&[0x08, 0x01, 0x44]);
 
-    sol_log_data(&fields);
+    sand_log_data(&fields);
 
     Ok(())
 }

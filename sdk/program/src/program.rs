@@ -65,7 +65,7 @@ pub fn invoke_signed_unchecked(
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_invoke_signed_rust(
+            fn sand_invoke_signed_rust(
                 instruction_addr: *const u8,
                 account_infos_addr: *const u8,
                 account_infos_len: u64,
@@ -75,7 +75,7 @@ pub fn invoke_signed_unchecked(
         }
 
         let result = unsafe {
-            sol_invoke_signed_rust(
+            sand_invoke_signed_rust(
                 instruction as *const _ as *const u8,
                 account_infos as *const _ as *const u8,
                 account_infos.len() as u64,
@@ -90,10 +90,10 @@ pub fn invoke_signed_unchecked(
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::sol_invoke_signed(instruction, account_infos, signers_seeds)
+    crate::program_stubs::sand_invoke_signed(instruction, account_infos, signers_seeds)
 }
 
-/// Maximum size that can be set using sol_set_return_data()
+/// Maximum size that can be set using sand_set_return_data()
 pub const MAX_RETURN_DATA: usize = 1024;
 
 /// Set a program's return data
@@ -101,14 +101,14 @@ pub fn set_return_data(data: &[u8]) {
     #[cfg(target_arch = "bpf")]
     {
         extern "C" {
-            fn sol_set_return_data(data: *const u8, length: u64);
+            fn sand_set_return_data(data: *const u8, length: u64);
         }
 
-        unsafe { sol_set_return_data(data.as_ptr(), data.len() as u64) };
+        unsafe { sand_set_return_data(data.as_ptr(), data.len() as u64) };
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::sol_set_return_data(data)
+    crate::program_stubs::sand_set_return_data(data)
 }
 
 /// Get the return data from invoked program
@@ -118,14 +118,14 @@ pub fn get_return_data() -> Option<(Pubkey, Vec<u8>)> {
         use std::cmp::min;
 
         extern "C" {
-            fn sol_get_return_data(data: *mut u8, length: u64, program_id: *mut Pubkey) -> u64;
+            fn sand_get_return_data(data: *mut u8, length: u64, program_id: *mut Pubkey) -> u64;
         }
 
         let mut buf = [0u8; MAX_RETURN_DATA];
         let mut program_id = Pubkey::default();
 
         let size =
-            unsafe { sol_get_return_data(buf.as_mut_ptr(), buf.len() as u64, &mut program_id) };
+            unsafe { sand_get_return_data(buf.as_mut_ptr(), buf.len() as u64, &mut program_id) };
 
         if size == 0 {
             None
@@ -136,7 +136,7 @@ pub fn get_return_data() -> Option<(Pubkey, Vec<u8>)> {
     }
 
     #[cfg(not(target_arch = "bpf"))]
-    crate::program_stubs::sol_get_return_data()
+    crate::program_stubs::sand_get_return_data()
 }
 
 #[allow(clippy::integer_arithmetic)]

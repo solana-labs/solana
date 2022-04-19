@@ -6,7 +6,7 @@ This document describes how to create and use a file system wallet with the
 Solana CLI tools. A file system wallet exists as an unencrypted keypair file
 on your computer system's filesystem.
 
-> File system wallets are the **least secure** method of storing SOL tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
+> File system wallets are the **least secure** method of storing SAND tokens. Storing large amounts of tokens in a file system wallet is **not recommended**.
 
 ## Before you Begin
 

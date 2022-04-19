@@ -84,7 +84,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount_or_all)
-                        .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
+                        .help("The amount to load the nonce account with, in SAND; accepts keyword ALL"),
                 )
                 .arg(
                     pubkey!(Arg::with_name(NONCE_AUTHORITY_ARG.name)
@@ -141,12 +141,12 @@ impl NonceSubCommands for App<'_, '_> {
                     Arg::with_name("lamports")
                         .long("lamports")
                         .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                        .help("Display balance in lamports instead of SAND"),
                 ),
         )
         .subcommand(
             SubCommand::with_name("withdraw-from-nonce-account")
-                .about("Withdraw SOL from the nonce account")
+                .about("Withdraw SAND from the nonce account")
                 .arg(
                     pubkey!(Arg::with_name("nonce_account_pubkey")
                         .index(1)
@@ -159,7 +159,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .index(2)
                         .value_name("RECIPIENT_ADDRESS")
                         .required(true),
-                        "The account to which the SOL should be transferred. "),
+                        "The account to which the SAND should be transferred. "),
                 )
                 .arg(
                     Arg::with_name("amount")
@@ -168,7 +168,7 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .required(true)
                         .validator(is_amount)
-                        .help("The amount to withdraw from the nonce account, in SOL"),
+                        .help("The amount to withdraw from the nonce account, in SAND"),
                 )
                 .arg(nonce_authority_arg())
                 .arg(memo_arg()),
@@ -301,7 +301,7 @@ pub fn parse_withdraw_from_nonce_account(
     let nonce_account = pubkey_of_signer(matches, "nonce_account_pubkey", wallet_manager)?.unwrap();
     let destination_account_pubkey =
         pubkey_of_signer(matches, "destination_account_pubkey", wallet_manager)?.unwrap();
-    let lamports = lamports_of_sol(matches, "amount").unwrap();
+    let lamports = lamports_of_sand(matches, "amount").unwrap();
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
     let (nonce_authority, nonce_authority_pubkey) =
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;

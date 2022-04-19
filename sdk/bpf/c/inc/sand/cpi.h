@@ -3,9 +3,9 @@
  * @brief Solana Cross-Program Invocation
  */
 
-#include <sol/types.h>
-#include <sol/pubkey.h>
-#include <sol/entrypoint.h>
+#include <sand/types.h>
+#include <sand/pubkey.h>
+#include <sand/entrypoint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,7 +34,7 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
-uint64_t sol_invoke_signed_c(
+uint64_t sand_invoke_signed_c(
   const SolInstruction *instruction,
   const SolAccountInfo *account_infos,
   int account_infos_len,
@@ -51,14 +51,14 @@ uint64_t sol_invoke_signed_c(
  * @param seeds Seed bytes used to sign program accounts
  * @param seeds_len Length of the seeds array
  */
-static uint64_t sol_invoke_signed(
+static uint64_t sand_invoke_signed(
     const SolInstruction *instruction,
     const SolAccountInfo *account_infos,
     int account_infos_len,
     const SolSignerSeeds *signers_seeds,
     int signers_seeds_len
 ) {
-  return sol_invoke_signed_c(
+  return sand_invoke_signed_c(
     instruction,
     account_infos,
     account_infos_len,
@@ -73,13 +73,13 @@ static uint64_t sol_invoke_signed(
  * @param account_infos Accounts used by instruction
  * @param account_infos_len Length of account_infos array
 */
-static uint64_t sol_invoke(
+static uint64_t sand_invoke(
     const SolInstruction *instruction,
     const SolAccountInfo *account_infos,
     int account_infos_len
 ) {
   const SolSignerSeeds signers_seeds[] = {{}};
-  return sol_invoke_signed(
+  return sand_invoke_signed(
     instruction,
     account_infos,
     account_infos_len,

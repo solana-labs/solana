@@ -35,7 +35,7 @@ use {
         instruction::{Instruction, InstructionError},
         loader_instruction,
         message::Message,
-        native_token::Sol,
+        native_token::Sand,
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
@@ -175,7 +175,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("allow_excessive_balance")
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
-                                .help("Use the designated program id even if the account already holds a large balance of SOL")
+                                .help("Use the designated program id even if the account already holds a large balance of SAND")
                         ),
                 )
                 .subcommand(
@@ -319,7 +319,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("lamports")
                                 .long("lamports")
                                 .takes_value(false)
-                                .help("Display balance in lamports instead of SOL"),
+                                .help("Display balance in lamports instead of SAND"),
                         ),
                 )
                 .subcommand(
@@ -379,7 +379,7 @@ impl ProgramSubCommands for App<'_, '_> {
                             Arg::with_name("lamports")
                                 .long("lamports")
                                 .takes_value(false)
-                                .help("Display balance in lamports instead of SOL"),
+                                .help("Display balance in lamports instead of SAND"),
                         ),
                 )
         )
@@ -414,7 +414,7 @@ impl ProgramSubCommands for App<'_, '_> {
                     Arg::with_name("allow_excessive_balance")
                         .long("allow-excessive-deploy-account-balance")
                         .takes_value(false)
-                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
+                        .help("Use the designated program id, even if the account already holds a large balance of SAND")
                 )
                 .arg(
                     Arg::with_name("skip_fee_check")
@@ -2095,7 +2095,7 @@ fn complete_partial_program_init(
         {
             return Err(format!(
                 "Buffer account has a balance: {:?}; it may already be in use",
-                Sol(account.lamports)
+                Sand(account.lamports)
             )
             .into());
         }

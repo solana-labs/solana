@@ -268,7 +268,7 @@ function DetailsSections({
       {flaggedAccounts.has(address) && (
         <div className="alert alert-danger alert-scam" role="alert">
           Warning! This account has been flagged by the community as a scam
-          account. Please be cautious sending SOL to this account.
+          account. Please be cautious sending SAND to this account.
         </div>
       )}
       <InfoSection account={account} />

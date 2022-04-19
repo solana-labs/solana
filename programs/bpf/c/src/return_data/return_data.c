@@ -10,30 +10,30 @@ extern uint64_t entrypoint(const uint8_t *input) {
   SolPubkey me;
 
   // There should be no return data on entry
-  uint64_t ret = sol_get_return_data(NULL, 0, NULL);
+  uint64_t ret = sand_get_return_data(NULL, 0, NULL);
 
-  sol_assert(ret == 0);
+  sand_assert(ret == 0);
 
   // set some return data
-  sol_set_return_data((const uint8_t*)DATA, sizeof(DATA));
+  sand_set_return_data((const uint8_t*)DATA, sizeof(DATA));
 
   // ensure the length is correct
-  ret = sol_get_return_data(NULL, 0, &me);
-  sol_assert(ret == sizeof(DATA));
+  ret = sand_get_return_data(NULL, 0, &me);
+  sand_assert(ret == sizeof(DATA));
 
   // try getting a subset
-  ret = sol_get_return_data(buf, 4, &me);
+  ret = sand_get_return_data(buf, 4, &me);
 
-  sol_assert(ret == sizeof(DATA));
+  sand_assert(ret == sizeof(DATA));
 
-  sol_assert(!sol_memcmp(buf, "the ", 4));
+  sand_assert(!sand_memcmp(buf, "the ", 4));
 
   // try getting the whole thing
-  ret = sol_get_return_data(buf, sizeof(buf), &me);
+  ret = sand_get_return_data(buf, sizeof(buf), &me);
 
-  sol_assert(ret == sizeof(DATA));
+  sand_assert(ret == sizeof(DATA));
 
-  sol_assert(!sol_memcmp(buf, (const uint8_t*)DATA, sizeof(DATA)));
+  sand_assert(!sand_memcmp(buf, (const uint8_t*)DATA, sizeof(DATA)));
 
   // done
   return SUCCESS;

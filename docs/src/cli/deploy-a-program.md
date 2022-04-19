@@ -111,7 +111,7 @@ solana program deploy --max-len 200000 <PROGRAM_FILEPATH>
 
 Note that program accounts are required to be
 [rent-exempt](developing/programming-model/accounts.md#rent-exemption), and the
-`max-len` is fixed after initial deployment, so any SOL in the program accounts
+`max-len` is fixed after initial deployment, so any SAND in the program accounts
 is locked up permanently.
 
 ### Resuming a failed deploy

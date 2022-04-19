@@ -9,6 +9,6 @@ pub use solana_program::log::*;
 )]
 macro_rules! info {
     ($msg:expr) => {
-        $crate::log::sol_log($msg)
+        $crate::log::sand_log($msg)
     };
 }

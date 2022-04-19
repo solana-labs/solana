@@ -46,8 +46,8 @@ anchor() {
   git clone https://github.com/project-serum/anchor.git
   cd anchor
 
-  update_solana_dependencies . "$solana_ver"
-  patch_crates_io_solana Cargo.toml "$solana_dir"
+  update_sandana_dependencies . "$solana_ver"
+  patch_crates_io_sandana Cargo.toml "$solana_dir"
 
   $cargo build
   $cargo test
@@ -65,9 +65,9 @@ mango() {
     git clone https://github.com/blockworks-foundation/mango-v3
     cd mango-v3
 
-    update_solana_dependencies . "$solana_ver"
+    update_sandana_dependencies . "$solana_ver"
     update_anchor_dependencies . "$anchor_ver"
-    patch_crates_io_solana Cargo.toml "$solana_dir"
+    patch_crates_io_sandana Cargo.toml "$solana_dir"
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
     $cargo build
@@ -84,9 +84,9 @@ metaplex() {
     git clone https://github.com/metaplex-foundation/metaplex-program-library
     cd metaplex-program-library
 
-    update_solana_dependencies . "$solana_ver"
+    update_sandana_dependencies . "$solana_ver"
     update_anchor_dependencies . "$anchor_ver"
-    patch_crates_io_solana Cargo.toml "$solana_dir"
+    patch_crates_io_sandana Cargo.toml "$solana_dir"
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
     $cargo build

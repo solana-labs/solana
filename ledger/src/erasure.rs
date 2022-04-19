@@ -42,7 +42,7 @@
 //!
 
 use {
-    reed_solomon_erasure::{galois_8::Field, ReconstructShard, ReedSolomon},
+    reed_sandomon_erasure::{galois_8::Field, ReconstructShard, ReedSolomon},
     serde::{Deserialize, Serialize},
 };
 
@@ -69,7 +69,7 @@ impl ErasureConfig {
     }
 }
 
-type Result<T> = std::result::Result<T, reed_solomon_erasure::Error>;
+type Result<T> = std::result::Result<T, reed_sandomon_erasure::Error>;
 
 /// Represents an erasure "session" with a particular configuration and number of data and coding
 /// shreds

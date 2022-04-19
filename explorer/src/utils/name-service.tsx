@@ -80,7 +80,7 @@ export async function performReverseLookup(
       }
       const nameLength = new BN(name!.data.slice(0, 4), "le").toNumber();
       return {
-        name: name.data.slice(4, 4 + nameLength).toString() + ".sol",
+        name: name.data.slice(4, 4 + nameLength).toString() + ".sand",
         address: name.address,
         class: name.class,
       };

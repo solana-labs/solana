@@ -126,7 +126,7 @@ The identities of the
 
 A permissionless, persistent cluster for early token holders and launch partners.
 
-- Tokens that are issued on Mainnet Beta are **real** SOL
+- Tokens that are issued on Mainnet Beta are **real** SAND
 - If you have paid money to purchase/be issued tokens, such as through our
   CoinList auction, these tokens will be transferred on Mainnet Beta.
   - Note: If you are using a non-command-line wallet, the wallet will always be

@@ -29,10 +29,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
                           0x23, 0x5f, 0x96, 0xd8, 0xf0, 0x72, 0x01, 0x2d};
   uint64_t recovery_id = 1;
 
-  uint64_t result_code = sol_secp256k1_recover(hash, recovery_id, signature, result);
+  uint64_t result_code = sand_secp256k1_recover(hash, recovery_id, signature, result);
 
-  sol_assert(0 == result_code);
-  sol_assert(0 == sol_memcmp(result, expected, SHA256_RESULT_LENGTH));
+  sand_assert(0 == result_code);
+  sand_assert(0 == sand_memcmp(result, expected, SHA256_RESULT_LENGTH));
 
   return SUCCESS;
 }

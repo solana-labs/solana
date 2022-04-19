@@ -36,7 +36,7 @@ pub fn process_instruction(
     // the no-op program, no account keys or input data are expected but real
     // programs will have specific requirements so they can do their work.
     msg!("Account keys and instruction input data:");
-    sol_log_params(accounts, instruction_data);
+    sand_log_params(accounts, instruction_data);
 
     {
         // Test - use std methods, unwrap
@@ -73,7 +73,7 @@ pub fn process_instruction(
 
     check_type_assumptions();
 
-    sol_log_compute_units();
+    sand_log_compute_units();
     Ok(())
 }
 

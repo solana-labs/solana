@@ -79,7 +79,7 @@ READ_ELF_FLAGS := \
 
 TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)../dependencies/criterion/lib)
 TESTFRAMEWORK_FLAGS := \
-  -DSOL_TEST \
+  -DSAND_TEST \
   -isystem $(LOCAL_PATH)../dependencies/criterion/include \
   -L $(LOCAL_PATH)../dependencies/criterion/lib \
   -rpath $(TESTFRAMEWORK_RPATH) \

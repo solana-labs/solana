@@ -9,7 +9,7 @@ use {
         input_validators::{is_amount, is_rfc3339_datetime, is_valid_pubkey, is_valid_signer},
     },
     solana_cli_config::CONFIG_FILE,
-    solana_sdk::native_token::sol_to_lamports,
+    solana_sdk::native_token::sand_to_lamports,
     std::{ffi::OsString, process::exit},
 };
 
@@ -173,7 +173,7 @@ where
                         .takes_value(true)
                         .value_name("AMOUNT")
                         .validator(is_amount)
-                        .help("Amount to move into the new stake accounts, in SOL"),
+                        .help("Amount to move into the new stake accounts, in SAND"),
                 )
                 .arg(
                     Arg::with_name("stake_authority")
@@ -281,7 +281,7 @@ fn parse_new_args(matches: &ArgMatches<'_>) -> NewArgs<String, String> {
     NewArgs {
         fee_payer: value_t_or_exit!(matches, "fee_payer", String),
         funding_keypair: value_t_or_exit!(matches, "funding_keypair", String),
-        lamports: sol_to_lamports(value_t_or_exit!(matches, "amount", f64)),
+        lamports: sand_to_lamports(value_t_or_exit!(matches, "amount", f64)),
         base_keypair: value_t_or_exit!(matches, "base_keypair", String),
         stake_authority: value_t_or_exit!(matches, "stake_authority", String),
         withdraw_authority: value_t_or_exit!(matches, "withdraw_authority", String),

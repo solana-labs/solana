@@ -30,7 +30,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::{Instruction, InstructionError},
-        native_token::sol_to_lamports,
+        native_token::sand_to_lamports,
         poh_config::PohConfig,
         program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
@@ -235,12 +235,12 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
 
 struct SyscallStubs {}
 impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
-    fn sol_log(&self, message: &str) {
+    fn sand_log(&self, message: &str) {
         let invoke_context = get_invoke_context();
         ic_msg!(invoke_context, "Program log: {}", message);
     }
 
-    fn sol_invoke_signed(
+    fn sand_invoke_signed(
         &self,
         instruction: &Instruction,
         account_infos: &[AccountInfo],
@@ -344,14 +344,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         Ok(())
     }
 
-    fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
+    fn sand_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(
             get_invoke_context().get_sysvar_cache().get_clock(),
             var_addr,
         )
     }
 
-    fn sol_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
+    fn sand_get_epoch_schedule_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(
             get_invoke_context().get_sysvar_cache().get_epoch_schedule(),
             var_addr,
@@ -359,20 +359,20 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
     }
 
     #[allow(deprecated)]
-    fn sol_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
+    fn sand_get_fees_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_fees(), var_addr)
     }
 
-    fn sol_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
+    fn sand_get_rent_sysvar(&self, var_addr: *mut u8) -> u64 {
         get_sysvar(get_invoke_context().get_sysvar_cache().get_rent(), var_addr)
     }
 
-    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+    fn sand_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
         let (program_id, data) = get_invoke_context().transaction_context.get_return_data();
         Some((*program_id, data.to_vec()))
     }
 
-    fn sol_set_return_data(&self, data: &[u8]) {
+    fn sand_set_return_data(&self, data: &[u8]) {
         let invoke_context = get_invoke_context();
         let transaction_context = &mut invoke_context.transaction_context;
         let instruction_context = transaction_context
@@ -751,13 +751,13 @@ impl ProgramTest {
         let fee_rate_governor = FeeRateGovernor::default();
         let bootstrap_validator_pubkey = Pubkey::new_unique();
         let bootstrap_validator_stake_lamports =
-            rent.minimum_balance(VoteState::size_of()) + sol_to_lamports(1_000_000.0);
+            rent.minimum_balance(VoteState::size_of()) + sand_to_lamports(1_000_000.0);
 
         let mint_keypair = Keypair::new();
         let voting_keypair = Keypair::new();
 
         let mut genesis_config = create_genesis_config_with_leader_ex(
-            sol_to_lamports(1_000_000.0),
+            sand_to_lamports(1_000_000.0),
             &mint_keypair.pubkey(),
             &bootstrap_validator_pubkey,
             &voting_keypair.pubkey(),
@@ -891,7 +891,7 @@ impl ProgramTest {
     /// Start the test client
     ///
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
-    /// with SOL for sending transactions
+    /// with SAND for sending transactions
     pub async fn start_with_context(self) -> ProgramTestContext {
         let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;

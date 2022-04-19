@@ -11,7 +11,7 @@ import * as web3 from '@solana/web3.js';
   var from = web3.Keypair.generate();
   var airdropSignature = await connection.requestAirdrop(
     from.publicKey,
-    web3.LAMPORTS_PER_SOL,
+    web3.LAMPORTS_PER_SAND,
   );
   await connection.confirmTransaction(airdropSignature);
 
@@ -23,7 +23,7 @@ import * as web3 from '@solana/web3.js';
     web3.SystemProgram.transfer({
       fromPubkey: from.publicKey,
       toPubkey: to.publicKey,
-      lamports: web3.LAMPORTS_PER_SOL / 100,
+      lamports: web3.LAMPORTS_PER_SAND / 100,
     }),
   );
 

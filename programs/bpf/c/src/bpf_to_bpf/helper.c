@@ -6,5 +6,5 @@
 #include "helper.h"
 
 void helper_function(void) {
-  sol_log(__FILE__);
+  sand_log(__FILE__);
 }

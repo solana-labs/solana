@@ -16,14 +16,14 @@ $ solana-keygen pubkey
 <PUBKEY>
 ```
 
-### Airdrop SOL/Lamports
+### Airdrop SAND/Lamports
 
 ```bash
 // Command
 $ solana airdrop 1
 
 // Return
-"1 SOL"
+"1 SAND"
 ```
 
 ### Get Balance
@@ -33,7 +33,7 @@ $ solana airdrop 1
 $ solana balance
 
 // Return
-"3.00050001 SOL"
+"3.00050001 SAND"
 ```
 
 ### Confirm Transaction

@@ -14,7 +14,7 @@ use {
     solana_client::{client_error::ClientError, rpc_client::RpcClient},
     solana_sdk::{
         message::Message,
-        native_token::lamports_to_sol,
+        native_token::lamports_to_sand,
         pubkey::Pubkey,
         signature::{unique_signers, Signature, Signer},
         signers::Signers,
@@ -262,8 +262,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             let balances = get_balances(&client, addresses)?;
             let lamports: u64 = balances.into_iter().map(|(_, bal)| bal).sum();
-            let sol = lamports_to_sol(lamports);
-            println!("{} SOL", sol);
+            let sand = lamports_to_sand(lamports);
+            println!("{} SAND", sand);
         }
         Command::Authorize(args) => {
             process_authorize_stake_accounts(&client, &args)?;

@@ -117,7 +117,7 @@ A transaction in Solana-Web3.js is created using the [`Transaction`](javascript-
 Take the example of a transfer transaction:
 
 ```javascript
-const {Keypair, Transaction, SystemProgram, LAMPORTS_PER_SOL} = require("@solana/web3.js");
+const {Keypair, Transaction, SystemProgram, LAMPORTS_PER_SAND} = require("@solana/web3.js");
 
 let fromKeypair = Keypair.generate();
 let toKeypair = Keypair.generate();
@@ -127,7 +127,7 @@ transaction.add(
   SystemProgram.transfer({
     fromPubkey: fromKeypair.publicKey,
     toPubkey: toKeypair.publicKey,
-    lamports: LAMPORTS_PER_SOL
+    lamports: LAMPORTS_PER_SAND
   })
 );
 ```
@@ -179,13 +179,13 @@ let connection = new web3.Connection(web3.clusterApiUrl('testnet'));
 
 let airdropSignature = await connection.requestAirdrop(
   payer.publicKey,
-  web3.LAMPORTS_PER_SOL,
+  web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);
 ```
 
-First, we set up the account Keypair and connection so that we have an account to make allocate on the testnet. We also create a payer Keypair and airdrop some sol so we can pay for the allocate transaction.
+First, we set up the account Keypair and connection so that we have an account to make allocate on the testnet. We also create a payer Keypair and airdrop some sand so we can pay for the allocate transaction.
 
 ```javascript
 let allocateTransaction = new web3.Transaction({
@@ -301,7 +301,7 @@ let connection = new web3.Connection(web3.clusterApiUrl('testnet'));
 
 let airdropSignature = await connection.requestAirdrop(
   payer.publicKey,
-  web3.LAMPORTS_PER_SOL,
+  web3.LAMPORTS_PER_SAND,
 );
 
 await connection.confirmTransaction(airdropSignature);

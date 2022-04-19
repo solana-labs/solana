@@ -22,7 +22,7 @@ use {
         fee_calculator::FeeRateGovernor,
         genesis_config::{ClusterType, GenesisConfig},
         inflation::Inflation,
-        native_token::sol_to_lamports,
+        native_token::sand_to_lamports,
         poh_config::PohConfig,
         pubkey::Pubkey,
         rent::Rent,
@@ -130,11 +130,11 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     };
 
     // vote account
-    let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
+    let default_bootstrap_validator_lamports = &sand_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
         .to_string();
     // stake account
-    let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
+    let default_bootstrap_validator_stake_lamports = &sand_to_lamports(0.5)
         .max(StakeState::get_rent_exempt_reserve(&rent))
         .to_string();
 

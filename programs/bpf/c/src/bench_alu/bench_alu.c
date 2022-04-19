@@ -23,7 +23,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     }
   }
 
-  // sol_log_64(x, count, 0, 0, 0);
+  // sand_log_64(x, count, 0, 0, 0);
   *result = count;
   return SUCCESS;
 }

@@ -181,7 +181,7 @@ pub mod reduce_required_deploy_balance {
     solana_sdk::declare_id!("EBeznQDjcPG8491sFsKZYBi5S5jTVXMpAKNDJMQPS2kq");
 }
 
-pub mod sol_log_data_syscall_enabled {
+pub mod sand_log_data_syscall_enabled {
     solana_sdk::declare_id!("6uaHcKPGUy4J7emLBgUTeufhJdiwhngW6a1R9B7c2ob9");
 }
 
@@ -381,9 +381,9 @@ lazy_static! {
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
         (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20265"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
-        (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
+        (return_data_syscall_enabled::id(), "enable sand_{set,get}_return_data syscall"),
         (reduce_required_deploy_balance::id(), "reduce required payer balance for program deploys"),
-        (sol_log_data_syscall_enabled::id(), "enable sol_log_data syscall"),
+        (sand_log_data_syscall_enabled::id(), "enable sand_log_data syscall"),
         (stakes_remove_delegation_if_inactive::id(), "remove delegations from stakes cache when inactive"),
         (do_support_realloc::id(), "support account data reallocation"),
         (prevent_calling_precompiles_as_programs::id(), "prevent calling precompiles as programs"),

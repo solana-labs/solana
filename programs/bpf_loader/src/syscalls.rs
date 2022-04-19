@@ -26,7 +26,7 @@ use {
             do_support_realloc, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
+            secp256k1_recover_syscall_enabled, sand_log_data_syscall_enabled,
             syscall_saturated_math, update_syscall_base_costs, zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
@@ -121,40 +121,40 @@ pub fn register_syscalls(
     let mut syscall_registry = SyscallRegistry::default();
 
     syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_panic_", SyscallPanic::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_panic_", SyscallPanic::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_log_", SyscallLog::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_log_64_", SyscallLogU64::call)?;
 
     syscall_registry
-        .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+        .register_syscall_by_name(b"sand_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
 
-    syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_log_pubkey", SyscallLogPubkey::call)?;
 
     syscall_registry.register_syscall_by_name(
-        b"sol_create_program_address",
+        b"sand_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
     syscall_registry.register_syscall_by_name(
-        b"sol_try_find_program_address",
+        b"sand_try_find_program_address",
         SyscallTryFindProgramAddress::call,
     )?;
 
-    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_sha256", SyscallSha256::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_keccak256", SyscallKeccak256::call)?;
 
     if invoke_context
         .feature_set
         .is_active(&secp256k1_recover_syscall_enabled::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+            .register_syscall_by_name(b"sand_secp256k1_recover", SyscallSecp256k1Recover::call)?;
     }
 
     if invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id())
     {
-        syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
+        syscall_registry.register_syscall_by_name(b"sand_blake3", SyscallBlake3::call)?;
     }
 
     if invoke_context
@@ -162,21 +162,21 @@ pub fn register_syscalls(
         .is_active(&zk_token_sdk_enabled::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
+            .register_syscall_by_name(b"sand_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
         syscall_registry.register_syscall_by_name(
-            b"sol_zk_token_elgamal_op_with_lo_hi",
+            b"sand_zk_token_elgamal_op_with_lo_hi",
             SyscallZkTokenElgamalOpWithLoHi::call,
         )?;
         syscall_registry.register_syscall_by_name(
-            b"sol_zk_token_elgamal_op_with_scalar",
+            b"sand_zk_token_elgamal_op_with_scalar",
             SyscallZkTokenElgamalOpWithScalar::call,
         )?;
     }
 
     syscall_registry
-        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+        .register_syscall_by_name(b"sand_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
-        b"sol_get_epoch_schedule_sysvar",
+        b"sand_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
     if !invoke_context
@@ -184,24 +184,24 @@ pub fn register_syscalls(
         .is_active(&disable_fees_sysvar::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+            .register_syscall_by_name(b"sand_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
     }
     syscall_registry
-        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+        .register_syscall_by_name(b"sand_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
-    syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_memcpy_", SyscallMemcpy::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_memmove_", SyscallMemmove::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_memcmp_", SyscallMemcmp::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_memset_", SyscallMemset::call)?;
 
     // Cross-program invocation syscalls
     syscall_registry
-        .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+        .register_syscall_by_name(b"sand_invoke_signed_c", SyscallInvokeSignedC::call)?;
     syscall_registry
-        .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+        .register_syscall_by_name(b"sand_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
     // Memory allocator
-    syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
+    syscall_registry.register_syscall_by_name(b"sand_alloc_free_", SyscallAllocFree::call)?;
 
     // Return data
     if invoke_context
@@ -209,17 +209,17 @@ pub fn register_syscalls(
         .is_active(&return_data_syscall_enabled::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
+            .register_syscall_by_name(b"sand_set_return_data", SyscallSetReturnData::call)?;
         syscall_registry
-            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+            .register_syscall_by_name(b"sand_get_return_data", SyscallGetReturnData::call)?;
     }
 
     // Log data
     if invoke_context
         .feature_set
-        .is_active(&sol_log_data_syscall_enabled::id())
+        .is_active(&sand_log_data_syscall_enabled::id())
     {
-        syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
+        syscall_registry.register_syscall_by_name(b"sand_log_data", SyscallLogData::call)?;
     }
 
     if invoke_context
@@ -227,7 +227,7 @@ pub fn register_syscalls(
         .is_active(&add_get_processed_sibling_instruction_syscall::id())
     {
         syscall_registry.register_syscall_by_name(
-            b"sol_get_processed_sibling_instruction",
+            b"sand_get_processed_sibling_instruction",
             SyscallGetProcessedSiblingInstruction::call,
         )?;
     }
@@ -237,7 +237,7 @@ pub fn register_syscalls(
         .is_active(&add_get_processed_sibling_instruction_syscall::id())
     {
         syscall_registry
-            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+            .register_syscall_by_name(b"sand_get_stack_height", SyscallGetStackHeight::call)?;
     }
 
     Ok(syscall_registry)
@@ -273,9 +273,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_return_data_syscall_active = invoke_context
         .feature_set
         .is_active(&return_data_syscall_enabled::id());
-    let is_sol_log_data_syscall_active = invoke_context
+    let is_sand_log_data_syscall_active = invoke_context
         .feature_set
-        .is_active(&sol_log_data_syscall_enabled::id());
+        .is_active(&sand_log_data_syscall_enabled::id());
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&zk_token_sdk_enabled::id());
@@ -481,10 +481,10 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         }),
     );
 
-    // sol_log_data
+    // sand_log_data
     bind_feature_gated_syscall_context_object!(
         vm,
-        is_sol_log_data_syscall_active,
+        is_sand_log_data_syscall_active,
         Box::new(SyscallLogData {
             invoke_context: invoke_context.clone(),
         }),
@@ -673,7 +673,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAbort<'a, 'b> {
     }
 }
 
-/// Panic syscall function, called when the BPF program calls 'sol_panic_()`
+/// Panic syscall function, called when the BPF program calls 'sand_panic_()`
 /// Causes the BPF program to be halted immediately
 /// Log a user's info message
 pub struct SyscallPanic<'a, 'b> {
@@ -879,7 +879,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
 }
 
 /// Dynamic memory allocation syscall called when the BPF program calls
-/// `sol_alloc_free_()`.  The allocator is expected to allocate/free
+/// `sand_alloc_free_()`.  The allocator is expected to allocate/free
 /// from/to a given chunk of memory and enforce size restrictions.  The
 /// memory chunk is given to the allocator during allocator creation and
 /// information about that memory (start address and size) is passed
@@ -3817,7 +3817,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "UserError(SyscallError(Panic(\"Gaggablaghblagh!\", 42, 84)))")]
-    fn test_syscall_sol_panic() {
+    fn test_syscall_sand_panic() {
         prepare_mockup!(
             invoke_context,
             transaction_context,
@@ -3889,14 +3889,14 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol_log() {
+    fn test_syscall_sand_log() {
         prepare_mockup!(
             invoke_context,
             transaction_context,
             program_id,
             bpf_loader::id(),
         );
-        let mut syscall_sol_log = SyscallLog {
+        let mut syscall_sand_log = SyscallLog {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
@@ -3918,14 +3918,14 @@ mod tests {
         )
         .unwrap();
 
-        syscall_sol_log
+        syscall_sand_log
             .invoke_context
             .borrow_mut()
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(400 - 1);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log.call(
+        syscall_sand_log.call(
             0x100000001, // AccessViolation
             string.len() as u64,
             0,
@@ -3936,7 +3936,7 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000001, string.len() as u64);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log.call(
+        syscall_sand_log.call(
             0x100000000,
             string.len() as u64 * 2, // AccessViolation
             0,
@@ -3948,7 +3948,7 @@ mod tests {
         assert_access_violation!(result, 0x100000000, string.len() as u64 * 2);
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log.call(
+        syscall_sand_log.call(
             0x100000000,
             string.len() as u64,
             0,
@@ -3959,7 +3959,7 @@ mod tests {
         );
         result.unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log.call(
+        syscall_sand_log.call(
             0x100000000,
             string.len() as u64,
             0,
@@ -3976,7 +3976,7 @@ mod tests {
         );
 
         assert_eq!(
-            syscall_sol_log
+            syscall_sand_log
                 .invoke_context
                 .borrow()
                 .get_log_collector()
@@ -3988,7 +3988,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol_log_u64() {
+    fn test_syscall_sand_log_u64() {
         prepare_mockup!(
             invoke_context,
             transaction_context,
@@ -3996,11 +3996,11 @@ mod tests {
             bpf_loader::id(),
         );
         let cost = invoke_context.get_compute_budget().log_64_units;
-        let mut syscall_sol_log_u64 = SyscallLogU64 {
+        let mut syscall_sand_log_u64 = SyscallLogU64 {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        syscall_sol_log_u64
+        syscall_sand_log_u64
             .invoke_context
             .borrow_mut()
             .get_compute_meter()
@@ -4009,11 +4009,11 @@ mod tests {
         let config = Config::default();
         let memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
+        syscall_sand_log_u64.call(1, 2, 3, 4, 5, &memory_mapping, &mut result);
         result.unwrap();
 
         assert_eq!(
-            syscall_sol_log_u64
+            syscall_sand_log_u64
                 .invoke_context
                 .borrow()
                 .get_log_collector()
@@ -4025,7 +4025,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol_pubkey() {
+    fn test_syscall_sand_pubkey() {
         prepare_mockup!(
             invoke_context,
             transaction_context,
@@ -4033,7 +4033,7 @@ mod tests {
             bpf_loader::id(),
         );
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
-        let mut syscall_sol_pubkey = SyscallLogPubkey {
+        let mut syscall_sand_pubkey = SyscallLogPubkey {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
@@ -4056,7 +4056,7 @@ mod tests {
         .unwrap();
 
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_pubkey.call(
+        syscall_sand_pubkey.call(
             0x100000001, // AccessViolation
             32,
             0,
@@ -4067,14 +4067,14 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000001, 32);
 
-        syscall_sol_pubkey
+        syscall_sand_pubkey
             .invoke_context
             .borrow_mut()
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(1);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_pubkey.call(100, 32, 0, 0, 0, &memory_mapping, &mut result);
+        syscall_sand_pubkey.call(100, 32, 0, 0, 0, &memory_mapping, &mut result);
         assert_eq!(
             Err(EbpfError::UserError(BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
@@ -4082,18 +4082,18 @@ mod tests {
             result
         );
 
-        syscall_sol_pubkey
+        syscall_sand_pubkey
             .invoke_context
             .borrow_mut()
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
-        syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
+        syscall_sand_pubkey.call(0x100000000, 0, 0, 0, 0, &memory_mapping, &mut result);
         result.unwrap();
 
         assert_eq!(
-            syscall_sol_pubkey
+            syscall_sand_pubkey
                 .invoke_context
                 .borrow()
                 .get_log_collector()
@@ -4105,7 +4105,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_sol_alloc_free() {
+    fn test_syscall_sand_alloc_free() {
         let config = Config::default();
 
         // large alloc

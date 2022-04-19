@@ -1,7 +1,7 @@
 #pragma once
 #include <solana_sdk.h>
 
-#define memcpy sol_memcpy
-#define memset sol_memset
-#define strlen sol_strlen
+#define memcpy sand_memcpy
+#define memset sand_memset
+#define strlen sand_strlen
 

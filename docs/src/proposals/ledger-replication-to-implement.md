@@ -24,7 +24,7 @@ Our improvement on this approach is to randomly sample the encrypted segments fa
 
 Validators for PoRep are the same validators that are verifying transactions. If an archiver can prove that a validator verified a fake PoRep, then the validator will not receive a reward for that storage epoch.
 
-Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sol from the mining pool.
+Archivers are specialized _light clients_. They download a part of the ledger \(a.k.a Segment\) and store it, and provide PoReps of storing the ledger. For each verified PoRep archivers earn a reward of sand from the mining pool.
 
 ## Constraints
 

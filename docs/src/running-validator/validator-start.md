@@ -180,7 +180,7 @@ network. **It is crucial to back-up this information.**
 
 If you don’t back up this information, you WILL NOT BE ABLE TO RECOVER YOUR
 VALIDATOR if you lose access to it. If this happens, YOU WILL LOSE YOUR
-ALLOCATION OF SOL TOO.
+ALLOCATION OF SAND TOO.
 
 To back-up your validator identify keypair, **back-up your
 "validator-keypair.json” file or your seed phrase to a secure location.**
@@ -206,14 +206,14 @@ Commitment: confirmed
 
 ## Airdrop & Check Validator Balance
 
-Airdrop yourself some SOL to get started:
+Airdrop yourself some SAND to get started:
 
 ```bash
 solana airdrop 1
 ```
 
 Note that airdrops are only available on Devnet and Testnet. Both are limited
-to 1 SOL per request.
+to 1 SAND per request.
 
 To view your current balance:
 
@@ -227,7 +227,7 @@ Or to see in finer detail:
 solana balance --lamports
 ```
 
-Read more about the [difference between SOL and lamports here](../introduction.md#what-are-sols).
+Read more about the [difference between SAND and lamports here](../introduction.md#what-are-sols).
 
 ## Create Authorized Withdrawer Account
 
@@ -343,7 +343,7 @@ here](https://github.com/solana-labs/solana/blob/36167b032c03fc7d1d8c288bb621920
 Running the validator as a systemd unit is one easy way to manage running in the
 background.
 
-Assuming you have a user called `sol` on your machine, create the file `/etc/systemd/system/sol.service` with
+Assuming you have a user called `sand` on your machine, create the file `/etc/systemd/system/sand.service` with
 the following:
 
 ```
@@ -357,29 +357,29 @@ StartLimitIntervalSec=0
 Type=simple
 Restart=always
 RestartSec=1
-User=sol
+User=sand
 LimitNOFILE=1000000
 LogRateLimitIntervalSec=0
-Environment="PATH=/bin:/usr/bin:/home/sol/.local/share/solana/install/active_release/bin"
-ExecStart=/home/sol/bin/validator.sh
+Environment="PATH=/bin:/usr/bin:/home/sand/.local/share/solana/install/active_release/bin"
+ExecStart=/home/sand/bin/validator.sh
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Now create `/home/sol/bin/validator.sh` to include the desired
+Now create `/home/sand/bin/validator.sh` to include the desired
 `solana-validator` command-line. Ensure that the 'exec' command is used to
 start the validator process (i.e. "exec solana-validator ...").  This is
 important because without it, logrotate will end up killing the validator
 every time the logs are rotated.
 
-Ensure that running `/home/sol/bin/validator.sh` manually starts
-the validator as expected. Don't forget to mark it executable with `chmod +x /home/sol/bin/validator.sh`
+Ensure that running `/home/sand/bin/validator.sh` manually starts
+the validator as expected. Don't forget to mark it executable with `chmod +x /home/sand/bin/validator.sh`
 
 Start the service with:
 
 ```bash
-$ sudo systemctl enable --now sol
+$ sudo systemctl enable --now sand
 ```
 
 ### Logging
@@ -410,23 +410,23 @@ instead of the validator's, which will kill them both.
 #### Using logrotate
 
 An example setup for the `logrotate`, which assumes that the validator is
-running as a systemd service called `sol.service` and writes a log file at
-/home/sol/solana-validator.log:
+running as a systemd service called `sand.service` and writes a log file at
+/home/sand/solana-validator.log:
 
 ```bash
 # Setup log rotation
 
-cat > logrotate.sol <<EOF
-/home/sol/solana-validator.log {
+cat > logrotate.sand <<EOF
+/home/sand/solana-validator.log {
   rotate 7
   daily
   missingok
   postrotate
-    systemctl kill -s USR1 sol.service
+    systemctl kill -s USR1 sand.service
   endscript
 }
 EOF
-sudo cp logrotate.sol /etc/logrotate.d/sol
+sudo cp logrotate.sand /etc/logrotate.d/sand
 systemctl restart logrotate.service
 ```
 
@@ -457,8 +457,8 @@ partition.
 Example configuration:
 
 1. `sudo mkdir /mnt/solana-accounts`
-2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sol 0 0` to `/etc/fstab`
-   (assuming your validator is running under the user "sol"). **CAREFUL: If you
+2. Add a 300GB tmpfs parition by adding a new line containing `tmpfs /mnt/solana-accounts tmpfs rw,size=300G,user=sand 0 0` to `/etc/fstab`
+   (assuming your validator is running under the user "sand"). **CAREFUL: If you
    incorrectly edit /etc/fstab your machine may no longer boot**
 3. Create at least 250GB of swap space
 

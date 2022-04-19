@@ -23,7 +23,7 @@ use {
         clock::{Epoch, Slot, UnixTimestamp},
         epoch_info::EpochInfo,
         hash::Hash,
-        native_token::lamports_to_sol,
+        native_token::lamports_to_sand,
         pubkey::Pubkey,
         signature::Signature,
         stake::state::{Authorized, Lockup},
@@ -861,8 +861,8 @@ impl fmt::Display for CliKeyedEpochRewards {
                         f,
                         "  {:<44}  ◎{:<17.9}  ◎{:<17.9}  {:>13.9}%  {:>14}  {:>10}",
                         keyed_reward.address,
-                        lamports_to_sol(reward.amount),
-                        lamports_to_sol(reward.post_balance),
+                        lamports_to_sand(reward.amount),
+                        lamports_to_sand(reward.post_balance),
                         reward.percent_change,
                         reward
                             .apr
@@ -997,8 +997,8 @@ fn show_epoch_rewards(
                 "  {:<6}  {:<11}  ◎{:<17.9}  ◎{:<17.9}  {:>13.9}%  {:>14}  {:>10}",
                 reward.epoch,
                 reward.effective_slot,
-                lamports_to_sol(reward.amount),
-                lamports_to_sol(reward.post_balance),
+                lamports_to_sand(reward.amount),
+                lamports_to_sand(reward.post_balance),
                 reward.percent_change,
                 reward
                     .apr
@@ -1263,7 +1263,7 @@ impl fmt::Display for CliStakeHistory {
                 if self.use_lamports_unit {
                     "lamports"
                 } else {
-                    "SOL"
+                    "SAND"
                 }
             )?;
         }
@@ -1691,7 +1691,7 @@ impl fmt::Display for CliAccountBalances {
                 f,
                 "{:<44}  {}",
                 account.address,
-                &format!("{} SOL", lamports_to_sol(account.lamports))
+                &format!("{} SAND", lamports_to_sand(account.lamports))
             )?;
         }
         Ok(())
@@ -1726,16 +1726,16 @@ impl VerboseDisplay for CliSupply {}
 
 impl fmt::Display for CliSupply {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln_name_value(f, "Total:", &format!("{} SOL", lamports_to_sol(self.total)))?;
+        writeln_name_value(f, "Total:", &format!("{} SAND", lamports_to_sand(self.total)))?;
         writeln_name_value(
             f,
             "Circulating:",
-            &format!("{} SOL", lamports_to_sol(self.circulating)),
+            &format!("{} SAND", lamports_to_sand(self.circulating)),
         )?;
         writeln_name_value(
             f,
             "Non-Circulating:",
-            &format!("{} SOL", lamports_to_sol(self.non_circulating)),
+            &format!("{} SAND", lamports_to_sand(self.non_circulating)),
         )?;
         if self.print_accounts {
             writeln!(f)?;
@@ -2317,14 +2317,14 @@ impl fmt::Display for CliBlock {
                     format!(
                         "{}◎{:<14.9}",
                         sign,
-                        lamports_to_sol(reward.lamports.abs() as u64)
+                        lamports_to_sand(reward.lamports.abs() as u64)
                     ),
                     if reward.post_balance == 0 {
                         "          -                 -".to_string()
                     } else {
                         format!(
                             "◎{:<19.9}  {:>13.9}%",
-                            lamports_to_sol(reward.post_balance),
+                            lamports_to_sand(reward.post_balance),
                             (reward.lamports.abs() as f64
                                 / (reward.post_balance as f64 - reward.lamports as f64))
                                 * 100.0
@@ -2342,7 +2342,7 @@ impl fmt::Display for CliBlock {
                 f,
                 "Total Rewards: {}◎{:<12.9}",
                 sign,
-                lamports_to_sol(total_rewards.abs() as u64)
+                lamports_to_sand(total_rewards.abs() as u64)
             )?;
         }
         for (index, transaction_with_meta) in

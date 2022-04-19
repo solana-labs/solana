@@ -6,12 +6,12 @@ For an overview of staking, read first the
 
 ------
 
-After you have [received SOL](transfer-tokens.md), you might consider putting
+After you have [received SAND](transfer-tokens.md), you might consider putting
 it to use by delegating _stake_ to a validator. Stake is what we call tokens
 in a _stake account_. Solana weights validator votes by the amount of stake
 delegated to them, which gives those validators more influence in determining
 then next valid block of transactions in the blockchain. Solana then generates
-new SOL periodically to reward stakers and validators. You earn more rewards
+new SAND periodically to reward stakers and validators. You earn more rewards
 the more stake you delegate.
 
 ## Create a Stake Account
@@ -59,7 +59,7 @@ solana stake-account <STAKE_ACCOUNT_ADDRESS>
 The output will look similar to this:
 
 ```text
-Total Stake: 5000 SOL
+Total Stake: 5000 SAND
 Stake account is undelegated
 Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
 Withdraw Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F
@@ -145,9 +145,9 @@ You will see new fields "Delegated Stake" and "Delegated Vote Account Address"
 in the output. The output will look similar to this:
 
 ```text
-Total Stake: 5000 SOL
+Total Stake: 5000 SAND
 Credits Observed: 147462
-Delegated Stake: 4999.99771712 SOL
+Delegated Stake: 4999.99771712 SAND
 Delegated Vote Account Address: CcaHc2L43ZWjwCHART3oZoJvHLAe9hzT2DJNUpBzoTN1
 Stake activates starting from epoch: 42
 Stake Authority: EXU95vqs93yPeCeAU7mPPu6HbRUmTFPEiGug9oCdvQ5F

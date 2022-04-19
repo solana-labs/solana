@@ -13,7 +13,7 @@ use {
     },
     solana_cli_config::CONFIG_FILE,
     solana_remote_wallet::remote_wallet::maybe_wallet_manager,
-    solana_sdk::native_token::sol_to_lamports,
+    solana_sdk::native_token::sand_to_lamports,
     std::{error::Error, ffi::OsString, process::exit},
 };
 
@@ -44,7 +44,7 @@ where
         )
         .subcommand(
             SubCommand::with_name("distribute-tokens")
-                .about("Distribute SOL")
+                .about("Distribute SAND")
                 .arg(
                     Arg::with_name("db_path")
                         .long("db-path")
@@ -71,7 +71,7 @@ where
                         .takes_value(true)
                         .value_name("AMOUNT")
                         .validator(is_amount)
-                        .help("The amount to send to each recipient, in SOL"),
+                        .help("The amount to send to each recipient, in SAND"),
                 )
                 .arg(
                     Arg::with_name("dry_run")
@@ -151,12 +151,12 @@ where
                         .help("Keypair to fund accounts"),
                 )
                 .arg(
-                    Arg::with_name("unlocked_sol")
+                    Arg::with_name("unlocked_sand")
                         .default_value("1.0")
-                        .long("unlocked-sol")
+                        .long("unlocked-sand")
                         .takes_value(true)
-                        .value_name("SOL_AMOUNT")
-                        .help("Amount of SOL to put in system account to pay for fees"),
+                        .value_name("SAND_AMOUNT")
+                        .help("Amount of SAND to put in system account to pay for fees"),
                 )
                 .arg(
                     Arg::with_name("lockup_authority")
@@ -231,12 +231,12 @@ where
                         .help("Stake Account Address"),
                 )
                 .arg(
-                    Arg::with_name("unlocked_sol")
+                    Arg::with_name("unlocked_sand")
                         .default_value("1.0")
-                        .long("unlocked-sol")
+                        .long("unlocked-sand")
                         .takes_value(true)
-                        .value_name("SOL_AMOUNT")
-                        .help("Amount of SOL to put in system account to pay for fees"),
+                        .value_name("SAND_AMOUNT")
+                        .help("Amount of SAND to put in system account to pay for fees"),
                 )
                 .arg(
                     Arg::with_name("stake_authority")
@@ -433,7 +433,7 @@ fn parse_distribute_tokens_args(
         fee_payer,
         stake_args: None,
         spl_token_args: None,
-        transfer_amount: value_of(matches, "transfer_amount").map(sol_to_lamports),
+        transfer_amount: value_of(matches, "transfer_amount").map(sand_to_lamports),
     })
 }
 
@@ -472,7 +472,7 @@ fn parse_create_stake_args(
         .transpose()?;
 
     let stake_args = StakeArgs {
-        unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
+        unlocked_sand: sand_to_lamports(value_t_or_exit!(matches, "unlocked_sand", f64)),
         lockup_authority,
         sender_stake_args: None,
     };
@@ -555,7 +555,7 @@ fn parse_distribute_stake_args(
         lockup_authority,
     };
     let stake_args = StakeArgs {
-        unlocked_sol: sol_to_lamports(value_t_or_exit!(matches, "unlocked_sol", f64)),
+        unlocked_sand: sand_to_lamports(value_t_or_exit!(matches, "unlocked_sand", f64)),
         lockup_authority: lockup_authority_address,
         sender_stake_args: Some(sender_stake_args),
     };

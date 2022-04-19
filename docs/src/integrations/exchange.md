@@ -2,7 +2,7 @@
 title: Add Solana to Your Exchange
 ---
 
-This guide describes how to add Solana's native token SOL to your cryptocurrency
+This guide describes how to add Solana's native token SAND to your cryptocurrency
 exchange.
 
 ## Node Setup
@@ -148,13 +148,13 @@ validators and only on the _Gossip_, _Repair_ and _ServeR_ ports.
 ## Setting up Deposit Accounts
 
 Solana accounts do not require any on-chain initialization; once they contain
-some SOL, they exist. To set up a deposit account for your exchange, simply
+some SAND, they exist. To set up a deposit account for your exchange, simply
 generate a Solana keypair using any of our [wallet tools](../wallet-guide/cli.md).
 
 We recommend using a unique deposit account for each of your users.
 
 Solana accounts must be made rent-exempt by containing 2-years worth of
-[rent](developing/programming-model/accounts.md#rent) in SOL. In order to find
+[rent](developing/programming-model/accounts.md#rent) in SAND. In order to find
 the minimum rent-exempt balance for your deposit accounts, query the
 [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
@@ -167,12 +167,12 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 ### Offline Accounts
 
 You may wish to keep the keys for one or more collection accounts offline for
-greater security. If so, you will need to move SOL to hot accounts using our
+greater security. If so, you will need to move SAND to hot accounts using our
 [offline methods](../offline-signing.md).
 
 ## Listening for Deposits
 
-When a user wants to deposit SOL into your exchange, instruct them to send a
+When a user wants to deposit SAND into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
 ### Poll for Blocks
@@ -264,7 +264,7 @@ list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
 example, if the deposit address if interest is
 `47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SAND
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our
@@ -373,7 +373,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 
 ## Sending Withdrawals
 
-To accommodate a user's request to withdraw SOL, you must generate a Solana
+To accommodate a user's request to withdraw SAND, you must generate a Solana
 transfer transaction, and send it to the api node to be forwarded to your
 cluster.
 
@@ -568,9 +568,9 @@ public class PubkeyValidator
 
 ## Minimum Deposit & Withdrawal Amounts
 
-Every deposit and withdrawal of SOL must be greater or equal to the minimum
-rent-exempt balance for the account at the wallet address (a basic SOL account
-holding no data), currently: 0.000890880 SOL
+Every deposit and withdrawal of SAND must be greater or equal to the minimum
+rent-exempt balance for the account at the wallet address (a basic SAND account
+holding no data), currently: 0.000890880 SAND
 
 Similarly, every deposit account must contain at least this balance.
 
@@ -585,7 +585,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
 [SPL Token](https://spl.solana.com/token) is the standard for wrapped/synthetic
 token creation and exchange on the Solana blockchain.
 
-The SPL Token workflow is similar to that of native SOL tokens, but there are a
+The SPL Token workflow is similar to that of native SAND tokens, but there are a
 few differences which will be discussed in this section.
 
 ### Token Mints
@@ -633,8 +633,8 @@ accounts do not:
    `spl-token transfer --fund-recipient ...` command.
 1. SPL Token accounts must remain [rent-exempt](developing/programming-model/accounts.md#rent-exemption)
    for the duration of their existence and therefore require a small amount of
-   native SOL tokens be deposited at account creation. For SPL Token v2 accounts,
-   this amount is 0.00203928 SOL (2,039,280 lamports).
+   native SAND tokens be deposited at account creation. For SPL Token v2 accounts,
+   this amount is 0.00203928 SAND (2,039,280 lamports).
 
 #### Command Line
 
@@ -708,7 +708,7 @@ Signature: 3R6tsog17QM8KfzbcbdP4aoMfwgo6hBggJDVy7dZPVmH2xbCWjEj31JKD53NzMrf25ChF
 ### Depositing
 
 Since each `(wallet, mint)` pair requires a separate account on chain. It is
-recommended that the addresses for these accounts be derived from SOL deposit
+recommended that the addresses for these accounts be derived from SAND deposit
 wallets using the
 [Associated Token Account](https://spl.solana.com/associated-token-account) (ATA)
 scheme and that _only_ deposits from ATA addresses be accepted.
@@ -727,13 +727,13 @@ case, the initial balance can be assumed to be zero.
 
 ### Withdrawing
 
-The withdrawal address a user provides must be the that of their SOL wallet.
+The withdrawal address a user provides must be the that of their SAND wallet.
 
 Before executing a withdrawal [transfer](#token-transfers),
 the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
 Additionally this address must be owned by the System Program and have no
-account data. If the address has no SOL balance, user confirmation should be
+account data. If the address has no SAND balance, user confirmation should be
 obtained before proceeding with the withdrawal.  All other withdrawal addresses
 must be rejected.
 
@@ -742,7 +742,7 @@ From the withdrawal address, the [Associated Token Account](https://spl.solana.c
 [TransferChecked](https://github.com/solana-labs/solana-program-library/blob/fc0d6a2db79bd6499f04b9be7ead0c400283845e/token/program/src/instruction.rs#L268)
 instruction. Note that it is possible that the ATA address does not yet exist, at which point the
 exchange should fund the account on behalf of the user. For SPL Token v2
-accounts, funding the withdrawal account will require 0.00203928 SOL (2,039,280
+accounts, funding the withdrawal account will require 0.00203928 SAND (2,039,280
 lamports).
 
 Template `spl-token transfer` command for a withdrawal:
@@ -768,4 +768,4 @@ Be sure to test your complete workflow on Solana devnet and testnet
 [clusters](../clusters.md) before moving to production on mainnet-beta. Devnet
 is the most open and flexible, and ideal for initial development, while testnet
 offers more realistic cluster configuration. Both devnet and testnet support a faucet,
-run `solana airdrop 1` to obtain some devnet or testnet SOL for development and testing.
+run `solana airdrop 1` to obtain some devnet or testnet SAND for development and testing.

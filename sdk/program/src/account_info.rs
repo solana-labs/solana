@@ -1,7 +1,7 @@
 use {
     crate::{
         clock::Epoch, debug_account_data::*, program_error::ProgramError,
-        program_memory::sol_memset, pubkey::Pubkey,
+        program_memory::sand_memset, pubkey::Pubkey,
     },
     std::{
         cell::{Ref, RefCell, RefMut},
@@ -137,7 +137,7 @@ impl<'a> AccountInfo<'a> {
 
         // zero-init if requested
         if zero_init && new_len > orig_len {
-            sol_memset(
+            sand_memset(
                 &mut self.try_borrow_mut_data()?[orig_len..],
                 0,
                 new_len.saturating_sub(orig_len),

@@ -25,8 +25,8 @@ example_helloworld() {
     git clone https://github.com/solana-labs/example-helloworld.git
     cd example-helloworld
 
-    update_solana_dependencies src/program-rust "$solana_ver"
-    patch_crates_io_solana src/program-rust/Cargo.toml "$solana_dir"
+    update_sandana_dependencies src/program-rust "$solana_ver"
+    patch_crates_io_sandana src/program-rust/Cargo.toml "$solana_dir"
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
     $cargo_build_bpf \
@@ -59,9 +59,9 @@ serum_dex() {
     git clone https://github.com/project-serum/serum-dex.git
     cd serum-dex
 
-    update_solana_dependencies . "$solana_ver"
-    patch_crates_io_solana Cargo.toml "$solana_dir"
-    patch_crates_io_solana dex/Cargo.toml "$solana_dir"
+    update_sandana_dependencies . "$solana_ver"
+    patch_crates_io_sandana Cargo.toml "$solana_dir"
+    patch_crates_io_sandana dex/Cargo.toml "$solana_dir"
     cat >> dex/Cargo.toml <<EOF
 [workspace]
 exclude = [

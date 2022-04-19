@@ -2301,9 +2301,9 @@ mod tests {
         let mut vote_state = VoteState::default();
 
         // bootstrap means fully-vested stake at epoch 0 with
-        //  10_000_000 SOL is a big but not unreasaonable stake
+        //  10_000_000 SAND is a big but not unreasaonable stake
         let stake = new_stake(
-            native_token::sol_to_lamports(10_000_000f64),
+            native_token::sand_to_lamports(10_000_000f64),
             &Pubkey::default(),
             &vote_state,
             std::u64::MAX,
@@ -2671,9 +2671,9 @@ mod tests {
     fn test_dbg_stake_minimum_balance() {
         let minimum_balance = Rent::default().minimum_balance(std::mem::size_of::<StakeState>());
         panic!(
-            "stake minimum_balance: {} lamports, {} SOL",
+            "stake minimum_balance: {} lamports, {} SAND",
             minimum_balance,
-            minimum_balance as f64 / solana_sdk::native_token::LAMPORTS_PER_SOL as f64
+            minimum_balance as f64 / solana_sdk::native_token::LAMPORTS_PER_SAND as f64
         );
     }
 

@@ -34,7 +34,7 @@ use {
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
-        native_token::lamports_to_sol, pubkey::Pubkey,
+        native_token::lamports_to_sand, pubkey::Pubkey,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
@@ -305,14 +305,14 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
                     .lamports;
             Some(format!(
                 "{}",
-                lamports_to_sol(total_supply - non_circulating_supply)
+                lamports_to_sand(total_supply - non_circulating_supply)
             ))
         }
         "/v0/total-supply" => {
             let r_bank_forks = bank_forks.read().unwrap();
             let bank = r_bank_forks.root_bank();
             let total_supply = bank.capitalization();
-            Some(format!("{}", lamports_to_sol(total_supply)))
+            Some(format!("{}", lamports_to_sand(total_supply)))
         }
         _ => None,
     }
@@ -368,7 +368,7 @@ impl JsonRpcService {
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(rpc_threads)
                 .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
-                .thread_name("sol-rpc-el")
+                .thread_name("sand-rpc-el")
                 .enable_all()
                 .build()
                 .expect("Runtime"),

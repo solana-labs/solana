@@ -101,7 +101,7 @@ where
 pub mod tests {
     use {
         super::*,
-        solana_sdk::{account::Account, native_token::sol_to_lamports},
+        solana_sdk::{account::Account, native_token::sand_to_lamports},
     };
 
     #[test]
@@ -120,30 +120,30 @@ pub mod tests {
         let stakes: HashMap<Pubkey, (u64, Account)> = [
             (
                 pubkey0,
-                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sand_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey1,
-                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sand_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey3,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey4,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -228,21 +228,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_000.0), // 1/3 stake
+                    sand_to_lamports(1_000_000.0), // 1/3 stake
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -276,14 +276,14 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_001.0), // 1/3 stake
+                    sand_to_lamports(1_000_001.0), // 1/3 stake
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -332,21 +332,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -473,21 +473,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -609,21 +609,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
@@ -747,21 +747,21 @@ pub mod tests {
             (
                 pubkey0,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
-                    sol_to_lamports(1_000_000.0),
+                    sand_to_lamports(1_000_000.0),
                     Account::new(1, 0, &Pubkey::default()),
                 ),
             ),

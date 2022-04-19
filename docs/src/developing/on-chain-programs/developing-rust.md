@@ -362,7 +362,7 @@ fn custom_panic(info: &core::panic::PanicInfo<'_>) {
 ## Compute Budget
 
 Use the system call
-[`sol_log_compute_units()`](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/log.rs#L141)
+[`sand_log_compute_units()`](https://github.com/solana-labs/solana/blob/d9b0fc0e3eec67dfe4a97d9298b15969b2804fab/sdk/program/src/log.rs#L141)
 to log a message containing the remaining number of compute units the program
 may consume before execution is halted
 
