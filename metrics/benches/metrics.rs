@@ -16,7 +16,7 @@ use {
 #[bench]
 fn bench_datapoint_submission(bencher: &mut Bencher) {
     let writer = Arc::new(MockMetricsWriter::new());
-    let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+    let agent = MetricsAgent::new(writer, Duration::from_secs(10), 1000);
 
     bencher.iter(|| {
         for i in 0..1000 {
@@ -34,7 +34,7 @@ fn bench_datapoint_submission(bencher: &mut Bencher) {
 #[bench]
 fn bench_counter_submission(bencher: &mut Bencher) {
     let writer = Arc::new(MockMetricsWriter::new());
-    let agent = MetricsAgent::new(writer.clone(), Duration::from_secs(10), 1000);
+    let agent = MetricsAgent::new(writer, Duration::from_secs(10), 1000);
 
     bencher.iter(|| {
         for i in 0..1000 {
