@@ -132,7 +132,7 @@ impl ReceiveWindowStats {
             ("elapsed_micros", self.elapsed.as_micros(), i64),
         );
         for (slot, num_shreds) in &self.slots {
-            datapoint_info!(
+            datapoint_debug!(
                 "receive_window_num_slot_shreds",
                 ("slot", *slot, i64),
                 ("num_shreds", *num_shreds, i64)
