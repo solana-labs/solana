@@ -167,7 +167,7 @@ export interface TransactionJSON {
     nonceInstruction: TransactionInstructionJSON;
   } | null;
   instructions: TransactionInstructionJSON[];
-  signatures: {publicKey: string; signature: number[] | null}[];
+  signers: string[];
 }
 
 /**
@@ -242,10 +242,9 @@ export class Transaction {
           }
         : null,
       instructions: this.instructions.map(instruction => instruction.toJSON()),
-      signatures: this.signatures.map(({publicKey, signature}) => ({
-        publicKey: publicKey.toJSON(),
-        signature: signature ? [...signature] : null,
-      })),
+      signers: this.signatures.map(({publicKey}) => {
+        return publicKey.toJSON();
+      }),
     };
   }
 
@@ -280,7 +279,7 @@ export class Transaction {
     if (this._message) {
       if (JSON.stringify(this.toJSON()) !== JSON.stringify(this._json)) {
         throw new Error(
-          'Transaction mutated after being populated from Message',
+          'Transaction message mutated after being populated from Message',
         );
       }
       return this._message;
