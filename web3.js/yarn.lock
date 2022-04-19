@@ -1688,8 +1688,8 @@
     "@types/chai" "*"
 
 "@types/chai@*", "@types/chai@^4.2.15":
-  version "4.3.0"
-  resolved "https://registry.npmjs.org/@types/chai/-/chai-4.3.0.tgz"
+  version "4.3.1"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-4.3.1.tgz#e2c6e73e0bdeb2521d00756d099218e9f5d90a04"
 
 "@types/connect@^3.4.33":
   version "3.4.35"
