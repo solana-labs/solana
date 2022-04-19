@@ -547,6 +547,7 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
+    pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
     pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
@@ -1188,11 +1189,8 @@ fn load_frozen_forks(
         &mut pending_slots,
     )?;
 
-    let dev_halt_at_slot = opts
-        .runtime_config
-        .dev_halt_at_slot
-        .unwrap_or(std::u64::MAX);
-    if bank_forks.read().unwrap().root() != dev_halt_at_slot {
+    let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
+    if bank_forks.read().unwrap().root() != halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
@@ -1373,7 +1371,7 @@ fn load_frozen_forks(
                 &mut pending_slots,
             )?;
 
-            if slot >= dev_halt_at_slot {
+            if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
                 let _ = bank.verify_bank_hash(false);
                 break;
@@ -3134,11 +3132,8 @@ pub mod tests {
         // Specify halting at slot 0
         let opts = ProcessOptions {
             poh_verify: true,
+            halt_at_slot: Some(0),
             accounts_db_test_hash_calculation: true,
-            runtime_config: RuntimeConfig {
-                dev_halt_at_slot: Some(0),
-                ..RuntimeConfig::default()
-            },
             ..ProcessOptions::default()
         };
         let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);

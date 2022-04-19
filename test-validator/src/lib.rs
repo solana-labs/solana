@@ -681,7 +681,6 @@ impl TestValidator {
                 max_units,
                 ..ComputeBudget::default()
             }),
-            ..RuntimeConfig::default()
         };
 
         let mut validator_config = ValidatorConfig {

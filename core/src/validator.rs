@@ -116,6 +116,7 @@ const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
 pub struct ValidatorConfig {
+    pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
     pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
@@ -175,6 +176,7 @@ pub struct ValidatorConfig {
 impl Default for ValidatorConfig {
     fn default() -> Self {
         Self {
+            halt_at_slot: None,
             expected_genesis_hash: None,
             expected_bank_hash: None,
             expected_shred_version: None,
@@ -846,7 +848,7 @@ impl Validator {
             (None, None, None, None)
         };
 
-        if config.runtime_config.dev_halt_at_slot.is_some() {
+        if config.halt_at_slot.is_some() {
             // Simulate a confirmed root to avoid RPC errors with CommitmentConfig::finalized() and
             // to ensure RPC endpoints like getConfirmedBlock, which require a confirmed root, work
             block_commitment_cache
@@ -1047,7 +1049,7 @@ impl Validator {
             validator_exit: config.validator_exit.clone(),
             cluster_info,
             bank_forks,
-            blockstore: blockstore.clone(),
+            blockstore,
             geyser_plugin_service,
             ledger_metric_report_service,
             accounts_background_service,
@@ -1387,6 +1389,7 @@ fn load_blockstore(
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify: config.poh_verify,
+        halt_at_slot: config.halt_at_slot,
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),

@@ -1787,11 +1787,8 @@ fn main() {
             ("shred-version", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: Some(0),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1875,11 +1872,8 @@ fn main() {
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: Some(0),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2108,6 +2102,7 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
@@ -2122,7 +2117,6 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                         bpf_jit: !matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
                     },
@@ -2163,11 +2157,8 @@ fn main() {
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
 
@@ -2294,11 +2285,8 @@ fn main() {
                     &blockstore,
                     ProcessOptions {
                         new_hard_forks,
+                        halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
-                        runtime_config: RuntimeConfig {
-                            dev_halt_at_slot: Some(snapshot_slot),
-                            ..RuntimeConfig::default()
-                        },
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
@@ -2593,14 +2581,11 @@ fn main() {
                 }
             }
             ("accounts", Some(arg_matches)) => {
-                let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot,
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot,
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2659,14 +2644,11 @@ fn main() {
                 println!("{:#?}", total_accounts_stats);
             }
             ("capitalization", Some(arg_matches)) => {
-                let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot,
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot,
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
