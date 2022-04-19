@@ -323,6 +323,10 @@ pub mod disable_deprecated_loader {
     solana_sdk::declare_id!("GTUMCZ8LTNxVfxdrw7ZsDFTxXb7TutYkzJnFwinpE6dg");
 }
 
+pub mod drop_redundant_turbine_path {
+    solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -398,6 +402,7 @@ lazy_static! {
         (check_physical_overlapping::id(), "check physical overlapping regions"),
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
+        (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
