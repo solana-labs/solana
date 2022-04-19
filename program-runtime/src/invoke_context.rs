@@ -173,6 +173,10 @@ impl fmt::Display for AllocErr {
     }
 }
 
+#[deprecated(
+    since = "1.11.0",
+    note = "Please use InstructionContext instead of StackFrame"
+)]
 #[allow(deprecated)]
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
@@ -203,6 +207,7 @@ impl<'a> StackFrame<'a> {
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
+    #[allow(deprecated)]
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
