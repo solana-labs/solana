@@ -50,7 +50,7 @@ impl StakesCache {
     pub fn is_stake(account: &AccountSharedData) -> bool {
         solana_vote_program::check_id(account.owner())
             || stake::program::check_id(account.owner())
-                && account.data().len() >= std::mem::size_of::<StakeState>()
+                && account.data().len() >= StakeState::size_of()
     }
 
     pub fn check_and_store(&self, pubkey: &Pubkey, account: &AccountSharedData) {

@@ -38,8 +38,10 @@ use {
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
+        bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
+        expected_rent_collection::ExpectedRentCollection,
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -3057,15 +3059,15 @@ impl AccountsDb {
             }
         }
         measure.stop();
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "shrink_select_top_sparse_storage_entries-ms",
             measure.as_ms() as usize
         );
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "shrink_select_top_sparse_storage_entries-seeds",
             candidates_count
         );
-        inc_new_counter_info!(
+        inc_new_counter_debug!(
             "shrink_total_preliminary_candidate_stores",
             total_candidate_stores
         );
@@ -5137,6 +5139,11 @@ impl AccountsDb {
         );
     }
 
+    /// find slot >= 'slot' which is a root or in 'ancestors'
+    pub fn find_unskipped_slot(&self, slot: Slot, ancestors: Option<&Ancestors>) -> Option<Slot> {
+        self.accounts_index.get_next_original_root(slot, ancestors)
+    }
+
     pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
         let new_total = total_cap as u128 + new_cap as u128;
         AccountsHash::checked_cast_for_capitalization(new_total)
@@ -5171,6 +5178,8 @@ impl AccountsDb {
         // We'll also accumulate the lamports within each chunk and fewer chunks results in less contention to accumulate the sum.
         let chunks = crate::accounts_hash::MERKLE_FANOUT.pow(4);
         let total_lamports = Mutex::<u64>::new(0);
+        let stats = HashStats::default();
+
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -5203,7 +5212,22 @@ impl AccountsDb {
                                     .get_loaded_account()
                                     .and_then(
                                         |loaded_account| {
+                                            let find_unskipped_slot = |slot: Slot| {
+                                                self.find_unskipped_slot(slot, config.ancestors)
+                                            };
                                             let loaded_hash = loaded_account.loaded_hash();
+                                            let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                                                &loaded_account,
+                                                &loaded_hash,
+                                                pubkey,
+                                                *slot,
+                                                config.rent_collector,
+                                                &stats,
+                                                max_slot + 1, // this wants an 'exclusive' number
+                                                find_unskipped_slot,
+                                                self.filler_account_suffix.as_ref(),
+                                            );
+                                            let loaded_hash = new_hash.unwrap_or(loaded_hash);
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
@@ -5260,6 +5284,16 @@ impl AccountsDb {
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
             ("collect", collect.as_us(), i64),
+            (
+                "rehashed_rewrites",
+                stats.rehash_required.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "rehashed_rewrites_unnecessary",
+                stats.rehash_unnecessary.load(Ordering::Relaxed),
+                i64
+            ),
         );
         Ok((accumulated_hash, total_lamports))
     }
@@ -5399,9 +5433,19 @@ impl AccountsDb {
                     return after_func(retval);
                 }
 
+                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data();
+
+                let eligible_for_caching =
+                    !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
+
+                if eligible_for_caching && retval.is_empty() {
+                    let range = bin_range.end - bin_range.start;
+                    retval.append(&mut vec![Vec::new(); range]);
+                }
+
                 let mut file_name = String::default();
                 // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
-                if !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK {
+                if should_cache_hash_data && eligible_for_caching {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
@@ -5443,10 +5487,6 @@ impl AccountsDb {
                             "{}.{}.{}.{}.{}",
                             start, end, bin_range.start, bin_range.end, hash
                         );
-                        if retval.is_empty() {
-                            let range = bin_range.end - bin_range.start;
-                            retval.append(&mut vec![Vec::new(); range]);
-                        }
                         if cache_hash_data
                             .load(
                                 &Path::new(&file_name),
@@ -5657,6 +5697,8 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = AtomicU64::new(0);
 
+        let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
+
         let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
@@ -5679,8 +5721,21 @@ impl AccountsDb {
                     raw_lamports
                 };
 
-                let source_item =
-                    CalculateHashIntermediate::new(loaded_account.loaded_hash(), balance, *pubkey);
+                let loaded_hash = loaded_account.loaded_hash();
+                let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                    &loaded_account,
+                    &loaded_hash,
+                    pubkey,
+                    slot,
+                    config.rent_collector,
+                    stats,
+                    storage.range().end,
+                    find_unskipped_slot,
+                    filler_account_suffix,
+                );
+                let loaded_hash = new_hash.unwrap_or(loaded_hash);
+
+                let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
 
                 if config.check_hash
                     && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
@@ -5938,6 +5993,13 @@ impl AccountsDb {
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
+        self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
+    }
+    pub fn get_accounts_delta_hash_with_rewrites(
+        &self,
+        slot: Slot,
+        skipped_rewrites: &Rewrites,
+    ) -> Hash {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -5981,6 +6043,8 @@ impl AccountsDb {
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
 
+        Self::extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
+
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
@@ -5998,6 +6062,18 @@ impl AccountsDb {
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         ret
+    }
+
+    /// add all items from 'skipped_rewrites' to 'hashes' where the pubkey doesn't already exist in 'hashes'
+    fn extend_hashes_with_skipped_rewrites(
+        hashes: &mut Vec<(Pubkey, Hash)>,
+        skipped_rewrites: &Rewrites,
+    ) {
+        let mut skipped_rewrites = skipped_rewrites.read().unwrap().clone();
+        hashes.iter().for_each(|(key, _)| {
+            skipped_rewrites.remove(key);
+        });
+        hashes.extend(skipped_rewrites.into_iter());
     }
 
     // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
@@ -13770,5 +13846,26 @@ pub mod tests {
                 AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
             );
         }
+    }
+
+    #[test]
+    fn test_extend_hashes_with_skipped_rewrites() {
+        let mut hashes = Vec::default();
+        let rewrites = Rewrites::default();
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert!(hashes.is_empty());
+        let pubkey = Pubkey::new(&[1; 32]);
+        let hash = Hash::new(&[2; 32]);
+        rewrites.write().unwrap().insert(pubkey, hash);
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash)]);
+        // pubkey is already in hashes, will not be added a second time
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash)]);
+        let pubkey2 = Pubkey::new(&[2; 32]);
+        let hash2 = Hash::new(&[3; 32]);
+        rewrites.write().unwrap().insert(pubkey2, hash2);
+        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        assert_eq!(hashes, vec![(pubkey, hash), (pubkey2, hash2)]);
     }
 }
