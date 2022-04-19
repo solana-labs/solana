@@ -58,6 +58,8 @@ use {
     },
 };
 
+pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
+
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
     write_locks: HashSet<Pubkey>,
@@ -930,11 +932,11 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         bank_id: BankId,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
+    ) -> ScanResult<Vec<PubkeyAccountSlot>> {
         self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
+            |collector: &mut Vec<PubkeyAccountSlot>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) = some_account_tuple
                     .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
                 {
