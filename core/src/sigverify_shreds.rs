@@ -69,10 +69,7 @@ impl SigVerifier for ShredSigVerifier {
 pub mod tests {
     use {
         super::*,
-        solana_ledger::{
-            genesis_utils::create_genesis_config_with_leader,
-            shred::{Shred, Shredder},
-        },
+        solana_ledger::{genesis_utils::create_genesis_config_with_leader, shred::Shred},
         solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
@@ -95,7 +92,7 @@ pub mod tests {
         let mut batches = [PacketBatch::default(), PacketBatch::default()];
 
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();
@@ -111,7 +108,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[1].packets.resize(1, Packet::default());
         batches[1].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[1].packets[0].meta.size = shred.payload.len();
@@ -145,7 +142,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        Shredder::sign_shred(&leader_keypair, &mut shred);
+        shred.sign(&leader_keypair);
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();
 
@@ -161,7 +158,7 @@ pub mod tests {
             0xc0de,
         );
         let wrong_keypair = Keypair::new();
-        Shredder::sign_shred(&wrong_keypair, &mut shred);
+        shred.sign(&wrong_keypair);
         batches[0].packets[1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[1].meta.size = shred.payload.len();
 

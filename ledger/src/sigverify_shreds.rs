@@ -459,7 +459,7 @@ pub fn sign_shreds_gpu(
 pub mod tests {
     use {
         super::*,
-        crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
+        crate::shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -479,7 +479,7 @@ pub mod tests {
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         trace!("signature {}", shred.common_header.signature);
         packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         packet.meta.size = shred.payload.len();
@@ -524,7 +524,7 @@ pub mod tests {
             0xc0de,
         );
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();
@@ -579,7 +579,7 @@ pub mod tests {
             0xc0de,
         );
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();

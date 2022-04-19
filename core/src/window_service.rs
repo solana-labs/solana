@@ -875,7 +875,7 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(
+        let (common, coding) = Shred::new_coding_shred_header(
             5, // slot
             5, // index
             5, // fec_set_index
@@ -886,7 +886,7 @@ mod test {
         );
         let mut coding_shred =
             Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
-        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
+        coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
         assert!(should_retransmit_and_persist(
             &coding_shred,
@@ -959,7 +959,7 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let (common, coding) = Shredder::new_coding_shred_header(
+        let (common, coding) = Shred::new_coding_shred_header(
             5, // slot
             5, // index
             5, // fec_set_index

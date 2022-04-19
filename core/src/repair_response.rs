@@ -52,10 +52,7 @@ pub fn nonce(buf: &[u8]) -> Option<Nonce> {
 mod test {
     use {
         super::*,
-        solana_ledger::{
-            shred::{Shred, Shredder},
-            sigverify_shreds::verify_shred_cpu,
-        },
+        solana_ledger::{shred::Shred, sigverify_shreds::verify_shred_cpu},
         solana_sdk::{
             packet::PacketFlags,
             signature::{Keypair, Signer},
@@ -81,7 +78,7 @@ mod test {
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         trace!("signature {}", shred.common_header.signature);
         let nonce = 9;
         let mut packet = repair_response_packet_from_bytes(
