@@ -1,30 +1,30 @@
 import React from "react";
 import { BigNumber } from "bignumber.js";
-import { SolBalance } from "utils";
+import { SandBalance} from "utils";
 
 export function BalanceDelta({
   delta,
-  isSol = false,
+  isSand = false,
 }: {
   delta: BigNumber;
-  isSol?: boolean;
+  isSand?: boolean;
 }) {
-  let sols;
+  let sands;
 
-  if (isSol) {
-    sols = <SolBalance lamports={delta.toNumber()} />;
+  if (isSand) {
+    sands = <SandBalancelamports={delta.toNumber()} />;
   }
 
   if (delta.gt(0)) {
     return (
       <span className="badge bg-success-soft">
-        +{isSol ? sols : delta.toString()}
+        +{isSand ? sands : delta.toString()}
       </span>
     );
   } else if (delta.lt(0)) {
     return (
       <span className="badge bg-warning-soft">
-        {isSol ? <>-{sols}</> : delta.toString()}
+        {isSand ? <>-{sands}</> : delta.toString()}
       </span>
     );
   }

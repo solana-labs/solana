@@ -5,7 +5,7 @@ use solana_program::{
 
 #[derive(Debug)]
 #[repr(C)]
-struct SolInstruction {
+struct SandInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
     accounts_len: usize,
@@ -13,19 +13,19 @@ struct SolInstruction {
     data_len: usize,
 }
 
-/// Rust representation of C's SolAccountMeta
+/// Rust representation of C's SandAccountMeta
 #[derive(Debug)]
 #[repr(C)]
-struct SolAccountMeta {
+struct SandAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
     is_signer: bool,
 }
 
-/// Rust representation of C's SolAccountInfo
+/// Rust representation of C's SandAccountInfo
 #[derive(Debug, Clone)]
 #[repr(C)]
-struct SolAccountInfo {
+struct SandAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
     data_len: u64,
@@ -55,16 +55,16 @@ struct SolSignerSeedsC {
 
 extern "C" {
     fn sand_invoke_signed_c(
-        instruction_addr: *const SolInstruction,
-        account_infos_addr: *const SolAccountInfo,
+        instruction_addr: *const SandInstruction,
+        account_infos_addr: *const SandAccountInfo,
         account_infos_len: u64,
         signers_seeds_addr: *const SolSignerSeedsC,
         signers_seeds_len: u64,
     ) -> u64;
 }
 
-const READONLY_ACCOUNTS: &[SolAccountInfo] = &[
-    SolAccountInfo {
+const READONLY_ACCOUNTS: &[SandAccountInfo] = &[
+    SandAccountInfo {
         is_signer: false,
         is_writable: false,
         executable: true,
@@ -75,7 +75,7 @@ const READONLY_ACCOUNTS: &[SolAccountInfo] = &[
         data_addr: 0x400000060,
         data_len: 14,
     },
-    SolAccountInfo {
+    SandAccountInfo {
         is_signer: true,
         is_writable: true,
         executable: false,
@@ -95,7 +95,7 @@ const PUBKEY: Pubkey = Pubkey::new_from_array([
 
 fn check_preconditions(
     in_infos: &[AccountInfo],
-    static_infos: &[SolAccountInfo],
+    static_infos: &[SandAccountInfo],
 ) -> Result<(), ProgramError> {
     for (in_info, static_info) in in_infos.iter().zip(static_infos) {
         check!(in_info.key.as_ref().as_ptr() as u64, static_info.key_addr);
@@ -127,12 +127,12 @@ fn process_instruction(
     match instruction_data[0] {
         1 => {
             let system_instruction = system_instruction::allocate(accounts[1].key, 42);
-            let metas = &[SolAccountMeta {
+            let metas = &[SandAccountMeta {
                 is_signer: true,
                 is_writable: true,
                 pubkey_addr: accounts[1].key as *const _ as u64,
             }];
-            let instruction = SolInstruction {
+            let instruction = SandInstruction {
                 accounts_addr: metas.as_ptr() as u64,
                 accounts_len: metas.len(),
                 data_addr: system_instruction.data.as_ptr() as u64,
@@ -162,12 +162,12 @@ fn process_instruction(
                 &mut [READONLY_ACCOUNTS[0].clone(), READONLY_ACCOUNTS[1].clone()];
             new_accounts[1].owner_addr = &PUBKEY as *const _ as u64;
             let system_instruction = system_instruction::assign(accounts[1].key, program_id);
-            let metas = &[SolAccountMeta {
+            let metas = &[SandAccountMeta {
                 is_signer: true,
                 is_writable: true,
                 pubkey_addr: accounts[1].key as *const _ as u64,
             }];
-            let instruction = SolInstruction {
+            let instruction = SandInstruction {
                 accounts_addr: metas.as_ptr() as u64,
                 accounts_len: metas.len(),
                 data_addr: system_instruction.data.as_ptr() as u64,

@@ -23,18 +23,18 @@ extern "C" {
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
  * into usable types.  This function does not perform copy deserialization,
- * instead it populates the pointers and lengths in SolAccountInfo and data so
+ * instead it populates the pointers and lengths in SandAccountInfo and data so
  * that any modification to lamports or account data take place on the original
  * buffer.  Doing so also eliminates the need to serialize back into the buffer
  * at the end of the program.
  *
  * @param input Source buffer containing serialized input parameters
- * @param params Pointer to a SolParameters structure
+ * @param params Pointer to a SandParameters structure
  * @return Boolean true if successful.
  */
 static bool sand_deserialize(
   const uint8_t *input,
-  SolParameters *params,
+  SandParameters *params,
   uint64_t ka_num
 ) {
   if (NULL == input || NULL == params) {
@@ -53,8 +53,8 @@ static bool sand_deserialize(
         input += sizeof(uint8_t);
         input += sizeof(uint8_t);
         input += 4; // padding
-        input += sizeof(SolPubkey);
-        input += sizeof(SolPubkey);
+        input += sizeof(SandPubkey);
+        input += sizeof(SandPubkey);
         input += sizeof(uint64_t);
         uint64_t data_len = *(uint64_t *) input;
         input += sizeof(uint64_t);
@@ -83,12 +83,12 @@ static bool sand_deserialize(
       input += 4; // padding
 
       // key
-      params->ka[i].key = (SolPubkey *) input;
-      input += sizeof(SolPubkey);
+      params->ka[i].key = (SandPubkey *) input;
+      input += sizeof(SandPubkey);
 
       // owner
-      params->ka[i].owner = (SolPubkey *) input;
-      input += sizeof(SolPubkey);
+      params->ka[i].owner = (SandPubkey *) input;
+      input += sizeof(SandPubkey);
 
       // lamports
       params->ka[i].lamports = (uint64_t *) input;
@@ -124,8 +124,8 @@ static bool sand_deserialize(
   params->data = input;
   input += params->data_len;
 
-  params->program_id = (SolPubkey *) input;
-  input += sizeof(SolPubkey);
+  params->program_id = (SandPubkey *) input;
+  input += sizeof(SandPubkey);
 
   return true;
 }

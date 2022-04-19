@@ -32,7 +32,7 @@ void sand_set_return_data(const uint8_t *bytes, uint64_t bytes_len);
  * @param program_id the program_id which set the return data. Only set if there was some return data (the function returns non-zero).
  * @param result length of return data (may exceed bytes_len if the return data is longer)
  */
-uint64_t sand_get_return_data(const uint8_t *bytes, uint64_t bytes_len, SolPubkey *program_id);
+uint64_t sand_get_return_data(const uint8_t *bytes, uint64_t bytes_len, SandPubkey *program_id);
 
 #ifdef __cplusplus
 }

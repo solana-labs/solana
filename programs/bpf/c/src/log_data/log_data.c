@@ -6,9 +6,9 @@
 static const uint8_t return_data[] = { 0x08, 0x01, 0x44 };
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo ka[1];
-  SolParameters params = (SolParameters) { .ka = ka };
-  SolBytes fields[2];
+  SandAccountInfo ka[1];
+  SandParameters params = (SandParameters) { .ka = ka };
+  SandBytes fields[2];
 
   if (!sand_deserialize(input, &params, SAND_ARRAY_SIZE(ka))) {
     return ERROR_INVALID_ARGUMENT;

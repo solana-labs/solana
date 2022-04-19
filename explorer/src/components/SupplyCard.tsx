@@ -2,7 +2,7 @@ import React from "react";
 import { useSupply, useFetchSupply, Status } from "providers/supply";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { SolBalance } from "utils";
+import { SandBalance} from "utils";
 import { TableCardBody } from "./common/TableCardBody";
 
 export function SupplyCard() {
@@ -33,7 +33,7 @@ export function SupplyCard() {
         <tr>
           <td className="w-100">Total Supply (SAND)</td>
           <td className="text-lg-end">
-            <SolBalance lamports={supply.total} maximumFractionDigits={0} />
+            <SandBalancelamports={supply.total} maximumFractionDigits={0} />
           </td>
         </tr>
 

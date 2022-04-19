@@ -12,8 +12,8 @@
 #define NUM_KA 1
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo ka[NUM_KA];
-  SolParameters params = (SolParameters){.ka = ka};
+  SandAccountInfo ka[NUM_KA];
+  SandParameters params = (SandParameters){.ka = ka};
   if (!sand_deserialize(input, &params, SAND_ARRAY_SIZE(ka))) {
     return ERROR_INVALID_ARGUMENT;
   }

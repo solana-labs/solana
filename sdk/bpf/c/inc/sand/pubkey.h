@@ -19,7 +19,7 @@ extern "C" {
  */
 typedef struct {
   uint8_t x[SIZE_PUBKEY];
-} SolPubkey;
+} SandPubkey;
 
 /**
  * Prints the hexadecimal representation of a public key
@@ -27,7 +27,7 @@ typedef struct {
  * @param key The public key to print
  */
 void sand_log_pubkey(
-  const SolPubkey *pubkey
+  const SandPubkey *pubkey
 );
 
 /**
@@ -37,7 +37,7 @@ void sand_log_pubkey(
  * @param two Second public key
  * @return true if the same
  */
-static bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
+static bool SandPubkey_same(const SandPubkey *one, const SandPubkey *two) {
   for (int i = 0; i < sizeof(*one); i++) {
     if (one->x[i] != two->x[i]) {
       return false;
@@ -74,8 +74,8 @@ typedef struct {
 uint64_t sand_create_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
-    const SolPubkey *program_id,
-    SolPubkey *program_address
+    const SandPubkey *program_id,
+    SandPubkey *program_address
 );
 
 /**
@@ -90,8 +90,8 @@ uint64_t sand_create_program_address(
 uint64_t sand_try_find_program_address(
     const SolSignerSeed *seeds,
     int seeds_len,
-    const SolPubkey *program_id,
-    SolPubkey *program_address,
+    const SandPubkey *program_id,
+    SandPubkey *program_address,
     uint8_t *bump_seed
 );
 
@@ -102,7 +102,7 @@ uint64_t sand_try_find_program_address(
 #include <stdio.h>
 
 void sand_log_pubkey(
-  const SolPubkey *pubkey
+  const SandPubkey *pubkey
 ) {
   printf("Program log: ");
   for (int i = 0; i < SIZE_PUBKEY; i++) {

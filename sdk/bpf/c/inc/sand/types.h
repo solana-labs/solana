@@ -132,7 +132,7 @@ static_assert(sizeof(uint64_t) == 8);
 typedef struct {
   const uint8_t *addr; /** bytes */
   uint64_t len; /** number of bytes*/
-} SolBytes;
+} SandBytes;
 
 #ifdef __cplusplus
 }

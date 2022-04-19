@@ -28,7 +28,7 @@ export function normalizeTokenAmount(
   return rawTokens / Math.pow(10, decimals);
 }
 
-export function lamportsToSol(lamports: number | BN): number {
+export function lamportsToSand(lamports: number | BN): number {
   if (typeof lamports === "number") {
     return Math.abs(lamports) / LAMPORTS_PER_SAND;
   }
@@ -48,11 +48,11 @@ export function lamportsToSol(lamports: number | BN): number {
   return signMultiplier * parseFloat(solString);
 }
 
-export function lamportsToSolString(
+export function lamportsToSandString(
   lamports: number | BN,
   maximumFractionDigits: number = 9
 ): string {
-  const sand = lamportsToSol(lamports);
+  const sand = lamportsToSand(lamports);
   return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sand);
 }
 
@@ -71,7 +71,7 @@ export function SolBalance({
     <span>
       ◎
       <span className="font-monospace">
-        {lamportsToSolString(lamports, maximumFractionDigits)}
+        {lamportsToSandString(lamports, maximumFractionDigits)}
       </span>
     </span>
   );

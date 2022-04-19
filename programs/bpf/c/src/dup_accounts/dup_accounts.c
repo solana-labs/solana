@@ -9,8 +9,8 @@
  */
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo accounts[5];
-  SolParameters params = (SolParameters){.ka = accounts};
+  SandAccountInfo accounts[5];
+  SandParameters params = (SandParameters){.ka = accounts};
 
   if (!sand_deserialize(input, &params, SAND_ARRAY_SIZE(accounts))) {
     return ERROR_INVALID_ARGUMENT;
@@ -60,25 +60,25 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     if (params.ka_num > 4) {
       {
-        SolAccountMeta arguments[] = {{accounts[0].key, true, true},
+        SandAccountMeta arguments[] = {{accounts[0].key, true, true},
                                       {accounts[1].key, true, false},
                                       {accounts[2].key, true, false},
                                       {accounts[3].key, false, true}};
         uint8_t data[] = {7};
-        const SolInstruction instruction = {
-            (SolPubkey *)params.program_id, arguments,
+        const SandInstruction instruction = {
+            (SandPubkey *)params.program_id, arguments,
             SAND_ARRAY_SIZE(arguments), data, SAND_ARRAY_SIZE(data)};
         sand_assert(SUCCESS ==
                    sand_invoke(&instruction, accounts, params.ka_num));
       }
       {
-        SolAccountMeta arguments[] = {{accounts[0].key, true, true},
+        SandAccountMeta arguments[] = {{accounts[0].key, true, true},
                                       {accounts[1].key, true, false},
                                       {accounts[2].key, true, false},
                                       {accounts[3].key, true, false}};
         uint8_t data[] = {3};
-        const SolInstruction instruction = {
-            (SolPubkey *)params.program_id, arguments,
+        const SandInstruction instruction = {
+            (SandPubkey *)params.program_id, arguments,
             SAND_ARRAY_SIZE(arguments), data, SAND_ARRAY_SIZE(data)};
         sand_assert(SUCCESS ==
                    sand_invoke(&instruction, accounts, params.ka_num));

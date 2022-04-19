@@ -2431,10 +2431,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     }
 }
 
-/// Rust representation of C's SolInstruction
+/// Rust representation of C's SandInstruction
 #[derive(Debug)]
 #[repr(C)]
-struct SolInstruction {
+struct SandInstruction {
     program_id_addr: u64,
     accounts_addr: u64,
     accounts_len: u64,
@@ -2442,19 +2442,19 @@ struct SolInstruction {
     data_len: u64,
 }
 
-/// Rust representation of C's SolAccountMeta
+/// Rust representation of C's SandAccountMeta
 #[derive(Debug)]
 #[repr(C)]
-struct SolAccountMeta {
+struct SandAccountMeta {
     pubkey_addr: u64,
     is_writable: bool,
     is_signer: bool,
 }
 
-/// Rust representation of C's SolAccountInfo
+/// Rust representation of C's SandAccountInfo
 #[derive(Debug)]
 #[repr(C)]
-struct SolAccountInfo {
+struct SandAccountInfo {
     key_addr: u64,
     lamports_addr: u64,
     data_len: u64,
@@ -2524,7 +2524,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
-        let ix_c = translate_type::<SolInstruction>(
+        let ix_c = translate_type::<SandInstruction>(
             memory_mapping,
             addr,
             invoke_context.get_check_aligned(),
@@ -2540,7 +2540,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             ix_c.program_id_addr,
             invoke_context.get_check_aligned(),
         )?;
-        let meta_cs = translate_slice::<SolAccountMeta>(
+        let meta_cs = translate_slice::<SandAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
             ix_c.accounts_len as u64,
@@ -2587,7 +2587,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         memory_mapping: &MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
-        let account_infos = translate_slice::<SolAccountInfo>(
+        let account_infos = translate_slice::<SandAccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
@@ -2606,7 +2606,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             })
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &SolAccountInfo, invoke_context: &InvokeContext| {
+        let translate = |account_info: &SandAccountInfo, invoke_context: &InvokeContext| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(

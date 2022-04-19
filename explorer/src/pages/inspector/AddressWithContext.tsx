@@ -8,7 +8,7 @@ import {
 } from "providers/accounts";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { addressLabel } from "utils/tx";
-import { lamportsToSolString } from "utils";
+import { lamportsToSandString } from "utils";
 
 type AccountValidator = (account: Account) => string | undefined;
 
@@ -94,7 +94,7 @@ function AccountInfo({
       {ownerAddress
         ? `Owned by ${
             ownerLabel || ownerAddress
-          }. Balance is ${lamportsToSolString(info.data.lamports)} SAND`
+          }. Balance is ${lamportsToSandString(info.data.lamports)} SAND`
         : "Account doesn't exist"}
     </span>
   );

@@ -35,7 +35,7 @@ function get_token_capitalization {
   totalSupplySol=$((totalSupplyLamports / LAMPORTS_PER_SAND))
 
   printf "\n--- Token Capitalization ---\n"
-  printf "Total token capitalization %'d SAND\n" "$totalSupplySol"
+  printf "Total token capitalization %'d SAND\n" "$totalSupplySand"
   printf "Total token capitalization %'d Lamports\n" "$totalSupplyLamports"
 
 }
@@ -55,28 +55,28 @@ function get_program_account_balance_totals {
     totalAccountBalancesLamports=$((totalAccountBalancesLamports + account))
     numberOfAccounts=$((numberOfAccounts + 1))
   done
-  totalAccountBalancesSol=$((totalAccountBalancesLamports / LAMPORTS_PER_SAND))
+  totalAccountBalancesSand=$((totalAccountBalancesLamports / LAMPORTS_PER_SAND))
 
   printf "\n--- %s Account Balance Totals ---\n" "$PROGRAM_NAME"
   printf "Number of %s Program accounts: %'.f\n" "$PROGRAM_NAME" "$numberOfAccounts"
-  printf "Total token balance in all %s accounts: %'d SAND\n" "$PROGRAM_NAME" "$totalAccountBalancesSol"
+  printf "Total token balance in all %s accounts: %'d SAND\n" "$PROGRAM_NAME" "$totalAccountBalancesSand"
   printf "Total token balance in all %s accounts: %'d Lamports\n" "$PROGRAM_NAME" "$totalAccountBalancesLamports"
 
   case $PROGRAM_NAME in
     SYSTEM)
-      systemAccountBalanceTotalSol=$totalAccountBalancesSol
+      systemAccountBalanceTotalSand=$totalAccountBalancesSand
       systemAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     STAKE)
-      stakeAccountBalanceTotalSol=$totalAccountBalancesSol
+      stakeAccountBalanceTotalSand=$totalAccountBalancesSand
       stakeAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     VOTE)
-      voteAccountBalanceTotalSol=$totalAccountBalancesSol
+      voteAccountBalanceTotalSand=$totalAccountBalancesSand
       voteAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     CONFIG)
-      configAccountBalanceTotalSol=$totalAccountBalancesSol
+      configAccountBalanceTotalSand=$totalAccountBalancesSand
       configAccountBalanceTotalLamports=$totalAccountBalancesLamports
       ;;
     *)
@@ -87,11 +87,11 @@ function get_program_account_balance_totals {
 }
 
 function sum_account_balances_totals {
-  grandTotalAccountBalancesSol=$((systemAccountBalanceTotalSol + stakeAccountBalanceTotalSol + voteAccountBalanceTotalSol + configAccountBalanceTotalSol))
+  grandtotalAccountBalancesSand=$((systemAccountBalanceTotalSand + stakeAccountBalanceTotalSand + voteAccountBalanceTotalSand + configAccountBalanceTotalSand))
   grandTotalAccountBalancesLamports=$((systemAccountBalanceTotalLamports + stakeAccountBalanceTotalLamports + voteAccountBalanceTotalLamports + configAccountBalanceTotalLamports))
 
   printf "\n--- Total Token Distribution in all Account Balances ---\n"
-  printf "Total SAND in all Account Balances: %'d\n" "$grandTotalAccountBalancesSol"
+  printf "Total SAND in all Account Balances: %'d\n" "$grandtotalAccountBalancesSand"
   printf "Total Lamports in all Account Balances: %'d\n" "$grandTotalAccountBalancesLamports"
 }
 
@@ -101,10 +101,10 @@ shift
 
 LAMPORTS_PER_SAND=1000000000 # 1 billion
 
-stakeAccountBalanceTotalSol=
-systemAccountBalanceTotalSol=
-voteAccountBalanceTotalSol=
-configAccountBalanceTotalSol=
+stakeAccountBalanceTotalSand=
+systemAccountBalanceTotalSand=
+voteAccountBalanceTotalSand=
+configAccountBalanceTotalSand=
 
 stakeAccountBalanceTotalLamports=
 systemAccountBalanceTotalLamports=

@@ -137,7 +137,7 @@ program data: 3fJSrRviyJtpwrBo/DeNqpUrpFjxKEWKPVaTfUjs8AAAAAAAAAAAAAAACC+JDWOEeN
 This requires a new system call:
 
 ```
-void sand_log_data(SolBytes *fields, uint64_t length);
+void sand_log_data(SandBytes *fields, uint64_t length);
 ```
 
 ### Considerations

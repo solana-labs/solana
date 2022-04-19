@@ -7,8 +7,8 @@
 #include <sand/deserialize_deprecated.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo ka[1];
-  SolParameters params = (SolParameters) { .ka = ka };
+  SandAccountInfo ka[1];
+  SandParameters params = (SandParameters) { .ka = ka };
 
   sand_log(__FILE__);
 

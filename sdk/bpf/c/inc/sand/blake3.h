@@ -22,7 +22,7 @@ extern "C" {
  * @param result 32 byte array to hold the result
  */
 uint64_t sand_blake3(
-    const SolBytes *bytes,
+    const SandBytes *bytes,
     int bytes_len,
     const uint8_t *result
 );

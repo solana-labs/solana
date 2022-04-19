@@ -7,7 +7,7 @@
 
 extern uint64_t entrypoint(const uint8_t *input) {
   uint8_t buf[1024];
-  SolPubkey me;
+  SandPubkey me;
 
   // There should be no return data on entry
   uint64_t ret = sand_get_return_data(NULL, 0, NULL);

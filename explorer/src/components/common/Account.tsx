@@ -1,7 +1,7 @@
 import React from "react";
 import { Address } from "./Address";
 import { Account } from "providers/accounts";
-import { SolBalance } from "utils";
+import { SandBalance} from "utils";
 
 type AccountHeaderProps = {
   title: string;
@@ -41,7 +41,7 @@ export function AccountBalanceRow({ account }: AccountProps) {
     <tr>
       <td>Balance (SAND)</td>
       <td className="text-lg-end text-uppercase">
-        <SolBalance lamports={lamports} />
+        <SandBalancelamports={lamports} />
       </td>
     </tr>
   );

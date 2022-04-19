@@ -20,7 +20,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t bytes1[] = {'G', 'a', 'g', 'g', 'a', 'b', 'l', 'a',
                         'g', 'h', 'b', 'l', 'a', 'g', 'h', '!'};
     uint8_t bytes2[] = {'f', 'l', 'u', 'r', 'b', 'o', 's'};
-    const SolBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
+    const SandBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
                               {bytes2, SAND_ARRAY_SIZE(bytes2)}};
 
     sand_sha256(bytes, SAND_ARRAY_SIZE(bytes), result);
@@ -39,7 +39,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t bytes1[] = {'G', 'a', 'g', 'g', 'a', 'b', 'l', 'a',
                         'g', 'h', 'b', 'l', 'a', 'g', 'h', '!'};
     uint8_t bytes2[] = {'f', 'l', 'u', 'r', 'b', 'o', 's'};
-    const SolBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
+    const SandBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
                               {bytes2, SAND_ARRAY_SIZE(bytes2)}};
 
     sand_keccak256(bytes, SAND_ARRAY_SIZE(bytes), result);
@@ -58,7 +58,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t bytes1[] = {'G', 'a', 'g', 'g', 'a', 'b', 'l', 'a',
                         'g', 'h', 'b', 'l', 'a', 'g', 'h', '!'};
     uint8_t bytes2[] = {'f', 'l', 'u', 'r', 'b', 'o', 's'};
-    const SolBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
+    const SandBytes bytes[] = {{bytes1, SAND_ARRAY_SIZE(bytes1)},
                               {bytes2, SAND_ARRAY_SIZE(bytes2)}};
 
     sand_blake3(bytes, SAND_ARRAY_SIZE(bytes), result);

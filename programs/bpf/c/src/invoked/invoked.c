@@ -7,8 +7,8 @@
 extern uint64_t entrypoint(const uint8_t *input) {
   sand_log("Invoked C program");
 
-  SolAccountInfo accounts[4];
-  SolParameters params = (SolParameters){.ka = accounts};
+  SandAccountInfo accounts[4];
+  SandParameters params = (SandParameters){.ka = accounts};
 
   if (!sand_deserialize(input, &params, 0)) {
     return ERROR_INVALID_ARGUMENT;
@@ -31,13 +31,13 @@ extern uint64_t entrypoint(const uint8_t *input) {
     static const int INVOKED_PROGRAM_DUP_INDEX = 3;
     sand_assert(sand_deserialize(input, &params, 4));
 
-    SolPubkey bpf_loader_id =
-        (SolPubkey){.x = {2,  168, 246, 145, 78,  136, 161, 110, 57,  90, 225,
+    SandPubkey bpf_loader_id =
+        (SandPubkey){.x = {2,  168, 246, 145, 78,  136, 161, 110, 57,  90, 225,
                           40, 148, 143, 250, 105, 86,  147, 55,  104, 24, 221,
                           71, 67,  82,  33,  243, 198, 0,   0,   0,   0}};
 
-    SolPubkey bpf_loader_deprecated_id =
-        (SolPubkey){.x = {2,   168, 246, 145, 78,  136, 161, 107, 189, 35,  149,
+    SandPubkey bpf_loader_deprecated_id =
+        (SandPubkey){.x = {2,   168, 246, 145, 78,  136, 161, 107, 189, 35,  149,
                           133, 95,  100, 4,   217, 180, 244, 86,  183, 130, 27,
                           176, 20,  87,  73,  66,  140, 0,   0,   0,   0}};
 
@@ -56,7 +56,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sand_assert(accounts[ARGUMENT_INDEX].data[i] == i);
     }
 
-    sand_assert(SolPubkey_same(accounts[INVOKED_ARGUMENT_INDEX].owner,
+    sand_assert(SandPubkey_same(accounts[INVOKED_ARGUMENT_INDEX].owner,
                               accounts[INVOKED_PROGRAM_INDEX].key));
     sand_assert(*accounts[INVOKED_ARGUMENT_INDEX].lamports == 10);
     sand_assert(accounts[INVOKED_ARGUMENT_INDEX].data_len == 10);
@@ -66,17 +66,17 @@ extern uint64_t entrypoint(const uint8_t *input) {
     sand_assert(!accounts[INVOKED_ARGUMENT_INDEX].executable);
 
     sand_assert(
-        SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key, params.program_id))
-        sand_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
+        SandPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key, params.program_id))
+        sand_assert(SandPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
                                   &bpf_loader_id));
     sand_assert(!accounts[INVOKED_PROGRAM_INDEX].is_signer);
     sand_assert(!accounts[INVOKED_PROGRAM_INDEX].is_writable);
     sand_assert(accounts[INVOKED_PROGRAM_INDEX].rent_epoch == 0);
     sand_assert(accounts[INVOKED_PROGRAM_INDEX].executable);
 
-    sand_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key,
+    sand_assert(SandPubkey_same(accounts[INVOKED_PROGRAM_INDEX].key,
                               accounts[INVOKED_PROGRAM_DUP_INDEX].key));
-    sand_assert(SolPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
+    sand_assert(SandPubkey_same(accounts[INVOKED_PROGRAM_INDEX].owner,
                               accounts[INVOKED_PROGRAM_DUP_INDEX].owner));
     sand_assert(*accounts[INVOKED_PROGRAM_INDEX].lamports ==
                *accounts[INVOKED_PROGRAM_DUP_INDEX].lamports);
@@ -119,12 +119,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t bump_seed2 = params.data[1];
     uint8_t bump_seed3 = params.data[2];
 
-    SolAccountMeta arguments[] = {
+    SandAccountMeta arguments[] = {
         {accounts[DERIVED_KEY1_INDEX].key, true, false},
         {accounts[DERIVED_KEY2_INDEX].key, true, true},
         {accounts[DERIVED_KEY3_INDEX].key, false, true}};
     uint8_t data[] = {VERIFY_NESTED_SIGNERS};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+    const SandInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SAND_ARRAY_SIZE(arguments),
                                         data, SAND_ARRAY_SIZE(data)};
     uint8_t seed1[] = {'L', 'i', 'l', '\''};
@@ -188,10 +188,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     sand_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
     sand_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
-    SolAccountMeta arguments[] = {
+    SandAccountMeta arguments[] = {
         {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+    const SandInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SAND_ARRAY_SIZE(arguments),
                                         data, SAND_ARRAY_SIZE(data)};
     sand_assert(SUCCESS ==
@@ -207,10 +207,10 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     sand_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_signer);
     sand_assert(false == accounts[INVOKED_ARGUMENT_INDEX].is_writable);
-    SolAccountMeta arguments[] = {
+    SandAccountMeta arguments[] = {
         {accounts[INVOKED_ARGUMENT_INDEX].key, false, true}};
     uint8_t data[] = {VERIFY_PRIVILEGE_ESCALATION};
-    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+    const SandInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SAND_ARRAY_SIZE(arguments),
                                         data, SAND_ARRAY_SIZE(data)};
     sand_assert(SUCCESS ==
@@ -240,12 +240,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     uint8_t remaining_invokes = params.data[1];
     if (remaining_invokes > 1) {
       sand_log("Invoke again");
-      SolAccountMeta arguments[] = {
+      SandAccountMeta arguments[] = {
           {accounts[INVOKED_ARGUMENT_INDEX].key, true, true},
           {accounts[ARGUMENT_INDEX].key, true, true},
           {accounts[INVOKED_PROGRAM_INDEX].key, false, false}};
       uint8_t data[] = {NESTED_INVOKE, remaining_invokes - 1};
-      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+      const SandInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                           arguments, SAND_ARRAY_SIZE(arguments),
                                           data, SAND_ARRAY_SIZE(data)};
       sand_assert(SUCCESS == sand_invoke(&instruction, accounts, params.ka_num));

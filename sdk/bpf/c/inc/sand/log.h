@@ -43,14 +43,14 @@ static void sand_log_array(const uint8_t *array, int len) {
 /**
  * Print the base64 representation of some arrays.
  */
-void sand_log_data(SolBytes *fields, uint64_t fields_len);
+void sand_log_data(SandBytes *fields, uint64_t fields_len);
 
 /**
  * Prints the program's input parameters
  *
- * @param params Pointer to a SolParameters structure
+ * @param params Pointer to a SandParameters structure
  */
-static void sand_log_params(const SolParameters *params) {
+static void sand_log_params(const SandParameters *params) {
   sand_log("- Program identifier:");
   sand_log_pubkey(params->program_id);
 

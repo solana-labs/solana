@@ -5,8 +5,8 @@
 #include <solana_sdk.h>
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  SolAccountInfo ka[2];
-  SolParameters params = (SolParameters){.ka = ka};
+  SandAccountInfo ka[2];
+  SandParameters params = (SandParameters){.ka = ka};
 
   sand_log(__FILE__);
 
@@ -15,14 +15,14 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
 
   char ka_data[] = {1, 2, 3};
-  SolPubkey ka_owner;
+  SandPubkey ka_owner;
   sand_memset(ka_owner.x, 0, SIZE_PUBKEY); // set to system program
 
   sand_assert(params.ka_num == 2);
   for (int i = 0; i < 2; i++) {
     sand_assert(*params.ka[i].lamports == 42);
     sand_assert(!sand_memcmp(params.ka[i].data, ka_data, 4));
-    sand_assert(SolPubkey_same(params.ka[i].owner, &ka_owner));
+    sand_assert(SandPubkey_same(params.ka[i].owner, &ka_owner));
     sand_assert(params.ka[i].is_signer == false);
     sand_assert(params.ka[i].is_writable == false);
     sand_assert(params.ka[i].executable == false);
