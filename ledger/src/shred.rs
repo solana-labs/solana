@@ -49,6 +49,7 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
+pub use crate::shred_stats::{ProcessShredsStats, ShredFetchStats};
 use {
     crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
     bincode::config::Options,
@@ -70,34 +71,6 @@ use {
     std::{cell::RefCell, mem::size_of},
     thiserror::Error,
 };
-
-#[derive(Default, Clone)]
-pub struct ProcessShredsStats {
-    // Per-slot elapsed time
-    pub shredding_elapsed: u64,
-    pub receive_elapsed: u64,
-    pub serialize_elapsed: u64,
-    pub gen_data_elapsed: u64,
-    pub gen_coding_elapsed: u64,
-    pub sign_coding_elapsed: u64,
-    pub coding_send_elapsed: u64,
-    pub get_leader_schedule_elapsed: u64,
-}
-impl ProcessShredsStats {
-    pub fn update(&mut self, new_stats: &ProcessShredsStats) {
-        self.shredding_elapsed += new_stats.shredding_elapsed;
-        self.receive_elapsed += new_stats.receive_elapsed;
-        self.serialize_elapsed += new_stats.serialize_elapsed;
-        self.gen_data_elapsed += new_stats.gen_data_elapsed;
-        self.gen_coding_elapsed += new_stats.gen_coding_elapsed;
-        self.sign_coding_elapsed += new_stats.sign_coding_elapsed;
-        self.coding_send_elapsed += new_stats.gen_coding_elapsed;
-        self.get_leader_schedule_elapsed += new_stats.get_leader_schedule_elapsed;
-    }
-    pub fn reset(&mut self) {
-        *self = Self::default();
-    }
-}
 
 pub type Nonce = u32;
 
@@ -1096,18 +1069,6 @@ impl Shredder {
 
         Ok(())
     }
-}
-
-#[derive(Default, Debug, Eq, PartialEq)]
-pub struct ShredFetchStats {
-    pub index_overrun: usize,
-    pub shred_count: usize,
-    pub index_bad_deserialize: usize,
-    pub index_out_of_bounds: usize,
-    pub slot_bad_deserialize: usize,
-    pub duplicate_shred: usize,
-    pub slot_out_of_range: usize,
-    pub bad_shred_type: usize,
 }
 
 // Get slot, index, and type from a packet with partial deserialize

@@ -17,7 +17,7 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, Builder, JoinHandle},
-        time::Instant,
+        time::{Duration, Instant},
     },
 };
 
@@ -72,6 +72,7 @@ impl ShredFetchStage {
     ) where
         F: Fn(&mut Packet),
     {
+        const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut last_updated = Instant::now();
 
@@ -80,7 +81,6 @@ impl ShredFetchStage {
         let mut last_slot = std::u64::MAX;
         let mut slots_per_epoch = 0;
 
-        let mut last_stats = Instant::now();
         let mut stats = ShredFetchStats::default();
         let mut packet_hasher = PacketHasher::default();
 
@@ -111,20 +111,7 @@ impl ShredFetchStage {
                     &packet_hasher,
                 );
             });
-            if last_stats.elapsed().as_millis() > 1000 {
-                datapoint_info!(
-                    name,
-                    ("index_overrun", stats.index_overrun, i64),
-                    ("shred_count", stats.shred_count, i64),
-                    ("slot_bad_deserialize", stats.slot_bad_deserialize, i64),
-                    ("index_bad_deserialize", stats.index_bad_deserialize, i64),
-                    ("index_out_of_bounds", stats.index_out_of_bounds, i64),
-                    ("slot_out_of_range", stats.slot_out_of_range, i64),
-                    ("duplicate_shred", stats.duplicate_shred, i64),
-                );
-                stats = ShredFetchStats::default();
-                last_stats = Instant::now();
-            }
+            stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(vec![packet_batch]).is_err() {
                 break;
             }
