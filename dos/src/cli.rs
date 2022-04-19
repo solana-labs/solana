@@ -46,7 +46,7 @@ pub struct DosClientParameters {
     pub transaction_params: TransactionParams,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default)]
+#[derive(Args, Clone, Serialize, Deserialize, Debug, Default)]
 #[clap(rename_all = "kebab-case")]
 pub struct TransactionParams {
     #[clap(
@@ -76,6 +76,13 @@ pub struct TransactionParams {
         help = "Type of transaction to be sent [Optional]"
     )]
     pub transaction_type: Option<TransactionType>,
+
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of threads generating transactions"
+    )]
+    pub num_gen_threads: usize,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]

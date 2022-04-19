@@ -40,6 +40,7 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 use {
+    crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
@@ -68,6 +69,7 @@ use {
         process::exit,
         str::FromStr,
         sync::Arc,
+        thread,
         time::{Duration, Instant},
     },
 };
@@ -95,6 +97,7 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
 /// 2.2 Transfer payer -> multiple destinations (many instructions per transaction)
 /// 2.3 Create account transaction
 ///
+#[derive(Clone)]
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
@@ -234,6 +237,145 @@ impl TransactionGenerator {
             tx
         }
     }
+}
+
+// Multithreading-related functions
+//
+// The most computationally expensive work is signing new
+// transactions. So we generate them in n threads.
+// Sending transactions is at least x8 times cheaper operation
+// so we use only one thread for that for now:
+//
+// |TxGenerator|{n} -> |Tx channel|{1} -> |Sender|{1}
+enum TransactionMsg {
+    Transaction(Transaction),
+    Exit,
+}
+
+fn create_sender_thread(
+    tx_receiver: Receiver<TransactionMsg>,
+    mut n_alive_threads: usize,
+    target: &SocketAddr,
+) -> thread::JoinHandle<()> {
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let target = target.clone();
+    let timer_receiver = tick(Duration::from_millis(REPORT_EACH_MILLIS as u64));
+
+    thread::spawn(move || {
+        let mut count: usize = 0;
+        let mut total_count: usize = 0;
+        let mut error_count = 0;
+        let start_total = Instant::now();
+        loop {
+            select! {
+                recv(tx_receiver) -> msg => {
+                    match msg {
+                        Ok(TransactionMsg::Transaction(tx)) => {
+                            let data = bincode::serialize(&tx).unwrap();
+                            let res = socket.send_to(&data, target);
+                            if res.is_err() {
+                                error_count += 1;
+                            }
+
+                            count += 1;
+                            total_count += 1;
+                        }
+                        Ok(TransactionMsg::Exit) => {
+                            info!("Worker is done");
+                            n_alive_threads -= 1;
+                            if n_alive_threads == 0 {
+                                let t = start_total.elapsed().as_micros() as f64;
+                                info!("Stopping sender. Count: {}, errors count: {}, total time: {}s, tps: {}",
+                                    total_count,
+                                    error_count,
+                                    t / 1e6,
+                                    ((count as f64)*1e6) / t,
+                                );
+
+                                break;
+                            }
+                        }
+                        _ => panic!("Sender panics"),
+                    }
+                },
+                recv(timer_receiver) -> _ => {
+                    let t = start_total.elapsed().as_micros() as f64;
+                    info!("Count: {}, tps: {}, time: {}",
+                        count,
+                        compute_tps(count),
+                        t / 1e6,
+                    );
+                    count = 0;
+                }
+            }
+        }
+    })
+}
+
+// TODO use Measure struct from bench instead of manual measuring
+fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
+    tx_sender: &Sender<TransactionMsg>,
+    max_iter_per_thread: usize,
+    transaction_generator: &mut TransactionGenerator,
+    client: &Option<Arc<T>>,
+    payer: Option<Keypair>,
+) -> thread::JoinHandle<()> {
+    let tx_sender = tx_sender.clone();
+    let mut transaction_generator = transaction_generator.clone();
+    let client = client.clone();
+
+    let num_signatures = transaction_generator.transaction_params.num_signatures;
+    let valid_signatures = transaction_generator.transaction_params.valid_signatures;
+    let valid_blockhash = transaction_generator.transaction_params.valid_blockhash;
+
+    // Generate n=1000 unique keypairs, which are used to create
+    // chunks of keypairs in case of valid_blockhash or valid_signatures option
+    // The number of chunks is described by binomial coefficient
+    // and hence this choice of n provides large enough number of permutations
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    if valid_signatures || valid_blockhash {
+        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    }
+
+    thread::spawn(move || {
+        let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+        let mut it = indexes.iter().permutations(num_signatures);
+        let mut count = 0;
+        let mut generation_elapsed: u64 = 0;
+        loop {
+            let generation_start = Instant::now();
+            let chunk_keypairs = if valid_signatures || valid_blockhash {
+                let permut = it.next();
+                if permut.is_none() {
+                    // if ran out of permutations, regenerate keys
+                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                    info!("Regenerate keypairs");
+                    continue;
+                }
+                let permut = permut.unwrap();
+                Some(apply_permutation(permut, &keypairs_flat))
+            } else {
+                None
+            };
+
+            let tx = transaction_generator.generate(&payer, chunk_keypairs, &client);
+            generation_elapsed =
+                generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
+
+            let _ = tx_sender.send(TransactionMsg::Transaction(tx));
+            count += 1;
+            if max_iter_per_thread != 0 && count >= max_iter_per_thread {
+                let _ = tx_sender.send(TransactionMsg::Exit);
+                break;
+            }
+        }
+        info!(
+            "Finished thread. count = {}, avg generation time = {}, tps = {}",
+            count,
+            generation_elapsed / 1_000,
+            (count as f64) / (generation_elapsed as f64) * 1e6
+        );
+    })
 }
 
 //TODO(klykov): is it possible to simplify this code using BenchTpsClient?
@@ -376,72 +518,42 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
 ) {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
-    let num_signatures = transaction_params.num_signatures;
-    let valid_signatures = transaction_params.valid_signatures;
+    info!("{:?}", transaction_params);
+    let num_gen_threads = transaction_params.num_gen_threads;
     let valid_blockhash = transaction_params.valid_blockhash;
-
-    // Number of payers is the number of generating threads, for now it is 1
-    // Later, we will create a new payer for each thread since Keypair is not clonable
-    let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
-    let payer = &payers[0];
-
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
-    // Generate n=1000 unique keypairs, which are used to create
-    // chunks of keypairs in case of valid_signatures option
-    // The number of chunks is described by binomial coefficient
-    // and hence this choice of n provides large enough number of permutations
-    let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    if valid_signatures || valid_blockhash {
-        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+    let (tx_sender, tx_receiver) = unbounded();
+
+    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target); //, addr);
+
+    let max_iter_per_thread = iterations / num_gen_threads;
+
+    // Number of payers is the number of generating threads
+    let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, num_gen_threads, &client);
+
+    let tx_generator_threads: Vec<_> = payers
+        .into_iter()
+        .map(|payer| {
+            create_generator_thread(
+                &tx_sender,
+                max_iter_per_thread,
+                &mut transaction_generator,
+                &client,
+                payer,
+            )
+        })
+        .collect();
+
+    if let Err(err) = sender_thread.join() {
+        println!("join() failed with: {:?}", err);
     }
-
-    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-    let mut it = indexes.iter().permutations(num_signatures);
-    let mut count = 0;
-    let mut total_count = 0;
-    let mut error_count = 0;
-    let mut last_log = Instant::now();
-    loop {
-        let chunk_keypairs = if valid_signatures || valid_blockhash {
-            let permut = it.next();
-            if permut.is_none() {
-                // if ran out of permutations, regenerate keys
-                keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                info!("Regenerate keypairs");
-                continue;
-            }
-            let permut = permut.unwrap();
-            Some(apply_permutation(permut, &keypairs_flat))
-        } else {
-            None
-        };
-
-        let tx = transaction_generator.generate(payer, chunk_keypairs, &client);
-
-        let data = bincode::serialize(&tx).unwrap();
-        let res = socket.send_to(&data, target);
-        if res.is_err() {
-            error_count += 1;
-        }
-        count += 1;
-        total_count += 1;
-        if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
-            info!(
-                "count: {}, errors: {}, tps: {}",
-                count,
-                error_count,
-                compute_tps(count)
-            );
-            last_log = Instant::now();
-            count = 0;
-        }
-        if iterations != 0 && total_count >= iterations {
-            break;
+    for t_generator in tx_generator_threads {
+        if let Err(err) = t_generator.join() {
+            println!("join() failed with: {:?}", err);
         }
     }
+    println!("This is the end");
 }
 
 fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
@@ -754,6 +866,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: false,
                     transaction_type: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -777,6 +890,7 @@ pub mod test {
                     valid_signatures: false,
                     unique_transactions: true,
                     transaction_type: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -800,6 +914,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: None,
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -877,6 +992,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: false,
                     transaction_type: Some(TransactionType::SingleTransfer),
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -901,6 +1017,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: Some(TransactionType::SingleTransfer),
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -925,6 +1042,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: Some(TransactionType::MultiTransfer),
+                    num_gen_threads: 1,
                 },
             },
         );
@@ -949,6 +1067,7 @@ pub mod test {
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: Some(TransactionType::AccountCreation),
+                    num_gen_threads: 1,
                 },
             },
         );
