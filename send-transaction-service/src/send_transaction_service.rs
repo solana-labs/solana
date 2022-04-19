@@ -232,9 +232,9 @@ impl SendTransactionService {
                     }
                 }
 
-                if !transactions.is_empty()
-                    && (last_batch_sent.elapsed().as_millis() as u64 >= config.batch_send_rate_ms
-                        || transactions.len() >= config.batch_size)
+                if (!transactions.is_empty()
+                    && last_batch_sent.elapsed().as_millis() as u64 >= config.batch_send_rate_ms)
+                    || transactions.len() >= config.batch_size
                 {
                     inc_new_counter_info!(
                         "send_transaction_service-batch-size",
@@ -247,21 +247,23 @@ impl SendTransactionService {
                         &config,
                     );
                     let last_sent_time = Instant::now();
-                    let mut retry_transactions = retry_transactions.lock().unwrap();
-                    for (signature, mut transaction_info) in transactions.drain() {
-                        let retry_len = retry_transactions.len();
-                        let entry = retry_transactions.entry(signature);
-                        if let Entry::Vacant(_) = entry {
-                            if retry_len >= MAX_TRANSACTION_QUEUE_SIZE {
-                                datapoint_warn!("send_transaction_service-queue-overflow");
-                                break;
-                            } else {
-                                transaction_info.last_sent_time = Some(last_sent_time);
-                                entry.or_insert(transaction_info);
+                    {
+                        // take a lock of retry_transactions and move the batch to the retry set.
+                        let mut retry_transactions = retry_transactions.lock().unwrap();
+                        for (signature, mut transaction_info) in transactions.drain() {
+                            let retry_len = retry_transactions.len();
+                            let entry = retry_transactions.entry(signature);
+                            if let Entry::Vacant(_) = entry {
+                                if retry_len >= MAX_TRANSACTION_QUEUE_SIZE {
+                                    datapoint_warn!("send_transaction_service-queue-overflow");
+                                    break;
+                                } else {
+                                    transaction_info.last_sent_time = Some(last_sent_time);
+                                    entry.or_insert(transaction_info);
+                                }
                             }
                         }
                     }
-                    drop(retry_transactions);
 
                     last_batch_sent = Instant::now();
                     if last_leader_refresh.elapsed().as_millis() > 1000 {
@@ -345,7 +347,7 @@ impl SendTransactionService {
         let mut measure = Measure::start("send_transactions_in_batch-us");
 
         // Processing the transactions in batch
-        let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
+        let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
 
         let wire_transactions = transactions
             .iter()
@@ -466,7 +468,7 @@ impl SendTransactionService {
 
         if !batched_transactions.is_empty() {
             // Processing the transactions in batch
-            let addresses = Self::get_tpu_addressesn(tpu_address, leader_info, config);
+            let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
 
             let wire_transactions = transactions
                 .iter()
@@ -529,7 +531,7 @@ impl SendTransactionService {
         }
     }
 
-    fn get_tpu_addressesn<'a, T: TpuInfo>(
+    fn get_tpu_addresses<'a, T: TpuInfo>(
         tpu_address: &'a SocketAddr,
         leader_info: &'a Option<T>,
         config: &'a Config,
