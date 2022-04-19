@@ -373,7 +373,7 @@ pub fn initialize(
     rent: &Rent,
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    if stake_account.get_data().len() != std::mem::size_of::<StakeState>() {
+    if stake_account.get_data().len() != StakeState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
     if let StakeState::Uninitialized = stake_account.get_state()? {
@@ -575,7 +575,7 @@ pub fn split(
     if *split.get_owner() != id() {
         return Err(InstructionError::IncorrectProgramId);
     }
-    if split.get_data().len() != std::mem::size_of::<StakeState>() {
+    if split.get_data().len() != StakeState::size_of() {
         return Err(InstructionError::InvalidAccountData);
     }
     if !matches!(split.get_state()?, StakeState::Uninitialized) {
@@ -1425,8 +1425,7 @@ pub fn create_lockup_stake_account(
     rent: &Rent,
     lamports: u64,
 ) -> AccountSharedData {
-    let mut stake_account =
-        AccountSharedData::new(lamports, std::mem::size_of::<StakeState>(), &id());
+    let mut stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
 
     let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
     assert!(
@@ -1492,8 +1491,7 @@ fn do_create_account(
     lamports: u64,
     activation_epoch: Epoch,
 ) -> AccountSharedData {
-    let mut stake_account =
-        AccountSharedData::new(lamports, std::mem::size_of::<StakeState>(), &id());
+    let mut stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
 
     let vote_state = VoteState::from(vote_account).expect("vote_state");
 
@@ -1674,7 +1672,7 @@ mod tests {
 
     #[test]
     fn test_stake_state_stake_from_fail() {
-        let mut stake_account = AccountSharedData::new(0, std::mem::size_of::<StakeState>(), &id());
+        let mut stake_account = AccountSharedData::new(0, StakeState::size_of(), &id());
 
         stake_account
             .set_state(&StakeState::default())
@@ -2669,7 +2667,7 @@ mod tests {
     #[ignore]
     #[should_panic]
     fn test_dbg_stake_minimum_balance() {
-        let minimum_balance = Rent::default().minimum_balance(std::mem::size_of::<StakeState>());
+        let minimum_balance = Rent::default().minimum_balance(StakeState::size_of());
         panic!(
             "stake minimum_balance: {} lamports, {} SOL",
             minimum_balance,
@@ -2967,7 +2965,7 @@ mod tests {
         let authority_pubkey = Pubkey::new_unique();
         let initial_lamports = 4242424242;
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_lamports = rent_exempt_reserve + initial_lamports;
 
         let meta = Meta {
@@ -2977,7 +2975,7 @@ mod tests {
         let mut stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .expect("stake_account");

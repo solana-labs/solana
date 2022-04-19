@@ -1310,7 +1310,7 @@ pub fn process_create_stake_account(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
@@ -1784,7 +1784,7 @@ pub fn process_split_stake(
         }
 
         let minimum_balance =
-            rpc_client.get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())?;
+            rpc_client.get_minimum_balance_for_rent_exemption(StakeState::size_of())?;
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
