@@ -5,7 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::collections::HashMap,
 };
 
@@ -223,10 +223,8 @@ impl CostTracker {
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         self.add_transaction_execution_cost(tx_cost, cost);
-        self.account_data_size = self
-            .account_data_size
-            .saturating_add(tx_cost.account_data_size);
-        self.transaction_count = self.transaction_count.saturating_add(1);
+        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
+        saturating_add_assign!(self.transaction_count, 1);
     }
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
@@ -245,20 +243,19 @@ impl CostTracker {
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            match account_cost.checked_add(adjustment) {
-                Some(adjusted_cost) => *account_cost = adjusted_cost,
-                None => *account_cost = self.account_cost_limit,
-            }
+            *account_cost = account_cost
+                .checked_add(adjustment)
+                .unwrap_or(self.account_cost_limit);
         }
-        match self.block_cost.checked_add(adjustment) {
-            Some(adjusted_cost) => self.block_cost = adjusted_cost,
-            None => self.block_cost = self.block_cost_limit,
-        }
+        self.block_cost = self
+            .block_cost
+            .checked_add(adjustment)
+            .unwrap_or(self.block_cost_limit);
         if tx_cost.is_simple_vote {
-            match self.vote_cost.checked_add(adjustment) {
-                Some(adjusted_cost) => self.vote_cost = adjusted_cost,
-                None => self.vote_cost = self.vote_cost_limit,
-            }
+            self.vote_cost = self
+                .vote_cost
+                .checked_add(adjustment)
+                .unwrap_or(self.vote_cost_limit);
         }
     }
 
@@ -269,20 +266,19 @@ impl CostTracker {
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            match account_cost.checked_sub(adjustment) {
-                Some(adjusted_cost) => *account_cost = adjusted_cost,
-                None => *account_cost = self.account_cost_limit,
-            }
+            *account_cost = account_cost
+                .checked_sub(adjustment)
+                .unwrap_or(self.account_cost_limit);
         }
-        match self.block_cost.checked_sub(adjustment) {
-            Some(adjusted_cost) => self.block_cost = adjusted_cost,
-            None => self.block_cost = self.block_cost_limit,
-        }
+        self.block_cost = self
+            .block_cost
+            .checked_sub(adjustment)
+            .unwrap_or(self.block_cost_limit);
         if tx_cost.is_simple_vote {
-            match self.vote_cost.checked_sub(adjustment) {
-                Some(adjusted_cost) => self.vote_cost = adjusted_cost,
-                None => self.vote_cost = self.vote_cost_limit,
-            }
+            self.vote_cost = self
+                .vote_cost
+                .checked_sub(adjustment)
+                .unwrap_or(self.vote_cost_limit);
         }
     }
 }
