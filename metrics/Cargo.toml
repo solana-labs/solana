@@ -25,5 +25,8 @@ serial_test = "0.6.0"
 [lib]
 name = "solana_metrics"
 
+[[bench]]
+name = "metrics"
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

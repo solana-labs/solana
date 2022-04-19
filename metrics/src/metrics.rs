@@ -36,11 +36,11 @@ enum MetricsCommand {
     SubmitCounter(CounterPoint, log::Level, u64),
 }
 
-struct MetricsAgent {
+pub struct MetricsAgent {
     sender: Sender<MetricsCommand>,
 }
 
-trait MetricsWriter {
+pub trait MetricsWriter {
     // Write the points and empty the vector.  Called on the internal
     // MetricsAgent worker thread.
     fn write(&self, points: Vec<DataPoint>);
@@ -148,7 +148,7 @@ impl Default for MetricsAgent {
 }
 
 impl MetricsAgent {
-    fn new(
+    pub fn new(
         writer: Arc<dyn MetricsWriter + Send + Sync>,
         write_frequency: Duration,
         max_points_per_sec: usize,
@@ -444,21 +444,21 @@ pub fn set_panic_hook(program: &'static str, version: Option<String>) {
     });
 }
 
-#[cfg(test)]
-mod test {
+pub mod test_mocks {
     use super::*;
 
-    struct MockMetricsWriter {
-        points_written: Arc<Mutex<Vec<DataPoint>>>,
+    pub struct MockMetricsWriter {
+        pub points_written: Arc<Mutex<Vec<DataPoint>>>,
     }
     impl MockMetricsWriter {
-        fn new() -> Self {
+        #[allow(dead_code)]
+        pub fn new() -> Self {
             MockMetricsWriter {
                 points_written: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
-        fn points_written(&self) -> usize {
+        pub fn points_written(&self) -> usize {
             self.points_written.lock().unwrap().len()
         }
     }
@@ -480,6 +480,11 @@ mod test {
             );
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+    use {super::*, test_mocks::MockMetricsWriter};
 
     #[test]
     fn test_submit() {

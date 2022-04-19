@@ -32,7 +32,6 @@ pub struct CounterPoint {
 }
 
 impl CounterPoint {
-    #[cfg(test)]
     pub fn new(name: &'static str) -> Self {
         CounterPoint {
             name,
