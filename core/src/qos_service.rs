@@ -214,6 +214,32 @@ impl QosService {
         &self,
         cost_details: &BatchedTransactionCostDetails,
     ) {
+<<<<<<< HEAD
+=======
+        self.metrics.stats.estimated_signature_cu.fetch_add(
+            batched_transaction_details.costs.batched_signature_cost,
+            Ordering::Relaxed,
+        );
+        self.metrics.stats.estimated_write_lock_cu.fetch_add(
+            batched_transaction_details.costs.batched_write_lock_cost,
+            Ordering::Relaxed,
+        );
+        self.metrics.stats.estimated_data_bytes_cu.fetch_add(
+            batched_transaction_details.costs.batched_data_bytes_cost,
+            Ordering::Relaxed,
+        );
+        self.metrics.stats.estimated_builtins_execute_cu.fetch_add(
+            batched_transaction_details
+                .costs
+                .batched_builtins_execute_cost,
+            Ordering::Relaxed,
+        );
+        self.metrics.stats.estimated_bpf_execute_cu.fetch_add(
+            batched_transaction_details.costs.batched_bpf_execute_cost,
+            Ordering::Relaxed,
+        );
+
+>>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
         self.metrics
             .estimated_signature_cu
             .fetch_add(cost_details.batched_signature_cost, Ordering::Relaxed);
@@ -230,7 +256,12 @@ impl QosService {
 
     pub fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
+<<<<<<< HEAD
             .actual_execute_cu
+=======
+            .stats
+            .actual_bpf_execute_cu
+>>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
             .fetch_add(units, Ordering::Relaxed);
     }
 
@@ -272,11 +303,22 @@ struct QosServiceMetrics {
     // accumulated estimated instructino data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
+<<<<<<< HEAD
     // accumulated estimated program Compute Units to be packed into block
     estimated_execute_cu: AtomicU64,
 
     // accumulated actual program Compute Units that have been packed into block
     actual_execute_cu: AtomicU64,
+=======
+    /// accumulated estimated builtin programs Compute Units to be packed into block
+    estimated_builtins_execute_cu: AtomicU64,
+
+    /// accumulated estimated BPF program Compute Units to be packed into block
+    estimated_bpf_execute_cu: AtomicU64,
+
+    /// accumulated actual program Compute Units that have been packed into block
+    actual_bpf_execute_cu: AtomicU64,
+>>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
 
     // accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
@@ -308,6 +350,57 @@ impl QosServiceMetrics {
                     i64
                 ),
                 (
+<<<<<<< HEAD
+=======
+                    "estimated_signature_cu",
+                    self.stats.estimated_signature_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_write_lock_cu",
+                    self.stats
+                        .estimated_write_lock_cu
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_data_bytes_cu",
+                    self.stats
+                        .estimated_data_bytes_cu
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_builtins_execute_cu",
+                    self.stats
+                        .estimated_builtins_execute_cu
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "estimated_bpf_execute_cu",
+                    self.stats
+                        .estimated_bpf_execute_cu
+                        .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_bpf_execute_cu",
+                    self.stats.actual_bpf_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_execute_time_us",
+                    self.stats.actual_execute_time_us.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+            );
+            datapoint_info!(
+                "qos-service-errors",
+                ("id", self.id as i64, i64),
+                ("bank_slot", bank_slot as i64, i64),
+                (
+>>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
                     "retried_txs_per_block_limit_count",
                     self.retried_txs_per_block_limit_count
                         .swap(0, Ordering::Relaxed) as i64,
