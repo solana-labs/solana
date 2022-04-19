@@ -49,6 +49,7 @@ use {
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
@@ -1243,6 +1244,9 @@ pub struct Bank {
 
     sysvar_cache: RwLock<SysvarCache>,
 
+    /// (Pubkey, account Hash) for each account that would have been rewritten in rent collection for this slot
+    pub rewrites_skipped_this_slot: Rewrites,
+
     /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
     /// maximum size.
     accounts_data_len: AtomicU64,
@@ -1329,6 +1333,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1654,6 +1659,7 @@ impl Bank {
 
         let accounts_data_len = parent.load_accounts_data_len();
         let mut new = Bank {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             src,
             slot,
@@ -1977,6 +1983,7 @@ impl Bank {
         }
         let feature_set = new();
         let mut bank = Self {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -5697,7 +5704,21 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
+        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
+            Some((mut account, storage_slot)) => {
+                ExpectedRentCollection::maybe_update_rent_epoch_on_load(
+                    &mut account,
+                    &SlotInfoInEpoch::new_small(storage_slot),
+                    &SlotInfoInEpoch::new_small(self.slot()),
+                    self.rent_collector(),
+                    pubkey,
+                    &self.rewrites_skipped_this_slot,
+                );
+
+                Some((account, storage_slot))
+            }
+            None => None,
+        }
     }
 
     pub fn get_program_accounts(
