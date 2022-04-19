@@ -4369,39 +4369,38 @@ mod tests {
 
     #[test]
     fn test_accumulate_batched_transaction_costs() {
-        let tx_costs = vec![
-            TransactionCost {
-                signature_cost: 1,
-                write_lock_cost: 2,
-                data_bytes_cost: 3,
-                bpf_execution_cost: 10,
+        let signature_cost = 1;
+        let write_lock_cost = 2;
+        let data_bytes_cost = 3;
+        let builtins_execution_cost = 4;
+        let bpf_execution_cost = 10;
+        let num_txs = 4;
+
+        let tx_costs: Vec<_> = (0..num_txs)
+            .map(|_| TransactionCost {
+                signature_cost,
+                write_lock_cost,
+                data_bytes_cost,
+                builtins_execution_cost,
+                bpf_execution_cost,
                 ..TransactionCost::default()
-            },
-            TransactionCost {
-                signature_cost: 4,
-                write_lock_cost: 5,
-                data_bytes_cost: 6,
-                bpf_execution_cost: 20,
-                ..TransactionCost::default()
-            },
-            TransactionCost {
-                signature_cost: 7,
-                write_lock_cost: 8,
-                data_bytes_cost: 9,
-                bpf_execution_cost: 40,
-                ..TransactionCost::default()
-            },
-        ];
-        let tx_results = vec![
-            Ok(()),
-            Ok(()),
-            Err(TransactionError::WouldExceedMaxBlockCostLimit),
-        ];
-        // should only accumulate first two cost that are OK
-        let expected_signatures = 5;
-        let expected_write_locks = 7;
-        let expected_data_bytes = 9;
-        let expected_executions = 30;
+            })
+            .collect();
+        let tx_results: Vec<_> = (0..num_txs)
+            .map(|n| {
+                if n % 2 == 0 {
+                    Ok(())
+                } else {
+                    Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                }
+            })
+            .collect();
+        // should only accumulate half of the costs that are OK
+        let expected_signatures = signature_cost * (num_txs / 2);
+        let expected_write_locks = write_lock_cost * (num_txs / 2);
+        let expected_data_bytes = data_bytes_cost * (num_txs / 2);
+        let expected_builtins_execution_costs = builtins_execution_cost * (num_txs / 2);
+        let expected_bpf_execution_costs = bpf_execution_cost * (num_txs / 2);
         let batched_transaction_details =
             BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
         assert_eq!(
@@ -4417,7 +4416,13 @@ mod tests {
             batched_transaction_details.costs.batched_data_bytes_cost
         );
         assert_eq!(
-            expected_executions,
+            expected_builtins_execution_costs,
+            batched_transaction_details
+                .costs
+                .batched_builtins_execute_cost
+        );
+        assert_eq!(
+            expected_bpf_execution_costs,
             batched_transaction_details.costs.batched_bpf_execute_cost
         );
     }
