@@ -4193,7 +4193,7 @@ mod tests {
     ) -> Vec<DeserializedPacket> {
         let capacity = transactions.len();
         let mut packet_vector = Vec::with_capacity(capacity);
-        for tx in transactions.iter().enumerate() {
+        for tx in transactions.iter() {
             packet_vector.push(Packet::from_data(None, &tx).unwrap());
         }
         for index in vote_indexes.iter() {
