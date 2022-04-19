@@ -1127,7 +1127,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
 
             // Set a working bank
@@ -1239,7 +1239,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
             // Let poh_recorder tick up to bank1.tick_height() - 1
@@ -1324,7 +1324,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
 
@@ -1420,7 +1420,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
 

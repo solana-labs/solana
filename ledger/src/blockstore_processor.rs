@@ -3951,7 +3951,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_confirm_slot_entries() {
+    fn test_confirm_slot_entries_without_fix() {
         const HASHES_PER_TICK: u64 = 10;
         const TICKS_PER_SLOT: u64 = 2;
 

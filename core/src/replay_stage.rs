@@ -5879,7 +5879,7 @@ pub mod tests {
 
         // Simulate landing a vote for slot 0 landing in slot 1
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-        bank1.fill_bank_with_ticks();
+        bank1.fill_bank_with_ticks_for_tests();
         tower.record_bank_vote(&bank0, &my_vote_pubkey);
         ReplayStage::push_vote(
             &bank0,
@@ -5919,7 +5919,7 @@ pub mod tests {
         // Trying to refresh the vote for bank 0 in bank 1 or bank 2 won't succeed because
         // the last vote has landed already
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 2));
-        bank2.fill_bank_with_ticks();
+        bank2.fill_bank_with_ticks_for_tests();
         bank2.freeze();
         for refresh_bank in &[&bank1, &bank2] {
             ReplayStage::refresh_last_vote(
@@ -6009,7 +6009,7 @@ pub mod tests {
                     &Pubkey::default(),
                     parent_bank.slot() + 1,
                 ));
-                parent_bank.fill_bank_with_ticks();
+                parent_bank.fill_bank_with_ticks_for_tests();
                 parent_bank.freeze();
             }
             parent_bank
@@ -6076,7 +6076,7 @@ pub mod tests {
             vote_account.vote_state().as_ref().unwrap().tower(),
             vec![0, 1]
         );
-        expired_bank_child.fill_bank_with_ticks();
+        expired_bank_child.fill_bank_with_ticks_for_tests();
         expired_bank_child.freeze();
 
         // Trying to refresh the vote on a sibling bank where:
@@ -6088,7 +6088,7 @@ pub mod tests {
             &Pubkey::default(),
             expired_bank_child.slot() + 1,
         ));
-        expired_bank_sibling.fill_bank_with_ticks();
+        expired_bank_sibling.fill_bank_with_ticks_for_tests();
         expired_bank_sibling.freeze();
         // Set the last refresh to now, shouldn't refresh because the last refresh just happened.
         last_vote_refresh_time.last_refresh_time = Instant::now();
