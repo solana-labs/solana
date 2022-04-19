@@ -379,11 +379,6 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
-<<<<<<< HEAD
-=======
-                        return_data,
-                        ..
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
                     } = details;
 
                     let lamports_per_signature = match durable_nonce_fee {

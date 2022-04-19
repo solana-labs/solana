@@ -20,13 +20,8 @@ pub struct TransactionCost {
     pub signature_cost: u64,
     pub write_lock_cost: u64,
     pub data_bytes_cost: u64,
-<<<<<<< HEAD
-    pub execution_cost: u64,
-=======
     pub builtins_execution_cost: u64,
     pub bpf_execution_cost: u64,
-    pub account_data_size: u64,
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
     pub is_simple_vote: bool,
 }
 
@@ -37,13 +32,8 @@ impl Default for TransactionCost {
             signature_cost: 0u64,
             write_lock_cost: 0u64,
             data_bytes_cost: 0u64,
-<<<<<<< HEAD
-            execution_cost: 0u64,
-=======
             builtins_execution_cost: 0u64,
             bpf_execution_cost: 0u64,
-            account_data_size: 0u64,
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
             is_simple_vote: false,
         }
     }
@@ -123,13 +113,9 @@ impl CostModel {
         tx_cost.signature_cost = self.get_signature_cost(transaction);
         self.get_write_lock_cost(&mut tx_cost, transaction);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
-<<<<<<< HEAD
-        tx_cost.execution_cost = self.get_transaction_cost(transaction);
-=======
-        (tx_cost.builtins_execution_cost, tx_cost.bpf_execution_cost) =
-            self.get_transaction_cost(transaction);
-        tx_cost.account_data_size = self.calculate_account_data_size(transaction);
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
+        let (builtins_cost, bpf_cost) = self.get_transaction_cost(transaction);
+        tx_cost.builtins_execution_cost = builtins_cost;
+        tx_cost.bpf_execution_cost = bpf_cost;
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
@@ -331,14 +317,7 @@ mod tests {
             .get(&system_program::id())
             .unwrap();
 
-<<<<<<< HEAD
-        let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), expected_cost)
-            .unwrap();
-=======
         let testee = CostModel::default();
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
         assert_eq!(
             (*expected_execution_cost, 0),
             testee.get_transaction_cost(&simple_transaction)
@@ -367,16 +346,8 @@ mod tests {
             .unwrap();
         let expected_cost = program_cost * 2;
 
-<<<<<<< HEAD
-        let mut testee = CostModel::default();
-        testee
-            .upsert_instruction_cost(&system_program::id(), program_cost)
-            .unwrap();
-        assert_eq!(expected_cost, testee.get_transaction_cost(&tx));
-=======
         let testee = CostModel::default();
         assert_eq!((expected_cost, 0), testee.get_transaction_cost(&tx));
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
     }
 
     #[test]
@@ -407,13 +378,8 @@ mod tests {
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-<<<<<<< HEAD
         let expected_cost = testee.instruction_execution_cost_table.get_mode() * 2;
-        assert_eq!(expected_cost, result);
-=======
-        let expected_cost = testee.instruction_execution_cost_table.get_default_units() * 2;
         assert_eq!((0, expected_cost), result);
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
     }
 
     #[test]
@@ -482,14 +448,7 @@ mod tests {
             .get(&system_program::id())
             .unwrap();
 
-<<<<<<< HEAD
-        let mut cost_model = CostModel::default();
-        cost_model
-            .upsert_instruction_cost(&system_program::id(), expected_execution_cost)
-            .unwrap();
-=======
         let cost_model = CostModel::default();
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
         let tx_cost = cost_model.calculate_cost(&tx);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);

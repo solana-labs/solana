@@ -48,6 +48,7 @@ use {
             Message,
         },
         pubkey::Pubkey,
+        saturating_add_assign,
         short_vec::decode_shortu16_len,
         signature::Signature,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -1429,47 +1430,28 @@ impl BankingStage {
         let mut cost_details = BatchedTransactionCostDetails::default();
         transactions_costs
             .zip(transaction_results)
-<<<<<<< HEAD
             .for_each(|(cost, result)| {
                 if result.is_ok() {
-                    cost_details.batched_signature_cost = cost_details
-                        .batched_signature_cost
-                        .saturating_add(cost.signature_cost);
-                    cost_details.batched_write_lock_cost = cost_details
-                        .batched_write_lock_cost
-                        .saturating_add(cost.write_lock_cost);
-                    cost_details.batched_data_bytes_cost = cost_details
-                        .batched_data_bytes_cost
-                        .saturating_add(cost.data_bytes_cost);
-                    cost_details.batched_execute_cost = cost_details
-                        .batched_execute_cost
-                        .saturating_add(cost.execution_cost);
-=======
-            .for_each(|(cost, result)| match result {
-                Ok(_) => {
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_signature_cost,
+                        cost_details.batched_signature_cost,
                         cost.signature_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_write_lock_cost,
+                        cost_details.batched_write_lock_cost,
                         cost.write_lock_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_data_bytes_cost,
+                        cost_details.batched_data_bytes_cost,
                         cost.data_bytes_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details
-                            .costs
-                            .batched_builtins_execute_cost,
+                        cost_details.batched_builtins_execute_cost,
                         cost.builtins_execution_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_bpf_execute_cost,
+                        cost_details.batched_bpf_execute_cost,
                         cost.bpf_execution_cost
                     );
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
                 }
             });
         cost_details
@@ -4135,40 +4117,6 @@ mod tests {
                 builtins_execution_cost,
                 bpf_execution_cost,
                 ..TransactionCost::default()
-<<<<<<< HEAD
-            },
-            TransactionCost {
-                signature_cost: 4,
-                write_lock_cost: 5,
-                data_bytes_cost: 6,
-                execution_cost: 20,
-                ..TransactionCost::default()
-            },
-            TransactionCost {
-                signature_cost: 7,
-                write_lock_cost: 8,
-                data_bytes_cost: 9,
-                execution_cost: 40,
-                ..TransactionCost::default()
-            },
-        ];
-        let tx_results = vec![
-            Ok(()),
-            Ok(()),
-            Err(TransactionError::WouldExceedMaxBlockCostLimit),
-        ];
-        // should only accumulate first two cost that are OK
-        let expected_signatures = 5;
-        let expected_write_locks = 7;
-        let expected_data_bytes = 9;
-        let expected_executions = 30;
-        let cost_details =
-            BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
-        assert_eq!(expected_signatures, cost_details.batched_signature_cost);
-        assert_eq!(expected_write_locks, cost_details.batched_write_lock_cost);
-        assert_eq!(expected_data_bytes, cost_details.batched_data_bytes_cost);
-        assert_eq!(expected_executions, cost_details.batched_execute_cost);
-=======
             })
             .collect();
         let tx_results: Vec<_> = (0..num_txs)
@@ -4190,27 +4138,24 @@ mod tests {
             BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
         assert_eq!(
             expected_signatures,
-            batched_transaction_details.costs.batched_signature_cost
+            batched_transaction_details.batched_signature_cost
         );
         assert_eq!(
             expected_write_locks,
-            batched_transaction_details.costs.batched_write_lock_cost
+            batched_transaction_details.batched_write_lock_cost
         );
         assert_eq!(
             expected_data_bytes,
-            batched_transaction_details.costs.batched_data_bytes_cost
+            batched_transaction_details.batched_data_bytes_cost
         );
         assert_eq!(
             expected_builtins_execution_costs,
-            batched_transaction_details
-                .costs
-                .batched_builtins_execute_cost
+            batched_transaction_details.batched_builtins_execute_cost
         );
         assert_eq!(
             expected_bpf_execution_costs,
-            batched_transaction_details.costs.batched_bpf_execute_cost
+            batched_transaction_details.batched_bpf_execute_cost
         );
->>>>>>> 94b0186a9 (Cost model tracks builtins and bpf programs separately  (#24468))
     }
 
     #[test]
