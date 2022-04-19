@@ -81,6 +81,7 @@ message TokenBalance {
     string mint = 2;
     UiTokenAmount ui_token_amount = 3;
     string owner = 4;
+    string program_id = 5;
 }
 
 message UiTokenAmount {
