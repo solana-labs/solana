@@ -256,6 +256,7 @@ pub enum ValidatorStartProgress {
     CleaningBlockStore,
     CleaningAccounts,
     LoadingLedger,
+    ProcessingLedger { slot: Slot, max_slot: Slot },
     StartingServices,
     Halted, // Validator halted due to `--dev-halt-at-slot` argument
     WaitingForSupermajority,
@@ -540,6 +541,7 @@ impl Validator {
             Arc::clone(&pending_accounts_package),
             blockstore_root_scan,
             pruned_banks_receiver,
+            &start_progress,
         );
         let last_full_snapshot_slot =
             last_full_snapshot_slot.or_else(|| starting_snapshot_hashes.map(|x| x.full.hash.0));
@@ -1475,10 +1477,33 @@ fn load_blockstore(
     )
 }
 
+fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
+    let mut start = Measure::start("Blockstore search for highest slot");
+    let highest_slot = blockstore
+        .slot_meta_iterator(0)
+        .map(|metas| {
+            let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
+            if slots.is_empty() {
+                println!("Ledger is empty");
+                None
+            } else {
+                let first = slots.first().unwrap();
+                Some(*slots.last().unwrap_or(first))
+            }
+        })
+        .unwrap_or_else(|err| {
+            warn!("Failed to ledger slot meta: {}", err);
+            None
+        });
+    start.stop();
+    info!("{}. Found slot {:?}", start, highest_slot);
+    highest_slot
+}
+
 #[allow(clippy::too_many_arguments)]
 fn process_blockstore(
     blockstore: &Blockstore,
-    bank_forks: &RwLock<BankForks>,
+    bank_forks: &Arc<RwLock<BankForks>>,
     leader_schedule_cache: &LeaderScheduleCache,
     process_options: &blockstore_processor::ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -1487,7 +1512,24 @@ fn process_blockstore(
     pending_accounts_package: PendingAccountsPackage,
     blockstore_root_scan: BlockstoreRootScan,
     pruned_banks_receiver: DroppedSlotsReceiver,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
 ) -> Option<Slot> {
+    let exit = Arc::new(AtomicBool::new(false));
+    if let Some(max_slot) = highest_slot(blockstore) {
+        let bank_forks = bank_forks.clone();
+        let exit = exit.clone();
+        let start_progress = start_progress.clone();
+
+        let _ = std::thread::spawn(move || {
+            while !exit.load(Ordering::Relaxed) {
+                let slot = bank_forks.read().unwrap().working_bank().slot();
+                *start_progress.write().unwrap() =
+                    ValidatorStartProgress::ProcessingLedger { slot, max_slot };
+                sleep(Duration::from_secs(2));
+            }
+        });
+    }
+
     let last_full_snapshot_slot = blockstore_processor::process_blockstore_from_root(
         blockstore,
         bank_forks,
@@ -1503,6 +1545,8 @@ fn process_blockstore(
         error!("Failed to load ledger: {:?}", err);
         abort()
     });
+
+    exit.store(true, Ordering::Relaxed);
 
     blockstore_root_scan.join();
 
