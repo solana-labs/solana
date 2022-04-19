@@ -396,7 +396,9 @@ impl ExpectedRentCollection {
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Hash> {
-        let expected = match ExpectedRentCollection::new(
+        use solana_measure::measure::Measure;
+        let mut m = Measure::start("rehash_calc_us");
+        let expected = ExpectedRentCollection::new(
             pubkey,
             loaded_account,
             storage_slot,
@@ -404,20 +406,26 @@ impl ExpectedRentCollection {
             max_slot_in_storages_exclusive,
             find_unskipped_slot,
             filler_account_suffix,
-        ) {
+        );
+
+        m.stop();
+        stats.rehash_calc_us.fetch_add(m.as_us(), Ordering::Relaxed);
+        let expected = match expected {
             None => {
                 // use the previously calculated hash
                 return None;
             }
             Some(expected) => expected,
         };
-
+        let mut m = Measure::start("rehash_hash_us");
         let recalc_hash = AccountsDb::hash_account_with_rent_epoch(
             expected.expected_rent_collection_slot_max_epoch,
             loaded_account,
             pubkey,
             expected.rent_epoch,
         );
+        m.stop();
+        stats.rehash_hash_us.fetch_add(m.as_us(), Ordering::Relaxed);
         if &recalc_hash == loaded_hash {
             // unnecessary calculation occurred
             stats.rehash_unnecessary.fetch_add(1, Ordering::Relaxed);
