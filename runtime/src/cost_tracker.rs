@@ -245,7 +245,7 @@ mod tests {
             system_transaction::transfer(mint_keypair, &keypair.pubkey(), 2, *start_hash),
         );
         let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.execution_cost = 5;
+        tx_cost.bpf_execution_cost = 5;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
 
         (simple_transaction, tx_cost)
@@ -274,7 +274,7 @@ mod tests {
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.execution_cost = 10;
+        tx_cost.bpf_execution_cost = 10;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
         tx_cost.is_simple_vote = true;
 
@@ -468,7 +468,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2, acct3],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_ok());
@@ -486,7 +486,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct2],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_ok());
@@ -506,7 +506,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_err());

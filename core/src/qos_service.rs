@@ -223,14 +223,18 @@ impl QosService {
         self.metrics
             .estimated_data_bytes_cu
             .fetch_add(cost_details.batched_data_bytes_cost, Ordering::Relaxed);
+        self.metrics.estimated_builtins_execute_cu.fetch_add(
+            cost_details.batched_builtins_execute_cost,
+            Ordering::Relaxed,
+        );
         self.metrics
-            .estimated_execute_cu
-            .fetch_add(cost_details.batched_execute_cost, Ordering::Relaxed);
+            .estimated_bpf_execute_cu
+            .fetch_add(cost_details.batched_bpf_execute_cost, Ordering::Relaxed);
     }
 
     pub fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
-            .actual_execute_cu
+            .actual_bpf_execute_cu
             .fetch_add(units, Ordering::Relaxed);
     }
 
@@ -272,11 +276,14 @@ struct QosServiceMetrics {
     // accumulated estimated instructino data Compute Units to be packed into block
     estimated_data_bytes_cu: AtomicU64,
 
-    // accumulated estimated program Compute Units to be packed into block
-    estimated_execute_cu: AtomicU64,
+    // accumulated estimated builtin programs Compute Units to be packed into block
+    estimated_builtins_execute_cu: AtomicU64,
+
+    // accumulated estimated BPF program Compute Units to be packed into block
+    estimated_bpf_execute_cu: AtomicU64,
 
     // accumulated actual program Compute Units that have been packed into block
-    actual_execute_cu: AtomicU64,
+    actual_bpf_execute_cu: AtomicU64,
 
     // accumulated actual program execute micro-sec that have been packed into block
     actual_execute_time_us: AtomicU64,
@@ -341,13 +348,19 @@ impl QosServiceMetrics {
                     i64
                 ),
                 (
-                    "estimated_execute_cu",
-                    self.estimated_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_builtins_execute_cu",
+                    self.estimated_builtins_execute_cu
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "actual_execute_cu",
-                    self.actual_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    "estimated_bpf_execute_cu",
+                    self.estimated_bpf_execute_cu.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "actual_bpf_execute_cu",
+                    self.actual_bpf_execute_cu.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
