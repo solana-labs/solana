@@ -4159,7 +4159,6 @@ impl Bank {
                         }
                     }
 
-                    signature_count += u64::from(tx.message().header().num_required_signatures);
                     self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
@@ -4265,6 +4264,10 @@ impl Bank {
             }
 
             if execution_result.was_executed() {
+                // Signature count must be accumulated only if the transaction
+                // is executed, otherwise a mismatched count between banking and
+                // replay could occur
+                signature_count += u64::from(tx.message().header().num_required_signatures);
                 executed_transactions_count += 1;
             }
 
@@ -16067,7 +16070,7 @@ pub(crate) mod tests {
         let program_id = solana_sdk::pubkey::new_rand();
         bank.add_builtin("mock_program", &program_id, mock_ix_processor);
 
-        // This message will not be executed because the compute budget is request is invalid
+        // This message will not be executed because the compute budget request is invalid
         let message0 = Message::new(
             &[
                 ComputeBudgetInstruction::request_heap_frame(1),
