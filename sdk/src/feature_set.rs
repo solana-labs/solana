@@ -323,6 +323,33 @@ pub mod disable_deprecated_loader {
     solana_sdk::declare_id!("GTUMCZ8LTNxVfxdrw7ZsDFTxXb7TutYkzJnFwinpE6dg");
 }
 
+<<<<<<< HEAD
+=======
+pub mod check_slice_translation_size {
+    solana_sdk::declare_id!("GmC19j9qLn2RFk5NduX6QXaDhVpGncVVBzyM8e9WMz2F");
+}
+
+pub mod stake_split_uses_rent_sysvar {
+    solana_sdk::declare_id!("FQnc7U4koHqWgRvFaBJjZnV8VPg6L6wWK33yJeDp4yvV");
+}
+
+pub mod add_get_minimum_delegation_instruction_to_stake_program {
+    solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
+}
+
+pub mod error_on_syscall_bpf_function_hash_collisions {
+    solana_sdk::declare_id!("8199Q2gMD2kwgfopK5qqVWuDbegLgpuFUFHCcUJQDN8b");
+}
+
+pub mod reject_callx_r10 {
+    solana_sdk::declare_id!("3NKRSwpySNwD3TvP5pHnRmkAQRsdkXWRr1WaQh8p4PWX");
+}
+
+pub mod drop_redundant_turbine_path {
+    solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
+}
+
+>>>>>>> 039488b56 (drops redundant turbine propagation path (#24351))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -398,6 +425,15 @@ lazy_static! {
         (check_physical_overlapping::id(), "check physical overlapping regions"),
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
+<<<<<<< HEAD
+=======
+        (check_slice_translation_size::id(), "check size when translating slices"),
+        (stake_split_uses_rent_sysvar::id(), "stake split instruction uses rent sysvar"),
+        (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
+        (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
+        (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
+        (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
+>>>>>>> 039488b56 (drops redundant turbine propagation path (#24351))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
