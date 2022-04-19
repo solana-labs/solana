@@ -1,3 +1,5 @@
+#[allow(deprecated)]
+use solana_sdk::keyed_account::{create_keyed_accounts_unified, KeyedAccount};
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
@@ -20,7 +22,6 @@ use {
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
-        keyed_account::{create_keyed_accounts_unified, KeyedAccount},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
@@ -172,12 +173,14 @@ impl fmt::Display for AllocErr {
     }
 }
 
+#[allow(deprecated)]
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
+#[allow(deprecated)]
 impl<'a> StackFrame<'a> {
     pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
@@ -411,6 +414,7 @@ impl<'a> InvokeContext<'a> {
         }
 
         // Create the KeyedAccounts that will be passed to the program
+        #[allow(deprecated)]
         let keyed_accounts = program_indices
             .iter()
             .map(|account_index| {
@@ -436,6 +440,7 @@ impl<'a> InvokeContext<'a> {
             .collect::<Result<Vec<_>, InstructionError>>()?;
 
         // Unsafe will be removed together with the keyed_accounts
+        #[allow(deprecated)]
         self.invoke_stack.push(StackFrame::new(
             program_indices.len(),
             create_keyed_accounts_unified(unsafe {
@@ -996,6 +1001,11 @@ impl<'a> InvokeContext<'a> {
         Err(InstructionError::UnsupportedProgramId)
     }
 
+    #[deprecated(
+        since = "1.11.0",
+        note = "Please use BorrowedAccount instead of KeyedAccount"
+    )]
+    #[allow(deprecated)]
     /// Get the list of keyed accounts including the chain of program accounts
     pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
