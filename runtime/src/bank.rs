@@ -15932,6 +15932,7 @@ pub(crate) mod tests {
 
         fn mock_ix_processor(
             _first_instruction_account: usize,
+            _data: &[u8],
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
