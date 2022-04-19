@@ -2,7 +2,7 @@
 use {
     super::*,
     crate::{
-        accounts::{create_test_accounts, Accounts},
+        accounts::{test_utils::create_test_accounts, Accounts},
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, StatusCacheRc},
         hardened_unpack::UnpackedAppendVecMap,

@@ -143,10 +143,10 @@ export class PublicKey extends Struct {
    * Derive a program address from seeds and a program ID.
    */
   /* eslint-disable require-await */
-  static async createProgramAddress(
+  static createProgramAddressSync(
     seeds: Array<Buffer | Uint8Array>,
     programId: PublicKey,
-  ): Promise<PublicKey> {
+  ): PublicKey {
     let buffer = Buffer.alloc(0);
     seeds.forEach(function (seed) {
       if (seed.length > MAX_SEED_LENGTH) {
@@ -168,22 +168,34 @@ export class PublicKey extends Struct {
   }
 
   /**
+   * Async version of createProgramAddressSync
+   * For backwards compatibility
+   */
+  /* eslint-disable require-await */
+  static async createProgramAddress(
+    seeds: Array<Buffer | Uint8Array>,
+    programId: PublicKey,
+  ): Promise<PublicKey> {
+    return this.createProgramAddressSync(seeds, programId);
+  }
+
+  /**
    * Find a valid program address
    *
    * Valid program addresses must fall off the ed25519 curve.  This function
    * iterates a nonce until it finds one that when combined with the seeds
    * results in a valid program address.
    */
-  static async findProgramAddress(
+  static findProgramAddressSync(
     seeds: Array<Buffer | Uint8Array>,
     programId: PublicKey,
-  ): Promise<[PublicKey, number]> {
+  ): [PublicKey, number] {
     let nonce = 255;
     let address;
     while (nonce != 0) {
       try {
         const seedsWithNonce = seeds.concat(Buffer.from([nonce]));
-        address = await this.createProgramAddress(seedsWithNonce, programId);
+        address = this.createProgramAddressSync(seedsWithNonce, programId);
       } catch (err) {
         if (err instanceof TypeError) {
           throw err;
@@ -194,6 +206,17 @@ export class PublicKey extends Struct {
       return [address, nonce];
     }
     throw new Error(`Unable to find a viable program address nonce`);
+  }
+
+  /**
+   * Async version of findProgramAddressSync
+   * For backwards compatibility
+   */
+  static async findProgramAddress(
+    seeds: Array<Buffer | Uint8Array>,
+    programId: PublicKey,
+  ): Promise<[PublicKey, number]> {
+    return this.findProgramAddressSync(seeds, programId);
   }
 
   /**

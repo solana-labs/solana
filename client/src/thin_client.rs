@@ -171,7 +171,7 @@ impl ThinClient {
         &self.tpu_addrs[self.optimizer.best()]
     }
 
-    fn rpc_client(&self) -> &RpcClient {
+    pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_clients[self.optimizer.best()]
     }
 

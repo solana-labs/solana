@@ -21,7 +21,7 @@ qstring = "0.7.2"
 semver = "1.0"
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 thiserror = "1.0"
-uriparse = "0.6.3"
+uriparse = "0.6.4"
 
 [features]
 default = ["linux-static-hidraw", "hidapi"]

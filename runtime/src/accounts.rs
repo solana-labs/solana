@@ -42,7 +42,7 @@ use {
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
+        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
@@ -747,7 +747,6 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
-        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
         let use_index = false;
@@ -760,7 +759,6 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
-                epoch_schedule,
                 rent_collector,
                 is_startup,
             )
@@ -775,7 +773,6 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
@@ -783,7 +780,6 @@ impl Accounts {
             ancestors,
             total_lamports,
             test_hash_calculation,
-            epoch_schedule,
             rent_collector,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
@@ -1156,13 +1152,6 @@ impl Accounts {
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
 
-    /// Purge a slot if it is not a root
-    /// Root slots cannot be purged
-    /// `is_from_abs` is true if the caller is the AccountsBackgroundService
-    pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
-        self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
-    }
-
     /// Add a slot to root.  Root slots cannot be purged
     pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
         self.accounts_db.add_root(slot)
@@ -1311,28 +1300,33 @@ pub fn prepare_if_nonce_account<'a>(
     }
 }
 
-pub fn create_test_accounts(
-    accounts: &Accounts,
-    pubkeys: &mut Vec<Pubkey>,
-    num: usize,
-    slot: Slot,
-) {
-    for t in 0..num {
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let account =
-            AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, &pubkey, &account);
-        pubkeys.push(pubkey);
-    }
-}
+/// A set of utility functions used for testing and benchmarking
+pub mod test_utils {
+    use super::*;
 
-// Only used by bench, not safe to call otherwise accounts can conflict with the
-// accounts cache!
-pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
-    for pubkey in pubkeys {
-        let amount = thread_rng().gen_range(0, 10);
-        let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
-        accounts.store_slow_uncached(slot, pubkey, &account);
+    pub fn create_test_accounts(
+        accounts: &Accounts,
+        pubkeys: &mut Vec<Pubkey>,
+        num: usize,
+        slot: Slot,
+    ) {
+        for t in 0..num {
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let account =
+                AccountSharedData::new((t + 1) as u64, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, &pubkey, &account);
+            pubkeys.push(pubkey);
+        }
+    }
+
+    // Only used by bench, not safe to call otherwise accounts can conflict with the
+    // accounts cache!
+    pub fn update_accounts_bench(accounts: &Accounts, pubkeys: &[Pubkey], slot: u64) {
+        for pubkey in pubkeys {
+            let amount = thread_rng().gen_range(0, 10);
+            let account = AccountSharedData::new(amount, 0, AccountSharedData::default().owner());
+            accounts.store_slow_uncached(slot, pubkey, &account);
+        }
     }
 }
 

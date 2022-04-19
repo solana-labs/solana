@@ -2,8 +2,8 @@ use {
     crate::{
         config,
         stake_state::{
-            authorize, authorize_with_seed, deactivate, delegate, initialize, merge, set_lockup,
-            split, withdraw,
+            authorize, authorize_with_seed, deactivate, deactivate_delinquent, delegate,
+            initialize, merge, set_lockup, split, withdraw,
         },
     },
     log::*,
@@ -55,14 +55,18 @@ pub fn process_instruction(
 
     trace!("process_instruction: {:?}", data);
 
-    let mut me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-    if *me.get_owner() != id() {
-        return Err(InstructionError::InvalidAccountOwner);
-    }
+    let get_stake_account = || {
+        let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *me.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+        Ok(me)
+    };
 
     let signers = instruction_context.get_signers(transaction_context);
-    match limited_deserialize(data)? {
-        StakeInstruction::Initialize(authorized, lockup) => {
+    match limited_deserialize(data) {
+        Ok(StakeInstruction::Initialize(authorized, lockup)) => {
+            let mut me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             initialize(
                 &mut me,
@@ -72,7 +76,8 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
+        Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
+            let mut me = get_stake_account()?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
@@ -109,7 +114,8 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::AuthorizeWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
+            let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
@@ -153,7 +159,8 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::DelegateStake => {
+        Ok(StakeInstruction::DelegateStake) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
@@ -182,7 +189,8 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::Split(lamports) => {
+        Ok(StakeInstruction::Split(lamports)) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             drop(me);
             split(
@@ -195,7 +203,8 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::Merge => {
+        Ok(StakeInstruction::Merge) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
@@ -216,7 +225,8 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::Withdraw(lamports) => {
+        Ok(StakeInstruction::Withdraw(lamports)) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
@@ -244,16 +254,19 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-        StakeInstruction::Deactivate => {
+        Ok(StakeInstruction::Deactivate) => {
+            let mut me = get_stake_account()?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
             deactivate(&mut me, &clock, &signers)
         }
-        StakeInstruction::SetLockup(lockup) => {
+        Ok(StakeInstruction::SetLockup(lockup)) => {
+            let mut me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
             set_lockup(&mut me, &lockup, &signers, &clock)
         }
-        StakeInstruction::InitializeChecked => {
+        Ok(StakeInstruction::InitializeChecked) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -287,7 +300,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeChecked(stake_authorize) => {
+        Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -321,7 +335,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeCheckedWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -360,7 +375,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::SetLockupChecked(lockup_checked) => {
+        Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -383,20 +399,51 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::GetMinimumDelegation => {
+        Ok(StakeInstruction::GetMinimumDelegation) => {
             let feature_set = invoke_context.feature_set.as_ref();
             if !feature_set.is_active(
                 &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
             ) {
+                // Retain previous behavior of always checking that the first account
+                // is a stake account until the feature is activated
+                let _ = get_stake_account()?;
                 return Err(InstructionError::InvalidInstructionData);
             }
 
             let minimum_delegation = crate::get_minimum_delegation(feature_set);
             let minimum_delegation = Vec::from(minimum_delegation.to_le_bytes());
-            drop(me);
             invoke_context
                 .transaction_context
                 .set_return_data(id(), minimum_delegation)
+        }
+        Ok(StakeInstruction::DeactivateDelinquent) => {
+            let mut me = get_stake_account()?;
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_deactivate_delinquent_instruction::id())
+            {
+                instruction_context.check_number_of_instruction_accounts(3)?;
+
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                deactivate_delinquent(
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    first_instruction_account + 1,
+                    first_instruction_account + 2,
+                    clock.epoch,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+        Err(err) => {
+            if !invoke_context.feature_set.is_active(
+                &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+            ) {
+                let _ = get_stake_account()?;
+            }
+            Err(err)
         }
     }
 }
@@ -406,8 +453,8 @@ mod tests {
     use {
         super::*,
         crate::stake_state::{
-            authorized_from, create_stake_history_from_delegations, from, stake_from, Delegation,
-            Meta, Stake, StakeState,
+            authorized_from, create_stake_history_from_delegations, from, new_stake, stake_from,
+            Delegation, Meta, Stake, StakeState,
         },
         bincode::serialize,
         solana_program_runtime::{
@@ -429,12 +476,13 @@ mod tests {
                     LockupArgs, StakeError,
                 },
                 state::{Authorized, Lockup, StakeAuthorize},
+                MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
             system_program, sysvar,
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{collections::HashSet, str::FromStr},
+        std::{borrow::BorrowMut, collections::HashSet, str::FromStr, sync::Arc},
     };
 
     fn create_default_account() -> AccountSharedData {
@@ -490,6 +538,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             sysvar_cache_override,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -635,6 +684,30 @@ mod tests {
             ),
             Err(InstructionError::InvalidAccountData),
         );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+                &Pubkey::new_unique(),
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+                &invalid_vote_state_pubkey(),
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
     }
 
     #[test]
@@ -728,6 +801,14 @@ mod tests {
             &instruction::set_lockup(
                 &spoofed_stake_state_pubkey(),
                 &LockupArgs::default(),
+                &Pubkey::new_unique(),
+            ),
+            Err(InstructionError::InvalidAccountOwner),
+        );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
             ),
             Err(InstructionError::InvalidAccountOwner),
@@ -882,7 +963,7 @@ mod tests {
             &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
-                (vote_address, vote_account),
+                (vote_address, vote_account.clone()),
                 (rewards_address, rewards_account.clone()),
                 (stake_history_address, stake_history_account),
             ],
@@ -927,7 +1008,7 @@ mod tests {
         process_instruction(
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             vec![
-                (stake_address, stake_account),
+                (stake_address, stake_account.clone()),
                 (rewards_address, rewards_account),
             ],
             vec![
@@ -950,6 +1031,41 @@ mod tests {
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             Vec::new(),
             Vec::new(),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Tests correct number of accounts are provided in deactivate_delinquent
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            Vec::new(),
+            Vec::new(),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            vec![(stake_address, stake_account.clone())],
+            vec![AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            vec![(stake_address, stake_account), (vote_address, vote_account)],
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: vote_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -1808,7 +1924,8 @@ mod tests {
     fn test_authorize_delegated_stake() {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
@@ -2006,7 +2123,8 @@ mod tests {
         vote_account_2
             .set_state(&VoteStateVersions::new_current(vote_state))
             .unwrap();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let mut stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -2822,8 +2940,9 @@ mod tests {
     fn test_withdraw_stake_before_warmup() {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let total_lamports = 100;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
+        let total_lamports = stake_lamports + 33;
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
@@ -3173,7 +3292,8 @@ mod tests {
     #[test]
     fn test_deactivate() {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
@@ -4283,6 +4403,7 @@ mod tests {
             ],
             Ok(()),
         );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         process_instruction(
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -5957,6 +6078,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             None,
+            None,
             Ok(()),
             |first_instruction_account, invoke_context| {
                 super::process_instruction(first_instruction_account, invoke_context)?;
@@ -5967,6 +6089,400 @@ mod tests {
                 assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
                 Ok(())
             },
+        );
+    }
+
+    // Ensure that the correct errors are returned when processing instructions
+    //
+    // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
+    // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
+    // changes the error *ordering* conditions.  These changes shall only occur when the
+    // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
+    // ensures it.
+    //
+    // For the following combinations of the feature enabled/disabled, if the instruction is
+    // valid/invalid, and if a stake account is passed in or not, assert the result:
+    //
+    //  feature | instruction | account || result
+    // ---------+-------------+---------++--------
+    //  enabled | good        | some    || Ok
+    //  enabled | bad         | some    || Err InvalidInstructionData
+    //  enabled | good        | none    || Err NotEnoughAccountKeys
+    //  enabled | bad         | none    || Err InvalidInstructionData
+    // disabled | good        | some    || Ok
+    // disabled | bad         | some    || Err InvalidInstructionData
+    // disabled | good        | none    || Err NotEnoughAccountKeys
+    // disabled | bad         | none    || Err NotEnoughAccountKeys
+    #[test]
+    fn test_stake_process_instruction_error_ordering() {
+        let rent = Rent::default();
+        let rent_address = sysvar::rent::id();
+        let rent_account = account::create_account_shared_data_for_test(&rent);
+
+        let good_stake_address = Pubkey::new_unique();
+        let good_stake_account = AccountSharedData::new(
+            u64::MAX,
+            std::mem::size_of::<crate::stake_state::StakeState>(),
+            &id(),
+        );
+        let good_instruction = instruction::initialize(
+            &good_stake_address,
+            &Authorized::auto(&good_stake_address),
+            &Lockup::default(),
+        );
+        let good_transaction_accounts = vec![
+            (good_stake_address, good_stake_account),
+            (rent_address, rent_account),
+        ];
+        let good_instruction_accounts = vec![
+            AccountMeta {
+                pubkey: good_stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: rent_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+        let good_accounts = (good_transaction_accounts, good_instruction_accounts);
+
+        // The instruction data needs to deserialize to a bogus StakeInstruction.  We likely never
+        // will have `usize::MAX`-number of instructions, so this should be a safe constant to
+        // always map to an invalid stake instruction.
+        let bad_instruction = Instruction::new_with_bincode(id(), &usize::MAX, Vec::default());
+        let bad_transaction_accounts = Vec::default();
+        let bad_instruction_accounts = Vec::default();
+        let bad_accounts = (bad_transaction_accounts, bad_instruction_accounts);
+
+        for (
+            is_feature_enabled,
+            instruction,
+            (transaction_accounts, instruction_accounts),
+            expected_result,
+        ) in [
+            (true, &good_instruction, &good_accounts, Ok(())),
+            (
+                true,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                true,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                true,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (false, &good_instruction, &good_accounts, Ok(())),
+            (
+                false,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                false,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                false,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+        ] {
+            let mut feature_set = FeatureSet::all_enabled();
+            if !is_feature_enabled {
+                feature_set.deactivate(
+                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+                );
+            }
+
+            mock_process_instruction(
+                &id(),
+                Vec::new(),
+                &instruction.data,
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                None,
+                Some(Arc::new(feature_set)),
+                expected_result,
+                super::process_instruction,
+            );
+        }
+    }
+
+    #[test]
+    fn test_deactivate_delinquent() {
+        let mut sysvar_cache_override = SysvarCache::default();
+
+        let reference_vote_address = Pubkey::new_unique();
+        let vote_address = Pubkey::new_unique();
+        let stake_address = Pubkey::new_unique();
+
+        let initial_stake_state = StakeState::Stake(
+            Meta::default(),
+            new_stake(
+                1, /* stake */
+                &vote_address,
+                &VoteState::default(),
+                1, /* activation_epoch */
+                &stake_config::Config::default(),
+            ),
+        );
+
+        let stake_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &initial_stake_state,
+            std::mem::size_of::<StakeState>(),
+            &id(),
+        )
+        .unwrap();
+
+        let mut vote_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &VoteStateVersions::new_current(VoteState::default()),
+            VoteState::size_of(),
+            &solana_vote_program::id(),
+        )
+        .unwrap();
+
+        let mut reference_vote_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &VoteStateVersions::new_current(VoteState::default()),
+            VoteState::size_of(),
+            &solana_vote_program::id(),
+        )
+        .unwrap();
+
+        let current_epoch = 20;
+
+        sysvar_cache_override.set_clock(Clock {
+            epoch: current_epoch,
+            ..Clock::default()
+        });
+
+        let process_instruction_deactivate_delinquent =
+            |stake_address: &Pubkey,
+             stake_account: &AccountSharedData,
+             vote_account: &AccountSharedData,
+             reference_vote_account: &AccountSharedData,
+             expected_result| {
+                process_instruction_with_sysvar_cache(
+                    &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+                    vec![
+                        (*stake_address, stake_account.clone()),
+                        (vote_address, vote_account.clone()),
+                        (reference_vote_address, reference_vote_account.clone()),
+                    ],
+                    vec![
+                        AccountMeta {
+                            pubkey: *stake_address,
+                            is_signer: false,
+                            is_writable: true,
+                        },
+                        AccountMeta {
+                            pubkey: vote_address,
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                        AccountMeta {
+                            pubkey: reference_vote_address,
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                    ],
+                    Some(&sysvar_cache_override),
+                    expected_result,
+                )
+            };
+
+        // `reference_vote_account` has not voted. Instruction will fail
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has not consistently voted for at least
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will fail
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
+            reference_vote_state.increment_credits(epoch as Epoch);
+        }
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has not consistently voted for the last
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will fail
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..=current_epoch {
+            reference_vote_state.increment_credits(epoch);
+        }
+        assert_eq!(
+            reference_vote_state.epoch_credits[current_epoch as usize - 2].0,
+            current_epoch - 2
+        );
+        reference_vote_state
+            .epoch_credits
+            .remove(current_epoch as usize - 2);
+        assert_eq!(
+            reference_vote_state.epoch_credits[current_epoch as usize - 2].0,
+            current_epoch - 1
+        );
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has never voted.
+        // Instruction will succeed
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..=current_epoch {
+            reference_vote_state.increment_credits(epoch);
+        }
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        let post_stake_account = &process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        )[0];
+
+        assert_eq!(
+            stake_from(post_stake_account)
+                .unwrap()
+                .delegation
+                .deactivation_epoch,
+            current_epoch
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has not voted for the
+        // last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will succeed
+
+        let mut vote_state = VoteState::default();
+        for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
+            vote_state.increment_credits(epoch as Epoch);
+        }
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+
+        let post_stake_account = &process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        )[0];
+
+        assert_eq!(
+            stake_from(post_stake_account)
+                .unwrap()
+                .delegation
+                .deactivation_epoch,
+            current_epoch
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has not voted for the
+        // last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`. Try to deactivate an unrelated stake
+        // account.  Instruction will fail
+        let unrelated_vote_address = Pubkey::new_unique();
+        let unrelated_stake_address = Pubkey::new_unique();
+        let mut unrelated_stake_account = stake_account.clone();
+        assert_ne!(unrelated_vote_address, vote_address);
+        unrelated_stake_account
+            .serialize_data(&StakeState::Stake(
+                Meta::default(),
+                new_stake(
+                    1, /* stake */
+                    &unrelated_vote_address,
+                    &VoteState::default(),
+                    1, /* activation_epoch */
+                    &stake_config::Config::default(),
+                ),
+            ))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &unrelated_stake_address,
+            &unrelated_stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::VoteAddressMismatch.into()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` voted once
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` ago.
+        // Instruction will succeed
+        let mut vote_state = VoteState::default();
+        vote_state
+            .increment_credits(current_epoch - MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION as Epoch);
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` voted once
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` - 1 epochs ago
+        // Instruction will fail
+        let mut vote_state = VoteState::default();
+        vote_state.increment_credits(
+            current_epoch - (MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION - 1) as Epoch,
+        );
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into()),
         );
     }
 }

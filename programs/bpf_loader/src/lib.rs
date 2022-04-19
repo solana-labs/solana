@@ -1,7 +1,6 @@
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
 
-pub mod alloc;
 pub mod allocator_bump;
 pub mod deprecated;
 pub mod serialization;
@@ -45,7 +44,8 @@ use {
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
             disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
-            do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
+            do_support_realloc, error_on_syscall_bpf_function_hash_collisions,
+            reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         keyed_account::keyed_account_at_index,
@@ -127,16 +127,29 @@ pub fn create_executor(
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
+        enable_stack_frame_gaps: true,
+        instruction_meter_checkpoint_distance: 10000,
+        enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
-        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
-            && invoke_context
-                .feature_set
-                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        enable_symbol_and_section_labels: false,
         disable_unresolved_symbols_at_runtime: invoke_context
             .feature_set
             .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
         reject_broken_elfs: reject_deployment_of_broken_elfs,
-        ..Config::default()
+        noop_instruction_ratio: 1.0 / 256.0,
+        sanitize_user_provided_values: true,
+        encrypt_environment_registers: true,
+        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
+            && invoke_context
+                .feature_set
+                .is_active(&disable_bpf_deprecated_load_instructions::id()),
+        syscall_bpf_function_hash_collision: invoke_context
+            .feature_set
+            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
+        reject_callx_r10: invoke_context
+            .feature_set
+            .is_active(&reject_callx_r10::id()),
+        // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut executable = {
@@ -234,7 +247,6 @@ pub fn create_vm<'a, 'b>(
     program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut InvokeContext<'b>,
-    orig_data_lens: &'a [usize],
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
@@ -251,7 +263,7 @@ pub fn create_vm<'a, 'b>(
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_data_lens)?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap)?;
     Ok(vm)
 }
 
@@ -1145,6 +1157,7 @@ impl Executor for BpfExecutor {
         let (mut parameter_bytes, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context)?;
         serialize_time.stop();
+        invoke_context.set_orig_account_lengths(account_lengths)?;
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
@@ -1152,7 +1165,6 @@ impl Executor for BpfExecutor {
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
                 invoke_context,
-                &account_lengths,
             ) {
                 Ok(info) => info,
                 Err(e) => {
@@ -1234,7 +1246,7 @@ impl Executor for BpfExecutor {
                     .transaction_context
                     .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
-                &account_lengths,
+                invoke_context.get_orig_account_lengths()?,
                 invoke_context
                     .feature_set
                     .is_active(&do_support_realloc::id()),
@@ -1313,6 +1325,7 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
             None,
             expected_result,
             super::process_instruction,
@@ -1574,6 +1587,7 @@ mod tests {
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
+            None,
             None,
             Err(InstructionError::ProgramFailedToComplete),
             |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
@@ -2839,6 +2853,7 @@ mod tests {
                 &instruction_data,
                 transaction_accounts,
                 instruction_accounts,
+                None,
                 None,
                 expected_result,
                 super::process_instruction,

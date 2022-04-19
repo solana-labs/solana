@@ -55,6 +55,12 @@ impl Hasher {
 
 impl Sanitize for Hash {}
 
+impl From<[u8; HASH_BYTES]> for Hash {
+    fn from(from: [u8; 32]) -> Self {
+        Self(from)
+    }
+}
+
 impl AsRef<[u8]> for Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]

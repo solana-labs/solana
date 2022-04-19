@@ -1148,6 +1148,10 @@ mod tests {
 
     #[test]
     fn test_run_ancestor_hashes() {
+        fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponseVersion {
+            limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap()
+        }
+
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
@@ -1177,8 +1181,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
@@ -1194,8 +1197,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // Set duplicate confirmed
@@ -1218,8 +1220,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert_eq!(
                 ancestor_hashes_response.into_slot_hashes(),
                 expected_ancestors

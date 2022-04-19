@@ -203,6 +203,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             None,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -221,11 +222,9 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             None,
+            Some(std::sync::Arc::new(FeatureSet::default())),
             expected_result,
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
-                invoke_context.feature_set = std::sync::Arc::new(FeatureSet::default());
-                super::process_instruction(first_instruction_account, invoke_context)
-            },
+            super::process_instruction,
         )
     }
 

@@ -18,11 +18,12 @@ console = "0.15.0"
 humantime = "2.0.1"
 indicatif = "0.16.2"
 pretty-hex = "0.2.1"
-semver = "1.0.6"
+semver = "1.0.7"
 serde = "1.0.136"
 serde_json = "1.0.79"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
+solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-client = { path = "../client", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }

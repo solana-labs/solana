@@ -2,6 +2,9 @@
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate solana_metrics;
+
 pub mod blockhash_query;
 pub mod client_error;
 pub mod connection_cache;
@@ -9,7 +12,6 @@ pub(crate) mod http_sender;
 pub(crate) mod mock_sender;
 pub mod nonblocking;
 pub mod nonce_utils;
-pub mod perf_utils;
 pub mod pubsub_client;
 pub mod quic_client;
 pub mod rpc_cache;

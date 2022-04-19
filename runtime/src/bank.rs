@@ -43,7 +43,6 @@ use {
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
-        accounts_index_storage::Startup,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
@@ -93,8 +92,8 @@ use {
         account_utils::StateMut,
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
-            MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
+            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -178,6 +177,8 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
+pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct RentDebit {
     rent_collected: u64,
@@ -234,7 +235,7 @@ pub type BankSlotDelta = SlotDelta<Result<()>>;
 // Eager rent collection repeats in cyclic manner.
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
-type PartitionIndex = u64;
+pub(crate) type PartitionIndex = u64;
 type PartitionsPerCycle = u64;
 type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
 type RentCollectionCycleParams = (
@@ -709,7 +710,7 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an IntrustionTrace to InnerInstructionsList
+/// Convert from an InstructionTrace to InnerInstructionsList
 pub fn inner_instructions_list_from_instruction_trace(
     instruction_trace: &InstructionTrace,
 ) -> InnerInstructionsList {
@@ -1231,6 +1232,7 @@ pub struct Bank {
 
     pub feature_set: Arc<FeatureSet>,
 
+    /// callback function only to be called when dropping and should only be called once
     pub drop_callback: RwLock<OptionalDropCallback>,
 
     pub freeze_started: AtomicBool,
@@ -1247,12 +1249,6 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
-}
-
-impl Default for BlockhashQueue {
-    fn default() -> Self {
-        Self::new(MAX_RECENT_BLOCKHASHES)
-    }
 }
 
 struct VoteWithStakeDelegations {
@@ -1382,7 +1378,7 @@ impl Bank {
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
             feature_set: Arc::<FeatureSet>::default(),
-            drop_callback: RwLock::<OptionalDropCallback>::default(),
+            drop_callback: RwLock::new(OptionalDropCallback(None)),
             freeze_started: AtomicBool::default(),
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
@@ -3727,6 +3723,10 @@ impl Bank {
             .collect()
     }
 
+    pub fn get_hash_age(&self, hash: &Hash) -> Option<u64> {
+        self.blockhash_queue.read().unwrap().get_hash_age(hash)
+    }
+
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
         self.blockhash_queue
             .read()
@@ -4837,7 +4837,6 @@ impl Bank {
 
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
-    #[cfg(test)]
     pub fn partition_from_pubkey(
         pubkey: &Pubkey,
         partition_count: PartitionsPerCycle,
@@ -5907,7 +5906,6 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
-            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -5976,7 +5974,6 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
-            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -6030,7 +6027,6 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
-                self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
             );
@@ -6056,7 +6052,6 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
-                        self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
                     );
@@ -6091,11 +6086,6 @@ impl Bank {
         }
         clean_time.stop();
 
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Startup);
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
@@ -6107,11 +6097,6 @@ impl Bank {
         let mut verify_time = Measure::start("verify_bank_hash");
         let mut verify = self.verify_bank_hash(test_hash_calculation);
         verify_time.stop();
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Normal);
 
         info!("verify_hash..");
         let mut verify2_time = Measure::start("verify_hash");
@@ -6806,6 +6791,7 @@ impl Drop for Bank {
             // Default case for tests
             self.rc
                 .accounts
+                .accounts_db
                 .purge_slot(self.slot(), self.bank_id(), false);
         }
     }
@@ -6851,7 +6837,7 @@ pub(crate) mod tests {
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
             feature::Feature,
@@ -14667,7 +14653,9 @@ pub(crate) mod tests {
         // Let threads run for a while, check the scans didn't see any mixed slots
         let min_expected_number_of_scans = 5;
         std::thread::sleep(Duration::new(5, 0));
-        let mut remaining_loops = 1000;
+        // This can be reduced when you are running this test locally to deal with hangs
+        // But, if it is too low, the ci fails intermittently.
+        let mut remaining_loops = 2000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
@@ -14774,9 +14762,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts(false, false, None);
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        let is_abs_service = true;
-                        abs_request_handler
-                            .handle_pruned_banks(&current_major_fork_bank, is_abs_service);
+                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(
