@@ -16,6 +16,7 @@ use {
     },
     quinn_proto::ConnectionStats,
     solana_sdk::{
+        hash::hash,
         quic::{
             QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
         },
@@ -125,12 +126,15 @@ impl TpuConnection for QuicTpuConnection {
     ) -> TransportResult<()> {
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
+        inc_new_counter_warn!("send-wire-async-start", 1);
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
             let send_buffer = client.send_buffer(wire_transaction, &stats);
             if let Err(e) = send_buffer.await {
                 warn!("Failed to send transaction async to {:?}", e);
                 datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+            } else {
+                inc_new_counter_warn!("send-wire-async-success", 1);
             }
         });
         Ok(())

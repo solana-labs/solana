@@ -430,6 +430,8 @@ fn poll_blockhash<T: BenchTpsClient>(
             }
         };
 
+        error!("Blockhash updated {}", blockhash_updated);
+
         if blockhash_updated {
             let balance = client.get_balance(id).unwrap_or(0);
             metrics_submit_lamport_balance(balance);
@@ -477,6 +479,10 @@ fn do_tx_transfers<T: BenchTpsClient>(
                 transactions.push(tx.0);
             }
 
+            info!(
+                "sample sig {:?}",
+                transactions.get(0).and_then(|t| t.signatures.get(0))
+            );
             if let Err(error) = client.send_batch(transactions) {
                 warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
@@ -559,6 +565,7 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
             );
 
             let blockhash = get_latest_blockhash(client.as_ref());
+            info!("blockhash {}", blockhash);
 
             // re-sign retained to_fund_txes with updated blockhash
             self.sign(blockhash);
