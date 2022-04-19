@@ -491,9 +491,16 @@ mod test {
             .collect()
     }
 
-    #[test]
-    #[allow(clippy::same_item_push)]
-    fn test_parse_token() {
+    // TODO: remove this hacky approach when update SPL token dependencies
+    fn make_coerced_message(
+        mut instruction: SplTokenInstruction,
+        program_id: &SplTokenPubkey,
+    ) -> Message {
+        instruction.program_id = *program_id;
+        Message::new(&[instruction], None)
+    }
+
+    fn test_parse_token(program_id: &SplTokenPubkey) {
         let mint_pubkey = Pubkey::new_unique();
         let mint_authority = Pubkey::new_unique();
         let freeze_authority = Pubkey::new_unique();
@@ -501,14 +508,14 @@ mod test {
 
         // Test InitializeMint variations
         let initialize_mint_ix = initialize_mint(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(mint_authority),
             Some(&convert_pubkey(freeze_authority)),
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_mint_ix], None);
+        let message = make_coerced_message(initialize_mint_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -529,14 +536,14 @@ mod test {
         );
 
         let initialize_mint_ix = initialize_mint(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(mint_authority),
             None,
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_mint_ix], None);
+        let message = make_coerced_message(initialize_mint_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -559,13 +566,13 @@ mod test {
         let account_pubkey = Pubkey::new_unique();
         let owner = Pubkey::new_unique();
         let initialize_account_ix = initialize_account(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(owner),
         )
         .unwrap();
-        let message = Message::new(&[initialize_account_ix], None);
+        let message = make_coerced_message(initialize_account_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -590,7 +597,7 @@ mod test {
         let multisig_signer1 = Pubkey::new_unique();
         let multisig_signer2 = Pubkey::new_unique();
         let initialize_multisig_ix = initialize_multisig(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(multisig_pubkey),
             &[
                 &convert_pubkey(multisig_signer0),
@@ -600,7 +607,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_multisig_ix], None);
+        let message = make_coerced_message(initialize_multisig_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -626,7 +633,7 @@ mod test {
         // Test Transfer, incl multisig
         let recipient = Pubkey::new_unique();
         let transfer_ix = transfer(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(recipient),
             &convert_pubkey(owner),
@@ -634,7 +641,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -654,7 +661,7 @@ mod test {
         );
 
         let transfer_ix = transfer(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(recipient),
             &convert_pubkey(multisig_pubkey),
@@ -690,7 +697,7 @@ mod test {
 
         // Test Approve, incl multisig
         let approve_ix = approve(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(recipient),
             &convert_pubkey(owner),
@@ -698,7 +705,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -718,7 +725,7 @@ mod test {
         );
 
         let approve_ix = approve(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(recipient),
             &convert_pubkey(multisig_pubkey),
@@ -729,7 +736,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -754,13 +761,13 @@ mod test {
 
         // Test Revoke
         let revoke_ix = revoke(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(owner),
             &[],
         )
         .unwrap();
-        let message = Message::new(&[revoke_ix], None);
+        let message = make_coerced_message(revoke_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -780,7 +787,7 @@ mod test {
         // Test SetOwner
         let new_freeze_authority = Pubkey::new_unique();
         let set_authority_ix = set_authority(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(mint_pubkey),
             Some(&convert_pubkey(new_freeze_authority)),
             AuthorityType::FreezeAccount,
@@ -788,7 +795,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[set_authority_ix], None);
+        let message = make_coerced_message(set_authority_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -808,7 +815,7 @@ mod test {
         );
 
         let set_authority_ix = set_authority(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             None,
             AuthorityType::CloseAccount,
@@ -816,7 +823,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[set_authority_ix], None);
+        let message = make_coerced_message(set_authority_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         let new_authority: Option<String> = None;
         assert_eq!(
@@ -838,7 +845,7 @@ mod test {
 
         // Test MintTo
         let mint_to_ix = mint_to(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_authority),
@@ -846,7 +853,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[mint_to_ix], None);
+        let message = make_coerced_message(mint_to_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -867,7 +874,7 @@ mod test {
 
         // Test Burn
         let burn_ix = burn(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(owner),
@@ -875,7 +882,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[burn_ix], None);
+        let message = make_coerced_message(burn_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -896,14 +903,14 @@ mod test {
 
         // Test CloseAccount
         let close_account_ix = close_account(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(recipient),
             &convert_pubkey(owner),
             &[],
         )
         .unwrap();
-        let message = Message::new(&[close_account_ix], None);
+        let message = make_coerced_message(close_account_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -923,14 +930,14 @@ mod test {
 
         // Test FreezeAccount
         let freeze_account_ix = freeze_account(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(freeze_authority),
             &[],
         )
         .unwrap();
-        let message = Message::new(&[freeze_account_ix], None);
+        let message = make_coerced_message(freeze_account_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -950,14 +957,14 @@ mod test {
 
         // Test ThawAccount
         let thaw_account_ix = thaw_account(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(freeze_authority),
             &[],
         )
         .unwrap();
-        let message = Message::new(&[thaw_account_ix], None);
+        let message = make_coerced_message(thaw_account_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -977,7 +984,7 @@ mod test {
 
         // Test TransferChecked, incl multisig
         let transfer_ix = transfer_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(recipient),
@@ -987,7 +994,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1013,7 +1020,7 @@ mod test {
         );
 
         let transfer_ix = transfer_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(recipient),
@@ -1026,7 +1033,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1057,7 +1064,7 @@ mod test {
 
         // Test ApproveChecked, incl multisig
         let approve_ix = approve_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(recipient),
@@ -1067,7 +1074,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1093,7 +1100,7 @@ mod test {
         );
 
         let approve_ix = approve_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(recipient),
@@ -1106,7 +1113,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1137,7 +1144,7 @@ mod test {
 
         // Test MintToChecked
         let mint_to_ix = mint_to_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_authority),
@@ -1146,7 +1153,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[mint_to_ix], None);
+        let message = make_coerced_message(mint_to_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1172,7 +1179,7 @@ mod test {
 
         // Test BurnChecked
         let burn_ix = burn_checked(
-            &spl_token::id(),
+            &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
             &convert_pubkey(mint_pubkey),
             &convert_pubkey(owner),
@@ -1181,7 +1188,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[burn_ix], None);
+        let message = make_coerced_message(burn_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1206,9 +1213,12 @@ mod test {
         );
 
         // Test SyncNative
-        let sync_native_ix =
-            sync_native(&spl_token::id(), &convert_pubkey(account_pubkey)).unwrap();
-        let message = Message::new(&[sync_native_ix], None);
+        let sync_native_ix = sync_native(
+            &spl_token::id(), // TODO: replace with `program_id`,
+            &convert_pubkey(account_pubkey),
+        )
+        .unwrap();
+        let message = make_coerced_message(sync_native_ix, program_id);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_token(
@@ -1227,7 +1237,17 @@ mod test {
 
     #[test]
     #[allow(clippy::same_item_push)]
-    fn test_token_ix_not_enough_keys() {
+    fn test_parse_token_v3() {
+        test_parse_token(&spl_token::id());
+    }
+
+    #[test]
+    #[allow(clippy::same_item_push)]
+    fn test_parse_token_2022() {
+        test_parse_token(&spl_token_2022::id());
+    }
+
+    fn test_token_ix_not_enough_keys(program_id: &SplTokenPubkey) {
         let mut keys: Vec<Pubkey> = vec![];
         for _ in 0..10 {
             keys.push(solana_sdk::pubkey::new_rand());
@@ -1242,7 +1262,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_mint_ix], None);
+        let message = make_coerced_message(initialize_mint_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
@@ -1257,7 +1277,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_mint_ix], None);
+        let message = make_coerced_message(initialize_mint_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
@@ -1272,7 +1292,7 @@ mod test {
             &convert_pubkey(keys[2]),
         )
         .unwrap();
-        let message = Message::new(&[initialize_account_ix], None);
+        let message = make_coerced_message(initialize_account_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
@@ -1291,7 +1311,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[initialize_multisig_ix], None);
+        let message = make_coerced_message(initialize_multisig_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
@@ -1308,7 +1328,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1324,7 +1344,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
@@ -1341,7 +1361,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1357,7 +1377,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..4], None)).is_err());
         compiled_instruction.accounts =
@@ -1372,7 +1392,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[revoke_ix], None);
+        let message = make_coerced_message(revoke_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
@@ -1389,7 +1409,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[set_authority_ix], None);
+        let message = make_coerced_message(set_authority_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..1], None)).is_err());
         compiled_instruction.accounts =
@@ -1406,7 +1426,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[mint_to_ix], None);
+        let message = make_coerced_message(mint_to_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1423,7 +1443,7 @@ mod test {
             42,
         )
         .unwrap();
-        let message = Message::new(&[burn_ix], None);
+        let message = make_coerced_message(burn_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1439,7 +1459,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[close_account_ix], None);
+        let message = make_coerced_message(close_account_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1455,7 +1475,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[freeze_account_ix], None);
+        let message = make_coerced_message(freeze_account_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1471,7 +1491,7 @@ mod test {
             &[],
         )
         .unwrap();
-        let message = Message::new(&[thaw_account_ix], None);
+        let message = make_coerced_message(thaw_account_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1490,7 +1510,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
@@ -1508,7 +1528,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[transfer_ix], None);
+        let message = make_coerced_message(transfer_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..5], None)).is_err());
         compiled_instruction.accounts =
@@ -1527,7 +1547,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..3], None)).is_err());
         compiled_instruction.accounts =
@@ -1545,7 +1565,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[approve_ix], None);
+        let message = make_coerced_message(approve_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..5], None)).is_err());
         compiled_instruction.accounts =
@@ -1563,7 +1583,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[mint_to_ix], None);
+        let message = make_coerced_message(mint_to_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1581,7 +1601,7 @@ mod test {
             2,
         )
         .unwrap();
-        let message = Message::new(&[burn_ix], None);
+        let message = make_coerced_message(burn_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys[0..2], None)).is_err());
         compiled_instruction.accounts =
@@ -1590,11 +1610,23 @@ mod test {
 
         // Test SyncNative
         let sync_native_ix = sync_native(&spl_token::id(), &convert_pubkey(keys[0])).unwrap();
-        let message = Message::new(&[sync_native_ix], None);
+        let message = make_coerced_message(sync_native_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
         compiled_instruction.accounts =
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
+    }
+
+    #[test]
+    #[allow(clippy::same_item_push)]
+    fn test_not_enough_keys_token_v3() {
+        test_token_ix_not_enough_keys(&spl_token::id());
+    }
+
+    #[test]
+    #[allow(clippy::same_item_push)]
+    fn test_not_enough_keys_token_2022() {
+        test_token_ix_not_enough_keys(&spl_token_2022::id());
     }
 }
