@@ -463,6 +463,12 @@ pub mod test_mocks {
         }
     }
 
+    impl Default for MockMetricsWriter {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MetricsWriter for MockMetricsWriter {
         fn write(&self, points: Vec<DataPoint>) {
             assert!(!points.is_empty());
