@@ -99,7 +99,7 @@ struct RecordTransactionsSummary {
     result: Result<(), PohRecorderError>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CommitTransactionDetails {
     Committed { compute_units: u64 },
     NotCommitted,
@@ -1074,9 +1074,9 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
-        let num_to_record = transactions.len();
 
         if !transactions.is_empty() {
+            let num_to_record = transactions.len();
             inc_new_counter_info!("banking_stage-record_count", 1);
             inc_new_counter_info!("banking_stage-record_transactions", num_to_record);
 
@@ -1191,7 +1191,7 @@ impl BankingStage {
                         .collect()
                 },
                 (),
-                " execution_results_to_transactions",
+                "execution_results_to_transactions",
             );
 
         let (freeze_lock, freeze_lock_time) =
@@ -1308,7 +1308,10 @@ impl BankingStage {
             execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_time.as_us();
             (commit_time_us, commit_transaction_statuses)
         } else {
-            (0, vec![])
+            (
+                0,
+                vec![CommitTransactionDetails::NotCommitted; execution_results.len()],
+            )
         };
 
         drop(freeze_lock);
@@ -1325,6 +1328,11 @@ impl BankingStage {
         debug!(
             "execute_and_commit_transactions_locked: {:?}",
             execute_and_commit_timings.execute_timings,
+        );
+
+        debug_assert_eq!(
+            commit_transaction_statuses.len(),
+            transactions_attempted_execution_count
         );
 
         ExecuteAndCommitTransactionsOutput {
