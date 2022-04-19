@@ -307,6 +307,8 @@ struct StreamStats {
     total_streams: AtomicUsize,
     total_new_streams: AtomicUsize,
     num_evictions: AtomicUsize,
+    connection_add_failed: AtomicUsize,
+    connection_setup_timeout: AtomicUsize,
 }
 
 impl StreamStats {
@@ -336,6 +338,16 @@ impl StreamStats {
             (
                 "evictions",
                 self.num_evictions.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_add_failed",
+                self.connection_add_failed.load(Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_timeout",
+                self.connection_setup_timeout.load(Ordering::Relaxed),
                 i64
             ),
         );
@@ -487,7 +499,13 @@ pub fn spawn_server(
                                 stream_exit,
                                 stats,
                             );
+                        } else {
+                            stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
                         }
+                    } else {
+                        stats
+                            .connection_setup_timeout
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
