@@ -4772,7 +4772,12 @@ impl Bank {
         datapoint_info!(
             "collect_rent_eagerly",
             ("accounts", account_count, i64),
-            ("partitions", count, i64)
+            ("partitions", count, i64),
+            (
+                "skipped_rewrites",
+                self.rewrites_skipped_this_slot.read().unwrap().len(),
+                i64
+            ),
         );
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
