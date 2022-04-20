@@ -4860,6 +4860,46 @@ impl Bank {
         account_count
     }
 
+    // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
+    #[allow(dead_code)]
+    fn remember_skipped_rewrites(&self, rewrites_skipped: Vec<(Pubkey, Hash)>) {
+        if !rewrites_skipped.is_empty() {
+            let mut rewrites_skipped_this_slot = self.rewrites_skipped_this_slot.write().unwrap();
+            rewrites_skipped.into_iter().for_each(|(pubkey, hash)| {
+                rewrites_skipped_this_slot.insert(pubkey, hash);
+            });
+        }
+    }
+
+    /// return true iff storing this account is just a rewrite and can be skipped
+    #[allow(dead_code)]
+    fn skip_rewrite(
+        bank_slot: Slot,
+        rent_amount: u64,
+        loaded_slot: Slot,
+        old_rent_epoch: Epoch,
+        account: &AccountSharedData,
+    ) -> bool {
+        if rent_amount != 0 || account.rent_epoch() == 0 {
+            // rent was != 0
+            // or special case for default rent value
+            // these cannot be skipped and must be written
+            return false;
+        }
+        if old_rent_epoch != account.rent_epoch() && loaded_slot == bank_slot {
+            // account's rent_epoch should increment even though we're not collecting rent.
+            // and we already wrote this account in this slot, but we did not adjust rent_epoch (sys vars for example)
+            // so, force ourselves to rewrite account if account was already written in this slot
+            // Now, the account that was written IN this slot, where normally we would have collected rent, has the corrent 'rent_epoch'.
+            // Only this last store will remain in the append vec.
+            // Otherwise, later code would assume the account was written successfully in this slot with the correct 'rent_epoch'.
+            return false;
+        }
+
+        // rent was 0 and no reason to rewrite, so THIS is a rewrite we can skip
+        true
+    }
+
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
     pub fn partition_from_pubkey(
@@ -17251,6 +17291,96 @@ pub(crate) mod tests {
                 assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
             }
         }
+    }
+
+    #[test]
+    fn test_skip_rewrite() {
+        solana_logger::setup();
+        let mut account = AccountSharedData::default();
+        let bank_slot = 10;
+        for account_rent_epoch in 0..3 {
+            account.set_rent_epoch(account_rent_epoch);
+            for rent_amount in [0, 1] {
+                for loaded_slot in (bank_slot - 1)..=bank_slot {
+                    for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch
+                    {
+                        let skip = Bank::skip_rewrite(
+                            bank_slot,
+                            rent_amount,
+                            loaded_slot,
+                            old_rent_epoch,
+                            &account,
+                        );
+                        let mut should_skip = true;
+                        if rent_amount != 0
+                            || account_rent_epoch == 0
+                            || (account_rent_epoch != old_rent_epoch && loaded_slot == bank_slot)
+                        {
+                            should_skip = false;
+                        }
+                        assert_eq!(
+                            skip,
+                            should_skip,
+                            "{:?}",
+                            (
+                                account_rent_epoch,
+                                old_rent_epoch,
+                                rent_amount,
+                                loaded_slot,
+                                old_rent_epoch
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_remember_skipped_rewrites() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(1_000_000_000, &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        activate_all_features(&mut genesis_config);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
+        bank.remember_skipped_rewrites(Vec::default());
+        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
+
+        // bank's map is initially empty
+        let mut test = vec![(Pubkey::new(&[4; 32]), Hash::new(&[5; 32]))];
+        bank.remember_skipped_rewrites(test.clone());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // now there is already some stuff in the bank's map
+        test.push((Pubkey::new(&[6; 32]), Hash::new(&[7; 32])));
+        bank.remember_skipped_rewrites(test[1..].to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // all contents are already in map
+        bank.remember_skipped_rewrites(test[1..].to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // all contents are already in map, but we're changing hash values
+        test[0].1 = Hash::new(&[8; 32]);
+        test[1].1 = Hash::new(&[9; 32]);
+        bank.remember_skipped_rewrites(test.to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.into_iter().collect()
+        );
     }
 
     #[test]
