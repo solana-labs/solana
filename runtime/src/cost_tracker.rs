@@ -6,7 +6,7 @@
 use {
     crate::{block_cost_limits::*, cost_model::TransactionCost},
     solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
-    std::collections::HashMap,
+    std::{cmp::Ordering, collections::HashMap},
 };
 
 const WRITABLE_ACCOUNTS_PER_BLOCK: usize = 512;
@@ -101,20 +101,20 @@ impl CostTracker {
         actual_execution_units: u64,
     ) {
         let estimated_execution_units = estimated_tx_cost.bpf_execution_cost;
-        if actual_execution_units == estimated_execution_units {
-            return;
-        }
-
-        if actual_execution_units > estimated_execution_units {
-            self.add_transaction_execution_cost(
-                estimated_tx_cost,
-                actual_execution_units - estimated_execution_units,
-            );
-        } else {
-            self.sub_transaction_execution_cost(
-                estimated_tx_cost,
-                estimated_execution_units - actual_execution_units,
-            );
+        match actual_execution_units.cmp(&estimated_execution_units) {
+            Ordering::Equal => (),
+            Ordering::Greater => {
+                self.add_transaction_execution_cost(
+                    estimated_tx_cost,
+                    actual_execution_units - estimated_execution_units,
+                );
+            }
+            Ordering::Less => {
+                self.sub_transaction_execution_cost(
+                    estimated_tx_cost,
+                    estimated_execution_units - actual_execution_units,
+                );
+            }
         }
     }
 
@@ -808,5 +808,54 @@ mod tests {
                     assert_eq!(account_max, *units);
                 });
         }
+    }
+
+    #[test]
+    fn test_update_execution_cost() {
+        let acct1 = Pubkey::new_unique();
+        let acct2 = Pubkey::new_unique();
+        let acct3 = Pubkey::new_unique();
+        let cost = 100;
+
+        let tx_cost = TransactionCost {
+            writable_accounts: vec![acct1, acct2, acct3],
+            bpf_execution_cost: cost,
+            ..TransactionCost::default()
+        };
+
+        let mut cost_tracker = CostTracker::default();
+
+        // Assert OK to add tx_cost
+        assert!(cost_tracker.try_add(&tx_cost).is_ok());
+        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
+        assert_eq!(cost, cost_tracker.block_cost);
+        assert_eq!(cost, costliest_account_cost);
+        assert_eq!(1, cost_tracker.transaction_count);
+
+        // assert no-change if actual units is same as estimated units
+        let mut expected_cost = cost;
+        cost_tracker.update_execution_cost(&tx_cost, cost);
+        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
+        assert_eq!(expected_cost, cost_tracker.block_cost);
+        assert_eq!(expected_cost, costliest_account_cost);
+        assert_eq!(1, cost_tracker.transaction_count);
+
+        // assert cost are adjusted down
+        let reduced_units = 3;
+        expected_cost -= reduced_units;
+        cost_tracker.update_execution_cost(&tx_cost, cost - reduced_units);
+        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
+        assert_eq!(expected_cost, cost_tracker.block_cost);
+        assert_eq!(expected_cost, costliest_account_cost);
+        assert_eq!(1, cost_tracker.transaction_count);
+
+        // assert cost are adjusted up
+        let increased_units = 1;
+        expected_cost += increased_units;
+        cost_tracker.update_execution_cost(&tx_cost, cost + increased_units);
+        let (_costliest_account, costliest_account_cost) = cost_tracker.find_costliest_account();
+        assert_eq!(expected_cost, cost_tracker.block_cost);
+        assert_eq!(expected_cost, costliest_account_cost);
+        assert_eq!(1, cost_tracker.transaction_count);
     }
 }
