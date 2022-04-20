@@ -3081,7 +3081,11 @@ impl AccountsDb {
 
         let max_root = self.accounts_index.max_root_inclusive();
         use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 60 / 100; // put some 'in-this-epoch' slots into an ancient append vec
+        /*
+        60 155875 fails
+        80
+        */
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 80 / 100; // put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width + 1000);
 
         let mut m = Measure::start("get slots");
