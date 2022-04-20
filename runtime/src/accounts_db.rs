@@ -6707,7 +6707,7 @@ impl AccountsDb {
             if let Some(expected_slot) = expected_slot {
                 //assert_eq!(*slot, expected_slot);
                 if *slot != expected_slot {
-                    error!("ancient_append_vec: slot != expected slo tin remove_dead_accounts: {}, {}", slot, expected_slot);
+                    // error!("ancient_append_vec: slot != expected slo tin remove_dead_accounts: {}, {}", slot, expected_slot);
                 }
             }
             if let Some(store) = self
