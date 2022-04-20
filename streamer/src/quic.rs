@@ -131,7 +131,7 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
 
 fn rt() -> Runtime {
     Builder::new_multi_thread()
-        .worker_threads(1)
+        .worker_threads(num_cpus::get())
         .enable_all()
         .build()
         .unwrap()
