@@ -1,6 +1,6 @@
 //! Basic low-level memory operations.
 //!
-//! Within the BPF environment these are implemented as syscalls and executed by
+//! Within the BPF environment, these are implemented as syscalls and executed by
 //! the runtime in native code.
 
 /// Like C `memcpy`.
