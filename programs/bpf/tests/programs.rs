@@ -62,8 +62,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::{
     token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
-    TransactionStatusMeta,
-    TransactionWithMetadata,
+    TransactionStatusMeta, TransactionWithMetadata,
 };
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc};
 
@@ -373,7 +372,7 @@ fn execute_transactions(
             post_token_balances,
         )| {
             match execution_result {
-                TransactionExecutionResult::Executed(details) => {
+                TransactionExecutionResult::Executed { details, .. } => {
                     let TransactionExecutionDetails {
                         status,
                         log_messages,
