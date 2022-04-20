@@ -69,6 +69,7 @@
     "js-sha3": "^0.8.0",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
+    "sinon-chai": "^3.7.0",
     "superstruct": "^0.14.2",
     "tweetnacl": "^1.0.0"
   },
