@@ -40,8 +40,8 @@ const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 1;
 // The maximum transaction batch size
 pub const MAX_TRANSACTION_BATCH_SIZE: usize = 10_000;
 
-/// Maximum transactions per second
-pub const MAX_TPS: u64 = 1_000;
+/// Maximum transaction sends per second
+pub const MAX_TRANSACTION_SENDS_PER_SECOND: u64 = 1_000;
 
 /// Default maximum batch waiting time in ms. If this time is reached,
 /// whatever transaction cached will be sent.
@@ -390,6 +390,7 @@ impl SendTransactionService {
                 inc_new_counter_info!("send_transaction_service-rooted", 1);
                 return false;
             }
+            let signature_status = working_bank.get_signature_status_slot(signature);
             if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
                 let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
                 let now = Instant::now();
@@ -398,7 +399,7 @@ impl SendTransactionService {
                     .map(|last| now.duration_since(last) >= retry_rate)
                     .unwrap_or(false);
                 if !nonce_account::verify_nonce_account(&nonce_account, &durable_nonce)
-                    && working_bank.get_signature_status_slot(signature).is_none()
+                    && signature_status.is_none()
                     && expired
                 {
                     info!("Dropping expired durable-nonce transaction: {}", signature);
@@ -428,7 +429,7 @@ impl SendTransactionService {
                 }
             }
 
-            match working_bank.get_signature_status_slot(signature) {
+            match signature_status {
                 None => {
                     let now = Instant::now();
                     let need_send = transaction_info

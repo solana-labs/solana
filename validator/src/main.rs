@@ -2370,13 +2370,13 @@ pub fn main() {
     }
 
     let tps = batch_size as u64 * MILLIS_PER_SECOND / batch_send_rate_ms;
-    if tps > send_transaction_service::MAX_TPS {
+    if tps > send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND {
         eprintln!(
             "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \
             'rpc-send-batch-size * 1000 / rpc-send-batch-ms' must be smaller than ({}) .",
             batch_size,
             batch_send_rate_ms,
-            send_transaction_service::MAX_TPS
+            send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND
         );
         exit(1);
     }
