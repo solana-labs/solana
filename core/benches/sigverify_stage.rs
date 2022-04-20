@@ -42,8 +42,8 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
         .collect();
 
     for batch in batches.iter_mut() {
-        total += batch.packets.len();
-        for p in batch.packets.iter_mut() {
+        total += batch.len();
+        for p in batch.iter_mut() {
             let ip_index = thread_rng().gen_range(0, ips.len());
             p.meta.addr = ips[ip_index];
         }
@@ -54,7 +54,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
         SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
-            for p in batch.packets.iter_mut() {
+            for p in batch.iter_mut() {
                 if !p.meta.discard() {
                     num_packets += 1;
                 }
@@ -88,7 +88,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     let mut batches = to_packet_batches(&vec![test_tx(); SIZE], CHUNK_SIZE);
     let spam_addr = new_rand_addr(&mut rng);
     for batch in batches.iter_mut() {
-        for packet in batch.packets.iter_mut() {
+        for packet in batch.iter_mut() {
             // One spam address, ~1000 unique addresses.
             packet.meta.addr = if rng.gen_ratio(1, 30) {
                 new_rand_addr(&mut rng)
@@ -101,7 +101,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
-            for packet in batch.packets.iter_mut() {
+            for packet in batch.iter_mut() {
                 if !packet.meta.discard() {
                     num_packets += 1;
                 }
@@ -158,7 +158,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         let mut sent_len = 0;
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
-                sent_len += batch.packets.len();
+                sent_len += batch.len();
                 packet_s.send(vec![batch]).unwrap();
             }
         }
@@ -167,7 +167,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         loop {
             if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
-                    received += v.packets.len();
+                    received += v.len();
                     batches.push(v);
                 }
                 if use_same_tx || received >= sent_len {

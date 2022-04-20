@@ -428,10 +428,10 @@ mod tests {
         for _ in 0..num_expected_batches {
             let validator_batch: Vec<PacketBatch> = gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
-            let expected_len = validator_batch[0].packets.len();
+            let expected_len = validator_batch[0].len();
             assert!(validator_batch
                 .iter()
-                .all(|batch| batch.packets.len() == expected_len));
+                .all(|batch| batch.len() == expected_len));
         }
 
         // Should be empty now

@@ -342,7 +342,7 @@ fn main() {
                     index,
                 );
                 for xv in v {
-                    sent += xv.packets.len();
+                    sent += xv.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
             }

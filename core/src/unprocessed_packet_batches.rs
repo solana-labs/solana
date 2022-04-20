@@ -90,7 +90,7 @@ impl UnprocessedPacketBatches {
     #[allow(dead_code)]
     fn get_packets_count(&self) -> usize {
         self.iter()
-            .map(|deserialized_packet_batch| deserialized_packet_batch.packet_batch.packets.len())
+            .map(|deserialized_packet_batch| deserialized_packet_batch.packet_batch.len())
             .sum()
     }
 
@@ -117,7 +117,7 @@ impl UnprocessedPacketBatches {
                     .unprocessed_packets
                     .keys()
                     .map(move |packet_index| {
-                        let p = &packet_batch.packets[*packet_index];
+                        let p = &packet_batch[*packet_index];
                         (
                             p.meta.sender_stake,
                             PacketLocator {
@@ -148,8 +148,7 @@ impl DeserializedPacketBatch {
         packet_indexes
             .iter()
             .filter_map(|packet_index| {
-                let deserialized_packet =
-                    Self::deserialize_packet(&packet_batch.packets[*packet_index])?;
+                let deserialized_packet = Self::deserialize_packet(&packet_batch[*packet_index])?;
                 Some((*packet_index, deserialized_packet))
             })
             .collect()

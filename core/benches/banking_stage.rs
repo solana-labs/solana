@@ -81,7 +81,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let batches = to_packet_batches(&vec![tx; len], chunk_size);
         let mut packet_batches = UnprocessedPacketBatches::new();
         for batch in batches {
-            let batch_len = batch.packets.len();
+            let batch_len = batch.len();
             packet_batches.push_back(DeserializedPacketBatch::new(
                 batch,
                 vec![0usize; batch_len],
@@ -260,7 +260,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     v.len(),
                 );
                 for xv in v {
-                    sent += xv.packets.len();
+                    sent += xv.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
             }

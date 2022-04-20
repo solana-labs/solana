@@ -386,7 +386,7 @@ where
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packets
             .par_iter()
-            .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
+            .flat_map_iter(|pkt| pkt.iter().filter_map(handle_packet))
             .unzip()
     });
     // Exclude repair packets from retransmit.
@@ -406,8 +406,8 @@ where
     }
     insert_shred_sender.send((shreds, repair_infos))?;
 
-    stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
-    for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
+    stats.num_packets += packets.iter().map(|pkt| pkt.len()).sum::<usize>();
+    for packet in packets.iter().flat_map(|pkt| pkt.iter()) {
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
     }
     stats.elapsed += now.elapsed();

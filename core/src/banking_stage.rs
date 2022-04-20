@@ -21,7 +21,6 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
     solana_perf::{
-        cuda_runtime::PinnedVec,
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
         perf_libs,
@@ -478,7 +477,7 @@ impl BankingStage {
                 deserialized_packet_batch
                     .unprocessed_packets
                     .iter()
-                    .map(|(index, _)| &deserialized_packet_batch.packet_batch.packets[*index])
+                    .map(|(index, _)| &deserialized_packet_batch.packet_batch[*index])
             })
             .collect()
     }
@@ -1917,7 +1916,7 @@ impl BankingStage {
         filtered_unprocessed_packet_indexes
     }
 
-    fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
+    fn generate_packet_indexes(vers: &PacketBatch) -> Vec<usize> {
         vers.iter()
             .enumerate()
             .filter(|(_, pkt)| !pkt.meta.discard())
@@ -1942,7 +1941,7 @@ impl BankingStage {
         recv_time.stop();
 
         let packet_batches_len = packet_batches.len();
-        let packet_count: usize = packet_batches.iter().map(|x| x.packets.len()).sum();
+        let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timestamp(),
@@ -1957,14 +1956,11 @@ impl BankingStage {
         let mut dropped_packet_batches_count = 0;
         let mut newly_buffered_packets_count = 0;
         for packet_batch in packet_batch_iter {
-            let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
+            let packet_indexes = Self::generate_packet_indexes(&packet_batch);
             // Track all the packets incoming from sigverify, both valid and invalid
             slot_metrics_tracker.increment_total_new_valid_packets(packet_indexes.len() as u64);
             slot_metrics_tracker.increment_newly_failed_sigverify_count(
-                packet_batch
-                    .packets
-                    .len()
-                    .saturating_sub(packet_indexes.len()) as u64,
+                packet_batch.len().saturating_sub(packet_indexes.len()) as u64,
             );
 
             Self::push_unprocessed(
@@ -2267,8 +2263,7 @@ mod tests {
         mut with_vers: Vec<(PacketBatch, Vec<u8>)>,
     ) -> Vec<PacketBatch> {
         with_vers.iter_mut().for_each(|(b, v)| {
-            b.packets
-                .iter_mut()
+            b.iter_mut()
                 .zip(v)
                 .for_each(|(p, f)| p.meta.set_discard(*f == 0))
         });
@@ -3808,10 +3803,7 @@ mod tests {
             let num_conflicting_transactions = transactions.len();
             let mut packet_batches = to_packet_batches(&transactions, num_conflicting_transactions);
             assert_eq!(packet_batches.len(), 1);
-            assert_eq!(
-                packet_batches[0].packets.len(),
-                num_conflicting_transactions
-            );
+            assert_eq!(packet_batches[0].len(), num_conflicting_transactions);
             let packet_batch = packet_batches.pop().unwrap();
             let mut buffered_packet_batches: UnprocessedPacketBatches =
                 vec![DeserializedPacketBatch::new(
@@ -3890,7 +3882,7 @@ mod tests {
             let packet_batches = to_packet_batches(&transactions, 1);
             assert_eq!(packet_batches.len(), num_conflicting_transactions);
             for single_packet_batch in &packet_batches {
-                assert_eq!(single_packet_batch.packets.len(), 1);
+                assert_eq!(single_packet_batch.len(), 1);
             }
             let mut buffered_packet_batches: UnprocessedPacketBatches = packet_batches
                 .clone()
@@ -3943,8 +3935,8 @@ mod tests {
                         .zip(&packet_batches[interrupted_iteration + 1..])
                     {
                         assert_eq!(
-                            deserialized_packet_batch.packet_batch.packets[0],
-                            original_packet.packets[0]
+                            deserialized_packet_batch.packet_batch[0],
+                            original_packet[0]
                         );
                     }
                 })
@@ -4168,7 +4160,7 @@ mod tests {
 
                 let num_unprocessed_packets: usize = unprocessed_packet_batches
                     .iter()
-                    .map(|b| b.packet_batch.packets.len())
+                    .map(|b| b.packet_batch.len())
                     .sum();
                 assert_eq!(
                     num_unprocessed_packets, expected_num_unprocessed,
@@ -4272,10 +4264,7 @@ mod tests {
             &mut LeaderSlotMetricsTracker::new(0),
         );
         assert_eq!(unprocessed_packets.len(), 2);
-        assert_eq!(
-            unprocessed_packets[1].packet_batch.packets[0],
-            new_packet_batch.packets[0]
-        );
+        assert_eq!(unprocessed_packets[1].packet_batch[0], new_packet_batch[0]);
         assert_eq!(dropped_packet_batches_count, 1);
         assert_eq!(dropped_packets_count, 2);
         assert_eq!(newly_buffered_packets_count, 2);
@@ -4287,15 +4276,15 @@ mod tests {
         vote_indexes: Vec<usize>,
     ) -> DeserializedPacketBatch {
         let capacity = transactions.len();
-        let mut packet_batch = PacketBatch::with_capacity(capacity);
         let mut packet_indexes = Vec::with_capacity(capacity);
-        packet_batch.packets.resize(capacity, Packet::default());
+        let mut packet_batch = PacketBatch::with_capacity(capacity);
+        packet_batch.resize(capacity, Packet::default());
         for (index, tx) in transactions.iter().enumerate() {
-            Packet::populate_packet(&mut packet_batch.packets[index], None, tx).ok();
+            Packet::populate_packet(&mut packet_batch[index], None, tx).ok();
             packet_indexes.push(index);
         }
         for index in vote_indexes.iter() {
-            packet_batch.packets[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
+            packet_batch[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
         DeserializedPacketBatch::new(packet_batch, packet_indexes, false)
     }
