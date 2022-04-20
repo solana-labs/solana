@@ -375,6 +375,10 @@ pub mod enable_durable_nonce {
     solana_sdk::declare_id!("4EJQtF2pkRyawwcTVfQutzq4Sa5hRhibF6QAK1QXhtEX");
 }
 
+pub mod executables_incur_cpi_data_cost {
+    solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -451,6 +455,7 @@ lazy_static! {
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
+<<<<<<< HEAD
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
@@ -462,6 +467,9 @@ lazy_static! {
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
+=======
+        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
+>>>>>>> 5eb1ba402 (cpi charge for executables (#24396))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
