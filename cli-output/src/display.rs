@@ -528,7 +528,7 @@ fn write_rewards<W: io::Write>(
                         "-".to_string()
                     },
                     sign,
-                    lamports_to_sol(reward.lamports.abs() as u64),
+                    lamports_to_sol(reward.lamports.unsigned_abs()),
                     lamports_to_sol(reward.post_balance)
                 )?;
             }
