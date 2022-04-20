@@ -10,7 +10,9 @@ use {
     solana_client::rpc_client::RpcClient,
     solana_sdk::{instruction::Instruction, message::Message, native_token::lamports_to_sol},
     solana_transaction_status::parse_token::spl_token_instruction,
-    spl_associated_token_account::{create_associated_token_account, get_associated_token_address},
+    spl_associated_token_account::{
+        get_associated_token_address, instruction::create_associated_token_account,
+    },
     spl_token::{
         solana_program::program_pack::Pack,
         state::{Account as SplTokenAccount, Mint},
