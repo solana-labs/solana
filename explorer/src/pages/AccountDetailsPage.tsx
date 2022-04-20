@@ -193,7 +193,7 @@ export function AccountHeader({
     } else {
       token = {
         logoURI: data.nftData!.json?.image,
-        name: data.nftData!.json?.name,
+        name: "Unverified: " + data.nftData!.json?.name,
       };
     }
 
