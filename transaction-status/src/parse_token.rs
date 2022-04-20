@@ -8,7 +8,8 @@ use {
         instruction::{AccountMeta, CompiledInstruction, Instruction},
         message::AccountKeys,
     },
-    spl_token::{
+    spl_token_2022::{
+        extension::ExtensionType,
         instruction::{AuthorityType, TokenInstruction},
         solana_program::{
             instruction::Instruction as SplTokenInstruction, program_option::COption,
@@ -145,6 +146,7 @@ pub fn parse_token(
                 }),
             })
         }
+        #[allow(deprecated)]
         TokenInstruction::Transfer { amount } => {
             check_num_token_accounts(&instruction.accounts, 3)?;
             let mut value = json!({
@@ -212,7 +214,10 @@ pub fn parse_token(
         } => {
             check_num_token_accounts(&instruction.accounts, 2)?;
             let owned = match authority_type {
-                AuthorityType::MintTokens | AuthorityType::FreezeAccount => "mint",
+                AuthorityType::MintTokens
+                | AuthorityType::FreezeAccount
+                | AuthorityType::TransferFeeConfig
+                | AuthorityType::WithheldWithdraw => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -434,6 +439,76 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::GetAccountDataSize { extension_types } => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            let mut value = json!({
+                "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+            });
+            let map = value.as_object_mut().unwrap();
+            if !extension_types.is_empty() {
+                map.insert(
+                    "extensionTypes".to_string(),
+                    json!(extension_types
+                        .into_iter()
+                        .map(UiExtensionType::from)
+                        .collect::<Vec<_>>()),
+                );
+            }
+            Ok(ParsedInstructionEnum {
+                instruction_type: "getAccountDataSize".to_string(),
+                info: value,
+            })
+        }
+        TokenInstruction::InitializeImmutableOwner => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeImmutableOwner".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
+        TokenInstruction::AmountToUiAmount { amount } => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "amountToUiAmount".to_string(),
+                info: json!({
+                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "amount": amount,
+                }),
+            })
+        }
+        TokenInstruction::UiAmountToAmount { ui_amount } => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "uiAmountToAmount".to_string(),
+                info: json!({
+                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "uiAmount": ui_amount,
+                }),
+            })
+        }
+        TokenInstruction::InitializeMintCloseAuthority { .. } => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::TransferFeeExtension(_) => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::ConfidentialTransferExtension => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::DefaultAccountStateExtension => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::Reallocate { .. } => Err(ParseInstructionError::InstructionNotParsable(
+            ParsableProgram::SplToken,
+        )),
+        TokenInstruction::MemoTransferExtension => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::CreateNativeMint => Err(ParseInstructionError::InstructionNotParsable(
+            ParsableProgram::SplToken,
+        )),
     }
 }
 
@@ -444,6 +519,8 @@ pub enum UiAuthorityType {
     FreezeAccount,
     AccountOwner,
     CloseAccount,
+    TransferFeeConfig,
+    WithheldWithdraw,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -453,6 +530,40 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::FreezeAccount => UiAuthorityType::FreezeAccount,
             AuthorityType::AccountOwner => UiAuthorityType::AccountOwner,
             AuthorityType::CloseAccount => UiAuthorityType::CloseAccount,
+            AuthorityType::TransferFeeConfig => UiAuthorityType::TransferFeeConfig,
+            AuthorityType::WithheldWithdraw => UiAuthorityType::WithheldWithdraw,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum UiExtensionType {
+    Uninitialized,
+    TransferFeeConfig,
+    TransferFeeAmount,
+    MintCloseAuthority,
+    ConfidentialTransferMint,
+    ConfidentialTransferAccount,
+    DefaultAccountState,
+    ImmutableOwner,
+    MemoTransfer,
+}
+
+impl From<ExtensionType> for UiExtensionType {
+    fn from(extension_type: ExtensionType) -> Self {
+        match extension_type {
+            ExtensionType::Uninitialized => UiExtensionType::Uninitialized,
+            ExtensionType::TransferFeeConfig => UiExtensionType::TransferFeeConfig,
+            ExtensionType::TransferFeeAmount => UiExtensionType::TransferFeeAmount,
+            ExtensionType::MintCloseAuthority => UiExtensionType::MintCloseAuthority,
+            ExtensionType::ConfidentialTransferMint => UiExtensionType::ConfidentialTransferMint,
+            ExtensionType::ConfidentialTransferAccount => {
+                UiExtensionType::ConfidentialTransferAccount
+            }
+            ExtensionType::DefaultAccountState => UiExtensionType::DefaultAccountState,
+            ExtensionType::ImmutableOwner => UiExtensionType::ImmutableOwner,
+            ExtensionType::MemoTransfer => UiExtensionType::MemoTransfer,
         }
     }
 }
@@ -508,7 +619,7 @@ mod test {
     use {
         super::*,
         solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
-        spl_token::{
+        spl_token_2022::{
             instruction::*,
             solana_program::{
                 instruction::CompiledInstruction as SplTokenCompiledInstruction, message::Message,
@@ -796,6 +907,7 @@ mod test {
 
         // Test Transfer, incl multisig
         let recipient = Pubkey::new_unique();
+        #[allow(deprecated)]
         let transfer_ix = transfer(
             &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
@@ -824,6 +936,7 @@ mod test {
             }
         );
 
+        #[allow(deprecated)]
         let transfer_ix = transfer(
             &spl_token::id(), // TODO: replace with `program_id`
             &convert_pubkey(account_pubkey),
@@ -1397,6 +1510,125 @@ mod test {
                 })
             }
         );
+
+        // Test InitializeImmutableOwner
+        let init_immutable_owner_ix = initialize_immutable_owner(
+            &spl_token::id(), // TODO: replace with `program_id`,
+            &convert_pubkey(account_pubkey),
+        )
+        .unwrap();
+        let message = make_coerced_message(init_immutable_owner_ix, program_id);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "initializeImmutableOwner".to_string(),
+                info: json!({
+                   "account": account_pubkey.to_string(),
+                })
+            }
+        );
+
+        // Test GetAccountDataSize
+        let get_account_data_size_ix = get_account_data_size(
+            &spl_token::id(),
+            &convert_pubkey(mint_pubkey),
+            &[], // This emulates the packed data of spl_token::instruction::get_account_data_size
+        )
+        .unwrap();
+        let message = make_coerced_message(get_account_data_size_ix, program_id);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "getAccountDataSize".to_string(),
+                info: json!({
+                   "mint": mint_pubkey.to_string(),
+                })
+            }
+        );
+
+        let get_account_data_size_ix = get_account_data_size(
+            &spl_token::id(),
+            &convert_pubkey(mint_pubkey),
+            &[ExtensionType::ImmutableOwner, ExtensionType::MemoTransfer],
+        )
+        .unwrap();
+        let message = make_coerced_message(get_account_data_size_ix, program_id);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "getAccountDataSize".to_string(),
+                info: json!({
+                    "mint": mint_pubkey.to_string(),
+                    "extensionTypes": [
+                        "immutableOwner",
+                        "memoTransfer"
+                    ]
+                })
+            }
+        );
+
+        // Test AmountToUiAmount
+        let amount_to_ui_amount_ix = amount_to_ui_amount(
+            &spl_token::id(), // TODO: replace with `program_id`,
+            &convert_pubkey(mint_pubkey),
+            4242,
+        )
+        .unwrap();
+        let message = make_coerced_message(amount_to_ui_amount_ix, program_id);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "amountToUiAmount".to_string(),
+                info: json!({
+                   "mint": mint_pubkey.to_string(),
+                   "amount": 4242,
+                })
+            }
+        );
+
+        // Test UiAmountToAmount
+        let ui_amount_to_amount_ix = ui_amount_to_amount(
+            &spl_token::id(), // TODO: replace with `program_id`,
+            &convert_pubkey(mint_pubkey),
+            "42.42",
+        )
+        .unwrap();
+        let message = make_coerced_message(ui_amount_to_amount_ix, program_id);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "uiAmountToAmount".to_string(),
+                info: json!({
+                   "mint": mint_pubkey.to_string(),
+                   "uiAmount": "42.42",
+                })
+            }
+        );
     }
 
     #[test]
@@ -1548,6 +1780,7 @@ mod test {
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
         // Test Transfer, incl multisig
+        #[allow(deprecated)]
         let transfer_ix = transfer(
             &spl_token::id(),
             &convert_pubkey(keys[1]),
@@ -1564,6 +1797,7 @@ mod test {
             compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
 
+        #[allow(deprecated)]
         let transfer_ix = transfer(
             &spl_token::id(),
             &convert_pubkey(keys[2]),
@@ -1840,6 +2074,46 @@ mod test {
         // Test SyncNative
         let sync_native_ix = sync_native(&spl_token::id(), &convert_pubkey(keys[0])).unwrap();
         let message = make_coerced_message(sync_native_ix, program_id);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
+
+        // Test InitializeImmutableOwner
+        let init_immutable_owner_ix =
+            initialize_immutable_owner(&spl_token::id(), &convert_pubkey(keys[0])).unwrap();
+        let message = make_coerced_message(init_immutable_owner_ix, program_id);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
+
+        // Test GetAccountDataSize
+        let get_account_data_size_ix =
+            get_account_data_size(&spl_token::id(), &convert_pubkey(keys[0]), &[]).unwrap();
+        let message = make_coerced_message(get_account_data_size_ix, program_id);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
+
+        // Test AmountToUiAmount
+        let amount_to_ui_amount_ix =
+            amount_to_ui_amount(&spl_token::id(), &convert_pubkey(keys[0]), 4242).unwrap();
+        let message = make_coerced_message(amount_to_ui_amount_ix, program_id);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
+        compiled_instruction.accounts =
+            compiled_instruction.accounts[0..compiled_instruction.accounts.len() - 1].to_vec();
+        assert!(parse_token(&compiled_instruction, &AccountKeys::new(&keys, None)).is_err());
+
+        // Test UiAmountToAmount
+        let ui_amount_to_amount_ix =
+            ui_amount_to_amount(&spl_token::id(), &convert_pubkey(keys[0]), "42.42").unwrap();
+        let message = make_coerced_message(ui_amount_to_amount_ix, program_id);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert!(parse_token(&compiled_instruction, &AccountKeys::new(&[], None)).is_err());
         compiled_instruction.accounts =
