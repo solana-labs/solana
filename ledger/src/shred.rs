@@ -74,6 +74,10 @@ use {
 
 pub type Nonce = u32;
 
+pub const SIZE_OF_MERKLE_HASH: usize = 20;
+pub const SIZE_OF_MERKLE_ROOT: usize = SIZE_OF_MERKLE_HASH;
+pub const SIZE_OF_MERKLE_PROOF: usize = SIZE_OF_MERKLE_HASH * 6;
+
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
@@ -91,12 +95,15 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_CODING_SHRED_HEADERS
-    - SIZE_OF_NONCE;
+    - SIZE_OF_NONCE
+    - SIZE_OF_MERKLE_ROOT
+    - SIZE_OF_MERKLE_PROOF;
 
 pub const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
-pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
+pub const SHRED_PAYLOAD_SIZE: usize =
+    PACKET_DATA_SIZE - SIZE_OF_NONCE - SIZE_OF_MERKLE_ROOT - SIZE_OF_MERKLE_PROOF;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -1828,13 +1835,13 @@ pub mod tests {
         );
         let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
         data_shreds.iter().enumerate().for_each(|(i, s)| {
-            let expected_fec_set_index = start_index + ((i / max_per_block) * max_per_block) as u32;
+            let expected_fec_set_index = start_index + (i - i % max_per_block) as u32;
             assert_eq!(s.fec_set_index(), expected_fec_set_index);
         });
 
         coding_shreds.iter().enumerate().for_each(|(i, s)| {
             let mut expected_fec_set_index = start_index + (i - i % max_per_block) as u32;
-            while expected_fec_set_index as usize > data_shreds.len() {
+            while expected_fec_set_index as usize - start_index as usize > data_shreds.len() {
                 expected_fec_set_index -= max_per_block as u32;
             }
             assert_eq!(s.fec_set_index(), expected_fec_set_index);

@@ -6177,7 +6177,7 @@ pub mod tests {
     #[test]
     pub fn test_insert_multiple_is_last() {
         solana_logger::setup();
-        let (shreds, _) = make_slot_entries(0, 0, 20);
+        let (shreds, _) = make_slot_entries(0, 0, 10);
         let num_shreds = shreds.len() as u64;
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
