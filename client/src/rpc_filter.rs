@@ -10,6 +10,7 @@ const MAX_DATA_BASE64_SIZE: usize = 172;
 pub enum RpcFilterType {
     DataSize(u64),
     Memcmp(Memcmp),
+    TokenAccountState,
 }
 
 impl RpcFilterType {
@@ -68,6 +69,7 @@ impl RpcFilterType {
                     }
                 }
             }
+            RpcFilterType::TokenAccountState => Ok(()),
         }
     }
 }

@@ -3,6 +3,7 @@ use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
+        rpc_filter::*,
         rpc_pubsub_service::PubSubConfig,
         rpc_subscription_tracker::{
             AccountSubscriptionParams, BlockSubscriptionKind, BlockSubscriptionParams,
@@ -15,13 +16,10 @@ use {
     rayon::prelude::*,
     serde::Serialize,
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
-    solana_client::{
-        rpc_filter::RpcFilterType,
-        rpc_response::{
-            ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcBlockUpdate,
-            RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
-            RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
-        },
+    solana_client::rpc_response::{
+        ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcBlockUpdate,
+        RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
+        RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
@@ -400,10 +398,9 @@ fn filter_program_results(
     let encoding = params.encoding;
     let filters = params.filters.clone();
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
-        filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-        })
+        filters
+            .iter()
+            .all(|filter_type| satisfies_filter(account, filter_type))
     });
     let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
         if is_known_spl_token_id(&params.pubkey)
