@@ -4834,21 +4834,43 @@ impl Bank {
         // parallelize?
         let mut rent_debits = RentDebits::default();
         let mut total_collected = CollectedInfo::default();
-        for (pubkey, mut account, _loaded_slot) in accounts {
+        let bank_slot = self.slot();
+        let mut rewrites_skipped = Vec::with_capacity(accounts.len());
+        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        for (pubkey, mut account, loaded_slot) in accounts {
+            let old_rent_epoch = account.rent_epoch();
             let collected = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_collected += collected;
-            // Store all of them unconditionally to purge old AppendVec,
-            // even if collected rent is 0 (= not updated).
+            // only store accounts where we collected rent
+            // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
             // ensures we verify the whole on-chain state (= all accounts)
-            // via the account delta hash slowly once per an epoch.
-            self.store_account(&pubkey, &account);
+            // via the bank delta hash slowly once per an epoch.
+            if can_skip_rewrites
+                && Self::skip_rewrite(
+                    bank_slot,
+                    collected.rent_amount,
+                    loaded_slot,
+                    old_rent_epoch,
+                    &account,
+                )
+            {
+                // this would have been rewritten previously. Now we skip it.
+                // calculate the hash that we would have gotten if we did the rewrite.
+                // This will be needed to calculate the bank's hash.
+                let hash =
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                rewrites_skipped.push((pubkey, hash));
+            } else if !just_rewrites {
+                self.store_account(&pubkey, &account);
+            }
             rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
         }
+        self.remember_skipped_rewrites(rewrites_skipped);
         self.collected_rent
             .fetch_add(total_collected.rent_amount, Relaxed);
         self.rewards
@@ -4866,7 +4888,6 @@ impl Bank {
     }
 
     // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
-    #[allow(dead_code)]
     fn remember_skipped_rewrites(&self, rewrites_skipped: Vec<(Pubkey, Hash)>) {
         if !rewrites_skipped.is_empty() {
             let mut rewrites_skipped_this_slot = self.rewrites_skipped_this_slot.write().unwrap();
@@ -4877,7 +4898,6 @@ impl Bank {
     }
 
     /// return true iff storing this account is just a rewrite and can be skipped
-    #[allow(dead_code)]
     fn skip_rewrite(
         bank_slot: Slot,
         rent_amount: u64,
