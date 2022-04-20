@@ -5140,6 +5140,7 @@ dependencies = [
  "libc",
  "log",
  "nix",
+ "num_cpus",
  "pem",
  "pkcs8",
  "quinn",
