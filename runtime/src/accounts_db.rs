@@ -3100,7 +3100,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         old_slots.sort_unstable();
-        // old_slots.truncate(3); // artificially limit to 3 slots
+        old_slots.truncate(3); // artificially limit to 3 slots
         self.combine_ancient_slots(old_slots, max_root);
         /*
         if false {
@@ -3400,7 +3400,6 @@ impl AccountsDb {
         _append_vec_slot: Slot,
         _recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
     ) {
-        /*
         if true {
             let store_id = writer.append_vec_id();
             for c in recent {
@@ -3479,7 +3478,6 @@ impl AccountsDb {
                 }
             }
         }
-        */
     }
     /*
         fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
