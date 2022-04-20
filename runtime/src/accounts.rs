@@ -810,6 +810,18 @@ impl Accounts {
         }
     }
 
+    fn load_with_slot(
+        collector: &mut Vec<PubkeyAccountSlot>,
+        some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>,
+    ) {
+        if let Some(mapped_account_tuple) = some_account_tuple
+            .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
+            .map(|(pubkey, account, slot)| (*pubkey, account, slot))
+        {
+            collector.push(mapped_account_tuple)
+        }
+    }
+
     pub fn load_by_program(
         &self,
         ancestors: &Ancestors,
@@ -964,14 +976,14 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         range: R,
-    ) -> Vec<TransactionAccount> {
+    ) -> Vec<PubkeyAccountSlot> {
         self.accounts_db.range_scan_accounts(
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
             &ScanConfig::new(true),
-            |collector: &mut Vec<TransactionAccount>, option| {
-                Self::load_while_filtering(collector, option, |_| true)
+            |collector: &mut Vec<PubkeyAccountSlot>, option| {
+                Self::load_with_slot(collector, option)
             },
         )
     }
