@@ -519,8 +519,6 @@ impl SendTransactionService {
         inc_new_counter_info!(
             "send_transaction_service-batch-us",
             measure.as_us() as usize,
-            1000,
-            1000
         );
     }
 
