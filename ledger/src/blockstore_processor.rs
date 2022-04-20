@@ -22,8 +22,8 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionResult,
-            TransactionResults,
+            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
+            TransactionExecutionResult, TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -1438,7 +1438,7 @@ pub enum TransactionStatusMessage {
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<SanitizedTransaction>,
-    pub execution_results: Vec<TransactionExecutionResult>,
+    pub execution_results: Vec<Option<TransactionExecutionDetails>>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub rent_debits: Vec<RentDebits>,
@@ -1466,7 +1466,13 @@ impl TransactionStatusSender {
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                execution_results,
+                execution_results: execution_results
+                    .into_iter()
+                    .map(|result| match result {
+                        TransactionExecutionResult::Executed { details, .. } => Some(details),
+                        TransactionExecutionResult::NotExecuted(_) => None,
+                    })
+                    .collect(),
                 balances,
                 token_balances,
                 rent_debits,

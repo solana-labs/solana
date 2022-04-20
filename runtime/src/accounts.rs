@@ -1185,7 +1185,7 @@ impl Accounts {
             }
 
             let execution_status = match &execution_results[i] {
-                TransactionExecutionResult::Executed(details) => &details.status,
+                TransactionExecutionResult::Executed { details, .. } => &details.status,
                 // Don't store any accounts if tx wasn't executed
                 TransactionExecutionResult::NotExecuted(_) => continue,
             };
@@ -1343,6 +1343,7 @@ mod tests {
             rent_collector::RentCollector,
         },
         solana_address_lookup_table_program::state::LookupTableMeta,
+        solana_program_runtime::invoke_context::Executors,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1358,7 +1359,9 @@ mod tests {
         },
         std::{
             borrow::Cow,
+            cell::RefCell,
             convert::TryFrom,
+            rc::Rc,
             sync::atomic::{AtomicBool, AtomicU64, Ordering},
             thread, time,
         },
@@ -1380,13 +1383,16 @@ mod tests {
         status: Result<()>,
         nonce: Option<&NonceFull>,
     ) -> TransactionExecutionResult {
-        TransactionExecutionResult::Executed(TransactionExecutionDetails {
-            status,
-            log_messages: None,
-            inner_instructions: None,
-            durable_nonce_fee: nonce.map(DurableNonceFee::from),
-            executed_units: 0u64,
-        })
+        TransactionExecutionResult::Executed {
+            details: TransactionExecutionDetails {
+                status,
+                log_messages: None,
+                inner_instructions: None,
+                durable_nonce_fee: nonce.map(DurableNonceFee::from),
+                executed_units: 0u64,
+            },
+            executors: Rc::new(RefCell::new(Executors::default())),
+        }
     }
 
     fn load_accounts_with_fee_and_rent(

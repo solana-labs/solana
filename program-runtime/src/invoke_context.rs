@@ -74,6 +74,7 @@ pub type Executors = HashMap<Pubkey, TransactionExecutor>;
 
 /// Tracks whether a given executor is "dirty" and needs to updated in the
 /// executors cache
+#[derive(Debug)]
 pub struct TransactionExecutor {
     executor: Arc<dyn Executor>,
     is_miss: bool,

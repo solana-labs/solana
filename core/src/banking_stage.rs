@@ -1224,7 +1224,7 @@ impl BankingStage {
         let mut transactions_execute_and_record_status: Vec<_> = execution_results
             .iter()
             .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(details) => {
+                TransactionExecutionResult::Executed { details, .. } => {
                     CommitTransactionDetails::Committed {
                         compute_units: details.executed_units,
                     }
@@ -2164,7 +2164,7 @@ mod tests {
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
         },
-        solana_program_runtime::timings::ProgramTiming,
+        solana_program_runtime::{invoke_context::Executors, timings::ProgramTiming},
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::bank::TransactionExecutionDetails,
         solana_sdk::{
@@ -2186,8 +2186,10 @@ mod tests {
         solana_vote_program::vote_transaction,
         std::{
             borrow::Cow,
+            cell::RefCell,
             net::SocketAddr,
             path::Path,
+            rc::Rc,
             sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
         },
@@ -2202,13 +2204,16 @@ mod tests {
     }
 
     fn new_execution_result(status: Result<(), TransactionError>) -> TransactionExecutionResult {
-        TransactionExecutionResult::Executed(TransactionExecutionDetails {
-            status,
-            log_messages: None,
-            inner_instructions: None,
-            durable_nonce_fee: None,
-            executed_units: 0u64,
-        })
+        TransactionExecutionResult::Executed {
+            details: TransactionExecutionDetails {
+                status,
+                log_messages: None,
+                inner_instructions: None,
+                durable_nonce_fee: None,
+                executed_units: 0u64,
+            },
+            executors: Rc::new(RefCell::new(Executors::default())),
+        }
     }
 
     #[test]
