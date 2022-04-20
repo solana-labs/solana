@@ -3073,9 +3073,426 @@ impl AccountsDb {
         (shrink_slots, shrink_slots_next_batch)
     }
 
+    fn shrink_ancient_slots(&self) {
+        // let _guard = self.active_stats.activate(ActiveStatItem::ShrinkAncient);
+
+        let max_root = self.accounts_index.max_root_inclusive();
+        use solana_sdk::clock::DEFAULT_SLOTS_PER_EPOCH;
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 60 / 100; // put some 'in-this-epoch' slots into an ancient append vec
+        let old_root = max_root.saturating_sub(epoch_width + 1000);
+
+        let mut m = Measure::start("get slots");
+        let mut old_slots = self
+            .storage
+            .map
+            .iter()
+            .filter_map(|k| {
+                let slot = *k.key() as Slot;
+                if slot <= old_root {
+                    Some(slot)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        m.stop();
+        old_slots.sort_unstable();
+        // old_slots.truncate(3); // artificially limit to 3 slots
+        self.combine_ancient_slots(old_slots, max_root);
+        /*
+        if false {
+            let _x: Vec<usize> = self.range_scan_accounts(
+                "dummy",
+                &Ancestors::default(),
+                Pubkey::default()..=Pubkey::new(&[0xff; 32]),
+                &ScanConfig::default(),
+                |_dummy, _got| {},
+            );
+        }
+        */
+    }
+
+    fn get_ancient_append_vec_capacity() -> u64 {
+        use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
+        // smaller than max by a bit just in case
+        MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+    }
+
+    fn is_full_ancient(storage: &AppendVec) -> bool {
+        let threshold = 10_000; // just a guess here?
+        Self::is_ancient(storage) && storage.remaining_bytes() < threshold
+    }
+
+    fn is_ancient(storage: &AppendVec) -> bool {
+        storage.capacity() == Self::get_ancient_append_vec_capacity()
+    }
+
+    /// combine all these slots into ancient append vecs
+    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, max_root: Slot) {
+        let mut current_storage = None;
+        let mut dropped_roots = vec![];
+        let mut dropped_roots_storages = vec![];
+        let mut i = 0;
+        let len = sorted_slots.len();
+        let mut t = Measure::start("");
+        let mut first = true;
+        for slot in sorted_slots {
+            if first {
+                first = false;
+                error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}", max_root, slot, max_root.saturating_sub(slot));
+            }
+            if let Some(storages) = self.storage.map.get(&slot) {
+                let mut dead_storages = Vec::default();
+                let storages = storages.value();
+                let read = storages.read().unwrap();
+                let all_storages = read.values().cloned().collect::<Vec<_>>();
+                drop(read);
+                let size = Self::get_ancient_append_vec_capacity();
+                let mut created_this_slot = false;
+                if current_storage.is_none() && all_storages.len() == 1 {
+                    // maybe this is good
+                    let first_storage = all_storages.first().unwrap();
+                    let capacity = first_storage.accounts.capacity();
+                    if Self::is_ancient(&first_storage.accounts) {
+                        if Self::is_full_ancient(&first_storage.accounts) {
+                            error!("ancient_append_vec: skipping existing full ancient append vec: {}, capacity: {}, free% {}, accounts: {}, cap of expected% {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), capacity * 100 / size);
+                            continue; // skip this full ancient append vec completely
+                        }
+                        error!("ancient_append_vec: reusing existing ancient append vec: {}, capacity: {}, free%: {}, accounts: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count());
+                        current_storage = Some((slot, Arc::clone(first_storage)));
+                        continue; // we're done with this slot - this slot IS the ancient append vec
+                    } else if capacity > size * 8 / 10 {
+                        // if the existing append vec is 80% of the size we desire for ancient, then don't recopy it all
+                        error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}, cap of expected% {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id(), capacity * 100 / size);
+                        continue;
+                    } else {
+                        error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
+                    }
+                } else if current_storage.is_none() && all_storages.len() > 1 {
+                    let first_storage = all_storages.first().unwrap();
+                    let capacity = first_storage.accounts.capacity();
+                    error!("ancient_append_vec: we have {} storages: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}", all_storages.len(), slot, capacity, size, size.saturating_sub(capacity));
+                }
+                i += 1;
+                let (stored_accounts, num_stores, original_bytes) =
+                    self.get_unique_accounts_from_storages(all_storages.iter());
+                if stored_accounts.is_empty() {
+                    error!("ancient_append_vec: skipping slot because there are no accounts to write: {}", slot);
+                    continue; // skipping empty slot
+                }
+                if current_storage.is_none() {
+                    // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
+                    let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
+                    //shrunken_store.accounts.set_ancient();
+                    error!(
+                        "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
+                        slot,
+                        size,
+                        shrunken_store.append_vec_id(),
+                    );
+                    created_this_slot = true;
+                    current_storage = Some((slot, shrunken_store));
+                }
+                let writer = current_storage.as_ref().unwrap();
+                let mut available_bytes = writer.1.accounts.remaining_bytes();
+                let mut hashes_this_append_vec = Vec::default();
+                let mut hashes_next_append_vec = Vec::default();
+                let mut accounts_this_append_vec = Vec::default();
+                let mut accounts_next_append_vec = Vec::default();
+
+                stored_accounts.iter().for_each(|account| {
+                    available_bytes = available_bytes.saturating_sub(account.1.account_size as u64);
+                    if available_bytes > 0 {
+                        hashes_this_append_vec.push(account.1.account.hash);
+                        &mut accounts_this_append_vec
+                    } else {
+                        hashes_next_append_vec.push(account.1.account.hash);
+                        &mut accounts_next_append_vec
+                    }
+                    .push((
+                        &account.1.account.meta.pubkey,
+                        &account.1.account,
+                        slot,
+                    ));
+                });
+
+                if i % 1000 == 0 {
+                    error!(
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
+                  slot, accounts_this_append_vec.len(),
+                  available_bytes, max_root.saturating_sub(slot),
+                  all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), Self::is_ancient(&store.accounts))).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes
+                );
+                }
+
+                if created_this_slot {
+                    error!(
+                        "rewrites from same slot as ancient: {}, {:?}",
+                        slot,
+                        accounts_this_append_vec
+                            .iter()
+                            .take(10_000)
+                            .map(|(a, b, c)| (a, c, b.offset))
+                            .collect::<Vec<_>>()
+                    );
+                }
+
+                let mut ids = vec![writer.1.append_vec_id()];
+                let mut drop_root = slot > writer.0;
+                let prev = if true {
+                    //accounts_next_append_vec.is_empty() {
+                    // write what we can to the current ancient storage
+                    let _store_accounts_timing = self.store_accounts_frozen(
+                        (writer.0, &accounts_this_append_vec[..]),
+                        Some(&hashes_this_append_vec),
+                        Some(Box::new(move |_, _| writer.1.clone())),
+                        None,
+                    );
+                    self.verify_contents(&writer.1, writer.0, &accounts_this_append_vec);
+
+                    let prev = format!(
+                        "{:?}",
+                        accounts_this_append_vec
+                            .iter()
+                            .take(10_000)
+                            .map(|(a, b, c)| (a, c, b.offset))
+                            .collect::<Vec<_>>()
+                    );
+                    accounts_this_append_vec.clear();
+                    hashes_this_append_vec.clear();
+                    prev
+                } else {
+                    String::new()
+                };
+
+                if !accounts_next_append_vec.is_empty() {
+                    created_this_slot = true;
+                    //writer.1.accounts.set_full_ancient();
+                    accounts_this_append_vec.append(&mut accounts_next_append_vec);
+                    hashes_this_append_vec.append(&mut hashes_next_append_vec);
+                    accounts_next_append_vec = accounts_this_append_vec;
+                    hashes_next_append_vec = hashes_this_append_vec;
+                    drop_root = false;
+                    // we need a new ancient append vec
+                    assert!(
+                        slot > writer.0,
+                        "slot: {}, writer.0: {}, remaining accounts: {}, available_bytes: {}",
+                        slot,
+                        writer.0,
+                        accounts_next_append_vec.len(),
+                        available_bytes
+                    );
+                    // our oldest slot is not an append vec of max size, so we need to start with rewriting that storage to create an ancient append vec for the oldest slot
+                    let (shrunken_store, _time) = self.get_store_for_shrink(slot, size);
+                    //shrunken_store.accounts.set_ancient();
+                    //error!("ancient_append_vec: creating ancient append vec because previous one was full, old one: {}, full one: {}, additional: {}, {}", slot, writer.0, accounts_this_append_vec.len(), hashes_next_append_vec.len());
+                    error!("ancient_append_vec: creating ancient append vec because previous one was full: {}, full one: {}, additional: {}, {}, items in full one: {} {}", slot, writer.0, accounts_next_append_vec.len(), hashes_next_append_vec.len(), writer.1.count(), writer.1.approx_stored_count());
+                    current_storage = Some((slot, shrunken_store));
+                    let writer = current_storage.as_ref().unwrap();
+                    ids.push(writer.1.append_vec_id());
+                    if created_this_slot {
+                        error!(
+                            "rewrites2 from same slot as ancient_previous: {}, {:?}",
+                            slot, prev
+                        );
+                        error!(
+                            "rewrites2 from same slot as ancient: {}, {:?}",
+                            slot,
+                            accounts_next_append_vec
+                                .iter()
+                                .take(10_000)
+                                .map(|(a, b, c)| (a, c, b.offset))
+                                .collect::<Vec<_>>()
+                        );
+                    }
+
+                    let clone = &writer.1.clone();
+                    // write the rest to the next ancient storage
+                    let _store_accounts_timing = self.store_accounts_frozen(
+                        (writer.0, &accounts_next_append_vec[..]),
+                        Some(&hashes_next_append_vec),
+                        Some(Box::new(move |_, _| Arc::clone(clone))),
+                        None,
+                    );
+                    self.verify_contents(&writer.1, writer.0, &accounts_next_append_vec);
+                }
+
+                // Purge old, overwritten storage entries
+                let mut start = Measure::start("write_storage_elapsed");
+                if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+                    let mut stores = slot_stores.write().unwrap();
+                    stores.retain(|_key, store| {
+                        if store.count() == 0 || !ids.contains(&store.append_vec_id()) {
+                            self.dirty_stores
+                                .insert((slot, store.append_vec_id()), store.clone());
+                            dead_storages.push(store.clone());
+                            if created_this_slot {
+                                error!(
+                                    "ancient_append_vec: NOT retaining store: {}, slot: {}",
+                                    store.append_vec_id(),
+                                    slot
+                                );
+                            }
+                            //error!("reset append_vec: {}", store.append_vec_id());
+                            store.accounts.reset();
+                            false
+                        } else {
+                            if created_this_slot {
+                                error!(
+                                    "ancient_append_vec: retaining store: {}, slot: {}",
+                                    store.append_vec_id(),
+                                    slot
+                                );
+                            }
+                            true
+                        }
+                    });
+                    if stores.is_empty() {
+                        dropped_roots_storages.push(slot);
+                    }
+                }
+                start.stop();
+
+                dead_storages.extend(all_storages.iter().map(Arc::clone));
+
+                self.drop_or_recycle_stores(dead_storages);
+
+                if drop_root {
+                    dropped_roots.push(slot);
+                }
+            }
+        }
+
+        if !dropped_roots.is_empty() {
+            // todo: afterwards, we need to remove the roots sometime
+            error!(
+                "ancient_append_vec: dropping roots: first {:?}, last {:?}, len {:?}, ",
+                dropped_roots.first(),
+                dropped_roots.last(),
+                dropped_roots.len()
+            );
+            dropped_roots.iter().for_each(|slot| {
+                self.accounts_index
+                    .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
+            });
+        }
+        error!(
+            "ancient_append_vec: purge_dead_slots_from_storage: first {:?}, last {:?}, len {:?}, ",
+            dropped_roots_storages.first(),
+            dropped_roots_storages.last(),
+            dropped_roots_storages.len()
+        );
+        self.purge_dead_slots_from_storage(dropped_roots_storages.iter(), &PurgeStats::default());
+
+        t.stop();
+        error!(
+            "ancient_append_vec: done. slots: {:?}, time(ms): {}",
+            len,
+            t.as_ms()
+        );
+    }
+    fn verify_contents<'a>(
+        &self,
+        _writer: &Arc<AccountStorageEntry>,
+        _append_vec_slot: Slot,
+        _recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
+    ) {
+        /*
+        if true {
+            let store_id = writer.append_vec_id();
+            for c in recent {
+                match self.accounts_index.get(&c.0, None, Some(append_vec_slot)) {
+                    AccountIndexGetResult::Found(g, _) => assert!(
+                        g.slot_list().iter().any(|(slot, info)| {
+                            if slot == &append_vec_slot {
+                                assert_eq!(info.store_id(), store_id);
+                                true
+                            } else {
+                                false
+                            }
+                        }),
+                        "{}, {:?}, id: {}",
+                        c.0,
+                        g.slot_list(),
+                        writer.append_vec_id()
+                    ),
+                    _ => {}
+                }
+            }
+        } else if true {
+            let mut start = 0;
+            let store_id = writer.append_vec_id();
+            let mut current = 0;
+            while let Some((account, next)) = writer.accounts.get_account(start) {
+                let account_size = next - start;
+                let c = &recent[current];
+                if c.0 == &account.meta.pubkey {
+                    match self
+                        .accounts_index
+                        .get(&account.meta.pubkey, None, Some(append_vec_slot))
+                    {
+                        AccountIndexGetResult::Found(g, _) => assert!(
+                            g.slot_list().iter().any(|(slot, info)| {
+                                if slot == &append_vec_slot {
+                                    assert_eq!(info.store_id(), store_id);
+                                    true
+                                } else {
+                                    false
+                                }
+                            }),
+                            "{}, {:?}, id: {}",
+                            account.meta.pubkey,
+                            g.slot_list(),
+                            writer.append_vec_id()
+                        ),
+                        _ => {}
+                    }
+                    current += 1;
+                }
+                start = next;
+            }
+            assert_eq!(current, recent.len());
+        } else {
+            let temp = Arc::clone(writer);
+            let temp2 = [temp];
+            let (stored_accounts, num_stores, original_bytes) =
+                self.get_unique_accounts_from_storages(temp2.iter());
+            for (pubkey, found) in stored_accounts.iter() {
+                match self.accounts_index.get(pubkey, None, Some(append_vec_slot)) {
+                    AccountIndexGetResult::Found(g, _) => assert!(
+                        g.slot_list().iter().any(|(slot, info)| {
+                            if slot == &append_vec_slot && info.store_id() == found.store_id {
+                                true
+                            } else {
+                                false
+                            }
+                        }),
+                        "{}, {:?}, id: {}",
+                        pubkey,
+                        g.slot_list(),
+                        writer.append_vec_id()
+                    ),
+                    _ => {}
+                }
+            }
+        }
+        */
+    }
+    /*
+        fn write_accounts_to_ancient_append_vec(storage: &Arc<AccountStorageEntry>, )
+    */
+
     pub fn shrink_candidate_slots(&self) -> usize {
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
+        if !shrink_candidates_slots.is_empty() {
+            self.shrink_ancient_slots();
+            error!(
+                "ancient_append_vec: shrink_candidate_slots, len: {}",
+                shrink_candidates_slots.len()
+            );
+        }
+
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
