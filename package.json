@@ -1,5 +1,5 @@
 {
-  "name": "@1111-1993/solana.git",
+  "name": "@1111-1993/solana",
   "version": "1.0.0",
   "description": "<p align=\"center\">   <a href=\"https://solana.com\">     <img alt=\"Solana\" src=\"https://i.imgur.com/IKyzQ6T.png\" width=\"250\" />   </a> </p>",
   "main": "index.js",
@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/1111-1993/solana/issues"
   },
-  "homepage": "https://github.com/1111-1993/solana#readme"
+  "homepage": "https://github.com/1111-1993/solana#readme",
+  "publishConfig": {
+    "@1111-1993:registry": "https://npm.pkg.github.com"
+  }
 }
