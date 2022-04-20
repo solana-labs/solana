@@ -590,6 +590,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
 - `owner: <string | undefined>` - Pubkey of token balance's owner.
+- `programId: <string | undefined>` - Pubkey of the Token program that owns the account.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
@@ -2563,6 +2564,7 @@ Returns all SPL Token accounts by approved Delegate.
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
+<<<<<<< HEAD
 - `<object>` - (optional) Configuration object containing the following fields:
   - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
@@ -2570,6 +2572,12 @@ Returns all SPL Token accounts by approved Delegate.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
+=======
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
+    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+>>>>>>> 77f6ec562 (Add program_id to TokenBalances structs (#24513))
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
@@ -2669,6 +2677,7 @@ Returns all SPL Token accounts by token owner.
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
+<<<<<<< HEAD
 - `<object>` - (optional) Configuration object containing the following fields:
   - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
@@ -2676,6 +2685,12 @@ Returns all SPL Token accounts by token owner.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
+=======
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
+    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+>>>>>>> 77f6ec562 (Add program_id to TokenBalances structs (#24513))
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
@@ -3775,7 +3790,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3786,7 +3802,8 @@ The notification will be an object with the following fields:
                       "amount": "11513067900",
                       "uiAmountString": "11513.0679"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3797,7 +3814,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3808,7 +3826,8 @@ The notification will be an object with the following fields:
                       "amount": "15138514093",
                       "uiAmountString": "15138.514093"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "postTokenBalances": [
@@ -3821,7 +3840,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3832,7 +3852,8 @@ The notification will be an object with the following fields:
                       "amount": "11513103028",
                       "uiAmountString": "11513.103028"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3843,7 +3864,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3854,7 +3876,8 @@ The notification will be an object with the following fields:
                       "amount": "15489767829",
                       "uiAmountString": "15489.767829"
                     },
-                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at"
+                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "rewards": []

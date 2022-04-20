@@ -535,6 +535,7 @@ impl From<TransactionTokenBalance> for generated::TokenBalance {
                 ui_amount_string: value.ui_token_amount.ui_amount_string,
             }),
             owner: value.owner,
+            program_id: value.program_id,
         }
     }
 }
@@ -563,6 +564,7 @@ impl From<generated::TokenBalance> for TransactionTokenBalance {
                 },
             },
             owner: value.owner,
+            program_id: value.program_id,
         }
     }
 }
