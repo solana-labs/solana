@@ -4841,6 +4841,8 @@ impl AccountsDb {
                 if should_flush {
                     let hash = iter_item.value().hash();
                     total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
+                    // todo: check >= use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE; here
+                    // if so, we need to move to a second append vec
                     num_flushed += 1;
                     Some(((key, account), hash))
                 } else {
