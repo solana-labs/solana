@@ -299,8 +299,8 @@ impl SendTransactionService {
         Builder::new()
             .name("send-tx-retry".to_string())
             .spawn(move || loop {
-                let recv_timeout_ms = config.retry_rate_ms;
-                sleep(Duration::from_millis(1000.min(recv_timeout_ms)));
+                let retry_interval_ms = config.retry_rate_ms;
+                sleep(Duration::from_millis(1000.min(retry_interval_ms)));
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
