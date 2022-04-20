@@ -160,7 +160,7 @@ fn output_keypair(
     Ok(())
 }
 
-fn grind_validator_starts_with(v: String) -> Result<(), String> {
+fn grind_validator_starts_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between PREFIX and COUNT"));
     }
@@ -175,7 +175,7 @@ fn grind_validator_starts_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_validator_ends_with(v: String) -> Result<(), String> {
+fn grind_validator_ends_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between SUFFIX and COUNT"));
     }
@@ -190,7 +190,7 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
+fn grind_validator_starts_and_ends_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 2 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from(
             "Expected : between PREFIX and SUFFIX and COUNT",
@@ -410,7 +410,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple_occurrences(true)
                         .multiple_values(true)
-                        .validator(|s| grind_validator_starts_with(s.to_string()))
+                        .validator(grind_validator_starts_with)
                         .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -421,7 +421,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple_occurrences(true)
                         .multiple_values(true)
-                        .validator(|s| grind_validator_ends_with(s.to_string()))
+                        .validator(grind_validator_ends_with)
                         .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -432,7 +432,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .multiple_occurrences(true)
                         .multiple_values(true)
-                        .validator(|s| grind_validator_starts_and_ends_with(s.to_string()))
+                        .validator(grind_validator_starts_and_ends_with)
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
@@ -440,7 +440,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("num-threads")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .validator(|s| is_parsable::<usize>(s.to_string()))
+                        .validator(is_parsable::<usize>)
                         .default_value(&default_num_threads)
                         .help("Specify the number of grind threads"),
                 )
@@ -535,8 +535,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
     let mut wallet_manager = None;
 
-    match matches.subcommand() {
-        Some(("pubkey", matches)) => {
+    let subcommand = matches.subcommand().unwrap();
+
+    match subcommand {
+        ("pubkey", matches) => {
             let pubkey =
                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
 
@@ -548,7 +550,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 println!("{}", pubkey);
             }
         }
-        Some(("new", matches)) => {
+        ("new", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile")
@@ -593,7 +595,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 );
             }
         }
-        Some(("recover", matches)) => {
+        ("recover", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
@@ -615,7 +617,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             };
             output_keypair(&keypair, outfile, "recovered")?;
         }
-        Some(("grind", matches)) => {
+        ("grind", matches) => {
             let ignore_case = matches.is_present("ignore_case");
 
             let starts_with_args = if matches.is_present("starts_with") {
@@ -770,7 +772,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 thread_handle.join().unwrap();
             }
         }
-        Some(("verify", matches)) => {
+        ("verify", matches) => {
             let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
             let simple_message = Message::new(
                 &[Instruction::new_with_bincode(

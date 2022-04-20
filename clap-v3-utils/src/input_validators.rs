@@ -25,12 +25,12 @@ where
 
 // Return an error if string cannot be parsed as type T.
 // Takes a String to avoid second type parameter when used as a clap validator
-pub fn is_parsable<T>(string: String) -> Result<(), String>
+pub fn is_parsable<T>(string: &str) -> Result<(), String>
 where
     T: FromStr,
     T::Err: Display,
 {
-    is_parsable_generic::<T, String>(string)
+    is_parsable_generic::<T, &str>(string)
 }
 
 // Return an error if string cannot be parsed as numeric type T, and value not within specified
