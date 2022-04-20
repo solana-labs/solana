@@ -5629,7 +5629,7 @@ impl AccountsDb {
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
             // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
-            self.remove_old_historical_roots(slot, &HashSet::default());
+            self.remove_old_historical_roots(slot, &config.rent_collector.epoch_schedule);
 
             result
         } else {
@@ -5887,15 +5887,43 @@ impl AccountsDb {
         }
     }
 
-    /// get rid of old historical roots
-    /// except keep those in 'keep'
-    fn remove_old_historical_roots(&self, current_max_root_inclusive: Slot, keep: &HashSet<Slot>) {
-        // epoch_schedule::DEFAULT_SLOTS_PER_EPOCH is a sufficient approximation for now
-        let width = solana_sdk::epoch_schedule::DEFAULT_SLOTS_PER_EPOCH * 11 / 10; // a buffer
-        if current_max_root_inclusive > width {
-            let min_root = current_max_root_inclusive - width;
+    /// calculate oldest_slot_to_keep and alive_roots
+    fn calc_old_historical_roots(
+        &self,
+        max_root_inclusive: Slot,
+        epoch_schedule: &EpochSchedule,
+    ) -> Option<(Slot, HashSet<Slot>)> {
+        let width = epoch_schedule.slots_per_epoch;
+        (max_root_inclusive > width).then(|| {
+            let oldest_slot_to_keep = max_root_inclusive - width;
+            let mut alive_roots = HashSet::default();
+            {
+                let all_roots = self.accounts_index.roots_tracker.read().unwrap();
+
+                if let Some(min) = all_roots.historical_roots.min() {
+                    for slot in min..oldest_slot_to_keep {
+                        if all_roots.alive_roots.contains(&slot) {
+                            // there was a storage for this root, so it counts as a root
+                            alive_roots.insert(slot);
+                        }
+                    }
+                }
+            }
+            (oldest_slot_to_keep, alive_roots)
+        })
+    }
+
+    /// get rid of historical roots that are older than an epoch from 'max_root_inclusive'
+    fn remove_old_historical_roots(
+        &self,
+        max_root_inclusive: Slot,
+        epoch_schedule: &EpochSchedule,
+    ) {
+        if let Some((oldest_slot_to_keep, alive_roots)) =
+            self.calc_old_historical_roots(max_root_inclusive, epoch_schedule)
+        {
             self.accounts_index
-                .remove_old_historical_roots(min_root, keep);
+                .remove_old_historical_roots(oldest_slot_to_keep, &alive_roots);
         }
     }
 
@@ -13898,5 +13926,37 @@ pub mod tests {
         rewrites.write().unwrap().insert(pubkey2, hash2);
         AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert_eq!(hashes, vec![(pubkey, hash), (pubkey2, hash2)]);
+    }
+
+    #[test]
+    fn test_calc_old_historical_roots() {
+        let db = AccountsDb::new_single_for_tests();
+        let epoch_schedule = EpochSchedule::default();
+        let max_root_inclusive = 0;
+        let result = db.calc_old_historical_roots(max_root_inclusive, &epoch_schedule);
+        assert_eq!(result, None);
+        for extra in 1..3 {
+            let max_root_inclusive = epoch_schedule.slots_per_epoch + extra;
+            let result = db.calc_old_historical_roots(max_root_inclusive, &epoch_schedule);
+            assert_eq!(
+                result,
+                Some((extra, HashSet::default())),
+                "extra: {}",
+                extra
+            );
+        }
+
+        let extra = 3;
+        let active_root = 2;
+        let max_root_inclusive = epoch_schedule.slots_per_epoch + extra;
+        db.accounts_index.add_root(active_root, false);
+        let result = db.calc_old_historical_roots(max_root_inclusive, &epoch_schedule);
+        let expected_alive_roots = [active_root].into_iter().collect();
+        assert_eq!(
+            result,
+            Some((extra, expected_alive_roots)),
+            "extra: {}",
+            extra
+        );
     }
 }
