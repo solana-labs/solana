@@ -316,17 +316,22 @@ impl QuicClient {
 #[cfg(test)]
 mod tests {
     use {
-        crate::{quic_client::QuicTpuConnection, tpu_connection::{ClientStats, TpuConnection}},
-        std::{sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+        crate::{
+            quic_client::QuicTpuConnection,
+            tpu_connection::{ClientStats, TpuConnection},
         },
-        collections::HashMap,
-        time::{Duration, Instant},
-        net::{UdpSocket, SocketAddr}},
         crossbeam_channel::unbounded,
+        solana_sdk::{packet::PACKET_DATA_SIZE, quic::QUIC_PORT_OFFSET, signature::Keypair},
         solana_streamer::quic::spawn_server,
-        solana_sdk::{signature::Keypair, quic::QUIC_PORT_OFFSET, packet::PACKET_DATA_SIZE,},
+        std::{
+            collections::HashMap,
+            net::{SocketAddr, UdpSocket},
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc, RwLock,
+            },
+            time::{Duration, Instant},
+        },
     };
 
     #[test]
@@ -338,9 +343,18 @@ mod tests {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
-        let t = spawn_server(s.try_clone().unwrap(), &keypair, ip, sender, exit.clone(), 1, staked_nodes,
-        10,
-        10,).unwrap();
+        let t = spawn_server(
+            s.try_clone().unwrap(),
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            10,
+            10,
+        )
+        .unwrap();
 
         let addr = s.local_addr().unwrap().ip();
         let port = s.local_addr().unwrap().port() - QUIC_PORT_OFFSET;
@@ -350,11 +364,15 @@ mod tests {
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets: usize = 10000;
-        let packets: Vec<_> = (0..num_expected_packets).map(|_idx| -> Vec<u8> {[0; PACKET_DATA_SIZE].to_vec()}).collect();
+        let packets: Vec<_> = (0..num_expected_packets)
+            .map(|_idx| -> Vec<u8> { [0; PACKET_DATA_SIZE].to_vec() })
+            .collect();
 
         let stats = Arc::new(ClientStats::default());
 
-        assert!(client.send_wire_transaction_batch_async(packets, stats).is_ok());
+        assert!(client
+            .send_wire_transaction_batch_async(packets, stats)
+            .is_ok());
 
         let mut all_packets = vec![];
         let now = Instant::now();
@@ -378,5 +396,4 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }
-
 }
