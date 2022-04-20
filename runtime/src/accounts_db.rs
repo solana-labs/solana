@@ -3396,9 +3396,9 @@ impl AccountsDb {
     }
     fn verify_contents<'a>(
         &self,
-        _writer: &Arc<AccountStorageEntry>,
-        _append_vec_slot: Slot,
-        _recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
+        writer: &Arc<AccountStorageEntry>,
+        append_vec_slot: Slot,
+        recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
     ) {
         if true {
             let store_id = writer.append_vec_id();
