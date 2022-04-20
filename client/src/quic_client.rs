@@ -377,7 +377,7 @@ mod tests {
         let mut all_packets = vec![];
         let now = Instant::now();
         let mut total_packets = 0;
-        while now.elapsed().as_secs() < 5 {
+        while now.elapsed().as_secs() < 15 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
                 total_packets += packets.packets.len();
                 all_packets.push(packets)
