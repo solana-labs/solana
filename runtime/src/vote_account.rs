@@ -80,6 +80,10 @@ impl VoteAccount {
 }
 
 impl VoteAccounts {
+    pub(crate) fn len(&self) -> usize {
+        self.vote_accounts.len()
+    }
+
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.staked_nodes_once.call_once(|| {
             let staked_nodes = self
@@ -235,6 +239,23 @@ impl Default for VoteAccountInner {
 impl PartialEq<VoteAccountInner> for VoteAccountInner {
     fn eq(&self, other: &Self) -> bool {
         self.account == other.account
+    }
+}
+
+impl PartialEq<AccountSharedData> for VoteAccount {
+    fn eq(&self, other: &AccountSharedData) -> bool {
+        let Account {
+            lamports,
+            data,
+            owner,
+            executable,
+            rent_epoch,
+        } = &self.0.account;
+        other.lamports() == *lamports
+            && other.executable() == *executable
+            && other.rent_epoch() == *rent_epoch
+            && other.owner() == owner
+            && other.data() == data
     }
 }
 

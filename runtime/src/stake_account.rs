@@ -16,7 +16,7 @@ use {
 /// Generic type T enforces type-saftey so that StakeAccount<Delegation> can
 /// only wrap a stake-state which is a Delegation; whereas StakeAccount<()>
 /// wraps any account with stake state.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct StakeAccount<T> {
     account: AccountSharedData,
     stake_state: StakeState,
@@ -102,6 +102,17 @@ impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
     #[inline]
     fn from(stake_account: StakeAccount<T>) -> Self {
         (stake_account.account, stake_account.stake_state)
+    }
+}
+
+impl<S, T> PartialEq<StakeAccount<S>> for StakeAccount<T> {
+    fn eq(&self, other: &StakeAccount<S>) -> bool {
+        let StakeAccount {
+            account,
+            stake_state,
+            _phantom,
+        } = other;
+        account == &self.account && stake_state == &self.stake_state
     }
 }
 
