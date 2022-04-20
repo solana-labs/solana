@@ -2506,7 +2506,7 @@ impl AccountsDb {
         );
         if purge_stats.is_none() {
             if !dead_slots.is_empty() {
-                error!("ancient_append_vec: !dead_slots.is_empty: {:?}", dead_slots);
+                //error!("ancient_append_vec: !dead_slots.is_empty: {:?}", dead_slots);
             }
             // assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
