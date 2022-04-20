@@ -8,7 +8,6 @@ pub mod bigtable_delete;
 pub mod bigtable_upload;
 pub mod bigtable_upload_service;
 pub mod block_error;
-mod slot_stats;
 #[macro_use]
 pub mod blockstore;
 pub mod ancestor_iterator;
@@ -25,6 +24,7 @@ pub mod next_slots_iterator;
 pub mod rooted_slot_iterator;
 pub mod shred;
 pub mod sigverify_shreds;
+pub mod slot_stats;
 pub mod staking_utils;
 
 #[macro_use]

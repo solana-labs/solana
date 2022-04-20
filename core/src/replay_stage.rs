@@ -1682,6 +1682,9 @@ impl ReplayStage {
         blockstore
             .set_dead_slot(slot)
             .expect("Failed to mark slot as dead in blockstore");
+
+        blockstore.slots_stats.mark_dead(slot);
+
         rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
             err: format!("error: {:?}", err),
@@ -1788,6 +1791,9 @@ impl ReplayStage {
                 epoch_slots_frozen_slots,
                 drop_bank_sender,
             );
+
+            blockstore.slots_stats.mark_rooted(new_root);
+
             rpc_subscriptions.notify_roots(rooted_slots);
             if let Some(sender) = bank_notification_sender {
                 sender
@@ -2931,6 +2937,7 @@ impl ReplayStage {
             accounts_background_request_sender,
             highest_confirmed_root,
         );
+
         drop_bank_sender
             .send(removed_banks)
             .unwrap_or_else(|err| warn!("bank drop failed: {:?}", err));
