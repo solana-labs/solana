@@ -1,5 +1,10 @@
 #![allow(deprecated)]
-use {std::borrow::Cow, thiserror::Error};
+use {
+    solana_sdk::account::{AccountSharedData, ReadableAccount},
+    spl_token_2022::{generic_token_account::GenericTokenAccount, state::Account},
+    std::borrow::Cow,
+    thiserror::Error,
+};
 
 const MAX_DATA_SIZE: usize = 128;
 const MAX_DATA_BASE58_SIZE: usize = 175;
@@ -70,6 +75,14 @@ impl RpcFilterType {
                 }
             }
             RpcFilterType::TokenAccountState => Ok(()),
+        }
+    }
+
+    pub fn allows(&self, account: &AccountSharedData) -> bool {
+        match self {
+            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
+            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
+            RpcFilterType::TokenAccountState => Account::valid_account_data(account.data()),
         }
     }
 }

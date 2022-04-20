@@ -3,7 +3,6 @@ use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         parsed_token_accounts::{get_parsed_token_account, get_parsed_token_accounts},
-        rpc_filter::*,
         rpc_pubsub_service::PubSubConfig,
         rpc_subscription_tracker::{
             AccountSubscriptionParams, BlockSubscriptionKind, BlockSubscriptionParams,
@@ -400,7 +399,7 @@ fn filter_program_results(
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
         filters
             .iter()
-            .all(|filter_type| satisfies_filter(account, filter_type))
+            .all(|filter_type| filter_type.allows(account))
     });
     let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
         if is_known_spl_token_id(&params.pubkey)

@@ -3,7 +3,7 @@
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*, rpc_filter::*, rpc_health::*,
+        parsed_token_accounts::*, rpc_health::*,
     },
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -1900,7 +1900,7 @@ impl JsonRpcRequestProcessor {
         let filter_closure = |account: &AccountSharedData| {
             filters
                 .iter()
-                .all(|filter_type| satisfies_filter(account, filter_type))
+                .all(|filter_type| filter_type.allows(account))
         };
         if self
             .config
@@ -1978,7 +1978,7 @@ impl JsonRpcRequestProcessor {
                         account.owner() == program_id
                             && filters
                                 .iter()
-                                .all(|filter_type| satisfies_filter(account, filter_type))
+                                .all(|filter_type| filter_type.allows(account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
@@ -2029,7 +2029,7 @@ impl JsonRpcRequestProcessor {
                         account.owner() == program_id
                             && filters
                                 .iter()
-                                .all(|filter_type| satisfies_filter(account, filter_type))
+                                .all(|filter_type| filter_type.allows(account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
