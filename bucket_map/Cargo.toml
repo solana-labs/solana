@@ -21,7 +21,7 @@ tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"
-rayon = "1.5.0"
+rayon = "1.5.2"
 solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [lib]

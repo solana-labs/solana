@@ -33,7 +33,7 @@ num-traits = { version = "0.2" }
 num_cpus = "1.13.1"
 ouroboros = "0.14.2"
 rand = "0.7.0"
-rayon = "1.5.1"
+rayon = "1.5.2"
 regex = "1.5.4"
 serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
