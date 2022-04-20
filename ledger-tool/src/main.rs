@@ -963,6 +963,13 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let skip_rewrites_arg = Arg::with_name("accounts_db_skip_rewrites")
+        .long("accounts-db-skip-rewrites")
+        .help(
+            "Accounts that are rent exempt and have no changes are not rewritten. \
+                  This produces snapshots that older versions cannot read.",
+        )
+        .hidden(true);
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1295,6 +1302,7 @@ fn main() {
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
+            .arg(&skip_rewrites_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -2096,6 +2104,7 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
+                    skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
                     ..AccountsDbConfig::default()
                 });
 

@@ -1541,6 +1541,13 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_skip_rewrites")
+                .long("accounts-db-skip-rewrites")
+                .help("Accounts that are rent exempt and have no changes are not rewritten. \
+                      This produces snapshots that older versions cannot read.")
+                      .hidden(true),
+        )
+        .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")
@@ -2276,6 +2283,7 @@ pub fn main() {
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
+        skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
         ..AccountsDbConfig::default()
     };
 
