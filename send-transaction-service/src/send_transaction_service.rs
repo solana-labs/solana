@@ -518,7 +518,7 @@ impl SendTransactionService {
         measure.stop();
         inc_new_counter_info!(
             "send_transaction_service-batch-us",
-            measure.as_us() as usize,
+            measure.as_us() as usize
         );
     }
 
