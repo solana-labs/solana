@@ -2505,7 +2505,10 @@ impl AccountsDb {
             reset_accounts,
         );
         if purge_stats.is_none() {
-            assert!(dead_slots.is_empty());
+            if !dead_slots.is_empty() {
+                error!("ancient_append_vec: !dead_slots.is_empty: {:?}", dead_slots);
+            }
+            // assert!(dead_slots.is_empty());
         } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
             assert!(dead_slots.len() <= 1);
             if dead_slots.len() == 1 {
