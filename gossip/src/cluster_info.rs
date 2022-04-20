@@ -47,7 +47,6 @@ use {
     serde::ser::Serialize,
     solana_ledger::shred::Shred,
     solana_measure::measure::Measure,
-    solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
     solana_net_utils::{
         bind_common, bind_common_in_range, bind_in_range, bind_two_consecutive_in_range,
         find_available_port_in_range, multi_bind_in_range, PortRange,
@@ -74,7 +73,6 @@ use {
     },
     solana_streamer::{
         packet,
-        sendmmsg::{multi_target_send, SendPktsError},
         socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
@@ -280,13 +278,13 @@ pub(crate) enum Protocol {
 }
 
 impl Protocol {
-    fn par_verify(self) -> Option<Self> {
+    fn par_verify(self, stats: &GossipStats) -> Option<Self> {
         match self {
             Protocol::PullRequest(_, ref caller) => {
                 if caller.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_pull_request_verify_fail", 1);
+                    stats.gossip_pull_request_verify_fail.add_relaxed(1);
                     None
                 }
             }
@@ -294,10 +292,9 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_info!(
-                        "cluster_info-gossip_pull_response_verify_fail",
-                        size - data.len()
-                    );
+                    stats
+                        .gossip_pull_response_verify_fail
+                        .add_relaxed((size - data.len()) as u64);
                 }
                 if data.is_empty() {
                     None
@@ -309,10 +306,9 @@ impl Protocol {
                 let size = data.len();
                 let data: Vec<_> = data.into_par_iter().filter(Signable::verify).collect();
                 if size != data.len() {
-                    inc_new_counter_info!(
-                        "cluster_info-gossip_push_msg_verify_fail",
-                        size - data.len()
-                    );
+                    stats
+                        .gossip_push_msg_verify_fail
+                        .add_relaxed((size - data.len()) as u64);
                 }
                 if data.is_empty() {
                     None
@@ -324,7 +320,7 @@ impl Protocol {
                 if data.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_debug!("cluster_info-gossip_prune_msg_verify_fail", 1);
+                    stats.gossip_prune_msg_verify_fail.add_relaxed(1);
                     None
                 }
             }
@@ -332,7 +328,7 @@ impl Protocol {
                 if ping.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_ping_msg_verify_fail", 1);
+                    stats.gossip_ping_msg_verify_fail.add_relaxed(1);
                     None
                 }
             }
@@ -340,7 +336,7 @@ impl Protocol {
                 if pong.verify() {
                     Some(self)
                 } else {
-                    inc_new_counter_info!("cluster_info-gossip_pong_msg_verify_fail", 1);
+                    stats.gossip_pong_msg_verify_fail.add_relaxed(1);
                     None
                 }
             }
@@ -884,7 +880,7 @@ impl ClusterInfo {
         if DEFAULT_SLOTS_PER_EPOCH as isize > total_slots
             && crds_value::MAX_EPOCH_SLOTS as usize <= current_slots.len()
         {
-            inc_new_counter_warn!("cluster_info-epoch_slots-filled", 1);
+            self.stats.epoch_slots_filled.add_relaxed(1);
             warn!(
                 "EPOCH_SLOTS are filling up FAST {}/{}",
                 total_slots,
@@ -1114,7 +1110,7 @@ impl ClusterInfo {
                 transaction
             })
             .collect();
-        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
+        self.stats.get_votes_count.add_relaxed(txs.len() as u64);
         txs
     }
 
@@ -1134,7 +1130,7 @@ impl ClusterInfo {
                 (vote.value.label(), transaction)
             })
             .unzip();
-        inc_new_counter_info!("cluster_info-get_votes-count", txs.len());
+        self.stats.get_votes_count.add_relaxed(txs.len() as u64);
         (labels, txs)
     }
 
@@ -1315,42 +1311,6 @@ impl ClusterInfo {
             })
             .cloned()
             .collect()
-    }
-
-    /// retransmit messages to a list of nodes
-    /// # Remarks
-    /// We need to avoid having obj locked while doing a io, such as the `send_to`
-    pub fn retransmit_to(
-        peers: &[&ContactInfo],
-        data: &[u8],
-        s: &UdpSocket,
-        forwarded: bool,
-        socket_addr_space: &SocketAddrSpace,
-    ) {
-        trace!("retransmit orders {}", peers.len());
-        let dests: Vec<_> = if forwarded {
-            peers
-                .iter()
-                .map(|peer| peer.tvu_forwards)
-                .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
-                .collect()
-        } else {
-            peers
-                .iter()
-                .map(|peer| peer.tvu)
-                .filter(|addr| socket_addr_space.check(addr))
-                .collect()
-        };
-        if let Err(SendPktsError::IoError(ioerr, num_failed)) = multi_target_send(s, data, &dests) {
-            inc_new_counter_info!("cluster_info-retransmit-packets", dests.len(), 1);
-            inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
-            error!(
-                "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-                ioerr,
-                num_failed,
-                dests.len(),
-            );
-        }
     }
 
     fn insert_self(&self) {
@@ -1659,7 +1619,7 @@ impl ClusterInfo {
         stakes: &HashMap<Pubkey, u64>,
     ) {
         let self_pubkey = self.id();
-        let epoch_duration = get_epoch_duration(bank_forks);
+        let epoch_duration = get_epoch_duration(bank_forks, &self.stats);
         let timeouts = self
             .gossip
             .make_timeouts(self_pubkey, stakes, epoch_duration);
@@ -1668,7 +1628,7 @@ impl ClusterInfo {
             self.gossip
                 .purge(&self_pubkey, thread_pool, timestamp(), &timeouts)
         };
-        inc_new_counter_info!("cluster_info-purge-count", num_purged);
+        self.stats.purge_count.add_relaxed(num_purged as u64);
     }
 
     // Trims the CRDS table by dropping all values associated with the pubkeys
@@ -1835,10 +1795,14 @@ impl ClusterInfo {
             }
         }
         if prune_message_timeout != 0 {
-            inc_new_counter_debug!("cluster_info-prune_message_timeout", prune_message_timeout);
+            self.stats
+                .prune_message_timeout
+                .add_relaxed(prune_message_timeout);
         }
         if bad_prune_destination != 0 {
-            inc_new_counter_debug!("cluster_info-bad_prune_destination", bad_prune_destination);
+            self.stats
+                .bad_prune_destination
+                .add_relaxed(bad_prune_destination);
         }
     }
 
@@ -1864,7 +1828,7 @@ impl ClusterInfo {
                     None => false,
                     Some(caller) if caller.id == self_pubkey => {
                         warn!("PullRequest ignored, I'm talking to myself");
-                        inc_new_counter_debug!("cluster_info-window-request-loopback", 1);
+                        self.stats.window_request_loopback.add_relaxed(1);
                         false
                     }
                     Some(_) => true,
@@ -1986,6 +1950,7 @@ impl ClusterInfo {
                 &caller_and_filters,
                 output_size_limit,
                 now,
+                &self.stats,
             )
         };
         if self.require_stake_for_gossip(stakes) {
@@ -2033,7 +1998,7 @@ impl ClusterInfo {
                         packet_batch.packets.push(packet);
                         sent += 1;
                     } else {
-                        inc_new_counter_info!("gossip_pull_request-no_budget", 1);
+                        self.stats.gossip_pull_request_no_budget.add_relaxed(1);
                         break;
                     }
                 }
@@ -2041,8 +2006,12 @@ impl ClusterInfo {
         }
         time.stop();
         let dropped_responses = responses.len() - sent;
-        inc_new_counter_info!("gossip_pull_request-sent_requests", sent);
-        inc_new_counter_info!("gossip_pull_request-dropped_requests", dropped_responses);
+        self.stats
+            .gossip_pull_request_sent_requests
+            .add_relaxed(sent as u64);
+        self.stats
+            .gossip_pull_request_dropped_requests
+            .add_relaxed(dropped_responses as u64);
         debug!(
             "handle_pull_requests: {} sent: {} total: {} total_bytes: {}",
             time,
@@ -2321,7 +2290,9 @@ impl ClusterInfo {
             .push_response_count
             .add_relaxed(packet_batch.packets.len() as u64);
         let new_push_requests = self.new_push_requests(stakes);
-        inc_new_counter_debug!("cluster_info-push_message-pushes", new_push_requests.len());
+        self.stats
+            .push_message_pushes
+            .add_relaxed(new_push_requests.len() as u64);
         for (address, request) in new_push_requests {
             if ContactInfo::is_valid_address(&address, &self.socket_addr_space) {
                 match Packet::from_data(Some(&address), &request) {
@@ -2498,7 +2469,7 @@ impl ClusterInfo {
             let data = &packet.data[..packet.meta.size];
             let protocol: Protocol = limited_deserialize(data).ok()?;
             protocol.sanitize().ok()?;
-            let protocol = protocol.par_verify()?;
+            let protocol = protocol.par_verify(&self.stats)?;
             Some((packet.meta.addr(), protocol))
         };
         let packets: Vec<_> = {
@@ -2553,7 +2524,7 @@ impl ClusterInfo {
             response_sender,
             &stakes,
             feature_set.as_deref(),
-            get_epoch_duration(bank_forks),
+            get_epoch_duration(bank_forks, &self.stats),
             should_check_duplicate_instance,
         )?;
         if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
@@ -2688,10 +2659,10 @@ impl ClusterInfo {
 // Returns root bank's epoch duration. Falls back on
 //     DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT
 // if there are no working banks.
-fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>) -> Duration {
+fn get_epoch_duration(bank_forks: Option<&RwLock<BankForks>>, stats: &GossipStats) -> Duration {
     let num_slots = match bank_forks {
         None => {
-            inc_new_counter_info!("cluster_info-purge-no_working_bank", 1);
+            stats.get_epoch_duration_no_working_bank.add_relaxed(1);
             DEFAULT_SLOTS_PER_EPOCH
         }
         Some(bank_forks) => {
@@ -4554,8 +4525,9 @@ mod tests {
 
     #[test]
     fn test_get_epoch_millis_no_bank() {
+        let epoch_duration = get_epoch_duration(/*bank_forks:*/ None, &GossipStats::default());
         assert_eq!(
-            get_epoch_duration(/*bank_forks=*/ None).as_millis() as u64,
+            epoch_duration.as_millis() as u64,
             DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT // 48 hours
         );
     }

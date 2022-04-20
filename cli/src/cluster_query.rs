@@ -379,6 +379,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                             "root",
                             "skip-rate",
                             "stake",
+                            "version",
                             "vote-account",
                         ])
                         .default_value("stake")
@@ -650,6 +651,7 @@ pub fn parse_show_validators(matches: &ArgMatches<'_>) -> Result<CliCommandInfo,
         "skip-rate" => CliValidatorsSortOrder::SkipRate,
         "stake" => CliValidatorsSortOrder::Stake,
         "vote-account" => CliValidatorsSortOrder::VoteAccount,
+        "version" => CliValidatorsSortOrder::Version,
         _ => unreachable!(),
     };
 
@@ -2111,7 +2113,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => std::mem::size_of::<StakeState>(),
+            Self::Stake => StakeState::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,

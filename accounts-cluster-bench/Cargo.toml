@@ -12,7 +12,7 @@ publish = false
 clap = "2.33.1"
 log = "0.4.14"
 rand = "0.7.0"
-rayon = "1.5.1"
+rayon = "1.5.2"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-client = { path = "../client", version = "=1.11.0" }

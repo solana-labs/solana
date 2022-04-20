@@ -10,11 +10,8 @@ use {
             TMP_BANK_SNAPSHOT_PREFIX,
         },
     },
-    crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
-    solana_sdk::{
-        clock::Slot, genesis_config::ClusterType, hash::Hash, sysvar::epoch_schedule::EpochSchedule,
-    },
+    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
     std::{
         fs,
         path::{Path, PathBuf},
@@ -23,14 +20,9 @@ use {
     tempfile::TempDir,
 };
 
-/// The sender side of the AccountsPackage channel, used by AccountsBackgroundService
-pub type AccountsPackageSender = Sender<AccountsPackage>;
-
-/// The receiver side of the AccountsPackage channel, used by AccountsHashVerifier
-pub type AccountsPackageReceiver = Receiver<AccountsPackage>;
-
-/// The error type when sending an AccountsPackage over the channel fails
-pub type AccountsPackageSendError = SendError<AccountsPackage>;
+/// The PendingAccountsPackage passes an AccountsPackage from AccountsBackgroundService to
+/// AccountsHashVerifier for hashing
+pub type PendingAccountsPackage = Arc<Mutex<Option<AccountsPackage>>>;
 
 /// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
 /// SnapshotPackagerService for archiving
@@ -43,7 +35,6 @@ pub struct AccountsPackage {
     pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
-    pub accounts_hash: Hash, // temporarily here while we still have to calculate hash before serializing bank
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
     pub snapshot_archives_dir: PathBuf,
@@ -52,7 +43,6 @@ pub struct AccountsPackage {
     pub cluster_type: ClusterType,
     pub snapshot_type: Option<SnapshotType>,
     pub accounts: Arc<Accounts>,
-    pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
 }
 
@@ -110,7 +100,6 @@ impl AccountsPackage {
             slot_deltas,
             snapshot_links,
             snapshot_storages,
-            accounts_hash: bank.get_accounts_hash(),
             archive_format,
             snapshot_version,
             snapshot_archives_dir: snapshot_archives_dir.as_ref().to_path_buf(),
@@ -119,8 +108,7 @@ impl AccountsPackage {
             cluster_type: bank.cluster_type(),
             snapshot_type,
             accounts: bank.accounts(),
-            epoch_schedule: *bank.epoch_schedule(),
-            rent_collector: bank.rent_collector(),
+            rent_collector: bank.rent_collector().clone(),
         })
     }
 }
@@ -135,8 +123,8 @@ pub struct SnapshotPackage {
     pub snapshot_type: SnapshotType,
 }
 
-impl From<AccountsPackage> for SnapshotPackage {
-    fn from(accounts_package: AccountsPackage) -> Self {
+impl SnapshotPackage {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: Hash) -> Self {
         assert!(
             accounts_package.snapshot_type.is_some(),
             "Cannot make a SnapshotPackage from an AccountsPackage when SnapshotType is None!"
@@ -147,7 +135,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
                 accounts_package.snapshot_archives_dir,
                 accounts_package.slot,
-                &accounts_package.accounts_hash,
+                &accounts_hash,
                 accounts_package.archive_format,
             ),
             SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
@@ -167,7 +155,7 @@ impl From<AccountsPackage> for SnapshotPackage {
                     accounts_package.snapshot_archives_dir,
                     incremental_snapshot_base_slot,
                     accounts_package.slot,
-                    &accounts_package.accounts_hash,
+                    &accounts_hash,
                     accounts_package.archive_format,
                 )
             }
@@ -177,7 +165,7 @@ impl From<AccountsPackage> for SnapshotPackage {
             snapshot_archive_info: SnapshotArchiveInfo {
                 path: snapshot_archive_path,
                 slot: accounts_package.slot,
-                hash: accounts_package.accounts_hash,
+                hash: accounts_hash,
                 archive_format: accounts_package.archive_format,
             },
             block_height: accounts_package.block_height,

@@ -148,6 +148,18 @@ all_test_steps() {
 
   # Full test suite
   command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
+
+  # Docs tests
+  if affects \
+             .rs$ \
+             ^ci/rust-version.sh \
+             ^ci/test-docs.sh \
+      ; then
+    command_step doctest "ci/test-docs.sh" 15
+  else
+    annotate --style info --context test-docs \
+      "Docs skipped as no .rs files were modified"
+  fi
   wait_step
 
   # BPF test suite

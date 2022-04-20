@@ -178,11 +178,14 @@ pub struct RpcNotification {
     pub created_at: Instant,
 }
 
+const RPC_NOTIFICATIONS_METRICS_SUBMISSION_INTERVAL_MS: Duration = Duration::from_millis(2_000);
+
 struct RecentItems {
     queue: VecDeque<Arc<String>>,
     total_bytes: usize,
     max_len: usize,
     max_total_bytes: usize,
+    last_metrics_submission: Instant,
 }
 
 impl RecentItems {
@@ -192,6 +195,7 @@ impl RecentItems {
             total_bytes: 0,
             max_len,
             max_total_bytes,
+            last_metrics_submission: Instant::now(),
         }
     }
 
@@ -210,11 +214,22 @@ impl RecentItems {
                 .expect("total bytes underflow");
         }
 
-        datapoint_info!(
-            "rpc_subscriptions_recent_items",
-            ("num", self.queue.len(), i64),
-            ("total_bytes", self.total_bytes, i64),
-        );
+        let now = Instant::now();
+        let last_metrics_ago = now.duration_since(self.last_metrics_submission);
+        if last_metrics_ago > RPC_NOTIFICATIONS_METRICS_SUBMISSION_INTERVAL_MS {
+            datapoint_info!(
+                "rpc_subscriptions_recent_items",
+                ("num", self.queue.len(), i64),
+                ("total_bytes", self.total_bytes, i64),
+            );
+            self.last_metrics_submission = now;
+        } else {
+            trace!(
+                "rpc_subscriptions_recent_items num={} total_bytes={}",
+                self.queue.len(),
+                self.total_bytes,
+            );
+        }
     }
 }
 
@@ -469,7 +484,7 @@ struct PubsubNotificationStats {
 
 impl PubsubNotificationStats {
     fn maybe_submit(&mut self) {
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+        const SUBMIT_CADENCE: Duration = RPC_NOTIFICATIONS_METRICS_SUBMISSION_INTERVAL_MS;
         let elapsed = self.since.as_ref().map(Instant::elapsed);
         if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
             return;

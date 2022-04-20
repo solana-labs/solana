@@ -37,6 +37,7 @@ use {
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
+    solana_storage_bigtable::CredentialType,
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -385,7 +386,7 @@ impl JsonRpcService {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
                     read_only: !enable_bigtable_ledger_upload,
                     timeout,
-                    credential_path: None,
+                    credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                 };
                 runtime

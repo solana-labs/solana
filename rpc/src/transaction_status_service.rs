@@ -360,11 +360,13 @@ pub(crate) mod tests {
         };
 
         let owner = Pubkey::new_unique().to_string();
+        let token_program_id = Pubkey::new_unique().to_string();
         let pre_token_balance = TransactionTokenBalance {
             account_index: 0,
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(42, 2),
             owner: owner.clone(),
+            program_id: token_program_id.clone(),
         };
 
         let post_token_balance = TransactionTokenBalance {
@@ -372,6 +374,7 @@ pub(crate) mod tests {
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(58, 2),
             owner,
+            program_id: token_program_id,
         };
 
         let token_balances = TransactionTokenBalancesSet {

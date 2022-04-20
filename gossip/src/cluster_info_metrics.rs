@@ -88,16 +88,31 @@ impl<'a, T> Drop for TimedGuard<'a, T> {
 }
 
 #[derive(Default)]
-pub(crate) struct GossipStats {
+pub struct GossipStats {
     pub(crate) all_tvu_peers: Counter,
+    pub(crate) bad_prune_destination: Counter,
     pub(crate) entrypoint2: Counter,
     pub(crate) entrypoint: Counter,
+    pub(crate) epoch_slots_filled: Counter,
     pub(crate) epoch_slots_lookup: Counter,
+    pub(crate) filter_crds_values_dropped_requests: Counter,
+    pub(crate) filter_crds_values_dropped_values: Counter,
     pub(crate) filter_pull_response: Counter,
     pub(crate) generate_pull_responses: Counter,
     pub(crate) get_accounts_hash: Counter,
+    pub(crate) get_epoch_duration_no_working_bank: Counter,
     pub(crate) get_votes: Counter,
+    pub(crate) get_votes_count: Counter,
     pub(crate) gossip_packets_dropped_count: Counter,
+    pub(crate) gossip_ping_msg_verify_fail: Counter,
+    pub(crate) gossip_pong_msg_verify_fail: Counter,
+    pub(crate) gossip_prune_msg_verify_fail: Counter,
+    pub(crate) gossip_pull_request_dropped_requests: Counter,
+    pub(crate) gossip_pull_request_no_budget: Counter,
+    pub(crate) gossip_pull_request_sent_requests: Counter,
+    pub(crate) gossip_pull_request_verify_fail: Counter,
+    pub(crate) gossip_pull_response_verify_fail: Counter,
+    pub(crate) gossip_push_msg_verify_fail: Counter,
     pub(crate) handle_batch_ping_messages_time: Counter,
     pub(crate) handle_batch_pong_messages_time: Counter,
     pub(crate) handle_batch_prune_messages_time: Counter,
@@ -136,12 +151,15 @@ pub(crate) struct GossipStats {
     pub(crate) process_push_success: Counter,
     pub(crate) prune_message_count: Counter,
     pub(crate) prune_message_len: Counter,
+    pub(crate) prune_message_timeout: Counter,
     pub(crate) prune_received_cache: Counter,
     pub(crate) pull_from_entrypoint_count: Counter,
     pub(crate) pull_request_ping_pong_check_failed_count: Counter,
     pub(crate) pull_requests_count: Counter,
     pub(crate) purge: Counter,
+    pub(crate) purge_count: Counter,
     pub(crate) push_message_count: Counter,
+    pub(crate) push_message_pushes: Counter,
     pub(crate) push_message_value_count: Counter,
     pub(crate) push_response_count: Counter,
     pub(crate) push_vote_read: Counter,
@@ -155,6 +173,7 @@ pub(crate) struct GossipStats {
     pub(crate) trim_crds_table_purged_values_count: Counter,
     pub(crate) tvu_peers: Counter,
     pub(crate) verify_gossip_packets_time: Counter,
+    pub(crate) window_request_loopback: Counter,
 }
 
 pub(crate) fn submit_gossip_stats(
@@ -180,6 +199,7 @@ pub(crate) fn submit_gossip_stats(
         ("entrypoint2", stats.entrypoint2.clear(), i64),
         ("push_vote_read", stats.push_vote_read.clear(), i64),
         ("get_votes", stats.get_votes.clear(), i64),
+        ("get_votes_count", stats.get_votes_count.clear(), i64),
         ("get_accounts_hash", stats.get_accounts_hash.clear(), i64),
         ("all_tvu_peers", stats.all_tvu_peers.clear(), i64),
         ("tvu_peers", stats.tvu_peers.clear(), i64),
@@ -211,6 +231,7 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("purge", stats.purge.clear(), i64),
+        ("purge_count", stats.purge_count.clear(), i64),
         (
             "process_gossip_packets_time",
             stats.process_gossip_packets_time.clear(),
@@ -257,6 +278,16 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("filter_pull_resp", stats.filter_pull_response.clear(), i64),
+        (
+            "filter_crds_values_dropped_requests",
+            stats.filter_crds_values_dropped_requests.clear(),
+            i64
+        ),
+        (
+            "filter_crds_values_dropped_values",
+            stats.filter_crds_values_dropped_values.clear(),
+            i64
+        ),
         (
             "process_pull_resp_count",
             stats.process_pull_response_count.clear(),
@@ -317,6 +348,16 @@ pub(crate) fn submit_gossip_stats(
         ),
         ("process_prune", stats.process_prune.clear(), i64),
         (
+            "prune_message_timeout",
+            stats.prune_message_timeout.clear(),
+            i64
+        ),
+        (
+            "bad_prune_destination",
+            stats.bad_prune_destination.clear(),
+            i64
+        ),
+        (
             "process_push_message",
             stats.process_push_message.clear(),
             i64
@@ -329,6 +370,21 @@ pub(crate) fn submit_gossip_stats(
         ("epoch_slots_lookup", stats.epoch_slots_lookup.clear(), i64),
         ("new_pull_requests", stats.new_pull_requests.clear(), i64),
         ("mark_pull_request", stats.mark_pull_request.clear(), i64),
+        (
+            "gossip_pull_request_no_budget",
+            stats.gossip_pull_request_no_budget.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_request_sent_requests",
+            stats.gossip_pull_request_sent_requests.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_request_dropped_requests",
+            stats.gossip_pull_request_dropped_requests.clear(),
+            i64
+        ),
     );
     datapoint_info!(
         "cluster_info_stats4",
@@ -348,6 +404,11 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("push_message_count", stats.push_message_count.clear(), i64),
+        (
+            "push_message_pushes",
+            stats.push_message_pushes.clear(),
+            i64
+        ),
         (
             "push_message_value_count",
             stats.push_message_value_count.clear(),
@@ -369,6 +430,17 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("prune_message_len", stats.prune_message_len.clear(), i64),
+        ("epoch_slots_filled", stats.epoch_slots_filled.clear(), i64),
+        (
+            "window_request_loopback",
+            stats.window_request_loopback.clear(),
+            i64
+        ),
+        (
+            "get_epoch_duration_no_working_bank",
+            stats.get_epoch_duration_no_working_bank.clear(),
+            i64
+        ),
     );
     datapoint_info!(
         "cluster_info_stats5",
@@ -448,47 +520,59 @@ pub(crate) fn submit_gossip_stats(
             stats.trim_crds_table_purged_values_count.clear(),
             i64
         ),
+        (
+            "gossip_pull_request_verify_fail",
+            stats.gossip_pull_request_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_response_verify_fail",
+            stats.gossip_pull_response_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_push_msg_verify_fail",
+            stats.gossip_push_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_prune_msg_verify_fail",
+            stats.gossip_prune_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_ping_msg_verify_fail",
+            stats.gossip_ping_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_pong_msg_verify_fail",
+            stats.gossip_pong_msg_verify_fail.clear(),
+            i64
+        ),
     );
-    let counts: Vec<_> = crds_stats
-        .pull
-        .counts
-        .iter()
-        .zip(crds_stats.push.counts.iter())
-        .map(|(a, b)| a + b)
-        .collect();
     datapoint_info!(
         "cluster_info_crds_stats",
-        ("ContactInfo", counts[0], i64),
         ("ContactInfo-push", crds_stats.push.counts[0], i64),
         ("ContactInfo-pull", crds_stats.pull.counts[0], i64),
-        ("Vote", counts[1], i64),
         ("Vote-push", crds_stats.push.counts[1], i64),
         ("Vote-pull", crds_stats.pull.counts[1], i64),
-        ("LowestSlot", counts[2], i64),
         ("LowestSlot-push", crds_stats.push.counts[2], i64),
         ("LowestSlot-pull", crds_stats.pull.counts[2], i64),
-        ("SnapshotHashes", counts[3], i64),
         ("SnapshotHashes-push", crds_stats.push.counts[3], i64),
         ("SnapshotHashes-pull", crds_stats.pull.counts[3], i64),
-        ("AccountsHashes", counts[4], i64),
         ("AccountsHashes-push", crds_stats.push.counts[4], i64),
         ("AccountsHashes-pull", crds_stats.pull.counts[4], i64),
-        ("EpochSlots", counts[5], i64),
         ("EpochSlots-push", crds_stats.push.counts[5], i64),
         ("EpochSlots-pull", crds_stats.pull.counts[5], i64),
-        ("LegacyVersion", counts[6], i64),
         ("LegacyVersion-push", crds_stats.push.counts[6], i64),
         ("LegacyVersion-pull", crds_stats.pull.counts[6], i64),
-        ("Version", counts[7], i64),
         ("Version-push", crds_stats.push.counts[7], i64),
         ("Version-pull", crds_stats.pull.counts[7], i64),
-        ("NodeInstance", counts[8], i64),
         ("NodeInstance-push", crds_stats.push.counts[8], i64),
         ("NodeInstance-pull", crds_stats.pull.counts[8], i64),
-        ("DuplicateShred", counts[9], i64),
         ("DuplicateShred-push", crds_stats.push.counts[9], i64),
         ("DuplicateShred-pull", crds_stats.pull.counts[9], i64),
-        ("IncrementalSnapshotHashes", counts[10], i64),
         (
             "IncrementalSnapshotHashes-push",
             crds_stats.push.counts[10],
@@ -499,7 +583,6 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.counts[10],
             i64
         ),
-        ("all", counts.iter().sum::<usize>(), i64),
         (
             "all-push",
             crds_stats.push.counts.iter().sum::<usize>(),
@@ -511,46 +594,28 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
     );
-    let fails: Vec<_> = crds_stats
-        .pull
-        .fails
-        .iter()
-        .zip(crds_stats.push.fails.iter())
-        .map(|(a, b)| a + b)
-        .collect();
     datapoint_info!(
         "cluster_info_crds_stats_fails",
-        ("ContactInfo", fails[0], i64),
         ("ContactInfo-push", crds_stats.push.fails[0], i64),
         ("ContactInfo-pull", crds_stats.pull.fails[0], i64),
-        ("Vote", fails[1], i64),
         ("Vote-push", crds_stats.push.fails[1], i64),
         ("Vote-pull", crds_stats.pull.fails[1], i64),
-        ("LowestSlot", fails[2], i64),
         ("LowestSlot-push", crds_stats.push.fails[2], i64),
         ("LowestSlot-pull", crds_stats.pull.fails[2], i64),
-        ("SnapshotHashes", fails[3], i64),
         ("SnapshotHashes-push", crds_stats.push.fails[3], i64),
         ("SnapshotHashes-pull", crds_stats.pull.fails[3], i64),
-        ("AccountsHashes", fails[4], i64),
         ("AccountsHashes-push", crds_stats.push.fails[4], i64),
         ("AccountsHashes-pull", crds_stats.pull.fails[4], i64),
-        ("EpochSlots", fails[5], i64),
         ("EpochSlots-push", crds_stats.push.fails[5], i64),
         ("EpochSlots-pull", crds_stats.pull.fails[5], i64),
-        ("LegacyVersion", fails[6], i64),
         ("LegacyVersion-push", crds_stats.push.fails[6], i64),
         ("LegacyVersion-pull", crds_stats.pull.fails[6], i64),
-        ("Version", fails[7], i64),
         ("Version-push", crds_stats.push.fails[7], i64),
         ("Version-pull", crds_stats.pull.fails[7], i64),
-        ("NodeInstance", fails[8], i64),
         ("NodeInstance-push", crds_stats.push.fails[8], i64),
         ("NodeInstance-pull", crds_stats.pull.fails[8], i64),
-        ("DuplicateShred", fails[9], i64),
         ("DuplicateShred-push", crds_stats.push.fails[9], i64),
         ("DuplicateShred-pull", crds_stats.pull.fails[9], i64),
-        ("IncrementalSnapshotHashes", fails[10], i64),
         (
             "IncrementalSnapshotHashes-push",
             crds_stats.push.fails[10],
@@ -561,24 +626,19 @@ pub(crate) fn submit_gossip_stats(
             crds_stats.pull.fails[10],
             i64
         ),
-        ("all", fails.iter().sum::<usize>(), i64),
         ("all-push", crds_stats.push.fails.iter().sum::<usize>(), i64),
         ("all-pull", crds_stats.pull.fails.iter().sum::<usize>(), i64),
     );
+    if !log::log_enabled!(log::Level::Trace) {
+        return;
+    }
     submit_vote_stats("cluster_info_crds_stats_votes_pull", &crds_stats.pull.votes);
     submit_vote_stats("cluster_info_crds_stats_votes_push", &crds_stats.push.votes);
     let votes: HashMap<Slot, usize> = crds_stats
         .pull
         .votes
         .into_iter()
-        .map(|(slot, num_votes)| (*slot, *num_votes))
-        .chain(
-            crds_stats
-                .push
-                .votes
-                .into_iter()
-                .map(|(slot, num_votes)| (*slot, *num_votes)),
-        )
+        .chain(crds_stats.push.votes.into_iter())
         .into_grouping_map()
         .aggregate(|acc, _slot, num_votes| Some(acc.unwrap_or_default() + num_votes));
     submit_vote_stats("cluster_info_crds_stats_votes", &votes);
@@ -589,12 +649,12 @@ where
     I: IntoIterator<Item = (&'a Slot, /*num-votes:*/ &'a usize)>,
 {
     // Submit vote stats only for the top most voted slots.
-    const NUM_SLOTS: usize = 20;
+    const NUM_SLOTS: usize = 10;
     let mut votes: Vec<_> = votes.into_iter().map(|(k, v)| (*k, *v)).collect();
     if votes.len() > NUM_SLOTS {
         votes.select_nth_unstable_by_key(NUM_SLOTS, |(_, num)| Reverse(*num));
     }
     for (slot, num_votes) in votes.into_iter().take(NUM_SLOTS) {
-        datapoint_info!(name, ("slot", slot, i64), ("num_votes", num_votes, i64),);
+        datapoint_trace!(name, ("slot", slot, i64), ("num_votes", num_votes, i64));
     }
 }

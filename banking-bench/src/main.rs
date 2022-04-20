@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, value_t, App, Arg},
+    clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
@@ -66,23 +66,55 @@ fn check_txs(
     no_bank
 }
 
+#[derive(ArgEnum, Clone, Copy, PartialEq)]
+enum WriteLockContention {
+    /// No transactions lock the same accounts.
+    None,
+    /// Transactions don't lock the same account, unless they belong to the same batch.
+    SameBatchOnly,
+    /// All transactions write lock the same account.
+    Full,
+}
+
+impl WriteLockContention {
+    fn possible_values<'a>() -> impl Iterator<Item = clap::PossibleValue<'a>> {
+        Self::value_variants()
+            .iter()
+            .filter_map(|v| v.to_possible_value())
+    }
+}
+
+impl std::str::FromStr for WriteLockContention {
+    type Err = String;
+    fn from_str(input: &str) -> Result<Self, String> {
+        ArgEnum::from_str(input, false)
+    }
+}
+
 fn make_accounts_txs(
     total_num_transactions: usize,
+    packets_per_batch: usize,
     hash: Hash,
-    same_payer: bool,
+    contention: WriteLockContention,
 ) -> Vec<Transaction> {
-    let to_pubkey = solana_sdk::pubkey::new_rand();
+    use solana_sdk::pubkey;
+    let to_pubkey = pubkey::new_rand();
+    let chunk_pubkeys: Vec<pubkey::Pubkey> = (0..total_num_transactions / packets_per_batch)
+        .map(|_| pubkey::new_rand())
+        .collect();
     let payer_key = Keypair::new();
     let dummy = system_transaction::transfer(&payer_key, &to_pubkey, 1, hash);
     (0..total_num_transactions)
         .into_par_iter()
-        .map(|_| {
+        .map(|i| {
             let mut new = dummy.clone();
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
-            if !same_payer {
-                new.message.account_keys[0] = solana_sdk::pubkey::new_rand();
-            }
-            new.message.account_keys[1] = solana_sdk::pubkey::new_rand();
+            new.message.account_keys[0] = pubkey::new_rand();
+            new.message.account_keys[1] = match contention {
+                WriteLockContention::None => pubkey::new_rand(),
+                WriteLockContention::SameBatchOnly => chunk_pubkeys[i / packets_per_batch],
+                WriteLockContention::Full => to_pubkey,
+            };
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
@@ -91,13 +123,11 @@ fn make_accounts_txs(
 
 struct Config {
     packets_per_batch: usize,
-    chunk_len: usize,
-    num_threads: usize,
 }
 
 impl Config {
     fn get_transactions_index(&self, chunk_index: usize) -> usize {
-        chunk_index * (self.chunk_len / self.num_threads) * self.packets_per_batch
+        chunk_index * self.packets_per_batch
     }
 }
 
@@ -109,57 +139,73 @@ fn bytes_as_usize(bytes: &[u8]) -> usize {
 fn main() {
     solana_logger::setup();
 
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("num_chunks")
+            Arg::new("num_chunks")
                 .long("num-chunks")
                 .takes_value(true)
                 .value_name("SIZE")
                 .help("Number of transaction chunks."),
         )
         .arg(
-            Arg::with_name("packets_per_chunk")
-                .long("packets-per-chunk")
+            Arg::new("packets_per_batch")
+                .long("packets-per-batch")
                 .takes_value(true)
                 .value_name("SIZE")
-                .help("Packets per chunk"),
+                .help("Packets per batch"),
         )
         .arg(
-            Arg::with_name("skip_sanity")
+            Arg::new("skip_sanity")
                 .long("skip-sanity")
                 .takes_value(false)
                 .help("Skip transaction sanity execution"),
         )
         .arg(
-            Arg::with_name("same_payer")
-                .long("same-payer")
-                .takes_value(false)
-                .help("Use the same payer for transfers"),
+            Arg::new("write_lock_contention")
+                .long("write-lock-contention")
+                .takes_value(true)
+                .possible_values(WriteLockContention::possible_values())
+                .help("Accounts that test transactions write lock"),
         )
         .arg(
-            Arg::with_name("iterations")
+            Arg::new("iterations")
                 .long("iterations")
                 .takes_value(true)
                 .help("Number of iterations"),
         )
         .arg(
-            Arg::with_name("num_threads")
-                .long("num-threads")
+            Arg::new("batches_per_iteration")
+                .long("batches-per-iteration")
                 .takes_value(true)
-                .help("Number of iterations"),
+                .help("Number of batches to send in each iteration"),
+        )
+        .arg(
+            Arg::new("num_banking_threads")
+                .long("num-banking-threads")
+                .takes_value(true)
+                .help("Number of threads to use in the banking stage"),
         )
         .get_matches();
 
-    let num_threads =
-        value_t!(matches, "num_threads", usize).unwrap_or(BankingStage::num_threads() as usize);
+    let num_banking_threads = matches
+        .value_of_t::<u32>("num_banking_threads")
+        .unwrap_or_else(|_| BankingStage::num_threads());
     //   a multiple of packet chunk duplicates to avoid races
-    let num_chunks = value_t!(matches, "num_chunks", usize).unwrap_or(16);
-    let packets_per_chunk = value_t!(matches, "packets_per_chunk", usize).unwrap_or(192);
-    let iterations = value_t!(matches, "iterations", usize).unwrap_or(1000);
+    let num_chunks = matches.value_of_t::<usize>("num_chunks").unwrap_or(16);
+    let packets_per_batch = matches
+        .value_of_t::<usize>("packets_per_batch")
+        .unwrap_or(192);
+    let iterations = matches.value_of_t::<usize>("iterations").unwrap_or(1000);
+    let batches_per_iteration = matches
+        .value_of_t::<usize>("batches_per_iteration")
+        .unwrap_or(BankingStage::num_threads() as usize);
+    let write_lock_contention = matches
+        .value_of_t::<WriteLockContention>("write_lock_contention")
+        .unwrap_or(WriteLockContention::None);
 
-    let total_num_transactions = num_chunks * num_threads * packets_per_chunk;
+    let total_num_transactions = num_chunks * packets_per_batch * batches_per_iteration;
     let mint_total = 1_000_000_000_000;
     let GenesisConfigInfo {
         genesis_config,
@@ -180,11 +226,17 @@ fn main() {
         .unwrap()
         .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
-    info!("threads: {} txs: {}", num_threads, total_num_transactions);
+    info!(
+        "threads: {} txs: {}",
+        num_banking_threads, total_num_transactions
+    );
 
-    let same_payer = matches.is_present("same_payer");
-    let mut transactions =
-        make_accounts_txs(total_num_transactions, genesis_config.hash(), same_payer);
+    let mut transactions = make_accounts_txs(
+        total_num_transactions,
+        packets_per_batch,
+        genesis_config.hash(),
+        write_lock_contention,
+    );
 
     // fund all the accounts
     transactions.iter().for_each(|tx| {
@@ -209,16 +261,20 @@ fn main() {
             assert!(res.is_ok(), "sanity test transactions error: {:?}", res);
         });
         bank.clear_signatures();
-        //sanity check, make sure all the transactions can execute in parallel
 
-        let res = bank.process_transactions(transactions.iter());
-        for r in res {
-            assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
+        if write_lock_contention == WriteLockContention::None {
+            //sanity check, make sure all the transactions can execute in parallel
+            let res = bank.process_transactions(transactions.iter());
+            for r in res {
+                assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
+            }
+            bank.clear_signatures();
         }
-        bank.clear_signatures();
     }
 
-    let mut verified: Vec<_> = to_packet_batches(&transactions, packets_per_chunk);
+    let mut verified: Vec<_> = to_packet_batches(&transactions, packets_per_batch);
+    assert_eq!(verified.len(), num_chunks * batches_per_iteration);
+
     let ledger_path = get_tmp_ledger_path!();
     {
         let blockstore = Arc::new(
@@ -237,19 +293,20 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
-        let banking_stage = BankingStage::new(
+        let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
             verified_receiver,
             tpu_vote_receiver,
             vote_receiver,
+            num_banking_threads,
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
-        let chunk_len = verified.len() / num_chunks;
+        let chunk_len = batches_per_iteration;
         let mut start = 0;
 
         // This is so that the signal_receiver does not go out of scope after the closure.
@@ -262,20 +319,13 @@ fn main() {
         let mut txs_processed = 0;
         let mut root = 1;
         let collector = solana_sdk::pubkey::new_rand();
-        let config = Config {
-            packets_per_batch: packets_per_chunk,
-            chunk_len,
-            num_threads,
-        };
+        let config = Config { packets_per_batch };
         let mut total_sent = 0;
         for _ in 0..iterations {
             let now = Instant::now();
             let mut sent = 0;
 
-            for (i, v) in verified[start..start + chunk_len]
-                .chunks(chunk_len / num_threads)
-                .enumerate()
-            {
+            for (i, v) in verified[start..start + chunk_len].chunks(1).enumerate() {
                 let mut byte = 0;
                 let index = config.get_transactions_index(start + i);
                 if index < transactions.len() {
@@ -383,7 +433,7 @@ fn main() {
                     let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
                     tx.signatures[0] = Signature::new(&sig[0..64]);
                 }
-                verified = to_packet_batches(&transactions.clone(), packets_per_chunk);
+                verified = to_packet_batches(&transactions.clone(), packets_per_batch);
             }
 
             start += chunk_len;

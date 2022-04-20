@@ -128,9 +128,9 @@ pub fn sol_memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
 ///
 /// # Arguments
 ///
-/// - `s` - Slice to be written
-/// - `c` - Byte to write
-/// - `n` - Number of bytes to write
+/// - `s` - Slice to be set
+/// - `c` - Repeated byte to set
+/// - `n` - Number of bytes to set
 ///
 /// # Errors
 ///

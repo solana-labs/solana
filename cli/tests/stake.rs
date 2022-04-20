@@ -204,6 +204,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_address,
         stake_authority: 0,
         sign_only: false,
+        deactivate_delinquent: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -287,6 +288,7 @@ fn test_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
+        deactivate_delinquent: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::default(),
         nonce_account: None,
@@ -412,6 +414,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: true,
+        deactivate_delinquent: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(blockhash),
         nonce_account: None,
@@ -431,6 +434,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
+        deactivate_delinquent: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(blockhash_query::Source::Cluster, blockhash),
         nonce_account: None,
@@ -546,6 +550,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         stake_account_pubkey: stake_keypair.pubkey(),
         stake_authority: 0,
         sign_only: false,
+        deactivate_delinquent: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
             blockhash_query::Source::NonceAccount(nonce_account.pubkey()),
@@ -1073,7 +1078,7 @@ fn test_stake_split() {
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap();
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
@@ -1222,7 +1227,7 @@ fn test_stake_set_lockup() {
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap();
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();

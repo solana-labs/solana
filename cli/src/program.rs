@@ -2233,7 +2233,7 @@ fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     );
     eprintln!("{}\n{}\n{}", divider, phrase, divider);
     eprintln!("To resume a deploy, pass the recovered keypair as the");
-    eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.");
+    eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
     eprintln!(
         "[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{}",

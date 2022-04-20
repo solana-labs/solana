@@ -6,7 +6,7 @@ use {
 
 pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
     ValidatorConfig {
-        dev_halt_at_slot: config.dev_halt_at_slot,
+        halt_at_slot: config.halt_at_slot,
         expected_genesis_hash: config.expected_genesis_hash,
         expected_bank_hash: config.expected_bank_hash,
         expected_shred_version: config.expected_shred_version,
@@ -14,7 +14,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         account_paths: config.account_paths.clone(),
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),
-        accountsdb_repl_service_config: config.accountsdb_repl_service_config.clone(),
         geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
         rpc_addrs: config.rpc_addrs,
         pubsub_config: config.pubsub_config.clone(),
@@ -44,7 +43,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         debug_keys: config.debug_keys.clone(),
         contact_debug_interval: config.contact_debug_interval,
         contact_save_interval: config.contact_save_interval,
-        bpf_jit: config.bpf_jit,
         send_transaction_service_config: config.send_transaction_service_config.clone(),
         no_poh_speed_test: config.no_poh_speed_test,
         no_os_memory_stats_reporting: config.no_os_memory_stats_reporting,
@@ -63,6 +61,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_db_config: config.accounts_db_config.clone(),
         wait_to_vote_slot: config.wait_to_vote_slot,
         ledger_column_options: config.ledger_column_options.clone(),
+        runtime_config: config.runtime_config.clone(),
     }
 }
 

@@ -349,6 +349,7 @@ mod tests {
             snapshots_dir,
             accounts_dir,
             archive_format,
+            snapshot_utils::VerifyBank::Deterministic,
         );
     }
 }

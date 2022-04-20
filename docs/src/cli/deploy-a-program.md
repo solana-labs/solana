@@ -132,7 +132,7 @@ Recover the intermediate account's ephemeral keypair file with
 valley flat great hockey share token excess clever benefit traffic avocado athlete
 ==================================================================================
 To resume a deploy, pass the recovered keypair as
-the [BUFFER_SIGNER] to `solana program deploy` or `solana write-buffer'.
+the [BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.
 Or to recover the account's lamports, pass it as the
 [BUFFER_ACCOUNT_ADDRESS] argument to `solana program drain`.
 ==================================================================================

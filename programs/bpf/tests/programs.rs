@@ -56,6 +56,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
+        stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         system_program,
         sysvar::{self, clock, rent},
@@ -113,7 +114,7 @@ fn write_bpf_program(
     program_keypair: &Keypair,
     elf: &[u8],
 ) {
-    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let chunk_size = 512; // Size of chunk just needs to fit into tx
     let mut offset = 0;
     for chunk in elf.chunks(chunk_size) {
         let instruction =
@@ -245,13 +246,11 @@ fn run_program(name: &str) -> u64 {
                 .unwrap();
             let mut parameter_bytes = parameter_bytes.clone();
             {
-                let mut vm = create_vm(
-                    &executable,
-                    parameter_bytes.as_slice_mut(),
-                    invoke_context,
-                    &account_lengths,
-                )
-                .unwrap();
+                invoke_context
+                    .set_orig_account_lengths(account_lengths.clone())
+                    .unwrap();
+                let mut vm =
+                    create_vm(&executable, parameter_bytes.as_slice_mut(), invoke_context).unwrap();
                 let result = if i == 0 {
                     vm.execute_program_interpreted(&mut instruction_meter)
                 } else {
@@ -395,6 +394,7 @@ fn execute_transactions(
                         inner_instructions,
                         durable_nonce_fee,
                         return_data,
+                        ..
                     } = details;
 
                     let lamports_per_signature = match durable_nonce_fee {
@@ -1418,7 +1418,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
-            ("alloc", 1237),
+            ("alloc", 11502),
             ("bpf_to_bpf", 313),
             ("multiple_static", 208),
             ("noop", 5),
@@ -1437,20 +1437,20 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 4559),
-            ("solana_bpf_rust_custom_heap", 458),
+            ("solana_bpf_rust_alloc", 4459),
+            ("solana_bpf_rust_custom_heap", 469),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 327),
+            ("solana_bpf_rust_external_spend", 338),
             ("solana_bpf_rust_iter", 108),
             ("solana_bpf_rust_many_args", 1289),
-            ("solana_bpf_rust_mem", 2217),
-            ("solana_bpf_rust_membuiltins", 1705),
-            ("solana_bpf_rust_noop", 315),
+            ("solana_bpf_rust_mem", 2118),
+            ("solana_bpf_rust_membuiltins", 1539),
+            ("solana_bpf_rust_noop", 326),
             ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 418),
-            ("solana_bpf_rust_sanity", 52170),
+            ("solana_bpf_rust_rand", 429),
+            ("solana_bpf_rust_sanity", 52290),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 25338),
+            ("solana_bpf_rust_sha", 25251),
         ]);
     }
 
@@ -3523,4 +3523,33 @@ fn test_program_fees() {
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     assert_eq!(pre_balance - post_balance, expected_min_fee);
+}
+
+#[test]
+#[cfg(feature = "bpf_rust")]
+fn test_get_minimum_delegation() {
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.feature_set = Arc::new(FeatureSet::all_enabled());
+
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_get_minimum_delegation",
+    );
+
+    let account_metas = vec![AccountMeta::new_readonly(stake::program::id(), false)];
+    let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
 }

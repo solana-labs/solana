@@ -6,6 +6,7 @@ use {
     serial_test::serial,
     solana_gossip::{
         cluster_info,
+        cluster_info_metrics::GossipStats,
         contact_info::ContactInfo,
         crds::GossipRoute,
         crds_gossip::*,
@@ -541,6 +542,7 @@ fn network_run_pull(
                                 &filters,
                                 usize::MAX, // output_size_limit
                                 now,
+                                &GossipStats::default(),
                             )
                             .into_iter()
                             .flatten()

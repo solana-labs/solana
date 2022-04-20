@@ -68,12 +68,12 @@ use {
     thiserror::Error,
     trees::{Tree, TreeWalk},
 };
+pub mod blockstore_purge;
 pub use {
     crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-pub mod blockstore_purge;
 
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
@@ -108,20 +108,6 @@ type CompletedRanges = Vec<(u32, u32)>;
 pub struct SignatureInfosForAddress {
     pub infos: Vec<ConfirmedTransactionStatusWithSignature>,
     pub found_before: bool,
-}
-
-#[derive(Clone, Copy)]
-/// Controls how `blockstore::purge_slots` purges the data.
-pub enum PurgeType {
-    /// A slower but more accurate way to purge slots by also ensuring higher
-    /// level of consistency between data during the clean up process.
-    Exact,
-    /// A faster approximation of `Exact` where the purge process only takes
-    /// care of the primary index and does not update the associated entries.
-    PrimaryIndex,
-    /// The fastest purge mode that relies on the slot-id based TTL
-    /// compaction filter to do the cleanup.
-    CompactionFilter,
 }
 
 #[derive(Error, Debug)]
@@ -5991,7 +5977,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
-        let (shred, coding) = Shredder::new_coding_shred_header(
+        let (shred, coding) = Shred::new_coding_shred_header(
             slot, 11, // index
             11, // fec_set_index
             11, // num_data_shreds
@@ -6048,7 +6034,7 @@ pub mod tests {
         let last_root = RwLock::new(0);
 
         let slot = 1;
-        let (mut shred, coding) = Shredder::new_coding_shred_header(
+        let (mut shred, coding) = Shred::new_coding_shred_header(
             slot, 11, // index
             11, // fec_set_index
             11, // num_data_shreds
@@ -8810,6 +8796,7 @@ pub mod tests {
                     ui_amount_string: "1.1".to_string(),
                 },
                 owner: Pubkey::new_unique().to_string(),
+                program_id: Pubkey::new_unique().to_string(),
             }]),
             post_token_balances: Some(vec![TransactionTokenBalance {
                 account_index: 0,
@@ -8821,6 +8808,7 @@ pub mod tests {
                     ui_amount_string: "1.1".to_string(),
                 },
                 owner: Pubkey::new_unique().to_string(),
+                program_id: Pubkey::new_unique().to_string(),
             }]),
             rewards: Some(vec![Reward {
                 pubkey: "My11111111111111111111111111111111111111111".to_string(),
