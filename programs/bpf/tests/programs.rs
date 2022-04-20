@@ -387,7 +387,7 @@ fn execute_transactions(
             post_token_balances,
         )| {
             match execution_result {
-                TransactionExecutionResult::Executed(details) => {
+                TransactionExecutionResult::Executed { details, .. } => {
                     let TransactionExecutionDetails {
                         status,
                         log_messages,
