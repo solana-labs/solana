@@ -109,7 +109,7 @@ pull_request_rules:
     actions:
       backport:
         assignees:
-          - "{{ merged_by }}"
+          - "{{ merged_by|replace('mergify[bot]', '@solana-labs/community-pr-subscribers') }}"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -122,7 +122,7 @@ pull_request_rules:
     actions:
       backport:
         assignees:
-          - "{{ merged_by }}"
+          - "{{ merged_by|replace('mergify[bot]', '@solana-labs/community-pr-subscribers') }}"
         ignore_conflicts: true
         branches:
           - v1.9
@@ -133,7 +133,7 @@ pull_request_rules:
     actions:
       backport:
         assignees:
-          - "{{ merged_by }}"
+          - "{{ merged_by|replace('mergify[bot]', '@solana-labs/community-pr-subscribers') }}"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -146,7 +146,7 @@ pull_request_rules:
     actions:
       backport:
         assignees:
-          - "{{ merged_by }}"
+          - "{{ merged_by|replace('mergify[bot]', '@solana-labs/community-pr-subscribers') }}"
         ignore_conflicts: true
         branches:
           - v1.10
