@@ -126,6 +126,7 @@ pub struct LoadedTransaction {
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
+pub type AccountOverrides = HashMap<Pubkey, AccountSharedData>;
 
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
@@ -240,6 +241,7 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
@@ -264,7 +266,11 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if solana_sdk::sysvar::instructions::check_id(key) {
+                    if let Some(account_override) =
+                        account_overrides.and_then(|overrides| overrides.get(key))
+                    {
+                        account_override.clone()
+                    } else if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
                             feature_set
@@ -488,6 +494,7 @@ impl Accounts {
         Ok(account_indices)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
@@ -498,6 +505,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
+        account_overrides: Option<&AccountOverrides>,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -527,6 +535,7 @@ impl Accounts {
                         error_counters,
                         rent_collector,
                         feature_set,
+                        account_overrides,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1435,6 +1444,7 @@ mod tests {
             rent_collector,
             feature_set,
             fee_structure,
+            None,
         )
     }
 
@@ -3025,7 +3035,11 @@ mod tests {
         accounts.accounts_db.clean_accounts(None, false, None);
     }
 
-    fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
+    fn load_accounts_no_store(
+        accounts: &Accounts,
+        tx: Transaction,
+        account_overrides: Option<&AccountOverrides>,
+    ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let rent_collector = RentCollector::default();
         let mut hash_queue = BlockhashQueue::new(100);
@@ -3042,6 +3056,7 @@ mod tests {
             &rent_collector,
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
+            account_overrides,
         )
     }
 
@@ -3067,9 +3082,40 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts_no_store(&accounts, tx);
+        let loaded_accounts = load_accounts_no_store(&accounts, tx, None);
         assert_eq!(loaded_accounts.len(), 1);
         assert!(loaded_accounts[0].0.is_err());
+    }
+
+    #[test]
+    fn test_overrides() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let mut account_overrides = AccountOverrides::new();
+
+        let keypair = Keypair::new();
+        let account = AccountSharedData::new(1_000_000, 0, &Pubkey::default());
+        account_overrides.insert(keypair.pubkey(), account);
+
+        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            vec![native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts_no_store(&accounts, tx, Some(&account_overrides));
+        assert_eq!(loaded_accounts.len(), 1);
+        let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
+        assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (

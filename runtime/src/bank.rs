@@ -38,7 +38,7 @@ use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
         accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
+            AccountAddressFilter, AccountOverrides, Accounts, LoadedTransaction, PubkeyAccountSlot,
             TransactionLoadResult,
         },
         accounts_db::{
@@ -3807,6 +3807,7 @@ impl Bank {
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
+        let account_overrides = self.simulation_override_accounts();
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             mut execution_results,
@@ -3821,6 +3822,7 @@ impl Bank {
             true,
             true,
             &mut timings,
+            Some(&account_overrides),
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -3865,6 +3867,39 @@ impl Bank {
             units_consumed,
             return_data,
         }
+    }
+
+    fn simulation_override_accounts(&self) -> AccountOverrides {
+        let mut account_overrides = AccountOverrides::new();
+        self.add_account_override(
+            &mut account_overrides,
+            &sysvar::slot_history::id(),
+            |account| {
+                let mut slot_history = account
+                    .as_ref()
+                    .map(|account| from_account::<SlotHistory, _>(account).unwrap())
+                    .unwrap_or_default();
+                slot_history.add(self.slot().saturating_sub(1));
+                create_account(
+                    &slot_history,
+                    self.inherit_specially_retained_account_fields(account),
+                )
+            },
+        );
+        account_overrides
+    }
+
+    fn add_account_override<F>(
+        &self,
+        account_overrides: &mut AccountOverrides,
+        pubkey: &Pubkey,
+        updater: F,
+    ) where
+        F: Fn(&Option<AccountSharedData>) -> AccountSharedData,
+    {
+        let old_account = self.get_account_with_fixed_root(pubkey);
+        let new_account = updater(&old_account);
+        account_overrides.insert(*pubkey, new_account);
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -4295,6 +4330,7 @@ impl Bank {
         enable_log_recording: bool,
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
+        account_overrides: Option<&AccountOverrides>,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4338,6 +4374,7 @@ impl Bank {
             &self.rent_collector,
             &self.feature_set,
             &self.fee_structure,
+            account_overrides,
         );
         load_time.stop();
 
@@ -5653,6 +5690,7 @@ impl Bank {
             enable_log_recording,
             enable_return_data_recording,
             timings,
+            None,
         );
 
         let results = self.commit_transactions(
@@ -17517,6 +17555,7 @@ pub(crate) mod tests {
             &bank.rent_collector,
             &bank.feature_set,
             &FeeStructure::default(),
+            None,
         );
 
         let compute_budget = bank
