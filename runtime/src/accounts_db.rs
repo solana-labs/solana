@@ -3566,6 +3566,7 @@ impl AccountsDb {
 
         if is_startup {
             self.shrink_ancient_slots();
+            return; // skip more shrinking for now
         }
 
         if is_startup && self.caching_enabled {
