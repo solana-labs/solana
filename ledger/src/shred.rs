@@ -1828,13 +1828,13 @@ pub mod tests {
         );
         let max_per_block = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
         data_shreds.iter().enumerate().for_each(|(i, s)| {
-            let expected_fec_set_index = start_index + ((i / max_per_block) * max_per_block) as u32;
+            let expected_fec_set_index = start_index + (i - i % max_per_block) as u32;
             assert_eq!(s.fec_set_index(), expected_fec_set_index);
         });
 
         coding_shreds.iter().enumerate().for_each(|(i, s)| {
             let mut expected_fec_set_index = start_index + (i - i % max_per_block) as u32;
-            while expected_fec_set_index as usize > data_shreds.len() {
+            while expected_fec_set_index as usize - start_index as usize > data_shreds.len() {
                 expected_fec_set_index -= max_per_block as u32;
             }
             assert_eq!(s.fec_set_index(), expected_fec_set_index);
