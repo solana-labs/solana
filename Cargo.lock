@@ -2722,13 +2722,15 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1cf9b1c4e9a6c4de793c632496fa490bdc0e1eea73f0c91394f7b6990935d22"
+checksum = "6105e89802af13fdf48c49d7646d3b533a70e536d818aae7e78ba0433d01acb8"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "futures 0.3.21",
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
  "js-sys",
  "lazy_static",
  "percent-encoding 2.1.0",
@@ -6486,9 +6488,9 @@ dependencies = [
 
 [[package]]
 name = "tarpc"
-version = "0.27.2"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b85d0a9369a919ba0db919b142a2b704cd207dfc676f7a43c2d105d0bc225487"
+checksum = "d1c46acb4df5c8ca12495cbc3e09e7ee16df3e533399bd51528e3423f810de44"
 dependencies = [
  "anyhow",
  "fnv",
@@ -7008,9 +7010,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.15.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "599f388ecb26b28d9c1b2e4437ae019a7b336018b45ed911458cd9ebf91129f6"
+checksum = "1f9378e96a9361190ae297e7f3a8ff644aacd2897f244b1ff81f381669196fa6"
 dependencies = [
  "opentelemetry",
  "tracing",
@@ -7020,9 +7022,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.2.25"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
+checksum = "5312f325fe3588e277415f5a6cca1f4ccad0f248c4cd5a4bd33032d7286abc22"
 dependencies = [
  "sharded-slab",
  "thread_local",
