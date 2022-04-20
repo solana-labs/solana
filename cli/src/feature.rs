@@ -664,32 +664,30 @@ fn process_status(
     config: &CliConfig,
     feature_ids: &[Pubkey],
 ) -> ProcessResult {
-    let mut features: Vec<CliFeature> = vec![];
     let mut inactive = false;
-    for (i, account) in rpc_client
+    let mut features = rpc_client
         .get_multiple_accounts(feature_ids)?
         .into_iter()
-        .enumerate()
-    {
-        let feature_id = &feature_ids[i];
-        let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
-        if let Some(account) = account {
-            if let Some(feature_status) = status_from_account(account) {
-                features.push(CliFeature {
+        .zip(feature_ids)
+        .map(|(account, feature_id)| {
+            let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
+            account
+                .and_then(status_from_account)
+                .map(|feature_status| CliFeature {
                     id: feature_id.to_string(),
                     description: feature_name.to_string(),
                     status: feature_status,
-                });
-                continue;
-            }
-        }
-        inactive = true;
-        features.push(CliFeature {
-            id: feature_id.to_string(),
-            description: feature_name.to_string(),
-            status: CliFeatureStatus::Inactive,
-        });
-    }
+                })
+                .unwrap_or_else(|| {
+                    inactive = true;
+                    CliFeature {
+                        id: feature_id.to_string(),
+                        description: feature_name.to_string(),
+                        status: CliFeatureStatus::Inactive,
+                    }
+                })
+        })
+        .collect::<Vec<_>>();
 
     features.sort_unstable();
 
