@@ -51,8 +51,9 @@ fn check_num_associated_token_accounts(
 mod test {
     use {
         super::*,
+        solana_account_decoder::parse_token::pubkey_from_spl_token,
         spl_associated_token_account::{
-            create_associated_token_account,
+            create_associated_token_account, get_associated_token_address,
             solana_program::{
                 instruction::CompiledInstruction as SplAssociatedTokenCompiledInstruction,
                 message::Message, pubkey::Pubkey as SplAssociatedTokenPubkey,
@@ -74,33 +75,46 @@ mod test {
         }
     }
 
+    fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
+        message
+            .account_keys
+            .iter()
+            .map(pubkey_from_spl_token)
+            .collect()
+    }
+
     #[test]
     fn test_parse_associated_token() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..7 {
-            keys.push(solana_sdk::pubkey::new_rand());
-        }
+        let funder = Pubkey::new_unique();
+        let wallet_address = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let associated_account_address =
+            get_associated_token_address(&convert_pubkey(wallet_address), &convert_pubkey(mint));
+        let rent_sysvar = solana_sdk::sysvar::rent::id();
 
         let create_ix = create_associated_token_account(
-            &convert_pubkey(keys[0]),
-            &convert_pubkey(keys[1]),
-            &convert_pubkey(keys[2]),
+            &convert_pubkey(funder),
+            &convert_pubkey(wallet_address),
+            &convert_pubkey(mint),
         );
         let message = Message::new(&[create_ix], None);
         let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
-        let account_keys = AccountKeys::new(&keys, None);
         assert_eq!(
-            parse_associated_token(&compiled_instruction, &account_keys).unwrap(),
+            parse_associated_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "create".to_string(),
                 info: json!({
-                    "source": keys[0].to_string(),
-                    "account": keys[1].to_string(),
-                    "wallet": keys[2].to_string(),
-                    "mint": keys[3].to_string(),
-                    "systemProgram": keys[4].to_string(),
-                    "tokenProgram": keys[5].to_string(),
-                    "rentSysvar": keys[6].to_string(),
+                    "source": funder.to_string(),
+                    "account": associated_account_address.to_string(),
+                    "wallet": wallet_address.to_string(),
+                    "mint": mint.to_string(),
+                    "systemProgram": solana_sdk::system_program::id().to_string(),
+                    "tokenProgram": spl_token::id().to_string(),
+                    "rentSysvar": rent_sysvar.to_string(),
                 })
             }
         );
