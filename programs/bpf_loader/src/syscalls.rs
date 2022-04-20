@@ -247,12 +247,17 @@ pub fn register_syscalls(
         SyscallZkTokenElgamalOpWithScalar::call,
     )?;
 
-    // Sysvars
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_clock_sysvar",
-        SyscallGetClockSysvar::init,
-        SyscallGetClockSysvar::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::curve25519_basic_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_curve25519", SyscallCurve25519BasicOps::call)?;
+    }
+
+
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
         b"sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::init,
@@ -363,6 +368,31 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory,
 ) -> Result<(), EbpfError<BpfError>> {
+    let is_blake3_syscall_active = invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id());
+    let is_secp256k1_recover_syscall_active = invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id());
+    let is_fee_sysvar_via_syscall_active = !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id());
+    let is_return_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id());
+    let is_sol_log_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id());
+    let is_zk_token_sdk_enabled = invoke_context
+        .feature_set
+        .is_active(&feature_set::zk_token_sdk_enabled::id());
+    let is_curve25519_enabled = invoke_context
+        .feature_set
+        .is_active(&feature_set::curve25519_basic_enabled::id());
+    let add_get_processed_sibling_instruction_syscall = invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id());
+
     invoke_context.set_check_aligned(
         bpf_loader_deprecated::id()
             != invoke_context
@@ -389,7 +419,234 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         .map_err(SyscallError::InstructionError)?;
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
-    vm.bind_syscall_context_objects(invoke_context)?;
+
+    // Syscall functions common across languages
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallAbort {
+            _invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallPanic {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLog {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogU64 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogBpfComputeUnits {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogPubkey {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallCreateProgramAddress {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallTryFindProgramAddress {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallSha256 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallKeccak256 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemcpy {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemmove {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemcmp {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemset {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_secp256k1_recover_syscall_active,
+        Box::new(SyscallSecp256k1Recover {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_blake3_syscall_active,
+        Box::new(SyscallBlake3 {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOp {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithLoHi {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithScalar {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_curve25519_enabled,
+        Box::new(SyscallCurve25519BasicOps {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetClockSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetEpochScheduleSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_fee_sysvar_via_syscall_active,
+        Box::new(SyscallGetFeesSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetRentSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    // Return data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallSetReturnData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallGetReturnData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // sol_log_data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sol_log_data_syscall_active,
+        Box::new(SyscallLogData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetProcessedSiblingInstruction {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // Get stack height
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetStackHeight {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // Cross-program invocation syscalls
+    vm.bind_syscall_context_object(
+        Box::new(SyscallInvokeSignedC {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallInvokeSignedRust {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    // Memory allocator
+    vm.bind_syscall_context_object(
+        Box::new(SyscallAllocFree {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
 
     Ok(())
 }
@@ -1890,9 +2147,195 @@ declare_syscall!(
     }
 );
 
-declare_syscall!(
-    // Blake3
-    SyscallBlake3,
+pub struct SyscallCurve25519BasicOps<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+
+impl<'a, 'b> SyscallObject<BpfError> for SyscallCurve25519BasicOps<'a, 'b> {
+    fn call(
+        &mut self,
+        op: u64,
+        left_addr: u64,
+        right_addr: u64,
+        result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::curve25519::{ops::*, pod::*};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+
+        match op {
+            OP_EDWARDS_ADD | OP_EDWARDS_SUB => {
+                let cost = invoke_context.get_compute_budget().curve25519_edwards_op_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let left_point = question_mark!(
+                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let right_point = question_mark!(
+                    translate_type::<PodEdwardsPoint>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = match op {
+                    OP_EDWARDS_ADD => add_edwards(left_point, right_point),
+                    OP_EDWARDS_SUB => subtract_edwards(left_point, right_point),
+                    _ => None,
+                } {
+                    *question_mark!(
+                        translate_type_mut::<PodEdwardsPoint>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            },
+            OP_RISTRETTO_ADD | OP_RISTRETTO_SUB => {
+                let cost = invoke_context.get_compute_budget().curve25519_ristretto_op_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let left_point = question_mark!(
+                    translate_type::<PodRistrettoPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let right_point = question_mark!(
+                    translate_type::<PodRistrettoPoint>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = match op {
+                    OP_RISTRETTO_ADD => add_ristretto(left_point, right_point),
+                    OP_RISTRETTO_SUB => subtract_ristretto(left_point, right_point),
+                    _ => None,
+                } {
+                    *question_mark!(
+                        translate_type_mut::<PodRistrettoPoint>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            },
+            OP_SCALAR_ADD | OP_SCALAR_SUB | OP_SCALAR_MUL | OP_SCALAR_DIV => {
+                let cost = invoke_context.get_compute_budget().curve25519_scalar_op_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let left_scalar = question_mark!(
+                    translate_type::<PodScalar>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let right_scalar = question_mark!(
+                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = match op {
+                    OP_SCALAR_ADD => add_scalar(left_scalar, right_scalar),
+                    OP_SCALAR_SUB => subtract_scalar(left_scalar, right_scalar),
+                    OP_SCALAR_MUL => multiply_scalar(left_scalar, right_scalar),
+                    OP_SCALAR_DIV => divide_scalar(left_scalar, right_scalar),
+                    _ => None,
+                } {
+                    *question_mark!(
+                        translate_type_mut::<PodScalar>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            },
+            OP_EDWARDS_MUL => {
+                let cost = invoke_context.get_compute_budget().curve25519_edwards_mul_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<PodEdwardsPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let scalar = question_mark!(
+                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = multiply_edwards(point, scalar) {
+                    *question_mark!(
+                        translate_type_mut::<PodEdwardsPoint>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            },
+            OP_RISTRETTO_MUL => {
+                let cost = invoke_context.get_compute_budget().curve25519_ristretto_mul_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<PodRistrettoPoint>(memory_mapping, left_addr, loader_id),
+                    result
+                );
+                let scalar = question_mark!(
+                    translate_type::<PodScalar>(memory_mapping, right_addr, loader_id),
+                    result
+                );
+
+                if let Some(result_point) = multiply_ristretto(point, scalar) {
+                    *question_mark!(
+                        translate_type_mut::<PodRistrettoPoint>(
+                            memory_mapping,
+                            result_addr,
+                            loader_id,
+                        ),
+                        result
+                    ) = result_point;
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            },
+            _ => {
+                *result = Ok(1);
+            }
+        };
+    }
+}
+
+
+// Blake3
+pub struct SyscallBlake3<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
     fn call(
         &mut self,
         vals_addr: u64,
