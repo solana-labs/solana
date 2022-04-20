@@ -363,10 +363,8 @@ mod tests {
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
-        let num_expected_packets: usize = 10000;
-        let packets: Vec<_> = (0..num_expected_packets)
-            .map(|_idx| -> Vec<u8> { [0; PACKET_DATA_SIZE].to_vec() })
-            .collect();
+        let num_expected_packets: usize = 4000;
+        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
         let stats = Arc::new(ClientStats::default());
 
@@ -377,7 +375,7 @@ mod tests {
         let mut all_packets = vec![];
         let now = Instant::now();
         let mut total_packets = 0;
-        while now.elapsed().as_secs() < 15 {
+        while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
                 total_packets += packets.packets.len();
                 all_packets.push(packets)
