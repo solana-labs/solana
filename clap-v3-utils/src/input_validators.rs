@@ -57,10 +57,7 @@ where
 }
 
 // Return an error if a pubkey cannot be parsed.
-pub fn is_pubkey<T>(string: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
+pub fn is_pubkey(string: &str) -> Result<(), String> {
     is_parsable_generic::<Pubkey, _>(string)
 }
 
@@ -96,14 +93,11 @@ where
 }
 
 // Return an error if a `SignerSourceKind::Prompt` cannot be parsed
-pub fn is_prompt_signer_source<T>(string: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
-    if string.as_ref() == ASK_KEYWORD {
+pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
+    if string == ASK_KEYWORD {
         return Ok(());
     }
-    match parse_signer_source(string.as_ref())
+    match parse_signer_source(string)
         .map_err(|err| format!("{}", err))?
         .kind
     {

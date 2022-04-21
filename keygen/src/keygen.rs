@@ -497,7 +497,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
-                        .validator(|s| is_prompt_signer_source(s))
+                        .validator(is_prompt_signer_source)
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
