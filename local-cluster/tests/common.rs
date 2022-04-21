@@ -262,9 +262,9 @@ pub fn run_cluster_partition<C>(
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
-    let enable_partition = Arc::new(AtomicBool::new(true));
+    let turbine_disabled = Arc::new(AtomicBool::new(false));
     let mut validator_config = ValidatorConfig {
-        enable_partition: Some(enable_partition.clone()),
+        turbine_disabled: Some(turbine_disabled.clone()),
         ..ValidatorConfig::default_for_test()
     };
 
@@ -342,13 +342,13 @@ pub fn run_cluster_partition<C>(
 
     info!("PARTITION_TEST start partition");
     on_partition_start(&mut cluster, &mut context);
-    enable_partition.store(false, Ordering::Relaxed);
+    turbine_disabled.store(true, Ordering::Relaxed);
 
     sleep(partition_duration);
 
     on_before_partition_resolved(&mut cluster, &mut context);
     info!("PARTITION_TEST remove partition");
-    enable_partition.store(true, Ordering::Relaxed);
+    turbine_disabled.store(false, Ordering::Relaxed);
 
     // Give partitions time to propagate their blocks from during the partition
     // after the partition resolves

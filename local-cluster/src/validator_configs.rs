@@ -20,7 +20,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         snapshot_config: config.snapshot_config.clone(),
         max_ledger_shreds: config.max_ledger_shreds,
         broadcast_stage_type: config.broadcast_stage_type.clone(),
-        enable_partition: config.enable_partition.clone(),
+        turbine_disabled: config.turbine_disabled.clone(),
         enforce_ulimit_nofile: config.enforce_ulimit_nofile,
         fixed_leader_schedule: config.fixed_leader_schedule.clone(),
         wait_for_supermajority: config.wait_for_supermajority,
