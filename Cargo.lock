@@ -5443,6 +5443,7 @@ dependencies = [
  "bincode",
  "enum-iterator",
  "itertools",
+ "lazy_static",
  "libc",
  "libloading",
  "log",

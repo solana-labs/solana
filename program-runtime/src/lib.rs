@@ -6,6 +6,9 @@ pub mod accounts_data_meter;
 pub mod compute_budget;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 extern crate solana_metrics;
 
 pub mod invoke_context;

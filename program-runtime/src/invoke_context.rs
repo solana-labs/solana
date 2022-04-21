@@ -253,6 +253,11 @@ impl InstructionProcessingStats {
     }
 }
 
+lazy_static! {
+    static ref INSTRUCTION_PROCESSING_STATS: InstructionProcessingStats =
+        InstructionProcessingStats::default();
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     #[allow(deprecated)]
@@ -275,7 +280,7 @@ pub struct InvokeContext<'a> {
     check_size: bool,
     orig_account_lengths: Vec<Option<Vec<usize>>>,
     allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
-    pub instruction_processing_stats: InstructionProcessingStats,
+    pub instruction_processing_stats: &'static InstructionProcessingStats,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -314,7 +319,7 @@ impl<'a> InvokeContext<'a> {
             check_size: true,
             orig_account_lengths: Vec::new(),
             allocators: Vec::new(),
-            instruction_processing_stats: InstructionProcessingStats::default(),
+            instruction_processing_stats: &INSTRUCTION_PROCESSING_STATS,
         }
     }
 
