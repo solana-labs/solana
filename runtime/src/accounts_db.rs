@@ -3096,7 +3096,7 @@ impl AccountsDb {
 
         */
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 99 / 100; // put some 'in-this-epoch' slots into an ancient append vec
-        let old_root = max_root.saturating_sub(epoch_width + 1000 + 16096 + 6096 + 6026);
+        let old_root = max_root.saturating_sub(epoch_width + 1000 + 16096 + 6096 + 3000);
 
         let mut m = Measure::start("get slots");
         let mut old_slots = self
