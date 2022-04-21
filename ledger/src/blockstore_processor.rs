@@ -160,7 +160,7 @@ fn sum_additional_costs(batch: &TransactionBatch) -> u64 {
     let cost_model = CostModel::new();
 
     for transaction in transactions {
-        let transaction_cost = cost_model.calculate_costs(transaction);     // computing a lot more than it needs to.. make sub-functions public and replace this
+        let transaction_cost = cost_model.calculate_cost(transaction);
         additional_costs += transaction_cost.signature_cost;
         additional_costs += transaction_cost.write_lock_cost;
         additional_costs += transaction_cost.data_bytes_cost;
