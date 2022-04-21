@@ -905,14 +905,16 @@ impl ExpectedRentCollection {
             200 failed
             212
             225 failed
-            237
+            231 
+            237 succeeded
+            243 
             250 succeeded
             300 succeeded
             */
-            if i < &237 {
+            if i < &231 {
                 return None;
             }
-            error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
+            error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}, i: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot, i);
         }
         stats.rehash_required.fetch_add(1, Ordering::Relaxed);
 
