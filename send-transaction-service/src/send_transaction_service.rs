@@ -215,7 +215,7 @@ impl SendTransactionService {
                     Ok(transaction_info) => {
                         inc_new_counter_info!("send_transaction_service-recv-tx", 1);
                         let entry = transactions.entry(transaction_info.signature);
-                        let mut new_txn = false;
+                        let mut new_transaction = false;
                         if let Entry::Vacant(_) = entry {
                             if !retry_transactions
                                 .lock()
@@ -223,10 +223,10 @@ impl SendTransactionService {
                                 .contains_key(&transaction_info.signature)
                             {
                                 entry.or_insert(transaction_info);
-                                new_txn = true;
+                                new_transaction = true;
                             }
                         }
-                        if !new_txn {
+                        if !new_transaction {
                             inc_new_counter_info!("send_transaction_service-recv-duplicate", 1);
                         }
                     }
