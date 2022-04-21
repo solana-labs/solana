@@ -16,7 +16,9 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     /// slot that all accounts are to be written to
     fn target_slot(&self) -> Slot;
     /// true if no accounts to write
-    fn is_empty(&self) -> bool;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     /// # accounts to write
     fn len(&self) -> usize;
     /// are there accounts from multiple slots
@@ -37,9 +39,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     }
     fn target_slot(&self) -> Slot {
         self.0
-    }
-    fn is_empty(&self) -> bool {
-        self.1.is_empty()
     }
     fn len(&self) -> usize {
         self.1.len()
@@ -65,9 +64,6 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     }
     fn target_slot(&self) -> Slot {
         self.0
-    }
-    fn is_empty(&self) -> bool {
-        self.1.is_empty()
     }
     fn len(&self) -> usize {
         self.1.len()
