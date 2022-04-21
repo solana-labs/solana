@@ -392,6 +392,7 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
+                        ..
                     } = details;
 
                     let lamports_per_signature = match durable_nonce_fee {
