@@ -584,11 +584,7 @@ pub struct TransactionExecutionDetails {
     pub log_messages: Option<Vec<String>>,
     pub inner_instructions: Option<Vec<Vec<CompiledInstruction>>>,
     pub durable_nonce_fee: Option<DurableNonceFee>,
-<<<<<<< HEAD
-=======
-    pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -4032,11 +4028,7 @@ impl Bank {
             log_messages,
             inner_instructions,
             durable_nonce_fee,
-<<<<<<< HEAD
-=======
-            return_data,
             executed_units,
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
         })
     }
 
@@ -6845,11 +6837,7 @@ pub(crate) mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: nonce.map(DurableNonceFee::from),
-<<<<<<< HEAD
-=======
-            return_data: None,
             executed_units: 0u64,
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
         })
     }
 

@@ -3,12 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
-<<<<<<< HEAD
-    crate::banking_stage::BatchedTransactionCostDetails,
-=======
-    crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
-    crossbeam_channel::{unbounded, Receiver, Sender},
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
+    crate::banking_stage::{BatchedTransactionCostDetails, CommitTransactionDetails},
     solana_measure::measure::Measure,
     solana_runtime::{
         bank::Bank,
@@ -182,11 +177,7 @@ impl QosService {
     fn update_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-<<<<<<< HEAD
-        transaction_committed_status: &[bool],
-=======
-        transaction_committed_status: &Vec<CommitTransactionDetails>,
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
+        transaction_committed_status: &[CommitTransactionDetails],
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();

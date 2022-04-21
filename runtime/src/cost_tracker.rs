@@ -195,16 +195,12 @@ impl CostTracker {
     fn add_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         self.add_transaction_execution_cost(tx_cost, cost);
-        saturating_add_assign!(self.account_data_size, tx_cost.account_data_size);
         saturating_add_assign!(self.transaction_count, 1);
     }
 
     fn remove_transaction_cost(&mut self, tx_cost: &TransactionCost) {
         let cost = tx_cost.sum();
         self.sub_transaction_execution_cost(tx_cost, cost);
-        self.account_data_size = self
-            .account_data_size
-            .saturating_sub(tx_cost.account_data_size);
         self.transaction_count = self.transaction_count.saturating_sub(1);
     }
 
@@ -221,10 +217,6 @@ impl CostTracker {
         if tx_cost.is_simple_vote {
             self.vote_cost = self.vote_cost.saturating_add(adjustment);
         }
-<<<<<<< HEAD
-        self.transaction_count = self.transaction_count.saturating_add(1);
-=======
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
     }
 
     /// Substract extra execution units from cost_tracker
@@ -240,9 +232,6 @@ impl CostTracker {
         if tx_cost.is_simple_vote {
             self.vote_cost = self.vote_cost.saturating_sub(adjustment);
         }
-<<<<<<< HEAD
-        self.transaction_count = self.transaction_count.saturating_sub(1);
-=======
     }
 
     /// count number of none-zero CU accounts
@@ -251,7 +240,6 @@ impl CostTracker {
             .iter()
             .map(|(_key, units)| if *units > 0 { 1 } else { 0 })
             .sum()
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
     }
 }
 
@@ -576,7 +564,7 @@ mod tests {
         let account_max = cost * 2;
         let block_max = account_max * 3; // for three accts
 
-        let mut testee = CostTracker::new(account_max, block_max, block_max, None);
+        let mut testee = CostTracker::new(account_max, block_max, block_max);
         let tx_cost = TransactionCost {
             writable_accounts: vec![acct1, acct2, acct3],
             bpf_execution_cost: cost,
@@ -723,7 +711,6 @@ mod tests {
         assert_eq!(1, cost_tracker.number_of_accounts());
         assert_eq!(cost, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
 
         cost_tracker.remove_transaction_cost(&tx_cost);
         // assert cost_tracker is reverted to default
@@ -731,6 +718,5 @@ mod tests {
         assert_eq!(0, cost_tracker.number_of_accounts());
         assert_eq!(0, cost_tracker.block_cost);
         assert_eq!(0, cost_tracker.vote_cost);
-        assert_eq!(0, cost_tracker.account_data_size);
     }
 }

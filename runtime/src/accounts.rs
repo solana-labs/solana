@@ -1353,11 +1353,7 @@ mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: nonce.map(DurableNonceFee::from),
-<<<<<<< HEAD
-=======
-            return_data: None,
             executed_units: 0u64,
->>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
         })
     }
 
