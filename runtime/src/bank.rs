@@ -127,7 +127,7 @@ use {
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
-        slot_history::SlotHistory,
+        slot_history::{Check, SlotHistory},
         stake::state::Delegation,
         system_transaction,
         sysvar::{self, Sysvar, SysvarId},
@@ -3807,7 +3807,7 @@ impl Bank {
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
-        let account_overrides = self.simulation_override_accounts();
+        let account_overrides = self.get_account_overrides_for_simulation();
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             mut execution_results,
@@ -3869,37 +3869,22 @@ impl Bank {
         }
     }
 
-    fn simulation_override_accounts(&self) -> AccountOverrides {
+    fn get_account_overrides_for_simulation(&self) -> AccountOverrides {
         let mut account_overrides = AccountOverrides::new();
-        self.add_account_override(
-            &mut account_overrides,
-            &sysvar::slot_history::id(),
-            |account| {
-                let mut slot_history = account
-                    .as_ref()
-                    .map(|account| from_account::<SlotHistory, _>(account).unwrap())
-                    .unwrap_or_default();
-                slot_history.add(self.slot().saturating_sub(1));
-                create_account(
-                    &slot_history,
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            },
-        );
+        {
+            let account_pubkey = sysvar::slot_history::id();
+            let current_account = self.get_account_with_fixed_root(&account_pubkey);
+            let slot_history = current_account
+                .as_ref()
+                .map(|account| from_account::<SlotHistory, _>(account).unwrap())
+                .unwrap_or_default();
+            if slot_history.check(self.slot()) == Check::Found {
+                let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
+                self.load_slow_with_fixed_root(&ancestors, &account_pubkey)
+                    .and_then(|(account, _)| account_overrides.insert(account_pubkey, account));
+            }
+        }
         account_overrides
-    }
-
-    fn add_account_override<F>(
-        &self,
-        account_overrides: &mut AccountOverrides,
-        pubkey: &Pubkey,
-        updater: F,
-    ) where
-        F: Fn(&Option<AccountSharedData>) -> AccountSharedData,
-    {
-        let old_account = self.get_account_with_fixed_root(pubkey);
-        let new_account = updater(&old_account);
-        account_overrides.insert(*pubkey, new_account);
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {

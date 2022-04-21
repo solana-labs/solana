@@ -25,7 +25,10 @@ async fn no_panic() {
     let transaction = Transaction::new_signed_with_payer(
         &[Instruction {
             program_id,
-            accounts: vec![AccountMeta::new_readonly(sysvar::slot_history::id(), false)],
+            accounts: vec![
+                AccountMeta::new_readonly(sysvar::slot_history::id(), false),
+                AccountMeta::new_readonly(sysvar::clock::id(), false),
+            ],
             data: vec![],
         }],
         Some(&context.payer.pubkey()),
