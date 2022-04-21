@@ -3332,7 +3332,7 @@ impl Bank {
 
     pub fn is_blockhash_valid(&self, hash: &Hash) -> bool {
         let blockhash_queue = self.blockhash_queue.read().unwrap();
-        blockhash_queue.check_hash(hash)
+        blockhash_queue.is_hash_valid(hash)
     }
 
     pub fn get_minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64 {
@@ -3680,14 +3680,10 @@ impl Bank {
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
                     let recent_blockhash = tx.message().recent_blockhash();
-                    let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
-                    if hash_age == Some(true) {
+                    if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
                         (Ok(()), None)
                     } else if let Some((address, account)) = self.check_transaction_for_nonce(tx) {
                         (Ok(()), Some(NoncePartial::new(address, account)))
-                    } else if hash_age == Some(false) {
-                        error_counters.blockhash_too_old += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
                     } else {
                         error_counters.blockhash_not_found += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
@@ -3737,11 +3733,11 @@ impl Bank {
         self.blockhash_queue.read().unwrap().get_hash_age(hash)
     }
 
-    pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
+    pub fn is_hash_valid_for_age(&self, hash: &Hash, max_age: usize) -> bool {
         self.blockhash_queue
             .read()
             .unwrap()
-            .check_hash_age(hash, max_age)
+            .is_hash_valid_for_age(hash, max_age)
     }
 
     fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
@@ -11592,7 +11588,7 @@ pub(crate) mod tests {
             assert_eq!(recent_blockhashes.len(), i);
             let most_recent_hash = recent_blockhashes.iter().next().unwrap().blockhash;
             // Check order
-            assert_eq!(Some(true), bank.check_hash_age(&most_recent_hash, 0));
+            assert!(bank.is_hash_valid_for_age(&most_recent_hash, 0));
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             bank = Arc::new(new_from_parent(&bank));
         }

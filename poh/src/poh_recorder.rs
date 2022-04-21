@@ -1967,7 +1967,7 @@ mod tests {
                 poh_recorder.tick();
             }
             poh_recorder.set_bank(&bank);
-            assert_eq!(Some(false), bank.check_hash_age(&genesis_hash, 1));
+            assert!(!bank.is_hash_valid_for_age(&genesis_hash, 1));
         }
     }
 
