@@ -101,6 +101,7 @@ impl TransactionStatusService {
                             log_messages,
                             inner_instructions,
                             durable_nonce_fee,
+                            ..
                         } = details;
                         let lamports_per_signature = match durable_nonce_fee {
                             Some(DurableNonceFee::Valid(lamports_per_signature)) => {
@@ -347,6 +348,7 @@ pub(crate) mod tests {
                     )
                     .unwrap(),
                 )),
+                executed_units: 0u64,
             });
 
         let balances = TransactionBalancesSet {
