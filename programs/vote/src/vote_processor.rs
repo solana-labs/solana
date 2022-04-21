@@ -17,9 +17,6 @@ pub fn process_instruction(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
 
-    // // report vote instruction processing stats every 2 seconds
-    // const INSTRUCITON_PROCESSING_STATS_REPORT_INTERVAL_MS: u64 = 2000;
-
     trace!("process_instruction: {:?}", data);
 
     let mut me =
@@ -29,7 +26,7 @@ pub fn process_instruction(
     }
 
     let signers = instruction_context.get_signers(transaction_context);
-    let ret = match limited_deserialize(data)? {
+    match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
             if !rent.is_exempt(me.get_lamports(), me.get_data().len()) {
@@ -62,10 +59,6 @@ pub fn process_instruction(
             vote_state::update_commission(&mut me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
-            // invoke_context
-            //     .vote_instruction_processing_stats
-            //     .inc_vote_native();
-
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
@@ -85,10 +78,6 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
             {
-                // invoke_context
-                //     .vote_instruction_processing_stats
-                //     .inc_vote_state_native();
-
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
@@ -161,13 +150,7 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-    };
-
-    // invoke_context
-    //     .vote_instruction_processing_stats
-    //     .report(INSTRUCITON_PROCESSING_STATS_REPORT_INTERVAL_MS);
-
-    ret
+    }
 }
 
 #[cfg(test)]

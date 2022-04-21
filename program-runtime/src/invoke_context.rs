@@ -265,7 +265,6 @@ impl<'a> InvokeContext<'a> {
             check_size: true,
             orig_account_lengths: Vec::new(),
             allocators: Vec::new(),
-            //vote_instruction_processing_stats: &mut VOTE_INSTRUCTION_PROCESSING_STATS,
         }
     }
 

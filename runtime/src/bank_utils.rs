@@ -100,11 +100,9 @@ pub fn find_and_send_votes(
             .iter()
             .zip(execution_results.iter())
             .for_each(|(tx, result)| {
+                // TODO:
                 //         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _)
-
-                //         VoteInstruction::UpdateVoteState(vote_state_update)
-                // | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _)
-
+                //         VoteInstruction::UpdateVoteState(vote_state_update) | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _)
                 if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
                     VOTE_INSTRUCTION_PROCESSING_STATS.inc_vote_native();
 
