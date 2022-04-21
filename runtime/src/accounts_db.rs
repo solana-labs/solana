@@ -1257,13 +1257,8 @@ impl PurgeStats {
 
 #[derive(Debug, Default)]
 struct FlushStats {
-    #[allow(dead_code)]
-    slot: Slot,
-    #[allow(dead_code)]
     num_flushed: usize,
-    #[allow(dead_code)]
     num_purged: usize,
-    #[allow(dead_code)]
     total_size: u64,
 }
 
@@ -4891,7 +4886,6 @@ impl AccountsDb {
         // flushing. That case is handled by retry_to_get_account_accessor()
         assert!(self.accounts_cache.remove_slot(slot).is_some());
         FlushStats {
-            slot,
             num_flushed,
             num_purged,
             total_size,
