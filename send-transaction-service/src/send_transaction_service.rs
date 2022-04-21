@@ -106,7 +106,7 @@ pub struct Config {
     pub leader_forward_count: u64,
     pub default_max_retries: Option<usize>,
     pub service_max_retries: usize,
-    /// Controls if to use Quic protocol to send transactions
+    /// Whether to use Quic protocol to send transactions
     pub use_quic: bool,
     /// The batch size for sending transaction in batch
     pub batch_size: usize,
