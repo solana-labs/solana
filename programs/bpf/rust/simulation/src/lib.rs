@@ -33,7 +33,10 @@ pub fn process_instruction(
 
     msg!("next_slot from slot history is {:?} ", slot);
     msg!("clock from cache is in slot {:?} ", clock_from_cache.slot);
-    msg!("clock from account is in slot {:?} ", clock_from_account.slot);
+    msg!(
+        "clock from account is in slot {:?} ",
+        clock_from_account.slot
+    );
     if clock_from_cache.slot >= slot {
         msg!("On-chain");
     } else {
