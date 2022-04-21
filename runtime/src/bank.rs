@@ -37,8 +37,9 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
+        account_overrides::AccountOverrides,
         accounts::{
-            AccountAddressFilter, AccountOverrides, Accounts, LoadedTransaction, PubkeyAccountSlot,
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
             TransactionLoadResult,
         },
         accounts_db::{
@@ -117,7 +118,7 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-        message::SanitizedMessage,
+        message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -3803,11 +3804,12 @@ impl Bank {
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
-        let number_of_accounts = transaction.message().account_keys().len();
+        let account_keys = transaction.message().account_keys();
+        let number_of_accounts = account_keys.len();
+        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
-        let account_overrides = self.get_account_overrides_for_simulation();
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             mut execution_results,
@@ -3869,19 +3871,22 @@ impl Bank {
         }
     }
 
-    fn get_account_overrides_for_simulation(&self) -> AccountOverrides {
-        let mut account_overrides = AccountOverrides::new();
-        {
-            let account_pubkey = sysvar::slot_history::id();
-            let current_account = self.get_account_with_fixed_root(&account_pubkey);
+    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
+        let mut account_overrides = AccountOverrides::default();
+        let slot_history_id = sysvar::slot_history::id();
+        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
+            let current_account = self.get_account_with_fixed_root(&slot_history_id);
             let slot_history = current_account
                 .as_ref()
                 .map(|account| from_account::<SlotHistory, _>(account).unwrap())
                 .unwrap_or_default();
             if slot_history.check(self.slot()) == Check::Found {
                 let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
-                self.load_slow_with_fixed_root(&ancestors, &account_pubkey)
-                    .and_then(|(account, _)| account_overrides.insert(account_pubkey, account));
+                if let Some((account, _)) =
+                    self.load_slow_with_fixed_root(&ancestors, &slot_history_id)
+                {
+                    account_overrides.set_slot_history(Some(account));
+                }
             }
         }
         account_overrides

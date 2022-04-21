@@ -1,5 +1,6 @@
 use {
     crate::{
+        account_overrides::AccountOverrides,
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
@@ -126,7 +127,6 @@ pub struct LoadedTransaction {
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
-pub type AccountOverrides = HashMap<Pubkey, AccountSharedData>;
 
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
@@ -266,35 +266,36 @@ impl Accounts {
                         payer_index = Some(i);
                     }
 
-                    if let Some(account_override) =
-                        account_overrides.and_then(|overrides| overrides.get(key))
-                    {
-                        account_override.clone()
-                    } else if solana_sdk::sysvar::instructions::check_id(key) {
+                    if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
                             feature_set
                                 .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                         )
                     } else {
-                        let (account, rent) = self
-                            .accounts_db
-                            .load_with_fixed_root(ancestors, key)
-                            .map(|(mut account, _)| {
-                                if message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                        )
-                                        .rent_amount;
-                                    (account, rent_due)
-                                } else {
-                                    (account, 0)
-                                }
-                            })
-                            .unwrap_or_default();
+                        let (account, rent) = if let Some(account_override) =
+                            account_overrides.and_then(|overrides| overrides.get(key))
+                        {
+                            (account_override.clone(), 0)
+                        } else {
+                            self.accounts_db
+                                .load_with_fixed_root(ancestors, key)
+                                .map(|(mut account, _)| {
+                                    if message.is_writable(i) {
+                                        let rent_due = rent_collector
+                                            .collect_from_existing_account(
+                                                key,
+                                                &mut account,
+                                                self.accounts_db.filler_account_suffix.as_ref(),
+                                            )
+                                            .rent_amount;
+                                        (account, rent_due)
+                                    } else {
+                                        (account, 0)
+                                    }
+                                })
+                                .unwrap_or_default()
+                        };
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
@@ -3097,16 +3098,19 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        let mut account_overrides = AccountOverrides::new();
+        let mut account_overrides = AccountOverrides::default();
+        let slot_history_id = sysvar::slot_history::id();
+        let account = AccountSharedData::new(42, 0, &Pubkey::default());
+        account_overrides.set_slot_history(Some(account));
 
         let keypair = Keypair::new();
         let account = AccountSharedData::new(1_000_000, 0, &Pubkey::default());
-        account_overrides.insert(keypair.pubkey(), account);
+        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
 
-        let instructions = vec![CompiledInstruction::new(1, &(), vec![0])];
+        let instructions = vec![CompiledInstruction::new(2, &(), vec![0])];
         let tx = Transaction::new_with_compiled_instructions(
             &[&keypair],
-            &[],
+            &[slot_history_id],
             Hash::default(),
             vec![native_loader::id()],
             instructions,
@@ -3116,6 +3120,8 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
+        assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
+        assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
     }
 
     fn create_accounts_prepare_if_nonce_account() -> (
