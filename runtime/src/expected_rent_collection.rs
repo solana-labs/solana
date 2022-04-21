@@ -432,6 +432,7 @@ impl ExpectedRentCollection {
             stats.rehash_unnecessary.fetch_add(1, Ordering::Relaxed);
             return None;
         }
+        use log::*;
         error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
         stats.rehash_required.fetch_add(1, Ordering::Relaxed);
 
