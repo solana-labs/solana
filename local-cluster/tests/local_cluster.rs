@@ -336,7 +336,6 @@ fn test_cluster_partition_1_2() {
         empty,
         on_partition_resolved,
         None,
-        None,
         vec![],
     )
 }
@@ -356,7 +355,6 @@ fn test_cluster_partition_1_1() {
         empty,
         on_partition_resolved,
         None,
-        None,
         vec![],
     )
 }
@@ -375,7 +373,6 @@ fn test_cluster_partition_1_1_1() {
         empty,
         empty,
         on_partition_resolved,
-        None,
         None,
         vec![],
     )
@@ -2556,7 +2553,6 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         on_partition_before_resolved,
         on_partition_resolved,
         None,
-        None,
         additional_accounts,
     );
 }
@@ -2653,7 +2649,6 @@ fn test_votes_land_in_fork_during_long_partition() {
     run_kill_partition_switch_threshold(
         &[&[(failures_stake as usize, 0)]],
         partitions,
-        None,
         None,
         PartitionContext::default(),
         on_partition_start,

@@ -132,7 +132,6 @@ pub fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
 pub fn run_kill_partition_switch_threshold<C>(
     stakes_to_kill: &[&[(usize, usize)]],
     alive_stakes: &[&[(usize, usize)]],
-    partition_duration: Option<u64>,
     ticks_per_slot: Option<u64>,
     partition_context: C,
     on_partition_start: impl Fn(&mut LocalCluster, &[Pubkey], Vec<ClusterValidatorInfo>, &mut C),
@@ -200,7 +199,6 @@ pub fn run_kill_partition_switch_threshold<C>(
         on_partition_start,
         on_before_partition_resolved,
         on_partition_resolved,
-        partition_duration,
         ticks_per_slot,
         vec![],
     )
@@ -252,7 +250,6 @@ pub fn run_cluster_partition<C>(
     on_partition_start: impl FnOnce(&mut LocalCluster, &mut C),
     on_before_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
     on_partition_resolved: impl FnOnce(&mut LocalCluster, &mut C),
-    partition_duration: Option<u64>,
     ticks_per_slot: Option<u64>,
     additional_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) {
@@ -271,29 +268,25 @@ pub fn run_cluster_partition<C>(
         ..ValidatorConfig::default_for_test()
     };
 
-    // Returns:
-    // 1) The keys for the validators
-    // 2) The amount of time it would take to iterate through one full iteration of the given
-    // leader schedule
-    let (validator_keys, leader_schedule_time): (Vec<_>, u64) = {
+    let (validator_keys, partition_duration): (Vec<_>, Duration) = {
         if let Some((leader_schedule, validator_keys)) = leader_schedule {
             assert_eq!(validator_keys.len(), num_nodes);
             let num_slots_per_rotation = leader_schedule.num_slots() as u64;
             let fixed_schedule = FixedSchedule {
-                start_epoch: 0,
                 leader_schedule: Arc::new(leader_schedule),
             };
             validator_config.fixed_leader_schedule = Some(fixed_schedule);
             (
                 validator_keys,
-                num_slots_per_rotation * clock::DEFAULT_MS_PER_SLOT,
+                // partition for the duration of one full iteration of the  leader schedule
+                Duration::from_millis(num_slots_per_rotation * clock::DEFAULT_MS_PER_SLOT),
             )
         } else {
             (
                 iter::repeat_with(|| Arc::new(Keypair::new()))
                     .take(partitions.len())
                     .collect(),
-                10_000,
+                Duration::from_secs(10),
             )
         }
     };
@@ -351,9 +344,7 @@ pub fn run_cluster_partition<C>(
     on_partition_start(&mut cluster, &mut context);
     enable_partition.store(false, Ordering::Relaxed);
 
-    sleep(Duration::from_millis(
-        partition_duration.unwrap_or(leader_schedule_time),
-    ));
+    sleep(partition_duration);
 
     on_before_partition_resolved(&mut cluster, &mut context);
     info!("PARTITION_TEST remove partition");
@@ -361,18 +352,18 @@ pub fn run_cluster_partition<C>(
 
     // Give partitions time to propagate their blocks from during the partition
     // after the partition resolves
-    let timeout = 10_000;
-    let propagation_time = leader_schedule_time;
+    let timeout_duration = Duration::from_secs(10);
+    let propagation_duration = partition_duration;
     info!(
         "PARTITION_TEST resolving partition. sleeping {} ms",
-        timeout
+        timeout_duration.as_millis()
     );
-    sleep(Duration::from_millis(timeout));
+    sleep(timeout_duration);
     info!(
         "PARTITION_TEST waiting for blocks to propagate after partition {}ms",
-        propagation_time
+        propagation_duration.as_millis()
     );
-    sleep(Duration::from_millis(propagation_time));
+    sleep(propagation_duration);
     info!("PARTITION_TEST resuming normal operation");
     on_partition_resolved(&mut cluster, &mut context);
 }

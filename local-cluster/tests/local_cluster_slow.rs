@@ -256,9 +256,6 @@ fn test_fork_choice_refresh_old_votes() {
     run_kill_partition_switch_threshold(
         &[&[(failures_stake as usize - 1, 16)]],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
@@ -302,7 +299,6 @@ fn test_kill_heaviest_partition() {
         empty,
         on_partition_resolved,
         None,
-        None,
         vec![],
     )
 }
@@ -336,7 +332,6 @@ fn test_kill_partition_switch_threshold_no_progress() {
             &[(alive_stake_1 as usize, 8)],
             &[(alive_stake_2 as usize, 8)],
         ],
-        None,
         None,
         (),
         on_partition_start,
@@ -387,7 +382,6 @@ fn test_kill_partition_switch_threshold_progress() {
             &[(alive_stake_1 as usize, 8)],
             &[(alive_stake_2 as usize, 8)],
         ],
-        None,
         None,
         (),
         on_partition_start,
@@ -827,9 +821,6 @@ fn test_switch_threshold_uses_gossip_votes() {
     run_kill_partition_switch_threshold(
         &[&[(failures_stake as usize, 0)]],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
