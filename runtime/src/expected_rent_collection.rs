@@ -880,8 +880,13 @@ Pubkey::from_str("5PjHr9wCUoxjTcp4rPwrYEfWa7XGP8v86rtgWmyqSrWi").unwrap(),
 Pubkey::from_str("5PjLaHr1HqrzhUB2eRWyYetzLJFnobY4UTip8ReqaamW").unwrap(),
 Pubkey::from_str("CX83CaJ29cJLHVGEEnwJGSJvwtsRjeneKEsysvYiR6SA").unwrap(),
 Pubkey::from_str("5PjMF9zB3BsANzbF5CtEHqMq8ULV1FVi73AgmDCjXWzi").unwrap(),];
-if interesting.contains(pubkey) {        
+for (i, interesting) in interesting.iter().enumerate() {
+    if interesting == pubkey {
+        if i < 200 {
+            return None;
+        }
         error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
+    }
 }
         stats.rehash_required.fetch_add(1, Ordering::Relaxed);
 
