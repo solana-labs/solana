@@ -4388,14 +4388,14 @@ impl AccountsDb {
             let mut remaining_contended_flush_slots: Vec<Slot> = remove_slots
                 .iter()
                 .filter_map(|(remove_slot, _)| {
-                        // Reserve the slots that we want to purge that aren't currently
-                        // being flushed to prevent cache from flushing those slots in
-                        // the future.
-                        //
-                        // Note that the single replay thread has to remove a specific slot `N`
-                        // before another version of the same slot can be replayed. This means
-                        // multiple threads should not call `remove_unrooted_slots()` simultaneously
-                        // with the same slot.
+                    // Reserve the slots that we want to purge that aren't currently
+                    // being flushed to prevent cache from flushing those slots in
+                    // the future.
+                    //
+                    // Note that the single replay thread has to remove a specific slot `N`
+                    // before another version of the same slot can be replayed. This means
+                    // multiple threads should not call `remove_unrooted_slots()` simultaneously
+                    // with the same slot.
                     let is_being_flushed = !currently_contended_slots.insert(*remove_slot);
                     // If the cache is currently flushing this slot, add it to the list
                     is_being_flushed.then(|| remove_slot)
@@ -4444,10 +4444,10 @@ impl AccountsDb {
         );
         remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
 
-        let mut currently_contended_slots = slots_under_contention.lock().unwrap();
-        for (remove_slot, _) in remove_slots {
-            assert!(currently_contended_slots.remove(remove_slot));
-        }
+        Self::remove_slots_under_contention(
+            &mut slots_under_contention.lock().unwrap(),
+            remove_slots.iter().map(|(slot, _)| *slot),
+        );
     }
 
     pub fn hash_account_with_rent_epoch<T: ReadableAccount>(
@@ -4896,13 +4896,13 @@ impl AccountsDb {
         self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
     }
 
-    fn remove_slots_under_contention(
+    fn remove_slots_under_contention<I>(
         slots_under_contention: &mut std::sync::MutexGuard<'_, HashSet<Slot>>,
-        slots: &[Slot],
-    ) {
-        slots
-            .iter()
-            .for_each(|slot| assert!(slots_under_contention.remove(slot)));
+        slots: I,
+    ) where
+        I: Iterator<Item = Slot>,
+    {
+        slots.for_each(|slot| assert!(slots_under_contention.remove(&slot)));
     }
 
     /// add/remove all 'slots' to/from 'slots_under_contention'
@@ -4924,16 +4924,17 @@ impl AccountsDb {
                         // one of the slots we're flushing is already under contention, so we cannot do any of these slots
                         Self::remove_slots_under_contention(
                             &mut slots_under_contention,
-                            &slots[..i],
+                            (slots[..i]).iter().cloned(),
                         );
                         success = false;
                         break;
                     }
                 }
             }
-            Operation::Remove => {
-                Self::remove_slots_under_contention(&mut slots_under_contention, slots)
-            }
+            Operation::Remove => Self::remove_slots_under_contention(
+                &mut slots_under_contention,
+                slots.iter().cloned(),
+            ),
         }
 
         self.remove_unrooted_slots_synchronization
