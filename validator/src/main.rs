@@ -14,6 +14,7 @@ use {
         input_validators::{
             is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
             is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
+            is_within_range,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -66,7 +67,9 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
-    solana_send_transaction_service::send_transaction_service,
+    solana_send_transaction_service::send_transaction_service::{
+        self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
+    },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
         admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
@@ -101,6 +104,7 @@ const INCLUDE_KEY: &str = "account-index-include-key";
 const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
+const MILLIS_PER_SECOND: u64 = 1000;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -434,11 +438,17 @@ pub fn main() {
     let default_rpc_send_transaction_retry_ms = default_send_transaction_service_config
         .retry_rate_ms
         .to_string();
+    let default_rpc_send_transaction_batch_ms = default_send_transaction_service_config
+        .batch_send_rate_ms
+        .to_string();
     let default_rpc_send_transaction_leader_forward_count = default_send_transaction_service_config
         .leader_forward_count
         .to_string();
     let default_rpc_send_transaction_service_max_retries = default_send_transaction_service_config
         .service_max_retries
+        .to_string();
+    let default_rpc_send_transaction_batch_size = default_send_transaction_service_config
+        .batch_size
         .to_string();
     let default_rpc_threads = num_cpus::get().to_string();
     let default_accountsdb_repl_threads = num_cpus::get().to_string();
@@ -1345,6 +1355,16 @@ pub fn main() {
                 .help("The rate at which transactions sent via rpc service are retried."),
         )
         .arg(
+            Arg::with_name("rpc_send_transaction_batch_ms")
+                .long("rpc-send-batch-ms")
+                .value_name("MILLISECS")
+                .hidden(true)
+                .takes_value(true)
+                .validator(|s| is_within_range(s, 1, MAX_BATCH_SEND_RATE_MS))
+                .default_value(&default_rpc_send_transaction_batch_ms)
+                .help("The rate at which transactions sent via rpc service are sent in batch."),
+        )
+        .arg(
             Arg::with_name("rpc_send_transaction_leader_forward_count")
                 .long("rpc-send-leader-count")
                 .value_name("NUMBER")
@@ -1369,6 +1389,16 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .default_value(&default_rpc_send_transaction_service_max_retries)
                 .help("The maximum number of transaction broadcast retries, regardless of requested value."),
+        )
+        .arg(
+            Arg::with_name("rpc_send_transaction_batch_size")
+                .long("rpc-send-batch-size")
+                .value_name("NUMBER")
+                .hidden(true)
+                .takes_value(true)
+                .validator(|s| is_within_range(s, 1, MAX_TRANSACTION_BATCH_SIZE))
+                .default_value(&default_rpc_send_transaction_batch_size)
+                .help("The size of transactions to be sent in batch."),
         )
         .arg(
             Arg::with_name("rpc_scan_and_fix_roots")
@@ -2335,6 +2365,31 @@ pub fn main() {
     if matches.is_present("no_accounts_db_index_hashing") {
         info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
     }
+    let rpc_send_retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
+    let rpc_send_batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
+    let rpc_send_batch_send_rate_ms =
+        value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
+
+    if rpc_send_batch_send_rate_ms > rpc_send_retry_rate_ms {
+        eprintln!(
+            "The specified rpc-send-batch-ms ({}) is invalid, it must be <= rpc-send-retry-ms ({})",
+            rpc_send_batch_send_rate_ms, rpc_send_retry_rate_ms
+        );
+        exit(1);
+    }
+
+    let tps = rpc_send_batch_size as u64 * MILLIS_PER_SECOND / rpc_send_batch_send_rate_ms;
+    if tps > send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND {
+        eprintln!(
+            "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \
+            'rpc-send-batch-size * 1000 / rpc-send-batch-ms' must be smaller than ({}) .",
+            rpc_send_batch_size,
+            rpc_send_batch_send_rate_ms,
+            send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND
+        );
+        exit(1);
+    }
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2416,7 +2471,7 @@ pub fn main() {
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
-            retry_rate_ms: value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64),
+            retry_rate_ms: rpc_send_retry_rate_ms,
             leader_forward_count: value_t_or_exit!(
                 matches,
                 "rpc_send_transaction_leader_forward_count",
@@ -2434,6 +2489,8 @@ pub fn main() {
                 usize
             ),
             use_quic: tpu_use_quic,
+            batch_send_rate_ms: rpc_send_batch_send_rate_ms,
+            batch_size: rpc_send_batch_size,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),

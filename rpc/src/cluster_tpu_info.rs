@@ -10,6 +10,7 @@ use {
     },
 };
 
+#[derive(Clone)]
 pub struct ClusterTpuInfo {
     cluster_info: Arc<ClusterInfo>,
     poh_recorder: Arc<Mutex<PohRecorder>>,

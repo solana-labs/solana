@@ -2377,6 +2377,7 @@ fn _send_transaction(
         last_valid_block_height,
         durable_nonce_info,
         max_retries,
+        None,
     );
     meta.transaction_sender
         .lock()
