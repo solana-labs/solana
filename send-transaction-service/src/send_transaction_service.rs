@@ -44,7 +44,7 @@ pub const MAX_TRANSACTION_BATCH_SIZE: usize = 10_000;
 pub const MAX_TRANSACTION_SENDS_PER_SECOND: u64 = 1_000;
 
 /// Default maximum batch waiting time in ms. If this time is reached,
-/// whatever transaction cached will be sent.
+/// whatever transactions are cached will be sent.
 const DEFAULT_BATCH_SEND_RATE_MS: u64 = 1;
 
 // The maximum transaction batch send rate in MS
