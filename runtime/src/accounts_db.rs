@@ -3084,9 +3084,10 @@ impl AccountsDb {
         /*
         60 155875 fails
         80 77396 fails
-        90
+        90 50836
+        95 
         */
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 90 / 100; // put some 'in-this-epoch' slots into an ancient append vec
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 95 / 100; // put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width + 1000);
 
         let mut m = Measure::start("get slots");
