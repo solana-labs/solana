@@ -134,7 +134,7 @@ describe('Transaction', () => {
 
     const fee = await transaction.getEstimatedFee(connection);
     expect(fee).to.eq(5000);
-  });
+  }).timeout(10 * 1000);
 
   it('partialSign', () => {
     const account1 = Keypair.generate();
@@ -412,7 +412,7 @@ describe('Transaction', () => {
 
     transaction.feePayer = new PublicKey(6);
     expect(() => transaction.compileMessage()).to.throw(
-      'Transaction mutated after being populated from Message',
+      'Transaction message mutated after being populated from Message',
     );
   });
 
@@ -612,8 +612,8 @@ describe('Transaction', () => {
         programId: Keypair.generate().publicKey,
       }),
     );
-    t0.partialSign(signer);
-    const t1 = Transaction.from(t0.serialize());
+    const t1 = Transaction.from(t0.serialize({requireAllSignatures: false}));
+    t1.partialSign(signer);
     t1.serialize();
   });
 });

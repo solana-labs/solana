@@ -1,7 +1,12 @@
+//! A type to hold data for the [`SlotHistory` sysvar][sv].
+//!
+//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#slothistory
+//!
+//! The sysvar ID is declared in [`sysvar::slot_history`].
+//!
+//! [`sysvar::slot_history`]: crate::slot_history
+
 #![allow(clippy::integer_arithmetic)]
-//!
-//! slot history
-//!
 pub use crate::clock::Slot;
 use bv::{BitVec, BitsMut};
 

@@ -233,7 +233,6 @@ impl SnapshotRequestHandler {
                             check_hash,
                             ancestors: None,
                             use_write_cache: false,
-                            epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
                         },
                     ).unwrap();
@@ -369,9 +368,9 @@ pub struct AbsRequestSender {
 }
 
 impl AbsRequestSender {
-    pub fn new(snapshot_request_sender: Option<SnapshotRequestSender>) -> Self {
-        AbsRequestSender {
-            snapshot_request_sender,
+    pub fn new(snapshot_request_sender: SnapshotRequestSender) -> Self {
+        Self {
+            snapshot_request_sender: Some(snapshot_request_sender),
         }
     }
 

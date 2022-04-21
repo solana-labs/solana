@@ -1,7 +1,11 @@
-//! named accounts for synthesized data accounts for bank state, etc.
+//! A type to hold data for the [`SlotHashes` sysvar][sv].
 //!
-//! this account carries the Bank's most recent bank hashes for some N parents
+//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#slothashes
 //!
+//! The sysvar ID is declared in [`sysvar::slot_hashes`].
+//!
+//! [`sysvar::slot_hashes`]: crate::slot_hashes
+
 pub use crate::clock::Slot;
 use {
     crate::hash::Hash,

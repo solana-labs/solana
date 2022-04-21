@@ -74,8 +74,13 @@ impl Default for StakeState {
 }
 
 impl StakeState {
+    /// The fixed number of bytes used to serialize each stake account
+    pub const fn size_of() -> usize {
+        200 // see test_size_of
+    }
+
     pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
-        rent.minimum_balance(std::mem::size_of::<StakeState>())
+        rent.minimum_balance(Self::size_of())
     }
 
     pub fn stake(&self) -> Option<Stake> {
@@ -593,6 +598,11 @@ mod test {
         let bincode_serialized = serialize(&stake).unwrap();
         let borsh_serialized = StakeState::try_to_vec(&stake).unwrap();
         assert_eq!(bincode_serialized, borsh_serialized);
+    }
+
+    #[test]
+    fn test_size_of() {
+        assert_eq!(StakeState::size_of(), std::mem::size_of::<StakeState>());
     }
 
     #[test]

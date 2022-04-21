@@ -20,12 +20,17 @@ use {
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{fs, path::PathBuf, process, result},
+    std::{
+        fs,
+        path::PathBuf,
+        process, result,
+        sync::{Arc, RwLock},
+    },
 };
 
 pub type LoadResult = result::Result<
     (
-        BankForks,
+        Arc<RwLock<BankForks>>,
         LeaderScheduleCache,
         Option<StartingSnapshotHashes>,
     ),
@@ -52,7 +57,7 @@ pub fn load(
     pending_accounts_package: PendingAccountsPackage,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> LoadResult {
-    let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
+    let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
         load_bank_forks(
             genesis_config,
             blockstore,
@@ -66,7 +71,7 @@ pub fn load(
 
     blockstore_processor::process_blockstore_from_root(
         blockstore,
-        &mut bank_forks,
+        &bank_forks,
         &leader_schedule_cache,
         &process_options,
         transaction_status_sender,
@@ -89,7 +94,7 @@ pub fn load_bank_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> (
-    BankForks,
+    Arc<RwLock<BankForks>>,
     LeaderScheduleCache,
     Option<StartingSnapshotHashes>,
     DroppedSlotsReceiver,
@@ -160,23 +165,27 @@ pub fn load_bank_forks(
     // There should only be one bank, the root bank in BankForks. Thus all banks added to
     // BankForks from now on will be descended from the root bank and thus will inherit
     // the bank drop callback.
-    assert_eq!(bank_forks.banks().len(), 1);
+    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
     let (pruned_banks_sender, pruned_banks_receiver) = bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
-    let root_bank = bank_forks.root_bank();
-    let callback = root_bank
-        .rc
-        .accounts
-        .accounts_db
-        .create_drop_bank_callback(pruned_banks_sender);
-    root_bank.set_callback(Some(Box::new(callback)));
 
-    let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&root_bank);
-    if process_options.full_leader_cache {
-        leader_schedule_cache.set_max_schedules(std::usize::MAX);
-    }
+    let leader_schedule_cache = {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let callback = root_bank
+            .rc
+            .accounts
+            .accounts_db
+            .create_drop_bank_callback(pruned_banks_sender);
+        root_bank.set_callback(Some(Box::new(callback)));
+
+        let mut leader_schedule_cache = LeaderScheduleCache::new_from_bank(&root_bank);
+        if process_options.full_leader_cache {
+            leader_schedule_cache.set_max_schedules(std::usize::MAX);
+        }
+        leader_schedule_cache
+    };
 
     if let Some(ref new_hard_forks) = process_options.new_hard_forks {
-        let root_bank = bank_forks.root_bank();
+        let root_bank = bank_forks.read().unwrap().root_bank();
         let hard_forks = root_bank.hard_forks();
 
         for hard_fork_slot in new_hard_forks.iter() {
@@ -207,7 +216,7 @@ fn bank_forks_from_snapshot(
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> (BankForks, Option<StartingSnapshotHashes>) {
+) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
         error!("Account paths not present when booting from snapshot");
@@ -264,7 +273,7 @@ fn bank_forks_from_snapshot(
     };
 
     (
-        BankForks::new(deserialized_bank),
+        Arc::new(RwLock::new(BankForks::new(deserialized_bank))),
         Some(starting_snapshot_hashes),
     )
 }

@@ -116,7 +116,7 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                             "-".to_string()
                         },
                         sign,
-                        lamports_to_sol(reward.lamports.abs() as u64),
+                        lamports_to_sol(reward.lamports.unsigned_abs()),
                         lamports_to_sol(reward.post_balance),
                         reward
                             .commission
@@ -729,7 +729,7 @@ fn load_bank_forks(
     blockstore: &Blockstore,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
-) -> Result<(BankForks, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
+) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let bank_snapshots_dir = blockstore
         .ledger_path()
         .join(if blockstore.is_primary_access() {
@@ -963,6 +963,13 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let skip_rewrites_arg = Arg::with_name("accounts_db_skip_rewrites")
+        .long("accounts-db-skip-rewrites")
+        .help(
+            "Accounts that are rent exempt and have no changes are not rewritten. \
+                  This produces snapshots that older versions cannot read.",
+        )
+        .hidden(true);
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1295,6 +1302,7 @@ fn main() {
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
+            .arg(&skip_rewrites_arg)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -1787,11 +1795,8 @@ fn main() {
             ("shred-version", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: Some(0),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1812,7 +1817,15 @@ fn main() {
                             "{}",
                             compute_shred_version(
                                 &genesis_config.hash(),
-                                Some(&bank_forks.working_bank().hard_forks().read().unwrap())
+                                Some(
+                                    &bank_forks
+                                        .read()
+                                        .unwrap()
+                                        .working_bank()
+                                        .hard_forks()
+                                        .read()
+                                        .unwrap()
+                                )
                             )
                         );
                     }
@@ -1867,11 +1880,8 @@ fn main() {
             ("bank-hash", Some(arg_matches)) => {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: Some(0),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: Some(0),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -1888,7 +1898,7 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        println!("{}", &bank_forks.working_bank().hash());
+                        println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                     }
                     Err(err) => {
                         eprintln!("Failed to load ledger: {:?}", err);
@@ -2094,12 +2104,14 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
+                    skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
                     ..AccountsDbConfig::default()
                 });
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
@@ -2114,7 +2126,6 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                         bpf_jit: !matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
                     },
@@ -2143,7 +2154,7 @@ fn main() {
                     exit(1);
                 });
                 if print_accounts_stats {
-                    let working_bank = bank_forks.working_bank();
+                    let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
                 }
                 exit_signal.store(true, Ordering::Relaxed);
@@ -2155,11 +2166,8 @@ fn main() {
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
 
@@ -2176,8 +2184,10 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        let dot =
-                            graph_forks(&bank_forks, arg_matches.is_present("include_all_votes"));
+                        let dot = graph_forks(
+                            &bank_forks.read().unwrap(),
+                            arg_matches.is_present("include_all_votes"),
+                        );
 
                         let extension = Path::new(&output_file).extension();
                         let result = if extension == Some(OsStr::new("pdf")) {
@@ -2284,17 +2294,16 @@ fn main() {
                     &blockstore,
                     ProcessOptions {
                         new_hard_forks,
+                        halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
-                        runtime_config: RuntimeConfig {
-                            dev_halt_at_slot: Some(snapshot_slot),
-                            ..RuntimeConfig::default()
-                        },
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, starting_snapshot_hashes)) => {
                         let mut bank = bank_forks
+                            .read()
+                            .unwrap()
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
                                 eprintln!("Error: Slot {} is not available", snapshot_slot);
@@ -2581,14 +2590,11 @@ fn main() {
                 }
             }
             ("accounts", Some(arg_matches)) => {
-                let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot,
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot,
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2610,7 +2616,7 @@ fn main() {
                     exit(1);
                 });
 
-                let bank = bank_forks.working_bank();
+                let bank = bank_forks.read().unwrap().working_bank();
                 let mut measure = Measure::start("getting accounts");
                 let accounts: BTreeMap<_, _> = bank
                     .get_all_accounts_with_modified_slots()
@@ -2647,14 +2653,11 @@ fn main() {
                 println!("{:#?}", total_accounts_stats);
             }
             ("capitalization", Some(arg_matches)) => {
-                let dev_halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
+                let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
+                    halt_at_slot,
                     poh_verify: false,
-                    runtime_config: RuntimeConfig {
-                        dev_halt_at_slot,
-                        ..RuntimeConfig::default()
-                    },
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
@@ -2671,6 +2674,7 @@ fn main() {
                     snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
+                        let bank_forks = bank_forks.read().unwrap();
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
                             eprintln!("Error: Slot {} is not available", slot);

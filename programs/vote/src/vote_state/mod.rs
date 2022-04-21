@@ -1,14 +1,15 @@
 //! Vote state, vote program
 //! Receive and processes votes from validators
+#[cfg(test)]
+use solana_sdk::epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET;
 use {
     crate::{authorized_voters::AuthorizedVoters, id, vote_error::VoteError},
-    bincode::{deserialize, serialize_into, serialized_size, ErrorKind},
+    bincode::{deserialize, serialize_into, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
-        epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         feature_set::{self, filter_votes_outside_slot_hashes, FeatureSet},
         hash::Hash,
         instruction::InstructionError,
@@ -349,11 +350,10 @@ impl VoteState {
         rent.minimum_balance(VoteState::size_of())
     }
 
-    pub fn size_of() -> usize {
-        // Upper limit on the size of the Vote State. Equal to
-        // size_of(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
-        let vote_state = VoteStateVersions::new_current(Self::get_max_sized_vote_state());
-        serialized_size(&vote_state).unwrap() as usize
+    /// Upper limit on the size of the Vote State
+    /// when votes.len() is MAX_LOCKOUT_HISTORY.
+    pub const fn size_of() -> usize {
+        3731 // see test_vote_state_size_of.
     }
 
     // utility function, used by Stakes, tests
@@ -416,6 +416,7 @@ impl VoteState {
             .is_ok()
     }
 
+    #[cfg(test)]
     fn get_max_sized_vote_state() -> VoteState {
         let mut authorized_voters = AuthorizedVoters::default();
         for i in 0..=MAX_LEADER_SCHEDULE_EPOCH_OFFSET {
@@ -2142,6 +2143,14 @@ mod tests {
         );
 
         assert_eq!(vote_state.get_authorized_voter(3), Some(new_voter));
+    }
+
+    #[test]
+    fn test_vote_state_size_of() {
+        let vote_state = VoteState::get_max_sized_vote_state();
+        let vote_state = VoteStateVersions::new_current(vote_state);
+        let size = bincode::serialized_size(&vote_state).unwrap();
+        assert_eq!(VoteState::size_of() as u64, size);
     }
 
     #[test]

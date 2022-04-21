@@ -12,6 +12,7 @@ members = [
     "bloom",
     "bucket_map",
     "clap-utils",
+    "clap-v3-utils",
     "cli",
     "cli-config",
     "cli-output",

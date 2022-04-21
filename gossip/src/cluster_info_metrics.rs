@@ -88,16 +88,31 @@ impl<'a, T> Drop for TimedGuard<'a, T> {
 }
 
 #[derive(Default)]
-pub(crate) struct GossipStats {
+pub struct GossipStats {
     pub(crate) all_tvu_peers: Counter,
+    pub(crate) bad_prune_destination: Counter,
     pub(crate) entrypoint2: Counter,
     pub(crate) entrypoint: Counter,
+    pub(crate) epoch_slots_filled: Counter,
     pub(crate) epoch_slots_lookup: Counter,
+    pub(crate) filter_crds_values_dropped_requests: Counter,
+    pub(crate) filter_crds_values_dropped_values: Counter,
     pub(crate) filter_pull_response: Counter,
     pub(crate) generate_pull_responses: Counter,
     pub(crate) get_accounts_hash: Counter,
+    pub(crate) get_epoch_duration_no_working_bank: Counter,
     pub(crate) get_votes: Counter,
+    pub(crate) get_votes_count: Counter,
     pub(crate) gossip_packets_dropped_count: Counter,
+    pub(crate) gossip_ping_msg_verify_fail: Counter,
+    pub(crate) gossip_pong_msg_verify_fail: Counter,
+    pub(crate) gossip_prune_msg_verify_fail: Counter,
+    pub(crate) gossip_pull_request_dropped_requests: Counter,
+    pub(crate) gossip_pull_request_no_budget: Counter,
+    pub(crate) gossip_pull_request_sent_requests: Counter,
+    pub(crate) gossip_pull_request_verify_fail: Counter,
+    pub(crate) gossip_pull_response_verify_fail: Counter,
+    pub(crate) gossip_push_msg_verify_fail: Counter,
     pub(crate) handle_batch_ping_messages_time: Counter,
     pub(crate) handle_batch_pong_messages_time: Counter,
     pub(crate) handle_batch_prune_messages_time: Counter,
@@ -136,12 +151,15 @@ pub(crate) struct GossipStats {
     pub(crate) process_push_success: Counter,
     pub(crate) prune_message_count: Counter,
     pub(crate) prune_message_len: Counter,
+    pub(crate) prune_message_timeout: Counter,
     pub(crate) prune_received_cache: Counter,
     pub(crate) pull_from_entrypoint_count: Counter,
     pub(crate) pull_request_ping_pong_check_failed_count: Counter,
     pub(crate) pull_requests_count: Counter,
     pub(crate) purge: Counter,
+    pub(crate) purge_count: Counter,
     pub(crate) push_message_count: Counter,
+    pub(crate) push_message_pushes: Counter,
     pub(crate) push_message_value_count: Counter,
     pub(crate) push_response_count: Counter,
     pub(crate) push_vote_read: Counter,
@@ -155,6 +173,7 @@ pub(crate) struct GossipStats {
     pub(crate) trim_crds_table_purged_values_count: Counter,
     pub(crate) tvu_peers: Counter,
     pub(crate) verify_gossip_packets_time: Counter,
+    pub(crate) window_request_loopback: Counter,
 }
 
 pub(crate) fn submit_gossip_stats(
@@ -180,6 +199,7 @@ pub(crate) fn submit_gossip_stats(
         ("entrypoint2", stats.entrypoint2.clear(), i64),
         ("push_vote_read", stats.push_vote_read.clear(), i64),
         ("get_votes", stats.get_votes.clear(), i64),
+        ("get_votes_count", stats.get_votes_count.clear(), i64),
         ("get_accounts_hash", stats.get_accounts_hash.clear(), i64),
         ("all_tvu_peers", stats.all_tvu_peers.clear(), i64),
         ("tvu_peers", stats.tvu_peers.clear(), i64),
@@ -211,6 +231,7 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("purge", stats.purge.clear(), i64),
+        ("purge_count", stats.purge_count.clear(), i64),
         (
             "process_gossip_packets_time",
             stats.process_gossip_packets_time.clear(),
@@ -257,6 +278,16 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("filter_pull_resp", stats.filter_pull_response.clear(), i64),
+        (
+            "filter_crds_values_dropped_requests",
+            stats.filter_crds_values_dropped_requests.clear(),
+            i64
+        ),
+        (
+            "filter_crds_values_dropped_values",
+            stats.filter_crds_values_dropped_values.clear(),
+            i64
+        ),
         (
             "process_pull_resp_count",
             stats.process_pull_response_count.clear(),
@@ -317,6 +348,16 @@ pub(crate) fn submit_gossip_stats(
         ),
         ("process_prune", stats.process_prune.clear(), i64),
         (
+            "prune_message_timeout",
+            stats.prune_message_timeout.clear(),
+            i64
+        ),
+        (
+            "bad_prune_destination",
+            stats.bad_prune_destination.clear(),
+            i64
+        ),
+        (
             "process_push_message",
             stats.process_push_message.clear(),
             i64
@@ -329,6 +370,21 @@ pub(crate) fn submit_gossip_stats(
         ("epoch_slots_lookup", stats.epoch_slots_lookup.clear(), i64),
         ("new_pull_requests", stats.new_pull_requests.clear(), i64),
         ("mark_pull_request", stats.mark_pull_request.clear(), i64),
+        (
+            "gossip_pull_request_no_budget",
+            stats.gossip_pull_request_no_budget.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_request_sent_requests",
+            stats.gossip_pull_request_sent_requests.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_request_dropped_requests",
+            stats.gossip_pull_request_dropped_requests.clear(),
+            i64
+        ),
     );
     datapoint_info!(
         "cluster_info_stats4",
@@ -348,6 +404,11 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("push_message_count", stats.push_message_count.clear(), i64),
+        (
+            "push_message_pushes",
+            stats.push_message_pushes.clear(),
+            i64
+        ),
         (
             "push_message_value_count",
             stats.push_message_value_count.clear(),
@@ -369,6 +430,17 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("prune_message_len", stats.prune_message_len.clear(), i64),
+        ("epoch_slots_filled", stats.epoch_slots_filled.clear(), i64),
+        (
+            "window_request_loopback",
+            stats.window_request_loopback.clear(),
+            i64
+        ),
+        (
+            "get_epoch_duration_no_working_bank",
+            stats.get_epoch_duration_no_working_bank.clear(),
+            i64
+        ),
     );
     datapoint_info!(
         "cluster_info_stats5",
@@ -446,6 +518,36 @@ pub(crate) fn submit_gossip_stats(
         (
             "trim_crds_table_purged_values_count",
             stats.trim_crds_table_purged_values_count.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_request_verify_fail",
+            stats.gossip_pull_request_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_pull_response_verify_fail",
+            stats.gossip_pull_response_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_push_msg_verify_fail",
+            stats.gossip_push_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_prune_msg_verify_fail",
+            stats.gossip_prune_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_ping_msg_verify_fail",
+            stats.gossip_ping_msg_verify_fail.clear(),
+            i64
+        ),
+        (
+            "gossip_pong_msg_verify_fail",
+            stats.gossip_pong_msg_verify_fail.clear(),
             i64
         ),
     );

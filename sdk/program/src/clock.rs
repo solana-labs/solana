@@ -1,4 +1,4 @@
-//! Provides information about the network's clock which is made up of ticks, slots, etc...
+//! Information about the network's clock, ticks, slots, etc.
 
 // The default tick rate that the cluster attempts to achieve.  Note that the actual tick
 // rate at any given time should be expected to drift

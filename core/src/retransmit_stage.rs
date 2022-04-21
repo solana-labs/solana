@@ -71,6 +71,7 @@ impl AddAssign for RetransmitSlotStats {
 struct RetransmitStats {
     since: Option<Instant>,
     num_nodes: AtomicUsize,
+    num_addrs_failed: AtomicUsize,
     num_shreds: usize,
     num_shreds_skipped: AtomicUsize,
     total_batches: usize,
@@ -114,6 +115,7 @@ impl RetransmitStats {
             ("epoch_cache_update", stats.epoch_cache_update, i64),
             ("total_batches", stats.total_batches, i64),
             ("num_nodes", stats.num_nodes.into_inner(), i64),
+            ("num_addrs_failed", stats.num_addrs_failed.into_inner(), i64),
             ("num_shreds", stats.num_shreds, i64),
             (
                 "num_shreds_skipped",
@@ -296,8 +298,9 @@ fn retransmit(
         let num_nodes = match multi_target_send(socket, &shred.payload, &addrs) {
             Ok(()) => addrs.len(),
             Err(SendPktsError::IoError(ioerr, num_failed)) => {
-                inc_new_counter_info!("cluster_info-retransmit-packets", addrs.len(), 1);
-                inc_new_counter_error!("cluster_info-retransmit-error", num_failed, 1);
+                stats
+                    .num_addrs_failed
+                    .fetch_add(num_failed, Ordering::Relaxed);
                 error!(
                     "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
                     ioerr,

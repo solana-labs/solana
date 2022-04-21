@@ -203,6 +203,10 @@ pub mod optimize_epoch_boundary_updates {
     solana_sdk::declare_id!("265hPS8k8xJ37ot82KEgjRunsUp5w4n4Q4VwwiN9i9ps");
 }
 
+pub mod remove_native_loader {
+    solana_sdk::declare_id!("HTTgmruMYRZEntyL3EdCDdnS6e4D5wRq1FA7kQsb66qq");
+}
+
 pub mod send_to_tpu_vote_port {
     solana_sdk::declare_id!("C5fh68nJ7uyKAuYZg2x9sEQ5YrVf3dkW6oojNBSc3Jvo");
 }
@@ -343,6 +347,14 @@ pub mod reject_callx_r10 {
     solana_sdk::declare_id!("3NKRSwpySNwD3TvP5pHnRmkAQRsdkXWRr1WaQh8p4PWX");
 }
 
+pub mod drop_redundant_turbine_path {
+    solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
+}
+
+pub mod executables_incur_cpi_data_cost {
+    solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -388,6 +400,7 @@ lazy_static! {
         (do_support_realloc::id(), "support account data reallocation"),
         (prevent_calling_precompiles_as_programs::id(), "prevent calling precompiles as programs"),
         (optimize_epoch_boundary_updates::id(), "optimize epoch boundary updates"),
+        (remove_native_loader::id(), "remove support for the native loader"),
         (send_to_tpu_vote_port::id(), "send votes to the tpu vote port"),
         (requestable_heap_size::id(), "Requestable heap frame size"),
         (disable_fee_calculator::id(), "deprecate fee calculator"),
@@ -423,6 +436,8 @@ lazy_static! {
         (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
         (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
         (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
+        (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
+        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

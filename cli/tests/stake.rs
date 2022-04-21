@@ -1078,7 +1078,7 @@ fn test_stake_split() {
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap();
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
@@ -1227,7 +1227,7 @@ fn test_stake_set_lockup() {
 
     // Create stake account, identity is authority
     let minimum_stake_balance = rpc_client
-        .get_minimum_balance_for_rent_exemption(std::mem::size_of::<StakeState>())
+        .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap();
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
