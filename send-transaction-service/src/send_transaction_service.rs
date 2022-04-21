@@ -110,7 +110,7 @@ pub struct Config {
     pub use_quic: bool,
     /// The batch size for sending transactions in batches
     pub batch_size: usize,
-    /// Controls the how frequently send the batches
+    /// How frequently batches are sent
     pub batch_send_rate_ms: u64,
 }
 
