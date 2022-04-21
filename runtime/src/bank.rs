@@ -584,6 +584,11 @@ pub struct TransactionExecutionDetails {
     pub log_messages: Option<Vec<String>>,
     pub inner_instructions: Option<Vec<Vec<CompiledInstruction>>>,
     pub durable_nonce_fee: Option<DurableNonceFee>,
+<<<<<<< HEAD
+=======
+    pub return_data: Option<TransactionReturnData>,
+    pub executed_units: u64,
+>>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -3940,6 +3945,8 @@ impl Bank {
 
         let (blockhash, lamports_per_signature) = self.last_blockhash_and_lamports_per_signature();
 
+        let mut executed_units = 0u64;
+
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
@@ -3957,8 +3964,10 @@ impl Bank {
             blockhash,
             lamports_per_signature,
             self.load_accounts_data_len(),
+            &mut executed_units,
         );
         process_message_time.stop();
+
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
             process_message_time.as_us()
@@ -4023,6 +4032,11 @@ impl Bank {
             log_messages,
             inner_instructions,
             durable_nonce_fee,
+<<<<<<< HEAD
+=======
+            return_data,
+            executed_units,
+>>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
         })
     }
 
@@ -6831,6 +6845,11 @@ pub(crate) mod tests {
             log_messages: None,
             inner_instructions: None,
             durable_nonce_fee: nonce.map(DurableNonceFee::from),
+<<<<<<< HEAD
+=======
+            return_data: None,
+            executed_units: 0u64,
+>>>>>>> a21fc3f30 (Apply transaction actual execution units to cost_tracker (#24311))
         })
     }
 
