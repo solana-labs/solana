@@ -26,7 +26,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        timing::AtomicInterval,
         transaction_context::{
             InstructionAccount, InstructionContext, TransactionAccount, TransactionContext,
         },
@@ -38,10 +37,7 @@ use {
         collections::HashMap,
         fmt::{self, Debug},
         rc::Rc,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
+        sync::Arc,
     },
 };
 
@@ -209,55 +205,6 @@ impl<'a> StackFrame<'a> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct VoteInstructionProcessingStats {
-    last_report: AtomicInterval,
-    vote_native_count: AtomicUsize,
-    vote_state_native_count: AtomicUsize,
-}
-
-impl VoteInstructionProcessingStats {
-    fn is_empty(&self) -> bool {
-        0 == self.vote_native_count.load(Ordering::Relaxed) as u64
-            && 0 == self.vote_state_native_count.load(Ordering::Relaxed) as u64
-    }
-
-    pub fn inc_vote_native(&mut self) {
-        self.vote_native_count.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn inc_vote_state_native(&mut self) {
-        self.vote_state_native_count.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn report(&mut self, report_interval_ms: u64) {
-        // skip reporting metrics if stats is empty
-        if self.is_empty() {
-            return;
-        }
-        if self.last_report.should_update(report_interval_ms) {
-            datapoint_info!(
-                "instruction_processing_stats",
-                (
-                    "vote_native",
-                    self.vote_native_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "vote_state_native",
-                    self.vote_state_native_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-            );
-        }
-    }
-}
-
-lazy_static! {
-    static ref VOTE_INSTRUCTION_PROCESSING_STATS: VoteInstructionProcessingStats =
-        VoteInstructionProcessingStats::default();
-}
-
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     #[allow(deprecated)]
@@ -280,7 +227,6 @@ pub struct InvokeContext<'a> {
     check_size: bool,
     orig_account_lengths: Vec<Option<Vec<usize>>>,
     allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
-    pub vote_instruction_processing_stats: &'static VoteInstructionProcessingStats,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -319,7 +265,7 @@ impl<'a> InvokeContext<'a> {
             check_size: true,
             orig_account_lengths: Vec::new(),
             allocators: Vec::new(),
-            vote_instruction_processing_stats: &VOTE_INSTRUCTION_PROCESSING_STATS,
+            //vote_instruction_processing_stats: &mut VOTE_INSTRUCTION_PROCESSING_STATS,
         }
     }
 

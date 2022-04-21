@@ -5443,7 +5443,6 @@ dependencies = [
  "bincode",
  "enum-iterator",
  "itertools",
- "lazy_static",
  "libc",
  "libloading",
  "log",
@@ -5455,7 +5454,6 @@ dependencies = [
  "solana-frozen-abi-macro 1.11.0",
  "solana-logger 1.11.0",
  "solana-measure",
- "solana-metrics",
  "solana-sdk 1.11.0",
  "thiserror",
 ]
