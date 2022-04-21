@@ -95,14 +95,6 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    pub fn update_execution_cost(
-        &mut self,
-        _estimated_tx_cost: &TransactionCost,
-        _actual_execution_cost: u64,
-    ) {
-        // TODO: adjust block_cost / vote_cost / account_cost by (actual_execution_cost - execution_cost)
-    }
-
     pub fn remove(&mut self, tx_cost: &TransactionCost) {
         self.remove_transaction_cost(tx_cost);
     }
@@ -304,7 +296,7 @@ mod tests {
             system_transaction::transfer(mint_keypair, &keypair.pubkey(), 2, *start_hash),
         );
         let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.execution_cost = 5;
+        tx_cost.bpf_execution_cost = 5;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
 
         (simple_transaction, tx_cost)
@@ -332,7 +324,7 @@ mod tests {
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);
-        tx_cost.execution_cost = 10;
+        tx_cost.bpf_execution_cost = 10;
         tx_cost.writable_accounts.push(mint_keypair.pubkey());
         tx_cost.is_simple_vote = true;
 
@@ -618,10 +610,6 @@ mod tests {
 
     #[test]
     fn test_cost_tracker_try_add_is_atomic() {
-        let (mint_keypair, start_hash) = test_setup();
-        // build two mocking vote transactions with diff accounts
-        let (_tx1, _tx_cost1) = build_simple_vote_transaction(&mint_keypair, &start_hash);
-
         let acct1 = Pubkey::new_unique();
         let acct2 = Pubkey::new_unique();
         let acct3 = Pubkey::new_unique();
@@ -639,7 +627,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2, acct3],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_ok());
@@ -657,7 +645,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct2],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_ok());
@@ -677,7 +665,7 @@ mod tests {
         {
             let tx_cost = TransactionCost {
                 writable_accounts: vec![acct1, acct2],
-                execution_cost: cost,
+                bpf_execution_cost: cost,
                 ..TransactionCost::default()
             };
             assert!(testee.try_add(&tx_cost).is_err());

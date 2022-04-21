@@ -23,12 +23,6 @@ cargo_audit_ignores=(
   # Blocked on multiple crates updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
 
-  # generic-array: arr! macro erases lifetimes
-  #
-  # Blocked on new spl dependencies on solana-program v1.9
-  # due to curve25519-dalek dependency
-  --ignore RUSTSEC-2020-0146
-
   # chrono: Potential segfault in `localtime_r` invocations
   #
   # Blocked due to no safe upgrade

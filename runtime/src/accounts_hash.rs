@@ -6,13 +6,12 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
-        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         borrow::Borrow,
         convert::TryInto,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
         },
     },
@@ -41,8 +40,15 @@ pub struct CalcAccountsHashConfig<'a> {
     /// does hash calc need to consider account data that exists in the write cache?
     /// if so, 'ancestors' will be used for this purpose as well as storages.
     pub use_write_cache: bool,
-    pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
+}
+
+impl<'a> CalcAccountsHashConfig<'a> {
+    /// return true if we should cache accounts hash intermediate data between calls
+    pub fn get_should_cache_hash_data() -> bool {
+        // when we are skipping rewrites, we cannot rely on the cached data from old append vecs, so we have to disable caching for now
+        false
+    }
 }
 
 // smallest, 3 quartiles, largest, average
@@ -64,6 +70,10 @@ pub struct HashStats {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
+    /// time spent hashing during rehash calls
+    pub rehash_hash_us: AtomicU64,
+    /// time spent determining whether to rehash during rehash calls
+    pub rehash_calc_us: AtomicU64,
     /// # rehashes that took place and were necessary
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
@@ -165,6 +175,16 @@ impl HashStats {
             (
                 "rehashed_rewrites",
                 self.rehash_required.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_hash_us",
+                self.rehash_hash_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_calc_us",
+                self.rehash_calc_us.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (

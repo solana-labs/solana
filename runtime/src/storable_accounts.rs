@@ -19,6 +19,9 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn is_empty(&self) -> bool;
     /// # accounts to write
     fn len(&self) -> usize;
+    /// are there accounts from multiple slots
+    /// only used for an assert
+    fn contains_multiple_slots(&self) -> bool;
 }
 
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a Pubkey, &'a T)]) {
@@ -40,6 +43,9 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     }
     fn len(&self) -> usize {
         self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
     }
 }
 
@@ -66,6 +72,16 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     fn len(&self) -> usize {
         self.1.len()
     }
+    fn contains_multiple_slots(&self) -> bool {
+        let len = self.len();
+        if len > 0 {
+            let slot = self.slot(0);
+            // true if any item has a different slot than the first item
+            (1..len).any(|i| slot != self.slot(i))
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -86,6 +102,23 @@ pub mod tests {
             assert_eq!(a.pubkey(i), b.pubkey(i));
             assert_eq!(a.account(i), b.account(i));
         })
+    }
+
+    #[test]
+    fn test_contains_multiple_slots() {
+        let pk = Pubkey::new(&[1; 32]);
+        let account = AccountSharedData::create(1, Vec::default(), Pubkey::default(), false, 0);
+        let slot = 0;
+        let test3 = (
+            slot,
+            &vec![(&pk, &account, slot), (&pk, &account, slot)][..],
+        );
+        assert!(!(&test3).contains_multiple_slots());
+        let test3 = (
+            slot,
+            &vec![(&pk, &account, slot), (&pk, &account, slot + 1)][..],
+        );
+        assert!(test3.contains_multiple_slots());
     }
 
     #[test]
@@ -122,9 +155,11 @@ pub mod tests {
                         assert_eq!(raw.0, *test3.pubkey(i));
                         assert_eq!(raw.1, *test3.account(i));
                         assert_eq!(raw.2, test3.slot(i));
-                        assert_eq!(target_slot, test3.target_slot());
                         assert_eq!(target_slot, test2.slot(i));
                     }
+                    assert_eq!(target_slot, test3.target_slot());
+                    assert!(!test2.contains_multiple_slots());
+                    assert_eq!(test3.contains_multiple_slots(), entries > 1);
                 }
             }
         }

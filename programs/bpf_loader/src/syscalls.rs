@@ -23,7 +23,7 @@ use {
         feature_set::{
             add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
             check_physical_overlapping, check_slice_translation_size, disable_fees_sysvar,
-            do_support_realloc, fixed_memcpy_nonoverlapping_check,
+            do_support_realloc, executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
             prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
@@ -2783,6 +2783,16 @@ where
                 .map_err(SyscallError::InstructionError)?;
             if account.borrow().executable() {
                 // Use the known account
+                if invoke_context
+                    .feature_set
+                    .is_active(&executables_incur_cpi_data_cost::id())
+                {
+                    invoke_context
+                        .get_compute_meter()
+                        .consume((account.borrow().data().len() as u64).saturating_div(
+                            invoke_context.get_compute_budget().cpi_bytes_per_unit,
+                        ))?;
+                }
                 accounts.push((instruction_account.index_in_transaction, None));
             } else if let Some(caller_account_index) =
                 account_info_keys.iter().position(|key| *key == account_key)

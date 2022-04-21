@@ -241,6 +241,7 @@ pub struct TransactionTokenBalance {
     pub mint: String,
     pub ui_token_amount: UiTokenAmount,
     pub owner: String,
+    pub program_id: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -251,6 +252,8 @@ pub struct UiTransactionTokenBalance {
     pub ui_token_amount: UiTokenAmount,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<String>,
 }
 
 impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
@@ -261,6 +264,11 @@ impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
             ui_token_amount: token_balance.ui_token_amount,
             owner: if !token_balance.owner.is_empty() {
                 Some(token_balance.owner)
+            } else {
+                None
+            },
+            program_id: if !token_balance.program_id.is_empty() {
+                Some(token_balance.program_id)
             } else {
                 None
             },

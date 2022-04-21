@@ -35,6 +35,7 @@
 
 use crate::account_info::AccountInfo;
 
+/// Print a message to the log.
 #[macro_export]
 #[deprecated(since = "1.4.14", note = "Please use `msg` macro instead")]
 macro_rules! info {

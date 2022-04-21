@@ -1541,6 +1541,13 @@ pub fn main() {
                       This option is for use during testing."),
         )
         .arg(
+            Arg::with_name("accounts_db_skip_rewrites")
+                .long("accounts-db-skip-rewrites")
+                .help("Accounts that are rent exempt and have no changes are not rewritten. \
+                      This produces snapshots that older versions cannot read.")
+                      .hidden(true),
+        )
+        .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")
@@ -2276,6 +2283,7 @@ pub fn main() {
         write_cache_limit_bytes: value_t!(matches, "accounts_db_cache_limit_mb", u64)
             .ok()
             .map(|mb| mb * MB as u64),
+        skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
         ..AccountsDbConfig::default()
     };
 
@@ -2330,6 +2338,7 @@ pub fn main() {
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
+        halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
         expected_genesis_hash: matches
             .value_of("expected_genesis_hash")
             .map(|s| Hash::from_str(s).unwrap()),
@@ -2442,7 +2451,6 @@ pub fn main() {
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {
-            dev_halt_at_slot: value_t!(matches, "dev_halt_at_slot", Slot).ok(),
             bpf_jit: !matches.is_present("no_bpf_jit"),
             ..RuntimeConfig::default()
         },

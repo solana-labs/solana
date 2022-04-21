@@ -37,19 +37,22 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
-        accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
+        accounts::{
+            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
+            TransactionLoadResult,
+        },
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
-        accounts_index_storage::Startup,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
+        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
@@ -93,8 +96,8 @@ use {
         account_utils::StateMut,
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
-            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_RECENT_BLOCKHASHES,
-            MAX_TRANSACTION_FORWARDING_DELAY, SECONDS_PER_DAY,
+            INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
+            SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -1244,18 +1247,15 @@ pub struct Bank {
 
     sysvar_cache: RwLock<SysvarCache>,
 
+    /// (Pubkey, account Hash) for each account that would have been rewritten in rent collection for this slot
+    pub rewrites_skipped_this_slot: Rewrites,
+
     /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
     /// maximum size.
     accounts_data_len: AtomicU64,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
-}
-
-impl Default for BlockhashQueue {
-    fn default() -> Self {
-        Self::new(MAX_RECENT_BLOCKHASHES)
-    }
 }
 
 struct VoteWithStakeDelegations {
@@ -1336,6 +1336,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let bank = Self {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1661,6 +1662,7 @@ impl Bank {
 
         let accounts_data_len = parent.load_accounts_data_len();
         let mut new = Bank {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             src,
             slot,
@@ -1984,6 +1986,7 @@ impl Bank {
         }
         let feature_set = new();
         let mut bank = Self {
+            rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             src: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -3042,7 +3045,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly();
+            self.collect_rent_eagerly(false);
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -3730,6 +3733,10 @@ impl Bank {
             .collect()
     }
 
+    pub fn get_hash_age(&self, hash: &Hash) -> Option<u64> {
+        self.blockhash_queue.read().unwrap().get_hash_age(hash)
+    }
+
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
         self.blockhash_queue
             .read()
@@ -4134,8 +4141,6 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    signature_count += u64::from(tx.message().header().num_required_signatures);
-
                     let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
                     let compute_budget_max_units = if tx_wide_compute_cap {
                         compute_budget::MAX_UNITS
@@ -4164,13 +4169,11 @@ impl Bank {
                         }
                     }
 
-                    let durable_nonce_fee = nonce.as_ref().map(DurableNonceFee::from);
-
                     self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
                         compute_budget,
-                        durable_nonce_fee,
+                        nonce.as_ref().map(DurableNonceFee::from),
                         enable_cpi_recording,
                         enable_log_recording,
                         enable_return_data_recording,
@@ -4271,6 +4274,10 @@ impl Bank {
             }
 
             if execution_result.was_executed() {
+                // Signature count must be accumulated only if the transaction
+                // is executed, otherwise a mismatched count between banking and
+                // replay could occur
+                signature_count += u64::from(tx.message().header().num_required_signatures);
                 executed_transactions_count += 1;
             }
 
@@ -4744,7 +4751,12 @@ impl Bank {
         }
     }
 
-    fn collect_rent_eagerly(&self) {
+    /// after deserialize, populate rewrites with accounts that would normally have had their data rewritten in this slot due to rent collection (but didn't)
+    pub fn prepare_rewrites_for_hash(&self) {
+        self.collect_rent_eagerly(true);
+    }
+
+    fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
         }
@@ -4754,13 +4766,18 @@ impl Bank {
         let count = partitions.len();
         let account_count: usize = partitions
             .into_iter()
-            .map(|partition| self.collect_rent_in_partition(partition))
+            .map(|partition| self.collect_rent_in_partition(partition, just_rewrites))
             .sum();
         measure.stop();
         datapoint_info!(
             "collect_rent_eagerly",
             ("accounts", account_count, i64),
-            ("partitions", count, i64)
+            ("partitions", count, i64),
+            (
+                "skipped_rewrites",
+                self.rewrites_skipped_this_slot.read().unwrap().len(),
+                i64
+            ),
         );
         inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
@@ -4790,7 +4807,17 @@ impl Bank {
         }
     }
 
-    fn collect_rent_in_partition(&self, partition: Partition) -> usize {
+    /// load accounts with pubkeys in 'partition'
+    /// collect rent
+    /// store accounts, whether rent was collected or not
+    /// update bank's rewrites set for all rewrites that were skipped
+    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
+    /// return # accounts loaded
+    fn collect_rent_in_partition(&self, partition: Partition, just_rewrites: bool) -> usize {
+        if just_rewrites {
+            // this is not implemented yet. In the meantime, this call can have no side effects.
+            return 0;
+        }
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
@@ -4807,21 +4834,43 @@ impl Bank {
         // parallelize?
         let mut rent_debits = RentDebits::default();
         let mut total_collected = CollectedInfo::default();
-        for (pubkey, mut account) in accounts {
+        let bank_slot = self.slot();
+        let mut rewrites_skipped = Vec::with_capacity(accounts.len());
+        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        for (pubkey, mut account, loaded_slot) in accounts {
+            let old_rent_epoch = account.rent_epoch();
             let collected = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_collected += collected;
-            // Store all of them unconditionally to purge old AppendVec,
-            // even if collected rent is 0 (= not updated).
+            // only store accounts where we collected rent
+            // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
             // ensures we verify the whole on-chain state (= all accounts)
-            // via the account delta hash slowly once per an epoch.
-            self.store_account(&pubkey, &account);
+            // via the bank delta hash slowly once per an epoch.
+            if can_skip_rewrites
+                && Self::skip_rewrite(
+                    bank_slot,
+                    collected.rent_amount,
+                    loaded_slot,
+                    old_rent_epoch,
+                    &account,
+                )
+            {
+                // this would have been rewritten previously. Now we skip it.
+                // calculate the hash that we would have gotten if we did the rewrite.
+                // This will be needed to calculate the bank's hash.
+                let hash =
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                rewrites_skipped.push((pubkey, hash));
+            } else if !just_rewrites {
+                self.store_account(&pubkey, &account);
+            }
             rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
         }
+        self.remember_skipped_rewrites(rewrites_skipped);
         self.collected_rent
             .fetch_add(total_collected.rent_amount, Relaxed);
         self.rewards
@@ -4836,6 +4885,44 @@ impl Bank {
             .accounts
             .hold_range_in_memory(&subrange, false, thread_pool);
         account_count
+    }
+
+    // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
+    fn remember_skipped_rewrites(&self, rewrites_skipped: Vec<(Pubkey, Hash)>) {
+        if !rewrites_skipped.is_empty() {
+            let mut rewrites_skipped_this_slot = self.rewrites_skipped_this_slot.write().unwrap();
+            rewrites_skipped.into_iter().for_each(|(pubkey, hash)| {
+                rewrites_skipped_this_slot.insert(pubkey, hash);
+            });
+        }
+    }
+
+    /// return true iff storing this account is just a rewrite and can be skipped
+    fn skip_rewrite(
+        bank_slot: Slot,
+        rent_amount: u64,
+        loaded_slot: Slot,
+        old_rent_epoch: Epoch,
+        account: &AccountSharedData,
+    ) -> bool {
+        if rent_amount != 0 || account.rent_epoch() == 0 {
+            // rent was != 0
+            // or special case for default rent value
+            // these cannot be skipped and must be written
+            return false;
+        }
+        if old_rent_epoch != account.rent_epoch() && loaded_slot == bank_slot {
+            // account's rent_epoch should increment even though we're not collecting rent.
+            // and we already wrote this account in this slot, but we did not adjust rent_epoch (sys vars for example)
+            // so, force ourselves to rewrite account if account was already written in this slot
+            // Now, the account that was written IN this slot, where normally we would have collected rent, has the corrent 'rent_epoch'.
+            // Only this last store will remain in the append vec.
+            // Otherwise, later code would assume the account was written successfully in this slot with the correct 'rent_epoch'.
+            return false;
+        }
+
+        // rent was 0 and no reason to rewrite, so THIS is a rewrite we can skip
+        true
     }
 
     /// This is the inverse of pubkey_range_from_partition.
@@ -5685,7 +5772,21 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
+        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
+            Some((mut account, storage_slot)) => {
+                ExpectedRentCollection::maybe_update_rent_epoch_on_load(
+                    &mut account,
+                    &SlotInfoInEpoch::new_small(storage_slot),
+                    &SlotInfoInEpoch::new_small(self.slot()),
+                    self.rent_collector(),
+                    pubkey,
+                    &self.rewrites_skipped_this_slot,
+                );
+
+                Some((account, storage_slot))
+            }
+            None => None,
+        }
     }
 
     pub fn get_program_accounts(
@@ -5734,9 +5835,7 @@ impl Bank {
         self.rc.accounts.account_indexes_include_key(key)
     }
 
-    pub fn get_all_accounts_with_modified_slots(
-        &self,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
+    pub fn get_all_accounts_with_modified_slots(&self) -> ScanResult<Vec<PubkeyAccountSlot>> {
         self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
@@ -5860,7 +5959,10 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self.rc.accounts.bank_hash_info_at(self.slot());
+        let accounts_delta_hash = self
+            .rc
+            .accounts
+            .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
 
@@ -5909,7 +6011,6 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
-            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -5978,7 +6079,6 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
-            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -6032,7 +6132,6 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
-                self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
             );
@@ -6058,7 +6157,6 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
-                        self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
                     );
@@ -6093,11 +6191,6 @@ impl Bank {
         }
         clean_time.stop();
 
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Startup);
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
@@ -6109,11 +6202,6 @@ impl Bank {
         let mut verify_time = Measure::start("verify_bank_hash");
         let mut verify = self.verify_bank_hash(test_hash_calculation);
         verify_time.stop();
-        self.rc
-            .accounts
-            .accounts_db
-            .accounts_index
-            .set_startup(Startup::Normal);
 
         info!("verify_hash..");
         let mut verify2_time = Measure::start("verify_hash");
@@ -6854,7 +6942,7 @@ pub(crate) mod tests {
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+            clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
             feature::Feature,
@@ -8798,7 +8886,7 @@ pub(crate) mod tests {
             vec![genesis_slot]
         );
 
-        bank.collect_rent_in_partition((0, 0, 1)); // all range
+        bank.collect_rent_in_partition((0, 0, 1), false); // all range
 
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
         assert_eq!(
@@ -8881,8 +8969,8 @@ pub(crate) mod tests {
         assert_eq!(hash1_with_zero, hash1_without_zero);
         assert_ne!(hash1_with_zero, Hash::default());
 
-        bank2_with_zero.collect_rent_in_partition((0, 0, 1)); // all
-        bank2_without_zero.collect_rent_in_partition((0, 0, 1)); // all
+        bank2_with_zero.collect_rent_in_partition((0, 0, 1), false); // all
+        bank2_without_zero.collect_rent_in_partition((0, 0, 1), false); // all
 
         bank2_with_zero.freeze();
         let hash2_with_zero = bank2_with_zero.hash();
@@ -16034,6 +16122,80 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_failed_compute_request_instruction() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(
+            1_000_000_000_000_000,
+            &Pubkey::new_unique(),
+            bootstrap_validator_stake_lamports(),
+        );
+        let mut bank = Bank::new_for_tests(&genesis_config);
+
+        let payer0_keypair = Keypair::new();
+        let payer1_keypair = Keypair::new();
+        bank.transfer(10, &mint_keypair, &payer0_keypair.pubkey())
+            .unwrap();
+        bank.transfer(10, &mint_keypair, &payer1_keypair.pubkey())
+            .unwrap();
+
+        fn mock_ix_processor(
+            _first_instruction_account: usize,
+            invoke_context: &mut InvokeContext,
+        ) -> std::result::Result<(), InstructionError> {
+            let compute_budget = invoke_context.get_compute_budget();
+            assert_eq!(
+                *compute_budget,
+                ComputeBudget {
+                    max_units: 1,
+                    heap_size: Some(48 * 1024),
+                    ..ComputeBudget::default()
+                }
+            );
+            Ok(())
+        }
+        let program_id = solana_sdk::pubkey::new_rand();
+        bank.add_builtin("mock_program", &program_id, mock_ix_processor);
+
+        // This message will not be executed because the compute budget request is invalid
+        let message0 = Message::new(
+            &[
+                ComputeBudgetInstruction::request_heap_frame(1),
+                Instruction::new_with_bincode(program_id, &0, vec![]),
+            ],
+            Some(&payer0_keypair.pubkey()),
+        );
+        // This message will be processed successfully
+        let message1 = Message::new(
+            &[
+                ComputeBudgetInstruction::request_units(1, 0),
+                ComputeBudgetInstruction::request_heap_frame(48 * 1024),
+                Instruction::new_with_bincode(program_id, &0, vec![]),
+            ],
+            Some(&payer1_keypair.pubkey()),
+        );
+        let txs = vec![
+            Transaction::new(&[&payer0_keypair], message0, bank.last_blockhash()),
+            Transaction::new(&[&payer1_keypair], message1, bank.last_blockhash()),
+        ];
+        let results = bank.process_transactions(txs.iter());
+
+        assert_eq!(
+            results[0],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData
+            ))
+        );
+        assert_eq!(results[1], Ok(()));
+        // two transfers and the mock program
+        assert_eq!(bank.signature_count(), 3);
+    }
+
+    #[test]
     fn test_verify_and_hash_transaction_sig_len() {
         let GenesisConfigInfo {
             mut genesis_config, ..
@@ -17154,6 +17316,96 @@ pub(crate) mod tests {
                 assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
             }
         }
+    }
+
+    #[test]
+    fn test_skip_rewrite() {
+        solana_logger::setup();
+        let mut account = AccountSharedData::default();
+        let bank_slot = 10;
+        for account_rent_epoch in 0..3 {
+            account.set_rent_epoch(account_rent_epoch);
+            for rent_amount in [0, 1] {
+                for loaded_slot in (bank_slot - 1)..=bank_slot {
+                    for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch
+                    {
+                        let skip = Bank::skip_rewrite(
+                            bank_slot,
+                            rent_amount,
+                            loaded_slot,
+                            old_rent_epoch,
+                            &account,
+                        );
+                        let mut should_skip = true;
+                        if rent_amount != 0
+                            || account_rent_epoch == 0
+                            || (account_rent_epoch != old_rent_epoch && loaded_slot == bank_slot)
+                        {
+                            should_skip = false;
+                        }
+                        assert_eq!(
+                            skip,
+                            should_skip,
+                            "{:?}",
+                            (
+                                account_rent_epoch,
+                                old_rent_epoch,
+                                rent_amount,
+                                loaded_slot,
+                                old_rent_epoch
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_remember_skipped_rewrites() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config_with_leader(1_000_000_000, &Pubkey::new_unique(), 42);
+        genesis_config.rent = Rent::default();
+        activate_all_features(&mut genesis_config);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+
+        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
+        bank.remember_skipped_rewrites(Vec::default());
+        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
+
+        // bank's map is initially empty
+        let mut test = vec![(Pubkey::new(&[4; 32]), Hash::new(&[5; 32]))];
+        bank.remember_skipped_rewrites(test.clone());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // now there is already some stuff in the bank's map
+        test.push((Pubkey::new(&[6; 32]), Hash::new(&[7; 32])));
+        bank.remember_skipped_rewrites(test[1..].to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // all contents are already in map
+        bank.remember_skipped_rewrites(test[1..].to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.clone().into_iter().collect()
+        );
+
+        // all contents are already in map, but we're changing hash values
+        test[0].1 = Hash::new(&[8; 32]);
+        test[1].1 = Hash::new(&[9; 32]);
+        bank.remember_skipped_rewrites(test.to_vec());
+        assert_eq!(
+            *bank.rewrites_skipped_this_slot.read().unwrap(),
+            test.into_iter().collect()
+        );
     }
 
     #[test]

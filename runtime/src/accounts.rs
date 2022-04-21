@@ -10,7 +10,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         bank::{
-            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
+            Bank, NonceFull, NonceInfo, RentDebits, Rewrites, TransactionCheckResult,
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
@@ -42,7 +42,7 @@ use {
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         system_program,
-        sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
+        sysvar::{self, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
         transaction_context::TransactionAccount,
     },
@@ -57,6 +57,8 @@ use {
         },
     },
 };
+
+pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
@@ -747,7 +749,6 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
-        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
         let use_index = false;
@@ -760,7 +761,6 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
-                epoch_schedule,
                 rent_collector,
                 is_startup,
             )
@@ -775,7 +775,6 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
-        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
@@ -783,7 +782,6 @@ impl Accounts {
             ancestors,
             total_lamports,
             test_hash_calculation,
-            epoch_schedule,
             rent_collector,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
@@ -807,6 +805,18 @@ impl Accounts {
         if let Some(mapped_account_tuple) = some_account_tuple
             .filter(|(_, account, _)| Self::is_loadable(account.lamports()) && filter(account))
             .map(|(pubkey, account, _slot)| (*pubkey, account))
+        {
+            collector.push(mapped_account_tuple)
+        }
+    }
+
+    fn load_with_slot(
+        collector: &mut Vec<PubkeyAccountSlot>,
+        some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>,
+    ) {
+        if let Some(mapped_account_tuple) = some_account_tuple
+            .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
+            .map(|(pubkey, account, slot)| (*pubkey, account, slot))
         {
             collector.push(mapped_account_tuple)
         }
@@ -934,11 +944,11 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         bank_id: BankId,
-    ) -> ScanResult<Vec<(Pubkey, AccountSharedData, Slot)>> {
+    ) -> ScanResult<Vec<PubkeyAccountSlot>> {
         self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut Vec<(Pubkey, AccountSharedData, Slot)>, some_account_tuple| {
+            |collector: &mut Vec<PubkeyAccountSlot>, some_account_tuple| {
                 if let Some((pubkey, account, slot)) = some_account_tuple
                     .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
                 {
@@ -966,14 +976,14 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         range: R,
-    ) -> Vec<TransactionAccount> {
+    ) -> Vec<PubkeyAccountSlot> {
         self.accounts_db.range_scan_accounts(
             "load_to_collect_rent_eagerly_scan_elapsed",
             ancestors,
             range,
             &ScanConfig::new(true),
-            |collector: &mut Vec<TransactionAccount>, option| {
-                Self::load_while_filtering(collector, option, |_| true)
+            |collector: &mut Vec<PubkeyAccountSlot>, option| {
+                Self::load_with_slot(collector, option)
             },
         )
     }
@@ -1035,12 +1045,14 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_at(&self, slot: Slot) -> Hash {
-        self.bank_hash_info_at(slot).hash
+    pub fn bank_hash_at(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
+        self.bank_hash_info_at(slot, rewrites).hash
     }
 
-    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
-        let delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
+    pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
+        let delta_hash = self
+            .accounts_db
+            .get_accounts_delta_hash_with_rewrites(slot, rewrites);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut hash_info = bank_hashes
             .get(&slot)
@@ -2400,7 +2412,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1);
+        accounts.bank_hash_at(1, &Rewrites::default());
     }
 
     #[test]

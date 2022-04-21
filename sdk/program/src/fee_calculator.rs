@@ -1,3 +1,5 @@
+//! Calculation of transaction fees.
+
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{clock::DEFAULT_MS_PER_SLOT, ed25519_program, message::Message, secp256k1_program},
@@ -7,8 +9,10 @@ use {
 #[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
-    // The current cost of a signature  This amount may increase/decrease over time based on
-    // cluster processing load.
+    /// The current cost of a signature.
+    ///
+    /// This amount may increase/decrease over time based on cluster processing
+    /// load.
     pub lamports_per_signature: u64,
 }
 

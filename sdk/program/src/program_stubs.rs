@@ -1,4 +1,4 @@
-//! Syscall stubs when building for programs for non-BPF targets
+//! Implementations of syscalls used when `solana-program` is built for non-BPF targets.
 
 #![cfg(not(target_arch = "bpf"))]
 

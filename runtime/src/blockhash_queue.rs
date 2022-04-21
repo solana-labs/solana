@@ -2,7 +2,9 @@
 use solana_sdk::sysvar::recent_blockhashes;
 use {
     serde::{Deserialize, Serialize},
-    solana_sdk::{fee_calculator::FeeCalculator, hash::Hash, timing::timestamp},
+    solana_sdk::{
+        clock::MAX_RECENT_BLOCKHASHES, fee_calculator::FeeCalculator, hash::Hash, timing::timestamp,
+    },
     std::collections::HashMap,
 };
 
@@ -27,6 +29,12 @@ pub struct BlockhashQueue {
 
     /// hashes older than `max_age` will be dropped from the queue
     max_age: usize,
+}
+
+impl Default for BlockhashQueue {
+    fn default() -> Self {
+        Self::new(MAX_RECENT_BLOCKHASHES)
+    }
 }
 
 impl BlockhashQueue {

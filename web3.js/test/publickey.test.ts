@@ -200,6 +200,12 @@ describe('PublicKey', function () {
         ),
       ).to.be.true;
     }
+
+    // Should work in promise mode, for backwards compatibility
+    PublicKey.createProgramAddress(
+      [Buffer.from('', 'utf8'), Buffer.from([1])],
+      programId,
+    ).then();
   });
 
   it('findProgramAddress', async () => {
@@ -218,6 +224,9 @@ describe('PublicKey', function () {
         ),
       ),
     ).to.be.true;
+
+    // Should work in promise mode, for backwards compatibility
+    PublicKey.findProgramAddress([Buffer.from('', 'utf8')], programId).then();
   });
 
   it('isOnCurve', () => {

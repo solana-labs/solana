@@ -115,7 +115,7 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // A result that indicates whether transactions were successfully
     // committed into the Poh stream. If so, the result tells us
     // how many such transactions were committed
-    commit_transactions_result: Result<(), PohRecorderError>,
+    commit_transactions_result: Result<Vec<bool>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
 }
 
@@ -334,7 +334,8 @@ pub struct BatchedTransactionCostDetails {
     pub batched_signature_cost: u64,
     pub batched_write_lock_cost: u64,
     pub batched_data_bytes_cost: u64,
-    pub batched_execute_cost: u64,
+    pub batched_builtins_execute_cost: u64,
+    pub batched_bpf_execute_cost: u64,
 }
 
 #[derive(Debug, Default)]
@@ -399,7 +400,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn new_num_threads(
+    pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
@@ -1204,6 +1205,11 @@ impl BankingStage {
             ..
         } = load_and_execute_transactions_output;
 
+        let mut transactions_execute_and_record_status: Vec<bool> = execution_results
+            .iter()
+            .map(|execution_result| execution_result.was_executed())
+            .collect();
+
         let (freeze_lock, freeze_lock_time) =
             Measure::this(|_| bank.freeze_lock(), (), "freeze_lock");
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
@@ -1228,6 +1234,11 @@ impl BankingStage {
             record_transactions_timings,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = record_transactions_timings;
+
+        // mark transactions that were executed but not recorded
+        retryable_record_transaction_indexes.iter().for_each(|i| {
+            transactions_execute_and_record_status[*i] = false;
+        });
 
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
@@ -1331,7 +1342,7 @@ impl BankingStage {
             executed_transactions_count,
             executed_with_successful_result_count,
             retryable_transaction_indexes,
-            commit_transactions_result: Ok(()),
+            commit_transactions_result: Ok(transactions_execute_and_record_status),
             execute_and_commit_timings,
         }
     }
@@ -1389,16 +1400,14 @@ impl BankingStage {
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
             ref execute_and_commit_timings,
+            ref commit_transactions_result,
             ..
         } = execute_and_commit_transactions_output;
 
-        // TODO: This does not revert the cost tracker changes from all unexecuted transactions
-        // yet: For example tx that are too old will not be included in the block, but are not
-        // retryable.
         QosService::update_or_remove_transaction_costs(
             transaction_costs.iter(),
             transactions_qos_results.iter(),
-            retryable_transaction_indexes,
+            commit_transactions_result.as_ref().ok(),
             bank,
         );
 
@@ -1453,8 +1462,14 @@ impl BankingStage {
                         cost.data_bytes_cost
                     );
                     saturating_add_assign!(
-                        batched_transaction_details.costs.batched_execute_cost,
-                        cost.execution_cost
+                        batched_transaction_details
+                            .costs
+                            .batched_builtins_execute_cost,
+                        cost.builtins_execution_cost
+                    );
+                    saturating_add_assign!(
+                        batched_transaction_details.costs.batched_bpf_execute_cost,
+                        cost.bpf_execution_cost
                     );
                 }
                 Err(transaction_error) => match transaction_error {
@@ -4354,39 +4369,38 @@ mod tests {
 
     #[test]
     fn test_accumulate_batched_transaction_costs() {
-        let tx_costs = vec![
-            TransactionCost {
-                signature_cost: 1,
-                write_lock_cost: 2,
-                data_bytes_cost: 3,
-                execution_cost: 10,
+        let signature_cost = 1;
+        let write_lock_cost = 2;
+        let data_bytes_cost = 3;
+        let builtins_execution_cost = 4;
+        let bpf_execution_cost = 10;
+        let num_txs = 4;
+
+        let tx_costs: Vec<_> = (0..num_txs)
+            .map(|_| TransactionCost {
+                signature_cost,
+                write_lock_cost,
+                data_bytes_cost,
+                builtins_execution_cost,
+                bpf_execution_cost,
                 ..TransactionCost::default()
-            },
-            TransactionCost {
-                signature_cost: 4,
-                write_lock_cost: 5,
-                data_bytes_cost: 6,
-                execution_cost: 20,
-                ..TransactionCost::default()
-            },
-            TransactionCost {
-                signature_cost: 7,
-                write_lock_cost: 8,
-                data_bytes_cost: 9,
-                execution_cost: 40,
-                ..TransactionCost::default()
-            },
-        ];
-        let tx_results = vec![
-            Ok(()),
-            Ok(()),
-            Err(TransactionError::WouldExceedMaxBlockCostLimit),
-        ];
-        // should only accumulate first two cost that are OK
-        let expected_signatures = 5;
-        let expected_write_locks = 7;
-        let expected_data_bytes = 9;
-        let expected_executions = 30;
+            })
+            .collect();
+        let tx_results: Vec<_> = (0..num_txs)
+            .map(|n| {
+                if n % 2 == 0 {
+                    Ok(())
+                } else {
+                    Err(TransactionError::WouldExceedMaxBlockCostLimit)
+                }
+            })
+            .collect();
+        // should only accumulate half of the costs that are OK
+        let expected_signatures = signature_cost * (num_txs / 2);
+        let expected_write_locks = write_lock_cost * (num_txs / 2);
+        let expected_data_bytes = data_bytes_cost * (num_txs / 2);
+        let expected_builtins_execution_costs = builtins_execution_cost * (num_txs / 2);
+        let expected_bpf_execution_costs = bpf_execution_cost * (num_txs / 2);
         let batched_transaction_details =
             BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
         assert_eq!(
@@ -4402,8 +4416,14 @@ mod tests {
             batched_transaction_details.costs.batched_data_bytes_cost
         );
         assert_eq!(
-            expected_executions,
-            batched_transaction_details.costs.batched_execute_cost
+            expected_builtins_execution_costs,
+            batched_transaction_details
+                .costs
+                .batched_builtins_execute_cost
+        );
+        assert_eq!(
+            expected_bpf_execution_costs,
+            batched_transaction_details.costs.batched_bpf_execute_cost
         );
     }
 
