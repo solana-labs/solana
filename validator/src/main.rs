@@ -2357,25 +2357,25 @@ pub fn main() {
     if matches.is_present("no_accounts_db_index_hashing") {
         info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
     }
-    let retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
-    let batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
-    let batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
+    let rpc_send_retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
+    let rpc_send_batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
+    let rpc_send_batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
 
-    if batch_send_rate_ms > retry_rate_ms {
+    if rpc_send_batch_send_rate_ms > rpc_send_retry_rate_ms {
         eprintln!(
             "The specified rpc-send-batch-ms ({}) is invalid, it must be <= rpc-send-retry-ms ({})",
-            batch_send_rate_ms, retry_rate_ms
+            rpc_send_batch_send_rate_ms, rpc_send_retry_rate_ms
         );
         exit(1);
     }
 
-    let tps = batch_size as u64 * MILLIS_PER_SECOND / batch_send_rate_ms;
+    let tps = rpc_send_batch_size as u64 * MILLIS_PER_SECOND / rpc_send_batch_send_rate_ms;
     if tps > send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND {
         eprintln!(
             "Either the specified rpc-send-batch-size ({}) or rpc-send-batch-ms ({}) is invalid, \
             'rpc-send-batch-size * 1000 / rpc-send-batch-ms' must be smaller than ({}) .",
-            batch_size,
-            batch_send_rate_ms,
+            rpc_send_batch_size,
+            rpc_send_batch_send_rate_ms,
             send_transaction_service::MAX_TRANSACTION_SENDS_PER_SECOND
         );
         exit(1);
@@ -2461,7 +2461,7 @@ pub fn main() {
         debug_keys,
         contact_debug_interval,
         send_transaction_service_config: send_transaction_service::Config {
-            retry_rate_ms,
+            retry_rate_ms: rpc_send_retry_rate_ms,
             leader_forward_count: value_t_or_exit!(
                 matches,
                 "rpc_send_transaction_leader_forward_count",
@@ -2479,8 +2479,8 @@ pub fn main() {
                 usize
             ),
             use_quic: tpu_use_quic,
-            batch_send_rate_ms,
-            batch_size,
+            batch_send_rate_ms: rpc_send_batch_send_rate_ms,
+            batch_size: rpc_send_batch_size,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
