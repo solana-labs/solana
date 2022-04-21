@@ -243,19 +243,11 @@ impl CostTracker {
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            *account_cost = account_cost
-                .checked_add(adjustment)
-                .unwrap_or(self.account_cost_limit);
+            *account_cost = account_cost.saturating_add(adjustment);
         }
-        self.block_cost = self
-            .block_cost
-            .checked_add(adjustment)
-            .unwrap_or(self.block_cost_limit);
+        self.block_cost = self.block_cost.saturating_add(adjustment);
         if tx_cost.is_simple_vote {
-            self.vote_cost = self
-                .vote_cost
-                .checked_add(adjustment)
-                .unwrap_or(self.vote_cost_limit);
+            self.vote_cost = self.vote_cost.saturating_add(adjustment);
         }
     }
 
@@ -266,19 +258,11 @@ impl CostTracker {
                 .cost_by_writable_accounts
                 .entry(*account_key)
                 .or_insert(0);
-            *account_cost = account_cost
-                .checked_sub(adjustment)
-                .unwrap_or(self.account_cost_limit);
+            *account_cost = account_cost.saturating_sub(adjustment);
         }
-        self.block_cost = self
-            .block_cost
-            .checked_sub(adjustment)
-            .unwrap_or(self.block_cost_limit);
+        self.block_cost = self.block_cost.saturating_sub(adjustment);
         if tx_cost.is_simple_vote {
-            self.vote_cost = self
-                .vote_cost
-                .checked_sub(adjustment)
-                .unwrap_or(self.vote_cost_limit);
+            self.vote_cost = self.vote_cost.saturating_sub(adjustment);
         }
     }
 }
@@ -781,31 +765,31 @@ mod tests {
                 });
         }
 
-        // adjust overflow up
+        // adjust overflow
         {
             testee.add_transaction_execution_cost(&tx_cost, u64::MAX);
             // expect block cost set to limit
-            assert_eq!(block_max, testee.block_cost());
+            assert_eq!(u64::MAX, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
             testee
                 .cost_by_writable_accounts
                 .iter()
                 .for_each(|(_key, units)| {
-                    assert_eq!(account_max, *units);
+                    assert_eq!(u64::MAX, *units);
                 });
         }
 
-        // adjust overflow down
+        // adjust underflow
         {
             testee.sub_transaction_execution_cost(&tx_cost, u64::MAX);
             // expect block cost set to limit
-            assert_eq!(block_max, testee.block_cost());
+            assert_eq!(u64::MIN, testee.block_cost());
             assert_eq!(expected_tx_count, testee.transaction_count());
             testee
                 .cost_by_writable_accounts
                 .iter()
                 .for_each(|(_key, units)| {
-                    assert_eq!(account_max, *units);
+                    assert_eq!(u64::MIN, *units);
                 });
         }
     }
