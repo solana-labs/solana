@@ -95,7 +95,7 @@ impl CostModel {
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
         tx_cost.signature_cost = self.get_signature_cost(transaction);
-        self.get_write_lock_cost(&mut tx_cost, transaction);
+        tx_cost.write_lock_cost = self.get_write_lock_cost(&mut tx_cost, transaction);
         tx_cost.data_bytes_cost = self.get_data_bytes_cost(transaction);
         (tx_cost.builtins_execution_cost, tx_cost.bpf_execution_cost) =
             self.get_transaction_cost(transaction);
@@ -133,7 +133,8 @@ impl CostModel {
         &self,
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
-    ) {
+    ) -> u64 {
+        let write_lock_cost: u64 = 0;
         let message = transaction.message();
         message
             .account_keys()
@@ -144,9 +145,10 @@ impl CostModel {
 
                 if is_writable {
                     tx_cost.writable_accounts.push(*k);
-                    tx_cost.write_lock_cost += WRITE_LOCK_UNITS;
+                    write_lock_cost += WRITE_LOCK_UNITS;
                 }
             });
+        write_lock_cost
     }
 
     fn get_data_bytes_cost(&self, transaction: &SanitizedTransaction) -> u64 {

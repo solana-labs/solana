@@ -154,6 +154,20 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
     execute_cost_units
 }
 
+fn sum_additional_costs(batch: &TransactionBatch) -> u64 {
+    let mut additional_costs: u64 = 0;
+    let transactions = batch.sanitized_transactions();
+    let cost_model = CostModel::new();
+
+    for transaction in transactions {
+        let transaction_cost = cost_model.calculate_costs(transaction);     // computing a lot more than it needs to.. make sub-functions public and replace this
+        additional_costs += transaction_cost.signature_cost;
+        additional_costs += transaction_cost.write_lock_cost;
+        additional_costs += transaction_cost.data_bytes_cost;
+    }
+    additional_costs
+}
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
@@ -189,16 +203,18 @@ fn execute_batch(
         .is_active(&feature_set::gate_large_block::id())
     {
         let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
+        let additional_cost_units = sum_additional_costs(batch);
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units);
+            .accumulate(execution_cost_units + additional_cost_units);
 
         debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
+            additional_cost_units,
             remaining_block_cost_cap,
         );
 
