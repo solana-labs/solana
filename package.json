@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/1111-1993/solana#readme",
   "publishConfig": {
-    "@1111-1993:registry": "https://npm.pkg.github.com"
+    "@1111-1993:registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }
