@@ -3311,6 +3311,14 @@ failed:
 
                 let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
+                let targetkey = Pubkey::from_str("5Pj1kicH7V3EpDvxmXUMaBeLSnvy1Ac1wQTFVSKBDnHR").unwrap();
+                accounts_this_append_vec.iter().enumerate().for_each(|(i, (key, acct, slot))|
+                    {
+                        if key == &&targetkey {
+                            error!("jwashw, writing: {}, {:?} {:?}, ancient: {}", key, (slot, accounts_this_append_vec[i].1.rent_epoch()), hashes_this_append_vec[i], writer.0);
+                        }
+                    });
+
                 let prev = if true {
                     //accounts_next_append_vec.is_empty() {
                     // write what we can to the current ancient storage
