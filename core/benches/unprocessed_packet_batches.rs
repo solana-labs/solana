@@ -85,6 +85,33 @@ fn insert_packet_batches(
     );
 }
 
+#[bench]
+fn bench_packet_clone(bencher: &mut Bencher) {
+    let batch_count = 1000;
+    let packet_per_batch_count = 128;
+
+    let packet_batches: Vec<PacketBatch> = (0..batch_count)
+        .map(|_| build_packet_batch(packet_per_batch_count).0)
+        .collect();
+
+    bencher.iter(|| {
+        test::black_box(packet_batches.iter().for_each(|packet_batch| {
+            let mut outer_packet = Packet::default();
+
+            let mut timer = Measure::start("insert_batch");
+            packet_batch.packets.iter().for_each(|packet| {
+                let mut packet = packet.clone();
+                packet.meta.sender_stake *= 2;
+                if packet.meta.sender_stake > 2 {
+                    outer_packet = packet;
+                }
+            });
+
+            timer.stop();
+        }));
+    });
+}
+
 //*
 // v1, bench: 5,600,038,163 ns/iter (+/- 940,818,988)
 // v2, bench: 5,265,382,750 ns/iter (+/- 153,623,264)
