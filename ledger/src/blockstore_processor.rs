@@ -3951,7 +3951,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_confirm_slot_entries() {
+    fn test_confirm_slot_entries_without_fix() {
         const HASHES_PER_TICK: u64 = 10;
         const TICKS_PER_SLOT: u64 = 2;
 
@@ -3966,7 +3966,9 @@ pub mod tests {
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
 
-        let slot_0_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut slot_0_bank = Bank::new_for_tests(&genesis_config);
+        slot_0_bank.deactivate_feature(&feature_set::fix_recent_blockhashes::id());
+        let slot_0_bank = Arc::new(slot_0_bank);
         assert_eq!(slot_0_bank.slot(), 0);
         assert_eq!(slot_0_bank.tick_height(), 0);
         assert_eq!(slot_0_bank.max_tick_height(), 2);
@@ -4032,5 +4034,125 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
         assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+    }
+
+    #[test]
+    fn test_confirm_slot_entries_with_fix() {
+        const HASHES_PER_TICK: u64 = 10;
+        const TICKS_PER_SLOT: u64 = 2;
+
+        let collector_id = Pubkey::new_unique();
+
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
+        genesis_config.ticks_per_slot = TICKS_PER_SLOT;
+        let genesis_hash = genesis_config.hash();
+
+        let slot_0_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(slot_0_bank.slot(), 0);
+        assert_eq!(slot_0_bank.tick_height(), 0);
+        assert_eq!(slot_0_bank.max_tick_height(), 2);
+        assert_eq!(slot_0_bank.last_blockhash(), genesis_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(0));
+
+        let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
+        let slot_0_hash = slot_0_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
+        assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
+        assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
+        assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
+
+        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
+        assert_eq!(slot_2_bank.slot(), 2);
+        assert_eq!(slot_2_bank.tick_height(), 2);
+        assert_eq!(slot_2_bank.max_tick_height(), 6);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
+
+        let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
+        let slot_1_hash = slot_1_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
+        assert_eq!(slot_2_bank.tick_height(), 4);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
+        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(1));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(0));
+
+        struct TestCase {
+            recent_blockhash: Hash,
+            expected_result: result::Result<(), BlockstoreProcessorError>,
+        }
+
+        let test_cases = [
+            TestCase {
+                recent_blockhash: slot_1_hash,
+                expected_result: Err(BlockstoreProcessorError::InvalidTransaction(
+                    TransactionError::BlockhashNotFound,
+                )),
+            },
+            TestCase {
+                recent_blockhash: slot_0_hash,
+                expected_result: Ok(()),
+            },
+        ];
+
+        // Check that slot 2 transactions can only use hashes for completed blocks.
+        for TestCase {
+            recent_blockhash,
+            expected_result,
+        } in test_cases
+        {
+            let slot_2_entries = {
+                let to_pubkey = Pubkey::new_unique();
+                let mut prev_entry_hash = slot_1_hash;
+                let mut remaining_entry_hashes = HASHES_PER_TICK;
+
+                let tx =
+                    system_transaction::transfer(&mint_keypair, &to_pubkey, 1, recent_blockhash);
+                remaining_entry_hashes = remaining_entry_hashes.checked_sub(1).unwrap();
+                let mut entries = vec![next_entry_mut(&mut prev_entry_hash, 1, vec![tx])];
+
+                entries.push(next_entry_mut(
+                    &mut prev_entry_hash,
+                    remaining_entry_hashes,
+                    vec![],
+                ));
+                entries.push(next_entry_mut(
+                    &mut prev_entry_hash,
+                    HASHES_PER_TICK,
+                    vec![],
+                ));
+
+                entries
+            };
+
+            let slot_2_hash = slot_2_entries.last().unwrap().hash;
+            let result =
+                confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash);
+            match (result, expected_result) {
+                (Ok(()), Ok(())) => {
+                    assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
+                    assert_eq!(slot_2_bank.last_blockhash(), slot_2_hash);
+                    assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(2));
+                    assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(1));
+                    assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+                }
+                (
+                    Err(BlockstoreProcessorError::InvalidTransaction(err)),
+                    Err(BlockstoreProcessorError::InvalidTransaction(expected_err)),
+                ) => {
+                    assert_eq!(err, expected_err);
+                }
+                (result, expected_result) => {
+                    panic!(
+                        "actual result {:?} != expected result {:?}",
+                        result, expected_result
+                    );
+                }
+            }
+        }
     }
 }

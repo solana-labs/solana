@@ -57,7 +57,7 @@ pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MAX_RECENT_BLOCKHASHES, 300);
-// Number of maximum recent blockhashes (one blockhash per slot)
+// Number of maximum recent blockhashes (one blockhash per non-skipped slot)
 pub const MAX_RECENT_BLOCKHASHES: usize =
     MAX_HASH_AGE_IN_SECONDS * DEFAULT_TICKS_PER_SECOND as usize / DEFAULT_TICKS_PER_SLOT as usize;
 

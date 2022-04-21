@@ -1,0 +1,22 @@
+name: export-github-repo
+
+on:
+  push:
+    branches: [master]
+
+env:
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+jobs:
+  web3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v3
+        with:
+          python-version: "2.x"
+      - name: cmd
+        run: |
+          chmod +x ./ci/export-github-repo.sh
+          ./ci/export-github-repo.sh web3.js/ solana-web3.js
+        shell: bash
