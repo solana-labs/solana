@@ -354,7 +354,7 @@ impl StreamStats {
     }
 }
 
-fn handle_connection(
+async fn handle_connection(
     mut uni_streams: IncomingUniStreams,
     packet_sender: Sender<PacketBatch>,
     remote_addr: SocketAddr,
@@ -363,50 +363,48 @@ fn handle_connection(
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
 ) {
-    tokio::spawn(async move {
-        debug!(
-            "quic new connection {} streams: {} connections: {}",
-            remote_addr,
-            stats.total_streams.load(Ordering::Relaxed),
-            stats.total_connections.load(Ordering::Relaxed),
-        );
-        while !stream_exit.load(Ordering::Relaxed) {
-            match uni_streams.next().await {
-                Some(stream_result) => match stream_result {
-                    Ok(mut stream) => {
-                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                        let mut maybe_batch = None;
-                        while !stream_exit.load(Ordering::Relaxed) {
-                            if handle_chunk(
-                                &stream.read_chunk(PACKET_DATA_SIZE, false).await,
-                                &mut maybe_batch,
-                                &remote_addr,
-                                &packet_sender,
-                            ) {
-                                last_update.store(timing::timestamp(), Ordering::Relaxed);
-                                break;
-                            }
+    debug!(
+        "quic new connection {} streams: {} connections: {}",
+        remote_addr,
+        stats.total_streams.load(Ordering::Relaxed),
+        stats.total_connections.load(Ordering::Relaxed),
+    );
+    while !stream_exit.load(Ordering::Relaxed) {
+        match uni_streams.next().await {
+            Some(stream_result) => match stream_result {
+                Ok(mut stream) => {
+                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                    let mut maybe_batch = None;
+                    while !stream_exit.load(Ordering::Relaxed) {
+                        if handle_chunk(
+                            &stream.read_chunk(PACKET_DATA_SIZE, false).await,
+                            &mut maybe_batch,
+                            &remote_addr,
+                            &packet_sender,
+                        ) {
+                            last_update.store(timing::timestamp(), Ordering::Relaxed);
+                            break;
                         }
                     }
-                    Err(e) => {
-                        debug!("stream error: {:?}", e);
-                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                        break;
-                    }
-                },
-                None => {
+                }
+                Err(e) => {
+                    debug!("stream error: {:?}", e);
                     stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     break;
                 }
+            },
+            None => {
+                stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                break;
             }
         }
-        connection_table
-            .lock()
-            .unwrap()
-            .remove_connection(&remote_addr);
-        stats.total_connections.fetch_sub(1, Ordering::Relaxed);
-    });
+    }
+    connection_table
+        .lock()
+        .unwrap()
+        .remove_connection(&remote_addr);
+    stats.total_connections.fetch_sub(1, Ordering::Relaxed);
 }
 
 pub fn spawn_server(
@@ -452,61 +450,68 @@ pub fn spawn_server(
                 }
 
                 if let Ok(Some(connection)) = timeout_connection {
-                    if let Ok(new_connection) = connection.await {
-                        stats.total_connections.fetch_add(1, Ordering::Relaxed);
-                        stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
-                        let quinn::NewConnection {
-                            connection,
-                            uni_streams,
-                            ..
-                        } = new_connection;
-
-                        let remote_addr = connection.remote_address();
-
-                        let mut connection_table_l =
-                            if staked_nodes.read().unwrap().contains_key(&remote_addr.ip()) {
-                                let mut connection_table_l =
-                                    staked_connection_table.lock().unwrap();
-                                let num_pruned =
-                                    connection_table_l.prune_oldest(max_staked_connections);
-                                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                                connection_table_l
-                            } else {
-                                let mut connection_table_l = connection_table.lock().unwrap();
-                                let num_pruned =
-                                    connection_table_l.prune_oldest(max_unstaked_connections);
-                                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                                connection_table_l
-                            };
-
-                        if let Some((last_update, stream_exit)) = connection_table_l
-                            .try_add_connection(
-                                &remote_addr,
-                                timing::timestamp(),
-                                max_connections_per_ip,
-                            )
-                        {
-                            drop(connection_table_l);
-                            let packet_sender = packet_sender.clone();
-                            let stats = stats.clone();
-                            let connection_table1 = connection_table.clone();
-                            handle_connection(
+                    let staked_connection_table = staked_connection_table.clone();
+                    let staked_nodes = staked_nodes.clone();
+                    let connection_table = connection_table.clone();
+                    let packet_sender = packet_sender.clone();
+                    let stats = stats.clone();
+                    tokio::spawn(async move {
+                        if let Ok(new_connection) = connection.await {
+                            stats.total_connections.fetch_add(1, Ordering::Relaxed);
+                            stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
+                            let quinn::NewConnection {
+                                connection,
                                 uni_streams,
-                                packet_sender,
-                                remote_addr,
-                                last_update,
-                                connection_table1,
-                                stream_exit,
-                                stats,
-                            );
-                        } else {
-                            stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                                ..
+                            } = new_connection;
+
+                            let remote_addr = connection.remote_address();
+
+                            let status = {
+                                let mut connection_table_l = if staked_nodes
+                                    .read()
+                                    .unwrap()
+                                    .contains_key(&remote_addr.ip())
+                                {
+                                    let mut connection_table_l =
+                                        staked_connection_table.lock().unwrap();
+                                    let num_pruned =
+                                        connection_table_l.prune_oldest(max_staked_connections);
+                                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                                    connection_table_l
+                                } else {
+                                    let mut connection_table_l = connection_table.lock().unwrap();
+                                    let num_pruned =
+                                        connection_table_l.prune_oldest(max_unstaked_connections);
+                                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                                    connection_table_l
+                                };
+
+                                let status = connection_table_l.try_add_connection(
+                                    &remote_addr,
+                                    timing::timestamp(),
+                                    max_connections_per_ip,
+                                );
+                                drop(connection_table_l);
+                                status
+                            };
+                            if let Some((last_update, stream_exit)) = status {
+                                let packet_sender = packet_sender.clone();
+                                let stats = stats.clone();
+                                let connection_table1 = connection_table.clone();
+                                handle_connection(
+                                    uni_streams,
+                                    packet_sender,
+                                    remote_addr,
+                                    last_update,
+                                    connection_table1,
+                                    stream_exit,
+                                    stats,
+                                )
+                                .await;
+                            }
                         }
-                    } else {
-                        stats
-                            .connection_setup_timeout
-                            .fetch_add(1, Ordering::Relaxed);
-                    }
+                    });
                 }
             }
         });
