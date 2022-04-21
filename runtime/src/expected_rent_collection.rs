@@ -396,6 +396,7 @@ impl ExpectedRentCollection {
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Hash> {
+        return None;
         use solana_measure::measure::Measure;
         let mut m = Measure::start("rehash_calc_us");
         let expected = ExpectedRentCollection::new(
