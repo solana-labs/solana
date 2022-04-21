@@ -363,6 +363,10 @@ pub mod update_rewards_from_cached_accounts {
     solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9");
 }
 
+pub mod turbine_merkle {
+    solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh0");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -448,6 +452,7 @@ lazy_static! {
         (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
         (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
+        (turbine_merkle::id(), "Merkle proof based turbine"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
