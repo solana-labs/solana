@@ -108,7 +108,7 @@ pub struct Config {
     pub service_max_retries: usize,
     /// Whether to use Quic protocol to send transactions
     pub use_quic: bool,
-    /// The batch size for sending transaction in batch
+    /// The batch size for sending transactions in batches
     pub batch_size: usize,
     /// Controls the how frequently send the batches
     pub batch_send_rate_ms: u64,
