@@ -31,6 +31,19 @@ pub struct DeserializedPacket {
 
 impl DeserializedPacket {
     pub fn new(packet: Packet, bank: &Option<Arc<Bank>>) -> Option<Self> {
+        Self::new_internal(packet, bank, None)
+    }
+
+    #[cfg(test)]
+    fn new_with_fee_per_cu(packet: Packet, fee_per_cu: u64) -> Option<Self> {
+        Self::new_internal(packet, &None, Some(fee_per_cu))
+    }
+
+    pub fn new_internal(
+        packet: Packet,
+        bank: &Option<Arc<Bank>>,
+        fee_per_cu: Option<u64>,
+    ) -> Option<Self> {
         let versioned_transaction: VersionedTransaction =
             match limited_deserialize(&packet.data[0..packet.meta.size]) {
                 Ok(tx) => tx,
@@ -40,10 +53,12 @@ impl DeserializedPacket {
         if let Some(message_bytes) = packet_message(&packet) {
             let message_hash = Message::hash_raw_message(message_bytes);
             let is_simple_vote = packet.meta.is_simple_vote_tx();
-            let fee_per_cu = bank
-                .as_ref()
-                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, &*bank))
-                .unwrap_or(0);
+
+            let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
+                bank.as_ref()
+                    .map(|bank| compute_fee_per_cu(&versioned_transaction.message, &*bank))
+                    .unwrap_or(0)
+            });
             Some(Self {
                 immutable_section: Rc::new(ImmutableDeserializedPacket {
                     original_packet: packet,
@@ -254,16 +269,16 @@ impl UnprocessedPacketBatches {
             .packet_priority_queue
             .push_pop_min(priority_queue_entry);
 
+        // Keep track of the original packet in the tracking hashmap
+        self.message_hash_to_transaction
+            .insert(deserialized_packet.message_hash(), deserialized_packet);
+
         // Remove the popped entry from the tracking hashmap. Unwrap call is safe
         // because the priority queue and hashmap are kept consistent at all times.
         let popped_packet = self
             .message_hash_to_transaction
             .remove(&popped_priority_queue_entry.message_hash)
             .unwrap();
-
-        // Keep track of the original packet in the tracking hashmap
-        self.message_hash_to_transaction
-            .insert(deserialized_packet.message_hash(), deserialized_packet);
 
         popped_packet
     }
@@ -359,6 +374,17 @@ mod tests {
         DeserializedPacket::new(packet, &None).unwrap()
     }
 
+    fn packet_with_fee_per_cu(fee_per_cu: u64) -> DeserializedPacket {
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+            Hash::new_unique(),
+        );
+        let packet = Packet::from_data(None, &tx).unwrap();
+        DeserializedPacket::new_with_fee_per_cu(packet, fee_per_cu).unwrap()
+    }
+
     #[test]
     fn test_unprocessed_packet_batches_insert_pop_same_packet() {
         let packet = packet_with_sender_stake(1, None);
@@ -371,6 +397,36 @@ mod tests {
         assert_eq!(
             unprocessed_packet_batches.pop_max_n(2).unwrap(),
             vec![packet]
+        );
+    }
+
+    #[test]
+    fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
+        let heavier_packet_weight = 2;
+        let heavier_packet = packet_with_fee_per_cu(heavier_packet_weight);
+
+        let lesser_packet_weight = heavier_packet_weight - 1;
+        let lesser_packet = packet_with_fee_per_cu(lesser_packet_weight);
+
+        // Test that the heavier packet is actually heavier
+        let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
+        unprocessed_packet_batches.push(heavier_packet.clone());
+        unprocessed_packet_batches.push(lesser_packet.clone());
+        assert_eq!(
+            unprocessed_packet_batches.pop_max().unwrap(),
+            heavier_packet
+        );
+
+        let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(1);
+        unprocessed_packet_batches.push(heavier_packet);
+
+        // Buffer is now at capacity, pushing the smaller weighted
+        // packet should immediately pop it
+        assert_eq!(
+            unprocessed_packet_batches
+                .push(lesser_packet.clone())
+                .unwrap(),
+            lesser_packet
         );
     }
 
