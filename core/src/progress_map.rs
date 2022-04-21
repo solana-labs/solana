@@ -9,7 +9,7 @@ use {
     solana_program_runtime::timings::ExecuteTimingType,
     solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
     solana_sdk::{
-        clock::Slot, fast_int_math::pow2_checked_u64 as pow2, hash::Hash, pubkey::Pubkey,
+        clock::Slot, fast_int_math::pow2_unchecked_u64 as pow2, hash::Hash, pubkey::Pubkey,
     },
     std::{
         collections::{BTreeMap, HashMap, HashSet},
@@ -330,7 +330,7 @@ impl ValidatorStakeInfo {
 }
 
 pub const RETRANSMIT_BASE_DELAY_MS: u64 = 5_000;
-pub const RETRANSMIT_BACKOFF_CAP: u32 = 6;
+const RETRANSMIT_BACKOFF_CAP: u32 = 6;
 
 #[derive(Debug, Default)]
 pub struct RetransmitInfo {
@@ -341,7 +341,7 @@ pub struct RetransmitInfo {
 impl RetransmitInfo {
     pub fn reached_retransmit_threshold(&self) -> bool {
         let backoff = std::cmp::min(self.retry_iteration, RETRANSMIT_BACKOFF_CAP);
-        let backoff_duration_ms = pow2(backoff) * RETRANSMIT_BASE_DELAY_MS;
+        let backoff_duration_ms = pow2(backoff.into()) * RETRANSMIT_BASE_DELAY_MS;
         self.retry_time
             .map(|time| time.elapsed().as_millis() > backoff_duration_ms.into())
             .unwrap_or(true)
