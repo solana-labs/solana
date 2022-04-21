@@ -3146,7 +3146,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         old_slots.sort_unstable();
-        error!("jwash: ancient_append_vec: slots: {:?}, total: {}", old_slots.skip(13449), old_slots.len());
+        error!("jwash: ancient_append_vec: slots: {:?}, total: {}", old_slots.iter().skip(13449).collect::<Vec<_>>(), old_slots.len());
         //old_slots.truncate(3); // artificially limit to 3 slots
         self.combine_ancient_slots(old_slots, max_root);
         /*
