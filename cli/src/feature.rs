@@ -28,6 +28,8 @@ use {
     },
 };
 
+const DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS: Slot = 15_000_000; // ~90days
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ForceActivation {
     No,
@@ -39,6 +41,7 @@ pub enum ForceActivation {
 pub enum FeatureCliCommand {
     Status {
         features: Vec<Pubkey>,
+        display_all: bool,
     },
     Activate {
         feature: Pubkey,
@@ -364,6 +367,11 @@ impl FeatureSubCommands for App<'_, '_> {
                                 .index(1)
                                 .multiple(true)
                                 .help("Feature status to query [default: all known features]"),
+                        )
+                        .arg(
+                            Arg::with_name("display_all")
+                                .long("display-all")
+                                .help("display all features regardless of age"),
                         ),
                 )
                 .subcommand(
@@ -435,9 +443,13 @@ pub fn parse_feature_subcommand(
             } else {
                 FEATURE_NAMES.keys().cloned().collect()
             };
+            let display_all = matches.is_present("display_all");
             features.sort();
             CliCommandInfo {
-                command: CliCommand::Feature(FeatureCliCommand::Status { features }),
+                command: CliCommand::Feature(FeatureCliCommand::Status {
+                    features,
+                    display_all,
+                }),
                 signers: vec![],
             }
         }
@@ -452,7 +464,10 @@ pub fn process_feature_subcommand(
     feature_subcommand: &FeatureCliCommand,
 ) -> ProcessResult {
     match feature_subcommand {
-        FeatureCliCommand::Status { features } => process_status(rpc_client, config, features),
+        FeatureCliCommand::Status {
+            features,
+            display_all,
+        } => process_status(rpc_client, config, features, *display_all),
         FeatureCliCommand::Activate { feature, force } => {
             process_activate(rpc_client, config, *feature, *force)
         }
@@ -663,7 +678,14 @@ fn process_status(
     rpc_client: &RpcClient,
     config: &CliConfig,
     feature_ids: &[Pubkey],
+    display_all: bool,
 ) -> ProcessResult {
+    let filter = if !display_all {
+        let now = rpc_client.get_slot()?;
+        now.checked_sub(DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS)
+    } else {
+        None
+    };
     let mut inactive = false;
     let mut features = rpc_client
         .get_multiple_accounts(feature_ids)?
@@ -686,6 +708,12 @@ fn process_status(
                         status: CliFeatureStatus::Inactive,
                     }
                 })
+        })
+        .filter(|feature| match (filter, &feature.status) {
+            (Some(min_activation), CliFeatureStatus::Active(activation)) => {
+                activation > &min_activation
+            }
+            _ => true,
         })
         .collect::<Vec<_>>();
 
