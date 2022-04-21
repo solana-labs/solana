@@ -433,6 +433,14 @@ impl ReplayStage {
                     last_print_time: Instant::now(),
                 };
 
+                Self::reset_poh_recorder(
+                    &my_pubkey,
+                    &blockstore,
+                    &bank_forks.read().unwrap().working_bank(),
+                    &poh_recorder,
+                    &leader_schedule_cache,
+                );
+
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {

@@ -49,7 +49,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_info, poh_timing_point::PohTimingSender},
     solana_poh::{
-        poh_recorder::{PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+        poh_recorder::PohRecorder,
         poh_service::{self, PohService},
     },
     solana_rpc::{
@@ -692,11 +692,11 @@ impl Validator {
                 None
             };
 
-        let bank = Arc::clone(&bank_forks.read().unwrap().working_bank());
-        info!("Starting validator with working bank slot {}", bank.slot());
-
         let mut block_commitment_cache = BlockCommitmentCache::default();
-        block_commitment_cache.initialize_slots(bank.slot(), bank_forks.read().unwrap().root());
+        block_commitment_cache.initialize_slots(
+            bank_forks.read().unwrap().working_bank().slot(),
+            bank_forks.read().unwrap().root(),
+        );
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
@@ -723,36 +723,24 @@ impl Validator {
             max_slots.clone(),
         );
 
-        info!(
-            "Starting PoH: epoch={} slot={} tick_height={} blockhash={} leader={:?}",
-            bank.epoch(),
-            bank.slot(),
-            bank.tick_height(),
-            bank.last_blockhash(),
-            leader_schedule_cache.slot_leader_at(bank.slot(), Some(&bank))
-        );
-
         let poh_config = Arc::new(genesis_config.poh_config.clone());
-        let (poh_recorder, entry_receiver, record_receiver) = PohRecorder::new_with_clear_signal(
-            bank.tick_height(),
-            bank.last_blockhash(),
-            bank.clone(),
-            leader_schedule_cache.next_leader_slot(
+        let (poh_recorder, entry_receiver, record_receiver) = {
+            let bank = &bank_forks.read().unwrap().working_bank();
+            PohRecorder::new_with_clear_signal(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                None,
+                bank.ticks_per_slot(),
                 &id,
-                bank.slot(),
-                &bank,
-                Some(&blockstore),
-                GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
-            ),
-            bank.ticks_per_slot(),
-            &id,
-            &blockstore,
-            blockstore.get_new_shred_signal(0),
-            &leader_schedule_cache,
-            &poh_config,
-            Some(poh_timing_point_sender),
-            exit.clone(),
-        );
+                &blockstore,
+                blockstore.get_new_shred_signal(0),
+                &leader_schedule_cache,
+                &poh_config,
+                Some(poh_timing_point_sender),
+                exit.clone(),
+            )
+        };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
@@ -898,7 +886,7 @@ impl Validator {
             poh_recorder.clone(),
             &poh_config,
             &exit,
-            bank.ticks_per_slot(),
+            bank_forks.read().unwrap().root_bank().ticks_per_slot(),
             config.poh_pinned_cpu_core,
             config.poh_hashes_per_batch,
             record_receiver,
