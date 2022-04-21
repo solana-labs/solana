@@ -7,6 +7,7 @@ pub const fn num_bits<T>() -> u32 {
 macro_rules! gen_log2_floor {
     ($n: ident, $t: ty) => {
         pub fn $n(x: $t) -> $t {
+            assert!(x > 0);
             (num_bits::<$t>() - x.leading_zeros() - 1) as $t
         }
     };
@@ -18,6 +19,7 @@ gen_log2_floor!(log2_floor_u64, u64);
 macro_rules! gen_log2_ceil {
     ($n: ident, $t: ty) => {
         pub fn $n(x: $t) -> $t {
+            assert!(x > 0);
             (num_bits::<$t>() - (x - 1 as $t).leading_zeros()) as $t
         }
     };
