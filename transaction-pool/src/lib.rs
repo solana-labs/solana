@@ -11,11 +11,12 @@ pub struct Item {
     pub id: (u32, u32),
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Pool {
     pub max_age: u64,
     pub max_bucket_cu: u64,
     pub max_block_cu: u64,
+    pub count: usize,
     items: BTreeMap<u64, VecDeque<Item>>,
 }
 
@@ -30,6 +31,7 @@ impl Pool {
             .entry(item.priority)
             .or_insert_with(VecDeque::new);
         bucket.push_back(item);
+        self.count += 1;
     }
     pub fn pop_block<T: Table>(&mut self, time: u64, table: &T) -> VecDeque<Item> {
         let mut rv = VecDeque::new();
@@ -38,10 +40,12 @@ impl Pool {
         let mut buckets: HashMap<Pubkey, u64> = HashMap::new();
         let mut gc = vec![];
         for (k, v) in &mut self.items.iter_mut() {
+            let mut retry = VecDeque::new();
             while v.front().is_some() {
                 let item = v.front().unwrap();
                 if time > self.max_age.saturating_add(item.time) {
                     v.pop_front();
+                    self.count -= 1;
                     break;
                 }
                 if total_cu.saturating_add(item.units) > self.max_block_cu {
@@ -60,6 +64,7 @@ impl Pool {
                     }
                 }
                 if bucket_full {
+                    retry.push_back(v.pop_front().unwrap());
                     continue;
                 }
                 for k in keys {
@@ -67,13 +72,18 @@ impl Pool {
                 }
                 total_cu += item.units;
                 rv.push_back(v.pop_front().unwrap());
+                self.count -= 1;
             }
+            v.append(&mut retry);
             if v.front().is_none() {
-                gc.push(k);
+                gc.push(*k);
             }
             if block_full {
                 break;
             }
+        }
+        for k in &gc {
+            self.items.remove(k);
         }
         rv
     }
@@ -81,6 +91,8 @@ impl Pool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::thread_rng;
+    use rand::Rng;
 
     struct Test<'a> {
         keys: &'a [&'a Pubkey],
@@ -107,5 +119,35 @@ mod tests {
         let test = Test { keys: &[] };
         let block = pool.pop_block(0, &test);
         assert_eq!(item, block[0]);
+    }
+    #[test]
+    fn test_pool_1() {
+        let mut pool = Pool::default();
+        for i in 0..1000 {
+            pool.insert(Item {
+                priority: thread_rng().gen_range(1, 100),
+                units: thread_rng().gen_range(1, 100),
+                time: thread_rng().gen_range(1, 100),
+                id: (i, i),
+            });
+        }
+        //10x smaller then a block
+        //ave units is 32
+        pool.max_block_cu = 10_000;
+        pool.max_bucket_cu = 2_500;
+        pool.max_age = 101;
+        let keys: &[&Pubkey] = &[
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+            &Pubkey::new_unique(),
+        ];
+        let test = Test { keys };
+        assert_eq!(pool.count, 1000);
+        let rv = pool.pop_block(0, &test);
+        assert!(rv.len() > 0);
+        assert_eq!(pool.count + rv.len(), 1000);
     }
 }
