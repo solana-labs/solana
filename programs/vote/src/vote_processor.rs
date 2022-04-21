@@ -63,7 +63,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             invoke_context
-                .instruction_processing_stats
+                .vote_instruction_processing_stats
                 .inc_vote_native();
 
             let slot_hashes =
@@ -86,7 +86,7 @@ pub fn process_instruction(
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
             {
                 invoke_context
-                    .instruction_processing_stats
+                    .vote_instruction_processing_stats
                     .inc_vote_state_native();
 
                 let sysvar_cache = invoke_context.get_sysvar_cache();
@@ -164,7 +164,7 @@ pub fn process_instruction(
     };
 
     invoke_context
-        .instruction_processing_stats
+        .vote_instruction_processing_stats
         .report(INSTRUCITON_PROCESSING_STATS_REPORT_INTERVAL_MS);
 
     ret

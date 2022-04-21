@@ -210,13 +210,13 @@ impl<'a> StackFrame<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct InstructionProcessingStats {
+pub struct VoteInstructionProcessingStats {
     last_report: AtomicInterval,
     vote_native_count: AtomicUsize,
     vote_state_native_count: AtomicUsize,
 }
 
-impl InstructionProcessingStats {
+impl VoteInstructionProcessingStats {
     fn is_empty(&self) -> bool {
         0 == self.vote_native_count.load(Ordering::Relaxed) as u64
             && 0 == self.vote_state_native_count.load(Ordering::Relaxed) as u64
@@ -254,8 +254,8 @@ impl InstructionProcessingStats {
 }
 
 lazy_static! {
-    static ref INSTRUCTION_PROCESSING_STATS: InstructionProcessingStats =
-        InstructionProcessingStats::default();
+    static ref VOTE_INSTRUCTION_PROCESSING_STATS: VoteInstructionProcessingStats =
+        VoteInstructionProcessingStats::default();
 }
 
 pub struct InvokeContext<'a> {
@@ -280,7 +280,7 @@ pub struct InvokeContext<'a> {
     check_size: bool,
     orig_account_lengths: Vec<Option<Vec<usize>>>,
     allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
-    pub instruction_processing_stats: &'static InstructionProcessingStats,
+    pub vote_instruction_processing_stats: &'static VoteInstructionProcessingStats,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -319,7 +319,7 @@ impl<'a> InvokeContext<'a> {
             check_size: true,
             orig_account_lengths: Vec::new(),
             allocators: Vec::new(),
-            instruction_processing_stats: &INSTRUCTION_PROCESSING_STATS,
+            vote_instruction_processing_stats: &VOTE_INSTRUCTION_PROCESSING_STATS,
         }
     }
 
