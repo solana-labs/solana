@@ -3127,9 +3127,11 @@ impl AccountsDb {
 9951 failed
 9950 failed
 
-failed:
+failed: 
 996300
 [2022-04-21T18:31:41.222096926Z ERROR solana_runtime::accounts_db] jwash: ancient_append_vec: slots: [130142117, 130142118], total: 13451
+996301
+[2022-04-21T18:39:45.863178526Z ERROR solana_runtime::accounts_db] jwash: ancient_append_vec: slots: [130142117], total: 13450
 
         */
         let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 996301 / 1000000; // put some 'in-this-epoch' slots into an ancient append vec
@@ -3190,12 +3192,14 @@ failed:
         let mut i = 0;
         let len = sorted_slots.len();
         let mut t = Measure::start("");
+        let magic = 130142118;
         let mut first = true;
         for slot in sorted_slots {
             if first {
                 first = false;
                 error!("ancient_append_vec: combine_ancient_slots max_root: {}, first slot: {}, distance from max: {}, # slots: {}", max_root, slot, max_root.saturating_sub(slot), len);
             }
+            let magic = magic == slot;
             if let Some(storages) = self.storage.map.get(&slot) {
                 let mut dead_storages = Vec::default();
                 let storages = storages.value();
@@ -3271,12 +3275,13 @@ failed:
                     ));
                 });
 
-                if i % 1000 == 0 {
+                if i % 1000 == 0 || magic {
                     error!(
-                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}",
+                    "ancient_append_vec: writing to ancient append vec: slot: {}, # accts: {}, available bytes after: {}, distance to max: {}, id: {:?}, # stores: {}, # stores {}, original bytes: {}, magic: {}",
                   slot, accounts_this_append_vec.len(),
                   available_bytes, max_root.saturating_sub(slot),
-                  all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), Self::is_ancient(&store.accounts))).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes
+                  all_storages.iter().map(|store| (store.append_vec_id(), store.accounts.capacity(), Self::is_ancient(&store.accounts))).collect::<Vec<_>>(), all_storages.len(), num_stores, original_bytes,
+                  magic
                 );
                 }
 
@@ -3290,6 +3295,18 @@ failed:
                             .map(|(a, b, c)| (a, c, b.offset))
                             .collect::<Vec<_>>()
                     );
+                }
+                if magic {
+                    error!(
+                        "jwash magic: from same slot as ancient: {}, {:?}",
+                        slot,
+                        accounts_this_append_vec
+                            .iter()
+                            .take(10_000)
+                            .map(|(a, b, c)| (a, c, b.offset))
+                            .collect::<Vec<_>>()
+                    );
+
                 }
 
                 let mut ids = vec![writer.1.append_vec_id()];
