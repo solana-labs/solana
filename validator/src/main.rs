@@ -836,7 +836,7 @@ pub fn main() {
                 .long("maximum-local-snapshot-age")
                 .value_name("NUMBER_OF_SLOTS")
                 .takes_value(true)
-                .default_value("500")
+                .default_value("2500")
                 .help("Reuse a local snapshot if it's less than this many \
                        slots behind the highest snapshot available for \
                        download from other validators"),
