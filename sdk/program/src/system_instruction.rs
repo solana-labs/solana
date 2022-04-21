@@ -1,3 +1,7 @@
+//! Instructions and constructors for the system program.
+//!
+//! The system program ID is defined in [`system_program`].
+
 #[allow(deprecated)]
 use {
     crate::{
