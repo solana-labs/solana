@@ -2359,7 +2359,8 @@ pub fn main() {
     }
     let rpc_send_retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
     let rpc_send_batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
-    let rpc_send_batch_send_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
+    let rpc_send_batch_send_rate_ms =
+        value_t_or_exit!(matches, "rpc_send_transaction_batch_ms", u64);
 
     if rpc_send_batch_send_rate_ms > rpc_send_retry_rate_ms {
         eprintln!(
