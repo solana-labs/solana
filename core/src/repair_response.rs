@@ -40,7 +40,7 @@ pub fn repair_response_packet_from_bytes(
     Some(packet)
 }
 
-pub fn nonce(buf: &[u8]) -> Option<Nonce> {
+pub(crate) fn nonce(buf: &[u8]) -> Option<Nonce> {
     if buf.len() < SIZE_OF_NONCE {
         None
     } else {

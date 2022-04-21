@@ -750,7 +750,7 @@ mod test {
                 )
                 .unwrap();
         };
-        for i in 0..3 {
+        for i in 0..2 {
             process_ticks((i + 1) * 100);
         }
         let mut shreds = Vec::<Shred>::new();
@@ -759,7 +759,7 @@ mod test {
         }
         assert!(shreds.len() < 32, "shreds.len(): {}", shreds.len());
         assert!(shreds.iter().all(|shred| shred.is_data()));
-        process_ticks(75);
+        process_ticks(300);
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
