@@ -1,4 +1,4 @@
-//! State transition types
+//! The [`Pack`] serialization trait.
 
 use crate::program_error::ProgramError;
 

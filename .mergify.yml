@@ -108,8 +108,8 @@ pull_request_rules:
       - label=feature-gate
     actions:
       backport:
-        assignees:
-          - "{{ merged_by }}"
+        assignees: &BackportAssignee
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -121,8 +121,7 @@ pull_request_rules:
       - label!=feature-gate
     actions:
       backport:
-        assignees:
-          - "{{ merged_by }}"
+        assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
           - v1.9
@@ -132,8 +131,7 @@ pull_request_rules:
       - label=feature-gate
     actions:
       backport:
-        assignees:
-          - "{{ merged_by }}"
+        assignees: *BackportAssignee
         ignore_conflicts: true
         labels:
           - feature-gate
@@ -145,8 +143,7 @@ pull_request_rules:
       - label!=feature-gate
     actions:
       backport:
-        assignees:
-          - "{{ merged_by }}"
+        assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
           - v1.10

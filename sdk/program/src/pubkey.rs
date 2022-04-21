@@ -1,3 +1,5 @@
+//! Solana account addresses.
+
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{decode_error::DecodeError, hash::hashv, wasm_bindgen},
@@ -48,6 +50,20 @@ impl From<u64> for PubkeyError {
     }
 }
 
+/// The address of a [Solana account][acc].
+///
+/// Some account addresses are [ed25519] public keys, with corresponding secret
+/// keys that are managed off-chain. Often, though, account addresses do not
+/// have corresponding secret keys &mdash; as with [_program derived
+/// addresses_][pdas] &mdash; or the secret key is not relevant to the operation
+/// of a program, and may have even been disposed of. As running Solana programs
+/// can not safely create or manage secret keys, the full [`Keypair`] is not
+/// defined in `solana-program` but in `solana-sdk`.
+///
+/// [acc]: https://docs.solana.com/developing/programming-model/accounts
+/// [ed25519]: https://ed25519.cr.yp.to/
+/// [pdas]: https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses
+/// [`Keypair`]: https://docs.rs/solana-sdk/latest/solana_sdk/signer/keypair/struct.Keypair.html
 #[wasm_bindgen]
 #[repr(transparent)]
 #[derive(

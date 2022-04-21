@@ -1,5 +1,5 @@
 use {
-    crate::{stakes::Stakes, vote_account::VoteAccountsHashMap},
+    crate::{stakes::StakesEnum, vote_account::VoteAccountsHashMap},
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::{collections::HashMap, sync::Arc},
@@ -16,26 +16,27 @@ pub struct NodeVoteAccounts {
 
 #[derive(Clone, Debug, Serialize, Deserialize, AbiExample, PartialEq)]
 pub struct EpochStakes {
-    stakes: Arc<Stakes>,
+    #[serde(with = "crate::stakes::serde_stakes_enum_compat")]
+    stakes: Arc<StakesEnum>,
     total_stake: u64,
     node_id_to_vote_accounts: Arc<NodeIdToVoteAccounts>,
     epoch_authorized_voters: Arc<EpochAuthorizedVoters>,
 }
 
 impl EpochStakes {
-    pub fn new(stakes: &Stakes, leader_schedule_epoch: Epoch) -> Self {
+    pub(crate) fn new(stakes: Arc<StakesEnum>, leader_schedule_epoch: Epoch) -> Self {
         let epoch_vote_accounts = stakes.vote_accounts();
         let (total_stake, node_id_to_vote_accounts, epoch_authorized_voters) =
             Self::parse_epoch_vote_accounts(epoch_vote_accounts.as_ref(), leader_schedule_epoch);
         Self {
-            stakes: Arc::new(stakes.clone()),
+            stakes,
             total_stake,
             node_id_to_vote_accounts: Arc::new(node_id_to_vote_accounts),
             epoch_authorized_voters: Arc::new(epoch_authorized_voters),
         }
     }
 
-    pub fn stakes(&self) -> &Stakes {
+    pub fn stakes(&self) -> &StakesEnum {
         &self.stakes
     }
 

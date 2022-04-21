@@ -3,7 +3,7 @@
 //! how transactions are included in blocks, and optimize those blocks.
 //!
 use {
-    crate::banking_stage::BatchedTransactionDetails,
+    crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
     solana_runtime::{
@@ -177,7 +177,7 @@ impl QosService {
     pub fn update_or_remove_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_committed_status: Option<&Vec<bool>>,
+        transaction_committed_status: Option<&Vec<CommitTransactionDetails>>,
         bank: &Arc<Bank>,
     ) {
         match transaction_committed_status {
@@ -196,20 +196,27 @@ impl QosService {
     fn update_transaction_costs<'a>(
         transaction_costs: impl Iterator<Item = &'a TransactionCost>,
         transaction_qos_results: impl Iterator<Item = &'a transaction::Result<()>>,
-        transaction_committed_status: &Vec<bool>,
+        transaction_committed_status: &Vec<CommitTransactionDetails>,
         bank: &Arc<Bank>,
     ) {
         let mut cost_tracker = bank.write_cost_tracker().unwrap();
         transaction_costs
             .zip(transaction_qos_results)
             .zip(transaction_committed_status)
-            .for_each(|((tx_cost, qos_inclusion_result), was_committed)| {
-                // Only transactions that the qos service included have to be
-                // checked for update
-                if qos_inclusion_result.is_ok() && !*was_committed {
-                    cost_tracker.remove(tx_cost);
-                }
-            });
+            .for_each(
+                |((tx_cost, qos_inclusion_result), transaction_committed_details)| {
+                    // Only transactions that the qos service included have to be
+                    // checked for update
+                    if qos_inclusion_result.is_ok() {
+                        match transaction_committed_details {
+                            CommitTransactionDetails::Committed { compute_units } => {
+                                cost_tracker.update_execution_cost(tx_cost, *compute_units)
+                            }
+                            CommitTransactionDetails::NotCommitted => cost_tracker.remove(tx_cost),
+                        }
+                    }
+                },
+            );
     }
 
     fn remove_transaction_costs<'a>(
@@ -661,19 +668,27 @@ mod tests {
         let txs: Vec<SanitizedTransaction> = (0..transaction_count)
             .map(|_| transfer_tx.clone())
             .collect();
+        let execute_units_adjustment = 10u64;
 
-        // assert all tx_costs should be applied to cost_tracker if all execution_results are all commited
+        // assert all tx_costs should be applied to cost_tracker if all execution_results are all committed
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
-            let total_txs_costs: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
+            let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
             assert_eq!(
-                total_txs_costs,
+                total_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
             );
-            let commited_status: Vec<bool> = (0..transaction_count).map(|_| true).collect();
+            // all transactions are committed with actual units more than estimated
+            let commited_status: Vec<CommitTransactionDetails> = txs_costs
+                .iter()
+                .map(|tx_cost| CommitTransactionDetails::Committed {
+                    compute_units: tx_cost.bpf_execution_cost + execute_units_adjustment,
+                })
+                .collect();
+            let final_txs_cost = total_txs_cost + execute_units_adjustment * transaction_count;
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
@@ -681,7 +696,7 @@ mod tests {
                 &bank,
             );
             assert_eq!(
-                total_txs_costs,
+                final_txs_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             assert_eq!(
@@ -708,12 +723,17 @@ mod tests {
             .map(|_| transfer_tx.clone())
             .collect();
 
-        // assert all tx_costs should be removed from cost_tracker if all execution_results are all NotExecuted
+        // assert all tx_costs should be removed from cost_tracker if all execution_results are all Not Committed
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+            let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
+            assert_eq!(
+                total_txs_cost,
+                bank.read_cost_tracker().unwrap().block_cost()
+            );
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
@@ -741,31 +761,55 @@ mod tests {
         let txs: Vec<SanitizedTransaction> = (0..transaction_count)
             .map(|_| transfer_tx.clone())
             .collect();
+        let execute_units_adjustment = 10u64;
 
         // assert only commited tx_costs are applied cost_tracker
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+            let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
-            let commited_status: Vec<bool> = (0..transaction_count).map(|n| n != 0).collect();
+            assert_eq!(
+                total_txs_cost,
+                bank.read_cost_tracker().unwrap().block_cost()
+            );
+            // Half of transactions are not committed, the rest with cost adjustment
+            let commited_status: Vec<CommitTransactionDetails> = txs_costs
+                .iter()
+                .enumerate()
+                .map(|(n, tx_cost)| {
+                    if n % 2 == 0 {
+                        CommitTransactionDetails::NotCommitted
+                    } else {
+                        CommitTransactionDetails::Committed {
+                            compute_units: tx_cost.bpf_execution_cost + execute_units_adjustment,
+                        }
+                    }
+                })
+                .collect();
             QosService::update_or_remove_transaction_costs(
                 txs_costs.iter(),
                 qos_results.iter(),
                 Some(&commited_status),
                 &bank,
             );
-            let expected_committed_units: u64 = txs_costs
-                .iter()
-                .enumerate()
-                .map(|(n, cost)| if n < 1 { 0 } else { cost.sum() })
-                .sum();
+
+            // assert the final block cost
+            let mut expected_final_txs_count = 0u64;
+            let mut expected_final_block_cost = 0u64;
+            txs_costs.iter().enumerate().for_each(|(n, cost)| {
+                if n % 2 != 0 {
+                    expected_final_txs_count += 1;
+                    expected_final_block_cost += cost.sum() + execute_units_adjustment;
+                }
+            });
             assert_eq!(
-                expected_committed_units,
+                expected_final_block_cost,
                 bank.read_cost_tracker().unwrap().block_cost()
             );
             assert_eq!(
-                transaction_count - 1,
+                expected_final_txs_count,
                 bank.read_cost_tracker().unwrap().transaction_count()
             );
         }
