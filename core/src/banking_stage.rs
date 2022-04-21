@@ -100,6 +100,12 @@ struct RecordTransactionsSummary {
     retryable_indexes: Vec<usize>,
 }
 
+#[derive(Debug)]
+pub enum CommitTransactionDetails {
+    Committed { compute_units: u64 },
+    NotCommitted,
+}
+
 pub struct ExecuteAndCommitTransactionsOutput {
     // Total number of transactions that were passed as candidates for execution
     transactions_attempted_execution_count: usize,
@@ -113,9 +119,8 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // to the block ending.
     retryable_transaction_indexes: Vec<usize>,
     // A result that indicates whether transactions were successfully
-    // committed into the Poh stream. If so, the result tells us
-    // how many such transactions were committed
-    commit_transactions_result: Result<Vec<bool>, PohRecorderError>,
+    // committed into the Poh stream.
+    commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
 }
 
@@ -1205,9 +1210,18 @@ impl BankingStage {
             ..
         } = load_and_execute_transactions_output;
 
-        let mut transactions_execute_and_record_status: Vec<bool> = execution_results
+        let mut transactions_execute_and_record_status: Vec<_> = execution_results
             .iter()
-            .map(|execution_result| execution_result.was_executed())
+            .map(|execution_result| match execution_result {
+                TransactionExecutionResult::Executed(details) => {
+                    CommitTransactionDetails::Committed {
+                        compute_units: details.executed_units,
+                    }
+                }
+                TransactionExecutionResult::NotExecuted { .. } => {
+                    CommitTransactionDetails::NotCommitted
+                }
+            })
             .collect();
 
         let (freeze_lock, freeze_lock_time) =
@@ -1237,7 +1251,7 @@ impl BankingStage {
 
         // mark transactions that were executed but not recorded
         retryable_record_transaction_indexes.iter().for_each(|i| {
-            transactions_execute_and_record_status[*i] = false;
+            transactions_execute_and_record_status[*i] = CommitTransactionDetails::NotCommitted;
         });
 
         inc_new_counter_info!(
@@ -2168,6 +2182,7 @@ mod tests {
             inner_instructions: None,
             durable_nonce_fee: None,
             return_data: None,
+            executed_units: 0u64,
         })
     }
 
