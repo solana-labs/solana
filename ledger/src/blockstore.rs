@@ -8529,7 +8529,6 @@ pub mod tests {
             leader_schedule: Arc::new(LeaderSchedule::new_from_schedule(vec![
                 leader_keypair.pubkey()
             ])),
-            start_epoch: 0,
         };
         leader_schedule_cache.set_fixed_leader_schedule(Some(fixed_schedule));
 
