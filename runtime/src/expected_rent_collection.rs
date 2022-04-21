@@ -396,7 +396,6 @@ impl ExpectedRentCollection {
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Hash> {
-        return None;
         use solana_measure::measure::Measure;
         let mut m = Measure::start("rehash_calc_us");
         let expected = ExpectedRentCollection::new(
@@ -433,6 +432,7 @@ impl ExpectedRentCollection {
             stats.rehash_unnecessary.fetch_add(1, Ordering::Relaxed);
             return None;
         }
+        error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
         stats.rehash_required.fetch_add(1, Ordering::Relaxed);
 
         // recomputed based on rent collection/rewrite slot
