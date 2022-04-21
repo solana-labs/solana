@@ -364,7 +364,7 @@ pub mod update_rewards_from_cached_accounts {
 }
 
 pub mod turbine_merkle {
-    solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh0");
+    solana_sdk::declare_id!("merkBarkFoAJYr6x1ceHjYtB4Qch3caVF53yP9vh1wt");
 }
 
 lazy_static! {

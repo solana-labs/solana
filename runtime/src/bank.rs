@@ -3292,6 +3292,23 @@ impl Bank {
         &self.epoch_schedule
     }
 
+    pub fn feature_enabled(&self, slot: Slot, feature_id: &Pubkey) -> bool {
+        let feature_slot = self.feature_set.activated_slot(&feature_id);
+        match feature_slot {
+            None => false,
+            Some(feature_slot) => {
+                let epoch_schedule = self.epoch_schedule();
+                let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+                let shred_epoch = epoch_schedule.get_epoch(slot);
+                feature_epoch < shred_epoch
+            }
+        }
+    }
+
+    pub fn feature_turbine_merkle_enabled(&self, slot: Slot) -> bool {
+        self.feature_enabled(slot, &feature_set::turbine_merkle::id())
+    }
+
     /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
     pub fn squash(&self) -> SquashTiming {
