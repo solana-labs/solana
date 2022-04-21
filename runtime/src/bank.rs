@@ -3984,7 +3984,7 @@ impl Bank {
             blockhash,
             lamports_per_signature,
             self.load_accounts_data_len(),
-            &mut Some(&mut executed_units),
+            &mut executed_units,
         );
         process_message_time.stop();
 
