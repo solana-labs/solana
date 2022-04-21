@@ -187,18 +187,26 @@ export function AccountHeader({
 
   if (isToken) {
     let token;
+    let unverified = false;
 
     if (tokenDetails) {
       token = tokenDetails;
     } else {
       token = {
-        logoURI: data.nftData!.json?.image,
-        name: "Unverified: " + data.nftData!.json?.name,
+        logoURI: data?.nftData?.json?.image,
+        name: data?.nftData?.json?.name,
       };
+      unverified = true;
     }
 
     return (
       <div className="row align-items-end">
+        {unverified && (
+          <div className="alert alert-danger alert-scam" role="alert">
+            Warning! This token uses custom metadata and may have spoofed its
+            name and logo to look like another token.
+          </div>
+        )}
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
             {token?.logoURI ? (
