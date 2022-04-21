@@ -3116,7 +3116,7 @@ impl AccountsDb {
 996305 passed
 996302 passed
 996301 passed
-996300
+996300 
 99630 trying again failed
 9963 failed, succeeded, failed
 9962 failed
@@ -3146,6 +3146,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         old_slots.sort_unstable();
+        error!("jwash: ancient_append_vec: slots: {:?}, total: {}", old_slots.skip(13449), old_slots.len());
         //old_slots.truncate(3); // artificially limit to 3 slots
         self.combine_ancient_slots(old_slots, max_root);
         /*
