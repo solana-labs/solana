@@ -3096,9 +3096,10 @@ impl AccountsDb {
 3000 5972, passed
 1500
 9995 passed
-9988 
 9982 passed
-9976  
+9979 
+9976  succeed
+9973 
 9970failed
 9960 failed
 9955 failed
@@ -3107,7 +3108,7 @@ impl AccountsDb {
 9951 failed
 9950 failed
         */
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 9976 / 10000; // put some 'in-this-epoch' slots into an ancient append vec
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 9973 / 10000; // put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width + 1000);// + 16096 + 6096 -1000);
 
         let mut m = Measure::start("get slots");
