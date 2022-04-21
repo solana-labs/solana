@@ -3463,6 +3463,18 @@ impl Bank {
         }
     }
 
+    /// Register a new recent blockhash in the bank's recent blockhash queue. Called when a bank
+    /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
+    /// processing without advancing to a new bank slot.
+    pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+        // Only acquire the write lock for the blockhash queue on block boundaries because
+        // readers can starve this write lock acquisition and ticks would be slowed down too
+        // much if the write lock is acquired for each tick.
+        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
+        w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
+        self.update_recent_blockhashes_locked(&w_blockhash_queue);
+    }
+
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
     /// correspond to later entries, and will boot the oldest ones once its internal cache is full.
     /// Once boot, the bank will reject transactions using that `hash`.
@@ -3477,12 +3489,7 @@ impl Bank {
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            // Only acquire the write lock for the blockhash queue on block boundaries because
-            // readers can starve this write lock acquisition and ticks would be slowed down too
-            // much if the write lock is acquired for each tick.
-            let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-            w_blockhash_queue.register_hash(hash, self.fee_rate_governor.lamports_per_signature);
-            self.update_recent_blockhashes_locked(&w_blockhash_queue);
+            self.register_recent_blockhash(hash);
         }
 
         // ReplayStage will start computing the accounts delta hash when it
@@ -3498,7 +3505,14 @@ impl Bank {
     }
 
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
-        tick_height % self.ticks_per_slot == 0
+        if self
+            .feature_set
+            .is_active(&feature_set::fix_recent_blockhashes::id())
+        {
+            tick_height == self.max_tick_height
+        } else {
+            tick_height % self.ticks_per_slot == 0
+        }
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
@@ -6567,17 +6581,14 @@ impl Bank {
         self.feature_set = Arc::new(feature_set);
     }
 
-    pub fn fill_bank_with_ticks(&self) {
-        let parent_distance = if self.slot() == 0 {
-            1
-        } else {
-            self.slot() - self.parent_slot()
-        };
-        for _ in 0..parent_distance {
+    pub fn fill_bank_with_ticks_for_tests(&self) {
+        if self.tick_height.load(Relaxed) < self.max_tick_height {
             let last_blockhash = self.last_blockhash();
             while self.last_blockhash() == last_blockhash {
                 self.register_tick(&Hash::new_unique())
             }
+        } else {
+            warn!("Bank already reached max tick height, cannot fill it with more ticks");
         }
     }
 

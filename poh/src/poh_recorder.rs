@@ -1127,7 +1127,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
 
             // Set a working bank
@@ -1239,7 +1239,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
             // Let poh_recorder tick up to bank1.tick_height() - 1
@@ -1324,7 +1324,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
 
@@ -1420,7 +1420,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            bank0.fill_bank_with_ticks();
+            bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
             poh_recorder.set_bank(&bank1);
 
@@ -1962,12 +1962,13 @@ mod tests {
             );
             //create a new bank
             let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 2));
-            //put 2 slots worth of virtual ticks into poh
-            for _ in 0..(bank.ticks_per_slot() * 2) {
+            // add virtual ticks into poh for slots 0, 1, and 2
+            for _ in 0..(bank.ticks_per_slot() * 3) {
                 poh_recorder.tick();
             }
             poh_recorder.set_bank(&bank);
-            assert!(!bank.is_hash_valid_for_age(&genesis_hash, 1));
+            assert!(!bank.is_hash_valid_for_age(&genesis_hash, 0));
+            assert!(bank.is_hash_valid_for_age(&genesis_hash, 1));
         }
     }
 
