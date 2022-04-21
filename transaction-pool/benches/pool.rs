@@ -55,6 +55,7 @@ fn bench_pool_pop(bencher: &mut Bencher) {
     ];
     let test = Test { keys };
     bencher.iter(move || {
-        let _rv = pool.pop_block(100, &test);
+        let rv = pool.pop_block(100, &test);
+        assert!(rv.len() > 0);
     });
 }

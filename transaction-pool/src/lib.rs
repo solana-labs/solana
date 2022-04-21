@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 
-#[derive(Default)]
+#[derive(Default, Clone, PartialEq, Debug)]
 pub struct Item {
     pub priority: u64,
     pub units: u64,
@@ -33,18 +33,18 @@ impl Pool {
     }
     pub fn pop_block<T: Table>(&mut self, time: u64, table: &T) -> VecDeque<Item> {
         let mut rv = VecDeque::new();
-        let mut total_cu = 0;
+        let mut total_cu: u64 = 0;
         let mut block_full = false;
         let mut buckets: HashMap<Pubkey, u64> = HashMap::new();
         let mut gc = vec![];
         for (k, v) in &mut self.items.iter_mut() {
             while v.front().is_some() {
                 let item = v.front().unwrap();
-                if time - item.time > self.max_age {
+                if time > self.max_age.saturating_add(item.time) {
                     v.pop_front();
                     break;
                 }
-                if total_cu + item.units > self.max_block_cu {
+                if total_cu.saturating_add(item.units) > self.max_block_cu {
                     block_full = true;
                     break;
                 }
@@ -54,7 +54,7 @@ impl Pool {
                     if buckets.get(k).is_none() {
                         continue;
                     }
-                    if buckets[k] + item.units > self.max_bucket_cu {
+                    if buckets[k].saturating_add(item.units) > self.max_bucket_cu {
                         bucket_full = true;
                         break;
                     }
@@ -76,5 +76,36 @@ impl Pool {
             }
         }
         rv
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Test<'a> {
+        keys: &'a [&'a Pubkey],
+    }
+
+    impl Table for Test<'_> {
+        fn keys(&self, item: &Item) -> &[&Pubkey] {
+            &self.keys[item.priority as usize % 5..self.keys.len()]
+        }
+    }
+
+    #[test]
+    fn test_pool() {
+        let mut pool = Pool::default();
+        pool.max_block_cu = 1;
+        pool.max_bucket_cu = 1;
+        let item = Item {
+            priority: 0,
+            units: 1,
+            time: 2,
+            id: (3, 4),
+        };
+        pool.insert(item.clone());
+        let test = Test { keys: &[] };
+        let block = pool.pop_block(0, &test);
+        assert_eq!(item, block[0]);
     }
 }
