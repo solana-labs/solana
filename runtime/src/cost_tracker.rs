@@ -144,11 +144,7 @@ impl CostTracker {
             ("block_cost", self.block_cost as i64, i64),
             ("vote_cost", self.vote_cost as i64, i64),
             ("transaction_count", self.transaction_count as i64, i64),
-            (
-                "number_of_accounts",
-                self.cost_by_writable_accounts.len() as i64,
-                i64
-            ),
+            ("number_of_accounts", self.number_of_accounts() as i64, i64),
             ("costliest_account", costliest_account.to_string(), String),
             ("costliest_account_cost", costliest_account_cost as i64, i64),
             ("account_data_size", self.account_data_size, i64),
@@ -264,6 +260,14 @@ impl CostTracker {
         if tx_cost.is_simple_vote {
             self.vote_cost = self.vote_cost.saturating_sub(adjustment);
         }
+    }
+
+    /// count number of none-zero CU accounts
+    fn number_of_accounts(&self) -> usize {
+        self.cost_by_writable_accounts
+            .iter()
+            .map(|(_key, units)| if *units > 0 { 1 } else { 0 })
+            .sum()
     }
 }
 
@@ -791,6 +795,10 @@ mod tests {
                 .for_each(|(_key, units)| {
                     assert_eq!(u64::MIN, *units);
                 });
+            // assert the number of non-empty accounts is zero, but map
+            // still contains 3 account
+            assert_eq!(0, testee.number_of_accounts());
+            assert_eq!(3, testee.cost_by_writable_accounts.len());
         }
     }
 
@@ -841,5 +849,33 @@ mod tests {
         assert_eq!(expected_cost, cost_tracker.block_cost);
         assert_eq!(expected_cost, costliest_account_cost);
         assert_eq!(1, cost_tracker.transaction_count);
+    }
+
+    #[test]
+    fn test_remove_transaction_cost() {
+        let mut cost_tracker = CostTracker::default();
+
+        let cost = 100u64;
+        let tx_cost = TransactionCost {
+            writable_accounts: vec![Pubkey::new_unique()],
+            bpf_execution_cost: cost,
+            ..TransactionCost::default()
+        };
+
+        cost_tracker.add_transaction_cost(&tx_cost);
+        // assert cost_tracker is reverted to default
+        assert_eq!(1, cost_tracker.transaction_count);
+        assert_eq!(1, cost_tracker.number_of_accounts());
+        assert_eq!(cost, cost_tracker.block_cost);
+        assert_eq!(0, cost_tracker.vote_cost);
+        assert_eq!(0, cost_tracker.account_data_size);
+
+        cost_tracker.remove_transaction_cost(&tx_cost);
+        // assert cost_tracker is reverted to default
+        assert_eq!(0, cost_tracker.transaction_count);
+        assert_eq!(0, cost_tracker.number_of_accounts());
+        assert_eq!(0, cost_tracker.block_cost);
+        assert_eq!(0, cost_tracker.vote_cost);
+        assert_eq!(0, cost_tracker.account_data_size);
     }
 }
