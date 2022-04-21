@@ -63,7 +63,7 @@ pub struct TransactionInfo {
     pub durable_nonce_info: Option<(Pubkey, Hash)>,
     pub max_retries: Option<usize>,
     retries: usize,
-    /// Last time when the transaction is sent
+    /// Last time the transaction was sent
     last_sent_time: Option<Instant>,
 }
 
