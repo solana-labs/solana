@@ -267,7 +267,7 @@ The [native token](#native-token) of a Solana [cluster](#cluster).
 
 ## Solana Program Library (SPL)
 
-A library of programs on Solana such as spl-token that facilitates tasks such as creating and using tokens
+A [library of programs](https://spl.solana.com/) on Solana such as spl-token that facilitates tasks such as creating and using tokens.
 
 ## stake
 
