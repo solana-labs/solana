@@ -2229,6 +2229,21 @@ export class Connection {
   /** @internal */ _subscriptionsByHash: {
     [hash: SubscriptionConfigHash]: Subscription | undefined;
   } = {};
+  /**
+   * Special case.
+   * After a signature is processed, RPCs automatically dispose of the
+   * subscription on the server side. We need to track which of these
+   * subscriptions have been disposed in such a way, so that we know
+   * whether the client is dealing with a not-yet-processed signature
+   * (in which case we must tear down the server subscription) or an
+   * already-processed signature (in which case the client can simply
+   * clear out the subscription locally without telling the server).
+   *
+   * NOTE: There is a proposal to eliminate this special case, here:
+   * https://github.com/solana-labs/solana/issues/18892
+   */
+  /** @internal */ _subscriptionsAutoDisposedByRpc: Set<ServerSubscriptionId> =
+    new Set();
 
   /**
    * Establish a JSON RPC connection
@@ -4338,25 +4353,42 @@ export class Connection {
               // Tear it down now.
               await (async () => {
                 const {serverSubscriptionId, unsubscribeMethod} = subscription;
-                this._subscriptionsByHash[hash] = {
-                  ...subscription,
-                  state: 'unsubscribing',
-                };
-                try {
-                  await this._rpcWebSocket.call(unsubscribeMethod, [
+                if (
+                  this._subscriptionsAutoDisposedByRpc.has(serverSubscriptionId)
+                ) {
+                  /**
+                   * Special case.
+                   * If we're dealing with a subscription that has been auto-
+                   * disposed by the RPC, then we can skip the RPC call to
+                   * tear down the subscription here.
+                   *
+                   * NOTE: There is a proposal to eliminate this special case, here:
+                   * https://github.com/solana-labs/solana/issues/18892
+                   */
+                  this._subscriptionsAutoDisposedByRpc.delete(
                     serverSubscriptionId,
-                  ]);
-                } catch (e) {
-                  if (e instanceof Error) {
-                    console.error(`${unsubscribeMethod} error:`, e.message);
-                  }
-                  // TODO: Maybe add an 'errored' state or a retry limit?
+                  );
+                } else {
                   this._subscriptionsByHash[hash] = {
                     ...subscription,
-                    state: 'subscribed',
+                    state: 'unsubscribing',
                   };
-                  await this._updateSubscriptions();
-                  return;
+                  try {
+                    await this._rpcWebSocket.call(unsubscribeMethod, [
+                      serverSubscriptionId,
+                    ]);
+                  } catch (e) {
+                    if (e instanceof Error) {
+                      console.error(`${unsubscribeMethod} error:`, e.message);
+                    }
+                    // TODO: Maybe add an 'errored' state or a retry limit?
+                    this._subscriptionsByHash[hash] = {
+                      ...subscription,
+                      state: 'subscribed',
+                    };
+                    await this._updateSubscriptions();
+                    return;
+                  }
                 }
                 this._subscriptionsByHash[hash] = {
                   ...subscription,
@@ -4782,6 +4814,22 @@ export class Connection {
       notification,
       SignatureNotificationResult,
     );
+    if (result.value !== 'receivedSignature') {
+      /**
+       * Special case.
+       * After a signature is processed, RPCs automatically dispose of the
+       * subscription on the server side. We need to track which of these
+       * subscriptions have been disposed in such a way, so that we know
+       * whether the client is dealing with a not-yet-processed signature
+       * (in which case we must tear down the server subscription) or an
+       * already-processed signature (in which case the client can simply
+       * clear out the subscription locally without telling the server).
+       *
+       * NOTE: There is a proposal to eliminate this special case, here:
+       * https://github.com/solana-labs/solana/issues/18892
+       */
+      this._subscriptionsAutoDisposedByRpc.add(subscription);
+    }
     this._publishNotification<SignatureSubscriptionCallback>(
       subscription,
       result.value === 'receivedSignature'

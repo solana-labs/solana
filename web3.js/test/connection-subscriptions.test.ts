@@ -225,6 +225,31 @@ describe('Subscriptions', () => {
         return connection.removeProgramAccountChangeListener(...args);
       },
     },
+    rootSubscribe: {
+      expectedAlternateParams: [],
+      expectedParams: [],
+      setupAlternateListener: undefined,
+      setupListener(callback: RootChangeCallback): number {
+        return connection.onRootChange(callback);
+      },
+      setupListenerWithDefaultsOmitted: undefined,
+      setupListenerWithDefaultableParamsSetToTheirDefaults: undefined,
+      publishNotificationForServerSubscriptionId(
+        socket: Client,
+        serverSubscriptionId: number,
+      ) {
+        socket.emit('rootNotification', {
+          subscription: serverSubscriptionId,
+          result: 101,
+        });
+      },
+      teardownListener(
+        ...args: Parameters<typeof connection.removeRootChangeListener>
+      ) {
+        return connection.removeRootChangeListener(...args);
+      },
+    },
+
     signatureSubscribe: {
       expectedAlternateParams: [
         'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK',
@@ -272,30 +297,6 @@ describe('Subscriptions', () => {
         ...args: Parameters<typeof connection.removeSignatureListener>
       ) {
         return connection.removeSignatureListener(...args);
-      },
-    },
-    rootSubscribe: {
-      expectedAlternateParams: [],
-      expectedParams: [],
-      setupAlternateListener: undefined,
-      setupListener(callback: RootChangeCallback): number {
-        return connection.onRootChange(callback);
-      },
-      setupListenerWithDefaultsOmitted: undefined,
-      setupListenerWithDefaultableParamsSetToTheirDefaults: undefined,
-      publishNotificationForServerSubscriptionId(
-        socket: Client,
-        serverSubscriptionId: number,
-      ) {
-        socket.emit('rootNotification', {
-          subscription: serverSubscriptionId,
-          result: 101,
-        });
-      },
-      teardownListener(
-        ...args: Parameters<typeof connection.removeRootChangeListener>
-      ) {
-        return connection.removeRootChangeListener(...args);
       },
     },
     slotSubscribe: {
@@ -679,4 +680,96 @@ describe('Subscriptions', () => {
       }
     },
   );
+  /**
+   * Special case.
+   * After a signature is processed, RPCs automatically dispose of the
+   * subscription on the server side. This test asserts that RPC
+   * unsubscribe request are only made before such a subscription has
+   * received a notification which it knows to be final and indicative
+   * that the RPC has auto-disposed the subscription.
+   *
+   * NOTE: There is a proposal to eliminate this special case, here:
+   * https://github.com/solana-labs/solana/issues/18892
+   */
+  describe('auto-disposing subscriptions', () => {
+    let clientSubscriptionId: number;
+    const serverSubscriptionId = 0;
+    const testSignature = 'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK';
+    const expectedParams = [testSignature, {commitment: 'finalized'}];
+    // This type of notification *is* indicative of auto-disposal.
+    const FINAL_NOTIFICATION_RESULT = {
+      context: {slot: 11},
+      value: {err: null},
+    };
+    // This type of notification is *not* indicative of auto-disposal.
+    const NON_FINAL_NOTIFICATION_RESULT = {
+      context: {slot: 11},
+      value: 'receivedSignature',
+    };
+    beforeEach(() => {
+      stubbedSocket.call
+        .withArgs('signatureSubscribe', expectedParams)
+        .resolves(serverSubscriptionId);
+      clientSubscriptionId = connection.onSignature(testSignature, spy());
+    });
+    describe('before an auto-disposing subscription has published any notification', () => {
+      describe('then unsubscribing the listener', () => {
+        beforeEach(async () => {
+          stubbedSocket.call.resetHistory();
+          await connection.removeSignatureListener(clientSubscriptionId);
+        });
+        it('results in an unsubscribe request being made to the RPC', () => {
+          expect(stubbedSocket.call).to.have.been.calledWith(
+            'signatureUnsubscribe',
+            [serverSubscriptionId],
+          );
+        });
+      });
+    });
+    describe('after an auto-disposing subscription has published a non-final notification', () => {
+      beforeEach(() => {
+        stubbedSocket.emit('signatureNotification', {
+          subscription: serverSubscriptionId,
+          result: NON_FINAL_NOTIFICATION_RESULT,
+        });
+      });
+      it('should not result in an unsubscribe request being made to the RPC', () => {
+        expect(stubbedSocket.call).not.to.have.been.calledWith(
+          'signatureUnsubscribe',
+          [serverSubscriptionId],
+        );
+      });
+      describe('then unsubscribing the listener', () => {
+        beforeEach(async () => {
+          stubbedSocket.call.resetHistory();
+          await connection.removeSignatureListener(clientSubscriptionId);
+        });
+        it('results in an unsubscribe request being made to the RPC', () => {
+          expect(stubbedSocket.call).to.have.been.calledWith(
+            'signatureUnsubscribe',
+            [serverSubscriptionId],
+          );
+        });
+      });
+    });
+    describe('after an auto-disposing subscription has published its final notification', () => {
+      beforeEach(() => {
+        stubbedSocket.emit('signatureNotification', {
+          subscription: serverSubscriptionId,
+          result: FINAL_NOTIFICATION_RESULT,
+        });
+      });
+      it('unsubscribing the listener should fatal', () => {
+        expect(async () => {
+          await connection.removeSignatureListener(clientSubscriptionId);
+        }).to.throw;
+      });
+      it('should not result in an unsubscribe request being made to the RPC', () => {
+        expect(stubbedSocket.call).not.to.have.been.calledWith(
+          'signatureUnsubscribe',
+          [serverSubscriptionId],
+        );
+      });
+    });
+  });
 });
