@@ -903,9 +903,11 @@ impl ExpectedRentCollection {
         if let Some(i) = interesting.get(pubkey) {
             /*
             200 failed
+            225
+            250 succeeded
             300 succeeded
             */
-            if i < &250 {
+            if i < &225 {
                 return None;
             }
             error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
