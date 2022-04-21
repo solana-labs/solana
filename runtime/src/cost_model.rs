@@ -134,16 +134,14 @@ impl CostModel {
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
     ) -> u64 {
-        let write_lock_cost: u64 = 0;
+        let mut write_lock_cost: u64 = 0;
         let message = transaction.message();
         message
             .account_keys()
             .iter()
             .enumerate()
             .for_each(|(i, k)| {
-                let is_writable = message.is_writable(i);
-
-                if is_writable {
+                if message.is_writable(i) {
                     tx_cost.writable_accounts.push(*k);
                     write_lock_cost += WRITE_LOCK_UNITS;
                 }
