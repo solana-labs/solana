@@ -905,7 +905,9 @@ impl ExpectedRentCollection {
             200 failed
             212
             225 failed
-            228
+            226
+            228 failed
+            230
             231 succeeded
             234
             237 succeeded
@@ -913,7 +915,7 @@ impl ExpectedRentCollection {
             250 succeeded
             300 succeeded
             */
-            if i < &228 {
+            if i < &230 {
                 return None;
             }
             error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}, i: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot, i);
