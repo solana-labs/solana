@@ -901,7 +901,10 @@ impl ExpectedRentCollection {
         use {log::*, std::str::FromStr};
 
         if let Some(i) = interesting.get(pubkey) {
-            if i < &200 {
+            /*
+            200 failed
+            */
+            if i < &300 {
                 return None;
             }
             error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot);
