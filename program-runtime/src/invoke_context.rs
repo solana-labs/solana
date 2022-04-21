@@ -222,15 +222,15 @@ impl VoteInstructionProcessingStats {
             && 0 == self.vote_state_native_count.load(Ordering::Relaxed) as u64
     }
 
-    pub fn inc_vote_native(&mut self) {
+    pub fn inc_vote_native(&self) {
         self.vote_native_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn inc_vote_state_native(&mut self) {
+    pub fn inc_vote_state_native(&self) {
         self.vote_state_native_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn report(&mut self, report_interval_ms: u64) {
+    pub fn report(&self, report_interval_ms: u64) {
         // skip reporting metrics if stats is empty
         if self.is_empty() {
             return;
