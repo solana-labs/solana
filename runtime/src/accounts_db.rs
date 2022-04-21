@@ -999,6 +999,12 @@ impl RecycleStores {
     }
 }
 
+#[derive(PartialEq)]
+enum Operation {
+    Add,
+    Remove,
+}
+
 /// Removing unrooted slots in Accounts Background Service needs to be synchronized with flushing
 /// slots from the Accounts Cache.  This keeps track of those slots and the Mutex + Condvar for
 /// synchronization.
@@ -4897,6 +4903,52 @@ impl AccountsDb {
         self.flush_slot_cache_with_clean(&[slot], None::<&mut fn(&_, &_) -> bool>, None)
     }
 
+    fn remove_slots_under_contention(
+        slots_under_contention: &mut std::sync::MutexGuard<'_, HashSet<Slot>>,
+        slots: &[Slot],
+    ) {
+        slots
+            .iter()
+            .for_each(|slot| assert!(slots_under_contention.remove(slot)));
+    }
+
+    /// add/remove all 'slots' to/from 'slots_under_contention'
+    /// return true iff success
+    /// otherwise, 'slots_under_contention' is restored to its prior state
+    fn modify_slots_under_contention(&self, slots: &[Slot], operation: Operation) -> bool {
+        let mut slots_under_contention = self
+            .remove_unrooted_slots_synchronization
+            .slots_under_contention
+            .lock()
+            .unwrap();
+
+        let mut success = true;
+        match operation {
+            Operation::Add => {
+                for (i, slot) in slots.iter().enumerate() {
+                    // If we're purging this slot, don't flush it here
+                    if !slots_under_contention.insert(*slot) {
+                        // one of the slots we're flushing is already under contention, so we cannot do any of these slots
+                        Self::remove_slots_under_contention(
+                            &mut slots_under_contention,
+                            &slots[..i],
+                        );
+                        success = false;
+                        break;
+                    }
+                }
+            }
+            Operation::Remove => {
+                Self::remove_slots_under_contention(&mut slots_under_contention, slots)
+            }
+        }
+
+        self.remove_unrooted_slots_synchronization
+            .signal
+            .notify_all();
+        success
+    }
+
     /// `should_flush_f` is an optional closure that determines whether a given
     /// account should be flushed. Passing `None` will by default flush all
     /// accounts
@@ -4908,49 +4960,29 @@ impl AccountsDb {
     ) -> Option<FlushStats> {
         assert_eq!(1, slots.len());
         let slot = slots[0];
-        if self
-            .remove_unrooted_slots_synchronization
-            .slots_under_contention
-            .lock()
-            .unwrap()
-            .insert(slot)
-        {
-            // We have not see this slot, flush it.
-            let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
-                #[cfg(test)]
-                {
-                    // Give some time for cache flushing to occur here for unit tests
-                    sleep(Duration::from_millis(self.load_delay));
-                }
-                // Since we added the slot to `slots_under_contention` AND this slot
-                // still exists in the cache, we know the slot cannot be removed
-                // by any other threads past this point. We are now responsible for
-                // flushing this slot.
-                self.do_flush_slot_cache(slot, &slot_cache, should_flush_f, max_clean_root)
-            });
 
-            // Nobody else should have been purging this slot, so should not have been removed
-            // from `self.remove_unrooted_slots_synchronization`.
-
-            slots.iter().for_each(|slot| {
-                assert!(self
-                    .remove_unrooted_slots_synchronization
-                    .slots_under_contention
-                    .lock()
-                    .unwrap()
-                    .remove(slot));
-            });
-
-            // Signal to any threads blocked on `remove_unrooted_slots(slot)` that we have finished
-            // flushing
-            self.remove_unrooted_slots_synchronization
-                .signal
-                .notify_all();
-            flush_stats
-        } else {
-            // We have already seen this slot. It is already under flushing. Skip.
-            None
+        if !self.modify_slots_under_contention(slots, Operation::Add) {
+            return None;
         }
+
+        // We have not see this slot, flush it.
+        let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
+            #[cfg(test)]
+            {
+                // Give some time for cache flushing to occur here for unit tests
+                sleep(Duration::from_millis(self.load_delay));
+            }
+            // Since we added the slot to `slots_under_contention` AND this slot
+            // still exists in the cache, we know the slot cannot be removed
+            // by any other threads past this point. We are now responsible for
+            // flushing this slot.
+            self.do_flush_slot_cache(slot, &slot_cache, should_flush_f, max_clean_root)
+        });
+
+        // Nobody else should have been purging this slot, so should not have been removed
+        // from `self.remove_unrooted_slots_synchronization`.
+        self.modify_slots_under_contention(slots, Operation::Remove);
+        flush_stats
     }
 
     fn write_accounts_to_cache(
