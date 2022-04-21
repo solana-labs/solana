@@ -130,8 +130,8 @@ pub fn ms_for_n_slots(num_blocks: u64, ticks_per_slot: u64) -> u64 {
 
 #[allow(clippy::assertions_on_constants)]
 pub fn run_kill_partition_switch_threshold<C>(
-    stakes_to_kill: &[&[(usize, usize)]],
-    alive_stakes: &[&[(usize, usize)]],
+    stakes_to_kill: &[(usize, usize)],
+    alive_stakes: &[(usize, usize)],
     ticks_per_slot: Option<u64>,
     partition_context: C,
     on_partition_start: impl Fn(&mut LocalCluster, &[Pubkey], Vec<ClusterValidatorInfo>, &mut C),
@@ -150,20 +150,15 @@ pub fn run_kill_partition_switch_threshold<C>(
     // 1) Spins up three partitions
     // 2) Kills the first partition with the stake `failures_stake`
     // 5) runs `on_partition_resolved`
-    let partitions: Vec<&[(usize, usize)]> = stakes_to_kill
+    let partitions: Vec<(usize, usize)> = stakes_to_kill
         .iter()
         .cloned()
         .chain(alive_stakes.iter().cloned())
         .collect();
 
-    let stake_partitions: Vec<Vec<usize>> = partitions
-        .iter()
-        .map(|stakes_and_slots| stakes_and_slots.iter().map(|(stake, _)| *stake).collect())
-        .collect();
-    let num_slots_per_validator: Vec<usize> = partitions
-        .iter()
-        .flat_map(|stakes_and_slots| stakes_and_slots.iter().map(|(_, num_slots)| *num_slots))
-        .collect();
+    let stake_partitions: Vec<usize> = partitions.iter().map(|(stake, _)| *stake).collect();
+    let num_slots_per_validator: Vec<usize> =
+        partitions.iter().map(|(_, num_slots)| *num_slots).collect();
 
     let (leader_schedule, validator_keys) =
         create_custom_leader_schedule_with_random_keys(&num_slots_per_validator);
@@ -238,13 +233,12 @@ pub fn create_custom_leader_schedule_with_random_keys(
 /// continues to achieve consensus
 /// # Arguments
 /// * `partitions` - A slice of partition configurations, where each partition
-/// configuration is a slice of (usize, bool), representing a node's stake and
-/// whether or not it should be killed during the partition
+/// configuration is a usize representing a node's stake
 /// * `leader_schedule` - An option that specifies whether the cluster should
 /// run with a fixed, predetermined leader schedule
 #[allow(clippy::cognitive_complexity)]
 pub fn run_cluster_partition<C>(
-    partitions: &[Vec<usize>],
+    partitions: &[usize],
     leader_schedule: Option<(LeaderSchedule, Vec<Arc<Keypair>>)>,
     mut context: C,
     on_partition_start: impl FnOnce(&mut LocalCluster, &mut C),
@@ -258,7 +252,7 @@ pub fn run_cluster_partition<C>(
     let num_nodes = partitions.len();
     let node_stakes: Vec<_> = partitions
         .iter()
-        .flat_map(|p| p.iter().map(|stake_weight| 100 * *stake_weight as u64))
+        .map(|stake_weight| 100 * *stake_weight as u64)
         .collect();
     assert_eq!(node_stakes.len(), num_nodes);
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
