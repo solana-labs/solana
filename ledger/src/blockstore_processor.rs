@@ -160,7 +160,11 @@ fn sum_additional_costs(batch: &TransactionBatch) -> u64 {
     let cost_model = CostModel::new();
 
     for transaction in transactions {
+<<<<<<< HEAD
         let transaction_cost = cost_model.calculate_cost(transaction);
+=======
+        let transaction_cost = cost_model.calculate_costs(transaction);     // computing a lot more than it needs to.. make sub-functions public and replace this
+>>>>>>> 156b608556 (Add additional cost values to capacity-gating of blocks during replay)
         additional_costs += transaction_cost.signature_cost;
         additional_costs += transaction_cost.write_lock_cost;
         additional_costs += transaction_cost.data_bytes_cost;
