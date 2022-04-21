@@ -47,6 +47,17 @@ macro_rules! gen_pow2_checked {
 gen_pow2_checked!(pow2_checked_u32, u32);
 gen_pow2_checked!(pow2_checked_u64, u64);
 
+/// generate fn to check if the number is power of 2
+macro_rules! gen_is_pow2 {
+    ($n: ident, $t: ty) => {
+        pub fn $n(x: $t) -> bool {
+            0 == (x & (x - 1))
+        }
+    };
+}
+gen_is_pow2!(is_pow2_u32, u32);
+gen_is_pow2!(is_pow2_u64, u64);
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -128,4 +139,22 @@ mod test {
 
     gen_pow2_checked_test!(test_pow2_checked_u32, pow2_checked_u32, u32);
     gen_pow2_checked_test!(test_pow2_checked_u64, pow2_checked_u64, u64);
+
+    macro_rules! gen_is_pow2_test {
+        ($test_name: ident, $fn_name: ident, $t: ty) => {
+            #[test]
+            fn $test_name() {
+                for i in 1..10 {
+                    assert!($fn_name(1 << i as $t));
+                }
+
+                for i in 1..10 {
+                    assert!(!$fn_name(3 << i as $t));
+                }
+            }
+        };
+    }
+
+    gen_is_pow2_test!(test_is_pow2_u32, is_pow2_u32, u32);
+    gen_is_pow2_test!(test_is_pow2_u64, is_pow2_u64, u64);
 }

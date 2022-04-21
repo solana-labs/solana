@@ -38,7 +38,7 @@ impl PubkeyBinCalculator24 {
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, crate::fast_int_math::num_bits};
+    use {super::*, solana_sdk::fast_int_math::num_bits};
 
     #[test]
     fn test_pubkey_bins_log2() {
