@@ -436,7 +436,7 @@ impl ExpectedRentCollection {
         use std::str::FromStr;
 let interesting = 
 [
-Pubkey::from_str("(5PjLaJCTHRzLoAfKY2fvHMqcABHV4vGbnyJ8qoAtakc6").unwrap(),
+Pubkey::from_str("5PjLaJCTHRzLoAfKY2fvHMqcABHV4vGbnyJ8qoAtakc6").unwrap(),
 Pubkey::from_str("5PjMZVHXNJM7ewASiXLrQUTkNzCk6DQEZoooaKP1Zreq").unwrap(),
 Pubkey::from_str("GRi5d3jn7isiL44kwrrqCmHsjuajtzugie35FF51ghmd").unwrap(),
 Pubkey::from_str("5PjJqVoGCDrAGchEM24xJX2fu53dfh7qQxbNCTFLyMTi").unwrap(),
