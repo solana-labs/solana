@@ -65,7 +65,7 @@ mod tests {
                 total_packets += packets.packets.len();
                 all_packets.push(packets)
             }
-            if total_packets > num_expected_packets {
+            if total_packets >= num_expected_packets {
                 break;
             }
         }
