@@ -18,7 +18,19 @@ export function MetadataAttributesCard({ nftData }: { nftData: NFTData }) {
     try {
       const response = await fetch(nftData.metadata.data.uri)
       const metadata = await response.json()
+
+      // Verify if the attributes value is an array
       if (Array.isArray(metadata.attributes)) {
+        // Filter the attributes to keep attribute interface matching objects
+        const filteredAttributes = metadata.attributes.filter(
+          (attribute: any) => {
+            return (
+              typeof attribute === 'object' &&
+              typeof attribute.trait_type === 'string' &&
+              typeof attribute.value === 'string'
+            )
+          }
+        )
         setAttributes(metadata.attributes)
         setStatus('success')
       } else {
