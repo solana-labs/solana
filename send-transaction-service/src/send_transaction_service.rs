@@ -662,6 +662,7 @@ mod test {
         let mut transactions = HashMap::new();
 
         info!("Expired transactions are dropped...");
+        let leader_info_provider = Arc::new(Mutex::new(LeaderInfoProvider::new(None)));
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
@@ -678,7 +679,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -707,7 +708,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -736,7 +737,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -765,7 +766,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -796,7 +797,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -837,7 +838,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -854,7 +855,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -928,12 +929,13 @@ mod test {
                 Some(Instant::now()),
             ),
         );
+        let leader_info_provider = Arc::new(Mutex::new(LeaderInfoProvider::new(None)));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -961,7 +963,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -991,7 +993,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -1019,7 +1021,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -1048,7 +1050,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert!(transactions.is_empty());
@@ -1077,7 +1079,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -1108,7 +1110,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider.clone(),
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -1136,7 +1138,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            &None,
+            leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 0);
