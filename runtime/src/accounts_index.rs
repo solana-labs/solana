@@ -1791,12 +1791,13 @@ impl<T: IndexValue> AccountsIndex<T> {
     /// This function exists to clean older entries from 'historical_roots'.
     /// all roots < 'oldest_slot_to_keep' are removed from 'historical_roots'.
     pub fn remove_old_historical_roots(&self, oldest_slot_to_keep: Slot, keep: &HashSet<Slot>) {
-        let w_roots_tracker = self.roots_tracker.read().unwrap();
-        let mut roots = w_roots_tracker
+        let mut roots = self
+            .roots_tracker
+            .read()
+            .unwrap()
             .historical_roots
             .get_all_less_than(oldest_slot_to_keep);
         roots.retain(|root| !keep.contains(root));
-        drop(w_roots_tracker);
         if !roots.is_empty() {
             let mut w_roots_tracker = self.roots_tracker.write().unwrap();
             roots.into_iter().for_each(|root| {
