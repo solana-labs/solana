@@ -93,6 +93,7 @@ fn main() {
             "sha",
             "sibling_inner_instruction",
             "sibling_instruction",
+            "simulation",
             "spoof1",
             "spoof1_system",
             "upgradeable",
