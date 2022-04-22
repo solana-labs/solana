@@ -42,7 +42,6 @@ impl Pool {
         let mut total_cu: u64 = 0;
         let mut block_full = false;
         let seed: (u128, u128) = thread_rng().gen();
-        let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
         let mut buckets = vec![0u64; u16::MAX.into()];
         let mut gc = vec![];
         for (k, v) in &mut self.items.iter_mut() {
@@ -63,6 +62,7 @@ impl Pool {
                     .keys(item)
                     .iter()
                     .map(|x| {
+                        let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
                         hasher.write(x.as_ref());
                         (hasher.finish() % u64::from(u16::MAX)).try_into().unwrap()
                     })
