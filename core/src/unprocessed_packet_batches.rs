@@ -275,12 +275,9 @@ impl UnprocessedPacketBatches {
 
         // Remove the popped entry from the tracking hashmap. Unwrap call is safe
         // because the priority queue and hashmap are kept consistent at all times.
-        let popped_packet = self
-            .message_hash_to_transaction
+        self.message_hash_to_transaction
             .remove(&popped_priority_queue_entry.message_hash)
-            .unwrap();
-
-        popped_packet
+            .unwrap()
     }
 
     pub fn pop_max(&mut self) -> Option<DeserializedPacket> {
