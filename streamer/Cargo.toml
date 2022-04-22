@@ -16,7 +16,7 @@ histogram = "0.6.9"
 itertools = "0.10.3"
 libc = "0.2.124"
 log = "0.4.14"
-nix = "0.23.1"
+nix = "0.24.0"
 pem = "1.0.2"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
 quinn = "0.8.2"
