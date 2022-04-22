@@ -167,9 +167,9 @@ version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "061a7acccaa286c011ddc30970520b98fa40e00c9d644633fb26b5fc63a265e3"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -242,7 +242,7 @@ dependencies = [
  "getrandom 0.2.4",
  "instant",
  "pin-project-lite",
- "rand 0.8.5",
+ "rand 0.8.2",
  "tokio",
 ]
 
@@ -351,7 +351,7 @@ dependencies = [
  "block-padding 0.1.5",
  "byte-tools",
  "byteorder 1.4.3",
- "generic-array 0.12.4",
+ "generic-array 0.12.3",
 ]
 
 [[package]]
@@ -360,11 +360,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
-<<<<<<< HEAD
- "block-padding",
-=======
  "block-padding 0.2.1",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "generic-array 0.14.5",
 ]
 
@@ -375,8 +371,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1d36a02058e76b040de25a4464ba1c80935655595b661505c8b39b664828b95"
 dependencies = [
  "generic-array 0.14.5",
-<<<<<<< HEAD
-=======
 ]
 
 [[package]]
@@ -386,7 +380,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -414,8 +407,8 @@ dependencies = [
  "borsh-derive-internal",
  "borsh-schema-derive-internal",
  "proc-macro-crate",
- "proc-macro2 1.0.24",
- "syn 1.0.67",
+ "proc-macro2 1.0.36",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -424,9 +417,9 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5449c28a7b352f2d1e592a8a28bf139bc71afb0764a14f3c02500935d8c44065"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -435,9 +428,9 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdbd5696d8bfa21d53d9fe39a714a18538bad11492a42d066dbbc395fb1951c0"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -498,9 +491,9 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e215f8c2f9f79cb53c8335e687ffd07d5bfcb6fe5fc80723762d0be46e7cc54"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -652,24 +645,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "clap"
-version = "3.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
-dependencies = [
- "atty",
- "bitflags",
- "indexmap",
- "lazy_static",
- "os_str_bytes",
- "strsim 0.10.0",
- "termcolor",
- "textwrap 0.15.0",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -679,7 +654,6 @@ dependencies = [
 ]
 
 [[package]]
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 name = "combine"
 version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -930,16 +904,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e5c37193a1db1d8ed868c03ec7b152175f26160a5b740e5e484143877e0adf0"
 
 [[package]]
-<<<<<<< HEAD
 name = "derivative"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaed5874effa6cde088c644ddcdcb4ffd1511391c5be4fdd7a5ccd02c7e4a183"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
-=======
+ "syn 1.0.91",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -950,7 +925,6 @@ dependencies = [
  "quote 1.0.6",
  "rustc_version 0.4.0",
  "syn 1.0.91",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -970,11 +944,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
 dependencies = [
-<<<<<<< HEAD
  "generic-array 0.12.3",
-=======
- "generic-array 0.12.4",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -1098,9 +1068,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f86b50932a01e7ec5c06160492ab660fb19b6bb2a7878030dd6cd68d21df9d4d"
 dependencies = [
  "enum-ordinalize",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -1148,9 +1118,9 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -1161,9 +1131,9 @@ checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
 dependencies = [
  "num-bigint",
  "num-traits",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -1404,9 +1374,9 @@ version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33c1e13800337f4d4d7a316bf45a567dbcb6ffe087f16424852d97e97a91f512"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -1451,15 +1421,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-<<<<<<< HEAD
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c68f0274ae0e023facc3c97b2e00f076be70e254bc851d972503b328db79b2ec"
-=======
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffdf9f34f1447443d37393cc6c2b8313aebddcd96906caf34e54c68d8e57d7bd"
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 dependencies = [
  "typenum",
 ]
@@ -1572,7 +1536,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.4",
  "tracing",
 ]
 
@@ -1965,7 +1929,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b939a78fa820cdfcb7ee7484466746a7377760970f6f9c6fe19f9edcc8a38d2"
 dependencies = [
- "proc-macro-crate 0.1.5",
+ "proc-macro-crate",
  "proc-macro2 1.0.36",
  "quote 1.0.6",
  "syn 1.0.91",
@@ -2031,7 +1995,7 @@ dependencies = [
  "log",
  "tokio",
  "tokio-stream",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.4",
  "unicase",
 ]
 
@@ -2352,9 +2316,9 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a7d5f7076603ebc68de2dc6a650ec331a062a13abaa346975be747bbfa4b789"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -2441,9 +2405,9 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c8b15b261814f992e33760b1fca9fe8b693d8a65299f20c9901688636cfb746"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -2492,9 +2456,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c0fd9eba1d5db0994a239e09c1be402d35622277e35468ba891aa5e3188ce7e"
 dependencies = [
  "proc-macro-crate",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -2581,7 +2545,7 @@ checksum = "e1cf9b1c4e9a6c4de793c632496fa490bdc0e1eea73f0c91394f7b6990935d22"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "futures",
+ "futures 0.3.21",
  "js-sys",
  "lazy_static",
  "percent-encoding 2.1.0",
@@ -2609,9 +2573,9 @@ checksum = "ed9a247206016d424fe8497bc611e510887af5c261fbbf977877c4bb55ca4d82"
 dependencies = [
  "Inflector",
  "proc-macro-error",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -2789,9 +2753,9 @@ version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "758669ae3558c6f74bd2a18b41f7ac0b5a195aea6639d6a9b5e5d1ad5ba24c0b"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -2848,14 +2812,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "237a5ed80e274dbc66f86bd59c1e25edc039660be53194b5fe0a482e0f2612ea"
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "pretty-hex"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6fa0831dd7cc608c38a5e323422a0077678fa5744aa2be4ad91c4ece8eec8d5"
-
-[[package]]
 name = "prettyplease"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2866,7 +2822,6 @@ dependencies = [
 ]
 
 [[package]]
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 name = "proc-macro-crate"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2882,9 +2837,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
  "version_check",
 ]
 
@@ -2894,7 +2849,7 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
  "version_check",
 ]
@@ -2916,9 +2871,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.24"
+version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
+checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid 0.2.0",
 ]
@@ -2943,7 +2898,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "cmake",
  "heck",
- "itertools",
+ "itertools 0.10.3",
  "lazy_static",
  "log",
  "multimap",
@@ -2962,7 +2917,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.3",
  "proc-macro2 1.0.36",
  "quote 1.0.6",
  "syn 1.0.91",
@@ -3056,7 +3011,7 @@ version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54a21852a652ad6f610c9510194f398ff6f8692e334fd1145fed931f7fbe44ea"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
 ]
 
 [[package]]
@@ -3372,10 +3327,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
-<<<<<<< HEAD
  "semver 1.0.6",
-=======
- "semver 1.0.7",
 ]
 
 [[package]]
@@ -3390,7 +3342,6 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "winapi 0.3.9",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -3487,9 +3438,9 @@ version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e367622f934864ffa1c704ba2b82280aab856e3d8213c84c5720257eb34b15b9"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -3528,18 +3479,6 @@ dependencies = [
 [[package]]
 name = "semver"
 version = "0.9.0"
-<<<<<<< HEAD
-=======
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
-dependencies = [
- "semver-parser",
-]
-
-[[package]]
-name = "semver"
-version = "1.0.7"
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
@@ -3551,12 +3490,6 @@ name = "semver"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a3381e03edd24287172047536f20cabde766e2cd3e65e6b00fb3af51c4f38d"
-
-[[package]]
-name = "semver-parser"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "semver-parser"
@@ -3588,9 +3521,9 @@ version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08597e7152fcd306f41838ed3e37be9eaeed2b61c42e2117266a554fab4662f9"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -3830,7 +3763,7 @@ dependencies = [
  "futures 0.3.21",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.8.2",
  "sha-1 0.9.8",
 ]
 
@@ -3917,7 +3850,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bloom"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "bv",
  "fnv",
@@ -3927,9 +3860,9 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-frozen-abi 1.10.10",
+ "solana-frozen-abi-macro 1.10.10",
+ "solana-sdk",
 ]
 
 [[package]]
@@ -4264,12 +4197,12 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-simulation"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
- "solana-logger 1.11.0",
- "solana-program 1.11.0",
+ "solana-logger 1.10.10",
+ "solana-program 1.10.10",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-validator",
 ]
 
@@ -4358,13 +4291,8 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "solana-clap-utils",
-<<<<<<< HEAD
  "solana-sdk",
- "url",
-=======
- "solana-sdk 1.11.0",
  "url 2.2.2",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -4378,12 +4306,7 @@ dependencies = [
  "console",
  "humantime",
  "indicatif",
-<<<<<<< HEAD
  "semver 1.0.6",
-=======
- "pretty-hex",
- "semver 1.0.7",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -4404,15 +4327,9 @@ dependencies = [
  "async-trait",
  "base64 0.13.0",
  "bincode",
-<<<<<<< HEAD
  "bs58 0.4.0",
- "bytes 1.1.0",
- "clap",
-=======
- "bs58",
  "bytes",
- "clap 2.33.3",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
+ "clap",
  "crossbeam-channel",
  "futures 0.3.21",
  "futures-util",
@@ -4429,11 +4346,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "rustls",
-<<<<<<< HEAD
  "semver 1.0.6",
-=======
- "semver 1.0.7",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "serde",
  "serde_derive",
  "serde_json",
@@ -4478,19 +4391,19 @@ dependencies = [
 
 [[package]]
 name = "solana-core"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "ahash",
  "base64 0.13.0",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "chrono",
  "crossbeam-channel",
  "dashmap",
  "etcd-client",
  "fs_extra",
  "histogram",
- "itertools",
+ "itertools 0.10.3",
  "log",
  "lru",
  "rand 0.7.3",
@@ -4504,8 +4417,8 @@ dependencies = [
  "solana-bloom",
  "solana-client",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.10.10",
+ "solana-frozen-abi-macro 1.10.10",
  "solana-geyser-plugin-manager",
  "solana-gossip",
  "solana-ledger",
@@ -4516,9 +4429,10 @@ dependencies = [
  "solana-poh",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-send-transaction-service",
  "solana-streamer",
  "solana-transaction-status",
@@ -4533,19 +4447,19 @@ dependencies = [
 
 [[package]]
 name = "solana-download-utils"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "console",
  "indicatif",
  "log",
  "reqwest",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
 ]
 
 [[package]]
 name = "solana-entry"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -4560,7 +4474,7 @@ dependencies = [
  "solana-metrics",
  "solana-perf",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk",
 ]
 
 [[package]]
@@ -4594,17 +4508,9 @@ dependencies = [
  "bs58 0.3.1",
  "bv",
  "generic-array 0.14.5",
-<<<<<<< HEAD
  "log",
  "memmap2 0.1.0",
  "rustc_version 0.2.3",
-=======
- "im",
- "lazy_static",
- "log",
- "memmap2",
- "rustc_version 0.4.0",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "serde",
  "serde_derive",
  "sha2 0.9.9",
@@ -4615,47 +4521,39 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-<<<<<<< HEAD
 version = "1.10.10"
 dependencies = [
  "bs58 0.4.0",
  "bv",
  "generic-array 0.14.5",
  "im",
-=======
-version = "1.11.0"
-dependencies = [
- "bs58",
- "bv",
- "generic-array 0.14.5",
- "im",
  "lazy_static",
  "log",
- "memmap2",
+ "memmap2 0.5.3",
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi-macro 1.10.10",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.10.9"
+version = "1.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "798b851026ff2366b318f7818a64846dd1ebc7e613f7893fba07a61cd55e6a48"
+checksum = "ceac6e8ad1a784c92ff5f3d6ad68a8d664d389b08055b674c38b2b9abb69e6d4"
 dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.6",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
  "syn 1.0.91",
 ]
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.6",
@@ -4665,28 +4563,28 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis-utils"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "solana-download-utils",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
 ]
 
 [[package]]
 name = "solana-geyser-plugin-interface"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "log",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-transaction-status",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-geyser-plugin-manager"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
- "bs58",
+ "bs58 0.4.0",
  "crossbeam-channel",
  "json5",
  "libloading",
@@ -4697,22 +4595,22 @@ dependencies = [
  "solana-metrics",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-transaction-status",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-gossip"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "bincode",
  "bv",
- "clap 2.33.3",
+ "clap",
  "crossbeam-channel",
  "flate2",
  "indexmap",
- "itertools",
+ "itertools 0.10.3",
  "log",
  "lru",
  "matches",
@@ -4728,17 +4626,17 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.10.10",
+ "solana-frozen-abi-macro 1.10.10",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.10.10",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-streamer",
  "solana-version",
  "solana-vote-program",
@@ -4747,7 +4645,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "bincode",
  "bitflags",
@@ -4757,14 +4655,10 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "futures 0.3.21",
- "itertools",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
+ "itertools 0.10.3",
  "lazy_static",
  "libc",
  "log",
-<<<<<<< HEAD
- "memmap2 0.5.3",
-=======
  "lru",
  "num-derive",
  "num-traits",
@@ -4775,48 +4669,21 @@ dependencies = [
  "rayon",
  "reed-solomon-erasure",
  "rocksdb",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
  "sha2 0.10.2",
-<<<<<<< HEAD
- "solana-frozen-abi-macro 1.10.10",
- "thiserror",
-]
-
-[[package]]
-name = "solana-frozen-abi-macro"
-version = "1.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceac6e8ad1a784c92ff5f3d6ad68a8d664d389b08055b674c38b2b9abb69e6d4"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.6",
- "rustc_version 0.2.3",
- "syn 1.0.67",
-]
-
-[[package]]
-name = "solana-frozen-abi-macro"
-version = "1.10.10"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.6",
- "rustc_version 0.4.0",
- "syn 1.0.67",
-=======
  "solana-bpf-loader-program",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.10.10",
+ "solana-frozen-abi-macro 1.10.10",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-transaction-status",
@@ -4826,7 +4693,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "trees",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 ]
 
 [[package]]
@@ -4859,11 +4725,11 @@ dependencies = [
 
 [[package]]
 name = "solana-merkle-tree"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "fast-math",
  "matches",
- "solana-program 1.11.0",
+ "solana-program 1.10.10",
 ]
 
 [[package]]
@@ -4925,7 +4791,7 @@ dependencies = [
 
 [[package]]
 name = "solana-poh"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "core_affinity",
  "crossbeam-channel",
@@ -4935,7 +4801,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-sys-tuner",
  "thiserror",
 ]
@@ -4960,14 +4826,8 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
-<<<<<<< HEAD
  "rand 0.7.3",
  "rustc_version 0.2.3",
-=======
- "parking_lot 0.12.0",
- "rand 0.7.3",
- "rustc_version 0.4.0",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "rustversion",
  "serde",
  "serde_bytes",
@@ -5084,27 +4944,38 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "qstring",
-<<<<<<< HEAD
  "semver 1.0.6",
  "solana-sdk",
-=======
- "semver 1.0.7",
- "solana-sdk 1.11.0",
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
  "thiserror",
  "uriparse",
 ]
 
 [[package]]
+name = "solana-replica-lib"
+version = "1.10.10"
+dependencies = [
+ "crossbeam-channel",
+ "futures-util",
+ "log",
+ "prost",
+ "solana-rpc",
+ "solana-runtime",
+ "solana-sdk",
+ "tokio",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "solana-rpc"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "base64 0.13.0",
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "crossbeam-channel",
  "dashmap",
- "itertools",
+ "itertools 0.10.3",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -5130,7 +5001,7 @@ dependencies = [
  "solana-poh",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5141,7 +5012,7 @@ dependencies = [
  "stream-cancel",
  "thiserror",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.4",
 ]
 
 [[package]]
@@ -5200,62 +5071,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-<<<<<<< HEAD
 version = "1.10.10"
-=======
-version = "1.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef63e9db435bcc173d37073d769871379bb90c0fc60b20616f87edc0b06d890"
-dependencies = [
- "assert_matches",
- "base64 0.13.0",
- "bincode",
- "bitflags",
- "borsh",
- "bs58",
- "bytemuck",
- "byteorder 1.4.3",
- "chrono",
- "derivation-path",
- "digest 0.10.3",
- "ed25519-dalek",
- "ed25519-dalek-bip32",
- "generic-array 0.14.5",
- "hmac 0.12.1",
- "itertools",
- "js-sys",
- "lazy_static",
- "libsecp256k1",
- "log",
- "memmap2",
- "num-derive",
- "num-traits",
- "pbkdf2 0.10.1",
- "qstring",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
- "rustc_version 0.4.0",
- "rustversion",
- "serde",
- "serde_bytes",
- "serde_derive",
- "serde_json",
- "sha2 0.10.2",
- "sha3 0.10.1",
- "solana-frozen-abi 1.10.9",
- "solana-frozen-abi-macro 1.10.9",
- "solana-logger 1.10.9",
- "solana-program 1.10.9",
- "solana-sdk-macro 1.10.9",
- "thiserror",
- "uriparse",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "solana-sdk"
-version = "1.11.0"
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 dependencies = [
  "assert_matches",
  "base64 0.13.0",
@@ -5309,10 +5125,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84710ce45a21cccd9f2b09d8e9aad529080bb2540f27b1253874b6e732b465b9"
 dependencies = [
  "bs58 0.3.1",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
  "rustversion",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -5320,10 +5136,10 @@ name = "solana-sdk-macro"
 version = "1.10.10"
 dependencies = [
  "bs58 0.4.0",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
  "rustversion",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -5362,7 +5178,7 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-bigtable"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "backoff",
  "bincode",
@@ -5378,7 +5194,7 @@ dependencies = [
  "serde_derive",
  "smpl_jwt",
  "solana-metrics",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
@@ -5388,14 +5204,14 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-proto"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "bincode",
- "bs58",
+ "bs58 0.4.0",
  "prost",
  "serde",
  "solana-account-decoder",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-transaction-status",
  "tonic-build",
 ]
@@ -5426,13 +5242,13 @@ dependencies = [
 
 [[package]]
 name = "solana-sys-tuner"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
- "clap 2.33.3",
+ "clap",
  "libc",
  "log",
  "nix",
- "solana-logger 1.11.0",
+ "solana-logger 1.10.10",
  "solana-version",
  "sysctl",
  "unix_socket2",
@@ -5441,7 +5257,7 @@ dependencies = [
 
 [[package]]
 name = "solana-test-validator"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "base64 0.13.0",
  "log",
@@ -5452,13 +5268,12 @@ dependencies = [
  "solana-core",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.10.10",
  "solana-net-utils",
- "solana-program-runtime",
  "solana-program-test",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-streamer",
  "tokio",
 ]
@@ -5490,10 +5305,10 @@ dependencies = [
 
 [[package]]
 name = "solana-validator"
-version = "1.11.0"
+version = "1.10.10"
 dependencies = [
  "chrono",
- "clap 2.33.3",
+ "clap",
  "console",
  "core_affinity",
  "crossbeam-channel",
@@ -5521,14 +5336,15 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.10.10",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5798,11 +5614,11 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.67"
+version = "1.0.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6498a9efc342871f91cc2d0d694c674368b4ceb40f62b65a7a08c3792935e702"
+checksum = "b683b2b825c8eef438b77c36a06dc262294da3d5a5813fac20da149241dcd44d"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
  "unicode-xid 0.2.0",
 ]
@@ -5819,9 +5635,9 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67656ea1dc1b41b1451851562ea232ec2e5a80242139f7e679ceccfb5d61f545"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
  "unicode-xid 0.2.0",
 ]
 
@@ -5878,7 +5694,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-serde",
- "tokio-util 0.6.9",
+ "tokio-util 0.6.4",
  "tracing",
  "tracing-opentelemetry",
 ]
@@ -5889,9 +5705,9 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee42b4e559f17bce0385ebf511a7beb67d5cc33c12c96b7f4e9789919d9c10f"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -5951,9 +5767,9 @@ version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa32fd3f627f367fe16f893e2597ae3c05020f8bba2666a4e6ea73d377e5714b"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -6114,9 +5930,9 @@ version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b557f72f448c511a979e2564e55d74e6c4432fc96ff4f6241bc6bded342643b7"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -6280,7 +6096,7 @@ dependencies = [
  "indexmap",
  "pin-project",
  "pin-project-lite",
- "rand 0.8.5",
+ "rand 0.8.2",
  "slab",
  "tokio",
  "tokio-util 0.7.1",
@@ -6339,9 +6155,9 @@ version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4f480b8f81512e825f337ad51e94c1eb5d3bbdf2b363dcd01e2b19a9ffe3f8e"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -6561,21 +6377,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05e42f7c18b8f902290b009cde6d651262f956c98bc51bca4cd1d511c9cd85c7"
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "valuable"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
-
-[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6645,9 +6452,9 @@ dependencies = [
  "bumpalo",
  "lazy_static",
  "log",
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
  "wasm-bindgen-shared",
 ]
 
@@ -6679,9 +6486,9 @@ version = "0.2.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7803e0eea25835f8abdc585cd3021b3deb11543c6fe226dcd30b228857c5c5ab"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -6723,9 +6530,9 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "4.2.5"
+version = "4.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4fb54e6113b6a8772ee41c3404fb0301ac79604489467e0a9ce1f3e97c24ae"
+checksum = "2a5a7e487e921cf220206864a94a89b6c6905bfc19f1057fa26a4cb360e5c1d2"
 dependencies = [
  "either",
  "lazy_static",
@@ -6912,9 +6719,9 @@ version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdff2024a851a322b08f179173ae2ba620445aef1e838f0c196820eade4ae0c7"
 dependencies = [
- "proc-macro2 1.0.24",
+ "proc-macro2 1.0.36",
  "quote 1.0.6",
- "syn 1.0.67",
+ "syn 1.0.91",
  "synstructure",
 ]
 

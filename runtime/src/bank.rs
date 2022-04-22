@@ -37,15 +37,8 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
-<<<<<<< HEAD
-        accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
-=======
         account_overrides::AccountOverrides,
-        accounts::{
-            AccountAddressFilter, Accounts, LoadedTransaction, PubkeyAccountSlot,
-            TransactionLoadResult,
-        },
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
+        accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -130,12 +123,7 @@ use {
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
-<<<<<<< HEAD
-        slot_history::SlotHistory,
-=======
         slot_history::{Check, SlotHistory},
-        stake::state::Delegation,
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
         system_transaction,
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
