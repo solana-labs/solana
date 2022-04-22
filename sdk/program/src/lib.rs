@@ -571,10 +571,6 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
-<<<<<<< HEAD
-pub mod example_mocks;
-=======
->>>>>>> 7206f894e (Move solana_program::example_mocks declaration to appear last in source files (#24577))
 pub mod feature;
 pub mod fee_calculator;
 pub mod hash;
