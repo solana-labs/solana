@@ -1,13 +1,14 @@
-use ahash::AHasher;
-use std::hash::Hasher;
-use solana_sdk::pubkey::Pubkey;
-use rand::thread_rng;
-use rand::Rng;
+use {
+    ahash::AHasher,
+    rand::{thread_rng, Rng},
+    solana_sdk::pubkey::Pubkey,
+    std::hash::Hasher,
+};
 
 pub struct FeePayerFilter {
     feepayers: Vec<u32>,
     count: u64,
-    seed: (u128,u128),
+    seed: (u128, u128),
 }
 
 impl FeePayerFilter {
@@ -29,7 +30,8 @@ impl FeePayerFilter {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(addr.as_ref());
         let pos = hasher.finish() % u64::from(u16::MAX);
-        self.feepayers[usize::try_from(pos).unwrap()] = self.feepayers[usize::try_from(pos).unwrap()].saturating_add(1);
+        self.feepayers[usize::try_from(pos).unwrap()] =
+            self.feepayers[usize::try_from(pos).unwrap()].saturating_add(1);
         self.count = self.count.saturating_add(1);
     }
 
@@ -38,7 +40,8 @@ impl FeePayerFilter {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(addr.as_ref());
         let pos = hasher.finish() % u64::from(u16::MAX);
-        let expected = u64::from(self.feepayers[usize::try_from(pos).unwrap()]) * u64::from(u16::MAX);
+        let expected =
+            u64::from(self.feepayers[usize::try_from(pos).unwrap()]) * u64::from(u16::MAX);
         expected > self.count
     }
 }
