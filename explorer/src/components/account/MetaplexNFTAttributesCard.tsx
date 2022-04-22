@@ -27,7 +27,8 @@ export function MetaplexNFTAttributesCard({ nftData }: { nftData: NFTData }) {
             return (
               typeof attribute === "object" &&
               typeof attribute.trait_type === "string" &&
-              typeof attribute.value === "string"
+              (typeof attribute.value === "string" ||
+                typeof attribute.value === "number")
             );
           }
         );
