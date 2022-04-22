@@ -42,7 +42,7 @@ impl FeePayerFilter {
         hasher.write(addr.as_ref());
         let pos = hasher.finish() % u64::from(u16::MAX);
         let expected =
-            u64::from(self.feepayers[usize::try_from(pos).unwrap()]) * u64::from(u16::MAX);
+            u64::from(self.feepayers[usize::try_from(pos).unwrap()]) * u64::try_from(self.feepayers.len()).unwrap();
         expected > self.count
     }
 }

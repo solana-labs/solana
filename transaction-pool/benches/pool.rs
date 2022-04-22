@@ -2,7 +2,6 @@
 
 extern crate test;
 use {
-    ahash::AHasher,
     rand::{thread_rng, Rng},
     solana_sdk::pubkey::Pubkey,
     solana_transaction_pool::pool::{Item, Pool, Table},
