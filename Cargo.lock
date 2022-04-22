@@ -5038,10 +5038,10 @@ name = "solana-keygen"
 version = "1.11.0"
 dependencies = [
  "bs58",
- "clap 2.33.3",
+ "clap 3.1.8",
  "dirs-next",
  "num_cpus",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-remote-wallet",
  "solana-sdk 1.11.0",
