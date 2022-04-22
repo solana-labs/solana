@@ -1,11 +1,14 @@
+//! A library that implements fast integer math functions using bit twiddling
+//! tricks.
+
 #![allow(clippy::integer_arithmetic)]
 
-/// return the bit width of the integer type
+/// Return the bit width for the integer type
 pub const fn num_bits<T>() -> u32 {
     (std::mem::size_of::<T>() * 8) as u32
 }
 
-/// generate fn to compute the floor of log2 for integer types
+/// Generate fn to compute the floor of log2 for integer types
 macro_rules! gen_log2_floor {
     ($n: ident, $t: ty) => {
         pub fn $n(x: $t) -> $t {
@@ -17,7 +20,7 @@ macro_rules! gen_log2_floor {
 gen_log2_floor!(log2_floor_u32, u32);
 gen_log2_floor!(log2_floor_u64, u64);
 
-/// generate fn to compute the ceil of log2 for integer types
+/// Generate fn to compute the ceil of log2 for integer types
 macro_rules! gen_log2_ceil {
     ($n: ident, $t: ty) => {
         pub fn $n(x: $t) -> $t {
@@ -29,7 +32,7 @@ macro_rules! gen_log2_ceil {
 gen_log2_ceil!(log2_ceil_u32, u32);
 gen_log2_ceil!(log2_ceil_u64, u64);
 
-/// generate fn to compute the pow(2, exponent) unchecked for integer types
+/// Generate fn to compute the pow(2, exponent) unchecked for integer types
 macro_rules! gen_pow2_unchecked {
     ($n: ident, $t: ty) => {
         pub fn $n(exponent: $t) -> $t {
@@ -40,7 +43,7 @@ macro_rules! gen_pow2_unchecked {
 gen_pow2_unchecked!(pow2_unchecked_u32, u32);
 gen_pow2_unchecked!(pow2_unchecked_u64, u64);
 
-/// generate fn to compute the pow(2, exponent) checked for integer types
+/// Generate fn to compute the pow(2, exponent) checked for integer types
 macro_rules! gen_pow2_checked {
     ($n: ident, $t: ty) => {
         pub fn $n(exponent: $t) -> Option<$t> {
@@ -51,7 +54,7 @@ macro_rules! gen_pow2_checked {
 gen_pow2_checked!(pow2_checked_u32, u32);
 gen_pow2_checked!(pow2_checked_u64, u64);
 
-/// generate fn to check if the number is power of 2
+/// Generate fn to check if the number is power of 2
 macro_rules! gen_is_pow2 {
     ($n: ident, $t: ty) => {
         pub fn $n(x: $t) -> bool {
@@ -78,6 +81,7 @@ mod test {
         assert_eq!(num_bits::<u64>(), 64);
     }
 
+    /// Test log2_floor
     macro_rules! gen_log2_floor_test {
         ($test_name: ident, $fn_name: ident, $t: ty) => {
             #[test]
@@ -97,6 +101,7 @@ mod test {
     gen_log2_floor_test!(test_log2_floor_u32, log2_floor_u32, u32);
     gen_log2_floor_test!(test_log2_floor_u64, log2_floor_u64, u64);
 
+    /// Test log2_ceil
     macro_rules! gen_log2_ceil_test {
         ($test_name: ident, $fn_name: ident, $t: ty) => {
             #[test]
@@ -116,6 +121,7 @@ mod test {
     gen_log2_ceil_test!(test_log2_ceil_u32, log2_ceil_u32, u32);
     gen_log2_ceil_test!(test_log2_ceil_u64, log2_ceil_u64, u64);
 
+    /// Test pow2_unchecked
     macro_rules! gen_pow2_unchecked_test {
         ($test_name: ident, $fn_name: ident, $t: ty) => {
             #[test]
@@ -130,6 +136,7 @@ mod test {
     gen_pow2_unchecked_test!(test_pow2_unchecked_u32, pow2_unchecked_u32, u32);
     gen_pow2_unchecked_test!(test_pow2_unchecked_u64, pow2_unchecked_u64, u64);
 
+    /// Test pow2_checked
     macro_rules! gen_pow2_checked_test {
         ($test_name: ident, $fn_name: ident, $t: ty) => {
             #[test]
@@ -144,6 +151,7 @@ mod test {
     gen_pow2_checked_test!(test_pow2_checked_u32, pow2_checked_u32, u32);
     gen_pow2_checked_test!(test_pow2_checked_u64, pow2_checked_u64, u64);
 
+    /// Test is_pow2
     macro_rules! gen_is_pow2_test {
         ($test_name: ident, $fn_name: ident, $t: ty) => {
             #[test]
