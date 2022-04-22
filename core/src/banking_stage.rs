@@ -29,13 +29,13 @@ use {
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        accounts_db::ErrorCounters,
         bank::{
             Bank, LoadAndExecuteTransactionsOutput, TransactionBalancesSet, TransactionCheckResult,
         },
         bank_utils,
         cost_model::{CostModel, TransactionCost},
         transaction_batch::TransactionBatch,
+        transaction_error_metrics::TransactionErrorMetrics,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -121,6 +121,7 @@ pub struct ExecuteAndCommitTransactionsOutput {
     // committed into the Poh stream.
     commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
+    error_counters: TransactionErrorMetrics,
 }
 
 #[derive(Debug, Default)]
@@ -1172,6 +1173,7 @@ impl BankingStage {
             executed_transactions_count,
             executed_with_successful_result_count,
             signature_count,
+            error_counters,
             ..
         } = load_and_execute_transactions_output;
 
@@ -1232,6 +1234,7 @@ impl BankingStage {
                 retryable_transaction_indexes,
                 commit_transactions_result: Err(recorder_err),
                 execute_and_commit_timings,
+                error_counters,
             };
         }
 
@@ -1338,6 +1341,7 @@ impl BankingStage {
             retryable_transaction_indexes,
             commit_transactions_result: Ok(commit_transaction_statuses),
             execute_and_commit_timings,
+            error_counters,
         }
     }
 
@@ -1556,6 +1560,7 @@ impl BankingStage {
         let mut total_cost_model_throttled_transactions_count: usize = 0;
         let mut total_cost_model_us: u64 = 0;
         let mut total_execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
+        let mut total_error_counters = TransactionErrorMetrics::default();
         let mut reached_max_poh_height = false;
         while chunk_start != transactions.len() {
             let chunk_end = std::cmp::min(
@@ -1589,10 +1594,12 @@ impl BankingStage {
                 retryable_transaction_indexes: new_retryable_transaction_indexes,
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
+                error_counters: new_error_counters,
                 ..
             } = execute_and_commit_transactions_output;
 
             total_execute_and_commit_timings.accumulate(&new_execute_and_commit_timings);
+            total_error_counters.accumulate(&new_error_counters);
             total_transactions_attempted_execution_count =
                 total_transactions_attempted_execution_count
                     .saturating_add(new_transactions_attempted_execution_count);
@@ -1655,6 +1662,7 @@ impl BankingStage {
             cost_model_throttled_transactions_count: total_cost_model_throttled_transactions_count,
             cost_model_us: total_cost_model_us,
             execute_and_commit_timings: total_execute_and_commit_timings,
+            error_counters: total_error_counters,
         }
     }
 
@@ -1727,7 +1735,7 @@ impl BankingStage {
         let filter =
             Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
 
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
         // The following code also checks if the blockhash for a transaction is too old
         // The check accounts for
         //  1. Transaction forwarding delay
@@ -1808,10 +1816,12 @@ impl BankingStage {
 
         let ProcessTransactionsSummary {
             ref retryable_transaction_indexes,
+            ref error_counters,
             ..
         } = process_transactions_summary;
 
         slot_metrics_tracker.accumulate_process_transactions_summary(&process_transactions_summary);
+        slot_metrics_tracker.accumulate_transaction_errors(error_counters);
 
         let retryable_tx_count = retryable_transaction_indexes.len();
         inc_new_counter_info!("banking_stage-unprocessed_transactions", retryable_tx_count);
