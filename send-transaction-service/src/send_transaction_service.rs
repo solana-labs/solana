@@ -132,7 +132,10 @@ impl Default for Config {
 /// used for sending transactions.
 pub const LEADER_INFO_REFRESH_RATE_IN_MS: u64 = 1000;
 
-pub struct LeaderInfoProvider<T: TpuInfo + std::marker::Send + Clone + 'static> {
+pub struct LeaderInfoProvider<T>
+where
+    T: TpuInfo + std::marker::Send + Clone + 'static,
+{
     /// The last time the leader info is refreshed
     last_leader_refresh: Option<Instant>,
 
@@ -143,7 +146,10 @@ pub struct LeaderInfoProvider<T: TpuInfo + std::marker::Send + Clone + 'static> 
     refresh_rate: Duration,
 }
 
-impl<T: TpuInfo + std::marker::Send + Clone + 'static> LeaderInfoProvider<T> {
+impl<T> LeaderInfoProvider<T>
+where
+    T: TpuInfo + std::marker::Send + Clone + 'static,
+{
     /// Get the leader info, refresh if expired
     pub fn get_leader_info(&mut self) -> &Option<T> {
         if let Some(leader_info) = self.leader_info.as_mut() {
