@@ -440,7 +440,7 @@ impl RetransmitStage {
         exit: Arc<AtomicBool>,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
-        cfg: Option<Arc<AtomicBool>>,
+        turbine_disabled: Option<Arc<AtomicBool>>,
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
@@ -492,10 +492,10 @@ impl RetransmitStage {
             repair_info,
             leader_schedule_cache,
             move |id, shred, working_bank, last_root| {
-                let is_connected = cfg
+                let turbine_disabled = turbine_disabled
                     .as_ref()
                     .map(|x| x.load(Ordering::Relaxed))
-                    .unwrap_or(true);
+                    .unwrap_or(false);
                 let rv = should_retransmit_and_persist(
                     shred,
                     working_bank,
@@ -504,7 +504,7 @@ impl RetransmitStage {
                     last_root,
                     shred_version,
                 );
-                rv && is_connected
+                rv && !turbine_disabled
             },
             verified_vote_receiver,
             completed_data_sets_sender,

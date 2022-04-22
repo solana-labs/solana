@@ -98,10 +98,10 @@ fn test_fork_choice_refresh_old_votes() {
     assert!(alive_stake_1 < alive_stake_2);
     assert!(alive_stake_1 + alive_stake_3 > alive_stake_2);
 
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(alive_stake_1 as usize, 8)],
-        &[(alive_stake_2 as usize, 8)],
-        &[(alive_stake_3 as usize, 0)],
+    let partitions: &[(usize, usize)] = &[
+        (alive_stake_1 as usize, 8),
+        (alive_stake_2 as usize, 8),
+        (alive_stake_3 as usize, 0),
     ];
 
     #[derive(Default)]
@@ -254,11 +254,8 @@ fn test_fork_choice_refresh_old_votes() {
     };
 
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize - 1, 16)]],
+        &[(failures_stake as usize - 1, 16)],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
@@ -279,7 +276,7 @@ fn test_kill_heaviest_partition() {
     // eventually choose the major partition
     // 4) Check for recovery
     let num_slots_per_validator = 8;
-    let partitions: [Vec<usize>; 4] = [vec![11], vec![10], vec![10], vec![10]];
+    let partitions: [usize; 4] = [11, 10, 10, 10];
     let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
         num_slots_per_validator * (partitions.len() - 1),
         num_slots_per_validator,
@@ -301,7 +298,6 @@ fn test_kill_heaviest_partition() {
         empty,
         empty,
         on_partition_resolved,
-        None,
         None,
         vec![],
     )
@@ -331,12 +327,8 @@ fn test_kill_partition_switch_threshold_no_progress() {
 
     // This kills `max_failures_stake`, so no progress should be made
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 16)]],
-        &[
-            &[(alive_stake_1 as usize, 8)],
-            &[(alive_stake_2 as usize, 8)],
-        ],
-        None,
+        &[(failures_stake as usize, 16)],
+        &[(alive_stake_1 as usize, 8), (alive_stake_2 as usize, 8)],
         None,
         (),
         on_partition_start,
@@ -382,12 +374,8 @@ fn test_kill_partition_switch_threshold_progress() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 16)]],
-        &[
-            &[(alive_stake_1 as usize, 8)],
-            &[(alive_stake_2 as usize, 8)],
-        ],
-        None,
+        &[(failures_stake as usize, 16)],
+        &[(alive_stake_1 as usize, 8), (alive_stake_2 as usize, 8)],
         None,
         (),
         on_partition_start,
@@ -612,10 +600,7 @@ fn test_switch_threshold_uses_gossip_votes() {
     let lighter_stake = heavier_stake - 1;
     let failures_stake = total_stake - heavier_stake - lighter_stake;
 
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(heavier_stake as usize, 8)],
-        &[(lighter_stake as usize, 8)],
-    ];
+    let partitions: &[(usize, usize)] = &[(heavier_stake as usize, 8), (lighter_stake as usize, 8)];
 
     #[derive(Default)]
     struct PartitionContext {
@@ -825,11 +810,8 @@ fn test_switch_threshold_uses_gossip_votes() {
 
     let ticks_per_slot = 8;
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 0)]],
+        &[(failures_stake as usize, 0)],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,

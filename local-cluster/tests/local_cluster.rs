@@ -319,28 +319,6 @@ fn test_leader_failure_4() {
     );
 }
 
-#[allow(unused_attributes)]
-#[ignore]
-#[test]
-#[serial]
-fn test_cluster_partition_1_2() {
-    let empty = |_: &mut LocalCluster, _: &mut ()| {};
-    let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
-    };
-    run_cluster_partition(
-        &[vec![1], vec![1, 1]],
-        None,
-        (),
-        empty,
-        empty,
-        on_partition_resolved,
-        None,
-        None,
-        vec![],
-    )
-}
-
 #[test]
 #[serial]
 fn test_cluster_partition_1_1() {
@@ -349,13 +327,12 @@ fn test_cluster_partition_1_1() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_cluster_partition(
-        &[vec![1], vec![1]],
+        &[1, 1],
         None,
         (),
         empty,
         empty,
         on_partition_resolved,
-        None,
         None,
         vec![],
     )
@@ -369,13 +346,12 @@ fn test_cluster_partition_1_1_1() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_cluster_partition(
-        &[vec![1], vec![1], vec![1]],
+        &[1, 1, 1],
         None,
         (),
         empty,
         empty,
         on_partition_resolved,
-        None,
         None,
         vec![],
     )
@@ -2506,7 +2482,7 @@ fn test_run_test_load_program_accounts_partition_root() {
 
 fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     let num_slots_per_validator = 8;
-    let partitions: [Vec<usize>; 2] = [vec![1], vec![1]];
+    let partitions: [usize; 2] = [1, 1];
     let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
         num_slots_per_validator,
         num_slots_per_validator,
@@ -2556,7 +2532,6 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         on_partition_before_resolved,
         on_partition_resolved,
         None,
-        None,
         additional_accounts,
     );
 }
@@ -2572,10 +2547,8 @@ fn test_votes_land_in_fork_during_long_partition() {
 
     // Give lighter stake 30 consecutive slots before
     // the heavier stake gets a single slot
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(heavier_stake as usize, 1)],
-        &[(lighter_stake as usize, 30)],
-    ];
+    let partitions: &[(usize, usize)] =
+        &[(heavier_stake as usize, 1), (lighter_stake as usize, 30)];
 
     #[derive(Default)]
     struct PartitionContext {
@@ -2651,9 +2624,8 @@ fn test_votes_land_in_fork_during_long_partition() {
     };
 
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 0)]],
+        &[(failures_stake as usize, 0)],
         partitions,
-        None,
         None,
         PartitionContext::default(),
         on_partition_start,

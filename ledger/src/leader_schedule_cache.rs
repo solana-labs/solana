@@ -165,9 +165,7 @@ impl LeaderScheduleCache {
     fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
         if let Some(ref fixed_schedule) = self.fixed_schedule {
-            if epoch >= fixed_schedule.start_epoch {
-                return Some(fixed_schedule.leader_schedule[slot_index]);
-            }
+            return Some(fixed_schedule.leader_schedule[slot_index]);
         }
         self.cached_schedules
             .read()
@@ -207,9 +205,7 @@ impl LeaderScheduleCache {
         bank: &Bank,
     ) -> Option<Arc<LeaderSchedule>> {
         if let Some(ref fixed_schedule) = self.fixed_schedule {
-            if epoch >= fixed_schedule.start_epoch {
-                return Some(fixed_schedule.leader_schedule.clone());
-            }
+            return Some(fixed_schedule.leader_schedule.clone());
         }
         let epoch_schedule = self.get_epoch_leader_schedule(epoch);
         if epoch_schedule.is_some() {
