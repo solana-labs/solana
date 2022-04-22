@@ -92,6 +92,7 @@ export enum PROGRAM_NAMES {
   SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  SOLANART = "Solanart",
 }
 
 const ALL_CLUSTERS = [
@@ -366,6 +367,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: {
     name: PROGRAM_NAMES.WORMHOLE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz: {
+    name: PROGRAM_NAMES.SOLANART,
     deployments: [Cluster.MainnetBeta],
   },
 };
