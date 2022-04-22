@@ -561,7 +561,7 @@ impl Tower {
     }
 
     // a slot is recent if it's newer than the last vote we have. If we haven't voted yet
-    // but have a root (hard forks situation) then comparre it to the root
+    // but have a root (hard forks situation) then compare it to the root
     pub fn is_recent(&self, slot: Slot) -> bool {
         if let Some(last_voted_slot) = self.vote_state.last_voted_slot() {
             if slot <= last_voted_slot {
