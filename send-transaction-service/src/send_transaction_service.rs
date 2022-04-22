@@ -235,7 +235,7 @@ impl SendTransactionService {
     fn receive_txn_thread<T: TpuInfo + std::marker::Send + Clone + 'static>(
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
-        leader_info: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         exit: Arc<AtomicBool>,
@@ -290,7 +290,7 @@ impl SendTransactionService {
                     let _result = Self::send_transactions_in_batch(
                         &tpu_address,
                         &mut transactions,
-                        leader_info.lock().unwrap().get_leader_info(),
+                        leader_info_provider.lock().unwrap().get_leader_info(),
                         &config,
                     );
                     let last_sent_time = Instant::now();
@@ -322,7 +322,7 @@ impl SendTransactionService {
     fn retry_thread<T: TpuInfo + std::marker::Send + Clone + 'static>(
         tpu_address: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
-        leader_info: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         exit: Arc<AtomicBool>,
@@ -359,7 +359,7 @@ impl SendTransactionService {
                         &root_bank,
                         &tpu_address,
                         &mut transactions,
-                        leader_info.clone(),
+                        leader_info_provider.clone(),
                         &config,
                     );
                 }
@@ -402,7 +402,7 @@ impl SendTransactionService {
         root_bank: &Arc<Bank>,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
-        leader_info: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
         config: &Config,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
@@ -507,7 +507,7 @@ impl SendTransactionService {
 
             let iter = wire_transactions.chunks(config.batch_size);
             for chunk in iter {
-                let mut leader_info_provider = leader_info.lock().unwrap();
+                let mut leader_info_provider = leader_info_provider.lock().unwrap();
                 let leader_info = leader_info_provider.get_leader_info();
                 let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
 
