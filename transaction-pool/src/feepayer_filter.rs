@@ -5,7 +5,7 @@ use rand::thread_rng;
 use rand::Rng;
 
 pub struct FeePayerFilter {
-    feepayers: Vec<u16>,
+    feepayers: Vec<u32>,
     count: u64,
     seed: (u128,u128),
 }
@@ -14,13 +14,14 @@ impl FeePayerFilter {
     pub fn new() -> Self {
         Self {
             seed: thread_rng().gen(),
-            blockhashes: vec![0; u16::MAX.into()],
+            feepayers: vec![0; u16::MAX.into()],
+            count: 0,
         }
     }
 
     pub fn reset(&mut self) {
         self.seed = thread_rng().gen();
-        self.blockhashes = vec![0; u16::MAX.into()];
+        self.feepayers = vec![0; u16::MAX.into()];
     }
 
     //accumilate invalid fee payers
@@ -37,7 +38,7 @@ impl FeePayerFilter {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(addr.as_ref());
         let pos = hasher.finish() % u64::from(u16::MAX);
-        let expected = u64::from(self.blockhashes[usize::try_from(pos).unwrap()]) * u64::from(u16::MAX);
+        let expected = u64::from(self.feepayers[usize::try_from(pos).unwrap()]) * u64::from(u16::MAX);
         expected > self.count
     }
 }
