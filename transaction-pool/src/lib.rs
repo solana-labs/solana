@@ -1,7 +1,11 @@
+use ahash::AHasher;
+use rand::thread_rng;
+use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::hash::Hasher;
 
 #[derive(Default, Clone, PartialEq, Debug)]
 pub struct Item {
@@ -37,7 +41,9 @@ impl Pool {
         let mut rv = VecDeque::new();
         let mut total_cu: u64 = 0;
         let mut block_full = false;
-        let mut buckets: HashMap<Pubkey, u64> = HashMap::new();
+        let seed: (u128, u128) = thread_rng().gen();
+        let mut hasher = AHasher::new_with_keys(seed.0, seed.1);
+        let mut buckets = vec![0u64; u16::MAX.into()];
         let mut gc = vec![];
         for (k, v) in &mut self.items.iter_mut() {
             let mut retry = VecDeque::new();
@@ -53,12 +59,17 @@ impl Pool {
                     break;
                 }
                 let mut bucket_full = false;
-                let keys = table.keys(item);
-                for k in keys {
-                    if buckets.get(k).is_none() {
-                        continue;
-                    }
-                    if buckets[k].saturating_add(item.units) > self.max_bucket_cu {
+                let keys: Vec<usize> = table
+                    .keys(item)
+                    .iter()
+                    .map(|x| {
+                        hasher.write(x.as_ref());
+                        (hasher.finish() % u64::from(u16::MAX)).try_into().unwrap()
+                    })
+                    .collect();
+
+                for k in &keys {
+                    if buckets[*k].saturating_add(item.units) > self.max_bucket_cu {
                         bucket_full = true;
                         break;
                     }
@@ -67,10 +78,10 @@ impl Pool {
                     retry.push_back(v.pop_front().unwrap());
                     continue;
                 }
-                for k in keys {
-                    *buckets.entry(**k).or_insert(0) += item.units;
+                for k in &keys {
+                    let ix = buckets[*k] = buckets[*k].saturating_add(item.units);
                 }
-                total_cu += item.units;
+                total_cu = total_cu.saturating_add(item.units);
                 rv.push_back(v.pop_front().unwrap());
                 self.count -= 1;
             }
@@ -91,8 +102,6 @@ impl Pool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::thread_rng;
-    use rand::Rng;
 
     struct Test<'a> {
         keys: &'a [&'a Pubkey],

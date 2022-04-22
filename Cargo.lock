@@ -6004,6 +6004,7 @@ dependencies = [
 name = "solana-transaction-pool"
 version = "1.11.0"
 dependencies = [
+ "ahash",
  "log",
  "rand 0.7.3",
  "rustc_version 0.4.0",

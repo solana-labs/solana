@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-transaction-pool"
 edition = "2021"
 
 [dependencies]
+ahash = "0.7.6"
 log = "0.4.14"
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.0" }

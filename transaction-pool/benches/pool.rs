@@ -1,6 +1,7 @@
 #![feature(test)]
 
 extern crate test;
+use ahash::AHasher;
 use rand::thread_rng;
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
