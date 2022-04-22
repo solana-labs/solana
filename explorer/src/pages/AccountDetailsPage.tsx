@@ -36,7 +36,7 @@ import { TokenTransfersCard } from "components/account/history/TokenTransfersCar
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
-import { MetadataAttributesCard } from "components/account/MetadataAttributesCard";
+import { MetaplexNFTAttributesCard } from "components/account/MetaplexNFTAttributesCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
@@ -411,7 +411,7 @@ function MoreSection({
         />
       )}
       {tab === "attributes" && (
-        <MetadataAttributesCard
+        <MetaplexNFTAttributesCard
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
