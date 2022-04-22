@@ -20,6 +20,8 @@ impl FeeFilter {
             seed: thread_rng().gen(),
             buckets: vec![(0, 0); u16::MAX.into()],
             age: 2_000,
+            global_price: 0,
+            global_now_ms: 0,
         }
     }
 
@@ -37,6 +39,11 @@ impl FeeFilter {
     pub fn set_key_price(&mut self, key: u64, lamports_per_cu: u64, now_ms: u64) {
         let pos = key % u64::from(u16::MAX);
         self.buckets[usize::try_from(pos).unwrap()] = (lamports_per_cu, now_ms);
+    }
+
+    pub fn set_global_price(&mut self, lamports_per_cu: u64, now_ms: u64) {
+        self.global_price = lamports_per_cu;
+        self.global_now_ms = now_ms;
     }
 
     pub fn check_price(&self, addr: &Pubkey, lamports_per_cu: u64, now_ms: u64) -> bool {

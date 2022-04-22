@@ -6,7 +6,7 @@ use {
     std::{
         collections::{BTreeMap, VecDeque},
         hash::Hasher,
-        sync::{Arc, RwLock},
+        sync::RwLock,
     },
 };
 
@@ -64,6 +64,10 @@ impl Pool {
                 }
                 if total_cu.saturating_add(item.units) > self.max_block_cu {
                     block_full = true;
+                    fee_filter
+                        .write()
+                        .unwrap()
+                        .set_global_price(item.lamports_per_cu, now_ms);
                     break;
                 }
                 let mut bucket_full = false;
