@@ -113,10 +113,10 @@ pub struct AccountSharedData {
 /// Returns true if accounts are essentially equivalent as in all fields are equivalent.
 pub fn accounts_equal<T: ReadableAccount, U: ReadableAccount>(me: &T, other: &U) -> bool {
     me.lamports() == other.lamports()
-        && me.data() == other.data()
-        && me.owner() == other.owner()
         && me.executable() == other.executable()
         && me.rent_epoch() == other.rent_epoch()
+        && me.owner() == other.owner()
+        && me.data() == other.data()
 }
 
 impl From<AccountSharedData> for Account {
