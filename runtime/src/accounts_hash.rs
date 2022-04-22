@@ -78,6 +78,9 @@ pub struct HashStats {
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
     pub rehash_unnecessary: AtomicUsize,
+    pub roots_older_than_epoch: AtomicUsize,
+    pub accounts_in_roots_older_than_epoch: AtomicUsize,
+    pub append_vec_sizes_older_than_epoch: AtomicUsize,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -190,6 +193,23 @@ impl HashStats {
             (
                 "rehashed_rewrites_unnecessary",
                 self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_older_than_epoch",
+                self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "append_vec_sizes_older_than_epoch",
+                self.append_vec_sizes_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "accounts_in_roots_older_than_epoch",
+                self.accounts_in_roots_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
                 i64
             ),
         );

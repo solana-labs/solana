@@ -5403,6 +5403,27 @@ impl AccountsDb {
         }
     }
 
+    fn update_old_slot_stats(
+        &self,
+        stats: &HashStats,
+        sub_storages: Option<&Vec<Arc<AccountStorageEntry>>>,
+    ) {
+        if let Some(sub_storages) = sub_storages {
+            stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
+            let num_accounts = sub_storages.iter().map(|storage| storage.count()).sum();
+            let sizes = sub_storages
+                .iter()
+                .map(|storage| storage.total_bytes())
+                .sum::<u64>();
+            stats
+                .append_vec_sizes_older_than_epoch
+                .fetch_add(sizes as usize, Ordering::Relaxed);
+            stats
+                .accounts_in_roots_older_than_epoch
+                .fetch_add(num_accounts, Ordering::Relaxed);
+        }
+    }
+
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<F, F2>(
         &self,
@@ -5413,6 +5434,7 @@ impl AccountsDb {
         after_func: F2,
         bin_range: &Range<usize>,
         bin_calculator: &PubkeyBinCalculator24,
+        stats: &HashStats,
     ) -> Vec<BinnedHashData>
     where
         F: Fn(LoadedAccount, &mut BinnedHashData, Slot) + Send + Sync,
@@ -5459,6 +5481,15 @@ impl AccountsDb {
                     retval.append(&mut vec![Vec::new(); range]);
                 }
 
+                let slots_per_epoch = config
+                    .rent_collector
+                    .epoch_schedule
+                    .get_slots_in_epoch(config.rent_collector.epoch);
+                let one_epoch_old = snapshot_storages
+                    .range()
+                    .end
+                    .saturating_sub(slots_per_epoch);
+
                 let mut file_name = String::default();
                 // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
                 if should_cache_hash_data && eligible_for_caching {
@@ -5466,6 +5497,9 @@ impl AccountsDb {
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
                     for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
+                        if bin_range.start == 0 && slot < one_epoch_old {
+                            self.update_old_slot_stats(stats, sub_storages);
+                        }
                         bin_range.start.hash(&mut hasher);
                         bin_range.end.hash(&mut hasher);
                         if let Some(sub_storages) = sub_storages {
@@ -5516,6 +5550,12 @@ impl AccountsDb {
                         }
 
                         // fall through and load normally - we failed to load
+                    }
+                } else {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
+                        if bin_range.start == 0 && slot < one_epoch_old {
+                            self.update_old_slot_stats(stats, sub_storages);
+                        }
                     }
                 }
 
@@ -5778,6 +5818,7 @@ impl AccountsDb {
             },
             bin_range,
             &bin_calculator,
+            stats,
         );
 
         stats.sort_time_total_us += sort_time.load(Ordering::Relaxed);
@@ -8246,6 +8287,7 @@ pub mod tests {
             |a| a,
             &Range { start: 0, end: 1 },
             &PubkeyBinCalculator24::new(1),
+            &HashStats::default(),
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
         assert_eq!(
