@@ -23,6 +23,7 @@ impl FeePayerFilter {
     pub fn reset(&mut self) {
         self.seed = thread_rng().gen();
         self.feepayers = vec![0; u16::MAX.into()];
+        self.count = 0;
     }
 
     //accumilate invalid fee payers
