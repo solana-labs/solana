@@ -3134,7 +3134,7 @@ failed:
 [2022-04-21T18:39:45.863178526Z ERROR solana_runtime::accounts_db] jwash: ancient_append_vec: slots: [130142117], total: 13450
 
         */
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 996300 / 1000000; // put some 'in-this-epoch' slots into an ancient append vec
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 60/100;// 996300 / 1000000; // put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width + 1000);// + 16096 + 6096 -1000);
 
         let mut m = Measure::start("get slots");
@@ -3291,7 +3291,7 @@ failed:
                         slot,
                         accounts_this_append_vec
                             .iter()
-                            .take(10_000)
+                            .take(10)
                             .map(|(a, b, c)| (a, c, b.offset))
                             .collect::<Vec<_>>()
                     );
@@ -3311,6 +3311,7 @@ failed:
 
                 let mut ids = vec![writer.1.append_vec_id()];
                 let mut drop_root = slot > writer.0;
+                /*
                 let targetkey = Pubkey::from_str("5Pj1kicH7V3EpDvxmXUMaBeLSnvy1Ac1wQTFVSKBDnHR").unwrap();
                 accounts_this_append_vec.iter().enumerate().for_each(|(i, (key, acct, slot))|
                     {
@@ -3318,7 +3319,7 @@ failed:
                             error!("jwashw, writing: {}, {:?} {:?}, ancient: {}", key, (slot, accounts_this_append_vec[i].1.rent_epoch()), hashes_this_append_vec[i], writer.0);
                         }
                     });
-
+*/
                 let prev = if true {
                     //accounts_next_append_vec.is_empty() {
                     // write what we can to the current ancient storage
@@ -3334,7 +3335,7 @@ failed:
                         "{:?}",
                         accounts_this_append_vec
                             .iter()
-                            .take(10_000)
+                            .take(10)
                             .map(|(a, b, c)| (a, c, b.offset))
                             .collect::<Vec<_>>()
                     );
@@ -3380,7 +3381,7 @@ failed:
                             slot,
                             accounts_next_append_vec
                                 .iter()
-                                .take(10_000)
+                                .take(10)
                                 .map(|(a, b, c)| (a, c, b.offset))
                                 .collect::<Vec<_>>()
                         );
@@ -3564,7 +3565,7 @@ failed:
         let shrink_candidates_slots =
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         if !shrink_candidates_slots.is_empty() {
-            //self.shrink_ancient_slots();
+            self.shrink_ancient_slots();
             error!(
                 "ancient_append_vec: shrink_candidate_slots, len: {}",
                 shrink_candidates_slots.len()
@@ -3638,7 +3639,7 @@ failed:
 
         if is_startup {
             self.shrink_ancient_slots();
-            return; // skip more shrinking for now
+            //return; // skip more shrinking for now
         }
 
         if is_startup && self.caching_enabled {

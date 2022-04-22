@@ -862,6 +862,7 @@ impl ExpectedRentCollection {
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Hash> {
+        return None; // since we're not skipping rewrites, we don't need to rehash
         use solana_measure::measure::Measure;
         let mut m = Measure::start("rehash_calc_us");
         let expected = ExpectedRentCollection::new(
@@ -900,6 +901,7 @@ impl ExpectedRentCollection {
         }
         use {log::*, std::str::FromStr};
 
+        /*
         if let Some(i) = interesting.get(pubkey) {
             /*
             200 failed
@@ -921,6 +923,7 @@ impl ExpectedRentCollection {
             }
             error!("jwash: rehashed: {} {}, slot: {}, rent_epoch: {}, existing_hash: {}, storage_slot: {}, i: {}", pubkey, recalc_hash, expected.expected_rent_collection_slot_max_epoch, expected.rent_epoch, loaded_hash, storage_slot, i);
         }
+        */
         stats.rehash_required.fetch_add(1, Ordering::Relaxed);
 
         // recomputed based on rent collection/rewrite slot
