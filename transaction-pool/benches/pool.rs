@@ -1,12 +1,13 @@
 #![feature(test)]
 
 extern crate test;
-use ahash::AHasher;
-use rand::thread_rng;
-use rand::Rng;
-use solana_sdk::pubkey::Pubkey;
-use solana_transaction_pool::{Item, Pool, Table};
-use test::Bencher;
+use {
+    ahash::AHasher,
+    rand::{thread_rng, Rng},
+    solana_sdk::pubkey::Pubkey,
+    solana_transaction_pool::pool::{Item, Pool, Table},
+    test::Bencher,
+};
 
 #[bench]
 fn bench_pool_insert(bencher: &mut Bencher) {
