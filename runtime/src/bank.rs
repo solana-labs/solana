@@ -37,6 +37,7 @@
 use solana_sdk::recent_blockhashes_account;
 use {
     crate::{
+        account_overrides::AccountOverrides,
         accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionLoadResult},
         accounts_db::{
             AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
@@ -112,7 +113,7 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-        message::SanitizedMessage,
+        message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -122,7 +123,7 @@ use {
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
-        slot_history::SlotHistory,
+        slot_history::{Check, SlotHistory},
         system_transaction,
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
@@ -3576,7 +3577,9 @@ impl Bank {
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
-        let number_of_accounts = transaction.message().account_keys().len();
+        let account_keys = transaction.message().account_keys();
+        let number_of_accounts = account_keys.len();
+        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -3593,6 +3596,7 @@ impl Bank {
             false,
             true,
             &mut timings,
+            Some(&account_overrides),
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -3634,6 +3638,27 @@ impl Bank {
             post_simulation_accounts,
             units_consumed,
         }
+    }
+
+    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
+        let mut account_overrides = AccountOverrides::default();
+        let slot_history_id = sysvar::slot_history::id();
+        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
+            let current_account = self.get_account_with_fixed_root(&slot_history_id);
+            let slot_history = current_account
+                .as_ref()
+                .map(|account| from_account::<SlotHistory, _>(account).unwrap())
+                .unwrap_or_default();
+            if slot_history.check(self.slot()) == Check::Found {
+                let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
+                if let Some((account, _)) =
+                    self.load_slow_with_fixed_root(&ancestors, &slot_history_id)
+                {
+                    account_overrides.set_slot_history(Some(account));
+                }
+            }
+        }
+        account_overrides
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
@@ -4043,6 +4068,7 @@ impl Bank {
         enable_cpi_recording: bool,
         enable_log_recording: bool,
         timings: &mut ExecuteTimings,
+        account_overrides: Option<&AccountOverrides>,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4086,6 +4112,7 @@ impl Bank {
             &self.rent_collector,
             &self.feature_set,
             &self.fee_structure,
+            account_overrides,
         );
         load_time.stop();
 
@@ -5317,6 +5344,7 @@ impl Bank {
             enable_cpi_recording,
             enable_log_recording,
             timings,
+            None,
         );
 
         let results = self.commit_transactions(
@@ -17060,6 +17088,7 @@ pub(crate) mod tests {
             &bank.rent_collector,
             &bank.feature_set,
             &FeeStructure::default(),
+            None,
         );
 
         let compute_budget = bank
