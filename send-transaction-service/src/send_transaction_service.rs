@@ -493,19 +493,19 @@ impl SendTransactionService {
 
         if !batched_transactions.is_empty() {
             // Processing the transactions in batch
-            let mut leader_info_provider = leader_info.lock().unwrap();
-            let leader_info = leader_info_provider.get_leader_info();
-            let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
-
             let wire_transactions = transactions
                 .iter()
                 .filter(|(signature, _)| batched_transactions.contains(signature))
                 .map(|(_, transaction_info)| transaction_info.wire_transaction.as_ref())
                 .collect::<Vec<&[u8]>>();
 
-            for address in &addresses {
-                let iter = wire_transactions.chunks(config.batch_size);
-                for chunk in iter {
+            let iter = wire_transactions.chunks(config.batch_size);
+            for chunk in iter {
+                let mut leader_info_provider = leader_info.lock().unwrap();
+                let leader_info = leader_info_provider.get_leader_info();
+                let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
+
+                for address in &addresses {
                     Self::send_transactions(address, chunk);
                 }
             }
