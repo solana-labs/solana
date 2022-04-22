@@ -3,9 +3,12 @@
 extern crate test;
 use {
     rand::{thread_rng, Rng},
+    std::sync::Arc,
+    std::sync::RwLock,
     solana_sdk::pubkey::Pubkey,
     solana_transaction_pool::pool::{Item, Pool, Table},
     test::Bencher,
+    solana_transaction_pool::fee_filter::{FeeFilter},
 };
 
 #[bench]
@@ -14,9 +17,9 @@ fn bench_pool_insert(bencher: &mut Bencher) {
     let mut i = 0;
     bencher.iter(move || {
         pool.insert(Item {
-            priority: i,
+            lamports_per_cu: i,
             units: i,
-            time: i,
+            now_ms: i,
             id: (0, 0),
         });
         i += 1;
@@ -29,7 +32,7 @@ struct Test<'a> {
 
 impl Table for Test<'_> {
     fn keys(&self, item: &Item) -> &[&Pubkey] {
-        &self.keys[item.priority as usize % 5..self.keys.len()]
+        &self.keys[item.lamports_per_cu as usize % 5..self.keys.len()]
     }
 }
 
@@ -39,9 +42,9 @@ fn bench_pool_baseline(bencher: &mut Bencher) {
     let max = 10_000usize;
     for i in 0..max {
         pool.insert(Item {
-            priority: thread_rng().gen_range(1, 100),
+            lamports_per_cu: thread_rng().gen_range(1, 100),
             units: thread_rng().gen_range(1, 100),
-            time: thread_rng().gen_range(1, 100),
+            now_ms: thread_rng().gen_range(1, 100),
             id: (i as u32, i as u32),
         });
     }
@@ -53,13 +56,14 @@ fn bench_pool_baseline(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_pool_pop(bencher: &mut Bencher) {
+    let filter = Arc::new(RwLock::new(FeeFilter::new()));
     let mut pool = Pool::default();
     let max = 10_000usize;
     for i in 0..max {
         pool.insert(Item {
-            priority: thread_rng().gen_range(1, 100),
+            lamports_per_cu: thread_rng().gen_range(1, 100),
             units: thread_rng().gen_range(1, 100),
-            time: thread_rng().gen_range(1, 100),
+            now_ms: thread_rng().gen_range(1, 100),
             id: (i as u32, i as u32),
         });
     }
@@ -79,7 +83,7 @@ fn bench_pool_pop(bencher: &mut Bencher) {
     let test = Test { keys };
     bencher.iter(move || {
         let mut pool1 = pool.clone();
-        let rv = pool1.pop_block(0, &test);
+        let rv = pool1.pop_block(0, &test, &filter);
         assert_eq!(rv.len() + pool1.count, pool.count);
     });
 }
