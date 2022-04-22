@@ -28,6 +28,8 @@ use {
     },
 };
 
+const DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS: Slot = 15_000_000; // ~90days
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ForceActivation {
     No,
@@ -39,6 +41,7 @@ pub enum ForceActivation {
 pub enum FeatureCliCommand {
     Status {
         features: Vec<Pubkey>,
+        display_all: bool,
     },
     Activate {
         feature: Pubkey,
@@ -364,6 +367,11 @@ impl FeatureSubCommands for App<'_, '_> {
                                 .index(1)
                                 .multiple(true)
                                 .help("Feature status to query [default: all known features]"),
+                        )
+                        .arg(
+                            Arg::with_name("display_all")
+                                .long("display-all")
+                                .help("display all features regardless of age"),
                         ),
                 )
                 .subcommand(
@@ -435,9 +443,13 @@ pub fn parse_feature_subcommand(
             } else {
                 FEATURE_NAMES.keys().cloned().collect()
             };
+            let display_all = matches.is_present("display_all");
             features.sort();
             CliCommandInfo {
-                command: CliCommand::Feature(FeatureCliCommand::Status { features }),
+                command: CliCommand::Feature(FeatureCliCommand::Status {
+                    features,
+                    display_all,
+                }),
                 signers: vec![],
             }
         }
@@ -452,7 +464,10 @@ pub fn process_feature_subcommand(
     feature_subcommand: &FeatureCliCommand,
 ) -> ProcessResult {
     match feature_subcommand {
-        FeatureCliCommand::Status { features } => process_status(rpc_client, config, features),
+        FeatureCliCommand::Status {
+            features,
+            display_all,
+        } => process_status(rpc_client, config, features, *display_all),
         FeatureCliCommand::Activate { feature, force } => {
             process_activate(rpc_client, config, *feature, *force)
         }
@@ -663,33 +678,44 @@ fn process_status(
     rpc_client: &RpcClient,
     config: &CliConfig,
     feature_ids: &[Pubkey],
+    display_all: bool,
 ) -> ProcessResult {
-    let mut features: Vec<CliFeature> = vec![];
+    let filter = if !display_all {
+        let now = rpc_client.get_slot()?;
+        now.checked_sub(DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS)
+    } else {
+        None
+    };
     let mut inactive = false;
-    for (i, account) in rpc_client
+    let mut features = rpc_client
         .get_multiple_accounts(feature_ids)?
         .into_iter()
-        .enumerate()
-    {
-        let feature_id = &feature_ids[i];
-        let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
-        if let Some(account) = account {
-            if let Some(feature_status) = status_from_account(account) {
-                features.push(CliFeature {
+        .zip(feature_ids)
+        .map(|(account, feature_id)| {
+            let feature_name = FEATURE_NAMES.get(feature_id).unwrap();
+            account
+                .and_then(status_from_account)
+                .map(|feature_status| CliFeature {
                     id: feature_id.to_string(),
                     description: feature_name.to_string(),
                     status: feature_status,
-                });
-                continue;
+                })
+                .unwrap_or_else(|| {
+                    inactive = true;
+                    CliFeature {
+                        id: feature_id.to_string(),
+                        description: feature_name.to_string(),
+                        status: CliFeatureStatus::Inactive,
+                    }
+                })
+        })
+        .filter(|feature| match (filter, &feature.status) {
+            (Some(min_activation), CliFeatureStatus::Active(activation)) => {
+                activation > &min_activation
             }
-        }
-        inactive = true;
-        features.push(CliFeature {
-            id: feature_id.to_string(),
-            description: feature_name.to_string(),
-            status: CliFeatureStatus::Inactive,
-        });
-    }
+            _ => true,
+        })
+        .collect::<Vec<_>>();
 
     features.sort_unstable();
 
