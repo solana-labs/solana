@@ -19,10 +19,6 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
-<<<<<<< HEAD
-pub mod example_mocks;
-=======
->>>>>>> 7206f894e (Move solana_program::example_mocks declaration to appear last in source files (#24577))
 pub mod feature;
 pub mod fee_calculator;
 pub mod hash;
@@ -229,7 +225,6 @@ macro_rules! unchecked_div_by_const {
     }};
 }
 
-<<<<<<< HEAD
 use std::{mem::MaybeUninit, ptr::write_bytes};
 
 #[macro_export]
@@ -248,7 +243,7 @@ where
     clone(&mut value);
     unsafe { value.assume_init() }
 }
-=======
+
 // This module is purposefully listed after all other exports: because of an
 // interaction within rustdoc between the reexports inside this module of
 // `solana_program`'s top-level modules, and `solana_sdk`'s glob re-export of
@@ -257,7 +252,6 @@ where
 // `solana_sdk`.
 #[cfg(not(target_arch = "bpf"))]
 pub mod example_mocks;
->>>>>>> 7206f894e (Move solana_program::example_mocks declaration to appear last in source files (#24577))
 
 #[cfg(test)]
 mod tests {
