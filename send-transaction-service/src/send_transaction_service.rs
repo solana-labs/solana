@@ -148,12 +148,12 @@ impl<T: TpuInfo + std::marker::Send + Clone + 'static> LeaderInfoProvider<T> {
     pub fn get_leader_info(&mut self) -> &Option<T> {
         if let Some(leader_info) = self.leader_info.as_mut() {
             let now = Instant::now();
-            let expired = self
+            let need_refresh = self
                 .last_leader_refresh
                 .map(|last| now.duration_since(last) >= self.refresh_rate)
-                .unwrap_or(false);
+                .unwrap_or(true);
 
-            if expired {
+            if need_refresh {
                 leader_info.refresh_recent_peers();
                 self.last_leader_refresh = Some(now);
             }
