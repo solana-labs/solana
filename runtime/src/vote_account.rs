@@ -5,7 +5,7 @@ use {
         ser::{Serialize, Serializer},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -244,18 +244,7 @@ impl PartialEq<VoteAccountInner> for VoteAccountInner {
 
 impl PartialEq<AccountSharedData> for VoteAccount {
     fn eq(&self, other: &AccountSharedData) -> bool {
-        let Account {
-            lamports,
-            data,
-            owner,
-            executable,
-            rent_epoch,
-        } = &self.0.account;
-        other.lamports() == *lamports
-            && other.executable() == *executable
-            && other.rent_epoch() == *rent_epoch
-            && other.owner() == owner
-            && other.data() == data
+        accounts_equal(&self.0.account, other)
     }
 }
 
