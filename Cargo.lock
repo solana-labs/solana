@@ -4786,6 +4786,7 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-stake-program",
  "solana-streamer",
+ "solana-transaction-pool",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -6010,6 +6011,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "solana-frozen-abi 1.11.0",
  "solana-frozen-abi-macro 1.11.0",
+ "solana-perf",
  "solana-sdk",
 ]
 

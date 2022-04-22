@@ -3,6 +3,9 @@ use {
     rand::{thread_rng, Rng},
     solana_sdk::hash::Hash,
     std::hash::Hasher,
+    solana_perf::{
+        packet::PacketBatch,
+    },
 };
 
 pub struct BlockhashFilter {

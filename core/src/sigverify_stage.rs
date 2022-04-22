@@ -255,6 +255,24 @@ impl SigVerifyStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
+        let mut bhf_time = Measure::start("sigverify_blockhash_filter_time");
+        blockhash_filter
+            .read()
+            .unwrap()
+            .filter_packets(&mut batches);
+        bhf_time.stop();
+
+        let mut fpf_time = Measure::start("sigverify_fee_payer_filter_time");
+        fee_payer_filter
+            .read()
+            .unwrap()
+            .filter_packets(&mut batches);
+        fpf_time.stop();
+
+        let mut fee_filter_time = Measure::start("sigverify_fee_filter_time");
+        fee_filter.read().unwrap().filter_packets(&mut batches);
+        fee_filter_time.stop();
+
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
         let mut batches = verifier.verify_batches(batches, num_valid_packets);
         verify_batch_time.stop();
@@ -307,6 +325,9 @@ impl SigVerifyStage {
         stats.total_excess_fail += excess_fail;
         stats.total_shrink_time += shrink_time.as_us() as usize;
         stats.total_shrinks += total_shrinks;
+        stats.blockhash_us += bhf_time.as_us() as usize;
+        stats.fee_payer_us += fpf_time.as_us() as usize;
+        stats.fee_filter_us += fee_filter_time.as_us() as usize;
 
         Ok(())
     }
