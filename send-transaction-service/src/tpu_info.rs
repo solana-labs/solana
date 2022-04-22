@@ -5,6 +5,7 @@ pub trait TpuInfo {
     fn get_leader_tpus(&self, max_count: u64) -> Vec<&SocketAddr>;
 }
 
+#[derive(Clone)]
 pub struct NullTpuInfo;
 
 impl TpuInfo for NullTpuInfo {
