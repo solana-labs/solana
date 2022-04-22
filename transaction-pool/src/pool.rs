@@ -1,14 +1,13 @@
 use {
+    crate::fee_filter::FeeFilter,
     ahash::AHasher,
     rand::{thread_rng, Rng},
-    std::sync::Arc,
-    std::sync::RwLock,
     solana_sdk::pubkey::Pubkey,
     std::{
         collections::{BTreeMap, VecDeque},
         hash::Hasher,
+        sync::{Arc, RwLock},
     },
-    crate::fee_filter::{FeeFilter},
 };
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -32,7 +31,6 @@ pub trait Table {
     fn keys(&self, item: &Item) -> &[&Pubkey];
 }
 
-
 impl Pool {
     pub fn insert(&mut self, item: Item) {
         let bucket = self
@@ -42,7 +40,12 @@ impl Pool {
         bucket.push_back(item);
         self.count += 1;
     }
-    pub fn pop_block<T: Table>(&mut self, now_ms: u64, table: &T, fee_filter: &RwLock<FeeFilter>) -> VecDeque<Item> {
+    pub fn pop_block<T: Table>(
+        &mut self,
+        now_ms: u64,
+        table: &T,
+        fee_filter: &RwLock<FeeFilter>,
+    ) -> VecDeque<Item> {
         let mut rv = VecDeque::new();
         let mut total_cu: u64 = 0;
         let mut block_full = false;
@@ -77,7 +80,11 @@ impl Pool {
                 for k in &keys {
                     if buckets[*k].saturating_add(item.units) > self.max_bucket_cu {
                         bucket_full = true;
-                        fee_filter.write().unwrap().set_key_price(u64::try_from(*k).unwrap(), item.lamports_per_cu, now_ms);
+                        fee_filter.write().unwrap().set_key_price(
+                            u64::try_from(*k).unwrap(),
+                            item.lamports_per_cu,
+                            now_ms,
+                        );
                         break;
                     }
                 }
@@ -108,8 +115,7 @@ impl Pool {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::sync::Arc;
+    use {super::*, std::sync::Arc};
 
     struct Test<'a> {
         keys: &'a [&'a Pubkey],

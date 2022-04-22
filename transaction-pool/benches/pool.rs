@@ -3,12 +3,13 @@
 extern crate test;
 use {
     rand::{thread_rng, Rng},
-    std::sync::Arc,
-    std::sync::RwLock,
     solana_sdk::pubkey::Pubkey,
-    solana_transaction_pool::pool::{Item, Pool, Table},
+    solana_transaction_pool::{
+        fee_filter::FeeFilter,
+        pool::{Item, Pool, Table},
+    },
+    std::sync::{Arc, RwLock},
     test::Bencher,
-    solana_transaction_pool::fee_filter::{FeeFilter},
 };
 
 #[bench]
