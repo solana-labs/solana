@@ -11,10 +11,12 @@ jobs:
   web3:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v3
         with:
-          python-version: "2.x"
+          python-version: "3.x"
       - name: cmd
         run: |
           chmod +x ./ci/export-github-repo.sh
