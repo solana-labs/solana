@@ -572,8 +572,6 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
-#[cfg(not(target_arch = "bpf"))]
-pub mod example_mocks;
 pub mod feature;
 pub mod fee_calculator;
 pub mod hash;
@@ -799,6 +797,15 @@ macro_rules! unchecked_div_by_const {
         quotient
     }};
 }
+
+// This module is purposefully listed after all other exports: because of an
+// interaction within rustdoc between the reexports inside this module of
+// `solana_program`'s top-level modules, and `solana_sdk`'s glob re-export of
+// `solana_program`'s top-level modules, if this module is not lexically last
+// rustdoc fails to generate documentation for the re-exports within
+// `solana_sdk`.
+#[cfg(not(target_arch = "bpf"))]
+pub mod example_mocks;
 
 #[cfg(test)]
 mod tests {
