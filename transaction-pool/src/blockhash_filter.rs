@@ -17,6 +17,12 @@ impl BlockhashFilter {
             blockhashes: vec![false; u16::MAX.into()],
         }
     }
+
+    pub fn reset(&mut self) {
+        self.seed = thread_rng().gen();
+        self.blockhashes = vec![false; u16::MAX.into()];
+    }
+
     pub fn valid(&mut self, hash: &Hash) {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(hash.as_ref());
