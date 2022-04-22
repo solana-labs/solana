@@ -1,3 +1,5 @@
+#![allow(clippy::integer_arithmetic)]
+
 /// return the bit width of the integer type
 pub const fn num_bits<T>() -> u32 {
     (std::mem::size_of::<T>() * 8) as u32
