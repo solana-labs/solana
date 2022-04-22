@@ -36,6 +36,7 @@ import { TokenTransfersCard } from "components/account/history/TokenTransfersCar
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
+import { MetaplexNFTAttributesCard } from "components/account/MetaplexNFTAttributesCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
@@ -69,6 +70,11 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "metadata",
       title: "Metadata",
       path: "/metadata",
+    },
+    {
+      slug: "attributes",
+      title: "Attributes",
+      path: "/attributes",
     },
   ],
   stake: [
@@ -360,6 +366,7 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
+  | "attributes"
   | "domains"
   | "security"
   | "anchor-program"
@@ -417,6 +424,11 @@ function MoreSection({
         )}
       {tab === "metadata" && (
         <MetaplexMetadataCard
+          nftData={(account.details?.data as TokenProgramData).nftData!}
+        />
+      )}
+      {tab === "attributes" && (
+        <MetaplexNFTAttributesCard
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
