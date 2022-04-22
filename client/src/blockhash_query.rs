@@ -1,7 +1,7 @@
 use {
     crate::{nonce_utils, rpc_client::RpcClient},
     clap::ArgMatches,
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         input_parsers::{pubkey_of, value_of},
         nonce::*,
         offline::*,

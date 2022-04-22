@@ -1,7 +1,7 @@
 use {
     clap::{crate_description, crate_name, ArgMatches},
     console::style,
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         input_validators::normalize_to_url_if_moniker,
         keypair::{CliSigners, DefaultSigner},
         DisplayError,

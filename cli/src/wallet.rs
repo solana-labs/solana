@@ -10,7 +10,7 @@ use {
     },
     clap::{Arg, ArgMatches, Command},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         fee_payer::*,
         input_parsers::*,
         input_validators::*,

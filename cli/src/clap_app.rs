@@ -4,7 +4,7 @@ use {
         validator_info::*, vote::*, wallet::*,
     },
     clap::{Arg, ArgGroup, Command},
-    solana_clap_utils::{self, input_validators::*, keypair::*},
+    solana_clap_v3_utils::{self, input_validators::*, keypair::*},
     solana_cli_config::CONFIG_FILE,
 };
 

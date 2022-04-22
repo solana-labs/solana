@@ -7,7 +7,7 @@ use {
     console::style,
     crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         input_parsers::*,
         input_validators::*,
         keypair::DefaultSigner,

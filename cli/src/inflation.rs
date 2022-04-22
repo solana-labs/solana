@@ -1,7 +1,7 @@
 use {
     crate::cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
     clap::{Arg, ArgMatches, Command},
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         input_parsers::{pubkeys_of, value_of},
         input_validators::is_valid_pubkey,
         keypair::*,

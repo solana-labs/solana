@@ -17,7 +17,7 @@ crossbeam-channel = "0.5"
 log = "0.4.17"
 serde = "1.0.137"
 serde_derive = "1.0.103"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
+solana-clap-v3-utils = { path = "../clap-v3-utils", version = "=1.11.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-logger = { path = "../logger", version = "=1.11.0" }
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
