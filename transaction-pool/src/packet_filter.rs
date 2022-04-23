@@ -1,10 +1,11 @@
 struct PacketFilter {
-    blockhash_filter: Arc<RwLock<ExpiringFilter>>,
-    fee_payer_filter: Arc<RwLock<ExpiringFilter>>,
-    fee_filter: Arc<RwLock<FeeFilter>>,
+    blockhash_filter: ExpiringFilter,
+    fee_payer_filter: ExpiringFilter,
+    fee_filter: FeeFilter,
 }
 
 impl PacketFilter {
+    // allows for both false positives and false negatives
     pub fn filter_packets(&self, batches: &mut [PacketBatch], now_ms: u64) {
         for batch in batches {
             for packet in &mut batch.packets {
@@ -15,8 +16,6 @@ impl PacketFilter {
                 if let Ok(blockhash) = offsets.get_packet_blockhash(p) {
                     if !self
                         .blockhash_filter
-                        .read()
-                        .unwrap()
                         .check(blockhash, now_ms)
                     {
                         p.meta.set_discard(true);
@@ -26,8 +25,6 @@ impl PacketFilter {
                 if let Ok(fee_payer) = offsets.get_packet_fee_payer(p) {
                     if !self
                         .fee_payer_filter
-                        .read()
-                        .unwrap()
                         .check(fee_payer, now_ms)
                     {
                         p.meta.set_discard(true);
@@ -38,8 +35,6 @@ impl PacketFilter {
                     for keys in offsets.get_writable_accounts(p) {
                         if !self
                             .fee_filter
-                            .read()
-                            .unwrap()
                             .check_price(lamports_per_cu, now_ms)
                         {
                             p.meta.set_discard(true);
