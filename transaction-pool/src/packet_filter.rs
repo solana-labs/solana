@@ -1,3 +1,7 @@
+use solana_perf::packet::PacketBatch;
+use crate::expiring_filter::ExpiringFilter;
+use crate::fee_filter::FeeFilter;
+
 struct PacketFilter {
     blockhash_filter: ExpiringFilter,
     fee_payer_filter: ExpiringFilter,

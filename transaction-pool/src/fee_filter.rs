@@ -3,12 +3,13 @@ use {
     rand::{thread_rng, Rng},
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::hash::Hasher,
+    core::sync::atomic::AtomicU64,
 };
 
 /// expiring price filter
 pub struct FeeFilter {
     buckets: Vec<(AtomicU64, AtomicU64)>,
-    seeds: [AtomicU64; 4];
+    seed: [AtomicU64; 4],
     global_price: AtomicU64,
     global_now_ms: AtomicU64,
     age: u64,
@@ -22,11 +23,10 @@ impl FeeFilter {
                   ,AtomicU64::new(thread_rng().gen())
                   ,AtomicU64::new(thread_rng().gen())
                   ],
-            buckets: vec![(AtomicU64::new(0), AtomicU64::new(0)); u16::MAX.into()],
-
+            buckets: (0..u16::MAX).iter().map(|_| AtomicU64::new(0), AtomicU64::new(0)).collect(),
             age: 2_000,
-            global_price: 0,
-            global_now_ms: 0,
+            global_price: AtomicU64::new(0),
+            global_now_ms: AtomicU64::new(0),
         }
     }
 
@@ -45,8 +45,8 @@ impl FeeFilter {
     }
 
     pub fn hasher(&self) -> AHasher {
-        let seed0 = u128::from(self.seed[0].load(now_ms, Ordering::Relaxed))<<64 + u128::from(self.seed[1].load(now_ms, Ordering::Relaxed));
-        let seed1 = u128::from(self.seed[2].load(now_ms, Ordering::Relaxed))<<64 + u128::from(self.seed[3].load(now_ms, Ordering::Relaxed));
+        let seed0 = u128::from(self.seed[0].load(Ordering::Relaxed))<<64 + u128::from(self.seed[1].load(Ordering::Relaxed));
+        let seed1 = u128::from(self.seed[2].load(Ordering::Relaxed))<<64 + u128::from(self.seed[3].load(Ordering::Relaxed));
         AHasher::new_with_keys(seed0, seed1)
     }
 
@@ -75,7 +75,7 @@ impl FeeFilter {
         {
             return false;
         }
-        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
+        let mut hasher = self.hasher();
         hasher.write(addr.as_ref());
         let pos = hasher.finish() % u64::from(u16::MAX);
         let price = self.buckets[usize::try_from(pos).unwrap()].0.load(Ordering::Releaxed);

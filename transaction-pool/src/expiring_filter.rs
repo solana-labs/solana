@@ -3,12 +3,13 @@ use {
     rand::{thread_rng, Rng},
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::hash::Hasher,
+    core::sync::atomic::AtomicU64,
 };
 
 /// expiring filter
 pub struct ExpiringFilter {
     buckets: Vec<AtomicU64>,
-    seeds: [AtomicU64; 4];
+    seed: [AtomicU64; 4],
     age: u64,
 }
 
@@ -59,7 +60,7 @@ impl ExpiringFilter {
         let mut hasher = self.hashser();
         hasher.write(val);
         let pos = hasher.finish() % u64::from(u16::MAX);
-        let item = self.buckets[usize::try_from(pos).unwrap()].load(now_ms, Ordering::Relaxed);
+        let item = self.buckets[usize::try_from(pos).unwrap()].load(Ordering::Relaxed);
         now_ms > item.1.saturating_add(self.age)
     }
 }
