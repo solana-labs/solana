@@ -24,7 +24,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b613b8e1e3cf911a086f53f03bf286f52fd7a7258e4fa606f0ef220d39d8877"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
 ]
 
 [[package]]
@@ -339,13 +339,8 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
-<<<<<<< HEAD
  "block-padding 0.2.1",
  "generic-array 0.14.5",
-=======
- "block-padding",
- "generic-array",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
 ]
 
 [[package]]
@@ -354,7 +349,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1d36a02058e76b040de25a4464ba1c80935655595b661505c8b39b664828b95"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
 ]
 
 [[package]]
@@ -583,7 +578,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ee52072ec15386f770805afd189a01c8841be8696bed250fa2f13c4c0d6dfb7"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
 ]
 
 [[package]]
@@ -805,7 +800,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57952ca27b5e3606ff4dd79b0020231aaf9d6aa76dc05fd30137538c50bd3ce8"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
  "typenum",
 ]
 
@@ -815,7 +810,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
  "subtle",
 ]
 
@@ -869,18 +864,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e5c37193a1db1d8ed868c03ec7b152175f26160a5b740e5e484143877e0adf0"
 
 [[package]]
-<<<<<<< HEAD
-name = "derivative"
-version = "2.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaed5874effa6cde088c644ddcdcb4ffd1511391c5be4fdd7a5ccd02c7e4a183"
-dependencies = [
- "proc-macro2 1.0.36",
- "quote 1.0.6",
- "syn 1.0.91",
-]
-
-[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -894,8 +877,6 @@ dependencies = [
 ]
 
 [[package]]
-=======
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
 name = "dialoguer"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -908,11 +889,20 @@ dependencies = [
 
 [[package]]
 name = "digest"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
+dependencies = [
+ "generic-array 0.12.3",
+]
+
+[[package]]
+name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
 ]
 
 [[package]]
@@ -1367,6 +1357,15 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c68f0274ae0e023facc3c97b2e00f076be70e254bc851d972503b328db79b2ec"
+dependencies = [
+ "typenum",
+]
+
+[[package]]
+name = "generic-array"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd48d33ec7f05fbfa152300fdad764757cbded343c1aa1cff2fbaf4134851803"
@@ -1542,7 +1541,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17ea0a1394df5b6574da6e0c1ade9e78868c9fb0a4e5ef4428e32da4676b85b1"
 dependencies = [
  "digest 0.9.0",
- "generic-array",
+ "generic-array 0.14.5",
  "hmac 0.8.1",
 ]
 
@@ -1733,7 +1732,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1f03d4ab4d5dc9ec2d219f86c15d2a15fc08239d1cd3b2d6a19717c0a2f443"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
 ]
 
 [[package]]
@@ -1851,7 +1850,7 @@ version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b939a78fa820cdfcb7ee7484466746a7377760970f6f9c6fe19f9edcc8a38d2"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 0.1.5",
  "proc-macro2 1.0.36",
  "quote 1.0.6",
  "syn 1.0.91",
@@ -2801,7 +2800,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "cmake",
  "heck",
- "itertools 0.10.3",
+ "itertools",
  "lazy_static",
  "log",
  "multimap",
@@ -2820,7 +2819,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
 dependencies = [
  "anyhow",
- "itertools 0.10.3",
+ "itertools",
  "proc-macro2 1.0.36",
  "quote 1.0.6",
  "syn 1.0.91",
@@ -3217,11 +3216,19 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_version"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
+dependencies = [
+ "semver 0.9.0",
+]
+
+[[package]]
+name = "rustc_version"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
-<<<<<<< HEAD
  "semver 1.0.6",
 ]
 
@@ -3237,9 +3244,6 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "winapi 0.3.9",
-=======
- "semver",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
 ]
 
 [[package]]
@@ -3376,7 +3380,6 @@ dependencies = [
 
 [[package]]
 name = "semver"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
@@ -3387,11 +3390,14 @@ dependencies = [
 [[package]]
 name = "semver"
 version = "1.0.6"
-=======
-version = "1.0.7"
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a3381e03edd24287172047536f20cabde766e2cd3e65e6b00fb3af51c4f38d"
+
+[[package]]
+name = "semver-parser"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
@@ -3677,7 +3683,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-config-program",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-vote-program",
  "spl-token",
  "spl-token-2022",
@@ -3694,13 +3700,13 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "solana-frozen-abi 1.10.10",
  "solana-frozen-abi-macro 1.10.10",
  "solana-program 1.10.10",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "thiserror",
 ]
 
@@ -3711,13 +3717,8 @@ dependencies = [
  "borsh",
  "futures 0.3.21",
  "solana-banks-interface",
-<<<<<<< HEAD
  "solana-program 1.10.10",
- "solana-sdk",
-=======
- "solana-program 1.11.0",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
  "tarpc",
  "thiserror",
  "tokio",
@@ -3729,7 +3730,7 @@ name = "solana-banks-interface"
 version = "1.10.10"
 dependencies = [
  "serde",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "tarpc",
 ]
 
@@ -3742,7 +3743,7 @@ dependencies = [
  "futures 0.3.21",
  "solana-banks-interface",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-send-transaction-service",
  "tarpc",
  "tokio",
@@ -3764,7 +3765,7 @@ dependencies = [
  "serde_derive",
  "solana-frozen-abi 1.10.10",
  "solana-frozen-abi-macro 1.10.10",
- "solana-sdk",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -3778,8 +3779,8 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
- "solana-zk-token-sdk 1.11.0",
+ "solana-sdk 1.10.10",
+ "solana-zk-token-sdk 1.10.10",
  "solana_rbpf",
  "thiserror",
 ]
@@ -3805,7 +3806,7 @@ dependencies = [
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-transaction-status",
  "solana_rbpf",
  "walkdir",
@@ -3980,7 +3981,7 @@ dependencies = [
  "solana-program 1.10.10",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4065,7 +4066,7 @@ dependencies = [
  "solana-program 1.10.10",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4079,13 +4080,8 @@ dependencies = [
 name = "solana-bpf-rust-sha"
 version = "1.10.10"
 dependencies = [
-<<<<<<< HEAD
- "blake3 1.3.1",
- "solana-program 1.10.10",
-=======
  "blake3",
- "solana-program 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-program 1.10.10",
 ]
 
 [[package]]
@@ -4109,7 +4105,7 @@ dependencies = [
  "solana-logger 1.10.10",
  "solana-program 1.10.10",
  "solana-program-test",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-validator",
 ]
 
@@ -4134,7 +4130,7 @@ dependencies = [
  "solana-program 1.10.10",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4155,13 +4151,8 @@ dependencies = [
 name = "solana-bpf-rust-zk_token_elgamal"
 version = "1.10.10"
 dependencies = [
-<<<<<<< HEAD
  "solana-program 1.10.10",
- "solana-zk-token-sdk",
-=======
- "solana-program 1.11.0",
- "solana-zk-token-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-zk-token-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4173,7 +4164,7 @@ dependencies = [
  "modular-bitfield",
  "rand 0.7.3",
  "solana-measure",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "tempfile",
 ]
 
@@ -4186,7 +4177,7 @@ dependencies = [
  "rpassword",
  "solana-perf",
  "solana-remote-wallet",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "thiserror",
  "tiny-bip39",
  "uriparse",
@@ -4203,13 +4194,8 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "solana-clap-utils",
-<<<<<<< HEAD
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "url 2.2.2",
-=======
- "solana-sdk 1.11.0",
- "url",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
 ]
 
 [[package]]
@@ -4223,19 +4209,14 @@ dependencies = [
  "console",
  "humantime",
  "indicatif",
-<<<<<<< HEAD
  "semver 1.0.6",
-=======
- "pretty-hex",
- "semver",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
  "serde",
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-transaction-status",
  "solana-vote-program",
  "spl-memo",
@@ -4249,15 +4230,9 @@ dependencies = [
  "async-trait",
  "base64 0.13.0",
  "bincode",
-<<<<<<< HEAD
- "bs58 0.4.0",
+ "bs58",
  "bytes",
  "clap",
-=======
- "bs58",
- "bytes 1.1.0",
- "clap 2.33.3",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
  "crossbeam-channel",
  "futures 0.3.21",
  "futures-util",
@@ -4274,11 +4249,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "rustls",
-<<<<<<< HEAD
  "semver 1.0.6",
-=======
- "semver",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
  "serde",
  "serde_derive",
  "serde_json",
@@ -4288,7 +4259,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
@@ -4306,7 +4277,7 @@ name = "solana-compute-budget-program"
 version = "1.10.10"
 dependencies = [
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4318,7 +4289,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4328,14 +4299,14 @@ dependencies = [
  "ahash",
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "chrono",
  "crossbeam-channel",
  "dashmap",
  "etcd-client",
  "fs_extra",
  "histogram",
- "itertools 0.10.3",
+ "itertools",
  "log",
  "lru",
  "rand 0.7.3",
@@ -4345,7 +4316,6 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
-<<<<<<< HEAD
  "solana-address-lookup-table-program",
  "solana-bloom",
  "solana-client",
@@ -4365,7 +4335,7 @@ dependencies = [
  "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-send-transaction-service",
  "solana-streamer",
  "solana-transaction-status",
@@ -4387,7 +4357,7 @@ dependencies = [
  "log",
  "reqwest",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4407,7 +4377,7 @@ dependencies = [
  "solana-metrics",
  "solana-perf",
  "solana-rayon-threadlimit",
- "solana-sdk",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4425,14 +4395,7 @@ dependencies = [
  "solana-cli-config",
  "solana-logger 1.10.10",
  "solana-metrics",
- "solana-sdk",
-=======
- "solana-clap-utils",
- "solana-cli-config",
- "solana-logger 1.11.0",
- "solana-metrics",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
  "solana-version",
  "spl-memo",
  "thiserror",
@@ -4447,12 +4410,12 @@ checksum = "55e139feda2afd510dea2027584cc35a9ee9ebac0bfef1ab4d23647bf5c091a6"
 dependencies = [
  "bs58",
  "bv",
- "generic-array",
+ "generic-array 0.14.5",
  "im",
  "lazy_static",
  "log",
  "memmap2",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -4467,12 +4430,12 @@ version = "1.10.10"
 dependencies = [
  "bs58",
  "bv",
- "generic-array",
+ "generic-array 0.14.5",
  "im",
  "lazy_static",
  "log",
  "memmap2",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -4489,7 +4452,7 @@ checksum = "798b851026ff2366b318f7818a64846dd1ebc7e613f7893fba07a61cd55e6a48"
 dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.6",
- "rustc_version",
+ "rustc_version 0.4.0",
  "syn 1.0.91",
 ]
 
@@ -4499,7 +4462,7 @@ version = "1.10.10"
 dependencies = [
  "proc-macro2 1.0.36",
  "quote 1.0.6",
- "rustc_version",
+ "rustc_version 0.4.0",
  "syn 1.0.91",
 ]
 
@@ -4509,7 +4472,7 @@ version = "1.10.10"
 dependencies = [
  "solana-download-utils",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4517,7 +4480,7 @@ name = "solana-geyser-plugin-interface"
 version = "1.10.10"
 dependencies = [
  "log",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-transaction-status",
  "thiserror",
 ]
@@ -4526,7 +4489,7 @@ dependencies = [
 name = "solana-geyser-plugin-manager"
 version = "1.10.10"
 dependencies = [
- "bs58 0.4.0",
+ "bs58",
  "crossbeam-channel",
  "json5",
  "libloading",
@@ -4537,7 +4500,7 @@ dependencies = [
  "solana-metrics",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-transaction-status",
  "thiserror",
 ]
@@ -4552,7 +4515,7 @@ dependencies = [
  "crossbeam-channel",
  "flate2",
  "indexmap",
- "itertools 0.10.3",
+ "itertools",
  "log",
  "lru",
  "matches",
@@ -4578,7 +4541,7 @@ dependencies = [
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-streamer",
  "solana-version",
  "solana-vote-program",
@@ -4597,7 +4560,7 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "futures 0.3.21",
- "itertools 0.10.3",
+ "itertools",
  "lazy_static",
  "libc",
  "log",
@@ -4625,7 +4588,7 @@ dependencies = [
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-transaction-status",
@@ -4662,7 +4625,7 @@ name = "solana-measure"
 version = "1.10.10"
 dependencies = [
  "log",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4683,7 +4646,7 @@ dependencies = [
  "lazy_static",
  "log",
  "reqwest",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -4699,13 +4662,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "socket2",
-<<<<<<< HEAD
  "solana-logger 1.10.10",
- "solana-sdk",
-=======
- "solana-logger 1.11.0",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
  "solana-version",
  "tokio",
  "url 2.2.2",
@@ -4732,7 +4690,7 @@ dependencies = [
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-vote-program",
 ]
 
@@ -4748,7 +4706,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-sys-tuner",
  "thiserror",
 ]
@@ -4779,9 +4737,9 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "parking_lot",
+ "parking_lot 0.12.0",
  "rand 0.7.3",
- "rustc_version",
+ "rustc_version 0.4.0",
  "rustversion",
  "serde",
  "serde_bytes",
@@ -4821,7 +4779,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "rand 0.7.3",
- "rustc_version",
+ "rustc_version 0.4.0",
  "rustversion",
  "serde",
  "serde_bytes",
@@ -4848,12 +4806,12 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "solana-frozen-abi 1.10.10",
  "solana-frozen-abi-macro 1.10.10",
  "solana-measure",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "thiserror",
 ]
 
@@ -4873,7 +4831,7 @@ dependencies = [
  "solana-logger 1.10.10",
  "solana-program-runtime",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-vote-program",
  "thiserror",
  "tokio",
@@ -4898,13 +4856,8 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "qstring",
-<<<<<<< HEAD
  "semver 1.0.6",
- "solana-sdk",
-=======
- "semver",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
  "thiserror",
  "uriparse",
 ]
@@ -4919,7 +4872,7 @@ dependencies = [
  "prost",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "tokio",
  "tonic",
  "tonic-build",
@@ -4931,10 +4884,10 @@ version = "1.10.10"
 dependencies = [
  "base64 0.13.0",
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "crossbeam-channel",
  "dashmap",
- "itertools 0.10.3",
+ "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
@@ -4960,7 +4913,7 @@ dependencies = [
  "solana-poh",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5003,7 +4956,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "regex",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_derive",
  "solana-address-lookup-table-program",
@@ -5016,11 +4969,11 @@ dependencies = [
  "solana-metrics",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-stake-program",
  "solana-vote-program",
  "solana-zk-token-proof-program",
- "solana-zk-token-sdk 1.11.0",
+ "solana-zk-token-sdk 1.10.10",
  "symlink",
  "tar",
  "tempfile",
@@ -5030,9 +4983,6 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-<<<<<<< HEAD
-version = "1.10.10"
-=======
 version = "1.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef63e9db435bcc173d37073d769871379bb90c0fc60b20616f87edc0b06d890"
@@ -5050,7 +5000,7 @@ dependencies = [
  "digest 0.10.3",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
- "generic-array",
+ "generic-array 0.14.5",
  "hmac 0.12.1",
  "itertools",
  "js-sys",
@@ -5064,7 +5014,7 @@ dependencies = [
  "qstring",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rustc_version",
+ "rustc_version 0.4.0",
  "rustversion",
  "serde",
  "serde_bytes",
@@ -5084,8 +5034,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.11.0"
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+version = "1.10.10"
 dependencies = [
  "assert_matches",
  "base64 0.13.0",
@@ -5100,7 +5049,7 @@ dependencies = [
  "digest 0.10.3",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
- "generic-array",
+ "generic-array 0.14.5",
  "hmac 0.12.1",
  "itertools",
  "js-sys",
@@ -5114,7 +5063,7 @@ dependencies = [
  "qstring",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rustc_version",
+ "rustc_version 0.4.0",
  "rustversion",
  "serde",
  "serde_bytes",
@@ -5166,7 +5115,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -5177,7 +5126,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_derive",
  "solana-config-program",
@@ -5185,7 +5134,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.10.10",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-vote-program",
  "thiserror",
 ]
@@ -5208,7 +5157,7 @@ dependencies = [
  "serde_derive",
  "smpl_jwt",
  "solana-metrics",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
@@ -5221,11 +5170,11 @@ name = "solana-storage-proto"
 version = "1.10.10"
 dependencies = [
  "bincode",
- "bs58 0.4.0",
+ "bs58",
  "prost",
  "serde",
  "solana-account-decoder",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-transaction-status",
  "tonic-build",
 ]
@@ -5249,7 +5198,7 @@ dependencies = [
  "rustls",
  "solana-metrics",
  "solana-perf",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "thiserror",
  "tokio",
 ]
@@ -5287,7 +5236,7 @@ dependencies = [
  "solana-program-test",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-streamer",
  "tokio",
 ]
@@ -5309,7 +5258,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo",
@@ -5359,7 +5308,7 @@ dependencies = [
  "solana-replica-lib",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk",
+ "solana-sdk 1.10.10",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5375,18 +5324,12 @@ name = "solana-version"
 version = "1.10.10"
 dependencies = [
  "log",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_derive",
-<<<<<<< HEAD
  "solana-frozen-abi 1.10.10",
  "solana-frozen-abi-macro 1.10.10",
- "solana-sdk",
-=======
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
 ]
 
 [[package]]
@@ -5397,14 +5340,14 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "rustc_version",
+ "rustc_version 0.4.0",
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.10.10",
  "solana-frozen-abi-macro 1.10.10",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.10.10",
  "thiserror",
 ]
 
@@ -5417,8 +5360,8 @@ dependencies = [
  "num-derive",
  "num-traits",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
- "solana-zk-token-sdk 1.11.0",
+ "solana-sdk 1.10.10",
+ "solana-zk-token-sdk 1.10.10",
 ]
 
 [[package]]
@@ -5472,13 +5415,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3 0.9.1",
-<<<<<<< HEAD
  "solana-program 1.10.10",
- "solana-sdk",
-=======
- "solana-program 1.11.0",
- "solana-sdk 1.11.0",
->>>>>>> 413806684 (Add SPL Token 2022 to the list of known token ids (#23067))
+ "solana-sdk 1.10.10",
  "subtle",
  "thiserror",
  "zeroize",
@@ -6371,7 +6309,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f214e8f697e925001e66ec2c6e37a4ef93f0f78c2eed7814394e10c62025b05"
 dependencies = [
- "generic-array",
+ "generic-array 0.14.5",
  "subtle",
 ]
 
