@@ -91,9 +91,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.56"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "arc-swap"
@@ -2523,9 +2523,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.24.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f6d99b651ff9697d6710f9613a07c5b4e0d655040faf56b3b471af108d55597"
+checksum = "8f17df307904acd05aa8e32e97bb20f2a0df1728bbc2d771ae8f9a90463441e9"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -4970,7 +4970,7 @@ dependencies = [
  "dirs-next",
  "indicatif",
  "lazy_static",
- "nix 0.24.0",
+ "nix 0.24.1",
  "reqwest",
  "semver 1.0.7",
  "serde",
@@ -5222,7 +5222,7 @@ dependencies = [
  "clap 3.1.8",
  "crossbeam-channel",
  "log",
- "nix 0.24.0",
+ "nix 0.24.1",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -5259,7 +5259,7 @@ dependencies = [
  "libc",
  "log",
  "matches",
- "nix 0.24.0",
+ "nix 0.24.1",
  "rand 0.7.3",
  "rayon",
  "serde",
@@ -5844,7 +5844,7 @@ dependencies = [
  "itertools",
  "libc",
  "log",
- "nix 0.24.0",
+ "nix 0.24.1",
  "pem",
  "pkcs8",
  "quinn",
@@ -5866,7 +5866,7 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
- "nix 0.24.0",
+ "nix 0.24.1",
  "solana-logger 1.11.0",
  "solana-version",
  "sysctl",
