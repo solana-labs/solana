@@ -1,6 +1,7 @@
 use {
     crate::leader_slot_banking_stage_timing_metrics::*,
     solana_poh::poh_recorder::BankStart,
+    solana_runtime::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
     std::time::Instant,
 };
@@ -45,6 +46,9 @@ pub(crate) struct ProcessTransactionsSummary {
 
     // Breakdown of time spent executing and comitting transactions
     pub execute_and_commit_timings: LeaderExecuteAndCommitTimings,
+
+    // Breakdown of all the transaction errors from transactions passed for execution
+    pub error_counters: TransactionErrorMetrics,
 }
 
 // Metrics describing packets ingested/processed in various parts of BankingStage during this
@@ -226,6 +230,8 @@ pub(crate) struct LeaderSlotMetrics {
 
     packet_count_metrics: LeaderSlotPacketCountMetrics,
 
+    transaction_error_metrics: TransactionErrorMetrics,
+
     timing_metrics: LeaderSlotTimingMetrics,
 
     // Used by tests to check if the `self.report()` method was called
@@ -238,6 +244,7 @@ impl LeaderSlotMetrics {
             id,
             slot,
             packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
+            transaction_error_metrics: TransactionErrorMetrics::new(),
             timing_metrics: LeaderSlotTimingMetrics::new(bank_creation_time),
             is_reported: false,
         }
@@ -247,6 +254,7 @@ impl LeaderSlotMetrics {
         self.is_reported = true;
 
         self.timing_metrics.report(self.id, self.slot);
+        self.transaction_error_metrics.report(self.id, self.slot);
         self.packet_count_metrics.report(self.id, self.slot);
     }
 
@@ -402,6 +410,17 @@ impl LeaderSlotMetricsTracker {
                 .timing_metrics
                 .execute_and_commit_timings
                 .accumulate(execute_and_commit_timings);
+        }
+    }
+
+    pub(crate) fn accumulate_transaction_errors(
+        &mut self,
+        error_metrics: &TransactionErrorMetrics,
+    ) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .transaction_error_metrics
+                .accumulate(error_metrics);
         }
     }
 

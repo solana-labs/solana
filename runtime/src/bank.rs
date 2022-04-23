@@ -43,7 +43,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
@@ -64,7 +64,12 @@ use {
         status_cache::{SlotDelta, StatusCache},
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
+<<<<<<< HEAD
         vote_account::VoteAccount,
+=======
+        transaction_error_metrics::TransactionErrorMetrics,
+        vote_account::{VoteAccount, VoteAccountsHashMap},
+>>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
         vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
@@ -649,6 +654,7 @@ pub struct LoadAndExecuteTransactionsOutput {
     // an error.
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
+    pub error_counters: TransactionErrorMetrics,
 }
 
 #[derive(Debug, Clone)]
@@ -3639,7 +3645,7 @@ impl Bank {
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         lock_results: &[Result<()>],
         max_age: usize,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
@@ -3680,7 +3686,7 @@ impl Bank {
         &self,
         sanitized_txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
         let rcache = self.src.status_cache.read().unwrap();
         sanitized_txs
@@ -3733,7 +3739,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
         let age_results =
             self.check_age(sanitized_txs.iter(), lock_results, max_age, error_counters);
@@ -3752,6 +3758,7 @@ impl Bank {
         balances
     }
 
+<<<<<<< HEAD
     #[allow(clippy::cognitive_complexity)]
     fn update_error_counters(error_counters: &ErrorCounters) {
         if 0 != error_counters.total {
@@ -3862,6 +3869,8 @@ impl Bank {
         Ok(())
     }
 
+=======
+>>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
     /// Get any cached executors needed by the transaction
     fn get_executors(&self, accounts: &[(Pubkey, AccountSharedData)]) -> Rc<RefCell<Executors>> {
         let executable_keys: Vec<_> = accounts
@@ -3957,7 +3966,7 @@ impl Bank {
         enable_cpi_recording: bool,
         enable_log_recording: bool,
         timings: &mut ExecuteTimings,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> TransactionExecutionResult {
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(&loaded_transaction.accounts);
@@ -4080,7 +4089,7 @@ impl Bank {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
             .lock_results()
@@ -4297,7 +4306,6 @@ impl Bank {
                 *err_count + executed_with_successful_result_count
             );
         }
-        Self::update_error_counters(&error_counters);
         LoadAndExecuteTransactionsOutput {
             loaded_transactions,
             execution_results,
@@ -4305,6 +4313,7 @@ impl Bank {
             executed_transactions_count,
             executed_with_successful_result_count,
             signature_count,
+            error_counters,
         }
     }
 
@@ -17358,7 +17367,7 @@ pub(crate) mod tests {
         );
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
         let loaded_txs = bank.rc.accounts.load_accounts(
             &bank.ancestors,
             &[sanitized_tx.clone()],
