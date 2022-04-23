@@ -302,12 +302,13 @@ mod tests {
         );
         let snapshot_package =
             SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
+        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        snapshot_utils::purge_old_snapshot_archives(
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-        )
-        .unwrap();
+        );
 
         // Restore bank from snapshot
         let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];

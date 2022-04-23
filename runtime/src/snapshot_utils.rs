@@ -247,11 +247,7 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
 }
 
 /// Make a snapshot archive out of the snapshot package
-pub fn archive_snapshot_package(
-    snapshot_package: &SnapshotPackage,
-    maximum_full_snapshot_archives_to_retain: usize,
-    maximum_incremental_snapshot_archives_to_retain: usize,
-) -> Result<()> {
+pub fn archive_snapshot_package(snapshot_package: &SnapshotPackage) -> Result<()> {
     info!(
         "Generating snapshot archive for slot {}",
         snapshot_package.slot()
@@ -377,13 +373,6 @@ pub fn archive_snapshot_package(
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
     fs::rename(&archive_path, &snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
-
-    purge_old_snapshot_archives(
-        tar_dir,
-        tar_dir,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
-    );
 
     timer.stop();
     info!(
@@ -1339,14 +1328,12 @@ where
     incremental_snapshot_archives.into_iter().rev().next()
 }
 
-pub fn purge_old_snapshot_archives<P>(
-    full_snapshot_archives_dir: P,
-    incremental_snapshot_archives_dir: P,
+pub fn purge_old_snapshot_archives(
+    full_snapshot_archives_dir: impl AsRef<Path>,
+    incremental_snapshot_archives_dir: impl AsRef<Path>,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
-) where
-    P: AsRef<Path>,
-{
+) {
     info!(
         "Purging old full snapshot archives in {}, retaining up to {} full snapshots",
         full_snapshot_archives_dir.as_ref().display(),
@@ -1921,8 +1908,8 @@ pub fn package_and_archive_full_snapshot(
         bank_snapshot_info,
         bank_snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &full_snapshot_archives_dir,
+        &incremental_snapshot_archives_dir,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1937,11 +1924,13 @@ pub fn package_and_archive_full_snapshot(
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
-    archive_snapshot_package(
-        &snapshot_package,
+    archive_snapshot_package(&snapshot_package)?;
+    purge_old_snapshot_archives(
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-    )?;
+    );
 
     Ok(FullSnapshotArchiveInfo::new(
         snapshot_package.snapshot_archive_info,
@@ -1968,8 +1957,8 @@ pub fn package_and_archive_incremental_snapshot(
         bank_snapshot_info,
         bank_snapshots_dir,
         bank.src.slot_deltas(&bank.src.roots()),
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
+        &full_snapshot_archives_dir,
+        &incremental_snapshot_archives_dir,
         snapshot_storages,
         archive_format,
         snapshot_version,
@@ -1986,11 +1975,13 @@ pub fn package_and_archive_incremental_snapshot(
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
-    archive_snapshot_package(
-        &snapshot_package,
+    archive_snapshot_package(&snapshot_package)?;
+    purge_old_snapshot_archives(
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         maximum_full_snapshot_archives_to_retain,
         maximum_incremental_snapshot_archives_to_retain,
-    )?;
+    );
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         incremental_snapshot_base_slot,

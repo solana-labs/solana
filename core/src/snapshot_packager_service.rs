@@ -82,12 +82,14 @@ impl SnapshotPackagerService {
                     // Archiving the snapshot package is not allowed to fail.
                     // AccountsBackgroundService calls `clean_accounts()` with a value for
                     // last_full_snapshot_slot that requires this archive call to succeed.
-                    snapshot_utils::archive_snapshot_package(
-                        &snapshot_package,
+                    snapshot_utils::archive_snapshot_package(&snapshot_package)
+                        .expect("failed to archive snapshot package");
+                    snapshot_utils::purge_old_snapshot_archives(
+                        &snapshot_config.full_snapshot_archives_dir,
+                        &snapshot_config.incremental_snapshot_archives_dir,
                         snapshot_config.maximum_full_snapshot_archives_to_retain,
                         snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-                    )
-                    .expect("failed to archive snapshot package");
+                    );
 
                     if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                         snapshot_gossip_manager.push_snapshot_hash(
@@ -260,6 +262,7 @@ mod tests {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
         let full_snapshot_archives_dir = temp_dir.join("snapshots_output");
+        let incremental_snapshot_archives_dir = temp_dir.join("snapshots_output");
         fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
@@ -302,7 +305,7 @@ mod tests {
         let hash = Hash::default();
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            full_snapshot_archives_dir,
+            &full_snapshot_archives_dir,
             slot,
             &hash,
             archive_format,
@@ -323,12 +326,13 @@ mod tests {
         };
 
         // Make tarball from packageable snapshot
-        snapshot_utils::archive_snapshot_package(
-            &snapshot_package,
+        snapshot_utils::archive_snapshot_package(&snapshot_package).unwrap();
+        snapshot_utils::purge_old_snapshot_archives(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        )
-        .unwrap();
+        );
 
         // before we compare, stick an empty status_cache in this dir so that the package comparison works
         // This is needed since the status_cache is added by the packager and is not collected from
