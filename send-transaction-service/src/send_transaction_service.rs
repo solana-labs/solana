@@ -151,7 +151,7 @@ where
     T: TpuInfo + std::marker::Send + Clone + 'static,
 {
     /// Get the leader info, refresh if expired
-    pub fn get_leader_info(&mut self) -> &Option<T> {
+    pub fn get_leader_info(&mut self) -> Option<&T> {
         if let Some(leader_info) = self.leader_info.as_mut() {
             let now = Instant::now();
             let need_refresh = self
@@ -164,7 +164,7 @@ where
                 self.last_leader_refresh = Some(now);
             }
         }
-        &self.leader_info
+        self.leader_info.as_ref()
     }
 
     pub fn new(leader_info: Option<T>) -> Self {
@@ -359,7 +359,7 @@ impl SendTransactionService {
                         &root_bank,
                         &tpu_address,
                         &mut transactions,
-                        leader_info_provider.clone(),
+                        &leader_info_provider,
                         &config,
                     );
                 }
@@ -371,7 +371,7 @@ impl SendTransactionService {
     fn send_transactions_in_batch<T: TpuInfo>(
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
-        leader_info: &Option<T>,
+        leader_info: Option<&T>,
         config: &Config,
     ) {
         let mut measure = Measure::start("send_transactions_in_batch-us");
@@ -402,7 +402,7 @@ impl SendTransactionService {
         root_bank: &Arc<Bank>,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
-        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: &Arc<Mutex<LeaderInfoProvider<T>>>,
         config: &Config,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
@@ -564,7 +564,7 @@ impl SendTransactionService {
 
     fn get_tpu_addresses<'a, T: TpuInfo>(
         tpu_address: &'a SocketAddr,
-        leader_info: &'a Option<T>,
+        leader_info: Option<&'a T>,
         config: &'a Config,
     ) -> Vec<&'a SocketAddr> {
         let addresses = leader_info
@@ -679,7 +679,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -708,7 +708,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -737,7 +737,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -766,7 +766,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -797,7 +797,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -838,7 +838,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -855,7 +855,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider,
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -935,7 +935,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -963,7 +963,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -993,7 +993,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -1021,7 +1021,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -1050,7 +1050,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert!(transactions.is_empty());
@@ -1079,7 +1079,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -1110,7 +1110,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider.clone(),
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 1);
@@ -1138,7 +1138,7 @@ mod test {
             &root_bank,
             &tpu_address,
             &mut transactions,
-            leader_info_provider,
+            &leader_info_provider,
             &config,
         );
         assert_eq!(transactions.len(), 0);
