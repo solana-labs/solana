@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
+            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
@@ -17,6 +17,7 @@ use {
         blockhash_queue::BlockhashQueue,
         rent_collector::RentCollector,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+        transaction_error_metrics::TransactionErrorMetrics,
     },
     dashmap::{
         mapref::entry::Entry::{Occupied, Vacant},
@@ -238,7 +239,7 @@ impl Accounts {
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
         fee: u64,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
@@ -422,7 +423,7 @@ impl Accounts {
         ancestors: &Ancestors,
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: usize,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
         let mut program_id = match accounts.get(program_account_index) {
@@ -502,7 +503,7 @@ impl Accounts {
         txs: &[SanitizedTransaction],
         lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
@@ -1417,7 +1418,7 @@ mod tests {
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
     ) -> Vec<TransactionLoadResult> {
@@ -1453,7 +1454,7 @@ mod tests {
         tx: Transaction,
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee_and_rent(
             tx,
@@ -1469,7 +1470,7 @@ mod tests {
     fn load_accounts(
         tx: Transaction,
         ka: &[TransactionAccount],
-        error_counters: &mut ErrorCounters,
+        error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee(tx, ka, 0, error_counters)
     }
@@ -1534,7 +1535,7 @@ mod tests {
     #[test]
     fn test_load_accounts_no_account_0_exists() {
         let accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
 
@@ -1560,7 +1561,7 @@ mod tests {
     #[test]
     fn test_load_accounts_unknown_program_id() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1594,7 +1595,7 @@ mod tests {
     #[test]
     fn test_load_accounts_insufficient_funds() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1632,7 +1633,7 @@ mod tests {
     #[test]
     fn test_load_accounts_invalid_account_for_fee() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1661,7 +1662,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_fee_payer_is_nonce() {
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
         let mut feature_set = FeatureSet::all_enabled();
         feature_set.deactivate(&tx_wide_compute_cap::id());
         let rent_collector = RentCollector::new(
@@ -1742,7 +1743,7 @@ mod tests {
     #[test]
     fn test_load_accounts_no_loaders() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1783,7 +1784,7 @@ mod tests {
     #[test]
     fn test_load_accounts_max_call_depth() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1849,7 +1850,7 @@ mod tests {
     #[test]
     fn test_load_accounts_bad_owner() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1884,7 +1885,7 @@ mod tests {
     #[test]
     fn test_load_accounts_not_executable() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1918,7 +1919,7 @@ mod tests {
     #[test]
     fn test_load_accounts_multiple_loaders() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2152,7 +2153,7 @@ mod tests {
     #[test]
     fn test_load_accounts_executable_with_write_lock() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2208,7 +2209,7 @@ mod tests {
     #[test]
     fn test_load_accounts_upgradeable_with_write_lock() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2305,7 +2306,7 @@ mod tests {
     #[test]
     fn test_load_accounts_programdata_with_write_lock() {
         let mut accounts: Vec<TransactionAccount> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2394,7 +2395,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
         let ancestors = vec![(0, 0)].into_iter().collect();
 
         let keypair = Keypair::new();
@@ -3047,7 +3048,7 @@ mod tests {
         hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let mut error_counters = ErrorCounters::default();
+        let mut error_counters = TransactionErrorMetrics::default();
         accounts.load_accounts(
             &ancestors,
             &[tx],
