@@ -196,26 +196,6 @@ pub enum ScanStorageResult<R, B> {
     Stored(B),
 }
 
-#[derive(Debug, Default)]
-pub struct ErrorCounters {
-    pub total: usize,
-    pub account_in_use: usize,
-    pub account_loaded_twice: usize,
-    pub account_not_found: usize,
-    pub blockhash_not_found: usize,
-    pub blockhash_too_old: usize,
-    pub call_chain_too_deep: usize,
-    pub already_processed: usize,
-    pub instruction_error: usize,
-    pub insufficient_funds: usize,
-    pub invalid_account_for_fee: usize,
-    pub invalid_account_index: usize,
-    pub invalid_program_for_execution: usize,
-    pub not_allowed_during_cluster_maintenance: usize,
-    pub invalid_writable_account: usize,
-    pub invalid_rent_paying_account: usize,
-}
-
 #[derive(Debug, Default, Clone, Copy)]
 pub struct IndexGenerationInfo {
     pub accounts_data_len: u64,
