@@ -34,6 +34,8 @@ impl SpendAmount {
         }
     }
 
+    /// creates SpendAmount from matches
+    /// panics if SIGN_ONLY_ARG is not valid argument
     pub fn new_from_matches(matches: &ArgMatches, name: &str) -> Self {
         let amount = lamports_of_sol(matches, name);
         let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
