@@ -238,7 +238,12 @@ impl Default for VoteAccountInner {
 
 impl PartialEq<VoteAccountInner> for VoteAccountInner {
     fn eq(&self, other: &Self) -> bool {
-        self.account == other.account
+        let Self {
+            account,
+            vote_state: _,
+            vote_state_once: _,
+        } = self;
+        account == &other.account
     }
 }
 
@@ -281,7 +286,12 @@ impl Clone for VoteAccounts {
 
 impl PartialEq<VoteAccounts> for VoteAccounts {
     fn eq(&self, other: &Self) -> bool {
-        self.vote_accounts == other.vote_accounts
+        let Self {
+            vote_accounts,
+            staked_nodes: _,
+            staked_nodes_once: _,
+        } = self;
+        vote_accounts == &other.vote_accounts
     }
 }
 
