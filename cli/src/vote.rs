@@ -74,8 +74,9 @@ impl VoteSubCommands for Command<'_> {
                         .index(3)
                         .value_name("WITHDRAWER_PUBKEY")
                         .takes_value(true)
-                        .required(true)
-                        .long("authorized-withdrawer"),
+                        .required(true),
+                        // It is not possible to use long/short for positional arguments
+                        //.long("authorized-withdrawer"),
                         "Public key of the authorized withdrawer")
                 )
                 .arg(
