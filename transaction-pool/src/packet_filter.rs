@@ -39,7 +39,7 @@ impl PacketFilter {
                     for keys in offsets.get_writable_accounts(p) {
                         if !self
                             .fee_filter
-                            .check_price(lamports_per_cu, now_ms)
+                            .check_price(key, lamports_per_cu, now_ms)
                         {
                             p.meta.set_discard(true);
                             continue;
