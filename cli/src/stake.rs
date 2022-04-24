@@ -659,6 +659,27 @@ impl StakeSubCommands for Command<'_> {
     }
 }
 
+pub fn parse_lockup_parameters(
+    matches: &ArgMatches,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+    checked: bool,
+) -> Result<Lockup, CliError> {
+    // in case of create-stake-account we can parse lockup parameters
+    // otherwise return default
+    if !checked {
+        let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
+        let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
+        let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
+            Ok(Lockup {
+                unix_timestamp,
+                epoch,
+                custodian,
+            })
+    } else {
+        Ok(Lockup::default())
+    }
+}
+
 pub fn parse_create_stake_account(
     matches: &ArgMatches,
     default_signer: &DefaultSigner,
@@ -666,10 +687,8 @@ pub fn parse_create_stake_account(
     checked: bool,
 ) -> Result<CliCommandInfo, CliError> {
     let seed = matches.value_of("seed").map(|s| s.to_string());
-    let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
-    let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
-    let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
     let staker = pubkey_of_signer(matches, STAKE_AUTHORITY_ARG.name, wallet_manager)?;
+    let lockup = parse_lockup_parameters(matches, wallet_manager, checked)?;
 
     let (withdrawer_signer, withdrawer) = if checked {
         signer_of(matches, WITHDRAW_AUTHORITY_ARG.name, wallet_manager)?
@@ -714,11 +733,7 @@ pub fn parse_create_stake_account(
             } else {
                 None
             },
-            lockup: Lockup {
-                unix_timestamp,
-                epoch,
-                custodian,
-            },
+            lockup,
             amount,
             sign_only,
             dump_transaction_message,
