@@ -4362,20 +4362,17 @@ impl AccountsDb {
             let mut remaining_contended_flush_slots: Vec<Slot> = remove_slots
                 .iter()
                 .filter_map(|(remove_slot, _)| {
-                    let is_being_flushed = currently_contended_slots.contains(remove_slot);
-                    if !is_being_flushed {
-                        // Reserve the slots that we want to purge that aren't currently
-                        // being flushed to prevent cache from flushing those slots in
-                        // the future.
-                        //
-                        // Note that the single replay thread has to remove a specific slot `N`
-                        // before another version of the same slot can be replayed. This means
-                        // multiple threads should not call `remove_unrooted_slots()` simultaneously
-                        // with the same slot.
-                        currently_contended_slots.insert(*remove_slot);
-                    }
+                    // Reserve the slots that we want to purge that aren't currently
+                    // being flushed to prevent cache from flushing those slots in
+                    // the future.
+                    //
+                    // Note that the single replay thread has to remove a specific slot `N`
+                    // before another version of the same slot can be replayed. This means
+                    // multiple threads should not call `remove_unrooted_slots()` simultaneously
+                    // with the same slot.
+                    let is_being_flushed = !currently_contended_slots.insert(*remove_slot);
                     // If the cache is currently flushing this slot, add it to the list
-                    Some(remove_slot).filter(|_| is_being_flushed)
+                    is_being_flushed.then(|| remove_slot)
                 })
                 .cloned()
                 .collect();
@@ -4398,12 +4395,8 @@ impl AccountsDb {
                 // For each slot the cache flush has finished, mark that we're about to start
                 // purging these slots by reserving it in `currently_contended_slots`.
                 remaining_contended_flush_slots.retain(|flush_slot| {
-                    let is_being_flushed = currently_contended_slots.contains(flush_slot);
-                    if !is_being_flushed {
-                        // Mark that we're about to delete this slot now
-                        currently_contended_slots.insert(*flush_slot);
-                    }
-                    is_being_flushed
+                    // returns true if slot was already in set. This means slot is being flushed
+                    !currently_contended_slots.insert(*flush_slot)
                 });
             }
         }
@@ -4895,7 +4888,7 @@ impl AccountsDb {
             .unwrap()
             .insert(slot)
         {
-            // We have not see this slot, flush it.
+            // We have not seen this slot, flush it.
             let flush_stats = self.accounts_cache.slot_cache(slot).map(|slot_cache| {
                 #[cfg(test)]
                 {
