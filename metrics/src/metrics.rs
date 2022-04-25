@@ -147,7 +147,7 @@ impl Default for MetricsAgent {
     }
 }
 
-const MAX_METRIC_COMMAND_QUEUE_SIZE: usize = 2000;
+const MAX_METRIC_COMMAND_QUEUE_SIZE: usize = 1000_000;
 const METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD: usize = 1000;
 
 impl MetricsAgent {
@@ -189,6 +189,7 @@ impl MetricsAgent {
         max_points: usize,
         max_points_per_sec: usize,
         last_write_time: Instant,
+        cmd_queue_size: usize,
     ) {
         if points.is_empty() {
             return;
@@ -206,17 +207,22 @@ impl MetricsAgent {
         }
         let points_written = cmp::min(num_points, max_points - 1);
         points.truncate(points_written);
-        points.push(
-            DataPoint::new("metrics")
-                .add_field_i64("points_written", points_written as i64)
-                .add_field_i64("num_points", num_points as i64)
-                .add_field_i64("points_lost", (num_points - points_written) as i64)
-                .add_field_i64(
-                    "secs_since_last_write",
-                    now.duration_since(last_write_time).as_secs() as i64,
-                )
-                .to_owned(),
-        );
+
+        let mut metric_datapoint = DataPoint::new("metrics")
+            .add_field_i64("points_written", points_written as i64)
+            .add_field_i64("num_points", num_points as i64)
+            .add_field_i64("points_lost", (num_points - points_written) as i64)
+            .add_field_i64(
+                "secs_since_last_write",
+                now.duration_since(last_write_time).as_secs() as i64,
+            )
+            .to_owned();
+
+        if cmd_queue_size > METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD {
+            metric_datapoint.add_field_i64("command_queue_len", cmd_queue_size as i64);
+        }
+
+        points.push(metric_datapoint.to_owned());
 
         writer.write(points);
     }
@@ -242,6 +248,7 @@ impl MetricsAgent {
                             max_points,
                             max_points_per_sec,
                             last_write_time,
+                            receiver.len(),
                         );
                         last_write_time = Instant::now();
                         barrier.wait();
@@ -284,6 +291,7 @@ impl MetricsAgent {
                     max_points,
                     max_points_per_sec,
                     last_write_time,
+                    receiver.len(),
                 );
                 last_write_time = now;
             }
@@ -292,31 +300,18 @@ impl MetricsAgent {
     }
 
     fn send(&self, command: MetricsCommand) {
-        let try_send = |command| {
-            match self.sender.try_send(command) {
-                Err(TrySendError::Full(cmd)) => {
-                    warn!("metric queue full, point dropped: {:?}.", cmd);
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    warn!("metric queue disconnected.");
-                }
-                // success
-                Ok(_) => {}
+        match self.sender.try_send(command) {
+            Err(TrySendError::Full(cmd)) => {
+                warn!("metric queue full, current point: {:?}.", cmd);
+                // try again and block on sending
+                let _ = self.sender.send(cmd);
             }
-        };
-
-        // Report a datapoint for the metric command queue size when the queue
-        // is filling up
-        let len = self.sender.len();
-        if len > METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD {
-            try_send(MetricsCommand::Submit(
-                DataPoint::new("metric_command_queue")
-                    .add_field_i64("len", len as i64)
-                    .to_owned(),
-                Level::Info,
-            ));
+            Err(TrySendError::Disconnected(_)) => {
+                warn!("metric queue disconnected.");
+            }
+            // success
+            Ok(_) => {}
         }
-        try_send(command);
     }
 
     pub fn submit(&self, point: DataPoint, level: log::Level) {
