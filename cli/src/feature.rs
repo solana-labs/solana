@@ -467,8 +467,9 @@ pub fn parse_feature_subcommand(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let response = match matches.subcommand() {
-        Some(("activate", matches)) => {
+    let subcommand = matches.subcommand().unwrap();
+    let response = match subcommand {
+        ("activate", matches) => {
             let (feature_signer, feature) = signer_of(matches, "feature", wallet_manager)?;
             let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
 
@@ -488,7 +489,7 @@ pub fn parse_feature_subcommand(
                 signers,
             }
         }
-        Some(("status", matches)) => {
+        ("status", matches) => {
             let mut features = if let Some(features) = pubkeys_of(matches, "features") {
                 for feature in &features {
                     known_feature(feature)?;

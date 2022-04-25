@@ -35,8 +35,9 @@ fn parse_settings(matches: &ArgMatches) -> Result<bool, Box<dyn error::Error>> {
             };
             let mut config = Config::load(config_file).unwrap_or_default();
 
-            match matches.subcommand() {
-                Some(("get", subcommand_matches)) => {
+            let subcommand = matches.subcommand().unwrap();
+            match subcommand {
+                ("get", subcommand_matches) => {
                     let (url_setting_type, json_rpc_url) =
                         ConfigInput::compute_json_rpc_url_setting("", &config.json_rpc_url);
                     let (ws_setting_type, websocket_url) =
@@ -76,7 +77,7 @@ fn parse_settings(matches: &ArgMatches) -> Result<bool, Box<dyn error::Error>> {
                         );
                     }
                 }
-                Some(("set", subcommand_matches)) => {
+                ("set", subcommand_matches) => {
                     if let Some(url) = subcommand_matches.value_of("json_rpc_url") {
                         config.json_rpc_url = normalize_to_url_if_moniker(url);
                         // Revert to a computed `websocket_url` value when `json_rpc_url` is
@@ -119,13 +120,13 @@ fn parse_settings(matches: &ArgMatches) -> Result<bool, Box<dyn error::Error>> {
                         commitment_setting_type,
                     );
                 }
-                Some(("import-address-labels", subcommand_matches)) => {
+                ("import-address-labels", subcommand_matches) => {
                     let filename: PathBuf = subcommand_matches.value_of_t_or_exit("filename");
                     config.import_address_labels(&filename)?;
                     config.save(config_file)?;
                     println!("Address labels imported from {:?}", filename);
                 }
-                Some(("export-address-labels", subcommand_matches)) => {
+                ("export-address-labels", subcommand_matches) => {
                     let filename: PathBuf = subcommand_matches.value_of_t_or_exit("filename");
                     config.export_address_labels(&filename)?;
                     println!("Address labels exported to {:?}", filename);

@@ -668,13 +668,14 @@ pub fn parse_lockup_parameters(
     // otherwise return default
     if !checked {
         let epoch = value_of(matches, "lockup_epoch").unwrap_or(0);
-        let unix_timestamp = unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
+        let unix_timestamp =
+            unix_timestamp_from_rfc3339_datetime(matches, "lockup_date").unwrap_or(0);
         let custodian = pubkey_of_signer(matches, "custodian", wallet_manager)?.unwrap_or_default();
-            Ok(Lockup {
-                unix_timestamp,
-                epoch,
-                custodian,
-            })
+        Ok(Lockup {
+            unix_timestamp,
+            epoch,
+            custodian,
+        })
     } else {
         Ok(Lockup::default())
     }
