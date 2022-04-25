@@ -530,7 +530,9 @@ pub fn parse_command(
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, Box<dyn error::Error>> {
     if matches.subcommand().is_none() {
-        return Err(Box::new(CliError::CommandNotRecognized("no subcommand given".to_string())));
+        return Err(Box::new(CliError::CommandNotRecognized(
+            "no subcommand given".to_string(),
+        )));
     }
 
     let subcommand = matches.subcommand().unwrap();

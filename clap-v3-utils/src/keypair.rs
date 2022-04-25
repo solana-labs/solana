@@ -370,7 +370,7 @@ impl DefaultSigner {
     }
 }
 
-pub(crate) struct SignerSource {
+pub struct SignerSource {
     pub kind: SignerSourceKind,
     pub derivation_path: Option<DerivationPath>,
     pub legacy: bool,
@@ -400,7 +400,7 @@ const SIGNER_SOURCE_USB: &str = "usb";
 const SIGNER_SOURCE_STDIN: &str = "stdin";
 const SIGNER_SOURCE_PUBKEY: &str = "pubkey";
 
-pub(crate) enum SignerSourceKind {
+pub enum SignerSourceKind {
     Prompt,
     Filepath(String),
     Usb(RemoteWalletLocator),
@@ -428,7 +428,7 @@ impl std::fmt::Debug for SignerSourceKind {
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum SignerSourceError {
+pub enum SignerSourceError {
     #[error("unrecognized signer source")]
     UnrecognizedSource,
     #[error(transparent)]
@@ -439,7 +439,7 @@ pub(crate) enum SignerSourceError {
     IoError(#[from] std::io::Error),
 }
 
-pub(crate) fn parse_signer_source<S: AsRef<str>>(
+pub fn parse_signer_source<S: AsRef<str>>(
     source: S,
 ) -> Result<SignerSource, SignerSourceError> {
     let source = source.as_ref();

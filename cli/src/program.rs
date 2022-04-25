@@ -11,7 +11,13 @@ use {
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
-    solana_clap_v3_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_v3_utils::{
+        self,
+        input_parsers::*,
+        input_validators::*,
+        keypair::*,
+        keypair::{parse_signer_source, SignerSourceKind},
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
@@ -456,13 +462,26 @@ pub fn parse_program_subcommand(
                 pubkey_of_signer(matches, "buffer", wallet_manager)?
             };
 
-            let program_pubkey = if let Ok((program_signer, Some(program_pubkey))) =
-                signer_of(matches, "program_id", wallet_manager)
-            {
-                bulk_signers.push(program_signer);
-                Some(program_pubkey)
-            } else {
+            let path = matches.value_of("program_id");
+            let program_pubkey = if path.is_none() {
                 pubkey_of_signer(matches, "program_id", wallet_manager)?
+            } else {
+                let path = path.unwrap();
+                let signed_source = parse_signer_source(path).expect("todo");
+                let program_pubkey = if let SignerSourceKind::Pubkey(_) = signed_source.kind {
+                    pubkey_of_signer(matches, "program_id", wallet_manager)?
+                } else {
+                    let program_pubkey = if let Ok((program_signer, Some(program_pubkey))) =
+                        signer_of(matches, "program_id", wallet_manager)
+                    {
+                        bulk_signers.push(program_signer);
+                        Some(program_pubkey)
+                    } else {
+                        pubkey_of_signer(matches, "program_id", wallet_manager)?
+                    };
+                    program_pubkey
+                };
+                program_pubkey
             };
 
             let upgrade_authority_pubkey =
