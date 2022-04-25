@@ -4427,7 +4427,7 @@ export class Connection {
   ): void {
     const callbacks =
       this._subscriptionCallbacksByServerSubscriptionId[serverSubscriptionId];
-    if (callbacks == null) {
+    if (callbacks === undefined) {
       return;
     }
     callbacks.forEach(cb => {
@@ -4503,7 +4503,7 @@ export class Connection {
     }
     const hash = hashSubscriptionConfig(subscriptionConfig);
     const existingSubscription = this._subscriptionsByHash[hash];
-    if (existingSubscription == null) {
+    if (existingSubscription === undefined) {
       this._subscriptionsByHash[hash] = {
         ...subscriptionConfig,
         callbacks: new Set([subscriptionConfig.callback]),
@@ -4525,7 +4525,7 @@ export class Connection {
       ];
       const subscription = this._subscriptionsByHash[hash];
       assert(
-        subscription,
+        subscription !== undefined,
         `Could not find a \`Subscription\` when tearing down client subscription #${clientSubscriptionId}`,
       );
       subscription.callbacks.delete(subscriptionConfig.callback);
