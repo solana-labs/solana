@@ -180,6 +180,17 @@ type SubscriptionConfig = Readonly<
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
+/**
+ * @internal
+ * This type represents a single subscribable 'topic.' It's made up of:
+ *
+ * - The configuration used to open the subscription with the server,
+ * - The state of the subscription, in terms of its connectedness, and
+ * - The set of callbacks to call when the server publishes notifications
+ *
+ * This record gets indexed by `SubscriptionConfigHash` and is used to
+ * set up subscriptions, fan out notifications, and track subscription state.
+ */
 type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
