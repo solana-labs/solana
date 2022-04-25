@@ -11362,12 +11362,20 @@ pub(crate) mod tests {
             genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
+        } = create_genesis_config_with_leader(10_000_000_000, &solana_sdk::pubkey::new_rand(), 1);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let stake_delegations = bank.stakes_cache.stakes().stake_delegations().clone();
         assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
+
+        let balance = {
+            let rent = &bank.rent_collector().rent;
+            let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+            let minimum_delegation =
+                solana_stake_program::get_minimum_delegation(&bank.feature_set);
+            rent_exempt_reserve + minimum_delegation
+        };
 
         let vote_keypair = Keypair::new();
         let mut instructions = vote_instruction::create_account(
@@ -11379,7 +11387,7 @@ pub(crate) mod tests {
                 authorized_withdrawer: vote_keypair.pubkey(),
                 commission: 0,
             },
-            10,
+            balance,
         );
 
         let stake_keypair = Keypair::new();
@@ -11389,7 +11397,7 @@ pub(crate) mod tests {
             &vote_keypair.pubkey(),
             &Authorized::auto(&stake_keypair.pubkey()),
             &Lockup::default(),
-            10,
+            balance,
         ));
 
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
