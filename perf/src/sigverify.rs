@@ -54,7 +54,7 @@ pub type TxOffset = PinnedVec<u32>;
 type TxOffsets = (TxOffset, TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>);
 
 #[derive(Debug, PartialEq, Eq)]
-struct PacketOffsets {
+pub struct PacketOffsets {
     pub sig_len: u32,
     pub sig_start: u32,
     pub msg_start: u32,
@@ -77,6 +77,33 @@ impl PacketOffsets {
             pubkey_start,
             pubkey_len,
         }
+    }
+    pub fn blockhash<'a>(&self, packet: &'a Packet) -> Option<&'a [u8]> {
+        let st: usize = usize::try_from(self.pubkey_start).unwrap() + usize::try_from(self.pubkey_len).unwrap() * size_of::<Pubkey>();
+        let en = st + size_of::<Hash>();
+        if en >= packet.data.len() || self.sig_len == 0 {
+            return None;
+        }
+        Some(&packet.data[st..en])
+    }
+    pub fn fee_payer<'a>(&self, packet: &'a Packet) -> Option<&'a [u8]> {
+        let st = self.pubkey_start.try_into().unwrap();
+        let en = st + size_of::<Pubkey>();
+        if en >= packet.data.len() || self.sig_len == 0 {
+            return None;
+        }
+        Some(&packet.data[st..en])
+    }
+    pub fn lamports_per_cu(&self, _packet: &Packet) -> Option<u64> {
+        None
+    }
+    pub fn writable_accounts<'a>(&self, packet: &'a Packet) -> Vec<&'a [u8]> {
+        let st = usize::try_from(self.pubkey_start).unwrap();
+        let en = st + size_of::<Pubkey>();
+        if en >= packet.data.len() || self.sig_len == 0 {
+            return vec![];
+        }
+        vec![&packet.data[st..en]]
     }
 }
 
@@ -296,7 +323,7 @@ fn do_get_packet_offsets(
     ))
 }
 
-fn get_packet_offsets(
+pub fn get_packet_offsets(
     packet: &mut Packet,
     current_offset: usize,
     reject_non_vote: bool,

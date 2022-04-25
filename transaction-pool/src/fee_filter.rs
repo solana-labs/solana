@@ -76,7 +76,7 @@ impl FeeFilter {
         self.global_now_ms.store(now_ms, Ordering::Relaxed);
     }
 
-    pub fn check_price(&self, addr: &Pubkey, lamports_per_cu: u64, now_ms: u64) -> bool {
+    pub fn check_price(&self, addr: &[u8], lamports_per_cu: u64, now_ms: u64) -> bool {
         let global_now_ms = self.global_now_ms.load(Ordering::Relaxed);
         let global_price = self.global_price.load(Ordering::Relaxed);
         if !(now_ms > global_now_ms.saturating_add(self.age) || lamports_per_cu < global_price) {
