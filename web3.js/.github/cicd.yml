@@ -65,7 +65,7 @@ jobs:
           node-version: "lts/*"
           cache: 'npm'
       - run: |
-          npx semantic-release
+          npx semantic-release --dry-run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
