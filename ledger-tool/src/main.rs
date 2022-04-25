@@ -1043,7 +1043,7 @@ fn main() {
         .max(VoteState::get_rent_exempt_reserve(&rent))
         .to_string();
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
-        .max(StakeState::get_rent_exempt_reserve(&rent))
+        .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
 
     let matches = App::new(crate_name!())
@@ -2227,7 +2227,7 @@ fn main() {
                     value_t_or_exit!(arg_matches, "bootstrap_validator_lamports", u64);
                 let bootstrap_validator_stake_lamports =
                     value_t_or_exit!(arg_matches, "bootstrap_validator_stake_lamports", u64);
-                let minimum_stake_lamports = StakeState::get_rent_exempt_reserve(&rent);
+                let minimum_stake_lamports = rent.minimum_balance(StakeState::size_of());
                 if bootstrap_validator_stake_lamports < minimum_stake_lamports {
                     eprintln!(
                         "Error: insufficient --bootstrap-validator-stake-lamports. \

@@ -4,7 +4,6 @@ use {
         clock::{Clock, Epoch, UnixTimestamp},
         instruction::InstructionError,
         pubkey::Pubkey,
-        rent::Rent,
         stake::{
             config::Config,
             instruction::{LockupArgs, StakeError},
@@ -77,10 +76,6 @@ impl StakeState {
     /// The fixed number of bytes used to serialize each stake account
     pub const fn size_of() -> usize {
         200 // see test_size_of
-    }
-
-    pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
-        rent.minimum_balance(Self::size_of())
     }
 
     pub fn stake(&self) -> Option<Stake> {
