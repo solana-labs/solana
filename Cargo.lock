@@ -5514,6 +5514,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "spl-token",
+ "spl-token-2022",
  "stream-cancel",
  "symlink",
  "thiserror",
