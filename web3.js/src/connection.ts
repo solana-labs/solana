@@ -121,7 +121,7 @@ type SubscriptionConfig = Readonly<
       callback: AccountChangeCallback;
       method: 'accountSubscribe';
       params: Readonly<{
-        commitment?: Commitment; // Must default to 'finalized'
+        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
         publicKey: string; // PublicKey of the account as a base 58 string
       }>;
       unsubscribeMethod: 'accountUnsubscribe';
@@ -130,7 +130,7 @@ type SubscriptionConfig = Readonly<
       callback: LogsCallback;
       method: 'logsSubscribe';
       params: Readonly<{
-        commitment?: Commitment; // Must default to 'finalized'
+        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
         filter: LogsFilter;
       }>;
       unsubscribeMethod: 'logsUnsubscribe';
@@ -139,7 +139,7 @@ type SubscriptionConfig = Readonly<
       callback: ProgramAccountChangeCallback;
       method: 'programSubscribe';
       params: Readonly<{
-        commitment?: Commitment; // Must default to 'finalized'
+        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
         filters?: GetProgramAccountsFilter[];
         programId: string; // PublicKey of the program as a base 58 string
       }>;
@@ -2058,7 +2058,7 @@ export type SignatureSubscriptionCallback = (
  * Signature subscription options
  */
 export type SignatureSubscriptionOptions = {
-  commitment?: Commitment; // Must default to 'finalized'
+  commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
   enableReceivedNotification?: boolean;
 };
 
@@ -4457,50 +4457,9 @@ export class Connection {
    * @private
    */
   _makeSubscription(
-    // The subscription config, before applying defaults
-    rawConfig: SubscriptionConfig,
+    subscriptionConfig: SubscriptionConfig,
   ): ClientSubscriptionId {
     const clientSubscriptionId = this._nextClientSubscriptionId++;
-    let subscriptionConfig: SubscriptionConfig;
-    // Apply defaults.
-    switch (rawConfig.method) {
-      case 'accountSubscribe':
-      case 'logsSubscribe':
-      case 'programSubscribe':
-        if (rawConfig.params.commitment === undefined) {
-          subscriptionConfig = {
-            ...rawConfig,
-            params: {
-              ...rawConfig.params,
-              commitment: 'finalized',
-            },
-          } as SubscriptionConfig;
-        } else {
-          subscriptionConfig = rawConfig;
-        }
-        break;
-      case 'signatureSubscribe':
-        if (
-          rawConfig.params.options &&
-          rawConfig.params.options.commitment === undefined
-        ) {
-          subscriptionConfig = {
-            ...rawConfig,
-            params: {
-              ...rawConfig.params,
-              options: {
-                ...rawConfig.params.options,
-                commitment: 'finalized',
-              },
-            },
-          };
-        } else {
-          subscriptionConfig = rawConfig;
-        }
-        break;
-      default:
-        subscriptionConfig = rawConfig;
-    }
     const hash = hashSubscriptionConfig(subscriptionConfig);
     const existingSubscription = this._subscriptionsByHash[hash];
     if (existingSubscription === undefined) {
@@ -4552,7 +4511,7 @@ export class Connection {
       callback,
       method: 'accountSubscribe',
       params: {
-        commitment,
+        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
         publicKey: publicKey.toBase58(),
       },
       unsubscribeMethod: 'accountUnsubscribe',
@@ -4610,7 +4569,7 @@ export class Connection {
       callback,
       method: 'programSubscribe',
       params: {
-        commitment,
+        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
         filters,
         programId: programId.toBase58(),
       },
@@ -4644,7 +4603,7 @@ export class Connection {
       callback,
       method: 'logsSubscribe',
       params: {
-        commitment,
+        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
         filter,
       },
       unsubscribeMethod: 'logsUnsubscribe',
@@ -4878,7 +4837,9 @@ export class Connection {
       },
       method: 'signatureSubscribe',
       params: {
-        options: {commitment},
+        options: {
+          commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
+        },
         signature,
       },
       unsubscribeMethod: 'signatureUnsubscribe',
@@ -4915,7 +4876,11 @@ export class Connection {
       },
       method: 'signatureSubscribe',
       params: {
-        options,
+        options: {
+          ...options,
+          commitment:
+            (options && options.commitment) || this._commitment || 'finalized', // Apply connection/server default.
+        },
         signature,
       },
       unsubscribeMethod: 'signatureUnsubscribe',
