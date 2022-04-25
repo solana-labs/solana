@@ -62,11 +62,11 @@ impl StandardBroadcastRun {
         keypair: &Keypair,
         max_ticks_in_slot: u8,
         stats: &mut ProcessShredsStats,
-    ) -> Vec<Shred> {
+    ) -> (Vec<Shred> /* data */, Vec<Shred> /* coding */) {
         let (current_slot, _) = self.current_slot_and_parent.unwrap();
         match self.unfinished_slot {
-            None => Vec::default(),
-            Some(ref state) if state.slot == current_slot => Vec::default(),
+            None => (Vec::default(), Vec::default()),
+            Some(ref state) if state.slot == current_slot => (Vec::default(), Vec::default()),
             Some(ref mut state) => {
                 let parent_offset = state.slot - state.parent;
                 let reference_tick = max_ticks_in_slot & SHRED_TICK_REFERENCE_MASK;
@@ -85,16 +85,16 @@ impl StandardBroadcastRun {
                 );
                 shred.sign(keypair);
                 state.data_shreds_buffer.push(shred.clone());
-                let mut shreds = make_coding_shreds(
+                let (data_shreds, mut coding_shreds) = make_coding_shreds(
                     keypair,
                     &mut self.unfinished_slot,
                     true, // is_last_in_slot
                     stats,
                 );
-                shreds.insert(0, shred);
+                coding_shreds.insert(0, shred);
                 self.report_and_reset_stats(true);
                 self.unfinished_slot = None;
-                shreds
+                (data_shreds, coding_shreds)
             }
         }
     }
@@ -165,10 +165,18 @@ impl StandardBroadcastRun {
         blockstore: &Arc<Blockstore>,
         receive_results: ReceiveResults,
         bank_forks: &Arc<RwLock<BankForks>>,
+        batch_fec_set: bool,
     ) -> Result<()> {
         let (bsend, brecv) = unbounded();
         let (ssend, srecv) = unbounded();
-        self.process_receive_results(keypair, blockstore, &ssend, &bsend, receive_results)?;
+        self.process_receive_results(
+            keypair,
+            blockstore,
+            &ssend,
+            &bsend,
+            receive_results,
+            batch_fec_set,
+        )?;
         let srecv = Arc::new(Mutex::new(srecv));
         let brecv = Arc::new(Mutex::new(brecv));
 
@@ -188,6 +196,7 @@ impl StandardBroadcastRun {
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         receive_results: ReceiveResults,
+        batch_fec_set: bool,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
         let num_entries = receive_results.entries.len();
@@ -213,7 +222,7 @@ impl StandardBroadcastRun {
         let mut to_shreds_time = Measure::start("broadcast_to_shreds");
 
         // 1) Check if slot was interrupted
-        let prev_slot_shreds =
+        let (_prev_slot_shreds_data, prev_slot_shreds_coding) =
             self.finish_prev_slot(keypair, bank.ticks_per_slot() as u8, &mut process_stats);
 
         // 2) Convert entries to shreds and coding shreds
@@ -239,8 +248,8 @@ impl StandardBroadcastRun {
 
         let mut get_leader_schedule_time = Measure::start("broadcast_get_leader_schedule");
         // Broadcast the last shred of the interrupted slot if necessary
-        if !prev_slot_shreds.is_empty() {
-            let slot = prev_slot_shreds[0].slot();
+        if !prev_slot_shreds_coding.is_empty() {
+            let slot = prev_slot_shreds_coding[0].slot();
             let batch_info = Some(BroadcastShredBatchInfo {
                 slot,
                 num_expected_batches: Some(old_num_batches + 1),
@@ -250,7 +259,7 @@ impl StandardBroadcastRun {
                 ),
                 was_interrupted: true,
             });
-            let shreds = Arc::new(prev_slot_shreds);
+            let shreds = Arc::new(prev_slot_shreds_coding);
             debug_assert!(shreds.iter().all(|shred| shred.slot() == slot));
             socket_sender.send((shreds.clone(), batch_info.clone()))?;
             blockstore_sender.send((shreds, batch_info))?;
@@ -277,25 +286,55 @@ impl StandardBroadcastRun {
 
         let mut coding_send_time = Measure::start("broadcast_coding_send");
 
-        // Send data shreds
-        let data_shreds = Arc::new(data_shreds);
-        debug_assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
-        socket_sender.send((data_shreds.clone(), batch_info.clone()))?;
-        blockstore_sender.send((data_shreds, batch_info.clone()))?;
+        if !batch_fec_set {
+            // Send data shreds
+            let data_shreds = Arc::new(data_shreds);
+            debug_assert!(data_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+            socket_sender.send((data_shreds.clone(), batch_info.clone()))?;
+            blockstore_sender.send((data_shreds, batch_info.clone()))?;
+        }
 
         // Create and send coding shreds
-        let coding_shreds = make_coding_shreds(
+        let (mut data_shreds_aggregated, mut coding_shreds) = make_coding_shreds(
             keypair,
             &mut self.unfinished_slot,
             is_last_in_slot,
             &mut process_stats,
         );
-        let coding_shreds = Arc::new(coding_shreds);
-        debug_assert!(coding_shreds
-            .iter()
-            .all(|shred| shred.slot() == bank.slot()));
-        socket_sender.send((coding_shreds.clone(), batch_info.clone()))?;
-        blockstore_sender.send((coding_shreds, batch_info))?;
+
+        if !batch_fec_set {
+            let coding_shreds = Arc::new(coding_shreds);
+            debug_assert!(coding_shreds
+                .iter()
+                .all(|shred| shred.slot() == bank.slot()));
+            socket_sender.send((coding_shreds.clone(), batch_info.clone()))?;
+            blockstore_sender.send((coding_shreds, batch_info))?;
+        } else if !coding_shreds.is_empty() {
+            const NUM_FEC_SET_SHREDS: usize = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize * 2;
+            let total_shreds = data_shreds_aggregated.len() + coding_shreds.len();
+            assert!(total_shreds % NUM_FEC_SET_SHREDS == 0);
+            assert!(total_shreds / NUM_FEC_SET_SHREDS > 0);
+
+            while !data_shreds_aggregated.is_empty() {
+                let mut batch_shreds: Vec<_> = data_shreds_aggregated
+                    .drain(
+                        ..(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                            .min(data_shreds_aggregated.len()),
+                    )
+                    .collect();
+                batch_shreds.extend(coding_shreds.drain(..NUM_FEC_SET_SHREDS - batch_shreds.len()));
+
+                assert_eq!(batch_shreds.len(), NUM_FEC_SET_SHREDS);
+
+                let batch_shreds = Arc::new(batch_shreds);
+                debug_assert!(batch_shreds.iter().all(|shred| shred.slot() == bank.slot()));
+                socket_sender.send((batch_shreds.clone(), batch_info.clone()))?;
+                blockstore_sender.send((batch_shreds, batch_info.clone()))?;
+            }
+
+            assert!(data_shreds_aggregated.is_empty());
+            assert!(coding_shreds.is_empty());
+        }
 
         coding_send_time.stop();
 
@@ -417,9 +456,9 @@ fn make_coding_shreds(
     unfinished_slot: &mut Option<UnfinishedSlotInfo>,
     is_slot_end: bool,
     stats: &mut ProcessShredsStats,
-) -> Vec<Shred> {
+) -> (Vec<Shred> /* data */, Vec<Shred> /* coding */) {
     let unfinished_slot = match unfinished_slot {
-        None => return Vec::default(),
+        None => return (Vec::default(), Vec::default()),
         Some(state) => state,
     };
     let data_shreds: Vec<_> = {
@@ -435,7 +474,7 @@ fn make_coding_shreds(
             .drain(0..size - offset)
             .collect()
     };
-    let shreds = Shredder::data_shreds_to_coding_shreds(
+    let coding_shreds = Shredder::data_shreds_to_coding_shreds(
         keypair,
         &data_shreds,
         is_slot_end,
@@ -443,7 +482,7 @@ fn make_coding_shreds(
         stats,
     )
     .unwrap();
-    if let Some(index) = shreds
+    if let Some(index) = coding_shreds
         .iter()
         .filter(|shred| shred.is_code())
         .map(Shred::index)
@@ -451,7 +490,7 @@ fn make_coding_shreds(
     {
         unfinished_slot.next_code_index = unfinished_slot.next_code_index.max(index + 1);
     }
-    shreds
+    (data_shreds, coding_shreds)
 }
 
 impl BroadcastRun for StandardBroadcastRun {
@@ -472,6 +511,7 @@ impl BroadcastRun for StandardBroadcastRun {
             socket_sender,
             blockstore_sender,
             receive_results,
+            false,
         )
     }
     fn transmit(
@@ -580,8 +620,9 @@ mod test {
         run.current_slot_and_parent = Some((4, 2));
 
         // Slot 2 interrupted slot 1
-        let shreds = run.finish_prev_slot(&keypair, 0, &mut ProcessShredsStats::default());
-        let shred = shreds
+        let (_data_shreds, coding_shreds) =
+            run.finish_prev_slot(&keypair, 0, &mut ProcessShredsStats::default());
+        let shred = coding_shreds
             .get(0)
             .expect("Expected a shred that signals an interrupt");
 
@@ -619,6 +660,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                false,
             )
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
@@ -684,6 +726,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                false,
             )
             .unwrap();
         let unfinished_slot = standard_broadcast_run.unfinished_slot.as_ref().unwrap();
@@ -747,6 +790,7 @@ mod test {
                     &ssend,
                     &bsend,
                     receive_results,
+                    false,
                 )
                 .unwrap();
         };
@@ -764,6 +808,57 @@ mod test {
             shreds.extend(recv_shreds.deref().clone());
         }
         assert!(shreds.len() > 64, "shreds.len(): {}", shreds.len());
+        let num_coding_shreds = shreds.iter().filter(|shred| shred.is_code()).count();
+        assert_eq!(
+            num_coding_shreds, 32,
+            "num coding shreds: {}",
+            num_coding_shreds
+        );
+    }
+
+    #[test]
+    fn test_buffer_data_shreds_batch() {
+        let num_shreds_per_slot = 2;
+        let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =
+            setup(num_shreds_per_slot);
+        let (bsend, brecv) = unbounded();
+        let (ssend, _srecv) = unbounded();
+        let mut last_tick_height = 0;
+        let mut standard_broadcast_run = StandardBroadcastRun::new(0);
+        let mut process_ticks = |num_ticks| {
+            let ticks = create_ticks(num_ticks, 0, genesis_config.hash());
+            last_tick_height += (ticks.len() - 1) as u64;
+            let receive_results = ReceiveResults {
+                entries: ticks,
+                time_elapsed: Duration::new(1, 0),
+                bank: bank.clone(),
+                last_tick_height,
+            };
+            standard_broadcast_run
+                .process_receive_results(
+                    &leader_keypair,
+                    &blockstore,
+                    &ssend,
+                    &bsend,
+                    receive_results,
+                    true,
+                )
+                .unwrap();
+        };
+        for i in 0..3 {
+            process_ticks((i + 1) * 100);
+        }
+        let mut shreds = Vec::<Shred>::new();
+        while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
+            shreds.extend(recv_shreds.deref().clone());
+        }
+        assert!(shreds.len() < 32, "shreds.len(): {}", shreds.len());
+        assert!(shreds.iter().all(|shred| shred.is_data()));
+        process_ticks(75);
+        while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
+            shreds.extend(recv_shreds.deref().clone());
+        }
+        assert!(shreds.len() == 64, "shreds.len(): {}", shreds.len());
         let num_coding_shreds = shreds.iter().filter(|shred| shred.is_code()).count();
         assert_eq!(
             num_coding_shreds, 32,
@@ -797,6 +892,7 @@ mod test {
                 &blockstore,
                 receive_results,
                 &bank_forks,
+                false,
             )
             .unwrap();
         assert!(standard_broadcast_run.unfinished_slot.is_none())
