@@ -297,6 +297,20 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("maybe_clone_account")
+                .long("maybe-clone")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an account from the cluster referenced by the --url argument, \
+                     skipping it if it doesn't exist. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("warp_slot")
                 .required(false)
                 .long("warp-slot")
@@ -533,6 +547,10 @@ fn main() {
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
 
+    let accounts_to_maybe_clone: HashSet<_> = pubkeys_of(&matches, "maybe_clone_account")
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default();
+
     let warp_slot = if matches.is_present("warp_slot") {
         Some(match matches.value_of("warp_slot") {
             Some(_) => value_t_or_exit!(matches, "warp_slot", Slot),
@@ -687,6 +705,17 @@ fn main() {
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
+            false,
+        );
+    }
+
+    if !accounts_to_maybe_clone.is_empty() {
+        genesis.clone_accounts(
+            accounts_to_maybe_clone,
+            cluster_rpc_client
+                .as_ref()
+                .expect("bug: --url argument missing?"),
+            true,
         );
     }
 
