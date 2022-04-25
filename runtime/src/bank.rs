@@ -3325,7 +3325,7 @@ impl Bank {
     }
 
     // dangerous; don't use this; this is only needed for ledger-tool's special command
-    pub fn unfreeze(&self) {
+    pub fn unfreeze_for_ledger_tool(&self) {
         self.freeze_started.store(false, Relaxed);
     }
 

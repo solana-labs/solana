@@ -2748,7 +2748,7 @@ fn main() {
                                 1,
                             );
                             if arg_matches.is_present("enable_credits_auto_rewind") {
-                                base_bank.unfreeze();
+                                base_bank.unfreeze_for_ledger_tool();
                                 let mut force_enabled_count = 0;
                                 if base_bank
                                     .get_account(&feature_set::credits_auto_rewind::id())
