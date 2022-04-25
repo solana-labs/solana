@@ -48,6 +48,7 @@ impl AsRef<[u8]> for TurbineMerkleHash {
 }
 
 impl TurbineMerkleProof {
+    #[allow(clippy::integer_arithmetic)]
     fn compute_root(&self, leaf_hash: &TurbineMerkleHash, leaf_index: usize) -> TurbineMerkleHash {
         let mut hash = *leaf_hash;
         let mut idx = leaf_index;
@@ -84,6 +85,7 @@ impl From<&[u8]> for TurbineMerkleProof {
 }
 
 impl TurbineMerkleTree {
+    #[allow(clippy::integer_arithmetic)]
     pub fn new_from_leaves(leaves: &[TurbineMerkleHash]) -> Self {
         // TODO assert leaves.len() is a power of 2?
         let tree_size = leaves.len() * 2 - 1;
@@ -113,10 +115,12 @@ impl TurbineMerkleTree {
         Self::new_from_leaves(&leaves)
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn leaf_count(&self) -> usize {
         (self.tree.len() + 1) / 2
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn root(&self) -> TurbineMerkleHash {
         self.tree[self.tree.len() - 1]
     }
@@ -125,6 +129,7 @@ impl TurbineMerkleTree {
         self.tree[index]
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn prove(&self, leaf_index: usize) -> TurbineMerkleProof {
         let mut proof = Vec::new();
         let mut level_leaves = self.leaf_count();
@@ -143,6 +148,7 @@ impl TurbineMerkleTree {
         TurbineMerkleProof(proof)
     }
 
+    #[allow(clippy::integer_arithmetic)]
     fn _print(&self) {
         let mut base = 0;
         let mut level_nodes = self.leaf_count();
