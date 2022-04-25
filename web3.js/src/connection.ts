@@ -2120,6 +2120,13 @@ export type ConnectionConfig = {
   confirmTransactionInitialTimeout?: number;
 };
 
+function createSubscriptionWarningMessage(id: number, label: string): string {
+  return (
+    'Ignored unsubscribe request because an active subscription ' +
+    `with id \`${id}\` for '${label}' events could not be found.`
+  );
+}
+
 /**
  * A connection to a fullnode JSON RPC endpoint
  */
@@ -4381,7 +4388,7 @@ export class Connection {
       await this._unsubscribe(subInfo, 'accountUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown account change id: ${id}`);
+      console.warn(createSubscriptionWarningMessage(id, 'account change'));
     }
   }
 
@@ -4445,7 +4452,9 @@ export class Connection {
       await this._unsubscribe(subInfo, 'programUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown program account change id: ${id}`);
+      console.warn(
+        createSubscriptionWarningMessage(id, 'program account change'),
+      );
     }
   }
 
@@ -4474,13 +4483,14 @@ export class Connection {
    * @param id subscription id to deregister.
    */
   async removeOnLogsListener(id: number): Promise<void> {
-    if (!this._logsSubscriptions[id]) {
-      throw new Error(`Unknown logs id: ${id}`);
+    if (this._logsSubscriptions[id]) {
+      const subInfo = this._logsSubscriptions[id];
+      delete this._logsSubscriptions[id];
+      await this._unsubscribe(subInfo, 'logsUnsubscribe');
+      this._updateSubscriptions();
+    } else {
+      console.warn(createSubscriptionWarningMessage(id, 'logs'));
     }
-    const subInfo = this._logsSubscriptions[id];
-    delete this._logsSubscriptions[id];
-    await this._unsubscribe(subInfo, 'logsUnsubscribe');
-    this._updateSubscriptions();
   }
 
   /**
@@ -4539,7 +4549,7 @@ export class Connection {
       await this._unsubscribe(subInfo, 'slotUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown slot change id: ${id}`);
+      console.warn(createSubscriptionWarningMessage(id, 'slot change'));
     }
   }
 
@@ -4585,7 +4595,7 @@ export class Connection {
       await this._unsubscribe(subInfo, 'slotsUpdatesUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown slot update id: ${id}`);
+      console.warn(createSubscriptionWarningMessage(id, 'slot update'));
     }
   }
 
@@ -4730,7 +4740,7 @@ export class Connection {
       await this._unsubscribe(subInfo, 'signatureUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown signature result id: ${id}`);
+      console.warn(createSubscriptionWarningMessage(id, 'signature result'));
     }
   }
 
@@ -4775,7 +4785,7 @@ export class Connection {
       await this._unsubscribe(subInfo, 'rootUnsubscribe');
       this._updateSubscriptions();
     } else {
-      throw new Error(`Unknown root change id: ${id}`);
+      console.warn(createSubscriptionWarningMessage(id, 'root change'));
     }
   }
 }
