@@ -1,0 +1,89 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "lts/*"
+          cache: 'npm'
+      - name: build
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
+          PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
+          npm install -g npm@7
+          npm install
+          npm run build
+          ls -l lib
+          test -r lib/index.iife.js
+          test -r lib/index.cjs.js
+          test -r lib/index.esm.js
+          npm run ok
+          npm run codecov
+          npm run test:live-with-test-validator
+          rm -rf deploy
+          mkdir -p deploy
+          cp -r doc deploy/docs
+          cp lib/index.iife.js deploy/solanaWeb3.min.js
+      - uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: deploy/
+
+  gh-page:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: build
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+
+  semantic-release:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "lts/*"
+          cache: 'npm'
+      - run: |
+          npx semantic-release --dry-run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  gh-release:
+    if: startsWith(github.ref, 'refs/tags')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: build
+      - name: Compress
+        run: |
+           tar zcf solanaWeb3Api.tgz docs
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            solanaWeb3.min.js
+            solanaWeb3Api.tgz
