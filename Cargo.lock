@@ -997,11 +997,11 @@ dependencies = [
 
 [[package]]
 name = "ctrlc"
-version = "3.2.1"
+version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a19c6cedffdc8c03a3346d723eb20bd85a13362bb96dc2ac000842c6381ec7bf"
+checksum = "b37feaa84e6861e00a1f5e5aa8da3ee56d605c9992d33e082786754828e20865"
 dependencies = [
- "nix 0.23.1",
+ "nix",
  "winapi 0.3.9",
 ]
 
@@ -2506,19 +2506,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "nix"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "memoffset",
 ]
 
 [[package]]
@@ -4970,7 +4957,7 @@ dependencies = [
  "dirs-next",
  "indicatif",
  "lazy_static",
- "nix 0.24.0",
+ "nix",
  "reqwest",
  "semver 1.0.7",
  "serde",
@@ -5221,7 +5208,7 @@ dependencies = [
  "clap 3.1.8",
  "crossbeam-channel",
  "log",
- "nix 0.24.0",
+ "nix",
  "rand 0.7.3",
  "serde",
  "serde_derive",
@@ -5258,7 +5245,7 @@ dependencies = [
  "libc",
  "log",
  "matches",
- "nix 0.24.0",
+ "nix",
  "rand 0.7.3",
  "rayon",
  "serde",
@@ -5844,7 +5831,7 @@ dependencies = [
  "itertools",
  "libc",
  "log",
- "nix 0.24.0",
+ "nix",
  "pem",
  "pkcs8",
  "quinn",
@@ -5866,7 +5853,7 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
- "nix 0.24.0",
+ "nix",
  "solana-logger 1.11.0",
  "solana-version",
  "sysctl",
