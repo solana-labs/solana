@@ -3,7 +3,7 @@ use {
     itertools::Itertools,
     solana_ledger::{
         blockstore_meta::DuplicateSlotProof,
-        shred::{Shred, ShredError, ShredType},
+        shred::{self, Shred, ShredType},
     },
     solana_sdk::{
         clock::Slot,
@@ -55,8 +55,8 @@ pub enum Error {
     InvalidSignature,
     #[error("invalid size limit")]
     InvalidSizeLimit,
-    #[error("invalid shred")]
-    InvalidShred(#[from] ShredError),
+    #[error(transparent)]
+    InvalidShred(#[from] shred::Error),
     #[error("number of chunks mismatch")]
     NumChunksMismatch,
     #[error("missing data chunk")]

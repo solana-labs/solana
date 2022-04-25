@@ -193,7 +193,7 @@ pub(crate) fn should_retransmit_and_persist(
         } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
             inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
             false
-        } else if !shred.sanitize() {
+        } else if shred.sanitize().is_err() {
             inc_new_counter_warn!("streamer-recv_window-invalid-shred", 1);
             false
         } else {
