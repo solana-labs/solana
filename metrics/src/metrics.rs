@@ -292,26 +292,31 @@ impl MetricsAgent {
     }
 
     fn send(&self, command: MetricsCommand) {
+        let try_send = |command| {
+            match self.sender.try_send(command) {
+                Err(TrySendError::Full(cmd)) => {
+                    warn!("metric queue full, point dropped: {:?}.", cmd);
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    warn!("metric queue disconnected.");
+                }
+                // success
+                Ok(_) => {}
+            }
+        };
+
+        // Report a datapoint for the metric command queue size when the queue
+        // is filling up
         let len = self.sender.len();
         if len > METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD {
-            self.submit(
+            try_send(MetricsCommand::Submit(
                 DataPoint::new("metric_command_queue")
                     .add_field_i64("len", len as i64)
                     .to_owned(),
                 Level::Info,
-            );
+            ));
         }
-
-        match self.sender.try_send(command) {
-            Err(TrySendError::Full(cmd)) => {
-                warn!("metric queue full, point dropped: {:?}.", cmd);
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                warn!("metric queue disconnected.");
-            }
-            // success
-            Ok(_) => {}
-        }
+        try_send(command);
     }
 
     pub fn submit(&self, point: DataPoint, level: log::Level) {
