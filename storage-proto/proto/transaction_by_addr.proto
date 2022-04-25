@@ -115,6 +115,7 @@ enum InstructionErrorType {
     ILLEGAL_OWNER = 49;
     MAX_ACCOUNTS_DATA_SIZE_EXCEEDED = 50;
     ACTIVE_VOTE_ACCOUNT_CLOSE = 51;
+    INSUFFICIENT_STAKE_DELEGATION = 52;
 }
 
 message UnixTimestamp {

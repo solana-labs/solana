@@ -55,6 +55,8 @@ pub enum ProgramError {
     MaxAccountsDataSizeExceeded,
     #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
     ActiveVoteAccountClose,
+    #[error("Stake amount is below the minimum delegation requirements")]
+    InsufficientStakeDelegation,
 }
 
 pub trait PrintProgramError {
@@ -95,6 +97,7 @@ impl PrintProgramError for ProgramError {
             Self::IllegalOwner => msg!("Error: IllegalOwner"),
             Self::MaxAccountsDataSizeExceeded => msg!("Error: MaxAccountsDataSizeExceeded"),
             Self::ActiveVoteAccountClose => msg!("Error: ActiveVoteAccountClose"),
+            Self::InsufficientStakeDelegation => msg!("Error: InsufficientStakeDelegation"),
         }
     }
 }
@@ -127,6 +130,7 @@ pub const UNSUPPORTED_SYSVAR: u64 = to_builtin!(17);
 pub const ILLEGAL_OWNER: u64 = to_builtin!(18);
 pub const MAX_ACCOUNTS_DATA_SIZE_EXCEEDED: u64 = to_builtin!(19);
 pub const ACTIVE_VOTE_ACCOUNT_CLOSE: u64 = to_builtin!(20);
+pub const INSUFFICIENT_STAKE_DELEGATION: u64 = to_builtin!(21);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
 // - Added as an equivilent to InstructionError
@@ -155,6 +159,7 @@ impl From<ProgramError> for u64 {
             ProgramError::IllegalOwner => ILLEGAL_OWNER,
             ProgramError::MaxAccountsDataSizeExceeded => MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
             ProgramError::ActiveVoteAccountClose => ACTIVE_VOTE_ACCOUNT_CLOSE,
+            ProgramError::InsufficientStakeDelegation => INSUFFICIENT_STAKE_DELEGATION,
             ProgramError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -189,6 +194,7 @@ impl From<u64> for ProgramError {
             ILLEGAL_OWNER => Self::IllegalOwner,
             MAX_ACCOUNTS_DATA_SIZE_EXCEEDED => Self::MaxAccountsDataSizeExceeded,
             ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
+            INSUFFICIENT_STAKE_DELEGATION => Self::InsufficientStakeDelegation,
             _ => Self::Custom(error as u32),
         }
     }
@@ -219,6 +225,7 @@ impl TryFrom<InstructionError> for ProgramError {
             Self::Error::IllegalOwner => Ok(Self::IllegalOwner),
             Self::Error::MaxAccountsDataSizeExceeded => Ok(Self::MaxAccountsDataSizeExceeded),
             Self::Error::ActiveVoteAccountClose => Ok(Self::ActiveVoteAccountClose),
+            Self::Error::InsufficientStakeDelegation => Ok(Self::InsufficientStakeDelegation),
             _ => Err(error),
         }
     }
@@ -251,6 +258,7 @@ where
             ILLEGAL_OWNER => Self::IllegalOwner,
             MAX_ACCOUNTS_DATA_SIZE_EXCEEDED => Self::MaxAccountsDataSizeExceeded,
             ACTIVE_VOTE_ACCOUNT_CLOSE => Self::ActiveVoteAccountClose,
+            INSUFFICIENT_STAKE_DELEGATION => Self::InsufficientStakeDelegation,
             _ => {
                 // A valid custom error has no bits set in the upper 32
                 if error >> BUILTIN_BIT_SHIFT == 0 {
