@@ -26,15 +26,7 @@ typedef struct {
  *
  * @param key The public key to print
  */
-#ifndef SOL_SBFV2
-void sol_log_pubkey(const SolPubkey *);
-#else
-typedef void(*sol_log_pubkey_pointer_type)(const SolPubkey *);
-static void sol_log_pubkey(const SolPubkey * arg1) {
-  sol_log_pubkey_pointer_type sol_log_pubkey_pointer = (sol_log_pubkey_pointer_type) 2129692874;
-  sol_log_pubkey_pointer(arg1);
-}
-#endif
+@SYSCALL void sol_log_pubkey(const SolPubkey *);
 
 /**
  * Compares two public keys
@@ -77,15 +69,7 @@ typedef struct {
  * @param program_id Program id of the signer
  * @param program_address Program address created, filled on return
  */
-#ifndef SOL_SBFV2
-uint64_t sol_create_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
-#else
-typedef uint64_t(*sol_create_program_address_pointer_type)(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
-static uint64_t sol_create_program_address(const SolSignerSeed * arg1, int arg2, const SolPubkey * arg3, SolPubkey * arg4) {
-  sol_create_program_address_pointer_type sol_create_program_address_pointer = (sol_create_program_address_pointer_type) 2474062396;
-  return sol_create_program_address_pointer(arg1, arg2, arg3, arg4);
-}
-#endif
+@SYSCALL uint64_t sol_create_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
 
 /**
  * Try to find a program address and return corresponding bump seed
@@ -96,15 +80,7 @@ static uint64_t sol_create_program_address(const SolSignerSeed * arg1, int arg2,
  * @param program_address Program address created, filled on return
  * @param bump_seed Bump seed required to create a valid program address
  */
-#ifndef SOL_SBFV2
-uint64_t sol_try_find_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
-#else
-typedef uint64_t(*sol_try_find_program_address_pointer_type)(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
-static uint64_t sol_try_find_program_address(const SolSignerSeed * arg1, int arg2, const SolPubkey * arg3, SolPubkey * arg4, uint8_t * arg5) {
-  sol_try_find_program_address_pointer_type sol_try_find_program_address_pointer = (sol_try_find_program_address_pointer_type) 1213221432;
-  return sol_try_find_program_address_pointer(arg1, arg2, arg3, arg4, arg5);
-}
-#endif
+@SYSCALL uint64_t sol_try_find_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
 
 #ifdef SOL_TEST
 /**

@@ -58,15 +58,7 @@ static size_t sol_strlen(const char *s) {
 /**
  * Internal memory alloc/free function
  */
-#ifndef SOL_SBFV2
-void* sol_alloc_free_(uint64_t, void *);
-#else
-typedef void*(*sol_alloc_free__pointer_type)(uint64_t, void *);
-static void* sol_alloc_free_(uint64_t arg1, void * arg2) {
-  sol_alloc_free__pointer_type sol_alloc_free__pointer = (sol_alloc_free__pointer_type) 2213547663;
-  return sol_alloc_free__pointer(arg1, arg2);
-}
-#endif
+@SYSCALL void* sol_alloc_free_(uint64_t, void *);
 
 /**
  * Alloc zero-initialized memory

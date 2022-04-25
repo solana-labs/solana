@@ -41,6 +41,12 @@ C_FLAGS := \
   $(addprefix -I,$(STD_INC_DIRS)) \
   $(addprefix -I,$(INC_DIRS)) \
 
+ifeq ($(SOL_SBFV2),1)
+C_FLAGS := \
+  $(C_FLAGS) \
+  -DSOL_SBFV2=1
+endif
+
 CXX_FLAGS := \
   $(C_FLAGS) \
   -std=c++17 \
@@ -69,6 +75,12 @@ BPF_LLD_FLAGS := \
   --entry entrypoint \
   -L $(STD_LIB_DIRS) \
   -lc \
+
+ifeq ($(SOL_SBFV2),1)
+BPF_LLD_FLAGS := \
+  $(BPF_LLD_FLAGS) \
+  --pack-dyn-relocs=relr
+endif
 
 OBJ_DUMP_FLAGS := \
   --source \
