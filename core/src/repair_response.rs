@@ -79,10 +79,10 @@ mod test {
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         shred.sign(&keypair);
-        trace!("signature {}", shred.common_header.signature);
+        trace!("signature {}", shred.signature());
         let nonce = 9;
         let mut packet = repair_response_packet_from_bytes(
-            shred.payload,
+            shred.into_payload(),
             &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             nonce,
         )

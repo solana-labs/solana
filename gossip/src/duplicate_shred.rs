@@ -91,7 +91,7 @@ fn check_shreds(
         Err(Error::ShredIndexMismatch)
     } else if shred1.shred_type() != shred2.shred_type() {
         Err(Error::ShredTypeMismatch)
-    } else if shred1.payload == shred2.payload {
+    } else if shred1.payload() == shred2.payload() {
         Err(Error::InvalidDuplicateShreds)
     } else {
         if let Some(leader_schedule) = leader_schedule {
@@ -152,14 +152,14 @@ pub(crate) fn from_shred(
     wallclock: u64,
     max_size: usize, // Maximum serialized size of each DuplicateShred.
 ) -> Result<impl Iterator<Item = DuplicateShred>, Error> {
-    if shred.payload == other_payload {
+    if shred.payload() == &other_payload {
         return Err(Error::InvalidDuplicateShreds);
     }
     let other_shred = Shred::new_from_serialized_shred(other_payload.clone())?;
     check_shreds(leader_schedule, &shred, &other_shred)?;
     let (slot, shred_index, shred_type) = (shred.slot(), shred.index(), shred.shred_type());
     let proof = DuplicateSlotProof {
-        shred1: shred.payload,
+        shred1: shred.into_payload(),
         shred2: other_payload,
     };
     let data = bincode::serialize(&proof)?;
@@ -259,7 +259,7 @@ pub fn into_shreds(
         Err(Error::ShredIndexMismatch)
     } else if shred1.shred_type() != shred_type || shred2.shred_type() != shred_type {
         Err(Error::ShredTypeMismatch)
-    } else if shred1.payload == shred2.payload {
+    } else if shred1.payload() == shred2.payload() {
         Err(Error::InvalidDuplicateShreds)
     } else if !shred1.verify(&slot_leader) || !shred2.verify(&slot_leader) {
         Err(Error::InvalidSignature)
@@ -352,7 +352,7 @@ pub(crate) mod tests {
         let leader = Arc::new(Keypair::new());
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = rng.gen();
+        let next_shred_index = rng.gen_range(0, 32_000);
         let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
         let leader_schedule = |s| {
@@ -365,7 +365,7 @@ pub(crate) mod tests {
         let chunks: Vec<_> = from_shred(
             shred1.clone(),
             Pubkey::new_unique(), // self_pubkey
-            shred2.payload.clone(),
+            shred2.payload().clone(),
             Some(leader_schedule),
             rng.gen(), // wallclock
             512,       // max_size

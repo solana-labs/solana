@@ -234,8 +234,8 @@ impl ErasureMeta {
             ShredType::Data => None,
             ShredType::Code => {
                 let config = ErasureConfig::new(
-                    usize::from(shred.coding_header.num_data_shreds),
-                    usize::from(shred.coding_header.num_coding_shreds),
+                    usize::from(shred.num_data_shreds().ok()?),
+                    usize::from(shred.num_coding_shreds().ok()?),
                 );
                 let first_coding_index = u64::from(shred.first_coding_index()?);
                 let erasure_meta = ErasureMeta {
