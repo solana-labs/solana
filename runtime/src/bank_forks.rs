@@ -131,7 +131,7 @@ impl BankForks {
             banks.insert(bank.slot(), bank.clone());
             let parents = bank.parents();
             for parent in parents {
-                if let Some(_) = banks.insert(parent.slot(), parent.clone()) {
+                if banks.insert(parent.slot(), parent.clone()).is_some() {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
