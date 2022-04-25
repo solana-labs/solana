@@ -115,247 +115,145 @@ impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
     }
 }
 
-macro_rules! register_feature_gated_syscall {
-    ($syscall_registry:expr, $is_feature_active:expr, $name:expr, $init:expr, $call:expr $(,)?) => {
-        if $is_feature_active {
-            $syscall_registry.register_syscall_by_name($name, $init, $call)
-        } else {
-            Ok(())
-        }
-    };
-}
-
 pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
-    let secp256k1_recover_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&secp256k1_recover_syscall_enabled::id());
-    let blake3_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&blake3_syscall_enabled::id());
-    let zk_token_sdk_enabled = invoke_context
-        .feature_set
-        .is_active(&zk_token_sdk_enabled::id());
-    let disable_fees_sysvar = invoke_context
-        .feature_set
-        .is_active(&disable_fees_sysvar::id());
-    let return_data_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&return_data_syscall_enabled::id());
-    let sol_log_data_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&sol_log_data_syscall_enabled::id());
-    let add_get_processed_sibling_instruction_syscall = invoke_context
-        .feature_set
-        .is_active(&add_get_processed_sibling_instruction_syscall::id());
-
     let mut syscall_registry = SyscallRegistry::default();
 
-    // Abort
-    syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::init, SyscallAbort::call)?;
+    syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_panic_", SyscallPanic::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
 
-    // Panic
-    syscall_registry.register_syscall_by_name(
-        b"sol_panic_",
-        SyscallPanic::init,
-        SyscallPanic::call,
-    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
 
-    // Logging
-    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::init, SyscallLog::call)?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_64_",
-        SyscallLogU64::init,
-        SyscallLogU64::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_compute_units_",
-        SyscallLogBpfComputeUnits::init,
-        SyscallLogBpfComputeUnits::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_pubkey",
-        SyscallLogPubkey::init,
-        SyscallLogPubkey::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
-    // Program defined addresses (PDA)
     syscall_registry.register_syscall_by_name(
         b"sol_create_program_address",
-        SyscallCreateProgramAddress::init,
         SyscallCreateProgramAddress::call,
     )?;
     syscall_registry.register_syscall_by_name(
         b"sol_try_find_program_address",
-        SyscallTryFindProgramAddress::init,
         SyscallTryFindProgramAddress::call,
     )?;
 
-    // Sha256
-    syscall_registry.register_syscall_by_name(
-        b"sol_sha256",
-        SyscallSha256::init,
-        SyscallSha256::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
-    // Keccak256
-    syscall_registry.register_syscall_by_name(
-        b"sol_keccak256",
-        SyscallKeccak256::init,
-        SyscallKeccak256::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+    }
 
-    // Secp256k1 Recover
-    register_feature_gated_syscall!(
-        syscall_registry,
-        secp256k1_recover_syscall_enabled,
-        b"sol_secp256k1_recover",
-        SyscallSecp256k1Recover::init,
-        SyscallSecp256k1Recover::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id())
+    {
+        syscall_registry.register_syscall_by_name(b"sol_blake3", SyscallBlake3::call)?;
+    }
 
-    // Blake3
-    register_feature_gated_syscall!(
-        syscall_registry,
-        blake3_syscall_enabled,
-        b"sol_blake3",
-        SyscallBlake3::init,
-        SyscallBlake3::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&zk_token_sdk_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_zk_token_elgamal_op", SyscallZkTokenElgamalOp::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_lo_hi",
+            SyscallZkTokenElgamalOpWithLoHi::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_zk_token_elgamal_op_with_scalar",
+            SyscallZkTokenElgamalOpWithScalar::call,
+        )?;
+    }
 
-    // ZK Token
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op",
-        SyscallZkTokenElgamalOp::init,
-        SyscallZkTokenElgamalOp::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_lo_hi",
-        SyscallZkTokenElgamalOpWithLoHi::init,
-        SyscallZkTokenElgamalOpWithLoHi::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_scalar",
-        SyscallZkTokenElgamalOpWithScalar::init,
-        SyscallZkTokenElgamalOpWithScalar::call,
-    )?;
-
-    // Sysvars
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_clock_sysvar",
-        SyscallGetClockSysvar::init,
-        SyscallGetClockSysvar::call,
-    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
         b"sol_get_epoch_schedule_sysvar",
-        SyscallGetEpochScheduleSysvar::init,
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        disable_fees_sysvar,
-        b"sol_get_fees_sysvar",
-        SyscallGetFeesSysvar::init,
-        SyscallGetFeesSysvar::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_rent_sysvar",
-        SyscallGetRentSysvar::init,
-        SyscallGetRentSysvar::call,
-    )?;
+    if !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_fees_sysvar", SyscallGetFeesSysvar::call)?;
+    }
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
-    // Memory ops
-    syscall_registry.register_syscall_by_name(
-        b"sol_memcpy_",
-        SyscallMemcpy::init,
-        SyscallMemcpy::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memmove_",
-        SyscallMemmove::init,
-        SyscallMemmove::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memcmp_",
-        SyscallMemcmp::init,
-        SyscallMemcmp::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memset_",
-        SyscallMemset::init,
-        SyscallMemset::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
 
-    // Cross-program invocation
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_c",
-        SyscallInvokeSignedC::init,
-        SyscallInvokeSignedC::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_rust",
-        SyscallInvokeSignedRust::init,
-        SyscallInvokeSignedRust::call,
-    )?;
+    // Cross-program invocation syscalls
+    syscall_registry
+        .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
     // Memory allocator
-    syscall_registry.register_syscall_by_name(
-        b"sol_alloc_free_",
-        SyscallAllocFree::init,
-        SyscallAllocFree::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     // Return data
-    register_feature_gated_syscall!(
-        syscall_registry,
-        return_data_syscall_enabled,
-        b"sol_set_return_data",
-        SyscallSetReturnData::init,
-        SyscallSetReturnData::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        return_data_syscall_enabled,
-        b"sol_get_return_data",
-        SyscallGetReturnData::init,
-        SyscallGetReturnData::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+    }
 
     // Log data
-    register_feature_gated_syscall!(
-        syscall_registry,
-        sol_log_data_syscall_enabled,
-        b"sol_log_data",
-        SyscallLogData::init,
-        SyscallLogData::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id())
+    {
+        syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
+    }
 
-    // Processed sibling instructions
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
-        b"sol_get_processed_sibling_instruction",
-        SyscallGetProcessedSiblingInstruction::init,
-        SyscallGetProcessedSiblingInstruction::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_sibling_instruction",
+            SyscallGetProcessedSiblingInstruction::call,
+        )?;
+    }
 
-    // Stack height
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
-        b"sol_get_stack_height",
-        SyscallGetStackHeight::init,
-        SyscallGetStackHeight::call,
-    )?;
+    if invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id())
+    {
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+    }
 
     Ok(syscall_registry)
+}
+
+macro_rules! bind_feature_gated_syscall_context_object {
+    ($vm:expr, $is_feature_active:expr, $syscall_context_object:expr $(,)?) => {
+        if $is_feature_active {
+            match $vm.bind_syscall_context_object($syscall_context_object, None) {
+                Err(EbpfError::SyscallNotRegistered(_)) | Ok(()) => {}
+                Err(err) => {
+                    return Err(err);
+                }
+            }
+        }
+    };
 }
 
 pub fn bind_syscall_context_objects<'a, 'b>(
@@ -363,6 +261,28 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory,
 ) -> Result<(), EbpfError<BpfError>> {
+    let is_blake3_syscall_active = invoke_context
+        .feature_set
+        .is_active(&blake3_syscall_enabled::id());
+    let is_secp256k1_recover_syscall_active = invoke_context
+        .feature_set
+        .is_active(&secp256k1_recover_syscall_enabled::id());
+    let is_fee_sysvar_via_syscall_active = !invoke_context
+        .feature_set
+        .is_active(&disable_fees_sysvar::id());
+    let is_return_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&return_data_syscall_enabled::id());
+    let is_sol_log_data_syscall_active = invoke_context
+        .feature_set
+        .is_active(&sol_log_data_syscall_enabled::id());
+    let is_zk_token_sdk_enabled = invoke_context
+        .feature_set
+        .is_active(&zk_token_sdk_enabled::id());
+    let add_get_processed_sibling_instruction_syscall = invoke_context
+        .feature_set
+        .is_active(&add_get_processed_sibling_instruction_syscall::id());
+
     invoke_context.set_check_aligned(
         bpf_loader_deprecated::id()
             != invoke_context
@@ -390,7 +310,225 @@ pub fn bind_syscall_context_objects<'a, 'b>(
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
 
-    vm.bind_syscall_context_objects(invoke_context, None)?;
+    // Syscall functions common across languages
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallAbort {
+            _invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallPanic {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLog {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogU64 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogBpfComputeUnits {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallLogPubkey {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallCreateProgramAddress {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallTryFindProgramAddress {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallSha256 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallKeccak256 {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemcpy {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemmove {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemcmp {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallMemset {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_secp256k1_recover_syscall_active,
+        Box::new(SyscallSecp256k1Recover {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_blake3_syscall_active,
+        Box::new(SyscallBlake3 {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOp {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithLoHi {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_zk_token_sdk_enabled,
+        Box::new(SyscallZkTokenElgamalOpWithScalar {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetClockSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetEpochScheduleSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_fee_sysvar_via_syscall_active,
+        Box::new(SyscallGetFeesSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+    vm.bind_syscall_context_object(
+        Box::new(SyscallGetRentSysvar {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    // Return data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallSetReturnData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_return_data_syscall_active,
+        Box::new(SyscallGetReturnData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // sol_log_data
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_sol_log_data_syscall_active,
+        Box::new(SyscallLogData {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // processed inner instructions
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetProcessedSiblingInstruction {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // Get stack height
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        add_get_processed_sibling_instruction_syscall,
+        Box::new(SyscallGetStackHeight {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    // Cross-program invocation syscalls
+    vm.bind_syscall_context_object(
+        Box::new(SyscallInvokeSignedC {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+    vm.bind_syscall_context_object(
+        Box::new(SyscallInvokeSignedRust {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
+
+    // Memory allocator
+    vm.bind_syscall_context_object(
+        Box::new(SyscallAllocFree {
+            invoke_context: invoke_context.clone(),
+        }),
+        None,
+    )?;
 
     Ok(())
 }
@@ -513,33 +651,14 @@ fn translate_string_and_do(
     }
 }
 
-type SyscallContext<'a, 'b> = Rc<RefCell<&'a mut InvokeContext<'b>>>;
-
-macro_rules! declare_syscall {
-    ($(#[$attr:meta])* $name:ident, $call:item) => {
-        $(#[$attr])*
-        pub struct $name<'a, 'b> {
-            invoke_context: SyscallContext<'a, 'b>,
-        }
-        impl<'a, 'b> $name<'a, 'b> {
-            pub fn init(
-                invoke_context: SyscallContext<'a, 'b>,
-            ) -> Box<(dyn SyscallObject<BpfError> + 'a)> {
-                Box::new(Self { invoke_context })
-            }
-        }
-        impl<'a, 'b> SyscallObject<BpfError> for $name<'a, 'b> {
-            $call
-        }
-    };
+/// Abort syscall functions, called when the BPF program calls `abort()`
+/// LLVM will insert calls to `abort()` if it detects an untenable situation,
+/// `abort()` is not intended to be called explicitly by the program.
+/// Causes the BPF program to be halted immediately
+pub struct SyscallAbort<'a, 'b> {
+    _invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
-
-declare_syscall!(
-    /// Abort syscall functions, called when the BPF program calls `abort()`
-    /// LLVM will insert calls to `abort()` if it detects an untenable situation,
-    /// `abort()` is not intended to be called explicitly by the program.
-    /// Causes the BPF program to be halted immediately
-    SyscallAbort,
+impl<'a, 'b> SyscallObject<BpfError> for SyscallAbort<'a, 'b> {
     fn call(
         &mut self,
         _arg1: u64,
@@ -550,20 +669,17 @@ declare_syscall!(
         _memory_mapping: &MemoryMapping,
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
-        let _ = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
         *result = Err(SyscallError::Abort.into());
     }
-);
+}
 
-declare_syscall!(
-    /// Panic syscall function, called when the BPF program calls 'sol_panic_()`
-    /// Causes the BPF program to be halted immediately
-    SyscallPanic,
+/// Panic syscall function, called when the BPF program calls 'sol_panic_()`
+/// Causes the BPF program to be halted immediately
+/// Log a user's info message
+pub struct SyscallPanic<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
     fn call(
         &mut self,
         file: u64,
@@ -596,11 +712,13 @@ declare_syscall!(
             &mut |string: &str| Err(SyscallError::Panic(string.to_string(), line, column).into()),
         );
     }
-);
+}
 
-declare_syscall!(
-    /// Log a user's info message
-    SyscallLog,
+/// Log a user's info message
+pub struct SyscallLog<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallLog<'a, 'b> {
     fn call(
         &mut self,
         addr: u64,
@@ -646,11 +764,13 @@ declare_syscall!(
         );
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Log 5 64-bit values
-    SyscallLogU64,
+/// Log 5 64-bit values
+pub struct SyscallLogU64<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallLogU64<'a, 'b> {
     fn call(
         &mut self,
         arg1: u64,
@@ -679,11 +799,13 @@ declare_syscall!(
         );
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Log current compute consumption
-    SyscallLogBpfComputeUnits,
+/// Log current compute consumption
+pub struct SyscallLogBpfComputeUnits<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallLogBpfComputeUnits<'a, 'b> {
     fn call(
         &mut self,
         _arg1: u64,
@@ -717,11 +839,13 @@ declare_syscall!(
         );
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Log 5 64-bit values
-    SyscallLogPubkey,
+/// Log 5 64-bit values
+pub struct SyscallLogPubkey<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallLogPubkey<'a, 'b> {
     fn call(
         &mut self,
         pubkey_addr: u64,
@@ -752,16 +876,18 @@ declare_syscall!(
         stable_log::program_log(&invoke_context.get_log_collector(), &pubkey.to_string());
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Dynamic memory allocation syscall called when the BPF program calls
-    /// `sol_alloc_free_()`.  The allocator is expected to allocate/free
-    /// from/to a given chunk of memory and enforce size restrictions.  The
-    /// memory chunk is given to the allocator during allocator creation and
-    /// information about that memory (start address and size) is passed
-    /// to the VM to use for enforcement.
-    SyscallAllocFree,
+/// Dynamic memory allocation syscall called when the BPF program calls
+/// `sol_alloc_free_()`.  The allocator is expected to allocate/free
+/// from/to a given chunk of memory and enforce size restrictions.  The
+/// memory chunk is given to the allocator during allocator creation and
+/// information about that memory (start address and size) is passed
+/// to the VM to use for enforcement.
+pub struct SyscallAllocFree<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallAllocFree<'a, 'b> {
     fn call(
         &mut self,
         size: u64,
@@ -813,7 +939,7 @@ declare_syscall!(
             Ok(0)
         };
     }
-);
+}
 
 fn translate_and_check_program_address_inputs<'a>(
     seeds_addr: u64,
@@ -852,9 +978,11 @@ fn translate_and_check_program_address_inputs<'a>(
     Ok((seeds, program_id))
 }
 
-declare_syscall!(
-    /// Create a program address
-    SyscallCreateProgramAddress,
+/// Create a program address
+struct SyscallCreateProgramAddress<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallCreateProgramAddress<'a, 'b> {
     fn call(
         &mut self,
         seeds_addr: u64,
@@ -908,11 +1036,13 @@ declare_syscall!(
         address.copy_from_slice(new_address.as_ref());
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Create a program address
-    SyscallTryFindProgramAddress,
+/// Create a program address
+struct SyscallTryFindProgramAddress<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallTryFindProgramAddress<'a, 'b> {
     fn call(
         &mut self,
         seeds_addr: u64,
@@ -984,11 +1114,13 @@ declare_syscall!(
         }
         *result = Ok(1);
     }
-);
+}
 
-declare_syscall!(
-    /// SHA256
-    SyscallSha256,
+/// SHA256
+pub struct SyscallSha256<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallSha256<'a, 'b> {
     fn call(
         &mut self,
         vals_addr: u64,
@@ -1081,7 +1213,7 @@ declare_syscall!(
         hash_result.copy_from_slice(&hasher.result().to_bytes());
         *result = Ok(0);
     }
-);
+}
 
 fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     sysvar: Result<Arc<T>, InstructionError>,
@@ -1104,9 +1236,11 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     Ok(SUCCESS)
 }
 
-declare_syscall!(
-    /// Get a Clock sysvar
-    SyscallGetClockSysvar,
+/// Get a Clock sysvar
+struct SyscallGetClockSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetClockSysvar<'a, 'b> {
     fn call(
         &mut self,
         var_addr: u64,
@@ -1131,11 +1265,12 @@ declare_syscall!(
             &mut invoke_context,
         );
     }
-);
-
-declare_syscall!(
-    /// Get a EpochSchedule sysvar
-    SyscallGetEpochScheduleSysvar,
+}
+/// Get a EpochSchedule sysvar
+struct SyscallGetEpochScheduleSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetEpochScheduleSysvar<'a, 'b> {
     fn call(
         &mut self,
         var_addr: u64,
@@ -1160,11 +1295,13 @@ declare_syscall!(
             &mut invoke_context,
         );
     }
-);
-
-declare_syscall!(
-    /// Get a Fees sysvar
-    SyscallGetFeesSysvar,
+}
+/// Get a Fees sysvar
+struct SyscallGetFeesSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+#[allow(deprecated)]
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetFeesSysvar<'a, 'b> {
     fn call(
         &mut self,
         var_addr: u64,
@@ -1181,22 +1318,20 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        #[allow(deprecated)]
-        {
-            *result = get_sysvar(
-                invoke_context.get_sysvar_cache().get_fees(),
-                var_addr,
-                invoke_context.get_check_aligned(),
-                memory_mapping,
-                &mut invoke_context,
-            );
-        }
+        *result = get_sysvar(
+            invoke_context.get_sysvar_cache().get_fees(),
+            var_addr,
+            invoke_context.get_check_aligned(),
+            memory_mapping,
+            &mut invoke_context,
+        );
     }
-);
-
-declare_syscall!(
-    /// Get a Rent sysvar
-    SyscallGetRentSysvar,
+}
+/// Get a Rent sysvar
+struct SyscallGetRentSysvar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetRentSysvar<'a, 'b> {
     fn call(
         &mut self,
         var_addr: u64,
@@ -1221,11 +1356,13 @@ declare_syscall!(
             &mut invoke_context,
         );
     }
-);
+}
 
-declare_syscall!(
-    // Keccak256
-    SyscallKeccak256,
+// Keccak256
+pub struct SyscallKeccak256<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallKeccak256<'a, 'b> {
     fn call(
         &mut self,
         vals_addr: u64,
@@ -1318,7 +1455,7 @@ declare_syscall!(
         hash_result.copy_from_slice(&hasher.result().to_bytes());
         *result = Ok(0);
     }
-);
+}
 
 /// This function is incorrect due to arithmetic overflow and only exists for
 /// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
@@ -1346,9 +1483,11 @@ fn mem_op_consume<'a, 'b>(
     invoke_context.get_compute_meter().consume(cost)
 }
 
-declare_syscall!(
-    /// memcpy
-    SyscallMemcpy,
+/// memcpy
+pub struct SyscallMemcpy<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
     fn call(
         &mut self,
         dst_addr: u64,
@@ -1437,11 +1576,12 @@ declare_syscall!(
         }
         *result = Ok(0);
     }
-);
-
-declare_syscall!(
-    /// memmove
-    SyscallMemmove,
+}
+/// memmove
+pub struct SyscallMemmove<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallMemmove<'a, 'b> {
     fn call(
         &mut self,
         dst_addr: u64,
@@ -1485,11 +1625,12 @@ declare_syscall!(
         }
         *result = Ok(0);
     }
-);
-
-declare_syscall!(
-    /// memcmp
-    SyscallMemcmp,
+}
+/// memcmp
+pub struct SyscallMemcmp<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcmp<'a, 'b> {
     fn call(
         &mut self,
         s1_addr: u64,
@@ -1560,11 +1701,12 @@ declare_syscall!(
         *cmp_result = 0;
         *result = Ok(0);
     }
-);
-
-declare_syscall!(
-    /// memset
-    SyscallMemset,
+}
+/// memset
+pub struct SyscallMemset<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallMemset<'a, 'b> {
     fn call(
         &mut self,
         s_addr: u64,
@@ -1598,11 +1740,13 @@ declare_syscall!(
         }
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// secp256k1_recover
-    SyscallSecp256k1Recover,
+/// secp256k1_recover
+pub struct SyscallSecp256k1Recover<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallSecp256k1Recover<'a, 'b> {
     fn call(
         &mut self,
         hash_addr: u64,
@@ -1709,10 +1853,12 @@ declare_syscall!(
         secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(SUCCESS);
     }
-);
+}
 
-declare_syscall!(
-    SyscallZkTokenElgamalOp,
+pub struct SyscallZkTokenElgamalOp<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOp<'a, 'b> {
     fn call(
         &mut self,
         op: u64,
@@ -1769,10 +1915,12 @@ declare_syscall!(
             *result = Ok(1);
         }
     }
-);
+}
 
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithLoHi,
+pub struct SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithLoHi<'a, 'b> {
     fn call(
         &mut self,
         op: u64,
@@ -1837,10 +1985,12 @@ declare_syscall!(
             *result = Ok(1);
         }
     }
-);
+}
 
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithScalar,
+pub struct SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallZkTokenElgamalOpWithScalar<'a, 'b> {
     fn call(
         &mut self,
         op: u64,
@@ -1889,11 +2039,13 @@ declare_syscall!(
             *result = Ok(1);
         }
     }
-);
+}
 
-declare_syscall!(
-    // Blake3
-    SyscallBlake3,
+// Blake3
+pub struct SyscallBlake3<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
     fn call(
         &mut self,
         vals_addr: u64,
@@ -1994,7 +2146,7 @@ declare_syscall!(
         hash_result.copy_from_slice(&hasher.result().to_bytes());
         *result = Ok(0);
     }
-);
+}
 
 // Cross-program invocation syscalls
 
@@ -2039,9 +2191,11 @@ trait SyscallInvokeSigned<'a, 'b> {
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>>;
 }
 
-declare_syscall!(
-    /// Cross-program invocation called from Rust
-    SyscallInvokeSignedRust,
+/// Cross-SyscallInvokeSignedRust invocation called from Rust
+pub struct SyscallInvokeSignedRust<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedRust<'a, 'b> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -2062,7 +2216,7 @@ declare_syscall!(
             memory_mapping,
         );
     }
-);
+}
 
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
@@ -2330,9 +2484,11 @@ struct SolSignerSeedsC {
     len: u64,
 }
 
-declare_syscall!(
-    /// Cross-program invocation called from C
-    SyscallInvokeSignedC,
+/// Cross-program invocation called from C
+pub struct SyscallInvokeSignedC<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallInvokeSignedC<'a, 'b> {
     fn call(
         &mut self,
         instruction_addr: u64,
@@ -2353,7 +2509,7 @@ declare_syscall!(
             memory_mapping,
         );
     }
-);
+}
 
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
@@ -2923,9 +3079,11 @@ fn call<'a, 'b: 'a>(
     Ok(SUCCESS)
 }
 
-declare_syscall!(
-    /// Set return data
-    SyscallSetReturnData,
+// Return data handling
+pub struct SyscallSetReturnData<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallSetReturnData<'a, 'b> {
     fn call(
         &mut self,
         addr: u64,
@@ -2997,11 +3155,12 @@ declare_syscall!(
 
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Get return data
-    SyscallGetReturnData,
+pub struct SyscallGetReturnData<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetReturnData<'a, 'b> {
     fn call(
         &mut self,
         return_data_addr: u64,
@@ -3084,11 +3243,13 @@ declare_syscall!(
         // Return the actual length, rather the length returned
         *result = Ok(return_data.len() as u64);
     }
-);
+}
 
-declare_syscall!(
-    /// Log data handling
-    SyscallLogData,
+// Log data handling
+pub struct SyscallLogData<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallLogData<'a, 'b> {
     fn call(
         &mut self,
         addr: u64,
@@ -3163,11 +3324,12 @@ declare_syscall!(
 
         *result = Ok(0);
     }
-);
+}
 
-declare_syscall!(
-    /// Get a processed sigling instruction
-    SyscallGetProcessedSiblingInstruction,
+pub struct SyscallGetProcessedSiblingInstruction<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetProcessedSiblingInstruction<'a, 'b> {
     fn call(
         &mut self,
         index: u64,
@@ -3291,11 +3453,12 @@ declare_syscall!(
         }
         *result = Ok(false as u64);
     }
-);
+}
 
-declare_syscall!(
-    /// Get current call stack height
-    SyscallGetStackHeight,
+pub struct SyscallGetStackHeight<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallGetStackHeight<'a, 'b> {
     fn call(
         &mut self,
         _arg1: u64,
@@ -3323,7 +3486,7 @@ declare_syscall!(
 
         *result = Ok(invoke_context.get_stack_height() as u64);
     }
-);
+}
 
 #[cfg(test)]
 mod tests {
@@ -3649,7 +3812,7 @@ mod tests {
         let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+                _invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             },
             0,
             0,
