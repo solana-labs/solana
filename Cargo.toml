@@ -67,6 +67,7 @@ members = [
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-test-bpf",
+    "sdk/gen-headers",
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",

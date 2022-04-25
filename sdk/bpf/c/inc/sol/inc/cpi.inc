@@ -34,33 +34,13 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
-#ifndef SOL_SBFV2
-uint64_t sol_invoke_signed_c(
+@SYSCALL uint64_t sol_invoke_signed_c(
   const SolInstruction *,
   const SolAccountInfo *,
   int,
   const SolSignerSeeds *,
   int
 );
-#else
-typedef uint64_t(*sol_invoke_signed_c_pointer_type)(
-  const SolInstruction *,
-  const SolAccountInfo *,
-  int,
-  const SolSignerSeeds *,
-  int
-);
-static uint64_t sol_invoke_signed_c(
-  const SolInstruction * arg1,
-  const SolAccountInfo * arg2,
-  int arg3,
-  const SolSignerSeeds * arg4,
-  int
- arg5) {
-  sol_invoke_signed_c_pointer_type sol_invoke_signed_c_pointer = (sol_invoke_signed_c_pointer_type) 2720767109;
-  return sol_invoke_signed_c_pointer(arg1, arg2, arg3, arg4, arg5);
-}
-#endif
 
 /**
  * Invoke another program and sign for some of the keys

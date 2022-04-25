@@ -1567,6 +1567,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-headers"
+version = "1.11.0"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "gen-syscall-list"
 version = "1.11.0"
 dependencies = [
