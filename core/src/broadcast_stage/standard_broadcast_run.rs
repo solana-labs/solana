@@ -76,13 +76,14 @@ impl StandardBroadcastRun {
                     state.slot,
                     state.next_shred_index,
                     parent_offset as u16,
-                    None, // data
+                    &[],  // data
                     true, // is_last_in_fec_set
                     true, // is_last_in_slot
                     reference_tick,
                     self.shred_version,
                     fec_set_index.unwrap(),
-                );
+                )
+                .unwrap();
                 shred.sign(keypair);
                 state.data_shreds_buffer.push(shred.clone());
                 let mut shreds = make_coding_shreds(

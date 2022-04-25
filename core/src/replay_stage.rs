@@ -3749,13 +3749,14 @@ pub mod tests {
                 bank.slot(),
                 0, // index,
                 parent_offset as u16,
-                Some(&gibberish),
+                &gibberish,
                 true,  // is_last_data
                 false, // is_last_in_slot
                 0,     // reference_tick
                 0,     // version
                 0,     // fec_set_index
-            );
+            )
+            .unwrap();
             vec![shred]
         });
 

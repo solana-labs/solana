@@ -30,15 +30,16 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
     for p in packet_batch.packets.iter_mut() {
         let shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-            true,
-            true,
-            1,
-            2,
-            0,
-        );
+            0xc0de,                           // index
+            0xdead,                           // parent_offset
+            &[5; SIZE_OF_DATA_SHRED_PAYLOAD], // data
+            true,                             // is_last_data
+            true,                             // is_last_in_slot
+            1,                                // reference_tick
+            2,                                // version
+            0,                                // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(p);
     }
     let mut batches = vec![packet_batch; NUM_BATCHES];
@@ -62,15 +63,16 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
     for p in packet_batch.packets.iter_mut() {
         let shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-            true,
-            true,
-            1,
-            2,
-            0,
-        );
+            0xc0de,                           // index
+            0xdead,                           // parent_offset
+            &[5; SIZE_OF_DATA_SHRED_PAYLOAD], // data
+            true,                             // is_last_data
+            true,                             // is_last_in_slot
+            1,                                // reference_tick
+            2,                                // version
+            0,                                // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(p);
     }
     let mut batches = vec![packet_batch; NUM_BATCHES];

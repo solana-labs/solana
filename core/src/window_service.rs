@@ -825,18 +825,6 @@ mod test {
             0
         ));
 
-        // with an invalid index, shred gets thrown out
-        let mut bad_index_shred = shreds[0].clone();
-        bad_index_shred.set_index((MAX_DATA_SHREDS_PER_SLOT + 1) as u32);
-        assert!(!should_retransmit_and_persist(
-            &bad_index_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-            0
-        ));
-
         // with a shred where shred.slot() == root, shred gets thrown out
         let root = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds = local_entries_to_shred(&[Entry::default()], root, root - 1, &leader_keypair);
@@ -871,7 +859,8 @@ mod test {
             6, // num_coding_shreds
             3, // position
             0, // version
-        );
+        )
+        .unwrap();
         coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
         assert!(should_retransmit_and_persist(
@@ -953,7 +942,8 @@ mod test {
             6, // num_coding_shreds
             4, // position
             0, // version
-        );
+        )
+        .unwrap();
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let repair_meta = RepairMeta {

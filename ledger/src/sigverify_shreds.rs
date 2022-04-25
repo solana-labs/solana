@@ -468,15 +468,16 @@ pub mod tests {
         let mut packet = Packet::default();
         let mut shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         shred.sign(&keypair);
@@ -514,15 +515,16 @@ pub mod tests {
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         let keypair = Keypair::new();
         shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
@@ -569,15 +571,16 @@ pub mod tests {
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         let keypair = Keypair::new();
         shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
@@ -637,15 +640,16 @@ pub mod tests {
         for (i, p) in packet_batch.packets.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
                 slot,
-                0xc0de,
-                i as u16,
-                Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-                true,
-                true,
-                1,
-                2,
-                0xc0de,
-            );
+                0x70de,                           // index
+                i as u16 + 1,                     // parent_offset
+                &[5; SIZE_OF_DATA_SHRED_PAYLOAD], // data
+                true,                             // is_last_data
+                true,                             // is_last_in_slot
+                1,                                // reference_tick
+                2,                                // version
+                0x70de,                           // fec_set_index
+            )
+            .unwrap();
             shred.copy_to_packet(p);
         }
         let mut batches = vec![packet_batch; num_batches];
@@ -683,15 +687,16 @@ pub mod tests {
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();

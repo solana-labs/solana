@@ -67,15 +67,16 @@ mod test {
         solana_logger::setup();
         let mut shred = Shred::new_from_data(
             slot,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         shred.sign(&keypair);

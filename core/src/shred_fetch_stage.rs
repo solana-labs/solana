@@ -228,15 +228,17 @@ mod tests {
 
         let slot = 1;
         let shred = Shred::new_from_data(
-            slot, 3,    // shred index
-            0,    // parent offset
-            None, // data
+            slot,
+            3,    // shred index
+            1,    // parent offset
+            &[],  // data
             true, // is_last_in_fec_set
             true, // is_last_in_slot
             0,    // reference_tick
             0,    // version
             3,    // fec_set_index
-        );
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
 
         let hasher = PacketHasher::default();
@@ -299,7 +301,18 @@ mod tests {
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard());
-        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1,    // slot
+            3,    // index
+            1,    // parent_offset
+            &[],  // data
+            true, // is_last_data
+            true, // is_last_in_slot
+            0,    // reference_tick
+            0,    // version
+            0,    // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
 
         // rejected slot is 1, root is 3
@@ -341,7 +354,18 @@ mod tests {
         );
         assert!(packet.meta.discard());
 
-        let shred = Shred::new_from_data(1_000_000, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1_000_000, // slot
+            3,         // index
+            5,         // parent_offset
+            &[],       // data
+            true,      // is_last_data
+            true,      // is_last_in_slot
+            0,         // reference_tick
+            0,         // version
+            0,         // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
 
         // Slot 1 million is too high
@@ -358,7 +382,18 @@ mod tests {
         assert!(packet.meta.discard());
 
         let index = MAX_DATA_SHREDS_PER_SLOT as u32;
-        let shred = Shred::new_from_data(5, index, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            5,     // slot
+            index, // index
+            3,     // parent_offset
+            &[],   // data
+            true,  // is_last_data
+            true,  // is_last_in_slot
+            0,     // reference_tick
+            0,     // version
+            0,     // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,

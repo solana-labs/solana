@@ -79,16 +79,17 @@ pub mod tests {
     fn test_sigverify_shreds_read_slots() {
         solana_logger::setup();
         let mut shred = Shred::new_from_data(
-            0xdead_c0de,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0xdead_c0de,   // slot
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         let mut batches = [PacketBatch::default(), PacketBatch::default()];
 
         let keypair = Keypair::new();
@@ -98,16 +99,17 @@ pub mod tests {
         batches[0].packets[0].meta.size = shred.payload().len();
 
         let mut shred = Shred::new_from_data(
-            0xc0de_dead,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0xc0de_dead,   // slot
+            0x70de,        // index
+            0xdead,        // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         shred.sign(&keypair);
         batches[1].packets.resize(1, Packet::default());
         batches[1].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
@@ -132,31 +134,33 @@ pub mod tests {
         batches[0].packets.resize(2, Packet::default());
 
         let mut shred = Shred::new_from_data(
-            0,
-            0xc0de,
-            0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0,             // slot
+            0x70de,        // index
+            0,             // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         shred.sign(&leader_keypair);
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();
 
         let mut shred = Shred::new_from_data(
-            0,
-            0xbeef,
-            0xc0de,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
-            0,
-            0,
-            0xc0de,
-        );
+            0,             // slot
+            0x7eef,        // index
+            0,             // parent_offset
+            &[1, 2, 3, 4], // data
+            true,          // is_last_data
+            true,          // is_last_in_slot
+            0,             // reference_tick
+            0,             // version
+            0x70de,        // fec_set_index
+        )
+        .unwrap();
         let wrong_keypair = Keypair::new();
         shred.sign(&wrong_keypair);
         batches[0].packets[1].data[0..shred.payload().len()].copy_from_slice(shred.payload());

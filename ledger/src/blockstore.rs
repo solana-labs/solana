@@ -5703,15 +5703,16 @@ pub mod tests {
             .map(|i| {
                 Shred::new_from_data(
                     slot,
-                    (i * gap) as u32,
-                    0,
-                    None,
-                    false,
-                    false,
-                    i as u8,
-                    0,
-                    (i * gap) as u32,
+                    (i * gap) as u32, // index
+                    0,                // parent_offset
+                    &[],              // data
+                    false,            // is_last_data
+                    false,            // is_last_in_slot
+                    i as u8,          // reference_tick
+                    0,                // version
+                    (i * gap) as u32, // fec_set_index
                 )
+                .unwrap()
             })
             .collect();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -5837,13 +5838,14 @@ pub mod tests {
                 let parent_offset = shred5.slot() - shred5.parent().unwrap();
                 parent_offset as u16
             },
-            None, // data
+            &[],  // data
             true, // is_last_data
             true, // is_last_in_slot
             0,    // reference_tick
             shred5.version(),
             shred5.fec_set_index(),
-        );
+        )
+        .unwrap();
         assert!(blockstore.should_insert_data_shred(
             &empty_shred,
             &slot_meta,
@@ -5945,8 +5947,8 @@ pub mod tests {
             11, // num_coding_shreds
             8,  // position
             0,  // version
-        );
-
+        )
+        .unwrap();
         let mut erasure_metas = HashMap::new();
         let mut index_working_set = HashMap::new();
         let mut just_received_shreds = HashMap::new();
@@ -6001,8 +6003,8 @@ pub mod tests {
             11, // num_coding_shreds
             8,  // position
             0,  // version
-        );
-
+        )
+        .unwrap();
         // Insert a good coding shred
         assert!(Blockstore::should_insert_coding_shred(
             &coding_shred,
@@ -6236,14 +6238,15 @@ pub mod tests {
         let shreds = vec![Shred::new_from_data(
             slot,
             next_shred_index as u32,
-            1,
-            Some(&[1, 1, 1]),
-            true,
-            true,
-            0,
-            0,
-            next_shred_index as u32,
-        )];
+            1,                       // parent_offset
+            &[1, 1, 1],              // data
+            true,                    // is_last_data
+            true,                    // is_last_in_slot
+            0,                       // reference_tick
+            0,                       // version
+            next_shred_index as u32, // fec_set_index
+        )
+        .unwrap()];
 
         // With the corruption, nothing should be returned, even though an
         // earlier data block was valid

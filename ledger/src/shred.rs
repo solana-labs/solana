@@ -123,7 +123,7 @@ pub enum Error {
     #[error("Invalid data shred index: {index}")]
     InvalidDataShredIndex { index: u32 },
     #[error("Invalid data size: {size}, payload: {payload}")]
-    InvalidDataSize { size: u16, payload: usize },
+    InvalidDataSize { size: usize, payload: usize },
     #[error("Invalid erasure block index: {0:?}")]
     InvalidErasureBlockIndex(Box<dyn Debug>),
     #[error("Invalid num coding shreds: {0}")]
@@ -264,18 +264,23 @@ impl Shred {
         packet.meta.size = len;
     }
 
-    // TODO: Should this sanitize output?
     pub fn new_from_data(
         slot: Slot,
         index: u32,
         parent_offset: u16,
-        data: Option<&[u8]>,
+        data: &[u8],
         is_last_data: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
         fec_set_index: u32,
-    ) -> Self {
+    ) -> Result<Self, Error> {
+        if data.len() > SIZE_OF_DATA_SHRED_PAYLOAD {
+            return Err(Error::InvalidDataSize {
+                size: data.len(),
+                payload: SHRED_PAYLOAD_SIZE,
+            });
+        }
         let payload_size = SHRED_PAYLOAD_SIZE;
         let mut payload = vec![0; payload_size];
         let common_header = ShredCommonHeader {
@@ -286,9 +291,7 @@ impl Shred {
             ..ShredCommonHeader::default()
         };
 
-        let size = (data.map(|d| d.len()).unwrap_or(0)
-            + SIZE_OF_DATA_SHRED_HEADER
-            + SIZE_OF_COMMON_SHRED_HEADER) as u16;
+        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
@@ -319,17 +322,14 @@ impl Shred {
             &data_header,
         )
         .expect("Failed to write data header into shred buffer");
-        // TODO: Need to check if data is too large!
-        if let Some(data) = data {
-            payload[start..start + data.len()].clone_from_slice(data);
-        }
-
-        Self {
+        payload[start..start + data.len()].clone_from_slice(data);
+        let shred = Self {
             common_header,
             data_header,
             coding_header: CodingShredHeader::default(),
             payload,
-        }
+        };
+        shred.sanitize().map(|_| shred)
     }
 
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
@@ -370,7 +370,7 @@ impl Shred {
         num_coding_shreds: u16,
         position: u16,
         version: u16,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         let common_header = ShredCommonHeader {
             shred_type: ShredType::Code,
             index,
@@ -400,12 +400,13 @@ impl Shred {
             &coding_header,
         )
         .expect("Failed to write coding header into shred buffer");
-        Shred {
+        let shred = Shred {
             common_header,
             data_header: DataShredHeader::default(),
             coding_header,
             payload,
-        }
+        };
+        shred.sanitize().map(|_| shred)
     }
 
     /// Unique identifier for each shred.
@@ -503,7 +504,7 @@ impl Shred {
                 let size = usize::from(self.data_header.size);
                 if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
                     return Err(Error::InvalidDataSize {
-                        size: self.data_header.size,
+                        size: usize::from(self.data_header.size),
                         payload: self.payload.len(),
                     });
                 }
@@ -835,13 +836,14 @@ impl Shredder {
                 self.slot,
                 shred_index,
                 parent_offset as u16,
-                Some(data),
+                data,
                 is_last_data,
                 is_last_in_slot,
                 self.reference_tick,
                 self.version,
                 fec_set_index.unwrap(),
-            );
+            )
+            .unwrap();
             shred.sign(keypair);
             shred
         };
@@ -973,7 +975,8 @@ impl Shredder {
                     num_coding,
                     u16::try_from(i).unwrap(), // position
                     version,
-                );
+                )
+                .unwrap();
                 shred.payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity);
                 shred
             })
@@ -1947,22 +1950,28 @@ mod tests {
 
     #[test]
     fn test_invalid_parent_offset() {
-        let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
+        let shred = Shred::new_from_data(
+            10,         // slot
+            0,          // index
+            3,          // parent_offset
+            &[1, 2, 3], // data
+            false,      // is_last_data
+            false,      // is_last_in_slot
+            0,          // reference_tick
+            1,          // version
+            0,          // fec_set_index
+        )
+        .unwrap();
+        assert_matches!(shred.parent(), Ok(7));
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
+        bincode::serialize_into(&mut packet.data[OFFSET_OF_SHRED_INDEX + 10..], &14u16).unwrap();
+        let shred = Shred::new_from_serialized_shred(packet.data.to_vec());
         assert_matches!(
-            shred.parent(),
+            shred,
             Err(Error::InvalidParentOffset {
                 slot: 10,
-                parent_offset: 1000
-            })
-        );
-        assert_matches!(
-            shred_res,
-            Err(Error::InvalidParentOffset {
-                slot: 10,
-                parent_offset: 1000
+                parent_offset: 14
             })
         );
     }
@@ -1971,7 +1980,18 @@ mod tests {
     fn test_shred_offsets() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1,    // slot
+            3,    // index
+            1,    // parent_offset
+            &[],  // data
+            true, // is_last_data
+            true, // is_last_in_slot
+            0,    // reference_tick
+            0,    // version
+            0,    // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
         let ret = get_shred_slot_index_type(&packet, &mut stats);
@@ -2009,27 +2029,49 @@ mod tests {
             4,   // num_code
             1,   // position
             200, // version
-        );
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
         assert_eq!(
             Some((8, 2, ShredType::Code)),
             get_shred_slot_index_type(&packet, &mut stats)
         );
 
-        let shred = Shred::new_from_data(1, std::u32::MAX - 10, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1,    // slot
+            3,    // index
+            1,    // parent_offset
+            &[],  // data
+            true, // is_last_data
+            true, // is_last_in_slot
+            0,    // reference_tick
+            0,    // version
+            0,    // fec_set_index
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
+        bincode::serialize_into(
+            &mut packet.data[OFFSET_OF_SHRED_INDEX..],
+            &(std::u32::MAX - 10),
+        )
+        .unwrap();
+        assert_matches!(
+            Shred::new_from_serialized_shred(Vec::from(packet.data)),
+            Err(Error::InvalidDataShredIndex { index: 4294967285 })
+        );
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
         let shred = Shred::new_empty_coding(
             8,   // slot
-            2,   // index
+            3,   // index
             10,  // fec_set_index
             30,  // num_data_shreds
             4,   // num_coding_shreds
             3,   // position
             200, // version
-        );
+        )
+        .unwrap();
         shred.copy_to_packet(&mut packet);
         packet.data[OFFSET_OF_SHRED_TYPE] = u8::MAX;
 
@@ -2072,13 +2114,13 @@ mod tests {
             420, // slot
             19,  // index
             5,   // parent_offset
-            Some(&data),
-            true,  // is_last_data
+            &data, true,  // is_last_data
             false, // is_last_in_slot
             3,     // reference_tick
             1,     // version
             16,    // fec_set_index
-        );
+        )
+        .unwrap();
         assert_matches!(shred.sanitize(), Ok(()));
         // Corrupt shred by making it too large
         {
@@ -2141,7 +2183,8 @@ mod tests {
             11, // num_coding_shreds
             8,  // position
             0,  // version
-        );
+        )
+        .unwrap();
         assert_matches!(shred.sanitize(), Ok(()));
         // index < position is invalid.
         {
