@@ -147,13 +147,15 @@ impl Default for MetricsAgent {
     }
 }
 
+const MAX_METRIC_COMMAND_QUEUE_SIZE: usize = 2000;
+const METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD: usize = 1000;
+
 impl MetricsAgent {
     fn new(
         writer: Arc<dyn MetricsWriter + Send + Sync>,
         write_frequency: Duration,
         max_points_per_sec: usize,
     ) -> Self {
-        const MAX_METRIC_COMMAND_QUEUE_SIZE: usize = 2000;
         let (sender, receiver) = bounded::<MetricsCommand>(MAX_METRIC_COMMAND_QUEUE_SIZE);
         thread::spawn(move || Self::run(&receiver, &writer, write_frequency, max_points_per_sec));
 
@@ -290,6 +292,16 @@ impl MetricsAgent {
     }
 
     fn send(&self, command: MetricsCommand) {
+        let len = self.sender.len();
+        if len > METRIC_COMMANDS_QUEUE_LENGTH_REPORT_THRESHOLD {
+            self.submit(
+                DataPoint::new("metric_command_queue")
+                    .add_field_i64("len", len as i64)
+                    .to_owned(),
+                Level::Info,
+            );
+        }
+
         match self.sender.try_send(command) {
             Err(TrySendError::Full(cmd)) => {
                 warn!("metric queue full, point dropped: {:?}.", cmd);
