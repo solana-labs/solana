@@ -186,7 +186,7 @@ impl MetricsAgent {
         max_points: usize,
         max_points_per_sec: usize,
         last_write_time: Instant,
-        cmd_queue_size: usize,
+        points_buffered: usize,
     ) {
         if points.is_empty() {
             return;
@@ -209,7 +209,7 @@ impl MetricsAgent {
                 .add_field_i64("points_written", points_written as i64)
                 .add_field_i64("num_points", num_points as i64)
                 .add_field_i64("points_lost", (num_points - points_written) as i64)
-                .add_field_i64("pending_command_queue_size", cmd_queue_size as i64)
+                .add_field_i64("points_buffered", points_buffered as i64)
                 .add_field_i64(
                     "secs_since_last_write",
                     now.duration_since(last_write_time).as_secs() as i64,
