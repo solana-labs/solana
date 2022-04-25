@@ -16,6 +16,6 @@ pub fn fee_payer_arg<'a>() -> Arg<'a> {
         .long(FEE_PAYER_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(|s| input_validators::is_valid_signer(s))
+        .validator(input_validators::is_valid_signer)
         .help(FEE_PAYER_ARG.help)
 }

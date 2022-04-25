@@ -13,7 +13,7 @@ macro_rules! ACCOUNT_STRING {
 macro_rules! pubkey {
     ($arg:expr, $help:expr) => {
         $arg.takes_value(true)
-            .validator(|s| is_valid_pubkey(s))
+            .validator(is_valid_pubkey)
             .help(concat!($help, ACCOUNT_STRING!()))
     };
 }

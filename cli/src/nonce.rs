@@ -74,7 +74,7 @@ impl NonceSubCommands for Command<'_> {
                         .value_name("ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Keypair of the nonce account to fund"),
                 )
                 .arg(
@@ -83,7 +83,7 @@ impl NonceSubCommands for Command<'_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_amount_or_all(s))
+                        .validator(is_amount_or_all)
                         .help("The amount to load the nonce account with, in SOL; accepts keyword ALL"),
                 )
                 .arg(
@@ -167,7 +167,7 @@ impl NonceSubCommands for Command<'_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_amount(s))
+                        .validator(is_amount)
                         .help("The amount to withdraw from the nonce account, in SOL"),
                 )
                 .arg(nonce_authority_arg())

@@ -96,7 +96,7 @@ impl WalletSubCommands for Command<'_> {
                         .index(1)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(|s| is_amount(s))
+                        .validator(is_amount)
                         .required(true)
                         .help("The airdrop amount to request, in SOL"),
                 )
@@ -155,7 +155,7 @@ impl WalletSubCommands for Command<'_> {
                         .value_name("SEED_STRING")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_derived_address_seed(s))
+                        .validator(is_derived_address_seed)
                         .help("The seed.  Must not take more than 32 bytes to encode as utf-8"),
                 )
                 .arg(
@@ -208,7 +208,7 @@ impl WalletSubCommands for Command<'_> {
                         .value_name("SIGNER_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("The signer path to resolve")
                 )
         )
@@ -228,7 +228,7 @@ impl WalletSubCommands for Command<'_> {
                         .index(2)
                         .value_name("AMOUNT")
                         .takes_value(true)
-                        .validator(|s| is_amount_or_all(s))
+                        .validator(is_amount_or_all)
                         .required(true)
                         .help("The amount to send, in SOL; accepts keyword ALL"),
                 )
@@ -250,7 +250,7 @@ impl WalletSubCommands for Command<'_> {
                         .takes_value(true)
                         .value_name("SEED_STRING")
                         .requires("derived_address_program_id")
-                        .validator(|s| is_derived_address_seed(s))
+                        .validator(is_derived_address_seed)
                         .hide(true)
                 )
                 .arg(

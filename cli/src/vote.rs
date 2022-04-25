@@ -57,7 +57,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("ACCOUNT_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Vote account keypair to create"),
                 )
                 .arg(
@@ -66,7 +66,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("IDENTITY_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Keypair of validator that will vote with this account"),
                 )
                 .arg(
@@ -127,7 +127,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(2)
                         .value_name("AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Current authorized vote signer."),
                 )
                 .arg(
@@ -157,7 +157,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(2)
                         .value_name("AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Current authorized withdrawer."),
                 )
                 .arg(
@@ -188,7 +188,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(2)
                         .value_name("AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Current authorized vote signer."),
                 )
                 .arg(
@@ -196,7 +196,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(3)
                         .value_name("NEW_AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("New authorized vote signer."),
                 )
                 .offline_args()
@@ -220,7 +220,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(2)
                         .value_name("AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Current authorized withdrawer."),
                 )
                 .arg(
@@ -228,7 +228,7 @@ impl VoteSubCommands for Command<'_> {
                         .index(3)
                         .value_name("NEW_AUTHORIZED_KEYPAIR")
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("New authorized withdrawer."),
                 )
                 .offline_args()
@@ -252,7 +252,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("IDENTITY_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Keypair of new validator that will vote with this account"),
                 )
                 .arg(
@@ -261,7 +261,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("AUTHORIZED_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
                 .offline_args()
@@ -285,7 +285,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("PERCENTAGE")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_percentage(s))
+                        .validator(is_valid_percentage)
                         .help("The new commission")
                 )
                 .arg(
@@ -294,7 +294,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("AUTHORIZED_KEYPAIR")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Authorized withdrawer keypair"),
                 )
                 .offline_args()
@@ -359,7 +359,7 @@ impl VoteSubCommands for Command<'_> {
                         .value_name("AMOUNT")
                         .takes_value(true)
                         .required(true)
-                        .validator(|s| is_amount_or_all(s))
+                        .validator(is_amount_or_all)
                         .help("The amount to withdraw, in SOL; accepts keyword ALL, which for this command means account balance minus rent-exempt minimum"),
                 )
                 .arg(
@@ -367,7 +367,7 @@ impl VoteSubCommands for Command<'_> {
                         .long("authorized-withdrawer")
                         .value_name("AUTHORIZED_KEYPAIR")
                         .takes_value(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Authorized withdrawer [default: cli config keypair]"),
                 )
                 .offline_args()
@@ -398,7 +398,7 @@ impl VoteSubCommands for Command<'_> {
                         .long("authorized-withdrawer")
                         .value_name("AUTHORIZED_KEYPAIR")
                         .takes_value(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("Authorized withdrawer [default: cli config keypair]"),
                 )
                 .arg(fee_payer_arg())

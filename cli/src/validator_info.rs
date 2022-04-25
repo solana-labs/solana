@@ -30,7 +30,7 @@ use {
 };
 
 // Return an error if a validator details are longer than the max length.
-pub fn check_details_length(string: String) -> Result<(), String> {
+pub fn check_details_length(string: &str) -> Result<(), String> {
     if string.len() > MAX_LONG_FIELD_LENGTH {
         Err(format!(
             "validator details longer than {:?}-byte limit",
@@ -42,8 +42,8 @@ pub fn check_details_length(string: String) -> Result<(), String> {
 }
 
 // Return an error if url field is too long or cannot be parsed.
-pub fn check_url(string: String) -> Result<(), String> {
-    is_url(string.clone())?;
+pub fn check_url(string: &str) -> Result<(), String> {
+    is_url(string)?;
     if string.len() > MAX_SHORT_FIELD_LENGTH {
         Err(format!(
             "url longer than {:?}-byte limit",
@@ -55,7 +55,7 @@ pub fn check_url(string: String) -> Result<(), String> {
 }
 
 // Return an error if a validator field is longer than the max length.
-pub fn is_short_field(string: String) -> Result<(), String> {
+pub fn is_short_field(string: &str) -> Result<(), String> {
     if string.len() > MAX_SHORT_FIELD_LENGTH {
         Err(format!(
             "validator field longer than {:?}-byte limit",
@@ -149,7 +149,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .long("info-pubkey")
                                 .value_name("PUBKEY")
                                 .takes_value(true)
-                                .validator(|s| is_pubkey(s))
+                                .validator(is_pubkey)
                                 .help("The pubkey of the Validator info account to update"),
                         )
                         .arg(
@@ -158,7 +158,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .value_name("NAME")
                                 .takes_value(true)
                                 .required(true)
-                                .validator(|s| is_short_field(s.to_string()))
+                                .validator(is_short_field)
                                 .help("Validator name"),
                         )
                         .arg(
@@ -167,7 +167,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .long("website")
                                 .value_name("URL")
                                 .takes_value(true)
-                                .validator(|s| check_url(s.to_string()))
+                                .validator(check_url)
                                 .help("Validator website url"),
                         )
                         .arg(
@@ -176,7 +176,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .long("keybase")
                                 .value_name("USERNAME")
                                 .takes_value(true)
-                                .validator(|s| is_short_field(s.to_string()))
+                                .validator(is_short_field)
                                 .help("Validator Keybase username"),
                         )
                         .arg(
@@ -185,7 +185,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .long("details")
                                 .value_name("DETAILS")
                                 .takes_value(true)
-                                .validator(|s| check_details_length(s.to_string()))
+                                .validator(check_details_length)
                                 .help("Validator description")
                         )
                         .arg(
@@ -204,7 +204,7 @@ impl ValidatorInfoSubCommands for Command<'_> {
                                 .index(1)
                                 .value_name("PUBKEY")
                                 .takes_value(true)
-                                .validator(|s| is_pubkey(s))
+                                .validator(is_pubkey)
                                 .help("The pubkey of the Validator info account; without this argument, returns all"),
                         ),
                 )
@@ -418,14 +418,12 @@ mod tests {
 
     #[test]
     fn test_check_details_length() {
-        let short_details = (0..MAX_LONG_FIELD_LENGTH).map(|_| "X").collect::<String>();
-        assert_eq!(check_details_length(short_details), Ok(()));
+        let short_details = "X".repeat(MAX_LONG_FIELD_LENGTH);
+        assert_eq!(check_details_length(&short_details), Ok(()));
 
-        let long_details = (0..MAX_LONG_FIELD_LENGTH + 1)
-            .map(|_| "X")
-            .collect::<String>();
+        let long_details = "X".repeat(MAX_LONG_FIELD_LENGTH + 1);
         assert_eq!(
-            check_details_length(long_details),
+            check_details_length(&long_details),
             Err(format!(
                 "validator details longer than {:?}-byte limit",
                 MAX_LONG_FIELD_LENGTH
@@ -436,19 +434,19 @@ mod tests {
     #[test]
     fn test_check_url() {
         let url = "http://test.com";
-        assert_eq!(check_url(url.to_string()), Ok(()));
+        assert_eq!(check_url(url), Ok(()));
         let long_url = "http://7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJ.com";
-        assert!(check_url(long_url.to_string()).is_err());
+        assert!(check_url(long_url).is_err());
         let non_url = "not parseable";
-        assert!(check_url(non_url.to_string()).is_err());
+        assert!(check_url(non_url).is_err());
     }
 
     #[test]
     fn test_is_short_field() {
         let name = "Alice Validator";
-        assert_eq!(is_short_field(name.to_string()), Ok(()));
+        assert_eq!(is_short_field(name), Ok(()));
         let long_name = "Alice 7cLvFwLCbyHuXQ1RGzhCMobAWYPMSZ3VbUml1qWi1nkc3FD7zj9hzTZzMvYJt6rY9";
-        assert!(is_short_field(long_name.to_string()).is_err());
+        assert!(is_short_field(long_name).is_err());
     }
 
     #[test]

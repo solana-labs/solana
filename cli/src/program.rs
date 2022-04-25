@@ -139,7 +139,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Intermediate buffer account to write data to, which can be used to resume a failed deploy \
                                       [default: random address]")
                         )
@@ -148,7 +148,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
@@ -195,7 +195,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("buffer")
                                 .value_name("BUFFER_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Buffer account to write data into [default: random address]")
                         )
                         .arg(
@@ -203,7 +203,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
@@ -232,7 +232,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("buffer-authority")
                                 .value_name("BUFFER_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Buffer authority [default: the default configured keypair]")
                         )
                         .arg(
@@ -259,7 +259,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .long("upgrade-authority")
                                 .value_name("UPGRADE_AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
@@ -366,7 +366,7 @@ impl ProgramSubCommands for Command<'_> {
                                 .alias("buffer-authority")
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .help("Upgrade or buffer authority [default: the default configured keypair]")
                         )
 
@@ -401,7 +401,7 @@ impl ProgramSubCommands for Command<'_> {
                         .index(2)
                         .value_name("PROGRAM_ADDRESS_SIGNER")
                         .takes_value(true)
-                        .validator(|s| is_valid_signer(s))
+                        .validator(is_valid_signer)
                         .help("The signer for the desired address of the program [default: new random address]")
                 )
                 .arg(

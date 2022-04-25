@@ -415,7 +415,7 @@ impl FeatureSubCommands for Command<'_> {
                         .arg(
                             Arg::new("features")
                                 .value_name("ADDRESS")
-                                .validator(|s| is_valid_pubkey(s))
+                                .validator(is_valid_pubkey)
                                 .index(1)
                                 .multiple_occurrences(true)
                                 .multiple_values(true)
@@ -433,7 +433,7 @@ impl FeatureSubCommands for Command<'_> {
                         .arg(
                             Arg::new("feature")
                                 .value_name("FEATURE_KEYPAIR")
-                                .validator(|s| is_valid_signer(s))
+                                .validator(is_valid_signer)
                                 .index(1)
                                 .required(true)
                                 .help("The signer for the feature to activate"),

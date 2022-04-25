@@ -89,7 +89,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                 .arg(
                     Arg::new("slot")
                         .long("slot")
-                        .validator(|s| is_slot(s))
+                        .validator(is_slot)
                         .value_name("SLOT")
                         .takes_value(true)
                         .index(1),
@@ -110,7 +110,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                         .index(2)
                         .value_name("OUR_URL")
                         .takes_value(true)
-                        .validator(|s| is_url(s))
+                        .validator(is_url)
                         .help("JSON RPC URL for validator, which is useful for validators with a private RPC service")
                 )
                 .arg(
@@ -125,7 +125,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                         .takes_value(false)
                         .value_name("PORT")
                         .default_value(DEFAULT_RPC_PORT_STR)
-                        .validator(|s| is_port(s))
+                        .validator(is_port)
                         .help("Guess Identity pubkey and validator rpc node assuming local (possibly private) validator"),
                 )
                 .arg(
@@ -152,7 +152,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                     .long("blockhash")
                     .takes_value(true)
                     .value_name("BLOCKHASH")
-                    .validator(|s| is_hash(s))
+                    .validator(is_hash)
                     .help("Query fees for BLOCKHASH instead of the the most recent blockhash")
             ),
         )
@@ -178,7 +178,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                     .long("epoch")
                     .takes_value(true)
                     .value_name("EPOCH")
-                    .validator(|s| is_epoch(s))
+                    .validator(is_epoch)
                     .help("Epoch to show leader schedule for. [default: current]")
             )
         )
@@ -397,7 +397,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                         .long("delinquent-slot-distance")
                         .takes_value(true)
                         .value_name("SLOT_DISTANCE")
-                        .validator(|s| is_slot(s))
+                        .validator(is_slot)
                         .help(
                             concatcp!(
                                 "Minimum slot distance from the tip to consider a validator delinquent. [default: ",
@@ -422,7 +422,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                         .long("limit")
                         .takes_value(true)
                         .value_name("LIMIT")
-                        .validator(|s| is_slot(s))
+                        .validator(is_slot)
                         .default_value("1000")
                         .help("Maximum number of transaction signatures to return"),
                 )
