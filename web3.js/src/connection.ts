@@ -4421,9 +4421,9 @@ export class Connection {
    *
    * @internal
    */
-  _publishNotification<TCallback extends SubscriptionConfig['callback']>(
+  _handleServerNotification<TCallback extends SubscriptionConfig['callback']>(
     serverSubscriptionId: ServerSubscriptionId,
-    publishArgs: Parameters<TCallback>,
+    callbackArgs: Parameters<TCallback>,
   ): void {
     const callbacks =
       this._subscriptionCallbacksByServerSubscriptionId[serverSubscriptionId];
@@ -4432,7 +4432,7 @@ export class Connection {
     }
     callbacks.forEach(cb => {
       try {
-        cb(...(publishArgs as [any, any]));
+        cb(...(callbackArgs as [any, any]));
       } catch (e) {
         console.error(e);
       }
@@ -4447,7 +4447,7 @@ export class Connection {
       notification,
       AccountNotificationResult,
     );
-    this._publishNotification<AccountChangeCallback>(subscription, [
+    this._handleServerNotification<AccountChangeCallback>(subscription, [
       result.value,
       result.context,
     ]);
@@ -4581,7 +4581,7 @@ export class Connection {
       notification,
       ProgramAccountNotificationResult,
     );
-    this._publishNotification<ProgramAccountChangeCallback>(subscription, [
+    this._handleServerNotification<ProgramAccountChangeCallback>(subscription, [
       {
         accountId: result.value.pubkey,
         accountInfo: result.value.account,
@@ -4667,7 +4667,7 @@ export class Connection {
    */
   _wsOnLogsNotification(notification: Object) {
     const {result, subscription} = create(notification, LogsNotificationResult);
-    this._publishNotification<LogsCallback>(subscription, [
+    this._handleServerNotification<LogsCallback>(subscription, [
       result.value,
       result.context,
     ]);
@@ -4678,7 +4678,7 @@ export class Connection {
    */
   _wsOnSlotNotification(notification: Object) {
     const {result, subscription} = create(notification, SlotNotificationResult);
-    this._publishNotification<SlotChangeCallback>(subscription, [result]);
+    this._handleServerNotification<SlotChangeCallback>(subscription, [result]);
   }
 
   /**
@@ -4718,7 +4718,7 @@ export class Connection {
       notification,
       SlotUpdateNotificationResult,
     );
-    this._publishNotification<SlotUpdateCallback>(subscription, [result]);
+    this._handleServerNotification<SlotUpdateCallback>(subscription, [result]);
   }
 
   /**
@@ -4841,7 +4841,7 @@ export class Connection {
        */
       this._subscriptionsAutoDisposedByRpc.add(subscription);
     }
-    this._publishNotification<SignatureSubscriptionCallback>(
+    this._handleServerNotification<SignatureSubscriptionCallback>(
       subscription,
       result.value === 'receivedSignature'
         ? [{type: 'received'}, result.context]
@@ -4942,7 +4942,7 @@ export class Connection {
    */
   _wsOnRootNotification(notification: Object) {
     const {result, subscription} = create(notification, RootNotificationResult);
-    this._publishNotification<RootChangeCallback>(subscription, [result]);
+    this._handleServerNotification<RootChangeCallback>(subscription, [result]);
   }
 
   /**
