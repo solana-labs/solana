@@ -24,7 +24,7 @@ libc = "0.2.124"
 log = { version = "0.4.14" }
 lru = "0.7.5"
 num_cpus = "1.13.1"
-num_enum = "0.5.4"
+num_enum = "0.5.7"
 prost = "0.10.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
