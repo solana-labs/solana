@@ -2440,6 +2440,68 @@ impl ClusterInfo {
         Ok(())
     }
 
+    fn handle_packet_batch_receive(
+        &self,
+        receiver: &PacketBatchReceiver,
+        max_allowed_packets: usize,
+    ) -> Result<(VecDeque<PacketBatch>, usize), GossipError> {
+        const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+        let packet_batch = receiver.recv_timeout(RECV_TIMEOUT)?;
+        let mut total_num_packets_received = packet_batch.packets.len();
+        let mut first_valid_packet_in_oldest_batch = 0;
+        let mut packet_batches = VecDeque::new();
+        packet_batches.push_back(packet_batch);
+
+        for packet_batch in receiver.try_iter() {
+            total_num_packets_received =
+                total_num_packets_received.saturating_add(packet_batch.packets.len());
+            packet_batches.push_back(packet_batch);
+
+            let mut excess_count = total_num_packets_received.saturating_sub(max_allowed_packets);
+            if excess_count > 0 {
+                self.stats
+                    .gossip_packets_dropped_count
+                    .add_relaxed(excess_count as u64);
+
+                while excess_count > 0 {
+                    // There must be at least one batch present if there is excess
+                    let oldest_batch_num_packets_remaining = packet_batches
+                        .front()
+                        .unwrap()
+                        .packets
+                        .len()
+                        .saturating_sub(first_valid_packet_in_oldest_batch);
+                    if oldest_batch_num_packets_remaining > excess_count {
+                        // There are enough packets in oldest batch to drop to get
+                        // under the threshold for max packets
+                        first_valid_packet_in_oldest_batch =
+                            first_valid_packet_in_oldest_batch.saturating_add(excess_count);
+                        break;
+                    } else {
+                        // This batch has been completely drained, drop it and
+                        // start removing excess from next oldest batch
+                        excess_count =
+                            excess_count.saturating_sub(oldest_batch_num_packets_remaining);
+                        first_valid_packet_in_oldest_batch = 0;
+                        packet_batches.pop_front();
+                    }
+                }
+            }
+        }
+
+        // The oldest batch may have some valid and excess packets; mark the
+        // excess packets as discarded so they are ignored in next step.
+        if let Some(oldest_packet_batch) = packet_batches.front_mut() {
+            for packet_index in 0..first_valid_packet_in_oldest_batch {
+                oldest_packet_batch.packets[packet_index]
+                    .meta
+                    .set_discard(true);
+            }
+        };
+
+        Ok((packet_batches, total_num_packets_received))
+    }
+
     // Consumes packets received from the socket, deserializing, sanitizing and
     // verifying them and then sending them down the channel for the actual
     // handling of requests/messages.
@@ -2449,23 +2511,16 @@ impl ClusterInfo {
         sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         thread_pool: &ThreadPool,
     ) -> Result<(), GossipError> {
-        const RECV_TIMEOUT: Duration = Duration::from_secs(1);
-        let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
-        let mut packets = VecDeque::from(packets);
-        for packet_batch in receiver.try_iter() {
-            packets.extend(packet_batch.packets.iter().cloned());
-            let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
-            if excess_count > 0 {
-                packets.drain(0..excess_count);
-                self.stats
-                    .gossip_packets_dropped_count
-                    .add_relaxed(excess_count as u64);
-            }
-        }
+        let (packet_batches, num_packets_received) =
+            self.handle_packet_batch_receive(receiver, MAX_GOSSIP_TRAFFIC)?;
+
         self.stats
             .packets_received_count
-            .add_relaxed(packets.len() as u64);
-        let verify_packet = |packet: Packet| {
+            .add_relaxed(num_packets_received as u64);
+        let verify_packet = |packet: &Packet| {
+            if packet.meta.discard() {
+                return None;
+            }
             let data = &packet.data[..packet.meta.size];
             let protocol: Protocol = limited_deserialize(data).ok()?;
             protocol.sanitize().ok()?;
@@ -2474,7 +2529,13 @@ impl ClusterInfo {
         };
         let packets: Vec<_> = {
             let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
-            thread_pool.install(|| packets.into_par_iter().filter_map(verify_packet).collect())
+            thread_pool
+                .install(|| {
+                    packet_batches
+                        .par_iter()
+                        .flat_map_iter(|batch| batch.packets.iter().filter_map(verify_packet))
+                })
+                .collect()
         };
         self.stats
             .packets_received_verified_count
