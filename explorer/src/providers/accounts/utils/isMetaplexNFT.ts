@@ -11,6 +11,6 @@ export default function isMetaplexNFT(
     data?.nftData &&
     mintInfo?.decimals === 0 &&
     (parseInt(mintInfo.supply) === 1 ||
-    data?.nftData?.metadata?.tokenStandard === 1)
+      data?.nftData?.metadata?.tokenStandard === 1)
   );
 }
