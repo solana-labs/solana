@@ -607,7 +607,7 @@ mod tests {
             signature::{Keypair, Signer},
             stake::{
                 self, instruction as stake_instruction,
-                state::{Authorized, Lockup, StakeAuthorize},
+                state::{Authorized, Lockup, StakeAuthorize, StakeState},
             },
             system_instruction, system_program, system_transaction,
             transaction::{self, Transaction},
@@ -828,7 +828,7 @@ mod tests {
             genesis_config,
             mint_keypair: alice,
             ..
-        } = create_genesis_config(10_000);
+        } = create_genesis_config(10_000_000_000);
 
         let new_stake_authority = solana_sdk::pubkey::new_rand();
         let stake_authority = Keypair::new();
@@ -872,16 +872,24 @@ mod tests {
         rpc_subscriptions.notify_slot(1, 0, 0);
         receiver2.recv();
 
-        let tx = system_transaction::transfer(&alice, &from.pubkey(), 51, blockhash);
-        process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
+        let balance = {
+            let bank = bank_forks.read().unwrap().working_bank();
+            let rent = &bank.rent_collector().rent;
+            let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+            let minimum_delegation =
+                solana_stake_program::get_minimum_delegation(&bank.feature_set);
+            rent_exempt_reserve + minimum_delegation
+        };
 
+        let tx = system_transaction::transfer(&alice, &from.pubkey(), balance, blockhash);
+        process_transaction_and_notify(&bank_forks, &tx, &rpc_subscriptions, 1).unwrap();
         let authorized = Authorized::auto(&stake_authority.pubkey());
         let ixs = stake_instruction::create_account(
             &from.pubkey(),
             &stake_account.pubkey(),
             &authorized,
             &Lockup::default(),
-            51,
+            balance,
         );
         let message = Message::new(&ixs, Some(&from.pubkey()));
         let tx = Transaction::new(&[&from, &stake_account], message, blockhash);
@@ -904,7 +912,7 @@ mod tests {
                    "context": { "slot": 1 },
                    "value": {
                        "owner": stake_program_id.to_string(),
-                       "lamports": 51,
+                       "lamports": balance,
                        "data": [base64::encode(expected_data), encoding],
                        "executable": false,
                        "rentEpoch": 0,
