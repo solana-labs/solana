@@ -9,7 +9,13 @@ use {
         signature::Signature,
         transaction::{Transaction, VersionedTransaction},
     },
-    std::{cmp::Ordering, collections::HashMap, mem::size_of, rc::Rc, sync::Arc},
+    std::{
+        cmp::Ordering,
+        collections::{hash_map::Entry, HashMap},
+        mem::size_of,
+        rc::Rc,
+        sync::Arc,
+    },
     thiserror::Error,
 };
 
@@ -213,7 +219,7 @@ impl UnprocessedPacketBatches {
             return None;
         }
 
-        if self.len() >= self.batch_limit {
+        if self.len() == self.batch_limit {
             // Optimized to not allocate by calling `MinMaxHeap::push_pop_min()`
             Some(self.push_pop_min(deserialized_packet))
         } else {
@@ -236,17 +242,31 @@ impl UnprocessedPacketBatches {
     {
         // TODO: optimize this only when number of packets
         // with oudated blockhash is high
-        self.packet_priority_queue.clear();
-        self.message_hash_to_transaction
-            .retain(|_k, deserialized_packet| {
-                let should_retain = f(deserialized_packet);
-                if should_retain {
-                    let priority_queue_entry =
-                        PacketPriorityQueueEntry::from_packet(deserialized_packet);
-                    self.packet_priority_queue.push(priority_queue_entry);
+        let new_packet_priority_queue: MinMaxHeap<PacketPriorityQueueEntry> = self
+            .packet_priority_queue
+            .drain()
+            .filter(|packet_priority_queue| {
+                match self
+                    .message_hash_to_transaction
+                    .entry(packet_priority_queue.message_hash)
+                {
+                    Entry::Vacant(_vacant_entry) => {
+                        panic!(
+                            "entry {} must exist to be consistent with `packet_priority_queue`",
+                            packet_priority_queue.message_hash
+                        );
+                    }
+                    Entry::Occupied(mut occupied_entry) => {
+                        let should_retain = f(occupied_entry.get_mut());
+                        if !should_retain {
+                            occupied_entry.remove_entry();
+                        }
+                        should_retain
+                    }
                 }
-                should_retain
             })
+            .collect();
+        self.packet_priority_queue = new_packet_priority_queue;
     }
 
     pub fn len(&self) -> usize {
@@ -339,12 +359,14 @@ pub fn deserialize_packets<'a>(
 pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
     let (sig_len, sig_size) =
         decode_shortu16_len(&packet.data).map_err(DeserializedPacketError::ShortVecError)?;
-    let msg_start = sig_len
+    sig_len
         .checked_mul(size_of::<Signature>())
         .and_then(|v| v.checked_add(sig_size))
-        .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))?;
-    let msg_end = packet.meta.size;
-    Ok(&packet.data[msg_start..msg_end])
+        .map(|msg_start| {
+            let msg_end = packet.meta.size;
+            &packet.data[msg_start..msg_end]
+        })
+        .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
 /// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
