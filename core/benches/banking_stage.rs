@@ -77,7 +77,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
-        let batches = transactions_to_deserialized_packets(&transactions);
+        let batches = transactions_to_deserialized_packets(&transactions).unwrap();
         let batches_len = batches.len();
         let mut transaction_buffer =
             UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len);

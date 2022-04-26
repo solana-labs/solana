@@ -689,8 +689,6 @@ impl BankingStage {
         slot_metrics_tracker.increment_retryable_packets_count(retryable_packets.len() as u64);
 
         if let Some(end_of_slot) = &reached_end_of_slot {
-            // If the processing loop finished because we went through all the packets,
-            // not because the slot ended, we will enter this case.
             slot_metrics_tracker
                 .set_end_of_slot_retryable_packets_len(retryable_packets.len() as u64);
             slot_metrics_tracker
@@ -731,6 +729,8 @@ impl BankingStage {
             slot_metrics_tracker
                 .increment_end_of_slot_filtering_us(end_of_slot_filtering_time.as_us());
         } else {
+            // If the processing loop finished because we went through all the packets,
+            // not because the slot ended, we will enter this case.
             std::mem::swap(&mut retryable_packets, buffered_packet_batches);
         }
 
@@ -1788,7 +1788,7 @@ impl BankingStage {
                             bank.vote_only_bank(),
                             bank.as_ref(),
                         )
-                        .map(|packet| (packet, i))
+                        .map(|transaction| (transaction, i))
                     })
                     .collect_vec()
             },
@@ -3830,7 +3830,8 @@ mod tests {
             let recorder = poh_recorder.lock().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions);
+                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
+                    .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches: UnprocessedPacketBatches =
                 UnprocessedPacketBatches::from_iter(
@@ -3923,7 +3924,8 @@ mod tests {
                     let deserialized_packets =
                         unprocessed_packet_batches::transactions_to_deserialized_packets(
                             &transactions,
-                        );
+                        )
+                        .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let num_packets_to_process_per_iteration = 1;
                     let mut buffered_packet_batches: UnprocessedPacketBatches =

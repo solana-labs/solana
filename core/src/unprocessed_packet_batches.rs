@@ -10,7 +10,19 @@ use {
         transaction::{Transaction, VersionedTransaction},
     },
     std::{cmp::Ordering, collections::HashMap, mem::size_of, rc::Rc, sync::Arc},
+    thiserror::Error,
 };
+
+#[derive(Debug, Error)]
+pub enum DeserializedPacketError {
+    #[error("ShortVec Failed to Deserialize")]
+    // short_vec::decode_shortu16_len() currently returns () on error
+    ShortVecError(()),
+    #[error("Deserialization Error: {0}")]
+    DeserializationError(#[from] bincode::Error),
+    #[error("overflowed on signature size {0}")]
+    SignatureOverflowed(usize),
+}
 
 #[derive(Debug, Default, PartialEq, Eq)]
 struct ImmutableDeserializedPacket {
@@ -30,12 +42,15 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
-    pub fn new(packet: Packet, bank: &Option<Arc<Bank>>) -> Option<Self> {
+    pub fn new(packet: Packet, bank: &Option<Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, bank, None)
     }
 
     #[cfg(test)]
-    fn new_with_fee_per_cu(packet: Packet, fee_per_cu: u64) -> Option<Self> {
+    fn new_with_fee_per_cu(
+        packet: Packet,
+        fee_per_cu: u64,
+    ) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, &None, Some(fee_per_cu))
     }
 
@@ -43,35 +58,28 @@ impl DeserializedPacket {
         packet: Packet,
         bank: &Option<Arc<Bank>>,
         fee_per_cu: Option<u64>,
-    ) -> Option<Self> {
+    ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
-            match limited_deserialize(&packet.data[0..packet.meta.size]) {
-                Ok(tx) => tx,
-                Err(_) => return None,
-            };
+            limited_deserialize(&packet.data[0..packet.meta.size])?;
+        let message_bytes = packet_message(&packet)?;
+        let message_hash = Message::hash_raw_message(message_bytes);
+        let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        if let Some(message_bytes) = packet_message(&packet) {
-            let message_hash = Message::hash_raw_message(message_bytes);
-            let is_simple_vote = packet.meta.is_simple_vote_tx();
-
-            let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
-                bank.as_ref()
-                    .map(|bank| compute_fee_per_cu(&versioned_transaction.message, &*bank))
-                    .unwrap_or(0)
-            });
-            Some(Self {
-                immutable_section: Rc::new(ImmutableDeserializedPacket {
-                    original_packet: packet,
-                    versioned_transaction,
-                    message_hash,
-                    is_simple_vote,
-                    fee_per_cu,
-                }),
-                forwarded: false,
-            })
-        } else {
-            None
-        }
+        let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
+            bank.as_ref()
+                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, &*bank))
+                .unwrap_or(0)
+        });
+        Ok(Self {
+            immutable_section: Rc::new(ImmutableDeserializedPacket {
+                original_packet: packet,
+                versioned_transaction,
+                message_hash,
+                is_simple_vote,
+                fee_per_cu,
+            }),
+            forwarded: false,
+        })
     }
 
     pub fn original_packet(&self) -> &Packet {
@@ -269,15 +277,21 @@ impl UnprocessedPacketBatches {
             .packet_priority_queue
             .push_pop_min(priority_queue_entry);
 
-        // Keep track of the original packet in the tracking hashmap
-        self.message_hash_to_transaction
-            .insert(deserialized_packet.message_hash(), deserialized_packet);
+        if popped_priority_queue_entry.message_hash != deserialized_packet.message_hash() {
+            // Remove the popped entry from the tracking hashmap. Unwrap call is safe
+            // because the priority queue and hashmap are kept consistent at all times.
+            let removed_min = self
+                .message_hash_to_transaction
+                .remove(&popped_priority_queue_entry.message_hash)
+                .unwrap();
 
-        // Remove the popped entry from the tracking hashmap. Unwrap call is safe
-        // because the priority queue and hashmap are kept consistent at all times.
-        self.message_hash_to_transaction
-            .remove(&popped_priority_queue_entry.message_hash)
-            .unwrap()
+            // Keep track of the original packet in the tracking hashmap
+            self.message_hash_to_transaction
+                .insert(deserialized_packet.message_hash(), deserialized_packet);
+            removed_min
+        } else {
+            deserialized_packet
+        }
     }
 
     pub fn pop_max(&mut self) -> Option<DeserializedPacket> {
@@ -290,18 +304,18 @@ impl UnprocessedPacketBatches {
             })
     }
 
-    /// Pop the next `n` highest priority transactions from the queue.
+    /// Pop up to the next `n` highest priority transactions from the queue.
     /// Returns `None` if the queue is empty
     pub fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
         let current_len = self.len();
-        if current_len == 0 {
+        if self.is_empty() {
             None
         } else {
             let num_to_pop = std::cmp::min(current_len, n);
             Some(
-                std::iter::repeat_with(|| self.pop_max().unwrap())
+                std::iter::from_fn(|| Some(self.pop_max().unwrap()))
                     .take(num_to_pop)
-                    .collect(),
+                    .collect::<Vec<DeserializedPacket>>(),
             )
         }
     }
@@ -317,18 +331,20 @@ pub fn deserialize_packets<'a>(
     bank: &'a Option<Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(|packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank)
+        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
     })
 }
 
 /// Read the transaction message from packet data
-pub fn packet_message(packet: &Packet) -> Option<&[u8]> {
-    let (sig_len, sig_size) = decode_shortu16_len(&packet.data).ok()?;
+pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
+    let (sig_len, sig_size) =
+        decode_shortu16_len(&packet.data).map_err(DeserializedPacketError::ShortVecError)?;
     let msg_start = sig_len
         .checked_mul(size_of::<Signature>())
-        .and_then(|v| v.checked_add(sig_size))?;
+        .and_then(|v| v.checked_add(sig_size))
+        .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))?;
     let msg_end = packet.meta.size;
-    Some(&packet.data[msg_start..msg_end])
+    Ok(&packet.data[msg_start..msg_end])
 }
 
 /// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
@@ -338,12 +354,12 @@ fn compute_fee_per_cu(_message: &VersionedMessage, _bank: &Bank) -> u64 {
 
 pub fn transactions_to_deserialized_packets(
     transactions: &[Transaction],
-) -> Vec<DeserializedPacket> {
+) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
     transactions
         .iter()
         .map(|transaction| {
-            let packet = Packet::from_data(None, transaction).unwrap();
-            DeserializedPacket::new(packet, &None).unwrap()
+            let packet = Packet::from_data(None, transaction)?;
+            DeserializedPacket::new(packet, &None)
         })
         .collect()
 }
