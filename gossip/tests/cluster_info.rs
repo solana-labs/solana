@@ -1,10 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-<<<<<<< HEAD
-=======
-    crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError},
     itertools::Itertools,
->>>>>>> 2b718d00b (removes legacy compatibility turbine peers shuffle code)
     rayon::{iter::ParallelIterator, prelude::*},
     serial_test::serial,
     solana_gossip::{

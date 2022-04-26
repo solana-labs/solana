@@ -8,12 +8,7 @@ use {
         cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
-<<<<<<< HEAD
-        weighted_shuffle::{weighted_best, weighted_shuffle, WeightedShuffle},
-=======
-        crds_value::{CrdsData, CrdsValue},
         weighted_shuffle::WeightedShuffle,
->>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
     },
     solana_ledger::shred::Shred,
     solana_runtime::bank::Bank,
@@ -198,7 +193,7 @@ impl ClusterNodes<RetransmitStage> {
             .collect()
     }
 
-    pub fn get_retransmit_peers(
+    fn get_retransmit_peers(
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
@@ -209,12 +204,6 @@ impl ClusterNodes<RetransmitStage> {
         Vec<&Node>, // children
     ) {
         let shred_seed = shred.seed(slot_leader);
-<<<<<<< HEAD
-        if !enable_turbine_peers_shuffle_patch(shred.slot(), root_bank) {
-            return self.get_retransmit_peers_compat(shred_seed, fanout, slot_leader);
-        }
-=======
->>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == self.pubkey {
@@ -237,49 +226,6 @@ impl ClusterNodes<RetransmitStage> {
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
         (neighbors, children)
     }
-<<<<<<< HEAD
-
-    fn get_retransmit_peers_compat(
-        &self,
-        shred_seed: [u8; 32],
-        fanout: usize,
-        slot_leader: Pubkey,
-    ) -> (
-        Vec<&Node>, // neighbors
-        Vec<&Node>, // children
-    ) {
-        // Exclude leader from list of nodes.
-        let (weights, index): (Vec<u64>, Vec<usize>) = if slot_leader == self.pubkey {
-            error!("retransmit from slot leader: {}", slot_leader);
-            self.compat_index.iter().copied().unzip()
-        } else {
-            self.compat_index
-                .iter()
-                .filter(|(_, i)| self.nodes[*i].pubkey() != slot_leader)
-                .copied()
-                .unzip()
-        };
-        let index: Vec<_> = {
-            let shuffle = weighted_shuffle(weights.into_iter(), shred_seed);
-            shuffle.into_iter().map(|i| index[i]).collect()
-        };
-        let self_index = index
-            .iter()
-            .position(|i| self.nodes[*i].pubkey() == self.pubkey)
-            .unwrap();
-        let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &index);
-        // Assert that the node itself is included in the set of neighbors, at
-        // the right offset.
-        debug_assert_eq!(
-            self.nodes[neighbors[self_index % fanout]].pubkey(),
-            self.pubkey
-        );
-        let neighbors = neighbors.into_iter().map(|i| &self.nodes[i]).collect();
-        let children = children.into_iter().map(|i| &self.nodes[i]).collect();
-        (neighbors, children)
-    }
-=======
->>>>>>> d0b850cdd (removes turbine peers shuffle patch feature)
 }
 
 fn new_cluster_nodes<T: 'static>(
@@ -419,44 +365,17 @@ impl From<Pubkey> for NodeId {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
     use {
         super::*,
         rand::{seq::SliceRandom, Rng},
         solana_gossip::{
             crds::GossipRoute,
             crds_value::{CrdsData, CrdsValue},
-            deprecated::{
-                shuffle_peers_and_index, sorted_retransmit_peers_and_stakes,
-                sorted_stakes_with_index,
-            },
         },
         solana_sdk::{signature::Keypair, timing::timestamp},
         solana_streamer::socket::SocketAddrSpace,
         std::{iter::repeat_with, sync::Arc},
     };
-
-    // Legacy methods copied for testing backward compatibility.
-
-    fn get_broadcast_peers(
-        cluster_info: &ClusterInfo,
-        stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> (Vec<ContactInfo>, Vec<(u64, usize)>) {
-        let mut peers = cluster_info.tvu_peers();
-        let peers_and_stakes = stake_weight_peers(&mut peers, stakes);
-        (peers, peers_and_stakes)
-    }
-
-    fn stake_weight_peers(
-        peers: &mut Vec<ContactInfo>,
-        stakes: Option<&HashMap<Pubkey, u64>>,
-    ) -> Vec<(u64, usize)> {
-        peers.dedup();
-        sorted_stakes_with_index(peers, stakes)
-    }
-=======
-    use super::*;
->>>>>>> 2b718d00b (removes legacy compatibility turbine peers shuffle code)
 
     fn make_cluster<R: Rng>(
         rng: &mut R,
@@ -506,12 +425,7 @@ mod tests {
     #[test]
     fn test_cluster_nodes_retransmit() {
         let mut rng = rand::thread_rng();
-<<<<<<< HEAD
         let (nodes, stakes, cluster_info) = make_cluster(&mut rng);
-        let this_node = cluster_info.my_contact_info();
-=======
-        let (nodes, stakes, cluster_info) = make_test_cluster(&mut rng, 1_000, None);
->>>>>>> 2b718d00b (removes legacy compatibility turbine peers shuffle code)
         // ClusterInfo::tvu_peers excludes the node itself.
         assert_eq!(cluster_info.tvu_peers().len(), nodes.len() - 1);
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
