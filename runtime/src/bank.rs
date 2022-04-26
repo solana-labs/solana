@@ -9286,9 +9286,9 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        let rewards = Rewards{
+        let rewards = Rewards {
             validator_point_value: 6625.150397619048,
-            unused: 0.0
+            unused: 0.0,
         };
 
         // verify the stake and vote accounts are the right size
