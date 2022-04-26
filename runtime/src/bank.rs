@@ -3521,7 +3521,10 @@ impl Bank {
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
-        let account_keys = transaction.message().account_keys_iter().collect::<Vec<_>>();
+        let account_keys = transaction
+            .message()
+            .account_keys_iter()
+            .collect::<Vec<_>>();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
         let batch = self.prepare_simulation_batch(transaction);
@@ -3587,7 +3590,10 @@ impl Bank {
     fn get_account_overrides_for_simulation(&self, account_keys: &[&Pubkey]) -> AccountOverrides {
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
-        if account_keys.iter().any(|pubkey| **pubkey == slot_history_id) {
+        if account_keys
+            .iter()
+            .any(|pubkey| **pubkey == slot_history_id)
+        {
             let current_account = self.get_account_with_fixed_root(&slot_history_id);
             let slot_history = current_account
                 .as_ref()
