@@ -2041,7 +2041,7 @@ export type SignatureSubscriptionCallback = (
  * Signature subscription options
  */
 export type SignatureSubscriptionOptions = {
-  commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
+  commitment?: Commitment;
   enableReceivedNotification?: boolean;
 };
 
@@ -4401,6 +4401,30 @@ export class Connection {
    */
   _makeSubscription(
     subscriptionConfig: SubscriptionConfig,
+    /**
+     * When preparing `args` for a call to `_makeSubscription`, be sure
+     * to carefully apply a default `commitment` property, if necessary.
+     *
+     * - If the user supplied a `commitment` use that.
+     * - Otherwise, if the `Connection::commitment` is set, use that.
+     * - Otherwise, set it to the RPC server default: `finalized`.
+     *
+     * This is extrememly important to ensure that these two fundamentally
+     * identical subscriptions produce the same identifying hash:
+     *
+     * - A subscription made without specifying a commitment.
+     * - A subscription made where the commitment specified is the same
+     *   as the default applied to the subscription above.
+     *
+     * Example; these two subscriptions must produce the same hash:
+     *
+     * - An `accountSubscribe` subscription for `'PUBKEY'`
+     * - An `accountSubscribe` subscription for `'PUBKEY'` with commitment
+     *   `'finalized'`.
+     *
+     * See the 'making a subscription with defaulted params omitted' test
+     * in `connection-subscriptions.ts` for more.
+     */
     args: IWSRequestParams,
   ): ClientSubscriptionId {
     const clientSubscriptionId = this._nextClientSubscriptionId++;
@@ -4552,7 +4576,7 @@ export class Connection {
   ): ClientSubscriptionId {
     const args = this._buildArgs(
       [typeof filter === 'object' ? {mentions: [filter.toString()]} : filter],
-      commitment || this._commitment || 'finalized', // Apply connection/server default.,
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
     );
     return this._makeSubscription(
       {
