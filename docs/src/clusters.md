@@ -22,7 +22,8 @@ Explorers:
   - Devnet tokens are **not real**
   - Devnet includes a token faucet for airdrops for application testing
   - Devnet may be subject to ledger resets
-  - Devnet typically runs a newer software version than Mainnet Beta
+  - Devnet typically runs the same software release branch version as Mainnet Beta,
+    but may run a newer minor release version than Mainnet Beta.
 - Gossip entrypoint for Devnet: `entrypoint.devnet.solana.com:8001`
 - Metrics environment variable for Devnet:
 
@@ -67,14 +68,14 @@ are operated by Solana Labs
 
 ## Testnet
 
-- Testnet is where we stress test recent release features on a live
+- Testnet is where the Solana core contributors stress test recent release features on a live
   cluster, particularly focused on network performance, stability and validator
   behavior.
 - Testnet tokens are **not real**
 - Testnet may be subject to ledger resets.
 - Testnet includes a token faucet for airdrops for application testing
-- Testnet typically runs a newer software release than both Devnet and
-  Mainnet Beta
+- Testnet typically runs a newer software release branch than both
+  Devnet and Mainnet Beta
 - Gossip entrypoint for Testnet: `entrypoint.testnet.solana.com:8001`
 - Metrics environment variable for Testnet:
 
@@ -116,7 +117,7 @@ $ solana-validator \
 The identities of the
 [`--known-validator`s](running-validator/validator-start.md#known-validators) are:
 
-- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Labs (testnet.solana.com)
+- `5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on` - Solana Labs
 - `dDzy5SR3AXdYWVqbDEkVFdvSPCtS9ihF5kJkHCtXoFs` - MonkeDAO
 - `Ft5fbkqNa76vnsjYNwjDZUXoTWpP7VYm3mtsaQckQADN` - Certus One
 - `eoKpUABi59aT4rR9HGS3LcMecfut9x7zJyodWWP43YQ` - SerGo
@@ -124,13 +125,9 @@ The identities of the
 
 ## Mainnet Beta
 
-A permissionless, persistent cluster for early token holders and launch partners.
+A permissionless, persistent cluster for Solana users, builders, validators and token holders.
 
 - Tokens that are issued on Mainnet Beta are **real** SOL
-- If you have paid money to purchase/be issued tokens, such as through our
-  CoinList auction, these tokens will be transferred on Mainnet Beta.
-  - Note: If you are using a non-command-line wallet, the wallet will always be
-connecting to Mainnet Beta.
 - Gossip entrypoint for Mainnet Beta: `entrypoint.mainnet-beta.solana.com:8001`
 - Metrics environment variable for Mainnet Beta:
 
