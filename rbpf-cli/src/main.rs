@@ -382,6 +382,6 @@ impl<'a> LazyAnalysis<'a> {
             return analysis;
         }
         self.analysis
-            .insert(Analysis::from_executable(self.executable))
+            .insert(Analysis::from_executable(self.executable).unwrap())
     }
 }
