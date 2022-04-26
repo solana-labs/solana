@@ -815,4 +815,58 @@ describe('Subscriptions', () => {
       );
     });
   });
+  describe('during state machine updates', () => {
+    beforeEach(() => {
+      stubbedSocket.connect.callsFake(() => {});
+      stubbedSocket.close.callsFake(() => {});
+    });
+    afterEach(() => {
+      stubbedSocket.emit('close');
+    });
+    /**
+     * This is a regression test for the case described here:
+     * https://github.com/solana-labs/solana/pull/24473#discussion_r858437090
+     *
+     * Essentially, you want to make sure that the state processor, as it recurses
+     * always processes the latest version of every subscription. Depending on how
+     * you craft the loop inside the processor, you can end up in this situation.
+     *
+     * 1A (pending subscription with zero callbacks; gets deleted then recurses)
+     *  L 2B (pending subscription; transitions to subscribing and makes network call)
+     * 2A (old version of subscription 2; transitions again and makes 2nd network call)
+     *
+     * The fact that subscription 2 made two network calls is the bug there.
+     * What you want is this:
+     *
+     * 1A (pending subscription with zero callbacks; gets deleted then recurses)
+     *  L 2B (pending subscription; transitions to subscribing and makes network call)
+     * 2A (now in the subscribing state; skipped by the processor)
+     *
+     * Below is a test that tries to replicate this exact scenario.
+     */
+    it('the processor always operates over the most up-to-date state of a given subscription', () => {
+      // Add two subscriptions.
+      const clientSubscriptionIdA = connection.onAccountChange(
+        new PublicKey('C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK'),
+        () => {},
+      );
+      connection.onAccountChange(
+        new PublicKey('27Y78XJXG9A13pnPajrB1VYU6EF8uNSoojPZBmhKsi8C'),
+        () => {},
+      );
+      // Then remove the first one before the connection opens.
+      connection.removeAccountChangeListener(clientSubscriptionIdA);
+      // Then open the connection.
+      stubbedSocket.emit('open');
+      // Despite recursion inside the state machine, ensure that the second
+      // subscription only makes *one* connection attempt.
+      expect(stubbedSocket.call).to.have.been.calledOnceWithExactly(
+        'accountSubscribe',
+        [
+          '27Y78XJXG9A13pnPajrB1VYU6EF8uNSoojPZBmhKsi8C',
+          {commitment: 'finalized', encoding: 'base64'},
+        ],
+      );
+    });
+  });
 });

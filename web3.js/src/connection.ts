@@ -4233,12 +4233,16 @@ export class Connection {
     }
 
     await Promise.all(
-      Object.entries(
-        this._subscriptionsByHash as Record<
-          SubscriptionConfigHash,
-          Subscription
-        >,
-      ).map(async ([hash, subscription]) => {
+      // Don't be tempted to change this to `Object.entries`. We call
+      // `_updateSubscriptions` recursively when processing the state,
+      // so it's important that we look up the *current* version of
+      // each subscription, every time we process a hash.
+      Object.keys(this._subscriptionsByHash).map(async hash => {
+        const subscription = this._subscriptionsByHash[hash];
+        if (subscription === undefined) {
+          // This entry has since been deleted. Skip.
+          return;
+        }
         switch (subscription.state) {
           case 'pending':
           case 'unsubscribed':
