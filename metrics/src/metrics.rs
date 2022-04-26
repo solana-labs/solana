@@ -160,7 +160,8 @@ impl MetricsAgent {
     }
 
     fn collect_points(points: &mut Vec<DataPoint>, counters: &mut CounterMap) -> Vec<DataPoint> {
-        let mut ret: Vec<DataPoint> = points.drain(..).collect();
+        let mut ret: Vec<DataPoint> = Vec::default();
+        std::mem::swap(&mut ret, points);
         for (_, v) in counters.drain() {
             ret.push(v.into());
         }
