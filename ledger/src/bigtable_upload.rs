@@ -48,14 +48,14 @@ pub async fn upload_confirmed_blocks(
 
     info!("Loading ledger slots starting at {}...", starting_slot);
     let blockstore_slots: Vec<_> = blockstore
-        .slot_meta_iterator(starting_slot)
+        .rooted_slot_iterator(starting_slot)
         .map_err(|err| {
             format!(
                 "Failed to load entries starting from slot {}: {:?}",
                 starting_slot, err
             )
         })?
-        .map_while(|(slot, _slot_meta)| {
+        .map_while(|slot| {
             if let Some(ending_slot) = &ending_slot {
                 if slot > *ending_slot {
                     return None;
