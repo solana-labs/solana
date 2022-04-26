@@ -182,23 +182,20 @@ fn redeem_stake_rewards(
         inflation_point_calc_tracer.as_ref(),
         credits_auto_rewind,
     )
-    .map(
-        |StakeRewardDistributions {
-             staker_rewards,
-             voter_rewards,
-             credits_observed,
-         }| {
-            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
-                inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
-                    stake.credits_observed,
-                    Some(credits_observed),
-                ));
-            }
-            stake.credits_observed = credits_observed;
-            stake.delegation.stake += staker_rewards;
-            (staker_rewards, voter_rewards)
-        },
-    )
+    .map(|calculated_stake_rewards| {
+        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
+            inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
+                stake.credits_observed,
+                Some(calculated_stake_rewards.new_credits_observed),
+            ));
+        }
+        stake.credits_observed = calculated_stake_rewards.new_credits_observed;
+        stake.delegation.stake += calculated_stake_rewards.staker_rewards;
+        (
+            calculated_stake_rewards.staker_rewards,
+            calculated_stake_rewards.voter_rewards,
+        )
+    })
 }
 
 fn calculate_stake_points(
@@ -212,14 +209,14 @@ fn calculate_stake_points(
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
-        true, // this is safe because this flag shouldn't affect the first
-              // element (i.e. `points`) of the returned tuple in any way
+        true, // this is safe because this flag shouldn't affect the
+              // `points` field of the returned struct in any way
     )
     .points
 }
 
 #[derive(Debug, PartialEq)]
-struct StakePointsEarned {
+struct CalculatedStakePoints {
     points: u128,
     new_credits_observed: u64,
     force_credits_update_with_skipped_reward: bool,
@@ -234,7 +231,7 @@ fn calculate_stake_points_and_credits(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
-) -> StakePointsEarned {
+) -> CalculatedStakePoints {
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
@@ -261,7 +258,7 @@ fn calculate_stake_points_and_credits(
             //    delinquent validator with no differenciation.
 
             // hint with true to indicate some exceptional credits handling is needed
-            return StakePointsEarned {
+            return CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: credits_in_vote,
                 force_credits_update_with_skipped_reward: true,
@@ -276,7 +273,7 @@ fn calculate_stake_points_and_credits(
             }
             // don't hint the caller and return current value if credits_auto_rewind is off or
             // credits remain to be unchanged (= delinquent)
-            return StakePointsEarned {
+            return CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: credits_in_stake,
                 force_credits_update_with_skipped_reward: false,
@@ -324,7 +321,7 @@ fn calculate_stake_points_and_credits(
         }
     }
 
-    StakePointsEarned {
+    CalculatedStakePoints {
         points,
         new_credits_observed,
         force_credits_update_with_skipped_reward: false,
@@ -332,10 +329,10 @@ fn calculate_stake_points_and_credits(
 }
 
 #[derive(Debug, PartialEq)]
-struct StakeRewardDistributions {
+struct CalculatedStakeRewards {
     staker_rewards: u64,
     voter_rewards: u64,
-    credits_observed: u64,
+    new_credits_observed: u64,
 }
 
 /// for a given stake and vote_state, calculate what distributions and what updates should be made
@@ -352,9 +349,9 @@ fn calculate_stake_rewards(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
-) -> Option<StakeRewardDistributions> {
+) -> Option<CalculatedStakeRewards> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
-    let StakePointsEarned {
+    let CalculatedStakePoints {
         points,
         new_credits_observed,
         mut force_credits_update_with_skipped_reward,
@@ -382,10 +379,10 @@ fn calculate_stake_rewards(
     }
 
     if force_credits_update_with_skipped_reward {
-        return Some(StakeRewardDistributions {
+        return Some(CalculatedStakeRewards {
             staker_rewards: 0,
             voter_rewards: 0,
-            credits_observed: new_credits_observed,
+            new_credits_observed,
         });
     }
 
@@ -437,10 +434,10 @@ fn calculate_stake_rewards(
         return None;
     }
 
-    Some(StakeRewardDistributions {
+    Some(CalculatedStakeRewards {
         staker_rewards,
         voter_rewards,
-        credits_observed: new_credits_observed,
+        new_credits_observed,
     })
 }
 
@@ -2453,10 +2450,10 @@ mod tests {
 
         // this one should be able to collect exactly 2
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake * 2,
                 voter_rewards: 0,
-                credits_observed: 2,
+                new_credits_observed: 2,
             }),
             calculate_stake_rewards(
                 0,
@@ -2475,10 +2472,10 @@ mod tests {
         stake.credits_observed = 1;
         // this one should be able to collect exactly 1 (already observed one)
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake,
                 voter_rewards: 0,
-                credits_observed: 2,
+                new_credits_observed: 2,
             }),
             calculate_stake_rewards(
                 0,
@@ -2500,10 +2497,10 @@ mod tests {
         stake.credits_observed = 2;
         // this one should be able to collect the one just added
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake,
                 voter_rewards: 0,
-                credits_observed: 3,
+                new_credits_observed: 3,
             }),
             calculate_stake_rewards(
                 1,
@@ -2523,10 +2520,10 @@ mod tests {
         vote_state.increment_credits(2);
         // this one should be able to collect 2 now
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake * 2,
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
@@ -2546,12 +2543,12 @@ mod tests {
         // this one should be able to collect everything from t=0 a warmed up stake of 2
         // (2 credits at stake of 1) + (1 credit at a stake of 2)
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake * 2 // epoch 0
                     + stake.delegation.stake // epoch 1
                     + stake.delegation.stake, // epoch 2
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
@@ -2606,10 +2603,10 @@ mod tests {
         // to advance the stake state's credits_observed field to prevent back-
         // paying rewards when inflation is turned on.
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: 0,
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
@@ -2629,10 +2626,10 @@ mod tests {
         // not advancing and inflation is disabled
         stake.credits_observed = 4;
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: 0,
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
@@ -2649,7 +2646,7 @@ mod tests {
         );
 
         assert_eq!(
-            StakePointsEarned {
+            CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
@@ -2662,7 +2659,7 @@ mod tests {
         stake.credits_observed = 1000;
         // this is old behavior; return the pre-recreation (large) credits from stake account
         assert_eq!(
-            StakePointsEarned {
+            CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: 1000,
                 force_credits_update_with_skipped_reward: false,
@@ -2671,7 +2668,7 @@ mod tests {
         );
         // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
-            StakePointsEarned {
+            CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
@@ -2681,7 +2678,7 @@ mod tests {
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
         assert_eq!(
-            StakePointsEarned {
+            CalculatedStakePoints {
                 points: 0,
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
@@ -2694,10 +2691,10 @@ mod tests {
         stake.credits_observed = 3;
         stake.delegation.activation_epoch = 1;
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: stake.delegation.stake, // epoch 2
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
@@ -2718,10 +2715,10 @@ mod tests {
         stake.delegation.activation_epoch = 2;
         stake.credits_observed = 3;
         assert_eq!(
-            Some(StakeRewardDistributions {
+            Some(CalculatedStakeRewards {
                 staker_rewards: 0,
                 voter_rewards: 0,
-                credits_observed: 4,
+                new_credits_observed: 4,
             }),
             calculate_stake_rewards(
                 2,
