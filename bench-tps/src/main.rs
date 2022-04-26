@@ -50,6 +50,7 @@ fn main() {
         ..
     } = &cli_config;
 
+    let use_quic = true;
     let keypair_count = *tx_count * keypair_multiplier;
     if *write_to_client_file {
         info!("Generating {} keypairs", keypair_count);
