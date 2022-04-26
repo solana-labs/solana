@@ -744,16 +744,20 @@ describe('Subscriptions', () => {
           result: FINAL_NOTIFICATION_RESULT,
         });
       });
-      it('unsubscribing the listener should fatal', () => {
-        expect(async () => {
-          await connection.removeSignatureListener(clientSubscriptionId);
-        }).to.throw;
-      });
       it('should not result in an unsubscribe request being made to the RPC', () => {
         expect(stubbedSocket.call).not.to.have.been.calledWith(
           'signatureUnsubscribe',
           [serverSubscriptionId],
         );
+      });
+      describe('then unsubscribing the listener', () => {
+        beforeEach(async () => {
+          stubbedSocket.call.resetHistory();
+          await connection.removeSignatureListener(clientSubscriptionId);
+        });
+        it('should not result in an unsubscribe request being made to the RPC', () => {
+          expect(stubbedSocket.call).not.to.have.been.called;
+        });
       });
     });
   });
