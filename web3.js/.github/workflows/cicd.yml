@@ -9,12 +9,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: "lts/*"
           cache: "npm"
-      - name: build
+
+      - name: Build
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
           PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
@@ -29,41 +33,16 @@ jobs:
           npm run ok
           npm run codecov
           npm run test:live-with-test-validator
-          rm -rf deploy
-          mkdir -p deploy
-          cp -r doc deploy/docs
-          cp lib/index.iife.js deploy/solanaWeb3.min.js
-      - uses: actions/upload-artifact@v3
-        with:
-          name: build
-          path: deploy/
 
-  gh-page:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: build
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-
-  semantic-release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: "lts/*"
-          cache: "npm"
-      - run: |
-          npm install -g npm@7
-          npm install
+      - name: Publish NPM
+        run: |
           npx semantic-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Deploy Github Page
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./doc
