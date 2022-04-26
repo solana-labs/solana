@@ -44,7 +44,11 @@ export function ProgramLogsCardBody({
         let programLogs: InstructionLogs | undefined = logs[logIndex];
         if (programLogs?.invokedProgram === programAddress) {
           logIndex++;
-        } else if (programLogs?.invokedProgram === null && programLogs.logs.length > 0 && NATIVE_PROGRAMS_MISSING_INVOKE_LOG.includes(programAddress)) {
+        } else if (
+          programLogs?.invokedProgram === null &&
+          programLogs.logs.length > 0 &&
+          NATIVE_PROGRAMS_MISSING_INVOKE_LOG.includes(programAddress)
+        ) {
           logIndex++;
         } else {
           programLogs = undefined;
