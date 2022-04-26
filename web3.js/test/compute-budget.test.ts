@@ -6,7 +6,7 @@ import {
   Connection,
   LAMPORTS_PER_SOL,
   Transaction,
-  ComputeBudget,
+  ComputeBudgetProgram,
   ComputeBudgetInstruction,
   PublicKey,
   SystemProgram,
@@ -17,14 +17,14 @@ import {url} from './url';
 
 use(chaiAsPromised);
 
-describe.skip('ComputeBudget', () => {
+describe('ComputeBudgetProgram', () => {
   it('requestUnits', () => {
     const params = {
       units: 150000,
       additionalFee: 0,
     };
     const transaction = new Transaction().add(
-      ComputeBudget.requestUnits(params),
+      ComputeBudgetProgram.requestUnits(params),
     );
     expect(transaction.instructions).to.have.length(1);
     const [computeBudgetInstruction] = transaction.instructions;
@@ -38,7 +38,7 @@ describe.skip('ComputeBudget', () => {
       bytes: 33 * 1024,
     };
     const transaction = new Transaction().add(
-      ComputeBudget.requestHeapFrame(params),
+      ComputeBudgetProgram.requestHeapFrame(params),
     );
     expect(transaction.instructions).to.have.length(1);
     const [computeBudgetInstruction] = transaction.instructions;
@@ -47,12 +47,14 @@ describe.skip('ComputeBudget', () => {
     );
   });
 
-  it('ComputeBudgetInstruction', async () => {
-    const requestUnits = ComputeBudget.requestUnits({
+  it('ComputeBudgetInstruction', () => {
+    const requestUnits = ComputeBudgetProgram.requestUnits({
       units: 150000,
       additionalFee: 0,
     });
-    const requestHeapFrame = ComputeBudget.requestHeapFrame({bytes: 33 * 1024});
+    const requestHeapFrame = ComputeBudgetProgram.requestHeapFrame({
+      bytes: 33 * 1024,
+    });
 
     const requestUnitsTransaction = new Transaction().add(requestUnits);
     expect(requestUnitsTransaction.instructions).to.have.length(1);
@@ -113,7 +115,10 @@ describe.skip('ComputeBudget', () => {
       };
 
       const createAccountFeeTooHighTransaction = new Transaction().add(
-        ComputeBudget.requestUnits({units: 2, additionalFee: 2 * FEE_AMOUNT}),
+        ComputeBudgetProgram.requestUnits({
+          units: 2,
+          additionalFee: 2 * FEE_AMOUNT,
+        }),
         SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
       await expect(
@@ -130,7 +135,10 @@ describe.skip('ComputeBudget', () => {
       );
 
       const createAccountFeeTransaction = new Transaction().add(
-        ComputeBudget.requestUnits({units: 2, additionalFee: FEE_AMOUNT}),
+        ComputeBudgetProgram.requestUnits({
+          units: 2,
+          additionalFee: FEE_AMOUNT,
+        }),
         SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
       await sendAndConfirmTransaction(
@@ -145,7 +153,7 @@ describe.skip('ComputeBudget', () => {
 
       async function expectRequestHeapFailure(bytes: number) {
         const requestHeapFrameTransaction = new Transaction().add(
-          ComputeBudget.requestHeapFrame({bytes}),
+          ComputeBudgetProgram.requestHeapFrame({bytes}),
         );
         await expect(
           sendAndConfirmTransaction(
@@ -165,7 +173,7 @@ describe.skip('ComputeBudget', () => {
 
       const VALID_BYTES = 33 * 1024;
       const requestHeapFrameTransaction = new Transaction().add(
-        ComputeBudget.requestHeapFrame({bytes: VALID_BYTES}),
+        ComputeBudgetProgram.requestHeapFrame({bytes: VALID_BYTES}),
       );
       await sendAndConfirmTransaction(
         connection,

@@ -1,4 +1,5 @@
 import * as BufferLayout from '@solana/buffer-layout';
+
 import {
   encodeData,
   decodeData,
@@ -79,7 +80,7 @@ export class ComputeBudgetInstruction {
    * @internal
    */
   static checkProgramId(programId: PublicKey) {
-    if (!programId.equals(ComputeBudget.programId)) {
+    if (!programId.equals(ComputeBudgetProgram.programId)) {
       throw new Error(
         'invalid instruction; programId is not ComputeBudgetProgram',
       );
@@ -151,7 +152,7 @@ export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze<{
 /**
  * Factory class for transaction instructions to interact with the Compute Budget program
  */
-export class ComputeBudget {
+export class ComputeBudgetProgram {
   /**
    * @internal
    */
