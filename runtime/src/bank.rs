@@ -7457,11 +7457,6 @@ pub(crate) mod tests {
         SLOT_HASHES_SYSVAR_MIN_BALANCE
     }
 
-    fn new_epoch_sysvar_delta() -> u64 {
-        const REWARDS_SYSVAR_MIN_BALANCE: u64 = 1_002_240;
-        REWARDS_SYSVAR_MIN_BALANCE
-    }
-
     #[test]
     fn test_bank_capitalization() {
         let bank0 = Arc::new(Bank::new_for_tests(&GenesisConfig {
@@ -9291,13 +9286,9 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
-            - bank1_sysvar_delta()
-            - new_epoch_sysvar_delta();
+            - bank1_sysvar_delta();
 
-        let rewards = bank1
-            .get_account(&sysvar::rewards::id())
-            .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();
+        let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
 
         // verify the stake and vote accounts are the right size
         assert!(
