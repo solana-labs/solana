@@ -125,16 +125,16 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
   # Set new crate version
   (
     set -x
-    sed -i "$Cargo_toml" -e "0,/^version =/{s/^version = \"[^\"]*\"$/version = \"$newVersion\"/}"
+    sed -i -e "0,/^version =/s/^version = \"[^\"]*\"$/version = \"$newVersion\"/" "$Cargo_toml"
   )
 
   # Fix up the version references to other internal crates
   for crate in "${crates[@]}"; do
     (
       set -x
-      sed -i "$Cargo_toml" -e "
+      sed -i -e "
         s/^$crate = { *path *= *\"\([^\"]*\)\" *, *version *= *\"[^\"]*\"\(.*\)} *\$/$crate = \{ path = \"\1\", version = \"=$newVersion\"\2\}/
-      "
+      " "$Cargo_toml"
     )
   done
 done
@@ -144,7 +144,7 @@ for file in "${markdownFiles[@]}"; do
   # Set new crate version
   (
     set -x
-    sed -i "$file" -e "s/$currentVersion/$newVersion/g"
+    sed -i -e "s/$currentVersion/$newVersion/g" "$file"
   )
 done
 
