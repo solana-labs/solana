@@ -202,7 +202,6 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
-        println!("new ClusterInfoVoteListener");
         let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
             unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
@@ -445,7 +444,6 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Result<()> {
-        println!("process_votes_loop");
         let mut confirmation_verifier =
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
@@ -509,7 +507,6 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         replay_votes_receiver: &ReplayVoteReceiver,
     ) -> Result<ThresholdConfirmedSlots> {
-        println!("get_and_process_votes_for_tests");
         Self::listen_and_confirm_votes(
             gossip_vote_txs_receiver,
             vote_tracker,
@@ -534,7 +531,6 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) -> Result<ThresholdConfirmedSlots> {
-        println!("listen_and_confirm_votes");
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
         sel.recv(replay_votes_receiver);
@@ -584,7 +580,6 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) {
-        println!("track_new_votes_and_notify_confirmations");
         if vote.is_empty() {
             return;
         }
@@ -698,7 +693,6 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
     ) -> ThresholdConfirmedSlots {
-        println!("filter_and_confirm_with_new_votes");
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
 
