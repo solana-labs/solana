@@ -3559,7 +3559,7 @@ mod tests {
         let memory_mapping = MemoryMapping::new::<UserError>(
             vec![
                 MemoryRegion::default(),
-                MemoryRegion::new_from_slice(&data, START, 0, false),
+                MemoryRegion::new_readonly(&data, START),
             ],
             &config,
         )
@@ -4126,14 +4126,14 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
-                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                    MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
+                    MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
+                    MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+                    MemoryRegion::new_writable(&mut [], ebpf::MM_INPUT_START),
                 ],
                 &config,
             )
@@ -4166,14 +4166,14 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
-                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                    MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
+                    MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
+                    MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+                    MemoryRegion::new_writable(&mut [], ebpf::MM_INPUT_START),
                 ],
                 &config,
             )
@@ -4206,14 +4206,14 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
-                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                    MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
+                    MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
+                    MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+                    MemoryRegion::new_writable(&mut [], ebpf::MM_INPUT_START),
                 ],
                 &config,
             )
@@ -4246,15 +4246,15 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
             let config = Config::default();
             let memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_PROGRAM_START, 0, false),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_STACK_START, 4096, true),
-                    MemoryRegion::new_from_slice(heap.as_slice(), ebpf::MM_HEAP_START, 0, true),
-                    MemoryRegion::new_from_slice(&[], ebpf::MM_INPUT_START, 0, true),
+                    MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
+                    MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
+                    MemoryRegion::new_writable(heap.as_slice_mut(), ebpf::MM_HEAP_START),
+                    MemoryRegion::new_writable(&mut [], ebpf::MM_INPUT_START),
                 ],
                 &config,
             )
