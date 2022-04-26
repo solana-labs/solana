@@ -14,7 +14,7 @@ use {
         shred::Shred,
     },
     solana_runtime::bank::Bank,
-    solana_sdk::pubkey::Pubkey,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     test::Bencher,
 };
 
@@ -31,16 +31,18 @@ fn make_cluster_nodes<R: Rng>(
 
 fn get_retransmit_peers_deterministic(
     cluster_nodes: &ClusterNodes<RetransmitStage>,
-    shred: &mut Shred,
+    slot: Slot,
     slot_leader: &Pubkey,
     root_bank: &Bank,
     num_simulated_shreds: usize,
 ) {
+    let parent_offset = if slot == 0 { 0 } else { 1 };
     for i in 0..num_simulated_shreds {
-        shred.set_index(i as u32);
+        let index = i as u32;
+        let shred = Shred::new_from_data(slot, index, parent_offset, None, false, false, 0, 0, 0);
         let (_neighbors, _children) = cluster_nodes.get_retransmit_peers(
             *slot_leader,
-            shred,
+            &shred,
             root_bank,
             solana_gossip::cluster_info::DATA_PLANE_FANOUT,
         );
@@ -54,12 +56,10 @@ fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: O
     let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
     let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
     let slot = rand::random::<u64>();
-    let mut shred = Shred::new_empty_data_shred();
-    shred.set_slot(slot);
     b.iter(|| {
         get_retransmit_peers_deterministic(
             &cluster_nodes,
-            &mut shred,
+            slot,
             &slot_leader,
             &bank,
             NUM_SIMULATED_SHREDS,

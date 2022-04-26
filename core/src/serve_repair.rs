@@ -1305,6 +1305,9 @@ mod tests {
 
     #[test]
     fn test_verify_shred_response() {
+        fn new_test_data_shred(slot: Slot, index: u32) -> Shred {
+            Shred::new_from_data(slot, index, 1, None, false, false, 0, 0, 0)
+        }
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
@@ -1317,41 +1320,34 @@ mod tests {
         let index = 5;
 
         // Orphan
-        let mut shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
+        let shred = new_test_data_shred(slot, 0);
         let request = ShredRepairType::Orphan(slot);
         assert!(request.verify_response(&shred));
-        shred.set_slot(slot - 1);
+        let shred = new_test_data_shred(slot - 1, 0);
         assert!(request.verify_response(&shred));
-        shred.set_slot(slot + 1);
+        let shred = new_test_data_shred(slot + 1, 0);
         assert!(!request.verify_response(&shred));
 
         // HighestShred
-        shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot, index);
         let request = ShredRepairType::HighestShred(slot, index as u64);
         assert!(request.verify_response(&shred));
-        shred.set_index(index + 1);
+        let shred = new_test_data_shred(slot, index + 1);
         assert!(request.verify_response(&shred));
-        shred.set_index(index - 1);
+        let shred = new_test_data_shred(slot, index - 1);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot - 1);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot - 1, index);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot + 1);
+        let shred = new_test_data_shred(slot + 1, index);
         assert!(!request.verify_response(&shred));
 
         // Shred
-        shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot, index);
         let request = ShredRepairType::Shred(slot, index as u64);
         assert!(request.verify_response(&shred));
-        shred.set_index(index + 1);
+        let shred = new_test_data_shred(slot, index + 1);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot + 1);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot + 1, index);
         assert!(!request.verify_response(&shred));
     }
 

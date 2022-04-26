@@ -51,7 +51,8 @@ fn broadcast_shreds_bench(bencher: &mut Bencher) {
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
     const NUM_SHREDS: usize = 32;
-    let shreds = vec![Shred::new_empty_data_shred(); NUM_SHREDS];
+    let shred = Shred::new_from_data(0, 0, 0, None, false, false, 0, 0, 0);
+    let shreds = vec![shred; NUM_SHREDS];
     let mut stakes = HashMap::new();
     const NUM_PEERS: usize = 200;
     for _ in 0..NUM_PEERS {

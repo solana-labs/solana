@@ -371,7 +371,7 @@ impl Shred {
         position: u16,
         version: u16,
     ) -> Self {
-        let header = ShredCommonHeader {
+        let common_header = ShredCommonHeader {
             shred_type: ShredType::Code,
             index,
             slot,
@@ -384,14 +384,6 @@ impl Shred {
             num_coding_shreds,
             position,
         };
-        Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header)
-    }
-
-    fn new_empty_from_header(
-        common_header: ShredCommonHeader,
-        data_header: DataShredHeader,
-        coding_header: CodingShredHeader,
-    ) -> Self {
         let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let mut start = 0;
         Self::serialize_obj_into(
@@ -401,36 +393,19 @@ impl Shred {
             &common_header,
         )
         .expect("Failed to write header into shred buffer");
-        match common_header.shred_type {
-            ShredType::Data => Self::serialize_obj_into(
-                &mut start,
-                SIZE_OF_DATA_SHRED_HEADER,
-                &mut payload,
-                &data_header,
-            )
-            .expect("Failed to write data header into shred buffer"),
-            ShredType::Code => Self::serialize_obj_into(
-                &mut start,
-                SIZE_OF_CODING_SHRED_HEADER,
-                &mut payload,
-                &coding_header,
-            )
-            .expect("Failed to write coding header into shred buffer"),
-        };
+        Self::serialize_obj_into(
+            &mut start,
+            SIZE_OF_CODING_SHRED_HEADER,
+            &mut payload,
+            &coding_header,
+        )
+        .expect("Failed to write coding header into shred buffer");
         Shred {
             common_header,
-            data_header,
+            data_header: DataShredHeader::default(),
             coding_header,
             payload,
         }
-    }
-
-    pub fn new_empty_data_shred() -> Self {
-        Self::new_empty_from_header(
-            ShredCommonHeader::default(),
-            DataShredHeader::default(),
-            CodingShredHeader::default(),
-        )
     }
 
     /// Unique identifier for each shred.
