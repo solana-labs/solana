@@ -70,25 +70,25 @@ pub async fn upload_confirmed_blocks(
         .into());
     }
 
+    let first_blockstore_slot = blockstore_slots.first().unwrap();
+    let last_blockstore_slot = blockstore_slots.last().unwrap();
     info!(
         "Found {} slots in the range ({}, {})",
         blockstore_slots.len(),
-        blockstore_slots.first().unwrap(),
-        blockstore_slots.last().unwrap()
+        first_blockstore_slot,
+        last_blockstore_slot,
     );
 
     // Gather the blocks that are already present in bigtable, by slot
     let bigtable_slots = if !config.force_reupload {
         let mut bigtable_slots = vec![];
-        let first_blockstore_slot = *blockstore_slots.first().unwrap();
-        let last_blockstore_slot = *blockstore_slots.last().unwrap();
         info!(
             "Loading list of bigtable blocks between slots {} and {}...",
             first_blockstore_slot, last_blockstore_slot
         );
 
-        let mut start_slot = *blockstore_slots.first().unwrap();
-        while start_slot <= last_blockstore_slot {
+        let mut start_slot = *first_blockstore_slot;
+        while start_slot <= *last_blockstore_slot {
             let mut next_bigtable_slots = loop {
                 match bigtable.get_confirmed_blocks(start_slot, 1000).await {
                     Ok(slots) => break slots,
@@ -107,7 +107,7 @@ pub async fn upload_confirmed_blocks(
         }
         bigtable_slots
             .into_iter()
-            .filter(|slot| *slot <= last_blockstore_slot)
+            .filter(|slot| slot <= last_blockstore_slot)
             .collect::<Vec<_>>()
     } else {
         Vec::new()
