@@ -10,6 +10,7 @@ export type LogMessage = {
 };
 
 export type InstructionLogs = {
+  invokedProgram: string | null;
   logs: LogMessage[];
   failed: boolean;
 };
@@ -50,6 +51,7 @@ export function prettyProgramLogs(
 
         if (depth === 0) {
           prettyLogs.push({
+            invokedProgram: programAddress,
             logs: [],
             failed: false,
           });
@@ -83,12 +85,13 @@ export function prettyProgramLogs(
       } else {
         if (depth === 0) {
           prettyLogs.push({
+            invokedProgram: null,
             logs: [],
             failed: false,
           });
           depth++;
         }
-        // system transactions don't start with "Program log:"
+        // native program logs don't start with "Program log:"
         prettyLogs[prettyLogs.length - 1].logs.push({
           prefix: prefixBuilder(depth),
           text: log,
@@ -102,6 +105,7 @@ export function prettyProgramLogs(
   // For example BpfUpgradableLoader fails without returning any logs for Upgrade instruction with buffer that doesn't exist
   if (prettyError && prettyLogs.length === 0) {
     prettyLogs.push({
+      invokedProgram: null,
       logs: [],
       failed: true,
     });
