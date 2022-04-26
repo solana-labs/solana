@@ -131,11 +131,10 @@ impl BankForks {
             banks.insert(bank.slot(), bank.clone());
             let parents = bank.parents();
             for parent in parents {
-                if banks.contains_key(&parent.slot()) {
+                if banks.insert(parent.slot(), parent.clone()).is_some() {
                     // All ancestors have already been inserted by another fork
                     break;
                 }
-                banks.insert(parent.slot(), parent.clone());
             }
         }
         let mut descendants = HashMap::<_, HashSet<_>>::new();
