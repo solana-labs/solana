@@ -217,7 +217,8 @@ pub fn parse_token(
                 AuthorityType::MintTokens
                 | AuthorityType::FreezeAccount
                 | AuthorityType::TransferFeeConfig
-                | AuthorityType::WithheldWithdraw => "mint",
+                | AuthorityType::WithheldWithdraw
+                | AuthorityType::CloseMint => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -521,6 +522,7 @@ pub enum UiAuthorityType {
     CloseAccount,
     TransferFeeConfig,
     WithheldWithdraw,
+    CloseMint,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -532,6 +534,7 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::CloseAccount => UiAuthorityType::CloseAccount,
             AuthorityType::TransferFeeConfig => UiAuthorityType::TransferFeeConfig,
             AuthorityType::WithheldWithdraw => UiAuthorityType::WithheldWithdraw,
+            AuthorityType::CloseMint => UiAuthorityType::CloseMint,
         }
     }
 }
