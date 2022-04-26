@@ -5023,10 +5023,6 @@ impl Bank {
     /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
     /// return # accounts loaded
     fn collect_rent_in_partition(&self, partition: Partition, just_rewrites: bool) -> usize {
-        if just_rewrites {
-            // this is not implemented yet. In the meantime, this call can have no side effects.
-            return 0;
-        }
         let subrange = Self::pubkey_range_from_partition(partition);
 
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
@@ -5045,7 +5041,7 @@ impl Bank {
         let mut total_collected = CollectedInfo::default();
         let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
-        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
+        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         for (pubkey, mut account, loaded_slot) in accounts {
             let old_rent_epoch = account.rent_epoch();
             let collected = self.rent_collector.collect_from_existing_account(
@@ -5053,7 +5049,6 @@ impl Bank {
                 &mut account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
-            total_collected += collected;
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
@@ -5075,6 +5070,7 @@ impl Bank {
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 rewrites_skipped.push((pubkey, hash));
             } else if !just_rewrites {
+                total_collected += collected;
                 self.store_account(&pubkey, &account);
             }
             rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
@@ -9097,6 +9093,18 @@ pub(crate) mod tests {
             vec![genesis_slot]
         );
 
+        assert_eq!(bank.collected_rent.load(Relaxed), 0);
+        // this should be a no-op because of just_rewrites=true
+        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
+        bank.collect_rent_in_partition((0, 0, 1), true);
+        {
+            let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
+            assert_eq!(rewrites_skipped.len(), 90);
+            assert!(rewrites_skipped.contains_key(&rent_exempt_pubkey));
+            assert!(!rewrites_skipped.contains_key(&rent_due_pubkey));
+        }
+
+        assert_eq!(bank.collected_rent.load(Relaxed), 0);
         bank.collect_rent_in_partition((0, 0, 1), false); // all range
 
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
