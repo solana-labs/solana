@@ -47,3 +47,11 @@ export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
     rm -rf target/release
   fi
 )
+
+
+while IFS= read -r env_var; do
+  key="${env_var%=*}"
+  if [[ "$key" == "OVERRIDE_BUILDKITE_"* ]]; then
+    export "${key#OVERRIDE_}"="${env_var#*=}"
+  fi
+done < <(env)
