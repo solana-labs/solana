@@ -24,7 +24,6 @@ import {
 import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
-import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
@@ -65,15 +64,28 @@ const BufferFromRawAccountData = coerce(
  */
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
+/**
+ * HACK.
+ * Copied from rpc-websockets/dist/lib/client.
+ * Otherwise, `yarn build` fails with:
+ * https://gist.github.com/steveluscher/c057eca81d479ef705cdb53162f9971d
+ */
+interface IWSRequestParams {
+  [x: string]: any;
+  [x: number]: any;
+}
+
 type ClientSubscriptionId = number;
 /** @internal */ type ServerSubscriptionId = number;
 /** @internal */ type SubscriptionConfigHash = string;
 /** @internal */ type SubscriptionDisposeFn = () => Promise<void>;
 /**
  * @internal
- * Every subscription has a list of callers interested in publishes.
+ * Every subscription contains the args used to open the subscription with
+ * the server, and a list of callers interested in notifications.
  */
 type BaseSubscription<TMethod = SubscriptionConfig['method']> = Readonly<{
+  args: IWSRequestParams;
   callbacks: Set<Extract<SubscriptionConfig, {method: TMethod}>['callback']>;
 }>;
 /**
@@ -114,62 +126,43 @@ type StatefulSubscription = Readonly<
     }
 >;
 /**
- * Different RPC subscription methods accept different params.
+ * A type that encapsulates a subscription's RPC method
+ * names and notification (callback) signature.
  */
 type SubscriptionConfig = Readonly<
   | {
       callback: AccountChangeCallback;
       method: 'accountSubscribe';
-      params: Readonly<{
-        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
-        publicKey: string; // PublicKey of the account as a base 58 string
-      }>;
       unsubscribeMethod: 'accountUnsubscribe';
     }
   | {
       callback: LogsCallback;
       method: 'logsSubscribe';
-      params: Readonly<{
-        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
-        filter: LogsFilter;
-      }>;
       unsubscribeMethod: 'logsUnsubscribe';
     }
   | {
       callback: ProgramAccountChangeCallback;
       method: 'programSubscribe';
-      params: Readonly<{
-        commitment?: Commitment; // Must default to `Connection._commitment` or 'finalized' otherwise
-        filters?: GetProgramAccountsFilter[];
-        programId: string; // PublicKey of the program as a base 58 string
-      }>;
       unsubscribeMethod: 'programUnsubscribe';
     }
   | {
       callback: RootChangeCallback;
       method: 'rootSubscribe';
-      params: undefined;
       unsubscribeMethod: 'rootUnsubscribe';
     }
   | {
       callback: SignatureSubscriptionCallback;
       method: 'signatureSubscribe';
-      params: Readonly<{
-        signature: TransactionSignature; // TransactionSignature as a base 58 string
-        options?: SignatureSubscriptionOptions;
-      }>;
       unsubscribeMethod: 'signatureUnsubscribe';
     }
   | {
       callback: SlotChangeCallback;
       method: 'slotSubscribe';
-      params: undefined;
       unsubscribeMethod: 'slotUnsubscribe';
     }
   | {
       callback: SlotUpdateCallback;
       method: 'slotsUpdatesSubscribe';
-      params: undefined;
       unsubscribeMethod: 'slotsUpdatesUnsubscribe';
     }
 >;
@@ -184,7 +177,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
  * @internal
  * This type represents a single subscribable 'topic.' It's made up of:
  *
- * - The configuration used to open the subscription with the server,
+ * - The args used to open the subscription with the server,
  * - The state of the subscription, in terms of its connectedness, and
  * - The set of callbacks to call when the server publishes notifications
  *
@@ -194,16 +187,6 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
 type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
-
-/**
- * @internal
- */
-function hashSubscriptionConfig({
-  method,
-  params,
-}: SubscriptionConfig): SubscriptionConfigHash {
-  return fastStableStringify([method, params], true /* isArrayProp */);
-}
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
@@ -4283,47 +4266,7 @@ export class Connection {
               return;
             }
             await (async () => {
-              const {method, params} = subscription;
-              let args: IWSRequestParams;
-              switch (method) {
-                case 'accountSubscribe':
-                  args = this._buildArgs(
-                    [params.publicKey],
-                    params.commitment,
-                    'base64',
-                  );
-                  break;
-                case 'logsSubscribe':
-                  args = this._buildArgs(
-                    [
-                      typeof params.filter === 'object'
-                        ? {mentions: [params.filter.toString()]}
-                        : params.filter,
-                    ],
-                    params.commitment,
-                  );
-                  break;
-                case 'programSubscribe':
-                  args = this._buildArgs(
-                    [params.programId],
-                    params.commitment,
-                    'base64',
-                    params.filters
-                      ? {
-                          filters: params.filters,
-                        }
-                      : undefined,
-                  );
-                  break;
-                case 'signatureSubscribe':
-                  args = [params.signature, params.options].filter(Boolean);
-                  break;
-                case 'rootSubscribe':
-                case 'slotSubscribe':
-                case 'slotsUpdatesSubscribe':
-                  args = [];
-                  break;
-              }
+              const {args, method} = subscription;
               try {
                 this._subscriptionsByHash[hash] = {
                   ...subscription,
@@ -4458,13 +4401,18 @@ export class Connection {
    */
   _makeSubscription(
     subscriptionConfig: SubscriptionConfig,
+    args: IWSRequestParams,
   ): ClientSubscriptionId {
     const clientSubscriptionId = this._nextClientSubscriptionId++;
-    const hash = hashSubscriptionConfig(subscriptionConfig);
+    const hash = fastStableStringify(
+      [subscriptionConfig.method, args],
+      true /* isArrayProp */,
+    );
     const existingSubscription = this._subscriptionsByHash[hash];
     if (existingSubscription === undefined) {
       this._subscriptionsByHash[hash] = {
         ...subscriptionConfig,
+        args,
         callbacks: new Set([subscriptionConfig.callback]),
         state: 'pending',
       };
@@ -4507,15 +4455,19 @@ export class Connection {
     callback: AccountChangeCallback,
     commitment?: Commitment,
   ): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'accountSubscribe',
-      params: {
-        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
-        publicKey: publicKey.toBase58(),
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+      'base64',
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'accountSubscribe',
+        unsubscribeMethod: 'accountUnsubscribe',
       },
-      unsubscribeMethod: 'accountUnsubscribe',
-    });
+      args,
+    );
   }
 
   /**
@@ -4565,16 +4517,20 @@ export class Connection {
     commitment?: Commitment,
     filters?: GetProgramAccountsFilter[],
   ): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'programSubscribe',
-      params: {
-        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
-        filters,
-        programId: programId.toBase58(),
+    const args = this._buildArgs(
+      [programId.toBase58()],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+      'base64' /* encoding */,
+      filters ? {filters: filters} : undefined /* extra */,
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'programSubscribe',
+        unsubscribeMethod: 'programUnsubscribe',
       },
-      unsubscribeMethod: 'programUnsubscribe',
-    });
+      args,
+    );
   }
 
   /**
@@ -4599,15 +4555,18 @@ export class Connection {
     callback: LogsCallback,
     commitment?: Commitment,
   ): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'logsSubscribe',
-      params: {
-        commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
-        filter,
+    const args = this._buildArgs(
+      [typeof filter === 'object' ? {mentions: [filter.toString()]} : filter],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.,
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'logsSubscribe',
+        unsubscribeMethod: 'logsUnsubscribe',
       },
-      unsubscribeMethod: 'logsUnsubscribe',
-    });
+      args,
+    );
   }
 
   /**
@@ -4647,12 +4606,14 @@ export class Connection {
    * @return subscription id
    */
   onSlotChange(callback: SlotChangeCallback): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'slotSubscribe',
-      params: undefined,
-      unsubscribeMethod: 'slotUnsubscribe',
-    });
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'slotSubscribe',
+        unsubscribeMethod: 'slotUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**
@@ -4688,12 +4649,14 @@ export class Connection {
    * @return subscription id
    */
   onSlotUpdate(callback: SlotUpdateCallback): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'slotsUpdatesSubscribe',
-      params: undefined,
-      unsubscribeMethod: 'slotsUpdatesUnsubscribe',
-    });
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'slotsUpdatesSubscribe',
+        unsubscribeMethod: 'slotsUpdatesUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**
@@ -4821,29 +4784,30 @@ export class Connection {
     callback: SignatureResultCallback,
     commitment?: Commitment,
   ): ClientSubscriptionId {
-    const clientSubscriptionId = this._makeSubscription({
-      callback: (notification, context) => {
-        if (notification.type === 'status') {
-          callback(notification.result, context);
-          // Signatures subscriptions are auto-removed by the RPC service
-          // so no need to explicitly send an unsubscribe message.
-          try {
-            this.removeSignatureListener(clientSubscriptionId);
-            // eslint-disable-next-line no-empty
-          } catch {
-            // Already removed.
+    const args = this._buildArgs(
+      [signature],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+    );
+    const clientSubscriptionId = this._makeSubscription(
+      {
+        callback: (notification, context) => {
+          if (notification.type === 'status') {
+            callback(notification.result, context);
+            // Signatures subscriptions are auto-removed by the RPC service
+            // so no need to explicitly send an unsubscribe message.
+            try {
+              this.removeSignatureListener(clientSubscriptionId);
+              // eslint-disable-next-line no-empty
+            } catch {
+              // Already removed.
+            }
           }
-        }
-      },
-      method: 'signatureSubscribe',
-      params: {
-        options: {
-          commitment: commitment || this._commitment || 'finalized', // Apply connection/server default.
         },
-        signature,
+        method: 'signatureSubscribe',
+        unsubscribeMethod: 'signatureUnsubscribe',
       },
-      unsubscribeMethod: 'signatureUnsubscribe',
-    });
+      args,
+    );
     return clientSubscriptionId;
   }
 
@@ -4862,29 +4826,35 @@ export class Connection {
     callback: SignatureSubscriptionCallback,
     options?: SignatureSubscriptionOptions,
   ): ClientSubscriptionId {
-    const clientSubscriptionId = this._makeSubscription({
-      callback: (notification, context) => {
-        callback(notification, context);
-        // Signatures subscriptions are auto-removed by the RPC service
-        // so no need to explicitly send an unsubscribe message.
-        try {
-          this.removeSignatureListener(clientSubscriptionId);
-          // eslint-disable-next-line no-empty
-        } catch {
-          // Already removed.
-        }
-      },
-      method: 'signatureSubscribe',
-      params: {
-        options: {
-          ...options,
-          commitment:
-            (options && options.commitment) || this._commitment || 'finalized', // Apply connection/server default.
+    const {commitment, ...extra} = {
+      ...options,
+      commitment:
+        (options && options.commitment) || this._commitment || 'finalized', // Apply connection/server default.
+    };
+    const args = this._buildArgs(
+      [signature],
+      commitment,
+      undefined /* encoding */,
+      extra,
+    );
+    const clientSubscriptionId = this._makeSubscription(
+      {
+        callback: (notification, context) => {
+          callback(notification, context);
+          // Signatures subscriptions are auto-removed by the RPC service
+          // so no need to explicitly send an unsubscribe message.
+          try {
+            this.removeSignatureListener(clientSubscriptionId);
+            // eslint-disable-next-line no-empty
+          } catch {
+            // Already removed.
+          }
         },
-        signature,
+        method: 'signatureSubscribe',
+        unsubscribeMethod: 'signatureUnsubscribe',
       },
-      unsubscribeMethod: 'signatureUnsubscribe',
-    });
+      args,
+    );
     return clientSubscriptionId;
   }
 
@@ -4917,12 +4887,14 @@ export class Connection {
    * @return subscription id
    */
   onRootChange(callback: RootChangeCallback): ClientSubscriptionId {
-    return this._makeSubscription({
-      callback,
-      method: 'rootSubscribe',
-      params: undefined,
-      unsubscribeMethod: 'rootUnsubscribe',
-    });
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'rootSubscribe',
+        unsubscribeMethod: 'rootUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**

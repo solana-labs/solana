@@ -5,6 +5,7 @@ import sinonChai from 'sinon-chai';
 
 import {
   AccountChangeCallback,
+  Commitment,
   Connection,
   LogsCallback,
   ProgramAccountChangeCallback,
@@ -43,26 +44,19 @@ function stubRpcWebSocket(
 describe('Subscriptions', () => {
   let connection: Connection;
   let stubbedSocket: SinonStubbedInstance<Client>;
-  beforeEach(() => {
-    connection = new Connection(url);
-    stubbedSocket = stubRpcWebSocket(connection);
-  });
-  afterEach(() => {
-    stubbedSocket.close();
-  });
-  Object.entries({
+  const subscriptionMethodsConfig = {
     accountSubscribe: {
-      expectedAlternateParams: [
+      getExpectedAlternateParams: () => [
         'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK',
         {
-          commitment: 'finalized',
+          commitment: connection.commitment || 'finalized',
           encoding: 'base64',
         },
       ],
-      expectedParams: [
+      getExpectedParams: () => [
         PublicKey.default.toBase58(),
         {
-          commitment: 'finalized',
+          commitment: connection.commitment || 'finalized',
           encoding: 'base64',
         },
       ],
@@ -86,7 +80,7 @@ describe('Subscriptions', () => {
         return connection.onAccountChange(
           PublicKey.default,
           callback,
-          'finalized',
+          connection.commitment || 'finalized',
         );
       },
       publishNotificationForServerSubscriptionId(
@@ -114,13 +108,13 @@ describe('Subscriptions', () => {
       },
     },
     logsSubscribe: {
-      expectedAlternateParams: [
+      getExpectedAlternateParams: () => [
         {mentions: ['C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK']},
-        {commitment: 'finalized'},
+        {commitment: connection.commitment || 'finalized'},
       ],
-      expectedParams: [
+      getExpectedParams: () => [
         {mentions: [PublicKey.default.toBase58()]},
-        {commitment: 'finalized'},
+        {commitment: connection.commitment || 'finalized'},
       ],
       setupAlternateListener(callback: LogsCallback): number {
         return connection.onLogs(
@@ -137,7 +131,11 @@ describe('Subscriptions', () => {
       setupListenerWithDefaultableParamsSetToTheirDefaults(
         callback: LogsCallback,
       ): number {
-        return connection.onLogs(PublicKey.default, callback, 'finalized');
+        return connection.onLogs(
+          PublicKey.default,
+          callback,
+          connection.commitment || 'finalized',
+        );
       },
       publishNotificationForServerSubscriptionId(
         socket: Client,
@@ -165,13 +163,13 @@ describe('Subscriptions', () => {
       },
     },
     programSubscribe: {
-      expectedAlternateParams: [
+      getExpectedAlternateParams: () => [
         'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK',
-        {commitment: 'finalized', encoding: 'base64'},
+        {commitment: connection.commitment || 'finalized', encoding: 'base64'},
       ],
-      expectedParams: [
+      getExpectedParams: () => [
         PublicKey.default.toBase58(),
-        {commitment: 'finalized', encoding: 'base64'},
+        {commitment: connection.commitment || 'finalized', encoding: 'base64'},
       ],
       setupAlternateListener(callback: ProgramAccountChangeCallback): number {
         return connection.onProgramAccountChange(
@@ -193,7 +191,7 @@ describe('Subscriptions', () => {
         return connection.onProgramAccountChange(
           PublicKey.default,
           callback,
-          'finalized',
+          connection.commitment || 'finalized',
         );
       },
       publishNotificationForServerSubscriptionId(
@@ -226,8 +224,8 @@ describe('Subscriptions', () => {
       },
     },
     rootSubscribe: {
-      expectedAlternateParams: [],
-      expectedParams: [],
+      getExpectedAlternateParams: () => [],
+      getExpectedParams: () => [],
       setupAlternateListener: undefined,
       setupListener(callback: RootChangeCallback): number {
         return connection.onRootChange(callback);
@@ -251,11 +249,14 @@ describe('Subscriptions', () => {
     },
 
     signatureSubscribe: {
-      expectedAlternateParams: [
+      getExpectedAlternateParams: () => [
         'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK',
-        {commitment: 'finalized'},
+        {commitment: connection.commitment || 'finalized'},
       ],
-      expectedParams: [PublicKey.default.toBase58(), {commitment: 'finalized'}],
+      getExpectedParams: () => [
+        PublicKey.default.toBase58(),
+        {commitment: connection.commitment || 'finalized'},
+      ],
       setupAlternateListener(callback: SignatureResultCallback): number {
         return connection.onSignature(
           new PublicKey(
@@ -278,7 +279,7 @@ describe('Subscriptions', () => {
         return connection.onSignature(
           PublicKey.default.toBase58(),
           callback,
-          'finalized',
+          connection.commitment || 'finalized',
         );
       },
       publishNotificationForServerSubscriptionId(
@@ -300,8 +301,8 @@ describe('Subscriptions', () => {
       },
     },
     slotSubscribe: {
-      expectedAlternateParams: [],
-      expectedParams: [],
+      getExpectedAlternateParams: () => [],
+      getExpectedParams: () => [],
       setupAlternateListener: undefined,
       setupListener(callback: SlotChangeCallback): number {
         return connection.onSlotChange(callback);
@@ -324,8 +325,8 @@ describe('Subscriptions', () => {
       },
     },
     slotsUpdatesSubscribe: {
-      expectedAlternateParams: [],
-      expectedParams: [],
+      getExpectedAlternateParams: () => [],
+      getExpectedParams: () => [],
       setupAlternateListener: undefined,
       setupListener(callback: SlotUpdateCallback): number {
         return connection.onSlotUpdate(callback);
@@ -351,17 +352,23 @@ describe('Subscriptions', () => {
         return connection.removeSlotUpdateListener(...args);
       },
     },
-  }).forEach(
+  };
+  beforeEach(() => {
+    connection = new Connection(url);
+    stubbedSocket = stubRpcWebSocket(connection);
+  });
+  afterEach(() => {
+    stubbedSocket.close();
+  });
+  Object.entries(subscriptionMethodsConfig).forEach(
     ([
       subscriptionMethod,
       {
-        expectedAlternateParams,
-        expectedParams,
+        getExpectedAlternateParams,
+        getExpectedParams,
         publishNotificationForServerSubscriptionId,
         setupAlternateListener,
         setupListener,
-        setupListenerWithDefaultableParamsSetToTheirDefaults,
-        setupListenerWithDefaultsOmitted,
         teardownListener,
       },
     ]) => {
@@ -385,7 +392,7 @@ describe('Subscriptions', () => {
           const serverSubscriptionId = 0;
           beforeEach(() => {
             stubbedSocket.call
-              .withArgs(subscriptionMethod, expectedParams)
+              .withArgs(subscriptionMethod, getExpectedParams())
               .callsFake(
                 () =>
                   // Defer the acknowledgement.
@@ -400,7 +407,7 @@ describe('Subscriptions', () => {
           it('results in a subscription request being made to the RPC', () => {
             expect(stubbedSocket.call).to.have.been.calledOnceWithExactly(
               subscriptionMethod,
-              expectedParams,
+              getExpectedParams(),
             );
           });
           describe('then unsubscribing that listener before the subscription has been acknowledged by the server', () => {
@@ -483,7 +490,7 @@ describe('Subscriptions', () => {
                       stubbedSocket.call,
                     ).to.have.been.calledOnceWithExactly(
                       subscriptionMethod,
-                      expectedParams,
+                      getExpectedParams(),
                     );
                   });
                 });
@@ -566,7 +573,7 @@ describe('Subscriptions', () => {
                 const secondServerSubscriptionId = 1;
                 beforeEach(() => {
                   stubbedSocket.call
-                    .withArgs(subscriptionMethod, expectedAlternateParams)
+                    .withArgs(subscriptionMethod, getExpectedAlternateParams())
                     .resolves(secondServerSubscriptionId);
                   alternateListenerCallback = spy();
                   setupAlternateListener(alternateListenerCallback);
@@ -574,7 +581,7 @@ describe('Subscriptions', () => {
                 it('results in a second subscription request being made to the RPC', () => {
                   expect(stubbedSocket.call).to.have.been.calledWithExactly(
                     subscriptionMethod,
-                    expectedAlternateParams,
+                    getExpectedAlternateParams(),
                   );
                 });
                 describe('when a notification for the first subscription is published', () => {
@@ -616,7 +623,7 @@ describe('Subscriptions', () => {
             it('results in a retry subscription request being made to the RPC', () => {
               expect(stubbedSocket.call).to.have.been.calledOnceWithExactly(
                 subscriptionMethod,
-                expectedParams,
+                getExpectedParams(),
               );
             });
           });
@@ -646,38 +653,13 @@ describe('Subscriptions', () => {
               it('results in a new subscription request being made to the RPC', () => {
                 expect(stubbedSocket.call).to.have.been.calledOnceWithExactly(
                   subscriptionMethod,
-                  expectedParams,
+                  getExpectedParams(),
                 );
               });
             });
           });
         });
       });
-      if (
-        setupListenerWithDefaultsOmitted &&
-        setupListenerWithDefaultableParamsSetToTheirDefaults
-      ) {
-        describe('making a subscription with defaulted params omitted', () => {
-          beforeEach(() => {
-            setupListenerWithDefaultsOmitted(spy());
-          });
-          it('results in a subscription request being made to the RPC', () => {
-            expect(stubbedSocket.call).to.have.been.calledWithExactly(
-              subscriptionMethod,
-              expectedParams,
-            );
-          });
-          describe('then making the same subscription with the defaultable params set to their defaults', () => {
-            beforeEach(() => {
-              stubbedSocket.call.resetHistory();
-              setupListenerWithDefaultableParamsSetToTheirDefaults(spy());
-            });
-            it('does not result in a subscription request being made to the RPC', () => {
-              expect(stubbedSocket.call).not.to.have.been.called;
-            });
-          });
-        });
-      }
     },
   );
   /**
@@ -695,7 +677,10 @@ describe('Subscriptions', () => {
     let clientSubscriptionId: number;
     const serverSubscriptionId = 0;
     const testSignature = 'C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK';
-    const expectedParams = [testSignature, {commitment: 'finalized'}];
+    const getExpectedParams = () => [
+      testSignature,
+      {commitment: connection.commitment || 'finalized'},
+    ];
     // This type of notification *is* indicative of auto-disposal.
     const FINAL_NOTIFICATION_RESULT = {
       context: {slot: 11},
@@ -708,7 +693,7 @@ describe('Subscriptions', () => {
     };
     beforeEach(() => {
       stubbedSocket.call
-        .withArgs('signatureSubscribe', expectedParams)
+        .withArgs('signatureSubscribe', getExpectedParams())
         .resolves(serverSubscriptionId);
       clientSubscriptionId = connection.onSignature(testSignature, spy());
     });
@@ -770,6 +755,60 @@ describe('Subscriptions', () => {
           [serverSubscriptionId],
         );
       });
+    });
+  });
+  [
+    undefined, // Let `Connection` use the default commitment
+    'processed' as Commitment, // Override `Connection's` commitment
+  ].forEach((maybeOverrideCommitment: Commitment | undefined) => {
+    describe(`given a Connection with ${
+      maybeOverrideCommitment
+        ? `its commitment overriden to \`${maybeOverrideCommitment}\``
+        : 'an unspecified commitment override'
+    }`, () => {
+      Object.entries(subscriptionMethodsConfig).forEach(
+        ([
+          subscriptionMethod,
+          {
+            getExpectedParams,
+            setupListenerWithDefaultableParamsSetToTheirDefaults,
+            setupListenerWithDefaultsOmitted,
+          },
+        ]) => {
+          beforeEach(() => {
+            connection = new Connection(url, maybeOverrideCommitment);
+            stubbedSocket = stubRpcWebSocket(connection);
+          });
+          afterEach(() => {
+            stubbedSocket.close();
+          });
+          if (
+            setupListenerWithDefaultsOmitted &&
+            setupListenerWithDefaultableParamsSetToTheirDefaults
+          ) {
+            describe('making a subscription with defaulted params omitted', () => {
+              beforeEach(() => {
+                setupListenerWithDefaultsOmitted(spy());
+              });
+              it('results in a subscription request being made to the RPC', () => {
+                expect(stubbedSocket.call).to.have.been.calledWithExactly(
+                  subscriptionMethod,
+                  getExpectedParams(),
+                );
+              });
+              describe('then making the same subscription with the defaultable params set to their defaults', () => {
+                beforeEach(() => {
+                  stubbedSocket.call.resetHistory();
+                  setupListenerWithDefaultableParamsSetToTheirDefaults(spy());
+                });
+                it('does not result in a subscription request being made to the RPC', () => {
+                  expect(stubbedSocket.call).not.to.have.been.called;
+                });
+              });
+            });
+          }
+        },
+      );
     });
   });
 });
