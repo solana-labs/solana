@@ -2,6 +2,7 @@ export * from './account';
 export * from './blockhash';
 export * from './bpf-loader-deprecated';
 export * from './bpf-loader';
+export * from './compute-budget';
 export * from './connection';
 export * from './epoch-schedule';
 export * from './ed25519-program';
