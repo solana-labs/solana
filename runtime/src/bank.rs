@@ -5672,6 +5672,25 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
+    /// Process a Transaction and store program log data. This is used for unit tests, and simply
+    /// replicates the vector Bank::process_transactions method with `enable_cpi_recording: true`
+    pub fn process_transaction_with_logs(&self, tx: &Transaction) -> Result<()> {
+        let txs = vec![VersionedTransaction::from(tx.clone())];
+        let batch = self.prepare_entry_batch(txs)?;
+        let _results = self.load_execute_and_commit_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            false,
+            false,
+            true,
+            false,
+            &mut ExecuteTimings::default(),
+        );
+        tx.signatures
+            .get(0)
+            .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
+    }
+
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
     ///
     /// # Panics
