@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - master
-    tags:
-      - '*'
 
 jobs:
   build:
@@ -15,7 +13,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: "lts/*"
-          cache: 'npm'
+          cache: "npm"
       - name: build
         run: |
           sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
@@ -41,7 +39,6 @@ jobs:
           path: deploy/
 
   gh-page:
-    if: github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -55,7 +52,6 @@ jobs:
           publish_dir: ./docs
 
   semantic-release:
-    if: github.ref == 'refs/heads/master'
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +59,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: "lts/*"
-          cache: 'npm'
+          cache: "npm"
       - run: |
           npm install -g npm@7
           npm install
@@ -73,19 +69,23 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   gh-release:
-    if: startsWith(github.ref, 'refs/tags')
-    needs: build
+    needs: [build, semantic-release]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
-          name: build
-      - name: Compress
-        run: |
-           tar zcf solanaWeb3Api.tgz docs
-      - name: Release
-        uses: softprops/action-gh-release@v1
+          fetch-depth: 0
+      - name: Get Tag
+        id: get_tag
+        run: echo "::set-output name=tag::$(git tag --points-at HEAD)"
+      - name: Create Release
+        if: steps.get_tag.outputs.tag
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: |
-            solanaWeb3.min.js
-            solanaWeb3Api.tgz
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          release_name: ${{ steps.get_tag.outputs.tag }}
+          draft: false
+          prerelease: false
