@@ -2637,7 +2637,7 @@ impl Bank {
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
-            self.stake_program_advance_activating_credits_observed(),
+            self.credits_auto_rewind(),
             thread_pool,
             metrics,
             update_rewards_from_cached_accounts,
@@ -2971,7 +2971,7 @@ impl Bank {
         rewarded_epoch: Epoch,
         rewards: u64,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        fix_activating_credits_observed: bool,
+        credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
@@ -3087,7 +3087,7 @@ impl Bank {
                         &point_value,
                         Some(&stake_history),
                         reward_calc_tracer.as_ref(),
-                        fix_activating_credits_observed,
+                        credits_auto_rewind,
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
@@ -3325,6 +3325,11 @@ impl Bank {
             *hash = self.hash_internal_state();
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
+    }
+
+    // dangerous; don't use this; this is only needed for ledger-tool's special command
+    pub fn unfreeze_for_ledger_tool(&self) {
+        self.freeze_started.store(false, Relaxed);
     }
 
     pub fn epoch_schedule(&self) -> &EpochSchedule {
@@ -6743,9 +6748,9 @@ impl Bank {
             .is_active(&feature_set::versioned_tx_message_enabled::id())
     }
 
-    pub fn stake_program_advance_activating_credits_observed(&self) -> bool {
+    pub fn credits_auto_rewind(&self) -> bool {
         self.feature_set
-            .is_active(&feature_set::stake_program_advance_activating_credits_observed::id())
+            .is_active(&feature_set::credits_auto_rewind::id())
     }
 
     pub fn leave_nonce_on_success(&self) -> bool {

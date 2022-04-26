@@ -52,6 +52,8 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         clock::{Epoch, Slot},
+        feature::{self, Feature},
+        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         inflation::Inflation,
@@ -1538,6 +1540,13 @@ fn main() {
                     .help("Overwrite inflation when warping"),
             )
             .arg(
+                Arg::with_name("enable_credits_auto_rewind")
+                    .required(false)
+                    .long("enable-credits-auto-rewind")
+                    .takes_value(false)
+                    .help("Enable credits auto rewind"),
+            )
+            .arg(
                 Arg::with_name("recalculate_capitalization")
                     .required(false)
                     .long("recalculate-capitalization")
@@ -2733,6 +2742,66 @@ fn main() {
                             base_bank
                                 .lazy_rent_collection
                                 .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                            let feature_account_balance = std::cmp::max(
+                                genesis_config.rent.minimum_balance(Feature::size_of()),
+                                1,
+                            );
+                            if arg_matches.is_present("enable_credits_auto_rewind") {
+                                base_bank.unfreeze_for_ledger_tool();
+                                let mut force_enabled_count = 0;
+                                if base_bank
+                                    .get_account(&feature_set::credits_auto_rewind::id())
+                                    .is_none()
+                                {
+                                    base_bank.store_account(
+                                        &feature_set::credits_auto_rewind::id(),
+                                        &feature::create_account(
+                                            &Feature { activated_at: None },
+                                            feature_account_balance,
+                                        ),
+                                    );
+                                    force_enabled_count += 1;
+                                }
+                                if force_enabled_count == 0 {
+                                    warn!(
+                                        "Already credits_auto_rewind is activated (or scheduled)"
+                                    );
+                                }
+                                let mut store_failed_count = 0;
+                                if force_enabled_count >= 1 {
+                                    if base_bank
+                                        .get_account(&feature_set::deprecate_rewards_sysvar::id())
+                                        .is_some()
+                                    {
+                                        // steal some lamports from the pretty old feature not to affect
+                                        // capitalizaion, which doesn't affect inflation behavior!
+                                        base_bank.store_account(
+                                            &feature_set::deprecate_rewards_sysvar::id(),
+                                            &AccountSharedData::default(),
+                                        );
+                                        force_enabled_count -= 1;
+                                    } else {
+                                        store_failed_count += 1;
+                                    }
+                                }
+                                assert_eq!(force_enabled_count, store_failed_count);
+                                if store_failed_count >= 1 {
+                                    // we have no choice; maybe locally created blank cluster with
+                                    // not-Development cluster type.
+                                    let old_cap = base_bank.set_capitalization();
+                                    let new_cap = base_bank.capitalization();
+                                    warn!(
+                                        "Skewing capitalization a bit to enable credits_auto_rewind as \
+                                         requested: increasing {} from {} to {}",
+                                        feature_account_balance, old_cap, new_cap,
+                                    );
+                                    assert_eq!(
+                                        old_cap + feature_account_balance * store_failed_count,
+                                        new_cap
+                                    );
+                                }
+                            }
 
                             #[derive(Default, Debug)]
                             struct PointDetail {
