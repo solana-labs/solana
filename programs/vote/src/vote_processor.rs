@@ -3,7 +3,6 @@
 use {
     crate::{id, vote_instruction::VoteInstruction, vote_state},
     log::*,
-    solana_metrics::inc_new_counter_info,
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
@@ -70,6 +69,7 @@ pub fn process_instruction(
             vote_state::update_commission(me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+<<<<<<< HEAD
             inc_new_counter_info!("vote-native", 1);
             let slot_hashes = get_sysvar_with_account_check::slot_hashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
@@ -79,6 +79,12 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
+=======
+            let slot_hashes =
+                get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
+>>>>>>> 1ea7e7c88 (remove vote instruction counters)
             vote_state::process_vote(
                 me,
                 &slot_hashes,
@@ -94,7 +100,6 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
             {
-                inc_new_counter_info!("vote-state-native", 1);
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
