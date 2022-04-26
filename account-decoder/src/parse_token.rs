@@ -4,9 +4,7 @@ use {
         StringAmount, StringDecimals,
     },
     solana_sdk::pubkey::Pubkey,
-    spl_token_2022::{
-        extension::StateWithExtensions,
-        generic_token_account::GenericTokenAccount,
+    spl_token::{
         solana_program::{
             program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey,
         },
@@ -62,56 +60,58 @@ pub fn parse_token(
     data: &[u8],
     mint_decimals: Option<u8>,
 ) -> Result<TokenAccountType, ParseAccountError> {
-    if let Ok(account) = StateWithExtensions::<Account>::unpack(data) {
+    if data.len() == Account::get_packed_len() {
+        let account = Account::unpack(data)
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         let decimals = mint_decimals.ok_or_else(|| {
             ParseAccountError::AdditionalDataMissing(
                 "no mint_decimals provided to parse spl-token account".to_string(),
             )
         })?;
-        return Ok(TokenAccountType::Account(UiTokenAccount {
-            mint: account.base.mint.to_string(),
-            owner: account.base.owner.to_string(),
-            token_amount: token_amount_to_ui_amount(account.base.amount, decimals),
-            delegate: match account.base.delegate {
+        Ok(TokenAccountType::Account(UiTokenAccount {
+            mint: account.mint.to_string(),
+            owner: account.owner.to_string(),
+            token_amount: token_amount_to_ui_amount(account.amount, decimals),
+            delegate: match account.delegate {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
-            state: account.base.state.into(),
-            is_native: account.base.is_native(),
-            rent_exempt_reserve: match account.base.is_native {
+            state: account.state.into(),
+            is_native: account.is_native(),
+            rent_exempt_reserve: match account.is_native {
                 COption::Some(reserve) => Some(token_amount_to_ui_amount(reserve, decimals)),
                 COption::None => None,
             },
-            delegated_amount: if account.base.delegate.is_none() {
+            delegated_amount: if account.delegate.is_none() {
                 None
             } else {
                 Some(token_amount_to_ui_amount(
-                    account.base.delegated_amount,
+                    account.delegated_amount,
                     decimals,
                 ))
             },
-            close_authority: match account.base.close_authority {
+            close_authority: match account.close_authority {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
-        }));
-    }
-    if let Ok(mint) = StateWithExtensions::<Mint>::unpack(data) {
-        return Ok(TokenAccountType::Mint(UiMint {
-            mint_authority: match mint.base.mint_authority {
+        }))
+    } else if data.len() == Mint::get_packed_len() {
+        let mint = Mint::unpack(data)
+            .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
+        Ok(TokenAccountType::Mint(UiMint {
+            mint_authority: match mint.mint_authority {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
-            supply: mint.base.supply.to_string(),
-            decimals: mint.base.decimals,
-            is_initialized: mint.base.is_initialized,
-            freeze_authority: match mint.base.freeze_authority {
+            supply: mint.supply.to_string(),
+            decimals: mint.decimals,
+            is_initialized: mint.is_initialized,
+            freeze_authority: match mint.freeze_authority {
                 COption::Some(pubkey) => Some(pubkey.to_string()),
                 COption::None => None,
             },
-        }));
-    }
-    if data.len() == Multisig::get_packed_len() {
+        }))
+    } else if data.len() == Multisig::get_packed_len() {
         let multisig = Multisig::unpack(data)
             .map_err(|_| ParseAccountError::AccountNotParsable(ParsableAccount::SplToken))?;
         Ok(TokenAccountType::Multisig(UiMultisig {
@@ -265,7 +265,7 @@ pub struct UiMultisig {
 }
 
 pub fn get_token_account_mint(data: &[u8]) -> Option<Pubkey> {
-    if Account::valid_account_data(data) {
+    if data.len() == Account::get_packed_len() {
         Some(Pubkey::new(&data[0..32]))
     } else {
         None
@@ -370,7 +370,6 @@ mod test {
         let mut account_data = vec![0; Account::get_packed_len()];
         let mut account = Account::unpack_unchecked(&account_data).unwrap();
         account.mint = mint_pubkey;
-        account.state = AccountState::Initialized;
         Account::pack(account, &mut account_data).unwrap();
 
         let expected_mint_pubkey = Pubkey::new(&[2; 32]);
