@@ -94,7 +94,6 @@ impl Tpu {
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
     ) -> Self {
-        println!("new Tpu");
         let TpuSockets {
             transactions: transactions_sockets,
             transaction_forwards: tpu_forwards_sockets,
