@@ -202,6 +202,7 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
+        // Test comment
         let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
             unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
