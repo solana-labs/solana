@@ -15,18 +15,30 @@ use {
     },
 };
 
-// Attempt to upload this many blocks in parallel
-const NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL: usize = 32;
+#[derive(Clone)]
+pub struct ConfirmedBlockUploadConfig {
+    pub force_reupload: bool,
+    pub num_blocks_to_upload_in_parallel: usize,
+    pub block_read_ahead_depth: usize, // should always be >= `num_blocks_to_upload_in_parallel`
+}
 
-// Read up to this many blocks from blockstore before blocking on the upload process
-const BLOCK_READ_AHEAD_DEPTH: usize = NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 2;
+impl Default for ConfirmedBlockUploadConfig {
+    fn default() -> Self {
+        const NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL: usize = 32;
+        ConfirmedBlockUploadConfig {
+            force_reupload: false,
+            num_blocks_to_upload_in_parallel: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL,
+            block_read_ahead_depth: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 2,
+        }
+    }
+}
 
 pub async fn upload_confirmed_blocks(
     blockstore: Arc<Blockstore>,
     bigtable: solana_storage_bigtable::LedgerStorage,
     starting_slot: Slot,
     ending_slot: Option<Slot>,
-    force_reupload: bool,
+    config: ConfirmedBlockUploadConfig,
     exit: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire upload");
@@ -66,7 +78,7 @@ pub async fn upload_confirmed_blocks(
     );
 
     // Gather the blocks that are already present in bigtable, by slot
-    let bigtable_slots = if !force_reupload {
+    let bigtable_slots = if !config.force_reupload {
         let mut bigtable_slots = vec![];
         let first_blockstore_slot = *blockstore_slots.first().unwrap();
         let last_blockstore_slot = *blockstore_slots.last().unwrap();
@@ -130,7 +142,7 @@ pub async fn upload_confirmed_blocks(
     let (_loader_thread, receiver) = {
         let exit = exit.clone();
 
-        let (sender, receiver) = bounded(BLOCK_READ_AHEAD_DEPTH);
+        let (sender, receiver) = bounded(config.block_read_ahead_depth);
         (
             std::thread::spawn(move || {
                 let mut measure = Measure::start("block loader thread");
@@ -150,7 +162,7 @@ pub async fn upload_confirmed_blocks(
                         }
                     };
 
-                    if i > 0 && i % NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL == 0 {
+                    if i > 0 && i % config.num_blocks_to_upload_in_parallel == 0 {
                         info!(
                             "{}% of blocks processed ({}/{})",
                             i * 100 / blocks_to_upload.len(),
@@ -170,7 +182,7 @@ pub async fn upload_confirmed_blocks(
     use futures::stream::StreamExt;
 
     let mut stream =
-        tokio_stream::iter(receiver.into_iter()).chunks(NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL);
+        tokio_stream::iter(receiver.into_iter()).chunks(config.num_blocks_to_upload_in_parallel);
 
     while let Some(blocks) = stream.next().await {
         if exit.load(Ordering::Relaxed) {

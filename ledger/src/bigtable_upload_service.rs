@@ -1,5 +1,8 @@
 use {
-    crate::{bigtable_upload, blockstore::Blockstore},
+    crate::{
+        bigtable_upload::{self, ConfirmedBlockUploadConfig},
+        blockstore::Blockstore,
+    },
     solana_runtime::commitment::BlockCommitmentCache,
     std::{
         cmp::min,
@@ -25,6 +28,26 @@ impl BigTableUploadService {
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        Self::new_with_config(
+            runtime,
+            bigtable_ledger_storage,
+            blockstore,
+            block_commitment_cache,
+            max_complete_transaction_status_slot,
+            ConfirmedBlockUploadConfig::default(),
+            exit,
+        )
+    }
+
+    pub fn new_with_config(
+        runtime: Arc<Runtime>,
+        bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
+        blockstore: Arc<Blockstore>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
+        config: ConfirmedBlockUploadConfig,
+        exit: Arc<AtomicBool>,
+    ) -> Self {
         info!("Starting BigTable upload service");
         let thread = Builder::new()
             .name("bigtable-upload".to_string())
@@ -35,6 +58,7 @@ impl BigTableUploadService {
                     blockstore,
                     block_commitment_cache,
                     max_complete_transaction_status_slot,
+                    config,
                     exit,
                 )
             })
@@ -49,6 +73,7 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) {
         let mut start_slot = 0;
@@ -72,7 +97,7 @@ impl BigTableUploadService {
                 bigtable_ledger_storage.clone(),
                 start_slot,
                 Some(end_slot),
-                false,
+                config.clone(),
                 exit.clone(),
             ));
 
