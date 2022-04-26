@@ -67,7 +67,7 @@ jobs:
       - run: |
           npm install -g npm@7
           npm install
-          npx semantic-release --dry-run
+          npx semantic-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
