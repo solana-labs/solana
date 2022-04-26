@@ -8,7 +8,7 @@ use {
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
         qos_service::QosService,
-        unprocessed_packet_batches::{self, *},
+        unprocessed_packet_batches::*,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
@@ -58,6 +58,7 @@ use {
         collections::HashMap,
         env,
         net::SocketAddr,
+        rc::Rc,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
@@ -457,8 +458,9 @@ impl BankingStage {
     }
 
     fn filter_valid_packets_for_forwarding<'a>(
-        deserialized_packets: impl Iterator<Item = &'a DeserializedPacket>,
+        deserialized_packets: impl Iterator<Item = &'a Rc<DeserializedPacket>>,
     ) -> Vec<&'a Packet> {
+        /* TODO - need to figure out `original_packet()` implementation 
         deserialized_packets
             .filter_map(|deserialized_packet| {
                 if !deserialized_packet.forwarded {
@@ -468,6 +470,8 @@ impl BankingStage {
                 }
             })
             .collect()
+        // */
+        vec![]
     }
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
@@ -549,8 +553,7 @@ impl BankingStage {
         let mut reached_end_of_slot: Option<EndOfSlot> = None;
 
         // All retryable packets get inserted here
-        let mut retryable_packets =
-            UnprocessedPacketBatches::with_capacity(buffered_packet_batches.capacity());
+        let mut retryable_packets = Vec::<Rc<DeserializedPacket>>::with_capacity(buffered_packet_batches.capacity());
 
         // TODO: Right now we iterate through buffer and try the highest weighted transaction once
         // but we should retry the highest weighted transactions more often.
@@ -725,7 +728,7 @@ impl BankingStage {
             slot_metrics_tracker
                 .increment_end_of_slot_filtering_us(end_of_slot_filtering_time.as_us());
         } else {
-            std::mem::swap(&mut retryable_packets, buffered_packet_batches);
+            buffered_packet_batches.insert_packets(&retryable_packets);
         }
 
         proc_start.stop();
@@ -946,9 +949,7 @@ impl BankingStage {
         }
 
         if hold {
-            for deserialized_packet in buffered_packet_batches.iter_mut() {
-                deserialized_packet.forwarded = true;
-            }
+            buffered_packet_batches.set_all_packets_forwarded();
         } else {
             slot_metrics_tracker
                 .increment_cleared_from_buffer_after_forward_count(forwardable_packets_len as u64);
@@ -1759,7 +1760,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &TransactionRecorder,
-        deserialized_packets: &[DeserializedPacket],
+        deserialized_packets: &[Rc<DeserializedPacket>],
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -1872,19 +1873,11 @@ impl BankingStage {
     fn filter_unprocessed_packets_at_end_of_slot(
         bank: &Option<Arc<Bank>>,
         unprocessed_packets: &mut UnprocessedPacketBatches,
-        retryable_packets: &mut UnprocessedPacketBatches,
+        retryable_packets: &mut Vec<Rc<DeserializedPacket>>,
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
         banking_stage_stats: &BankingStageStats,
     ) -> usize {
-        let (bigger_queue, smaller_queue, is_unprocessed_packets_bigger) =
-            if retryable_packets.len() > unprocessed_packets.len() {
-                (retryable_packets, unprocessed_packets, false)
-            } else {
-                (unprocessed_packets, retryable_packets, true)
-            };
-        let original_unprocessed_packets_len = bigger_queue.len() + smaller_queue.len();
-
         // Check if we are the next leader. If so, let's not filter the packets
         // as we'll filter it again while processing the packets.
         // Filtering helps if we were going to forward the packets to some other node
@@ -1898,9 +1891,8 @@ impl BankingStage {
             // retryable queue and the unprocessed packets queue so we don't
             // lose any packets for forwarding or for the next time we're
             // processing transactions
-            for packet in smaller_queue.iter() {
-                bigger_queue.push(packet.clone());
-            }
+            unprocessed_packets.insert_packets(retryable_packets);
+            0usize
         } else {
             // If `should_filter_unprocessed_packets` is true, then the bank
             // must be `Some`
@@ -1908,9 +1900,10 @@ impl BankingStage {
             let mut unprocessed_packet_conversion_time =
                 Measure::start("unprocessed_packet_conversion");
 
+            let pre_filter_packets_count = retryable_packets.len();
             // Retain elements of larger queue, only perf benefit here would be
             // if retain was optimized, which currently is is not.
-            bigger_queue.retain(|deserialized_packet| {
+            retryable_packets.retain(|deserialized_packet| {
                 Self::transaction_from_deserialized_packet(
                     deserialized_packet,
                     &bank.feature_set,
@@ -1919,20 +1912,9 @@ impl BankingStage {
                 )
                 .is_some()
             });
+            let filtered_packets_count = pre_filter_packets_count.saturating_sub(retryable_packets.len());
+            unprocessed_packets.insert_packets(retryable_packets);
 
-            for deserialized_packet in smaller_queue.iter() {
-                let should_retain = Self::transaction_from_deserialized_packet(
-                    deserialized_packet,
-                    &bank.feature_set,
-                    bank.vote_only_bank(),
-                    bank.as_ref(),
-                )
-                .is_some();
-
-                if should_retain {
-                    bigger_queue.push(deserialized_packet.clone());
-                }
-            }
             unprocessed_packet_conversion_time.stop();
             banking_stage_stats
                 .unprocessed_packet_conversion_elapsed
@@ -1940,26 +1922,8 @@ impl BankingStage {
                     unprocessed_packet_conversion_time.as_us(),
                     Ordering::Relaxed,
                 );
+            filtered_packets_count
         }
-
-        let (unprocessed_packets, retryable_packets) = {
-            if !is_unprocessed_packets_bigger {
-                // This means:
-                // 1) The input `retryable_packets` is the `bigger_queue`
-                // 2) The input `unprocessed_packets` is the `smaller_queue`
-                //
-                // The `bigger_queue` contains all of the merged transactions
-                //
-                // We need to ensure the input `unprocessed_packets` pointer always ends
-                // up pointing to this aggregated data, so we need to swap.
-                std::mem::swap(bigger_queue, smaller_queue);
-            };
-            (smaller_queue, bigger_queue)
-        };
-
-        // Clear the retryable buffer
-        retryable_packets.clear();
-        original_unprocessed_packets_len.saturating_sub(unprocessed_packets.len())
     }
 
     fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
@@ -2012,7 +1976,7 @@ impl BankingStage {
 
             Self::push_unprocessed(
                 buffered_packet_batches,
-                &packet_batch,
+                packet_batch,
                 &packet_indexes,
                 &mut dropped_packets_count,
                 &mut newly_buffered_packets_count,
@@ -2054,7 +2018,7 @@ impl BankingStage {
 
     fn push_unprocessed(
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
-        packet_batch: &PacketBatch,
+        packet_batch: PacketBatch,
         packet_indexes: &[usize],
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
@@ -2071,12 +2035,9 @@ impl BankingStage {
                 .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
-                // Passing `None` for bank for now will make all packet weights 0
-                unprocessed_packet_batches::deserialize_packets(
                     packet_batch,
                     packet_indexes,
                     &None,
-                ),
             );
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
