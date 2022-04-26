@@ -519,7 +519,7 @@ impl Shred {
         }
         match self.shred_type() {
             ShredType::Data => {
-                if self.index() as usize > MAX_DATA_SHREDS_PER_SLOT {
+                if self.index() as usize >= MAX_DATA_SHREDS_PER_SLOT {
                     return Err(Error::InvalidDataShredIndex {
                         index: self.index(),
                     });
@@ -2134,6 +2134,14 @@ mod tests {
                     size: 0,
                     payload: 1228,
                 })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataShredIndex { index: 32768 })
             );
         }
         {
