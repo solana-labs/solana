@@ -3,9 +3,8 @@ mod tests {
     use {
         crossbeam_channel::unbounded,
         solana_client::{
-            connection_cache::ConnectionCacheStats,
-            quic_client::QuicTpuConnection,
-            tpu_connection::{ClientStats, TpuConnection},
+            connection_cache::ConnectionCacheStats, quic_client::QuicTpuConnection,
+            tpu_connection::TpuConnection,
         },
         solana_sdk::{packet::PACKET_DATA_SIZE, quic::QUIC_PORT_OFFSET, signature::Keypair},
         solana_streamer::quic::spawn_server,
@@ -53,11 +52,7 @@ mod tests {
         let num_expected_packets: usize = 4000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        let stats = Arc::new(ClientStats::default());
-
-        assert!(client
-            .send_wire_transaction_batch_async(packets, stats)
-            .is_ok());
+        assert!(client.send_wire_transaction_batch_async(packets).is_ok());
 
         let mut all_packets = vec![];
         let now = Instant::now();

@@ -1,16 +1,13 @@
 use {
     crate::{
-        quic_client::QuicTpuConnection,
-        tpu_connection::{ClientStats, TpuConnection},
-        udp_client::UdpTpuConnection,
+        quic_client::QuicTpuConnection, tpu_connection::ClientStats, udp_client::UdpTpuConnection,
     },
+    enum_dispatch::enum_dispatch,
     indexmap::map::IndexMap,
     lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{
-        timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
-    },
+    solana_sdk::timing::AtomicInterval,
     std::{
         net::SocketAddr,
         sync::{
@@ -23,10 +20,10 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
-#[derive(Clone)]
+#[enum_dispatch(TpuConnection)]
 pub enum Connection {
-    Udp(Arc<UdpTpuConnection>),
-    Quic(Arc<QuicTpuConnection>),
+    UdpTpuConnection,
+    QuicTpuConnection,
 }
 
 #[derive(Default)]
@@ -52,7 +49,12 @@ pub struct ConnectionCacheStats {
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
 
 impl ConnectionCacheStats {
-    fn add_client_stats(&self, client_stats: &ClientStats, num_packets: usize, is_success: bool) {
+    pub fn add_client_stats(
+        &self,
+        client_stats: &ClientStats,
+        num_packets: usize,
+        is_success: bool,
+    ) {
         self.total_client_stats.total_connections.fetch_add(
             client_stats.total_connections.load(Ordering::Relaxed),
             Ordering::Relaxed,
@@ -214,7 +216,7 @@ impl ConnectionCacheStats {
 }
 
 struct ConnectionMap {
-    map: IndexMap<SocketAddr, Connection>,
+    map: IndexMap<SocketAddr, Arc<Connection>>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
@@ -245,7 +247,7 @@ pub fn set_use_quic(use_quic: bool) {
 }
 
 struct GetConnectionResult {
-    connection: Connection,
+    connection: Arc<Connection>,
     cache_hit: bool,
     report_stats: bool,
     map_timing_ms: u64,
@@ -286,17 +288,13 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
                 match map.map.get(addr) {
                     Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
                     None => {
-                        let connection = if map.use_quic {
-                            Connection::Quic(Arc::new(QuicTpuConnection::new(
-                                *addr,
-                                map.stats.clone(),
-                            )))
+                        let connection: Connection = if map.use_quic {
+                            QuicTpuConnection::new(*addr, map.stats.clone()).into()
                         } else {
-                            Connection::Udp(Arc::new(UdpTpuConnection::new(
-                                *addr,
-                                map.stats.clone(),
-                            )))
+                            UdpTpuConnection::new(*addr, map.stats.clone()).into()
                         };
+
+                        let connection = Arc::new(connection);
 
                         // evict a connection if the cache is reaching upper bounds
                         let mut num_evictions = 0;
@@ -338,7 +336,7 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
 
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
+pub fn get_connection(addr: &SocketAddr) -> Arc<Connection> {
     let mut get_connection_measure = Measure::start("get_connection_measure");
     let GetConnectionResult {
         connection,
@@ -384,114 +382,20 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
     connection_cache_stats
         .get_connection_ms
         .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
-    (connection, connection_cache_stats)
-}
 
-// TODO: see https://github.com/solana-labs/solana/issues/23851
-// use enum_dispatch and get rid of this tedious code.
-// The main blocker to using enum_dispatch right now is that
-// the it doesn't work with static methods like TpuConnection::new
-// which is used by thin_client. This will be eliminated soon
-// once thin_client is moved to using this connection cache.
-// Once that is done, we will migrate to using enum_dispatch
-// This will be done in a followup to
-// https://github.com/solana-labs/solana/pull/23817
-pub fn send_wire_transaction_batch(
-    packets: &[&[u8]],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
-        Connection::Quic(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
-    };
-    stats.add_client_stats(&client_stats, packets.len(), r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction_async(
-    packets: Vec<u8>,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = Arc::new(ClientStats::default());
-    let r = match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
-        Connection::Quic(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
-    };
-    stats.add_client_stats(&client_stats, 1, r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction_batch_async(
-    packets: Vec<Vec<u8>>,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = Arc::new(ClientStats::default());
-    let len = packets.len();
-    let r = match conn {
-        Connection::Udp(conn) => {
-            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
-        }
-        Connection::Quic(conn) => {
-            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
-        }
-    };
-    stats.add_client_stats(&client_stats, len, r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction(
-    wire_transaction: &[u8],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    send_wire_transaction_batch(&[wire_transaction], addr)
-}
-
-pub fn serialize_and_send_transaction(
-    transaction: &VersionedTransaction,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
-        Connection::Quic(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
-    };
-    stats.add_client_stats(&client_stats, 1, r.is_ok());
-    r
-}
-
-pub fn par_serialize_and_send_transaction_batch(
-    transactions: &[VersionedTransaction],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => {
-            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
-        }
-        Connection::Quic(conn) => {
-            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
-        }
-    };
-    stats.add_client_stats(&client_stats, transactions.len(), r.is_ok());
-    r
+    connection
 }
 
 #[cfg(test)]
 mod tests {
     use {
         crate::{
-            connection_cache::{get_connection, Connection, CONNECTION_MAP, MAX_CONNECTIONS},
+            connection_cache::{get_connection, CONNECTION_MAP, MAX_CONNECTIONS},
             tpu_connection::TpuConnection,
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        std::net::{IpAddr, SocketAddr},
+        std::net::SocketAddr,
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -503,13 +407,6 @@ mod tests {
         let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
 
         addr_str.parse().expect("Invalid address")
-    }
-
-    fn ip(conn: Connection) -> IpAddr {
-        match conn {
-            Connection::Udp(conn) => conn.tpu_addr().ip(),
-            Connection::Quic(conn) => conn.tpu_addr().ip(),
-        }
     }
 
     #[test]
@@ -540,7 +437,7 @@ mod tests {
             assert!(map.map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
                 let conn = map.map.get(a).expect("Address not found");
-                assert!(a.ip() == ip(conn.clone()));
+                assert!(a.ip() == conn.tpu_addr().ip());
             });
         }
 
