@@ -107,7 +107,7 @@ pub(crate) mod tests {
         let repair_type = ShredRepairType::Orphan(9);
         let mut outstanding_requests = OutstandingRequests::default();
         let nonce = outstanding_requests.add_request(repair_type, timestamp());
-        let shred = Shred::new_empty_data_shred();
+        let shred = Shred::new_from_data(0, 0, 0, None, false, false, 0, 0, 0);
 
         let expire_timestamp = outstanding_requests
             .requests
@@ -127,7 +127,7 @@ pub(crate) mod tests {
         let mut outstanding_requests = OutstandingRequests::default();
         let nonce = outstanding_requests.add_request(repair_type, timestamp());
 
-        let shred = Shred::new_empty_data_shred();
+        let shred = Shred::new_from_data(0, 0, 0, None, false, false, 0, 0, 0);
         let mut expire_timestamp = outstanding_requests
             .requests
             .get(&nonce)
