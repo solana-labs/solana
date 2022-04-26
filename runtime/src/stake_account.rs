@@ -13,7 +13,7 @@ use {
 };
 
 /// An account and a stake state deserialized from the account.
-/// Generic type T enforces type-saftey so that StakeAccount<Delegation> can
+/// Generic type T enforces type-safety so that StakeAccount<Delegation> can
 /// only wrap a stake-state which is a Delegation; whereas StakeAccount<()>
 /// wraps any account with stake state.
 #[derive(Clone, Debug, Default)]

@@ -43,6 +43,7 @@ pub enum SkippedReason {
     ZeroReward,
     ZeroCreditsAndReturnZero,
     ZeroCreditsAndReturnCurrent,
+    ZeroCreditsAndReturnRewinded,
 }
 
 impl From<SkippedReason> for InflationPointCalculationEvent {
@@ -164,7 +165,7 @@ fn redeem_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    fix_activating_credits_observed: bool,
+    credits_auto_rewind: bool,
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -179,7 +180,7 @@ fn redeem_stake_rewards(
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
-        fix_activating_credits_observed,
+        credits_auto_rewind,
     )
     .map(|(stakers_reward, voters_reward, credits_observed)| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -205,6 +206,8 @@ fn calculate_stake_points(
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
+        true, // this is safe because this flag shouldn't affect the first
+              // element (i.e. `points`) of the returned tuple in any way
     )
     .0
 }
@@ -217,15 +220,47 @@ fn calculate_stake_points_and_credits(
     new_vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-) -> (u128, u64) {
+    credits_auto_rewind: bool,
+) -> (u128, u64, bool) {
     let credits_in_stake = stake.credits_observed;
     let credits_in_vote = new_vote_state.credits();
     // if there is no newer credits since observed, return no point
     if credits_in_vote <= credits_in_stake {
-        if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
-            inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
-        }
-        return (0, credits_in_stake);
+        if credits_auto_rewind && credits_in_vote < credits_in_stake {
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+                inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnRewinded.into());
+            }
+            // Don't adjust stake.activation_epoch for simplicity:
+            //  - generally fast-forwarding stake.activation_epoch forcibly (for
+            //    artifical re-activation with re-warm-up) skews the stake
+            //    history sysvar. And properly handling all the cases
+            //    regarding deactivation epoch/warm-up/cool-down without
+            //    introducing incentive skew is hard.
+            //  - Conceptually, it should be acceptable for the staked SOLs at
+            //    the recreated vote to receive rewards again immediately after
+            //    rewind even if it looks like instant activation. That's
+            //    because it must have passed the required warmed-up at least
+            //    once in the past already
+            //  - Also such a stake account remains to be a part of overall
+            //    effective stake calculation even while the vote account is
+            //    missing for (indefinite) time or remains to be pre-remove
+            //    credits score. It should be treated equally to staking with
+            //    delinquent validator with no differenciation.
+
+            // hint with true to indicate some exceptional credits handling is needed
+            return (0, credits_in_vote, true);
+        } else {
+            // change the above `else` to `else if credits_in_vote == credits_in_stake`
+            // (and remove the outermost enclosing `if`) when cleaning credits_auto_rewind
+            // after activation
+
+            if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
+                inflation_point_calc_tracer(&SkippedReason::ZeroCreditsAndReturnCurrent.into());
+            }
+            // don't hint the caller and return current value if credits_auto_rewind is off or
+            // credits remain to be unchanged (= delinquent)
+            return (0, credits_in_stake, false);
+        };
     }
 
     let mut points = 0;
@@ -268,7 +303,7 @@ fn calculate_stake_points_and_credits(
         }
     }
 
-    (points, new_credits_observed)
+    (points, new_credits_observed, false)
 }
 
 /// for a given stake and vote_state, calculate what distributions and what updates should be made
@@ -284,17 +319,17 @@ fn calculate_stake_rewards(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    _fix_activating_credits_observed: bool, // this unused flag will soon be justified by an upcoming feature pr
+    credits_auto_rewind: bool,
 ) -> Option<(u64, u64, u64)> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
-    // this awkward flag variable will soon be justified by an upcoming feature pr
-    let mut forced_credits_update_with_skipped_reward = false;
-    let (points, credits_observed) = calculate_stake_points_and_credits(
-        stake,
-        vote_state,
-        stake_history,
-        inflation_point_calc_tracer.as_ref(),
-    );
+    let (points, credits_observed, mut forced_credits_update_with_skipped_reward) =
+        calculate_stake_points_and_credits(
+            stake,
+            vote_state,
+            stake_history,
+            inflation_point_calc_tracer.as_ref(),
+            credits_auto_rewind,
+        );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
     // or when this is the stake's activation epoch
@@ -1302,7 +1337,7 @@ pub fn redeem_rewards(
     point_value: &PointValue,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
-    fix_activating_credits_observed: bool,
+    credits_auto_rewind: bool,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
@@ -1326,7 +1361,7 @@ pub fn redeem_rewards(
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
-            fix_activating_credits_observed,
+            credits_auto_rewind,
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
@@ -2546,10 +2581,29 @@ mod tests {
             )
         );
 
-        // assert the previous behavior is preserved where fix_stake_deactivate=false
         assert_eq!(
-            (0, 4),
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer())
+            (0, 4, false),
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+        );
+
+        // credits_observed is auto-rewinded when vote_state credits are assumed to have been
+        // recreated
+        stake.credits_observed = 1000;
+        // this is old behavior; return the pre-recreation (large) credits from stake account
+        assert_eq!(
+            (0, 1000, false),
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
+        );
+        // this is new behavior 1; return the post-recreation rewinded credits from the vote account
+        assert_eq!(
+            (0, 4, true),
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+        );
+        // this is new behavior 2; don't hint when credits both from stake and vote are identical
+        stake.credits_observed = 4;
+        assert_eq!(
+            (0, 4, false),
+            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
         );
 
         // get rewards and credits observed when not the activation epoch

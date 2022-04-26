@@ -346,7 +346,7 @@ pub struct ReplayStage {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T: Into<Tower> + Sized>(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -354,7 +354,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         duplicate_slots_receiver: DuplicateSlotReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        mut tower: Tower,
+        tower: T,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -369,6 +369,9 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
+        let mut tower = tower.into();
+        info!("Tower state: {:?}", tower);
+
         let ReplayStageConfig {
             vote_account,
             authorized_voter_keypairs,
@@ -429,6 +432,14 @@ impl ReplayStage {
                     last_refresh_time: Instant::now(),
                     last_print_time: Instant::now(),
                 };
+
+                Self::reset_poh_recorder(
+                    &my_pubkey,
+                    &blockstore,
+                    &bank_forks.read().unwrap().working_bank(),
+                    &poh_recorder,
+                    &leader_schedule_cache,
+                );
 
                 loop {
                     // Stop getting entries if we get exit signal
@@ -3133,10 +3144,7 @@ pub mod tests {
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
             get_tmp_ledger_path,
-            shred::{
-                CodingShredHeader, DataShredHeader, Shred, ShredCommonHeader, DATA_COMPLETE_SHRED,
-                SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD,
-            },
+            shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -3152,7 +3160,6 @@ pub mod tests {
             genesis_config,
             hash::{hash, Hash},
             instruction::InstructionError,
-            packet::PACKET_DATA_SIZE,
             poh_config::PohConfig,
             signature::{Keypair, Signer},
             system_transaction,
@@ -3736,26 +3743,19 @@ pub mod tests {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, bank| {
-            let gibberish = [0xa5u8; PACKET_DATA_SIZE];
-            let mut data_header = DataShredHeader::default();
-            data_header.flags |= DATA_COMPLETE_SHRED;
-            // Need to provide the right size for Shredder::deshred.
-            data_header.size = SIZE_OF_DATA_SHRED_PAYLOAD as u16;
-            data_header.parent_offset = (bank.slot() - bank.parent_slot()) as u16;
-            let shred_common_header = ShredCommonHeader {
-                slot: bank.slot(),
-                ..ShredCommonHeader::default()
-            };
-            let mut shred = Shred::new_empty_from_header(
-                shred_common_header,
-                data_header,
-                CodingShredHeader::default(),
+            let gibberish = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+            let parent_offset = bank.slot() - bank.parent_slot();
+            let shred = Shred::new_from_data(
+                bank.slot(),
+                0, // index,
+                parent_offset as u16,
+                Some(&gibberish),
+                true,  // is_last_data
+                false, // is_last_in_slot
+                0,     // reference_tick
+                0,     // version
+                0,     // fec_set_index
             );
-            bincode::serialize_into(
-                &mut shred.payload[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER..],
-                &gibberish[..SIZE_OF_DATA_SHRED_PAYLOAD],
-            )
-            .unwrap();
             vec![shred]
         });
 

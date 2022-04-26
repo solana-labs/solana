@@ -23,9 +23,8 @@ lazy_static = "1.4.0"
 libc = "0.2.124"
 log = { version = "0.4.14" }
 lru = "0.7.5"
-num-derive = "0.3"
-num-traits = "0.2"
 num_cpus = "1.13.1"
+num_enum = "0.5.7"
 prost = "0.10.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
@@ -45,6 +44,7 @@ solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
 solana-runtime = { path = "../runtime", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
+solana-stake-program = { path = "../programs/stake", version = "=1.11.0" }
 solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.0" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }

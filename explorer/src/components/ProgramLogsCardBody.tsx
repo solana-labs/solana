@@ -5,6 +5,14 @@ import { InstructionLogs } from "utils/program-logs";
 import { ProgramName } from "utils/anchor";
 import React from "react";
 
+const NATIVE_PROGRAMS_MISSING_INVOKE_LOG: string[] = [
+  "AddressLookupTab1e1111111111111111111111111",
+  "ZkTokenProof1111111111111111111111111111111",
+  "BPFLoader1111111111111111111111111111111111",
+  "BPFLoader2111111111111111111111111111111111",
+  "BPFLoaderUpgradeab1e11111111111111111111111",
+];
+
 export function ProgramLogsCardBody({
   message,
   logs,
@@ -16,6 +24,7 @@ export function ProgramLogsCardBody({
   cluster: Cluster;
   url: string;
 }) {
+  let logIndex = 0;
   return (
     <TableCardBody>
       {message.instructions.map((ix, index) => {
@@ -30,7 +39,20 @@ export function ProgramLogsCardBody({
         } else {
           programId = ix.programId;
         }
-        const programLogs: InstructionLogs | undefined = logs[index];
+
+        const programAddress = programId.toBase58();
+        let programLogs: InstructionLogs | undefined = logs[logIndex];
+        if (programLogs?.invokedProgram === programAddress) {
+          logIndex++;
+        } else if (
+          programLogs?.invokedProgram === null &&
+          programLogs.logs.length > 0 &&
+          NATIVE_PROGRAMS_MISSING_INVOKE_LOG.includes(programAddress)
+        ) {
+          logIndex++;
+        } else {
+          programLogs = undefined;
+        }
 
         let badgeColor = "white";
         if (programLogs) {

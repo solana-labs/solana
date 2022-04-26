@@ -104,7 +104,6 @@ fn no_passphrase_arg<'a>() -> Arg<'a> {
 fn no_outfile_arg<'a>() -> Arg<'a> {
     Arg::new(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
-        .conflicts_with_all(&["outfile", "silent"])
         .help(NO_OUTFILE_ARG.help)
 }
 
@@ -391,7 +390,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
                 .key_generation_common_args()
-                .arg(no_outfile_arg())
+                .arg(no_outfile_arg()
+                    .conflicts_with_all(&["outfile", "silent"])
+                )
         )
         .subcommand(
             Command::new("grind")

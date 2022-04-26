@@ -94,8 +94,8 @@ pub mod tests {
         let keypair = Keypair::new();
         shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let mut shred = Shred::new_from_data(
             0xc0de_dead,
@@ -110,8 +110,8 @@ pub mod tests {
         );
         shred.sign(&keypair);
         batches[1].packets.resize(1, Packet::default());
-        batches[1].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[1].packets[0].meta.size = shred.payload.len();
+        batches[1].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[1].packets[0].meta.size = shred.payload().len();
 
         let expected: HashSet<u64> = [0xc0de_dead, 0xdead_c0de].iter().cloned().collect();
         assert_eq!(ShredSigVerifier::read_slots(&batches), expected);
@@ -143,8 +143,8 @@ pub mod tests {
             0xc0de,
         );
         shred.sign(&leader_keypair);
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let mut shred = Shred::new_from_data(
             0,
@@ -159,8 +159,8 @@ pub mod tests {
         );
         let wrong_keypair = Keypair::new();
         shred.sign(&wrong_keypair);
-        batches[0].packets[1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[1].meta.size = shred.payload.len();
+        batches[0].packets[1].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[1].meta.size = shred.payload().len();
 
         let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
         let rv = verifier.verify_batches(batches, num_packets);

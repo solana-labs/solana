@@ -260,17 +260,26 @@ impl TestValidatorGenesis {
         self
     }
 
-    pub fn clone_accounts<T>(&mut self, addresses: T, rpc_client: &RpcClient) -> &mut Self
+    pub fn clone_accounts<T>(
+        &mut self,
+        addresses: T,
+        rpc_client: &RpcClient,
+        skip_missing: bool,
+    ) -> &mut Self
     where
         T: IntoIterator<Item = Pubkey>,
     {
         for address in addresses {
             info!("Fetching {} over RPC...", address);
-            let account = rpc_client.get_account(&address).unwrap_or_else(|err| {
-                error!("Failed to fetch {}: {}", address, err);
+            let res = rpc_client.get_account(&address);
+            if let Ok(account) = res {
+                self.add_account(address, AccountSharedData::from(account));
+            } else if skip_missing {
+                warn!("Could not find {}, skipping.", address);
+            } else {
+                error!("Failed to fetch {}: {}", address, res.unwrap_err());
                 solana_core::validator::abort();
-            });
-            self.add_account(address, AccountSharedData::from(account));
+            }
         }
         self
     }

@@ -480,9 +480,9 @@ pub mod tests {
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
         shred.sign(&keypair);
-        trace!("signature {}", shred.common_header.signature);
-        packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        packet.meta.size = shred.payload.len();
+        trace!("signature {}", shred.signature());
+        packet.data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        packet.meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -526,8 +526,8 @@ pub mod tests {
         let keypair = Keypair::new();
         shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -581,8 +581,8 @@ pub mod tests {
         let keypair = Keypair::new();
         shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
@@ -693,8 +693,8 @@ pub mod tests {
             0xc0de,
         );
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, Pubkey::default().to_bytes()),

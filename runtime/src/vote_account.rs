@@ -5,7 +5,7 @@ use {
         ser::{Serialize, Serializer},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -238,24 +238,18 @@ impl Default for VoteAccountInner {
 
 impl PartialEq<VoteAccountInner> for VoteAccountInner {
     fn eq(&self, other: &Self) -> bool {
-        self.account == other.account
+        let Self {
+            account,
+            vote_state: _,
+            vote_state_once: _,
+        } = self;
+        account == &other.account
     }
 }
 
 impl PartialEq<AccountSharedData> for VoteAccount {
     fn eq(&self, other: &AccountSharedData) -> bool {
-        let Account {
-            lamports,
-            data,
-            owner,
-            executable,
-            rent_epoch,
-        } = &self.0.account;
-        other.lamports() == *lamports
-            && other.executable() == *executable
-            && other.rent_epoch() == *rent_epoch
-            && other.owner() == owner
-            && other.data() == data
+        accounts_equal(&self.0.account, other)
     }
 }
 
@@ -292,7 +286,12 @@ impl Clone for VoteAccounts {
 
 impl PartialEq<VoteAccounts> for VoteAccounts {
     fn eq(&self, other: &Self) -> bool {
-        self.vote_accounts == other.vote_accounts
+        let Self {
+            vote_accounts,
+            staked_nodes: _,
+            staked_nodes_once: _,
+        } = self;
+        vote_accounts == &other.vote_accounts
     }
 }
 
