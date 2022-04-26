@@ -1030,6 +1030,18 @@ pub fn main() {
                        Turning on compression can save ~10% of the ledger size."),
         )
         .arg(
+            Arg::with_name("rocksdb_perf_sample_interval")
+                .hidden(true)
+                .long("rocksdb-perf-sample-interval")
+                .value_name("INTERVAL")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value("0")
+                .help("Controls how often RocksDB read/write performance sample is collected. \
+                       Reads/writes perf samples are collected in 1 / INTERVAL sampling rate."),
+
+        )
+        .arg(
             Arg::with_name("skip_poh_verify")
                 .long("skip-poh-verify")
                 .takes_value(false)
@@ -2726,6 +2738,11 @@ pub fn main() {
                 ),
             },
         },
+        rocks_perf_sample_interval: value_t_or_exit!(
+            matches,
+            "rocksdb-perf-sample-interval",
+            usize
+        ),
     };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
