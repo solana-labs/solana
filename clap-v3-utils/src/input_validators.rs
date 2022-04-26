@@ -93,8 +93,11 @@ where
 }
 
 // Return an error if a `SignerSourceKind::Prompt` cannot be parsed
-pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
-    if string == ASK_KEYWORD {
+pub fn is_prompt_signer_source_or_ask_keyword(
+    string: &str,
+    allow_ask_keyword: bool,
+) -> Result<(), String> {
+    if allow_ask_keyword && string == ASK_KEYWORD {
         return Ok(());
     }
     match parse_signer_source(string)
@@ -103,7 +106,7 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
     {
         SignerSourceKind::Prompt => Ok(()),
         _ => Err(format!(
-            "Unable to parse input as `prompt:` URI scheme or `ASK` keyword: {}",
+            "Unable to parse input as `prompt:` URI scheme: {}",
             string
         )),
     }
