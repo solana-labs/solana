@@ -272,6 +272,7 @@ EOF
       --gossip-host "$entrypointIp"
       --gossip-port 8001
       --init-complete-file "$initCompleteFile"
+      --tpu-use-quic
     )
 
     if [[ "$tmpfsAccounts" = "true" ]]; then
@@ -338,6 +339,7 @@ EOF
       --gossip-port 8001
       --rpc-port 8899
       --expected-shred-version "$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
+      --tpu-use-quic
     )
     if [[ $nodeType = blockstreamer ]]; then
       args+=(
