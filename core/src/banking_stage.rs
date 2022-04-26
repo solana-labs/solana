@@ -1888,14 +1888,6 @@ impl BankingStage {
         next_leader: Option<Pubkey>,
         banking_stage_stats: &BankingStageStats,
     ) -> usize {
-        let (bigger_queue, smaller_queue, is_unprocessed_packets_bigger) =
-            if retryable_packets.len() > unprocessed_packets.len() {
-                (retryable_packets, unprocessed_packets, false)
-            } else {
-                (unprocessed_packets, retryable_packets, true)
-            };
-        let original_unprocessed_packets_len = bigger_queue.len() + smaller_queue.len();
-
         // Check if we are the next leader. If so, let's not filter the packets
         // as we'll filter it again while processing the packets.
         // Filtering helps if we were going to forward the packets to some other node
@@ -1903,6 +1895,14 @@ impl BankingStage {
             .map(|next_leader| next_leader == *my_pubkey)
             .unwrap_or(false);
         let should_filter_unprocessed_packets = !will_still_be_leader && bank.is_some();
+
+        let (bigger_queue, smaller_queue, is_unprocessed_packets_bigger) =
+            if retryable_packets.len() > unprocessed_packets.len() {
+                (retryable_packets, unprocessed_packets, false)
+            } else {
+                (unprocessed_packets, retryable_packets, true)
+            };
+        let original_unprocessed_packets_len = bigger_queue.len() + smaller_queue.len();
 
         if !should_filter_unprocessed_packets {
             // If we shouldn't filter the packets, then simply merge the
@@ -1919,9 +1919,7 @@ impl BankingStage {
             let mut unprocessed_packet_conversion_time =
                 Measure::start("unprocessed_packet_conversion");
 
-            // Retain elements of larger queue, only perf benefit here would be
-            // if retain was optimized, which currently is is not.
-            bigger_queue.retain(|deserialized_packet| {
+            let should_retain = |deserialized_packet: &DeserializedPacket| {
                 Self::transaction_from_deserialized_packet(
                     deserialized_packet,
                     &bank.feature_set,
@@ -1929,18 +1927,13 @@ impl BankingStage {
                     bank.as_ref(),
                 )
                 .is_some()
-            });
+            };
+            // Retain elements of larger queue, only perf benefit here would be
+            // if retain was optimized, which currently it is not.
+            bigger_queue.retain(|deserialized_packet| should_retain(deserialized_packet));
 
             for deserialized_packet in smaller_queue.iter() {
-                let should_retain = Self::transaction_from_deserialized_packet(
-                    deserialized_packet,
-                    &bank.feature_set,
-                    bank.vote_only_bank(),
-                    bank.as_ref(),
-                )
-                .is_some();
-
-                if should_retain {
+                if should_retain(deserialized_packet) {
                     bigger_queue.push(deserialized_packet.clone());
                 }
             }
