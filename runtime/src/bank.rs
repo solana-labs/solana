@@ -116,14 +116,10 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-<<<<<<< HEAD
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
         },
-=======
-        message::{AccountKeys, SanitizedMessage},
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -133,12 +129,7 @@ use {
         saturating_add_assign, secp256k1_program,
         signature::{Keypair, Signature},
         slot_hashes::SlotHashes,
-<<<<<<< HEAD
-        slot_history::SlotHistory,
-=======
         slot_history::{Check, SlotHistory},
-        stake::state::Delegation,
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
         system_transaction,
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
@@ -3530,13 +3521,9 @@ impl Bank {
         &self,
         transaction: SanitizedTransaction,
     ) -> TransactionSimulationResult {
-<<<<<<< HEAD
-        let number_of_accounts = transaction.message().account_keys_len();
-=======
-        let account_keys = transaction.message().account_keys();
+        let account_keys = transaction.message().account_keys_iter().collect::<Vec<_>>();
         let number_of_accounts = account_keys.len();
         let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
@@ -3597,10 +3584,10 @@ impl Bank {
         }
     }
 
-    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
+    fn get_account_overrides_for_simulation(&self, account_keys: &[&Pubkey]) -> AccountOverrides {
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
-        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
+        if account_keys.iter().any(|pubkey| **pubkey == slot_history_id) {
             let current_account = self.get_account_with_fixed_root(&slot_history_id);
             let slot_history = current_account
                 .as_ref()

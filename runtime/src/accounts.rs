@@ -1,11 +1,7 @@
 use {
     crate::{
-<<<<<<< HEAD
-        account_rent_state::{check_rent_state, RentState},
-=======
         account_overrides::AccountOverrides,
-        account_rent_state::{check_rent_state_with_account, RentState},
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
+        account_rent_state::{check_rent_state, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
             BankHashInfo, ErrorCounters, LoadHint, LoadedAccount, ScanStorageResult,
@@ -311,27 +307,6 @@ impl Accounts {
                                 .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                         )
                     } else {
-<<<<<<< HEAD
-                        let (account, rent) = self
-                            .accounts_db
-                            .load_with_fixed_root(ancestors, key)
-                            .map(|(mut account, _)| {
-                                if message.is_writable(i) {
-                                    let rent_due = rent_collector
-                                        .collect_from_existing_account(
-                                            key,
-                                            &mut account,
-                                            rent_for_sysvars,
-                                            self.accounts_db.filler_account_suffix.as_ref(),
-                                        )
-                                        .rent_amount;
-                                    (account, rent_due)
-                                } else {
-                                    (account, 0)
-                                }
-                            })
-                            .unwrap_or_default();
-=======
                         let (account, rent) = if let Some(account_override) =
                             account_overrides.and_then(|overrides| overrides.get(key))
                         {
@@ -345,6 +320,7 @@ impl Accounts {
                                             .collect_from_existing_account(
                                                 key,
                                                 &mut account,
+                                                rent_for_sysvars,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
                                             )
                                             .rent_amount;
@@ -355,7 +331,6 @@ impl Accounts {
                                 })
                                 .unwrap_or_default()
                         };
->>>>>>> 0d5159622 (sim: Override slot hashes account on simulation bank (#24543))
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
