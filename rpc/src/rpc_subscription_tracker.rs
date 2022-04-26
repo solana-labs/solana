@@ -288,6 +288,21 @@ impl SubscriptionControl {
     }
 
     #[cfg(test)]
+    pub fn logs_subscribed(&self, pubkey: Option<&Pubkey>) -> bool {
+        self.0.subscriptions.iter().any(|item| {
+            if let SubscriptionParams::Logs(params) = item.key() {
+                let subscribed_pubkey = match &params.kind {
+                    LogsSubscriptionKind::All | LogsSubscriptionKind::AllWithVotes => None,
+                    LogsSubscriptionKind::Single(pubkey) => Some(pubkey),
+                };
+                subscribed_pubkey == pubkey
+            } else {
+                false
+            }
+        })
+    }
+
+    #[cfg(test)]
     pub fn signature_subscribed(&self, signature: &Signature) -> bool {
         self.0.subscriptions.iter().any(|item| {
             if let SubscriptionParams::Signature(params) = item.key() {
