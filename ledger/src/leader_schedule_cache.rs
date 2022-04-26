@@ -518,7 +518,8 @@ mod tests {
             &mint_keypair,
             &vote_account,
             &validator_identity,
-            bootstrap_validator_stake_lamports(),
+            bootstrap_validator_stake_lamports()
+                + solana_stake_program::get_minimum_delegation(&bank.feature_set),
         );
         let node_pubkey = validator_identity.pubkey();
 
