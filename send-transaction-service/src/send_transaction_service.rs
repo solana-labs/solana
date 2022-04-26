@@ -128,13 +128,18 @@ impl Default for Config {
     }
 }
 
-/// A struct responsible for providing the up-to-date leader information
-/// used for sending transactions.
+/// The longest sleep the retry thread sleep before waking up
+/// to process the transactions need to be retried.
+pub const LONGEST_RETRY_SLEEP_IN_MS: u64 = 1000;
+
+/// The leader info refresh rate. It will be refresh every 1 second.
 pub const LEADER_INFO_REFRESH_RATE_IN_MS: u64 = 1000;
 
+/// A struct responsible for providing the up-to-date leader information
+/// used for sending transactions.
 pub struct LeaderInfoProvider<T>
 where
-    T: TpuInfo + std::marker::Send + Clone + 'static,
+    T: TpuInfo + std::marker::Send + 'static,
 {
     /// The last time the leader info is refreshed
     last_leader_refresh: Option<Instant>,
@@ -148,7 +153,7 @@ where
 
 impl<T> LeaderInfoProvider<T>
 where
-    T: TpuInfo + std::marker::Send + Clone + 'static,
+    T: TpuInfo + std::marker::Send + 'static,
 {
     /// Get the leader info, refresh if expired
     pub fn get_leader_info(&mut self) -> Option<&T> {
@@ -177,7 +182,7 @@ where
 }
 
 impl SendTransactionService {
-    pub fn new<T: TpuInfo + std::marker::Send + Clone + 'static>(
+    pub fn new<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
@@ -195,7 +200,7 @@ impl SendTransactionService {
         Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
     }
 
-    pub fn new_with_config<T: TpuInfo + std::marker::Send + Clone + 'static>(
+    pub fn new_with_config<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
@@ -232,7 +237,7 @@ impl SendTransactionService {
     }
 
     /// Thread responsible for receiving transactions from RPC clients.
-    fn receive_txn_thread<T: TpuInfo + std::marker::Send + Clone + 'static>(
+    fn receive_txn_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
@@ -252,7 +257,7 @@ impl SendTransactionService {
             .name("send-tx-receive".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
-                match receiver.recv_timeout(Duration::from_millis(1000.min(recv_timeout_ms))) {
+                match receiver.recv_timeout(Duration::from_millis(recv_timeout_ms)) {
                     Err(RecvTimeoutError::Disconnected) => {
                         info!("Terminating send-transaction-service.");
                         exit.store(true, Ordering::Relaxed);
@@ -319,7 +324,7 @@ impl SendTransactionService {
     }
 
     /// Thread responsible for retrying transactions
-    fn retry_thread<T: TpuInfo + std::marker::Send + Clone + 'static>(
+    fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
@@ -336,7 +341,9 @@ impl SendTransactionService {
             .name("send-tx-retry".to_string())
             .spawn(move || loop {
                 let retry_interval_ms = config.retry_rate_ms;
-                sleep(Duration::from_millis(1000.min(retry_interval_ms)));
+                sleep(Duration::from_millis(
+                    LONGEST_RETRY_SLEEP_IN_MS.min(retry_interval_ms),
+                ));
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
@@ -397,7 +404,7 @@ impl SendTransactionService {
     }
 
     /// Retry transactions sent before.
-    fn process_transactions<T: TpuInfo + std::marker::Send + Clone + 'static>(
+    fn process_transactions<T: TpuInfo + std::marker::Send + 'static>(
         working_bank: &Arc<Bank>,
         root_bank: &Arc<Bank>,
         tpu_address: &SocketAddr,
