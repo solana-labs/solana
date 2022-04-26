@@ -55,7 +55,7 @@ pub async fn upload_confirmed_blocks(
                 starting_slot, err
             )
         })?
-        .filter_map(|(slot, _slot_meta)| {
+        .map_while(|(slot, _slot_meta)| {
             if let Some(ending_slot) = &ending_slot {
                 if slot > *ending_slot {
                     return None;
