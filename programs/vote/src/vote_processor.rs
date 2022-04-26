@@ -69,8 +69,6 @@ pub fn process_instruction(
             vote_state::update_commission(me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
-<<<<<<< HEAD
-            inc_new_counter_info!("vote-native", 1);
             let slot_hashes = get_sysvar_with_account_check::slot_hashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
@@ -79,12 +77,6 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
-=======
-            let slot_hashes =
-                get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
-            let clock =
-                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
->>>>>>> 1ea7e7c88 (remove vote instruction counters)
             vote_state::process_vote(
                 me,
                 &slot_hashes,
