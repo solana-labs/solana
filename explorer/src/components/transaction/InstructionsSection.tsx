@@ -1,6 +1,7 @@
 import React from "react";
 import { ErrorCard } from "components/common/ErrorCard";
 import {
+  ComputeBudgetProgram,
   ParsedInnerInstruction,
   ParsedInstruction,
   ParsedTransaction,
@@ -46,6 +47,7 @@ import { isMangoInstruction } from "../instruction/mango/types";
 import { useAnchorProgram } from "providers/anchor";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorBoundary } from "@sentry/react";
+import { ComputeBudgetDetailsCard } from "components/instruction/ComputeBudgetDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -236,6 +238,8 @@ function InstructionCard({
     return <WormholeDetailsCard key={key} {...props} />;
   } else if (isPythInstruction(transactionIx)) {
     return <PythDetailsCard key={key} {...props} />;
+  } else if (ComputeBudgetProgram.programId.equals(transactionIx.programId)) {
+    return <ComputeBudgetDetailsCard key={key} {...props} />;
   } else if (anchorProgram) {
     return (
       <ErrorBoundary fallback={<UnknownDetailsCard {...props} />}>
