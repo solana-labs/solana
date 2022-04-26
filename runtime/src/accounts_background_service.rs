@@ -362,7 +362,7 @@ impl SnapshotRequestHandler {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct AbsRequestSender {
     snapshot_request_sender: Option<SnapshotRequestSender>,
 }

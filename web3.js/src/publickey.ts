@@ -222,8 +222,9 @@ export class PublicKey extends Struct {
   /**
    * Check that a pubkey is on the ed25519 curve.
    */
-  static isOnCurve(pubkey: Uint8Array): boolean {
-    return is_on_curve(pubkey) == 1;
+  static isOnCurve(pubkeyData: PublicKeyInitData): boolean {
+    const pubkey = new PublicKey(pubkeyData);
+    return is_on_curve(pubkey.toBytes()) == 1;
   }
 }
 

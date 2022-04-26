@@ -295,7 +295,7 @@ fn retransmit(
             .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        let num_nodes = match multi_target_send(socket, &shred.payload, &addrs) {
+        let num_nodes = match multi_target_send(socket, shred.payload(), &addrs) {
             Ok(()) => addrs.len(),
             Err(SendPktsError::IoError(ioerr, num_failed)) => {
                 stats

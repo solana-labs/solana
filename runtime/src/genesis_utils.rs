@@ -21,7 +21,7 @@ const VALIDATOR_LAMPORTS: u64 = 42;
 
 // fun fact: rustc is very close to make this const fn.
 pub fn bootstrap_validator_stake_lamports() -> u64 {
-    StakeState::get_rent_exempt_reserve(&Rent::default())
+    Rent::default().minimum_balance(StakeState::size_of())
 }
 
 // Number of lamports automatically used for genesis accounts

@@ -10,11 +10,16 @@ edition = "2021"
 publish = false
 
 [dependencies]
+bv = "0.11.1"
 clap = { version = "3.1.5", features = ["cargo"] }
+gimli = "0.26.1"
+goblin = { version = "0.5.1", features = ["std"] }
+itertools = "0.10.3"
+log = { version = "0.4.14", features = ["std"] }
 serde = "1.0.136"
 serde_json = "1.0.79"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.0" }
 solana-logger = { path = "../logger", version = "=1.11.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
-solana_rbpf = "=0.2.26"
+solana_rbpf = "=0.2.27"

@@ -53,10 +53,9 @@ pub use crate::shred_stats::{ProcessShredsStats, ShredFetchStats};
 use {
     crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
     bincode::config::Options,
-    num_derive::FromPrimitive,
-    num_traits::FromPrimitive,
+    num_enum::{IntoPrimitive, TryFromPrimitive},
     rayon::{prelude::*, ThreadPool},
-    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::{limited_deserialize, Packet},
@@ -68,7 +67,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
-    std::{cell::RefCell, mem::size_of},
+    std::{cell::RefCell, fmt::Debug, mem::size_of, ops::RangeInclusive},
     thiserror::Error,
 };
 
@@ -77,25 +76,32 @@ pub type Nonce = u32;
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-pub const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
-pub const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
-pub const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
-pub const SIZE_OF_SIGNATURE: usize = 64;
-pub const SIZE_OF_SHRED_TYPE: usize = 1;
-pub const SIZE_OF_SHRED_SLOT: usize = 8;
-pub const SIZE_OF_SHRED_INDEX: usize = 4;
+const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
+const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
+const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
+const SIZE_OF_SIGNATURE: usize = 64;
+const SIZE_OF_SHRED_TYPE: usize = 1;
+const SIZE_OF_SHRED_SLOT: usize = 8;
+const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
-pub const SIZE_OF_CODING_SHRED_HEADERS: usize =
+const SIZE_OF_CODING_SHRED_HEADERS: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_CODING_SHRED_HEADERS
     - SIZE_OF_NONCE;
+const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
+// DataShredHeader.size is sum of common-shred-header, data-shred-header and
+// data.len(). Broadcast stage may create zero length data shreds when the
+// previous slot was interrupted:
+// https://github.com/solana-labs/solana/blob/2d4defa47/core/src/broadcast_stage/standard_broadcast_run.rs#L79
+const DATA_SHRED_SIZE_RANGE: RangeInclusive<usize> =
+    SHRED_DATA_OFFSET..=SHRED_DATA_OFFSET + SIZE_OF_DATA_SHRED_PAYLOAD;
 
-pub const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
-pub const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
-pub const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
+const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
+const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
+const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
@@ -108,35 +114,46 @@ pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
 pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
 const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
-pub const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
+const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
 
-#[derive(Error, Debug)]
-pub enum ShredError {
-    #[error("invalid shred type")]
-    InvalidShredType,
-
-    #[error("invalid FEC rate; must be 0.0 < {0} < 1.0")]
-    InvalidFecRate(f32),
-
-    #[error("slot too low; current slot {slot} must be above parent slot {parent_slot}, but the difference must be below u16::MAX")]
-    SlotTooLow { slot: Slot, parent_slot: Slot },
-
-    #[error("serialization error")]
-    Serialize(#[from] Box<bincode::ErrorKind>),
-
-    #[error(
-        "invalid parent offset; parent_offset {parent_offset} must be larger than slot {slot}"
-    )]
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    BincodeError(#[from] bincode::Error),
+    #[error("Invalid data shred index: {index}")]
+    InvalidDataShredIndex { index: u32 },
+    #[error("Invalid data size: {size}, payload: {payload}")]
+    InvalidDataSize { size: u16, payload: usize },
+    #[error("Invalid erasure block index: {0:?}")]
+    InvalidErasureBlockIndex(Box<dyn Debug>),
+    #[error("Invalid num coding shreds: {0}")]
+    InvalidNumCodingShreds(u16),
+    #[error("Invalid parent_offset: {parent_offset}, slot: {slot}")]
     InvalidParentOffset { slot: Slot, parent_offset: u16 },
-
-    #[error("invalid payload")]
-    InvalidPayload,
+    #[error("Invalid parent slot: {parent_slot}, slot: {slot}")]
+    InvalidParentSlot { slot: Slot, parent_slot: Slot },
+    #[error("Invalid payload size: {size}")]
+    InvalidPayloadSize { size: usize },
+    #[error("Invalid shred type: {0:?}")]
+    InvalidShredType(ShredType),
 }
 
-pub type Result<T> = std::result::Result<T, ShredError>;
-
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, FromPrimitive, Hash, PartialEq, AbiEnumVisitor, AbiExample)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    AbiEnumVisitor,
+    AbiExample,
+    Deserialize,
+    IntoPrimitive,
+    Serialize,
+    TryFromPrimitive,
+)]
+#[serde(into = "u8", try_from = "u8")]
 pub enum ShredType {
     Data = 0b1010_0101,
     Code = 0b0101_1010,
@@ -148,59 +165,39 @@ impl Default for ShredType {
     }
 }
 
-impl Serialize for ShredType {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        (*self as u8).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ShredType {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let shred_type = u8::deserialize(deserializer)?;
-        Self::from_u8(shred_type)
-            .ok_or_else(|| serde::de::Error::custom(ShredError::InvalidShredType))
-    }
-}
-
 /// A common header that is present in data and code shred headers
-#[derive(Serialize, Clone, Deserialize, Default, PartialEq, Debug)]
-pub struct ShredCommonHeader {
-    pub signature: Signature,
-    pub shred_type: ShredType,
-    pub slot: Slot,
-    pub index: u32,
-    pub version: u16,
-    pub fec_set_index: u32,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
+struct ShredCommonHeader {
+    signature: Signature,
+    shred_type: ShredType,
+    slot: Slot,
+    index: u32,
+    version: u16,
+    fec_set_index: u32,
 }
 
 /// The data shred header has parent offset and flags
-#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
-pub struct DataShredHeader {
-    pub parent_offset: u16,
-    pub flags: u8,
-    pub size: u16,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
+struct DataShredHeader {
+    parent_offset: u16,
+    flags: u8,
+    size: u16, // common shred header + data shred header + data
 }
 
 /// The coding shred header has FEC information
-#[derive(Serialize, Clone, Default, Deserialize, PartialEq, Debug)]
-pub struct CodingShredHeader {
-    pub num_data_shreds: u16,
-    pub num_coding_shreds: u16,
-    pub position: u16,
+#[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
+struct CodingShredHeader {
+    num_data_shreds: u16,
+    num_coding_shreds: u16,
+    position: u16,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shred {
-    pub common_header: ShredCommonHeader,
-    pub data_header: DataShredHeader,
-    pub coding_header: CodingShredHeader,
-    pub payload: Vec<u8>,
+    common_header: ShredCommonHeader,
+    data_header: DataShredHeader,
+    coding_header: CodingShredHeader,
+    payload: Vec<u8>,
 }
 
 /// Tuple which uniquely identifies a shred should it exists.
@@ -267,6 +264,7 @@ impl Shred {
         packet.meta.size = len;
     }
 
+    // TODO: Should this sanitize output?
     pub fn new_from_data(
         slot: Slot,
         index: u32,
@@ -321,7 +319,7 @@ impl Shred {
             &data_header,
         )
         .expect("Failed to write data header into shred buffer");
-
+        // TODO: Need to check if data is too large!
         if let Some(data) = data {
             payload[start..start + data.len()].clone_from_slice(data);
         }
@@ -334,7 +332,7 @@ impl Shred {
         }
     }
 
-    pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self> {
+    pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut start = 0;
         let common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
@@ -361,13 +359,10 @@ impl Shred {
             coding_header,
             payload,
         };
-        shred
-            .sanitize()
-            .then(|| shred)
-            .ok_or(ShredError::InvalidPayload)
+        shred.sanitize().map(|_| shred)
     }
 
-    pub fn new_coding_shred_header(
+    pub fn new_empty_coding(
         slot: Slot,
         index: u32,
         fec_set_index: u32,
@@ -375,7 +370,7 @@ impl Shred {
         num_coding_shreds: u16,
         position: u16,
         version: u16,
-    ) -> (ShredCommonHeader, CodingShredHeader) {
+    ) -> Self {
         let header = ShredCommonHeader {
             shred_type: ShredType::Code,
             index,
@@ -384,38 +379,15 @@ impl Shred {
             fec_set_index,
             ..ShredCommonHeader::default()
         };
-        (
-            header,
-            CodingShredHeader {
-                num_data_shreds,
-                num_coding_shreds,
-                position,
-            },
-        )
-    }
-
-    pub fn new_empty_coding(
-        slot: Slot,
-        index: u32,
-        fec_set_index: u32,
-        num_data: u16,
-        num_code: u16,
-        position: u16,
-        version: u16,
-    ) -> Self {
-        let (header, coding_header) = Self::new_coding_shred_header(
-            slot,
-            index,
-            fec_set_index,
-            num_data,
-            num_code,
+        let coding_header = CodingShredHeader {
+            num_data_shreds,
+            num_coding_shreds,
             position,
-            version,
-        );
+        };
         Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header)
     }
 
-    pub fn new_empty_from_header(
+    fn new_empty_from_header(
         common_header: ShredCommonHeader,
         data_header: DataShredHeader,
         coding_header: CodingShredHeader,
@@ -470,24 +442,24 @@ impl Shred {
         self.common_header.slot
     }
 
-    pub fn parent(&self) -> Result<Slot> {
+    pub fn parent(&self) -> Result<Slot, Error> {
         match self.shred_type() {
             ShredType::Data => {
                 let slot = self.slot();
-                let parent_offset = Slot::from(self.data_header.parent_offset);
+                let parent_offset = self.data_header.parent_offset;
                 if parent_offset == 0 && slot != 0 {
-                    return Err(ShredError::InvalidParentOffset {
+                    return Err(Error::InvalidParentOffset {
                         slot,
-                        parent_offset: 0,
+                        parent_offset,
                     });
                 }
-                slot.checked_sub(parent_offset)
-                    .ok_or(ShredError::InvalidParentOffset {
+                slot.checked_sub(Slot::from(parent_offset))
+                    .ok_or(Error::InvalidParentOffset {
                         slot,
-                        parent_offset: self.data_header.parent_offset,
+                        parent_offset,
                     })
             }
-            ShredType::Code => Err(ShredError::InvalidShredType),
+            ShredType::Code => Err(Error::InvalidShredType(ShredType::Code)),
         }
     }
 
@@ -495,7 +467,29 @@ impl Shred {
         self.common_header.index
     }
 
-    pub(crate) fn fec_set_index(&self) -> u32 {
+    #[inline]
+    pub fn payload(&self) -> &Vec<u8> {
+        &self.payload
+    }
+
+    // Possibly trimmed payload;
+    // Should only be used when storing shreds to blockstore.
+    pub(crate) fn bytes_to_store(&self) -> &[u8] {
+        match self.shred_type() {
+            ShredType::Code => &self.payload,
+            ShredType::Data => {
+                // Payload will be padded out to SHRED_PAYLOAD_SIZE.
+                // But only need to store the bytes within data_header.size.
+                &self.payload[..self.data_header.size as usize]
+            }
+        }
+    }
+
+    pub fn into_payload(self) -> Vec<u8> {
+        self.payload
+    }
+
+    pub fn fec_set_index(&self) -> u32 {
         self.common_header.fec_set_index
     }
 
@@ -510,18 +504,45 @@ impl Shred {
     }
 
     // Returns true if the shred passes sanity checks.
-    pub(crate) fn sanitize(&self) -> bool {
-        self.erasure_block_index().is_some()
-            && match self.shred_type() {
-                ShredType::Data => {
-                    self.parent().is_ok()
-                        && usize::from(self.data_header.size) <= self.payload.len()
+    pub fn sanitize(&self) -> Result<(), Error> {
+        if self.payload().len() > SHRED_PAYLOAD_SIZE {
+            return Err(Error::InvalidPayloadSize {
+                size: self.payload.len(),
+            });
+        }
+        if self.erasure_block_index().is_none() {
+            let headers: Box<dyn Debug> = match self.shred_type() {
+                ShredType::Data => Box::new((self.common_header, self.data_header)),
+                ShredType::Code => Box::new((self.common_header, self.coding_header)),
+            };
+            return Err(Error::InvalidErasureBlockIndex(headers));
+        }
+        match self.shred_type() {
+            ShredType::Data => {
+                if self.index() as usize >= MAX_DATA_SHREDS_PER_SLOT {
+                    return Err(Error::InvalidDataShredIndex {
+                        index: self.index(),
+                    });
                 }
-                ShredType::Code => {
-                    u32::from(self.coding_header.num_coding_shreds)
-                        <= 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK
+                let _parent = self.parent()?;
+                let size = usize::from(self.data_header.size);
+                if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
+                    return Err(Error::InvalidDataSize {
+                        size: self.data_header.size,
+                        payload: self.payload.len(),
+                    });
                 }
             }
+            ShredType::Code => {
+                let num_coding_shreds = u32::from(self.coding_header.num_coding_shreds);
+                if num_coding_shreds > 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK {
+                    return Err(Error::InvalidNumCodingShreds(
+                        self.coding_header.num_coding_shreds,
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn version(&self) -> u16 {
@@ -652,7 +673,7 @@ impl Shred {
     }
 
     #[cfg(test)]
-    pub fn unset_data_complete(&mut self) {
+    pub(crate) fn unset_data_complete(&mut self) {
         if self.is_data() {
             self.data_header.flags &= !DATA_COMPLETE_SHRED;
         }
@@ -677,7 +698,7 @@ impl Shred {
         }
     }
 
-    pub fn reference_tick(&self) -> u8 {
+    pub(crate) fn reference_tick(&self) -> u8 {
         if self.is_data() {
             self.data_header.flags & SHRED_TICK_REFERENCE_MASK
         } else {
@@ -697,7 +718,7 @@ impl Shred {
         limited_deserialize::<Slot>(&p.data[slot_start..slot_end]).ok()
     }
 
-    pub fn reference_tick_from_data(data: &[u8]) -> u8 {
+    pub(crate) fn reference_tick_from_data(data: &[u8]) -> u8 {
         let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER
             - size_of::<u8>()
             - size_of::<u16>()];
@@ -708,20 +729,56 @@ impl Shred {
         self.signature()
             .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
     }
+
+    // Returns true if the erasure coding of the two shreds mismatch.
+    pub(crate) fn erasure_mismatch(self: &Shred, other: &Shred) -> Result<bool, Error> {
+        match (self.shred_type(), other.shred_type()) {
+            (ShredType::Code, ShredType::Code) => {
+                let CodingShredHeader {
+                    num_data_shreds,
+                    num_coding_shreds,
+                    position: _,
+                } = self.coding_header;
+                Ok(num_coding_shreds != other.coding_header.num_coding_shreds
+                    || num_data_shreds != other.coding_header.num_data_shreds
+                    || self.first_coding_index() != other.first_coding_index())
+            }
+            _ => Err(Error::InvalidShredType(ShredType::Data)),
+        }
+    }
+
+    pub(crate) fn num_data_shreds(self: &Shred) -> Result<u16, Error> {
+        match self.shred_type() {
+            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
+            ShredType::Code => Ok(self.coding_header.num_data_shreds),
+        }
+    }
+
+    pub(crate) fn num_coding_shreds(self: &Shred) -> Result<u16, Error> {
+        match self.shred_type() {
+            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
+            ShredType::Code => Ok(self.coding_header.num_coding_shreds),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Shredder {
-    pub slot: Slot,
-    pub parent_slot: Slot,
+    slot: Slot,
+    parent_slot: Slot,
     version: u16,
     reference_tick: u8,
 }
 
 impl Shredder {
-    pub fn new(slot: Slot, parent_slot: Slot, reference_tick: u8, version: u16) -> Result<Self> {
+    pub fn new(
+        slot: Slot,
+        parent_slot: Slot,
+        reference_tick: u8,
+        version: u16,
+    ) -> Result<Self, Error> {
         if slot < parent_slot || slot - parent_slot > u64::from(std::u16::MAX) {
-            Err(ShredError::SlotTooLow { slot, parent_slot })
+            Err(Error::InvalidParentSlot { slot, parent_slot })
         } else {
             Ok(Self {
                 slot,
@@ -839,7 +896,7 @@ impl Shredder {
         is_last_in_slot: bool,
         next_code_index: u32,
         process_stats: &mut ProcessShredsStats,
-    ) -> Result<Vec<Shred>> {
+    ) -> Result<Vec<Shred>, Error> {
         if data_shreds.is_empty() {
             return Ok(Vec::default());
         }
@@ -948,9 +1005,7 @@ impl Shredder {
             .collect()
     }
 
-    pub fn try_recovery(
-        shreds: Vec<Shred>,
-    ) -> std::result::Result<Vec<Shred>, reed_solomon_erasure::Error> {
+    pub fn try_recovery(shreds: Vec<Shred>) -> Result<Vec<Shred>, reed_solomon_erasure::Error> {
         use reed_solomon_erasure::Error::InvalidIndex;
         Self::verify_consistent_shred_payload_sizes("try_recovery()", &shreds)?;
         let (slot, fec_set_index) = match shreds.first() {
@@ -1013,9 +1068,8 @@ impl Shredder {
     }
 
     /// Combines all shreds to recreate the original buffer
-    pub fn deshred(shreds: &[Shred]) -> std::result::Result<Vec<u8>, reed_solomon_erasure::Error> {
+    pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, reed_solomon_erasure::Error> {
         use reed_solomon_erasure::Error::TooFewDataShards;
-        const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
         Self::verify_consistent_shred_payload_sizes("deshred()", shreds)?;
         let index = shreds.first().ok_or(TooFewDataShards)?.index();
         let aligned = shreds.iter().zip(index..).all(|(s, i)| s.index() == i);
@@ -1049,7 +1103,7 @@ impl Shredder {
     fn verify_consistent_shred_payload_sizes(
         caller: &str,
         shreds: &[Shred],
-    ) -> std::result::Result<(), reed_solomon_erasure::Error> {
+    ) -> Result<(), reed_solomon_erasure::Error> {
         if shreds.is_empty() {
             return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
         }
@@ -1110,12 +1164,12 @@ pub fn get_shred_slot_index_type(
         }
     };
 
-    let shred_type = match ShredType::from_u8(p.data[OFFSET_OF_SHRED_TYPE]) {
-        None => {
+    let shred_type = match ShredType::try_from(p.data[OFFSET_OF_SHRED_TYPE]) {
+        Err(_) => {
             stats.bad_shred_type += 1;
             return None;
         }
-        Some(shred_type) => shred_type,
+        Ok(shred_type) => shred_type,
     };
     Some((slot, index, shred_type))
 }
@@ -1167,7 +1221,7 @@ pub fn verify_test_data_shred(
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use {
         super::*,
         bincode::serialized_size,
@@ -1234,18 +1288,12 @@ pub mod tests {
         // Test that parent cannot be > current slot
         assert_matches!(
             Shredder::new(slot, slot + 1, 0, 0),
-            Err(ShredError::SlotTooLow {
-                slot: _,
-                parent_slot: _,
-            })
+            Err(Error::InvalidParentSlot { .. })
         );
         // Test that slot - parent cannot be > u16 MAX
         assert_matches!(
             Shredder::new(slot, slot - 1 - 0xffff, 0, 0),
-            Err(ShredError::SlotTooLow {
-                slot: _,
-                parent_slot: _,
-            })
+            Err(Error::InvalidParentSlot { .. })
         );
         let parent_slot = slot - 5;
         let shredder = Shredder::new(slot, parent_slot, 0, 0).unwrap();
@@ -1930,12 +1978,18 @@ pub mod tests {
         let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
         assert_matches!(
             shred.parent(),
-            Err(ShredError::InvalidParentOffset {
+            Err(Error::InvalidParentOffset {
                 slot: 10,
                 parent_offset: 1000
             })
         );
-        assert_matches!(shred_res, Err(ShredError::InvalidPayload));
+        assert_matches!(
+            shred_res,
+            Err(Error::InvalidParentOffset {
+                slot: 10,
+                parent_offset: 1000
+            })
+        );
     }
 
     #[test]
@@ -1992,7 +2046,7 @@ pub mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let (header, coding_header) = Shred::new_coding_shred_header(
+        let shred = Shred::new_empty_coding(
             8,   // slot
             2,   // index
             10,  // fec_set_index
@@ -2001,7 +2055,6 @@ pub mod tests {
             3,   // position
             200, // version
         );
-        let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
         packet.data[OFFSET_OF_SHRED_TYPE] = u8::MAX;
 
@@ -2013,12 +2066,13 @@ pub mod tests {
     #[test]
     fn test_shred_type_compat() {
         assert_eq!(std::mem::size_of::<ShredType>(), std::mem::size_of::<u8>());
-        assert_eq!(ShredType::from_u8(0), None);
-        assert_eq!(ShredType::from_u8(1), None);
+        assert_matches!(ShredType::try_from(0u8), Err(_));
+        assert_matches!(ShredType::try_from(1u8), Err(_));
         assert_matches!(bincode::deserialize::<ShredType>(&[0u8]), Err(_));
+        assert_matches!(bincode::deserialize::<ShredType>(&[1u8]), Err(_));
         // data shred
         assert_eq!(ShredType::Data as u8, 0b1010_0101);
-        assert_eq!(ShredType::from_u8(0b1010_0101), Some(ShredType::Data));
+        assert_eq!(ShredType::try_from(0b1010_0101), Ok(ShredType::Data));
         let buf = bincode::serialize(&ShredType::Data).unwrap();
         assert_eq!(buf, vec![0b1010_0101]);
         assert_matches!(
@@ -2027,12 +2081,149 @@ pub mod tests {
         );
         // coding shred
         assert_eq!(ShredType::Code as u8, 0b0101_1010);
-        assert_eq!(ShredType::from_u8(0b0101_1010), Some(ShredType::Code));
+        assert_eq!(ShredType::try_from(0b0101_1010), Ok(ShredType::Code));
         let buf = bincode::serialize(&ShredType::Code).unwrap();
         assert_eq!(buf, vec![0b0101_1010]);
         assert_matches!(
             bincode::deserialize::<ShredType>(&[0b0101_1010]),
             Ok(ShredType::Code)
         );
+    }
+
+    #[test]
+    fn test_sanitize_data_shred() {
+        let data = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+        let mut shred = Shred::new_from_data(
+            420, // slot
+            19,  // index
+            5,   // parent_offset
+            Some(&data),
+            true,  // is_last_data
+            false, // is_last_in_slot
+            3,     // reference_tick
+            1,     // version
+            16,    // fec_set_index
+        );
+        assert_matches!(shred.sanitize(), Ok(()));
+        // Corrupt shred by making it too large
+        {
+            let mut shred = shred.clone();
+            shred.payload.push(10u8);
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidPayloadSize { size: 1229 })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.size += 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 1140,
+                    payload: 1228,
+                })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.size = 0;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 0,
+                    payload: 1228,
+                })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataShredIndex { index: 32768 })
+            );
+        }
+        {
+            shred.data_header.size = shred.payload().len() as u16 + 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 1229,
+                    payload: 1228,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn test_sanitize_coding_shred() {
+        let mut shred = Shred::new_empty_coding(
+            1,  // slot
+            12, // index
+            11, // fec_set_index
+            11, // num_data_shreds
+            11, // num_coding_shreds
+            8,  // position
+            0,  // version
+        );
+        assert_matches!(shred.sanitize(), Ok(()));
+        // index < position is invalid.
+        {
+            let mut shred = shred.clone();
+            let index = shred.index() - shred.fec_set_index() - 1;
+            shred.set_index(index as u32);
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureBlockIndex { .. })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.coding_header.num_coding_shreds = 0;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureBlockIndex { .. })
+            );
+        }
+        // pos >= num_coding is invalid.
+        {
+            let mut shred = shred.clone();
+            let num_coding_shreds = shred.index() - shred.fec_set_index();
+            shred.coding_header.num_coding_shreds = num_coding_shreds as u16;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureBlockIndex { .. })
+            );
+        }
+        // set_index with num_coding that would imply the last
+        // shred has index > u32::MAX should fail.
+        {
+            let mut shred = shred.clone();
+            shred.common_header.fec_set_index = std::u32::MAX - 1;
+            shred.coding_header.num_data_shreds = 2;
+            shred.coding_header.num_coding_shreds = 4;
+            shred.coding_header.position = 1;
+            shred.common_header.index = std::u32::MAX - 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureBlockIndex { .. })
+            );
+
+            shred.coding_header.num_coding_shreds = 2000;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureBlockIndex { .. })
+            );
+
+            // Decreasing the number of num_coding_shreds will put it within
+            // the allowed limit.
+            shred.coding_header.num_coding_shreds = 2;
+            assert_matches!(shred.sanitize(), Ok(()));
+        }
+        {
+            shred.coding_header.num_coding_shreds = u16::MAX;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidNumCodingShreds(65535)));
+        }
     }
 }

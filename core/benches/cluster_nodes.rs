@@ -37,7 +37,7 @@ fn get_retransmit_peers_deterministic(
     num_simulated_shreds: usize,
 ) {
     for i in 0..num_simulated_shreds {
-        shred.common_header.index = i as u32;
+        shred.set_index(i as u32);
         let (_neighbors, _children) = cluster_nodes.get_retransmit_peers(
             *slot_leader,
             shred,
@@ -55,7 +55,7 @@ fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: O
     let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
     let slot = rand::random::<u64>();
     let mut shred = Shred::new_empty_data_shred();
-    shred.common_header.slot = slot;
+    shred.set_slot(slot);
     b.iter(|| {
         get_retransmit_peers_deterministic(
             &cluster_nodes,

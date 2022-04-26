@@ -9,13 +9,20 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
         max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-        MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS,
-        SIZE_OF_DATA_SHRED_PAYLOAD,
+        MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
     },
     solana_perf::test_tx,
-    solana_sdk::{hash::Hash, signature::Keypair},
+    solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
     test::Bencher,
 };
+
+// Copied these values here to avoid exposing shreds
+// internals only for the sake of benchmarks.
+
+// size of nonce: 4
+// size of common shred header: 83
+// size of coding shred header: 6
+const VALID_SHRED_DATA_LEN: usize = PACKET_DATA_SIZE - 4 - 83 - 6;
 
 fn make_test_entry(txs_per_entry: u64) -> Entry {
     Entry {
@@ -54,11 +61,10 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
 
 fn make_concatenated_shreds(num_shreds: usize) -> Vec<u8> {
     let data_shreds = make_shreds(num_shreds);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
-    let mut data: Vec<u8> = vec![0; num_shreds * valid_shred_data_len];
+    let mut data: Vec<u8> = vec![0; num_shreds * VALID_SHRED_DATA_LEN];
     for (i, shred) in (data_shreds[0..num_shreds]).iter().enumerate() {
-        data[i * valid_shred_data_len..(i + 1) * valid_shred_data_len]
-            .copy_from_slice(&shred.payload[..valid_shred_data_len]);
+        data[i * VALID_SHRED_DATA_LEN..(i + 1) * VALID_SHRED_DATA_LEN]
+            .copy_from_slice(&shred.payload()[..VALID_SHRED_DATA_LEN]);
     }
 
     data
@@ -120,7 +126,7 @@ fn bench_deserialize_hdr(bencher: &mut Bencher) {
     let shred = Shred::new_from_data(2, 1, 1, Some(&data), true, true, 0, 0, 1);
 
     bencher.iter(|| {
-        let payload = shred.payload.clone();
+        let payload = shred.payload().clone();
         let _ = Shred::new_from_serialized_shred(payload).unwrap();
     })
 }
@@ -157,9 +163,8 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
 fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
     let data = make_concatenated_shreds(symbol_count as usize);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
     bencher.iter(|| {
-        let encoder = Encoder::with_defaults(&data, valid_shred_data_len as u16);
+        let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
         encoder.get_encoded_packets(symbol_count);
     })
 }
@@ -168,8 +173,7 @@ fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
 fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
     let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
     let data = make_concatenated_shreds(symbol_count as usize);
-    let valid_shred_data_len = (SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS) as usize;
-    let encoder = Encoder::with_defaults(&data, valid_shred_data_len as u16);
+    let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
     let mut packets = encoder.get_encoded_packets(symbol_count as u32);
     packets.shuffle(&mut rand::thread_rng());
 

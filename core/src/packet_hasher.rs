@@ -31,7 +31,7 @@ impl PacketHasher {
     }
 
     pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {
-        self.hash_data(&shred.payload)
+        self.hash_data(shred.payload())
     }
 
     fn hash_data(&self, data: &[u8]) -> u64 {
