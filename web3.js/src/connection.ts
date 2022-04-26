@@ -4419,14 +4419,9 @@ export class Connection {
     } else {
       existingSubscription.callbacks.add(subscriptionConfig.callback);
     }
-    let unsubscribed = false;
     this._subscriptionDisposeFunctionsByClientSubscriptionId[
       clientSubscriptionId
     ] = async () => {
-      if (unsubscribed) {
-        return;
-      }
-      unsubscribed = true;
       delete this._subscriptionDisposeFunctionsByClientSubscriptionId[
         clientSubscriptionId
       ];
