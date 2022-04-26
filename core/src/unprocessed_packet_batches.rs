@@ -48,7 +48,7 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
-    pub fn new(packet: Packet, bank: &Option<Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
+    pub fn new(packet: Packet, bank: Option<&Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, bank, None)
     }
 
@@ -62,7 +62,7 @@ impl DeserializedPacket {
 
     pub fn new_internal(
         packet: Packet,
-        bank: &Option<Arc<Bank>>,
+        bank: Option<&Arc<Bank>>,
         fee_per_cu: Option<u64>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
@@ -73,7 +73,7 @@ impl DeserializedPacket {
 
         let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
             bank.as_ref()
-                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, &*bank))
+                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, bank))
                 .unwrap_or(0)
         });
         Ok(Self {
@@ -348,9 +348,9 @@ impl UnprocessedPacketBatches {
 pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
-    bank: &'a Option<Arc<Bank>>,
+    bank: Option<&'a Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
-    packet_indexes.iter().filter_map(|packet_index| {
+    packet_indexes.iter().filter_map(move |packet_index| {
         DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
     })
 }
@@ -381,7 +381,7 @@ pub fn transactions_to_deserialized_packets(
         .iter()
         .map(|transaction| {
             let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet, &None)
+            DeserializedPacket::new(packet, None)
         })
         .collect()
 }

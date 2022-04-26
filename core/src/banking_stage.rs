@@ -2076,11 +2076,7 @@ impl BankingStage {
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
                 // Passing `None` for bank for now will make all packet weights 0
-                unprocessed_packet_batches::deserialize_packets(
-                    packet_batch,
-                    packet_indexes,
-                    &None,
-                ),
+                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes, None),
             );
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
