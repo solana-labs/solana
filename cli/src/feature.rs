@@ -13,6 +13,7 @@ use {
     solana_sdk::{
         account::Account,
         clock::Slot,
+        epoch_schedule::EpochSchedule,
         feature::{self, Feature},
         feature_set::FEATURE_NAMES,
         message::Message,
@@ -107,6 +108,7 @@ impl Ord for CliFeature {
 #[serde(rename_all = "camelCase")]
 pub struct CliFeatures {
     pub features: Vec<CliFeature>,
+    pub epoch_schedule: EpochSchedule,
     pub feature_activation_allowed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_feature_sets: Option<CliClusterFeatureSets>,
@@ -121,7 +123,7 @@ impl fmt::Display for CliFeatures {
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} | {:<27} | {}",
+                    "{:<44} | {:<22} | {}",
                     "Feature", "Status", "Description"
                 ))
                 .bold()
@@ -130,13 +132,15 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} | {:<27} | {}",
+                "{:<44} | {:<22} | {}",
                 feature.id,
                 match feature.status {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
                     CliFeatureStatus::Pending => style("activation pending".to_string()).yellow(),
-                    CliFeatureStatus::Active(activation_slot) =>
-                        style(format!("active since slot {:>9}", activation_slot)).green(),
+                    CliFeatureStatus::Active(activation_slot) => {
+                        let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
+                        style(format!("active since epoch {:>3}", activation_epoch)).green()
+                    }
                 },
                 feature.description,
             )?;
@@ -721,8 +725,10 @@ fn process_status(
 
     let (feature_activation_allowed, cluster_feature_sets) =
         feature_activation_allowed(rpc_client, features.len() <= 1)?;
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
     let feature_set = CliFeatures {
         features,
+        epoch_schedule,
         feature_activation_allowed,
         cluster_feature_sets,
         inactive,
