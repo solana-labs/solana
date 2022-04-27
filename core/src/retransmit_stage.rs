@@ -535,37 +535,37 @@ mod tests {
         let slot = 1;
         let index = 5;
         let version = 0x40;
-        let shred = Shred::new_from_data(slot, index, 0, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(slot, index, 0, &[], true, true, 0, version, 0);
         let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 2, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(slot, index, 2, &[], true, true, 0, version, 0);
         // first duplicate shred for (1, 5) passed
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 8, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(slot, index, 8, &[], true, true, 0, version, 0);
         // 2nd duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 0, 1, 1, 0, version);
         // Coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 2, 1, 1, 0, version);
         // 2nd unique coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // same again is blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 3, 1, 1, 0, version);
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
