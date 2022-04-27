@@ -7146,7 +7146,6 @@ pub(crate) mod tests {
             },
             system_instruction::{self, SystemError},
             system_program,
-            sysvar::rewards::Rewards,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
@@ -9247,32 +9246,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
-            .vote_with_stake_delegations_map
-            .into_iter()
-            .map(
-                |(
-                    _vote_pubkey,
-                    VoteWithStakeDelegations {
-                        vote_state,
-                        delegations,
-                        ..
-                    },
-                )| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
-                                stake_account.stake_state(),
-                                &vote_state,
-                                None, // stake_history
-                            )
-                            .unwrap_or_default()
-                        })
-                        .sum::<u128>()
-                },
-            )
-            .sum();
+        load_vote_and_stake_accounts(&bank0);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -9283,25 +9257,26 @@ pub(crate) mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
-        // verify the inflation is represented in validator_points *
+        // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        let rewards = Rewards {
-            validator_point_value: 6625.150397619048,
-            unused: 0.0,
-        };
+        let slot_in_year = bank1.slot_in_year_for_inflation();
+        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
+        let validator_rate = bank1.inflation.read().unwrap().validator(slot_in_year);
+
+        let allocated_rewards =
+            (validator_rate * bank0.capitalization() as f64 * epoch_duration_in_years) as f64;
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - rewards.validator_point_value * validator_points as f64)
+                - allocated_rewards)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
         assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
@@ -9311,7 +9286,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
+                    lamports: allocated_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
