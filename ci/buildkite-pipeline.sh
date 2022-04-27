@@ -312,6 +312,14 @@ pull_or_push_steps() {
   # web3.js, explorer and docs changes run on Travis or Github actions...
 }
 
+not_a_draft_step() {
+  cat >> "$output_file" <<"EOF"
+  - block: "Draft build blocked"
+    prompt: "Unblock to proceed with Draft build?"
+    if: !!build.pull_request.draft
+    blocked_state: running
+EOF
+}
 
 if [[ -n $BUILDKITE_TAG ]]; then
   start_pipeline "Tag pipeline for $BUILDKITE_TAG"
@@ -332,6 +340,7 @@ if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
   done
 
   start_pipeline "Pull request pipeline for $BUILDKITE_BRANCH"
+  not_a_draft_step
 
   # Add helpful link back to the corresponding Github Pull Request
   annotate --style info --context pr-backlink \
