@@ -606,12 +606,11 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
     }
 
     fn send<T: BenchTpsClient>(&self, client: &Arc<T>) {
-        let mut send_txs = Measure::start("send_txs");
-        self.iter().for_each(|(_, tx)| {
-            client.send_transaction(tx.clone()).expect("transfer");
-        });
+        let mut send_txs = Measure::start("send_and_clone_txs");
+        let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
+        client.send_batch(batch).expect("transfer");
         send_txs.stop();
-        debug!("send {} txs: {}us", self.len(), send_txs.as_us());
+        debug!("send {} {}", self.len(), send_txs);
     }
 
     fn verify<T: 'static + BenchTpsClient + Send + Sync>(
