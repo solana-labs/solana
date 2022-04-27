@@ -6329,6 +6329,31 @@ pub mod tests {
     }
 
     #[test]
+    fn test_get_first_available_block() {
+        let mint_total = 1_000_000_000_000;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 0);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 0);
+        assert_eq!(blockstore.lowest_slot(), 0);
+        for slot in 1..4 {
+            let entries = make_slot_entries_with_transactions(100);
+            let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore.set_roots(vec![slot].iter()).unwrap();
+        }
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 0);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 0);
+        assert_eq!(blockstore.lowest_slot(), 1);
+
+        blockstore.purge_slots(0, 1, PurgeType::CompactionFilter);
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 3);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 2);
+        assert_eq!(blockstore.lowest_slot(), 2);
+    }
+
+    #[test]
     fn test_get_rooted_block() {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
