@@ -10,14 +10,21 @@ use {
         clap_app::get_clap_app,
         cli::{parse_command, process_command, CliCommandInfo, CliConfig},
     },
-    solana_cli_config::{Config, ConfigInput},
+    solana_cli_config::{Config, ConfigInput, CONFIG_FILE_OVERRIDE},
     solana_cli_output::{
         display::{println_name_value, println_name_value_or},
         OutputFormat,
     },
     solana_client::rpc_config::RpcSendTransactionConfig,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
-    std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration},
+    std::{
+        collections::HashMap,
+        error,
+        fs::{self},
+        path::PathBuf,
+        sync::Arc,
+        time::Duration,
+    },
 };
 
 fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error>> {
@@ -118,6 +125,18 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                         &commitment.commitment.to_string(),
                         commitment_setting_type,
                     );
+                }
+                ("default", Some(subcommand_matches)) => {
+                    if subcommand_matches.is_present("reset") {
+                        match fs::remove_file(CONFIG_FILE_OVERRIDE.as_ref().unwrap()) {
+                            Ok(_) => println!("Default config reset"),
+                            Err(_) => println!("Already default"),
+                        }
+                    } else {
+                        let filepath = subcommand_matches.value_of("filepath").unwrap();
+                        fs::write(CONFIG_FILE_OVERRIDE.as_ref().unwrap(), filepath)?;
+                        println!("Default config changed to: {}", filepath);
+                    }
                 }
                 ("import-address-labels", Some(subcommand_matches)) => {
                     let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);

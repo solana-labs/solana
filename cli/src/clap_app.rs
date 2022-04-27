@@ -167,6 +167,22 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                         ),
                 )
                 .subcommand(
+                    SubCommand::with_name("default")
+                        .about("Set the default config file")
+                        .arg(
+                            Arg::with_name("filepath")
+                                .value_name("FILEPATH")
+                                .required_unless("reset")
+                                .help("Path to the new default config file"),
+                        ).arg(
+                            Arg::with_name("reset")
+                                .value_name("RESET")
+                                .short("r")
+                                .takes_value(false)
+                                .help("Reset to default"),
+                        ),
+                )
+                .subcommand(
                     SubCommand::with_name("import-address-labels")
                         .about("Import a list of address labels")
                         .arg(

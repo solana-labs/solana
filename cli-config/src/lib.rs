@@ -62,7 +62,7 @@ use std::{
     path::Path,
 };
 pub use {
-    config::{Config, CONFIG_FILE},
+    config::{Config, CONFIG_FILE, CONFIG_FILE_OVERRIDE},
     config_input::{ConfigInput, SettingType},
 };
 

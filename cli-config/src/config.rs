@@ -1,7 +1,12 @@
 // Wallet settings that can be configured for long-term use
 use {
     serde_derive::{Deserialize, Serialize},
-    std::{collections::HashMap, io, path::Path},
+    std::{
+        collections::HashMap,
+        fs::File,
+        io::{self, Read},
+        path::Path,
+    },
     url::Url,
 };
 
@@ -17,8 +22,46 @@ lazy_static! {
     ///
     /// [lazy_static]: https://docs.rs/lazy_static
     pub static ref CONFIG_FILE: Option<String> = {
-        dirs_next::home_dir().map(|mut path| {
+        let config_override_path = dirs_next::home_dir().map(|mut path| {
+            path.extend(&[".config", "solana", "cli", "config_override"]);
+            path.to_str().unwrap().to_string()
+        });
+        let default_config_path = dirs_next::home_dir().map(|mut path| {
             path.extend(&[".config", "solana", "cli", "config.yml"]);
+            path.to_str().unwrap().to_string()
+        });
+        let config_path = match config_override_path {
+            Some(path) => {
+                let file = File::open(path);
+                match file {
+                    Ok(mut file) => {
+                        let mut buf = String::new();
+                        match file.read_to_string(&mut buf) {
+                            Ok(_) => Some(buf.strip_suffix('\n').unwrap_or(buf.as_str()).to_string()),
+                            Err(_) => default_config_path
+                        }
+                    },
+                    _ => default_config_path
+                }
+            }
+            _ => default_config_path
+        };
+        config_path
+    };
+
+    /// The path to the optional override for the default CLI configuration file.
+    ///
+    /// This is a [lazy_static] of `Option<String>`, the value of which is
+    ///
+    /// > `~/.config/solana/cli/config_override`
+    ///
+    /// It will only be `None` if it is unable to identify the user's home
+    /// directory, which should not happen under typical OS environments.
+    ///
+    /// [lazy_static]: https://docs.rs/lazy_static
+    pub static ref CONFIG_FILE_OVERRIDE: Option<String> = {
+        dirs_next::home_dir().map(|mut path| {
+            path.extend(&[".config", "solana", "cli", "config_override"]);
             path.to_str().unwrap().to_string()
         })
     };
