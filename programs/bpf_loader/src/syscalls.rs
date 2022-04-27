@@ -260,7 +260,7 @@ pub fn register_syscalls(
     )?;
     register_feature_gated_syscall!(
         syscall_registry,
-        disable_fees_sysvar,
+        !disable_fees_sysvar,
         b"sol_get_fees_sysvar",
         SyscallGetFeesSysvar::init,
         SyscallGetFeesSysvar::call,
