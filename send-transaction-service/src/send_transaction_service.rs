@@ -137,7 +137,7 @@ pub const LEADER_INFO_REFRESH_RATE_MS: u64 = 1000;
 
 /// A struct responsible for holding up-to-date leader information
 /// used for sending transactions.
-pub struct LeaderInfoProvider<T>
+pub struct CurrentLeaderInfo<T>
 where
     T: TpuInfo + std::marker::Send + 'static,
 {
@@ -151,7 +151,7 @@ where
     refresh_rate: Duration,
 }
 
-impl<T> LeaderInfoProvider<T>
+impl<T> CurrentLeaderInfo<T>
 where
     T: TpuInfo + std::marker::Send + 'static,
 {
@@ -209,7 +209,7 @@ impl SendTransactionService {
     ) -> Self {
         let retry_transactions = Arc::new(Mutex::new(HashMap::new()));
 
-        let leader_info_provider = Arc::new(Mutex::new(LeaderInfoProvider::new(leader_info)));
+        let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(leader_info)));
 
         let exit = Arc::new(AtomicBool::new(false));
         let receive_txn_thread = Self::receive_txn_thread(
@@ -240,7 +240,7 @@ impl SendTransactionService {
     fn receive_txn_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
-        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         exit: Arc<AtomicBool>,
@@ -327,7 +327,7 @@ impl SendTransactionService {
     fn retry_thread<T: TpuInfo + std::marker::Send + 'static>(
         tpu_address: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
-        leader_info_provider: Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         exit: Arc<AtomicBool>,
@@ -409,7 +409,7 @@ impl SendTransactionService {
         root_bank: &Arc<Bank>,
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
-        leader_info_provider: &Arc<Mutex<LeaderInfoProvider<T>>>,
+        leader_info_provider: &Arc<Mutex<CurrentLeaderInfo<T>>>,
         config: &Config,
     ) -> ProcessTransactionsResult {
         let mut result = ProcessTransactionsResult::default();
@@ -669,7 +669,7 @@ mod test {
         let mut transactions = HashMap::new();
 
         info!("Expired transactions are dropped...");
-        let leader_info_provider = Arc::new(Mutex::new(LeaderInfoProvider::new(None)));
+        let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(None)));
         transactions.insert(
             Signature::default(),
             TransactionInfo::new(
@@ -936,7 +936,7 @@ mod test {
                 Some(Instant::now()),
             ),
         );
-        let leader_info_provider = Arc::new(Mutex::new(LeaderInfoProvider::new(None)));
+        let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(None)));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
