@@ -176,7 +176,7 @@ where
         Self {
             last_leader_refresh: None,
             leader_info,
-            refresh_rate: Duration::from_millis(LEADER_INFO_REFRESH_RATE_IN_MS),
+            refresh_rate: Duration::from_millis(LEADER_INFO_REFRESH_RATE_MS),
         }
     }
 }
@@ -342,7 +342,7 @@ impl SendTransactionService {
             .spawn(move || loop {
                 let retry_interval_ms = config.retry_rate_ms;
                 sleep(Duration::from_millis(
-                    LONGEST_RETRY_SLEEP_IN_MS.min(retry_interval_ms),
+                    MAX_RETRY_SLEEP_MS.min(retry_interval_ms),
                 ));
                 if exit.load(Ordering::Relaxed) {
                     break;
