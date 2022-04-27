@@ -29,6 +29,7 @@ serde = "1.0.136"
 serde_derive = "1.0.103"
 serde_json = "1.0.79"
 soketto = "0.7"
+<<<<<<< HEAD
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.35" }
 solana-client = { path = "../client", version = "=1.10.35" }
 solana-entry = { path = "../entry", version = "=1.10.35" }
@@ -50,6 +51,29 @@ solana-version = { path = "../version", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
 spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.2.0", features = ["no-entrypoint"] }
+=======
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
+solana-client = { path = "../client", version = "=1.11.0" }
+solana-entry = { path = "../entry", version = "=1.11.0" }
+solana-faucet = { path = "../faucet", version = "=1.11.0" }
+solana-gossip = { path = "../gossip", version = "=1.11.0" }
+solana-ledger = { path = "../ledger", version = "=1.11.0" }
+solana-measure = { path = "../measure", version = "=1.11.0" }
+solana-metrics = { path = "../metrics", version = "=1.11.0" }
+solana-perf = { path = "../perf", version = "=1.11.0" }
+solana-poh = { path = "../poh", version = "=1.11.0" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
+solana-runtime = { path = "../runtime", version = "=1.11.0" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
+solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.0" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.0" }
+solana-streamer = { path = "../streamer", version = "=1.11.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
+solana-version = { path = "../version", version = "=1.11.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
+spl-token = { version = "=3.3.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.3.0", features = ["no-entrypoint"] }
+>>>>>>> a1b066a43 (Support token-2022 in RPC instruction parsing (#24537))
 stream-cancel = "0.8.1"
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }

@@ -27,8 +27,13 @@ solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
 spl-associated-token-account = { version = "=1.0.5", features = ["no-entrypoint"] }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
+<<<<<<< HEAD
 spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.2.0", features = ["no-entrypoint"] }
+=======
+spl-token = { version = "=3.3.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.3.0", features = ["no-entrypoint"] }
+>>>>>>> a1b066a43 (Support token-2022 in RPC instruction parsing (#24537))
 thiserror = "1.0"
 
 [package.metadata.docs.rs]
