@@ -108,7 +108,9 @@ impl Ord for CliFeature {
 #[serde(rename_all = "camelCase")]
 pub struct CliFeatures {
     pub features: Vec<CliFeature>,
+    #[serde(skip)]
     pub epoch_schedule: EpochSchedule,
+    #[serde(skip)]
     pub current_slot: Slot,
     pub feature_activation_allowed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
