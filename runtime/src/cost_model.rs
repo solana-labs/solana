@@ -143,7 +143,7 @@ impl CostModel {
             .for_each(|(i, k)| {
                 if message.is_writable(i) {
                     tx_cost.writable_accounts.push(*k);
-                    write_lock_cost += WRITE_LOCK_UNITS;
+                    write_lock_cost.saturating_add_in_place(WRITE_LOCK_UNITS);
                 }
             });
         write_lock_cost
