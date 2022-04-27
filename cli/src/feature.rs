@@ -119,13 +119,13 @@ pub struct CliFeatures {
 
 impl fmt::Display for CliFeatures {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.features.len() > 0 {
+        if !self.features.is_empty() {
             writeln!(
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} | {:<9} | {} | {}",
-                    "Feature", "Status", "Epoch", "Description"
+                    "{:<44} | {:<23} | {}",
+                    "Feature", "Status", "Description"
                 ))
                 .bold()
             )?;
@@ -133,22 +133,17 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} | {:<9} | {:<5} | {}",
+                "{:<44} | {:<23} | {}",
                 feature.id,
                 match feature.status {
-                    CliFeatureStatus::Inactive => style("inactive").red(),
-                    CliFeatureStatus::Pending => style("pending").yellow(),
-                    CliFeatureStatus::Active(_) => style("activated").green(),
-                },
-                match feature.status {
-                    CliFeatureStatus::Inactive => style("NA".to_string()).red(),
+                    CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
                     CliFeatureStatus::Pending => {
                         let current_epoch = self.epoch_schedule.get_epoch(self.current_slot);
-                        style((current_epoch + 1).to_string()).yellow()
+                        style(format!("pending until epoch {}", current_epoch + 1)).yellow()
                     }
                     CliFeatureStatus::Active(activation_slot) => {
                         let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
-                        style(activation_epoch.to_string()).green()
+                        style(format!("active since epoch {}", activation_epoch)).green()
                     }
                 },
                 feature.description,
