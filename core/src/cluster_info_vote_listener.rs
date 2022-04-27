@@ -1608,6 +1608,7 @@ mod tests {
 
     #[test]
     fn test_check_for_leader_bank_and_send_votes() {
+        println!("Running test_check_for_leader_bank_and_send_votes");
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let current_leader_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
