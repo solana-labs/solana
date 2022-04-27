@@ -12,7 +12,7 @@ default-run = "solana-validator"
 
 [dependencies]
 chrono = { version = "0.4.11", features = ["serde"] }
-clap = "2.33.1"
+clap = "3.1.12"
 console = "0.15.0"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"

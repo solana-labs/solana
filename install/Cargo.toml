@@ -14,7 +14,7 @@ atty = "0.2.11"
 bincode = "1.3.3"
 bzip2 = "0.4.3"
 chrono = { version = "0.4.11", features = ["serde"] }
-clap = { version = "2.33.1" }
+clap = { version = "3.1.12" }
 console = "0.15.0"
 crossbeam-channel = "0.5"
 ctrlc = { version = "3.2.2", features = ["termination"] }

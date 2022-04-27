@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4"
-clap = "2.33.0"
+clap = "3.1.12"
 rpassword = "6.0"
 solana-perf = { path = "../perf", version = "=1.11.0" }
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.0", default-features = false }
