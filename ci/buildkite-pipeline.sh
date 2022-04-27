@@ -332,7 +332,7 @@ pull_or_push_steps() {
 not_a_draft_step() {
   cat >> "$output_file" <<"EOF"
   - block: "Draft"
-    if: "build.pull_request.draft"
+    if: "true"
     blocked_state: running
 EOF
 }
