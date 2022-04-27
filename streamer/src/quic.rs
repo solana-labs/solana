@@ -372,52 +372,52 @@ impl StreamStats {
             ),
             (
                 "connection_add_failed",
-                self.connection_add_failed.load(Ordering::Relaxed),
+                self.connection_add_failed.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "connection_setup_timeout",
-                self.connection_setup_timeout.load(Ordering::Relaxed),
+                self.connection_setup_timeout.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "invalid_chunk",
-                self.total_invalid_chunks.load(Ordering::Relaxed),
+                self.total_invalid_chunks.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "invalid_chunk_size",
-                self.total_invalid_chunk_size.load(Ordering::Relaxed),
+                self.total_invalid_chunk_size.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "packets_allocated",
-                self.total_packets_allocated.load(Ordering::Relaxed),
+                self.total_packets_allocated.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "chunks_received",
-                self.total_chunks_received.load(Ordering::Relaxed),
+                self.total_chunks_received.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "packet_batch_send_error",
-                self.total_packet_batch_send_err.load(Ordering::Relaxed),
+                self.total_packet_batch_send_err.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "packet_batches_sent",
-                self.total_packet_batches_sent.load(Ordering::Relaxed),
+                self.total_packet_batches_sent.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "packet_batch_empty",
-                self.total_packet_batches_none.load(Ordering::Relaxed),
+                self.total_packet_batches_none.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "stream_read_errors",
-                self.total_stream_read_errors.load(Ordering::Relaxed),
+                self.total_stream_read_errors.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
