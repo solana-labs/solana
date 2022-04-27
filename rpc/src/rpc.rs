@@ -1124,7 +1124,10 @@ impl JsonRpcRequestProcessor {
             )));
         }
 
-        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+        let lowest_blockstore_slot = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
             // [start_slot..end_slot] can be fetched from BigTable. This range should not ever run
@@ -1188,7 +1191,10 @@ impl JsonRpcRequestProcessor {
             )));
         }
 
-        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+        let lowest_blockstore_slot = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
 
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
@@ -6677,6 +6683,7 @@ pub mod tests {
     #[test]
     fn test_get_blocks() {
         let rpc = RpcHandler::start();
+        let _ = rpc.create_test_transactions_and_populate_blockstore();
         rpc.add_roots_to_blockstore(vec![0, 1, 3, 4, 8]);
         rpc.block_commitment_cache
             .write()
@@ -6685,7 +6692,7 @@ pub mod tests {
 
         let request = create_test_request("getBlocks", Some(json!([0u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4, 8]);
+        assert_eq!(result, vec![0, 1, 3, 4, 8]);
 
         let request = create_test_request("getBlocks", Some(json!([2u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -6693,11 +6700,11 @@ pub mod tests {
 
         let request = create_test_request("getBlocks", Some(json!([0u64, 4u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4]);
+        assert_eq!(result, vec![0, 1, 3, 4]);
 
         let request = create_test_request("getBlocks", Some(json!([0u64, 7u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4]);
+        assert_eq!(result, vec![0, 1, 3, 4]);
 
         let request = create_test_request("getBlocks", Some(json!([9u64, 11u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -6713,7 +6720,7 @@ pub mod tests {
             Some(json!([0u64, MAX_GET_CONFIRMED_BLOCKS_RANGE])),
         );
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4, 8]);
+        assert_eq!(result, vec![0, 1, 3, 4, 8]);
 
         let request = create_test_request(
             "getBlocks",
