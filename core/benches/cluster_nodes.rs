@@ -39,7 +39,7 @@ fn get_retransmit_peers_deterministic(
     let parent_offset = if slot == 0 { 0 } else { 1 };
     for i in 0..num_simulated_shreds {
         let index = i as u32;
-        let shred = Shred::new_from_data(slot, index, parent_offset, None, false, false, 0, 0, 0);
+        let shred = Shred::new_from_data(slot, index, parent_offset, &[], false, false, 0, 0, 0);
         let (_neighbors, _children) = cluster_nodes.get_retransmit_peers(
             *slot_leader,
             &shred,

@@ -269,15 +269,14 @@ impl Shred {
         slot: Slot,
         index: u32,
         parent_offset: u16,
-        data: Option<&[u8]>,
+        data: &[u8],
         is_last_data: bool,
         is_last_in_slot: bool,
         reference_tick: u8,
         version: u16,
         fec_set_index: u32,
     ) -> Self {
-        let payload_size = SHRED_PAYLOAD_SIZE;
-        let mut payload = vec![0; payload_size];
+        let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let common_header = ShredCommonHeader {
             slot,
             index,
@@ -286,9 +285,7 @@ impl Shred {
             ..ShredCommonHeader::default()
         };
 
-        let size = (data.map(|d| d.len()).unwrap_or(0)
-            + SIZE_OF_DATA_SHRED_HEADER
-            + SIZE_OF_COMMON_SHRED_HEADER) as u16;
+        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
@@ -320,10 +317,7 @@ impl Shred {
         )
         .expect("Failed to write data header into shred buffer");
         // TODO: Need to check if data is too large!
-        if let Some(data) = data {
-            payload[start..start + data.len()].clone_from_slice(data);
-        }
-
+        payload[start..start + data.len()].copy_from_slice(data);
         Self {
             common_header,
             data_header,
@@ -362,9 +356,10 @@ impl Shred {
         shred.sanitize().map(|_| shred)
     }
 
-    pub fn new_empty_coding(
+    pub fn new_from_parity_shard(
         slot: Slot,
         index: u32,
+        parity_shard: &[u8],
         fec_set_index: u32,
         num_data_shreds: u16,
         num_coding_shreds: u16,
@@ -400,6 +395,10 @@ impl Shred {
             &coding_header,
         )
         .expect("Failed to write coding header into shred buffer");
+        // Tests may have an empty parity_shard.
+        if !parity_shard.is_empty() {
+            payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity_shard);
+        }
         Shred {
             common_header,
             data_header: DataShredHeader::default(),
@@ -835,7 +834,7 @@ impl Shredder {
                 self.slot,
                 shred_index,
                 parent_offset as u16,
-                Some(data),
+                data,
                 is_last_data,
                 is_last_in_slot,
                 self.reference_tick,
@@ -965,17 +964,16 @@ impl Shredder {
             .enumerate()
             .map(|(i, parity)| {
                 let index = next_code_index + u32::try_from(i).unwrap();
-                let mut shred = Shred::new_empty_coding(
+                Shred::new_from_parity_shard(
                     slot,
                     index,
+                    parity,
                     fec_set_index,
                     num_data,
                     num_coding,
                     u16::try_from(i).unwrap(), // position
                     version,
-                );
-                shred.payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity);
-                shred
+                )
             })
             .collect()
     }
@@ -1947,7 +1945,7 @@ mod tests {
 
     #[test]
     fn test_invalid_parent_offset() {
-        let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
+        let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], false, false, 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
         let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
@@ -1971,7 +1969,7 @@ mod tests {
     fn test_shred_offsets() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(1, 3, 0, &[], true, true, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
         let ret = get_shred_slot_index_type(&packet, &mut stats);
@@ -2001,9 +1999,10 @@ mod tests {
         );
         assert_eq!(stats.index_overrun, 4);
 
-        let shred = Shred::new_empty_coding(
+        let shred = Shred::new_from_parity_shard(
             8,   // slot
             2,   // index
+            &[], // parity_shard
             10,  // fec_set_index
             30,  // num_data
             4,   // num_code
@@ -2016,14 +2015,15 @@ mod tests {
             get_shred_slot_index_type(&packet, &mut stats)
         );
 
-        let shred = Shred::new_from_data(1, std::u32::MAX - 10, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(1, std::u32::MAX - 10, 0, &[], true, true, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let shred = Shred::new_empty_coding(
+        let shred = Shred::new_from_parity_shard(
             8,   // slot
             2,   // index
+            &[], // parity_shard
             10,  // fec_set_index
             30,  // num_data_shreds
             4,   // num_coding_shreds
@@ -2072,8 +2072,7 @@ mod tests {
             420, // slot
             19,  // index
             5,   // parent_offset
-            Some(&data),
-            true,  // is_last_data
+            &data, true,  // is_last_data
             false, // is_last_in_slot
             3,     // reference_tick
             1,     // version
@@ -2133,14 +2132,15 @@ mod tests {
 
     #[test]
     fn test_sanitize_coding_shred() {
-        let mut shred = Shred::new_empty_coding(
-            1,  // slot
-            12, // index
-            11, // fec_set_index
-            11, // num_data_shreds
-            11, // num_coding_shreds
-            8,  // position
-            0,  // version
+        let mut shred = Shred::new_from_parity_shard(
+            1,   // slot
+            12,  // index
+            &[], // parity_shard
+            11,  // fec_set_index
+            11,  // num_data_shreds
+            11,  // num_coding_shreds
+            8,   // position
+            0,   // version
         );
         assert_matches!(shred.sanitize(), Ok(()));
         // index < position is invalid.

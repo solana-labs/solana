@@ -76,7 +76,7 @@ impl StandardBroadcastRun {
                     state.slot,
                     state.next_shred_index,
                     parent_offset as u16,
-                    None, // data
+                    &[],  // data
                     true, // is_last_in_fec_set
                     true, // is_last_in_slot
                     reference_tick,
