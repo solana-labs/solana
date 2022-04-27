@@ -597,7 +597,6 @@ mod test {
         quinn::{ClientConfig, NewConnection},
         solana_sdk::quic::QUIC_KEEP_ALIVE_MS,
         std::{net::SocketAddr, time::Instant},
-        tokio::time::sleep,
     };
 
     struct SkipServerVerification;
@@ -702,11 +701,14 @@ mod test {
             let mut s1 = conn1.connection.open_uni().await.unwrap();
             let mut s2 = conn2.connection.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
-            s2.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
-            // Wait for a few milliseconds to allow connection close state to
-            // propagate from server to the client
-            sleep(Duration::from_millis(10)).await;
+            // Send enough data to create more than 1 chunks.
+            // The first will try to open the connection (which should fail).
+            // The following chunks will enable the detection of connection failure.
+            let data = vec![1u8; PACKET_DATA_SIZE * 2];
+            s2.write_all(&data)
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
             s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
