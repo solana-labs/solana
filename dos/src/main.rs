@@ -27,11 +27,11 @@
 //! 2. With blockhash and payer:
 //! 2.1 Single instruction transaction
 //! ```bash
-//! solana-dos $COMMON --valid-blockhash --transaction-type single-transfer
+//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 1
 //! ```
 //! 2.2 Multi instruction transaction
 //! ```bash
-//! solana-dos $COMMON --valid-blockhash --transaction-type multi-transfer
+//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 8
 //! ```
 //! 2.3 Account creation transaction
 //! ```bash
@@ -59,7 +59,7 @@ use {
         signature::{Keypair, Signature, Signer},
         stake, system_instruction,
         system_instruction::SystemInstruction,
-        system_program, system_transaction,
+        system_program,
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -147,22 +147,13 @@ impl TransactionGenerator {
         // transaction_type is known to be present because it is required by blockhash option in cli
         let transaction_type = self.transaction_params.transaction_type.as_ref().unwrap();
         match transaction_type {
-            TransactionType::SingleTransfer => {
-                self.create_single_transfer_transaction(payer, &destinations[0].pubkey())
-            }
-            TransactionType::MultiTransfer => {
+            TransactionType::Transfer => {
                 self.create_multi_transfer_transaction(payer, &destinations)
             }
             TransactionType::AccountCreation => {
                 self.create_account_transaction(payer, destinations[0])
             }
         }
-    }
-
-    /// Creates a transaction which transfers some lamports from payer to destination
-    fn create_single_transfer_transaction(&self, payer: &Keypair, to: &Pubkey) -> Transaction {
-        let to_transfer = 500_000_000; // specify amount which will cause error
-        system_transaction::transfer(payer, to, to_transfer, self.blockhash)
     }
 
     /// Creates a transaction which transfers some lamports from payer to several destinations
@@ -230,7 +221,8 @@ impl TransactionGenerator {
                 program_ids,
                 instructions,
             );
-            tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_signatures];
+            let num_signatures = self.transaction_params.num_signatures.unwrap();
+            tx.signatures = vec![Signature::new_unique(); num_signatures];
             tx
         }
     }
@@ -370,6 +362,16 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
+fn get_permutation_size(num_signatures: Option<usize>, num_instructions: Option<usize>) -> usize {
+    if let Some(num_signatures) = num_signatures {
+        num_signatures
+    } else if let Some(num_instructions) = num_instructions {
+        num_instructions
+    } else {
+        1 // for the case AccountCreation
+    }
+}
+
 fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     target: SocketAddr,
     iterations: usize,
@@ -379,6 +381,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let num_signatures = transaction_params.num_signatures;
+    let num_instructions = transaction_params.num_instructions;
     let valid_signatures = transaction_params.valid_signatures;
     let valid_blockhash = transaction_params.valid_blockhash;
 
@@ -394,27 +397,31 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     // The number of chunks is described by binomial coefficient
     // and hence this choice of n provides large enough number of permutations
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    // 1000 is arbitrary number. In case of permutation_size > 1,
+    // this guaranties large enough set of unique permutations
+    let permutation_size = get_permutation_size(num_signatures, num_instructions);
+    let num_keypairs = 1000 * permutation_size;
     if valid_signatures || valid_blockhash {
-        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
     }
 
     let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-    let mut it = indexes.iter().permutations(num_signatures);
+    let mut it = indexes.iter().permutations(permutation_size);
     let mut count = 0;
     let mut total_count = 0;
     let mut error_count = 0;
     let mut last_log = Instant::now();
     loop {
         let chunk_keypairs = if valid_signatures || valid_blockhash {
-            let permut = it.next();
-            if permut.is_none() {
+            let permutation = it.next();
+            if permutation.is_none() {
                 // if ran out of permutations, regenerate keys
                 keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
                 info!("Regenerate keypairs");
                 continue;
             }
-            let permut = permut.unwrap();
-            Some(apply_permutation(permut, &keypairs_flat))
+            let permutation = permutation.unwrap();
+            Some(apply_permutation(permutation, &keypairs_flat))
         } else {
             None
         };
@@ -494,8 +501,9 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                 let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
                 let payer = &payers[0];
 
+                let permutation_size = get_permutation_size(tp.num_signatures, tp.num_instructions);
                 let keypairs: Vec<Keypair> =
-                    (0..tp.num_signatures).map(|_| Keypair::new()).collect();
+                    (0..permutation_size).map(|_| Keypair::new()).collect();
                 let keypairs_chunk: Option<Vec<&Keypair>> =
                     if tp.valid_signatures || tp.valid_blockhash {
                         Some(keypairs.iter().collect())
@@ -686,7 +694,6 @@ pub mod test {
     // TODO(klykov): remove ignore and serial after fix of the issue
     #[test]
     #[serial]
-    #[ignore]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -717,8 +724,6 @@ pub mod test {
     }
 
     #[test]
-    #[serial]
-    #[ignore]
     fn test_dos_without_blockhash() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -749,11 +754,12 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 8,
+                    num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: true,
                     unique_transactions: false,
                     transaction_type: None,
+                    num_instructions: None,
                 },
             },
         );
@@ -772,11 +778,12 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 8,
+                    num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: false,
                     unique_transactions: true,
                     transaction_type: None,
+                    num_instructions: None,
                 },
             },
         );
@@ -795,19 +802,18 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 8,
+                    num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: None,
+                    num_instructions: None,
                 },
             },
         );
     }
 
     #[test]
-    #[serial]
-    #[ignore]
     fn test_dos_with_blockhash_and_payer() {
         solana_logger::setup();
 
@@ -872,15 +878,17 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: false,
-                    transaction_type: Some(TransactionType::SingleTransfer),
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(1),
                 },
             },
         );
-        // creates and sends unique transactions of type SingleTransfer
+
+        // creates and sends unique transactions of Transfer
         // which tries to send too much lamports from payer to one recipient
         // it uses several threads
         run_dos(
@@ -896,15 +904,16 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
-                    transaction_type: Some(TransactionType::SingleTransfer),
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(1),
                 },
             },
         );
-        // creates and sends unique transactions of type MultiTransfer
+        // creates and sends unique transactions of type Transfer
         // which tries to send too much lamports from payer to several recipients
         // it uses several threads
         run_dos(
@@ -920,11 +929,12 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
-                    transaction_type: Some(TransactionType::MultiTransfer),
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(8),
                 },
             },
         );
@@ -944,11 +954,12 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
                     transaction_type: Some(TransactionType::AccountCreation),
+                    num_instructions: None,
                 },
             },
         );

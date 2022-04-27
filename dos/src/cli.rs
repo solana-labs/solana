@@ -51,10 +51,10 @@ pub struct DosClientParameters {
 pub struct TransactionParams {
     #[clap(
         long,
-        default_value = "2",
+        conflicts_with("valid-blockhash"),
         help = "Number of signatures in transaction"
     )]
-    pub num_signatures: usize,
+    pub num_signatures: Option<usize>,
 
     #[clap(
         long,
@@ -76,6 +76,13 @@ pub struct TransactionParams {
         help = "Type of transaction to be sent [Optional]"
     )]
     pub transaction_type: Option<TransactionType>,
+
+    #[clap(
+        long,
+        required_if_eq("transaction-type", "transfer"),
+        help = "Number of instructions in transfer transaction"
+    )]
+    pub num_instructions: Option<usize>,
 }
 
 #[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
@@ -103,8 +110,7 @@ pub enum DataType {
 
 #[derive(ArgEnum, Serialize, Deserialize, Debug, Clone)]
 pub enum TransactionType {
-    SingleTransfer,
-    MultiTransfer,
+    Transfer,
     AccountCreation,
 }
 
