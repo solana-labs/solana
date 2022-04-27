@@ -209,8 +209,9 @@ export function AccountHeader({
       <div className="row align-items-end">
         {unverified && (
           <div className="alert alert-danger alert-scam" role="alert">
-            Warning! This token uses custom metadata and may have spoofed its
-            name and logo to look like another token.
+            Warning! Token names and logos are not unique. This token may have
+            spoofed its name and logo to look like another token. Verify the
+            token's mint address to ensure it is correct.
           </div>
         )}
         <div className="col-auto">
