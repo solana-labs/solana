@@ -14,6 +14,7 @@ import { BlockProgramsCard } from "./BlockProgramsCard";
 import { BlockAccountsCard } from "./BlockAccountsCard";
 import { displayTimestamp, displayTimestampUtc } from "utils/date";
 import { Epoch } from "components/common/Epoch";
+import { Address } from "components/common/Address";
 
 export function BlockOverviewCard({
   slot,
@@ -43,7 +44,8 @@ export function BlockOverviewCard({
     return <ErrorCard retry={refresh} text={`Block ${slot} was not found`} />;
   }
 
-  const block = confirmedBlock.data.block;
+  const { block, blockLeader, childSlot, childLeader, parentLeader } =
+    confirmedBlock.data;
   const committedTxs = block.transactions.filter((tx) => tx.meta?.err === null);
   const epoch = clusterInfo?.epochSchedule.getEpoch(slot);
 
@@ -57,17 +59,25 @@ export function BlockOverviewCard({
         </div>
         <TableCardBody>
           <tr>
-            <td className="w-100">Slot</td>
-            <td className="text-lg-end font-monospace">
-              <Slot slot={slot} />
-            </td>
-          </tr>
-          <tr>
             <td className="w-100">Blockhash</td>
             <td className="text-lg-end font-monospace">
               <span>{block.blockhash}</span>
             </td>
           </tr>
+          <tr>
+            <td className="w-100">Slot</td>
+            <td className="text-lg-end font-monospace">
+              <Slot slot={slot} />
+            </td>
+          </tr>
+          {blockLeader !== undefined && (
+            <tr>
+              <td className="w-100">Slot Leader</td>
+              <td className="text-lg-end">
+                <Address pubkey={blockLeader} alignRight link />
+              </td>
+            </tr>
+          )}
           {block.blockTime ? (
             <>
               <tr>
@@ -93,12 +103,6 @@ export function BlockOverviewCard({
               <td className="text-lg-end">Unavailable</td>
             </tr>
           )}
-          <tr>
-            <td className="w-100">Parent Slot</td>
-            <td className="text-lg-end font-monospace">
-              <Slot slot={block.parentSlot} link />
-            </td>
-          </tr>
           {epoch !== undefined && (
             <tr>
               <td className="w-100">Epoch</td>
@@ -113,11 +117,33 @@ export function BlockOverviewCard({
               <span>{block.previousBlockhash}</span>
             </td>
           </tr>
-          {confirmedBlock.data.child && (
+          <tr>
+            <td className="w-100">Parent Slot</td>
+            <td className="text-lg-end font-monospace">
+              <Slot slot={block.parentSlot} link />
+            </td>
+          </tr>
+          {parentLeader !== undefined && (
+            <tr>
+              <td className="w-100">Parent Slot Leader</td>
+              <td className="text-lg-end">
+                <Address pubkey={parentLeader} alignRight link />
+              </td>
+            </tr>
+          )}
+          {childSlot !== undefined && (
             <tr>
               <td className="w-100">Child Slot</td>
               <td className="text-lg-end font-monospace">
-                <Slot slot={confirmedBlock.data.child} link />
+                <Slot slot={childSlot} link />
+              </td>
+            </tr>
+          )}
+          {childLeader !== undefined && (
+            <tr>
+              <td className="w-100">Child Slot Leader</td>
+              <td className="text-lg-end">
+                <Address pubkey={childLeader} alignRight link />
               </td>
             </tr>
           )}
