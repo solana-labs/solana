@@ -134,7 +134,7 @@ describe('Transaction', () => {
 
     const fee = await transaction.getEstimatedFee(connection);
     expect(fee).to.eq(5000);
-  }).timeout(10 * 1000);
+  }).timeout(60 * 1000);
 
   it('partialSign', () => {
     const account1 = Keypair.generate();
