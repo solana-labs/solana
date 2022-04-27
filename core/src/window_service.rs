@@ -863,14 +863,15 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let mut coding_shred = Shred::new_empty_coding(
-            5, // slot
-            5, // index
-            5, // fec_set_index
-            6, // num_data_shreds
-            6, // num_coding_shreds
-            3, // position
-            0, // version
+        let mut coding_shred = Shred::new_from_parity_shard(
+            5,   // slot
+            5,   // index
+            &[], // parity_shard
+            5,   // fec_set_index
+            6,   // num_data_shreds
+            6,   // num_coding_shreds
+            3,   // position
+            0,   // version
         );
         coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
@@ -945,14 +946,15 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let shred = Shred::new_empty_coding(
-            5, // slot
-            5, // index
-            5, // fec_set_index
-            6, // num_data_shreds
-            6, // num_coding_shreds
-            4, // position
-            0, // version
+        let shred = Shred::new_from_parity_shard(
+            5,   // slot
+            5,   // index
+            &[], // parity_shard
+            5,   // fec_set_index
+            6,   // num_data_shreds
+            6,   // num_coding_shreds
+            4,   // position
+            0,   // version
         );
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);

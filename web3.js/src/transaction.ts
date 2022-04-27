@@ -2,6 +2,10 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
+import {
+  PACKET_DATA_SIZE,
+  SIGNATURE_LENGTH_IN_BYTES,
+} from './transaction-constants';
 import {Connection} from './connection';
 import {Message} from './message';
 import {PublicKey} from './publickey';
@@ -19,21 +23,8 @@ export type TransactionSignature = string;
 
 /**
  * Default (empty) signature
- *
- * Signatures are 64 bytes in length
  */
-const DEFAULT_SIGNATURE = Buffer.alloc(64).fill(0);
-
-/**
- * Maximum over-the-wire size of a Transaction
- *
- * 1280 is IPv6 minimum MTU
- * 40 bytes is the size of the IPv6 header
- * 8 bytes is the size of the fragment header
- */
-export const PACKET_DATA_SIZE = 1280 - 40 - 8;
-
-const SIGNATURE_LENGTH = 64;
+const DEFAULT_SIGNATURE = Buffer.alloc(SIGNATURE_LENGTH_IN_BYTES).fill(0);
 
 /**
  * Account metadata used to define instructions
@@ -747,8 +738,8 @@ export class Transaction {
     const signatureCount = shortvec.decodeLength(byteArray);
     let signatures = [];
     for (let i = 0; i < signatureCount; i++) {
-      const signature = byteArray.slice(0, SIGNATURE_LENGTH);
-      byteArray = byteArray.slice(SIGNATURE_LENGTH);
+      const signature = byteArray.slice(0, SIGNATURE_LENGTH_IN_BYTES);
+      byteArray = byteArray.slice(SIGNATURE_LENGTH_IN_BYTES);
       signatures.push(bs58.encode(Buffer.from(signature)));
     }
 

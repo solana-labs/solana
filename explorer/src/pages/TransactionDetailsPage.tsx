@@ -274,7 +274,7 @@ function StatusCard({
         </tr>
 
         <tr>
-          <td>Block</td>
+          <td>Slot</td>
           <td className="text-lg-end">
             <Slot slot={info.slot} link />
           </td>

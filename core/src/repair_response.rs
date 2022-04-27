@@ -69,7 +69,7 @@ mod test {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
+            &[1, 2, 3, 4],
             true,
             true,
             0,

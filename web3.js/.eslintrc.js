@@ -34,6 +34,7 @@ module.exports = {
     'linebreak-style': ['error', 'unix'],
     'no-console': [0],
     'no-trailing-spaces': ['error'],
+    'no-undef': 'off',
     'no-unused-vars': 'off',
     quotes: [
       'error',
