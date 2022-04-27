@@ -161,10 +161,10 @@ fn sum_additional_costs(batch: &TransactionBatch) -> u64 {
 
     for transaction in transactions {
         let transaction_cost = cost_model.calculate_cost(transaction);
-        additiona_costs.saturating_add_in_place(transaction_cost.signature_cost);
-        additiona_costs.saturating_add_in_place(transaction_cost.write_lock_cost);
-        additiona_costs.saturating_add_in_place(transaction_cost.data_bytes_cost);
-        additiona_costs.saturating_add_in_place(transaction_cost.builtins_execution_cost);
+        additional_costs = additional_costs.saturating_add(transaction_cost.signature_cost);
+        additional_costs = additional_costs.saturating_add(transaction_cost.write_lock_cost);
+        additional_costs = additional_costs.saturating_add(transaction_cost.data_bytes_cost);
+        additional_costs = additional_costs.saturating_add(transaction_cost.builtins_execution_cost);
     }
     additional_costs
 }
