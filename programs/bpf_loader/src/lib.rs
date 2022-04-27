@@ -146,6 +146,9 @@ pub fn create_executor(
         reject_callx_r10: invoke_context
             .feature_set
             .is_active(&reject_callx_r10::id()),
+        dynamic_stack_frames: false,
+        enable_sdiv: false,
+        optimize_rodata: false,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
