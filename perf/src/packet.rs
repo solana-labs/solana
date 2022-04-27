@@ -60,6 +60,32 @@ impl PacketBatch {
         batch
     }
 
+    pub fn new_unpinned_with_recycler_data_and_dests<T: Serialize>(
+        recycler: PacketBatchRecycler,
+        name: &'static str,
+        dests_and_data: &[(SocketAddr, T)],
+    ) -> Self {
+        let mut batch =
+            PacketBatch::new_unpinned_with_recycler(recycler, dests_and_data.len(), name);
+        batch
+            .packets
+            .resize(dests_and_data.len(), Packet::default());
+
+        for ((addr, data), packet) in dests_and_data.iter().zip(batch.packets.iter_mut()) {
+            if !addr.ip().is_unspecified() && addr.port() != 0 {
+                if let Err(e) = Packet::populate_packet(packet, Some(addr), &data) {
+                    // TODO: This should never happen. Instead the caller should
+                    // break the payload into smaller messages, and here any errors
+                    // should be propagated.
+                    error!("Couldn't write to packet {:?}. Data skipped.", e);
+                }
+            } else {
+                trace!("Dropping packet, as destination is unknown");
+            }
+        }
+        batch
+    }
+
     pub fn new_unpinned_with_recycler_data(
         recycler: &PacketBatchRecycler,
         name: &'static str,
@@ -98,33 +124,6 @@ pub fn to_packet_batches<T: Serialize>(items: &[T], chunk_size: usize) -> Vec<Pa
 #[cfg(test)]
 pub fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch> {
     to_packet_batches(items, NUM_PACKETS)
-}
-
-pub fn to_packet_batch_with_destination<T: Serialize>(
-    recycler: PacketBatchRecycler,
-    dests_and_data: &[(SocketAddr, T)],
-) -> PacketBatch {
-    let mut batch = PacketBatch::new_unpinned_with_recycler(
-        recycler,
-        dests_and_data.len(),
-        "to_packet_batch_with_destination",
-    );
-    batch
-        .packets
-        .resize(dests_and_data.len(), Packet::default());
-    for ((addr, data), packet) in dests_and_data.iter().zip(batch.packets.iter_mut()) {
-        if !addr.ip().is_unspecified() && addr.port() != 0 {
-            if let Err(e) = Packet::populate_packet(packet, Some(addr), &data) {
-                // TODO: This should never happen. Instead the caller should
-                // break the payload into smaller messages, and here any errors
-                // should be propagated.
-                error!("Couldn't write to packet {:?}. Data skipped.", e);
-            }
-        } else {
-            trace!("Dropping packet, as destination is unknown");
-        }
-    }
-    batch
 }
 
 pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
