@@ -597,6 +597,7 @@ mod test {
         quinn::{ClientConfig, NewConnection},
         solana_sdk::quic::QUIC_KEEP_ALIVE_MS,
         std::{net::SocketAddr, time::Instant},
+        tokio::time::sleep,
     };
 
     struct SkipServerVerification;
@@ -703,6 +704,9 @@ mod test {
             s1.write_all(&[0u8]).await.unwrap();
             s2.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
+            // Wait for a few milliseconds to allow connection close state to
+            // propagate from server to the client
+            sleep(Duration::from_millis(10)).await;
             s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
