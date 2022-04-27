@@ -46,6 +46,7 @@ use {
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
     solana_client::rpc_client::RpcClient,
+    //solana_client::transaction_executor::TransactionExecutor,
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
     solana_gossip::{
@@ -256,10 +257,13 @@ fn create_sender_thread(
     tx_receiver: Receiver<TransactionMsg>,
     mut n_alive_threads: usize,
     target: &SocketAddr,
+    //addr: SocketAddr,
 ) -> thread::JoinHandle<()> {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let target = target.clone();
     let timer_receiver = tick(Duration::from_millis(REPORT_EACH_MILLIS as u64));
+
+    //let executor = TransactionExecutor::new(addr);
 
     thread::spawn(move || {
         let mut count: usize = 0;
@@ -276,6 +280,8 @@ fn create_sender_thread(
                             if res.is_err() {
                                 error_count += 1;
                             }
+                            //executor.push_transactions(vec![tx]);
+                            //let _ = executor.drain_cleared();
 
                             count += 1;
                             total_count += 1;
@@ -513,6 +519,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
 }
 
 fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
+    //addr: SocketAddr,
     target: SocketAddr,
     iterations: usize,
     client: Option<Arc<T>>,
@@ -571,6 +578,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
+        //let addr = nodes[1].rpc;
         run_dos_transactions(target, iterations, client, params.transaction_params);
     } else {
         let mut data = match params.data_type {
@@ -798,7 +806,6 @@ pub mod test {
     // TODO(klykov): remove ignore and serial after fix of the issue
     #[test]
     #[serial]
-    #[ignore]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -830,7 +837,6 @@ pub mod test {
 
     #[test]
     #[serial]
-    #[ignore]
     fn test_dos_without_blockhash() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -922,7 +928,6 @@ pub mod test {
 
     #[test]
     #[serial]
-    #[ignore]
     fn test_dos_with_blockhash_and_payer() {
         solana_logger::setup();
 
@@ -974,6 +979,7 @@ pub mod test {
 
         // creates one transaction and sends it 10 times
         // this is done in single thread
+        /*
         run_dos(
             &nodes_slice,
             10,
@@ -996,6 +1002,7 @@ pub mod test {
                 },
             },
         );
+
         // creates and sends unique transactions of type SingleTransfer
         // which tries to send too much lamports from payer to one recipient
         // it uses several threads
@@ -1020,7 +1027,7 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );
+        );*/
         // creates and sends unique transactions of type MultiTransfer
         // which tries to send too much lamports from payer to several recipients
         // it uses several threads
@@ -1046,6 +1053,7 @@ pub mod test {
                 },
             },
         );
+        /*
         // creates and sends unique transactions of type CreateAccount
         // which tries to create account with too large balance
         // it uses several threads
@@ -1070,6 +1078,6 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );
+        );*/
     }
 }

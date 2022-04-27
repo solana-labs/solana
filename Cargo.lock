@@ -4656,7 +4656,7 @@ dependencies = [
  "bincode",
  "clap 3.1.12",
  "crossbeam-channel",
- "itertools 0.10.3",
+ "itertools",
  "log",
  "rand 0.7.3",
  "serde",
@@ -4671,7 +4671,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-rpc",
- "solana-sdk",
+ "solana-sdk 1.11.0",
  "solana-streamer",
  "solana-version",
 ]
