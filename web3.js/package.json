@@ -50,8 +50,8 @@
     "pretty": "prettier --check '{,{src,test}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{src,test}/**/}*.{j,t}s'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
-    "test": "mocha -r ts-node/register './test/**/*.test.ts'",
-    "test:cover": "TS_NODE_COMPILER_OPTIONS='{\"module\": \"commonjs\" }' nyc --reporter=lcov mocha -r ts-node/register './test/**/*.test.ts'",
+    "test": "cross-env TS_NODE_COMPILER_OPTIONS='{ \"module\": \"commonjs\" }' ts-mocha --require esm './test/**/*.test.ts'",
+    "test:cover": "nyc --reporter=lcov npm run test",
     "test:live": "TEST_LIVE=1 npm run test",
     "test:live-with-test-validator": "start-server-and-test 'solana-test-validator --reset --quiet' http://localhost:8899/health test:live"
   },
@@ -126,6 +126,7 @@
     "semantic-release": "^18.0.0",
     "sinon": "^12.0.0",
     "start-server-and-test": "^1.12.0",
+    "ts-mocha": "^9.0.2",
     "ts-node": "^10.0.0",
     "tslib": "^2.1.0",
     "typedoc": "^0.22.2",
