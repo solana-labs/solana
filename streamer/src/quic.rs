@@ -31,6 +31,7 @@ use {
 
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
+const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 4;
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
@@ -131,7 +132,7 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
 
 fn rt() -> Runtime {
     Builder::new_multi_thread()
-        .worker_threads(1)
+        .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
         .enable_all()
         .build()
         .unwrap()
@@ -701,7 +702,14 @@ mod test {
             let mut s2 = conn2.connection.open_uni().await.unwrap();
             s1.write_all(&[0u8]).await.unwrap();
             s1.finish().await.unwrap();
-            s2.write_all(&[0u8])
+            // Send enough data to create more than 1 chunks.
+            // The first will try to open the connection (which should fail).
+            // The following chunks will enable the detection of connection failure.
+            let data = vec![1u8; PACKET_DATA_SIZE * 2];
+            s2.write_all(&data)
+                .await
+                .expect_err("shouldn't be able to open 2 connections");
+            s2.finish()
                 .await
                 .expect_err("shouldn't be able to open 2 connections");
         });
