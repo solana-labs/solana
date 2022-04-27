@@ -9118,13 +9118,21 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        // this should be a no-op because of just_rewrites=true
         assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
         bank.collect_rent_in_partition((0, 0, 1), true);
         {
             let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
-            assert_eq!(rewrites_skipped.len(), 90);
+            // this magic number is the number of non-rent paying accounts in the slot.
+            // These accounts will stop being written to the append vec when we start skipping rewrites.
+            // The number is unhappily brittle. 'collect_rent_in_partition' fills 'rewrites_skipped_this_slot' with
+            // rewrites that were skipped during rent collection but should still be considered in the slot's bank hash.
+            // If the slot is also written in the append vec, then the bank hash calc code ignores the contents of this list.
+            // This assert is confirming that the expected # of accounts were included in 'rewrites_skipped' by the call to
+            // 'collect_rent_in_partition(..., true)' above.
+            assert_eq!(rewrites_skipped.len(), 91);
+            // should have skipped 'rent_exempt_pubkey'
             assert!(rewrites_skipped.contains_key(&rent_exempt_pubkey));
+            // should NOT have skipped 'rent_exempt_pubkey'
             assert!(!rewrites_skipped.contains_key(&rent_due_pubkey));
         }
 
