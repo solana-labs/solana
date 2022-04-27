@@ -1930,11 +1930,17 @@ impl Blockstore {
 
     /// The first complete block that is available in the Blockstore ledger
     pub fn get_first_available_block(&self) -> Result<Slot> {
-        let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot())?;
-        // The block at root-index 0 cannot be complete, because it is missing its parent
-        // blockhash. A parent blockhash must be calculated from the entries of the previous block.
-        // Therefore, the first available complete block is that at root-index 1.
-        Ok(root_iterator.nth(1).unwrap_or_default())
+        let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot_with_genesis())?;
+        let first_root = root_iterator.next().unwrap_or_default();
+        // If the first root is slot 0, it is genesis. Genesis is always complete, so it is correct
+        // to return it as first-available.
+        if first_root == 0 {
+            return Ok(first_root);
+        }
+        // Otherwise, the block at root-index 0 cannot ever be complete, because it is missing its
+        // parent blockhash. A parent blockhash must be calculated from the entries of the previous
+        // block. Therefore, the first available complete block is that at root-index 1.
+        Ok(root_iterator.next().unwrap_or_default())
     }
 
     pub fn get_rooted_block(
@@ -3153,6 +3159,19 @@ impl Blockstore {
             .expect("unable to iterate over meta")
         {
             if slot > 0 && meta.received > 0 {
+                return slot;
+            }
+        }
+        // This means blockstore is empty, should never get here aside from right at boot.
+        self.last_root()
+    }
+
+    fn lowest_slot_with_genesis(&self) -> Slot {
+        for (slot, meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            if meta.received > 0 {
                 return slot;
             }
         }
