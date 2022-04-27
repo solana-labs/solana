@@ -267,13 +267,17 @@ pub fn recv_vec_packet_batches(
         .iter()
         .map(|packets| packets.packets.len())
         .sum::<usize>();
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch
-            .iter()
-            .map(|packets| packets.packets.len())
-            .sum::<usize>();
-        packet_batches.extend(packet_batch);
+    while num_packets < 100_000 {
+        if let Ok(packet_batch) = recvr.try_recv() {
+            trace!("got more packets");
+            num_packets += packet_batch
+                .iter()
+                .map(|packets| packets.packets.len())
+                .sum::<usize>();
+            packet_batches.extend(packet_batch);
+        } else {
+            break;
+        }
     }
     let recv_duration = recv_start.elapsed();
     trace!(
@@ -293,10 +297,14 @@ pub fn recv_packet_batches(
     trace!("got packets");
     let mut num_packets = packet_batch.packets.len();
     let mut packet_batches = vec![packet_batch];
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch.packets.len();
-        packet_batches.push(packet_batch);
+    while num_packets < 100_000 {
+        if let Ok(packet_batch) = recvr.try_recv() {
+            trace!("got more packets");
+            num_packets += packet_batch.packets.len();
+            packet_batches.push(packet_batch);
+        } else {
+            break;
+        }
     }
     let recv_duration = recv_start.elapsed();
     trace!(
