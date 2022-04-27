@@ -481,8 +481,18 @@ export class Transaction {
   /**
    * Get the estimated fee associated with a transaction
    */
-  async getEstimatedFee(connection: Connection): Promise<number> {
+  async getFeeForMessage(connection: Connection): Promise<number> {
     return (await connection.getFeeForMessage(this.compileMessage())).value;
+  }
+
+  /**
+   * @deprecated Use {@link Transaction#getFeeForMessage} instead.
+   * /
+  /**
+   * Get the estimated fee associated with a transaction
+   */
+  async getEstimatedFee(connection: Connection): Promise<number> {
+    return await this.getFeeForMessage(connection);
   }
 
   /**
