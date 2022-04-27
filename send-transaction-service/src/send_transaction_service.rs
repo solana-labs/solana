@@ -128,26 +128,26 @@ impl Default for Config {
     }
 }
 
-/// The longest sleep the retry thread sleep before waking up
-/// to process the transactions need to be retried.
-pub const LONGEST_RETRY_SLEEP_IN_MS: u64 = 1000;
+/// The maximum duration the retry thread may be configured to sleep before
+/// processing the transactions that need to be retried.
+pub const MAX_RETRY_SLEEP_MS: u64 = 1000;
 
-/// The leader info refresh rate. It will be refresh every 1 second.
-pub const LEADER_INFO_REFRESH_RATE_IN_MS: u64 = 1000;
+/// The leader info refresh rate.
+pub const LEADER_INFO_REFRESH_RATE_MS: u64 = 1000;
 
-/// A struct responsible for providing the up-to-date leader information
+/// A struct responsible for holding up-to-date leader information
 /// used for sending transactions.
 pub struct LeaderInfoProvider<T>
 where
     T: TpuInfo + std::marker::Send + 'static,
 {
-    /// The last time the leader info is refreshed
+    /// The last time the leader info was refreshed
     last_leader_refresh: Option<Instant>,
 
     /// The leader info
     leader_info: Option<T>,
 
-    /// Refresh the leader info every duration set by refresh_rate
+    /// How often to refresh the leader info
     refresh_rate: Duration,
 }
 
