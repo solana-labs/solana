@@ -37,8 +37,12 @@ function generateConfig(configType, format) {
       }),
     ],
     onwarn: function (warning, rollupWarn) {
-      if (warning.code !== 'CIRCULAR_DEPENDENCY') {
-        rollupWarn(warning);
+      rollupWarn(warning);
+      if (warning.code === 'CIRCULAR_DEPENDENCY') {
+        throw new Error(
+          'Please eliminate the circular dependencies listed ' +
+            'above and retry the build',
+        );
       }
     },
     treeshake: {
