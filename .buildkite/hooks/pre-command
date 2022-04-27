@@ -3,6 +3,13 @@ set -e
 
 eval "$(ejson2env .buildkite/env/secrets.ejson)"
 
+while IFS= read -r env_var; do
+  key="${env_var%=*}"
+  if [[ "$key" == "OVERRIDE_BUILDKITE_"* ]]; then
+    export "${key#OVERRIDE_}"="${env_var#*=}"
+  fi
+done < <(env)
+echo "$env"
 # Ensure the pattern "+++ ..." never occurs when |set -x| is set, as buildkite
 # interprets this as the start of a log group.
 # Ref: https://buildkite.com/docs/pipelines/managing-log-output
@@ -47,3 +54,6 @@ export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"
     rm -rf target/release
   fi
 )
+
+
+
