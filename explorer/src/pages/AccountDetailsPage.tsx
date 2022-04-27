@@ -208,7 +208,7 @@ export function AccountHeader({
     return (
       <div className="row align-items-end">
         {unverified && (
-          <div className="alert alert-danger alert-scam" role="alert">
+          <div className="alert alert-warning alert-scam" role="alert">
             Warning! Token names and logos are not unique. This token may have
             spoofed its name and logo to look like another token. Verify the
             token's mint address to ensure it is correct.
