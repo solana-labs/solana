@@ -66,12 +66,12 @@ export function ProgramLogsCardBody({
                 <span className={`badge bg-${badgeColor}-soft me-2`}>
                   #{index + 1}
                 </span>
+                Invoking{" "}
                 <ProgramName
                   programId={programId}
                   cluster={cluster}
                   url={url}
-                />{" "}
-                Instruction
+                />
               </div>
               {programLogs && (
                 <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
