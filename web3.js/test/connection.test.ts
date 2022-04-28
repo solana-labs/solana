@@ -2386,50 +2386,72 @@ describe('Connection', function () {
   it('get blocks between two slots', async () => {
     await mockRpcResponse({
       method: 'getBlocks',
-      params: [0, 10],
-      value: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      params: [0, 9],
+      value: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     });
-
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 0,
+    });
     await mockRpcResponse({
       method: 'getSlot',
       params: [],
-      value: 10,
+      value: 9,
     });
 
-    const latestSlot = await connection.getSlot();
-    const blocks = await connection.getBlocks(0, latestSlot);
-    expect(blocks).to.have.length(latestSlot);
-    expect(blocks).to.contain(1);
+    while ((await connection.getSlot()) <= 1) {
+      continue;
+    }
+
+    const [startSlot, latestSlot] = await Promise.all([
+      connection.getFirstAvailableBlock(),
+      connection.getSlot(),
+    ]);
+    const blocks = await connection.getBlocks(startSlot, latestSlot);
+    expect(blocks).to.have.length(latestSlot - startSlot + 1);
+    expect(blocks[0]).to.eq(startSlot);
     expect(blocks).to.contain(latestSlot);
-  });
+  }).timeout(20 * 1000);
 
   it('get blocks from starting slot', async () => {
     await mockRpcResponse({
       method: 'getBlocks',
       params: [0],
       value: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
-        39, 40, 41, 42,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37,
+        38, 39, 40, 41, 42,
       ],
     });
-
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 0,
+    });
     await mockRpcResponse({
       method: 'getSlot',
       params: [],
       value: 20,
     });
 
-    while ((await connection.getSlot()) <= 0) {
+    while ((await connection.getSlot()) <= 1) {
       continue;
     }
 
-    const blocks = await connection.getBlocks(0);
-    const latestSlot = await connection.getSlot();
-    expect(blocks).to.have.lengthOf.greaterThanOrEqual(latestSlot);
-    expect(blocks).to.contain(1);
+    const startSlot = await connection.getFirstAvailableBlock();
+    const [blocks, latestSlot] = await Promise.all([
+      connection.getBlocks(startSlot),
+      connection.getSlot(),
+    ]);
+    if (mockServer) {
+      expect(blocks).to.have.length(43);
+    } else {
+      expect(blocks).to.have.length(latestSlot - startSlot + 1);
+    }
+    expect(blocks[0]).to.eq(startSlot);
     expect(blocks).to.contain(latestSlot);
-  });
+  }).timeout(20 * 1000);
 
   describe('get block signatures', function () {
     beforeEach(async function () {
