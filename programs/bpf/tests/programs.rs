@@ -264,7 +264,7 @@ fn run_program(name: &str) -> u64 {
                 if config.enable_instruction_tracing {
                     if i == 1 {
                         if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                            let analysis = Analysis::from_executable(&executable).unwrap();
+                            let analysis = Analysis::from_executable(&executable);
                             let stdout = std::io::stdout();
                             println!("TRACE (interpreted):");
                             tracer
@@ -278,7 +278,7 @@ fn run_program(name: &str) -> u64 {
                                 .unwrap();
                             assert!(false);
                         } else if log_enabled!(Trace) {
-                            let analysis = Analysis::from_executable(&executable).unwrap();
+                            let analysis = Analysis::from_executable(&executable);
                             let mut trace_buffer = Vec::<u8>::new();
                             tracer
                                 .as_ref()
