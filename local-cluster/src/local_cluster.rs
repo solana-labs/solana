@@ -115,6 +115,7 @@ impl LocalCluster {
         lamports_per_node: u64,
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
+        println!("Creating {} new node(s) with equal stake of {} lamports",num_nodes,lamports_per_node);
         let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
         let mut config = ClusterConfig {
             node_stakes: stakes,

@@ -152,6 +152,7 @@ fn test_spend_and_verify_all_nodes_1() {
     let num_nodes = 1;
     let local =
         LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    println!("Local Cluster data {:#?}",local);
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
