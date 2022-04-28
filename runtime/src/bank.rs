@@ -2602,15 +2602,28 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    fn inflation_allocated_during_epoch(&self) -> u64 {
+    fn inflation_info_during_epoch(
+        &self,
+        capitalization : u64,
+        epoch : Epoch
+    ) -> (u64, f64, f64, f64) {
         let slot_in_year = self.slot_in_year_for_inflation();
-        let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
-        let parent_bank = self.parent().unwrap();
-        let prev_bank_capitalization = parent_bank.capitalization();
-        let prev_bank_epoch = parent_bank.epoch();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+        let (validator_rate, foundation_rate) = {
+            let inflation = self.inflation.read().unwrap();
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
 
-        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
+        let epoch_duration_in_years = self.epoch_duration_in_years(epoch);
+
+        (
+            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64,
+            epoch_duration_in_years,
+            validator_rate,
+            foundation_rate
+        )
     }
 
     // update rewards based on the previous epoch
@@ -2621,19 +2634,9 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
-        let slot_in_year = self.slot_in_year_for_inflation();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
-
-        let (validator_rate, foundation_rate) = {
-            let inflation = self.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
-
         let capitalization = self.capitalization();
-        let validator_rewards = self.inflation_allocated_during_epoch();
+        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate)
+            = self.inflation_info_during_epoch(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -9269,19 +9272,20 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-        let allocated_rewards = bank1.inflation_allocated_during_epoch() as f64;
+        let (validator_rewards, _, _, _)
+            = bank1.inflation_info_during_epoch(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - allocated_rewards)
+                - validator_rewards as f64)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
+        assert!((validator_rewards as f64 - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
@@ -9290,7 +9294,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: allocated_rewards as i64,
+                    lamports: validator_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
