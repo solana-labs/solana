@@ -997,6 +997,9 @@ impl Validator {
         datapoint_info!("validator-new", ("id", id.to_string(), String));
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
+
+        println!("Validator Information: {:#?}",Self);
+
         Self {
             stats_reporter_service,
             gossip_service,
