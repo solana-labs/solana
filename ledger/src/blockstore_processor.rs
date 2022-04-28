@@ -733,7 +733,7 @@ pub fn process_blockstore_from_root(
     info!("ledger processing timing: {:?}", timing);
     {
         let bank_forks = bank_forks.read().unwrap();
-        let mut bank_slots = bank_forks.banks().keys().collect::<Vec<_>>();
+        let mut bank_slots = bank_forks.banks().keys().copied().collect::<Vec<_>>();
         bank_slots.sort_unstable();
 
         info!(
@@ -1165,7 +1165,7 @@ fn load_frozen_forks(
     );
 
     process_next_slots(
-        bank_forks.read().unwrap().get(start_slot).unwrap(),
+        &bank_forks.read().unwrap().get(start_slot).unwrap(),
         start_slot_meta,
         blockstore,
         leader_schedule_cache,
@@ -3118,7 +3118,7 @@ pub mod tests {
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap().clone();
+        let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
             accounts_db_test_hash_calculation: true,
