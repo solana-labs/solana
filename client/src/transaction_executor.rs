@@ -87,6 +87,7 @@ impl TransactionExecutor {
         cleared: &Arc<RwLock<Vec<u64>>>,
         entrypoint_addr: SocketAddr,
     ) -> JoinHandle<()> {
+        println!("start_sig_clear_thread");
         let sigs = sigs.clone();
         let exit = exit.clone();
         let cleared = cleared.clone();

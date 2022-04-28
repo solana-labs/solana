@@ -53,7 +53,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
 ) {
     println!("{:#?}",entry_point_info);
     println!("{:#?}",funding_keypair);
-    println!("{:#?}",socket_addr_space);
+    println!("{:#?}\n",socket_addr_space);
     let cluster_nodes =
         discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);

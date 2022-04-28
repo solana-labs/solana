@@ -654,6 +654,7 @@ fn update_finalized_transactions(
     db: &mut PickleDb,
     exit: Arc<AtomicBool>,
 ) -> Result<Option<usize>, Error> {
+    println!("update_finalized_transactions");
     let transaction_infos = db::read_transaction_infos(db);
     let unconfirmed_transactions: Vec<_> = transaction_infos
         .iter()

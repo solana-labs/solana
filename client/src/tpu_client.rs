@@ -155,6 +155,7 @@ impl TpuClient {
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
+        println!("send_and_confirm_messages_with_spinner");
         let mut expired_blockhash_retries = 5;
         /* Send at ~100 TPS */
         const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);

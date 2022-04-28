@@ -1089,6 +1089,7 @@ impl RpcClient {
         signature: &Signature,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<bool> {
+        println!("confirm_transaction_with_commitment");
         let Response { context, value } = self.get_signature_statuses(&[*signature]).await?;
 
         Ok(Response {
