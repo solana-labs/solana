@@ -10,7 +10,7 @@ use {
         time::Duration,
     },
 };
-
+#[derive(Debug)]
 pub struct StatsReporterService {
     thread_hdl: JoinHandle<()>,
 }
