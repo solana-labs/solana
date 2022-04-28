@@ -518,6 +518,31 @@ describe('Subscriptions', () => {
                   );
                 });
               });
+              describe('then having the socket connection drop unexpectedly', () => {
+                beforeEach(() => {
+                  stubbedSocket.emit('close');
+                });
+                describe('upon the socket connection reopening', () => {
+                  let fatalPriorUnubscribe;
+                  beforeEach(() => {
+                    fatalPriorUnubscribe = fatalUnsubscribe;
+                    stubbedSocket.call.resetHistory();
+                    stubbedSocket.emit('open');
+                  });
+                  it('does not result in a new unsubscription request being made to the RPC', () => {
+                    expect(stubbedSocket.call).not.to.have.been.called;
+                  });
+                  describe('then upon the prior unsubscribe fataling (eg. because its timeout triggers)', () => {
+                    beforeEach(async () => {
+                      stubbedSocket.call.resetHistory();
+                      await fatalPriorUnubscribe();
+                    });
+                    it('does not result in a new unsubscription request being made to the RPC', () => {
+                      expect(stubbedSocket.call).not.to.have.been.called;
+                    });
+                  });
+                });
+              });
             });
             describe('attaching a second notification listener with the same params', () => {
               let secondListenerCallback: SinonSpy;
@@ -646,7 +671,9 @@ describe('Subscriptions', () => {
               });
             });
             describe('upon the socket connection reopening', () => {
+              let fatalPriorSubscription;
               beforeEach(() => {
+                fatalPriorSubscription = fatalSubscription;
                 stubbedSocket.call.resetHistory();
                 stubbedSocket.emit('open');
               });
@@ -655,6 +682,32 @@ describe('Subscriptions', () => {
                   subscriptionMethod,
                   getExpectedParams(),
                 );
+              });
+              describe('then upon the prior subscription fataling (eg. because its timeout triggers)', () => {
+                beforeEach(async () => {
+                  stubbedSocket.call.resetHistory();
+                  await fatalPriorSubscription();
+                });
+                it('does not result in a new subscription request being made to the RPC', () => {
+                  expect(stubbedSocket.call).not.to.have.been.called;
+                });
+                describe('once the new subscription has been acknowledged by the server', () => {
+                  beforeEach(async () => {
+                    stubbedSocket.call.resetHistory();
+                    await acknowledgeSubscription(serverSubscriptionId);
+                  });
+                  describe('when a notification is published', () => {
+                    beforeEach(() => {
+                      publishNotificationForServerSubscriptionId(
+                        stubbedSocket,
+                        serverSubscriptionId,
+                      );
+                    });
+                    it('fires the listener callback', () => {
+                      expect(listenerCallback).to.have.been.calledOnce;
+                    });
+                  });
+                });
               });
             });
           });

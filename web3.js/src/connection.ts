@@ -2194,6 +2194,13 @@ export class Connection {
   /** @internal */ _rpcWebSocketIdleTimeout: ReturnType<
     typeof setTimeout
   > | null = null;
+  /** @internal
+   * A number that we increment every time an active connection closes.
+   * Used to determine whether the same socket connection that was open
+   * when an async operation started is the same one that's active when
+   * its continuation fires.
+   *
+   */ private _rpcWebSocketGeneration: number = 0;
 
   /** @internal */ _disableBlockhashCaching: boolean = false;
   /** @internal */ _pollingBlockhash: boolean = false;
@@ -4174,6 +4181,7 @@ export class Connection {
    * @internal
    */
   _wsOnClose(code: number) {
+    this._rpcWebSocketGeneration++;
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
       this._rpcWebSocketHeartbeat = null;
@@ -4232,6 +4240,11 @@ export class Connection {
       return;
     }
 
+    const activeWebSocketGeneration = this._rpcWebSocketGeneration;
+    const isCurrentConnectionStillActive = () => {
+      return activeWebSocketGeneration === this._rpcWebSocketGeneration;
+    };
+
     await Promise.all(
       // Don't be tempted to change this to `Object.entries`. We call
       // `_updateSubscriptions` recursively when processing the state,
@@ -4286,6 +4299,7 @@ export class Connection {
                 this._subscriptionCallbacksByServerSubscriptionId[
                   serverSubscriptionId
                 ] = subscription.callbacks;
+                await this._updateSubscriptions();
               } catch (e) {
                 if (e instanceof Error) {
                   console.error(
@@ -4294,12 +4308,14 @@ export class Connection {
                     e.message,
                   );
                 }
+                if (!isCurrentConnectionStillActive()) {
+                  return;
+                }
                 // TODO: Maybe add an 'errored' state or a retry limit?
                 this._subscriptionsByHash[hash] = {
                   ...subscription,
                   state: 'pending',
                 };
-              } finally {
                 await this._updateSubscriptions();
               }
             })();
@@ -4338,6 +4354,9 @@ export class Connection {
                   } catch (e) {
                     if (e instanceof Error) {
                       console.error(`${unsubscribeMethod} error:`, e.message);
+                    }
+                    if (!isCurrentConnectionStillActive()) {
+                      return;
                     }
                     // TODO: Maybe add an 'errored' state or a retry limit?
                     this._subscriptionsByHash[hash] = {
