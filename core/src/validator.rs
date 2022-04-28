@@ -998,16 +998,17 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
 
+        println!("\nSTARTING NEW VALIDATOR!");
         println!("{:#?}",stats_reporter_service);
         println!("{:#?}",gossip_service);
         println!("{:#?}",serve_repair_service);
         //println!("{:#?}",json_rpc_service);
         println!("{:#?}",pubsub_service);
-        println!("{:#?}",rpc_completed_slots_service);/*
+        println!("{:#?}",rpc_completed_slots_service);
         println!("{:#?}",optimistically_confirmed_bank_tracker);
         println!("{:#?}",transaction_status_service);
         println!("{:#?}",rewards_recorder_service);
-        println!("{:#?}",cache_block_meta_service);
+        /*println!("{:#?}",cache_block_meta_service);
         println!("{:#?}",system_monitor_service);
         println!("{:#?}",sample_performance_service);
         println!("{:#?}",poh_timing_report_service);

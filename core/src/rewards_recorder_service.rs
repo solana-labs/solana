@@ -17,6 +17,7 @@ use {
 pub type RewardsRecorderReceiver = Receiver<(Slot, Vec<(Pubkey, RewardInfo)>)>;
 pub type RewardsRecorderSender = Sender<(Slot, Vec<(Pubkey, RewardInfo)>)>;
 
+#[derive(Debug)]
 pub struct RewardsRecorderService {
     thread_hdl: JoinHandle<()>,
 }
