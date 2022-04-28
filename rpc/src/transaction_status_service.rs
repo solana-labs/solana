@@ -20,6 +20,7 @@ use {
     },
 };
 
+#[derive(Debug)]
 pub struct TransactionStatusService {
     thread_hdl: JoinHandle<()>,
 }

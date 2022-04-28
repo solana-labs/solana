@@ -53,6 +53,7 @@ impl std::fmt::Debug for BankNotification {
 pub type BankNotificationReceiver = Receiver<BankNotification>;
 pub type BankNotificationSender = Sender<BankNotification>;
 
+#[derive(Debug)]
 pub struct OptimisticallyConfirmedBankTracker {
     thread_hdl: JoinHandle<()>,
 }
