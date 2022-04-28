@@ -11,10 +11,7 @@ use {
         blockstore_meta::*,
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredType, Shredder,
-            SHRED_PAYLOAD_SIZE,
-        },
+        shred::{self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredType, Shredder},
         slot_stats::{ShredSource, SlotsStats},
     },
     bincode::deserialize,
@@ -1637,14 +1634,12 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
-            data.map(|mut d| {
-                // Only data_header.size bytes stored in the blockstore so
-                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
-                // erasure recovery works properly.
-                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
-                d
-            })
+        let shred = self.data_shred_cf.get_bytes((slot, index))?;
+        let shred = shred.map(Shred::resize_stored_shred).transpose();
+        shred.map_err(|err| {
+            let err = format!("Invalid stored shred: {}", err);
+            let err = Box::new(bincode::ErrorKind::Custom(err));
+            BlockstoreError::InvalidShredData(err)
         })
     }
 
@@ -3107,15 +3102,13 @@ impl Blockstore {
     // Returns the existing shred if `new_shred` is not equal to the existing shred at the
     // given slot and index as this implies the leader generated two different shreds with
     // the same slot and index
-    pub fn is_shred_duplicate(&self, shred: ShredId, mut payload: Vec<u8>) -> Option<Vec<u8>> {
+    pub fn is_shred_duplicate(&self, shred: ShredId, payload: Vec<u8>) -> Option<Vec<u8>> {
         let (slot, index, shred_type) = shred.unwrap();
         let existing_shred = match shred_type {
             ShredType::Data => self.get_data_shred(slot, index as u64),
             ShredType::Code => self.get_coding_shred(slot, index as u64),
         }
         .expect("fetch from DuplicateSlots column family failed")?;
-        let size = payload.len().max(SHRED_PAYLOAD_SIZE);
-        payload.resize(size, 0u8);
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         (existing_shred != *new_shred.payload()).then(|| existing_shred)
     }
