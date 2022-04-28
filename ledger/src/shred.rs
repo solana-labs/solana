@@ -102,7 +102,7 @@ const DATA_SHRED_SIZE_RANGE: RangeInclusive<usize> =
 const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
-pub const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
+const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 // SIZE_OF_CODING_SHRED_HEADERS bytes at the end of data shreds
 // is never used and is not part of erasure coding.
 const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
@@ -133,8 +133,8 @@ pub enum Error {
     InvalidParentSlot { slot: Slot, parent_slot: Slot },
     #[error("Invalid payload size: {size}")]
     InvalidPayloadSize { size: usize },
-    #[error("Invalid shred type: {0:?}")]
-    InvalidShredType(ShredType),
+    #[error("Invalid shred type")]
+    InvalidShredType,
 }
 
 #[repr(u8)]
@@ -432,7 +432,7 @@ impl Shred {
                         parent_offset,
                     })
             }
-            ShredType::Code => Err(Error::InvalidShredType(ShredType::Code)),
+            ShredType::Code => Err(Error::InvalidShredType),
         }
     }
 
@@ -442,7 +442,7 @@ impl Shred {
 
     pub(crate) fn data(&self) -> Result<&[u8], Error> {
         match self.shred_type() {
-            ShredType::Code => Err(Error::InvalidShredType(ShredType::Code)),
+            ShredType::Code => Err(Error::InvalidShredType),
             ShredType::Data => {
                 let size = usize::from(self.data_header.size);
                 if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
@@ -474,6 +474,27 @@ impl Shred {
         }
     }
 
+    // Possibly zero pads bytes stored in blockstore.
+    pub(crate) fn resize_stored_shred(mut shred: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let shred_type = match shred.get(OFFSET_OF_SHRED_TYPE) {
+            None => return Err(Error::InvalidPayloadSize { size: shred.len() }),
+            Some(shred_type) => match ShredType::try_from(*shred_type) {
+                Err(_) => return Err(Error::InvalidShredType),
+                Ok(shred_type) => shred_type,
+            },
+        };
+        match shred_type {
+            ShredType::Code => Ok(shred),
+            ShredType::Data => {
+                if shred.len() > SHRED_PAYLOAD_SIZE {
+                    return Err(Error::InvalidPayloadSize { size: shred.len() });
+                }
+                shred.resize(SHRED_PAYLOAD_SIZE, 0u8);
+                Ok(shred)
+            }
+        }
+    }
+
     pub fn into_payload(self) -> Vec<u8> {
         self.payload
     }
@@ -494,7 +515,7 @@ impl Shred {
 
     // Returns true if the shred passes sanity checks.
     pub fn sanitize(&self) -> Result<(), Error> {
-        if self.payload().len() > SHRED_PAYLOAD_SIZE {
+        if self.payload().len() != SHRED_PAYLOAD_SIZE {
             return Err(Error::InvalidPayloadSize {
                 size: self.payload.len(),
             });
@@ -570,7 +591,12 @@ impl Shred {
     }
 
     // Returns the portion of the shred's payload which is erasure coded.
-    pub(crate) fn erasure_block(self) -> Vec<u8> {
+    pub(crate) fn erasure_block(self) -> Result<Vec<u8>, Error> {
+        if self.payload.len() != SHRED_PAYLOAD_SIZE {
+            return Err(Error::InvalidPayloadSize {
+                size: self.payload.len(),
+            });
+        }
         let shred_type = self.shred_type();
         let mut block = self.payload;
         match shred_type {
@@ -581,19 +607,23 @@ impl Shred {
                 // SIZE_OF_CODING_SHRED_HEADERS bytes at the beginning of the
                 // coding shreds contains the header and is not part of erasure
                 // coding.
-                let offset = SIZE_OF_CODING_SHRED_HEADERS.min(block.len());
-                block.drain(..offset);
+                block.drain(..SIZE_OF_CODING_SHRED_HEADERS);
             }
         }
-        block
+        Ok(block)
     }
 
     // Like Shred::erasure_block but returning a slice
-    pub(crate) fn erasure_block_as_slice(&self) -> &[u8] {
-        match self.shred_type() {
+    pub(crate) fn erasure_block_as_slice(&self) -> Result<&[u8], Error> {
+        if self.payload.len() != SHRED_PAYLOAD_SIZE {
+            return Err(Error::InvalidPayloadSize {
+                size: self.payload.len(),
+            });
+        }
+        Ok(match self.shred_type() {
             ShredType::Data => &self.payload[..ENCODED_PAYLOAD_SIZE],
             ShredType::Code => &self.payload[SIZE_OF_CODING_SHRED_HEADERS..],
-        }
+        })
     }
 
     pub fn set_index(&mut self, index: u32) {
@@ -737,20 +767,20 @@ impl Shred {
                     || num_data_shreds != other.coding_header.num_data_shreds
                     || self.first_coding_index() != other.first_coding_index())
             }
-            _ => Err(Error::InvalidShredType(ShredType::Data)),
+            _ => Err(Error::InvalidShredType),
         }
     }
 
     pub(crate) fn num_data_shreds(self: &Shred) -> Result<u16, Error> {
         match self.shred_type() {
-            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
+            ShredType::Data => Err(Error::InvalidShredType),
             ShredType::Code => Ok(self.coding_header.num_data_shreds),
         }
     }
 
     pub(crate) fn num_coding_shreds(self: &Shred) -> Result<u16, Error> {
         match self.shred_type() {
-            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
+            ShredType::Data => Err(Error::InvalidShredType),
             ShredType::Code => Ok(self.coding_header.num_coding_shreds),
         }
     }
@@ -833,6 +863,7 @@ pub fn verify_test_data_shred(
     is_last_in_slot: bool,
     is_last_data: bool,
 ) {
+    shred.sanitize().unwrap();
     assert_eq!(shred.payload.len(), SHRED_PAYLOAD_SIZE);
     assert!(shred.is_data());
     assert_eq!(shred.index(), index);
