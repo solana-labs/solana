@@ -41,12 +41,7 @@ struct StakeV2 {
     meta: Meta,
     stake: Stake,
     last_claim_epoch: Epoch, // needed to know if it's up-to-date, see `ClaimRewards`
-    redelegation: Redelegation,
-}
-struct Redelegation {
-    voter_pubkey: Pubkey,
-    redelegation_epoch: Epoch,
-    credits_observed: u64,
+    redelegation: Stake,
 }
 ```
 
@@ -70,7 +65,7 @@ enum StakeStateV2 {
 }
 impl StakeStateV2 {
     /// ... all the same as StakeState ...
-    pub fn redelegation(&self) -> Option<Redelegation> {
+    pub fn redelegation(&self) -> Option<Stake> {
       match self {
           Self::StakeV2(stake) => Some(stake.redelegation),
           _ => None,
@@ -156,10 +151,51 @@ an account if the update is done during the 64th epoch since the last claim.
 This slice of the rewards could be claimable by anyone, or only the authorized
 voter on the account.
 
-## New Vote Account Field
+## New sysvar: Rewards GMI version (Name TBD)
 
-Vote accounts need to keep track of `withheld_rewards`. We should be able to steal
-some bytes from `prior_voters`, since we only need a `u64` for the withheld amount.
+The old `Rewards` sysvar was actually pretty close to exactly what we need to perform
+the claim calculation. Instead of just one field for the point values, we'll need:
+
+```
+struct RewardsGMI {
+    point_values: [PointValue; 64], // could even go to 512 to match stake history
+}
+```
+
+Where `PointValue` already exists as:
+
+```
+struct PointValue {
+    epoch: Epoch, // epoch concerned
+    rewards: u64, // all new lamports created
+    points: u128, // all points gained
+}
+```
+
+## New sysvar: StakeHistoryV2
+
+During epoch activation, the bank needs to know how much stake is activating,
+effective, and deactivating. Currently, it calculates these by iterating through
+all of the stakes and figuring their activation status based on the existing
+stake history.
+
+For StakeV2, the total information about how much is effective, activating, and
+deactivating must exist somewhere. This can be accomplished through a new sysvar
+that looks just like `StakeHistory`, but only contains information about V2 stakes.
+
+During epoch activation, the bank simply tacks on the V2 information.
+
+Side note: `StakeHistory` still holds all stakes (V1 and V2), so perhaps the
+name `StakeHistoryV2` is incorrect. Suggestions are welcome!
+
+## New Vote Account Fields
+
+Create a new vote account version to store new fields:
+
+ * `withheld_rewards`: all lamports that rightfully belong to delegators, but are stored in the validator vote account
+ * `commission` in `epoch_credits`: to calculate accrued rewards over multiple
+epochs, also store a history of commissions by adding a `u16` to the entries
+in `epoch_credits`.
 
 `Withdraw` needs to respect the withheld amount and rent-exemption. This means
 that vote accounts cannot be deleted if any withheld rewards remain. Thankfully,
