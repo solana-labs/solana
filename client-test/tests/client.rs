@@ -125,7 +125,7 @@ fn test_account_subscription() {
     let bank = Bank::new_for_tests(&genesis_config);
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-    let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+    let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let bob = Keypair::new();
@@ -331,7 +331,7 @@ fn test_program_subscription() {
     let bank = Bank::new_for_tests(&genesis_config);
     let blockhash = bank.last_blockhash();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-    let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+    let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let bob = Keypair::new();
@@ -418,7 +418,7 @@ fn test_root_subscription() {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-    let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+    let bank0 = bank_forks.read().unwrap().get(0).unwrap();
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank_forks.write().unwrap().insert(bank1);
     let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());

@@ -63,8 +63,8 @@ impl BankForks {
         Self::new_from_banks(&[Arc::new(bank)], root)
     }
 
-    pub fn banks(&self) -> &HashMap<Slot, Arc<Bank>> {
-        &self.banks
+    pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
+        self.banks.clone()
     }
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
@@ -80,8 +80,8 @@ impl BankForks {
     }
 
     /// Create a map of bank slot id to the set of all of its descendants
-    pub fn descendants(&self) -> &HashMap<Slot, HashSet<Slot>> {
-        &self.descendants
+    pub fn descendants(&self) -> HashMap<Slot, HashSet<Slot>> {
+        self.descendants.clone()
     }
 
     pub fn frozen_banks(&self) -> HashMap<Slot, Arc<Bank>> {
@@ -100,16 +100,16 @@ impl BankForks {
             .collect()
     }
 
-    pub fn get(&self, bank_slot: Slot) -> Option<&Arc<Bank>> {
-        self.banks.get(&bank_slot)
+    pub fn get(&self, bank_slot: Slot) -> Option<Arc<Bank>> {
+        self.banks.get(&bank_slot).cloned()
     }
 
     pub fn get_with_checked_hash(
         &self,
         (bank_slot, expected_hash): (Slot, Hash),
-    ) -> Option<&Arc<Bank>> {
-        let maybe_bank = self.banks.get(&bank_slot);
-        if let Some(bank) = maybe_bank {
+    ) -> Option<Arc<Bank>> {
+        let maybe_bank = self.get(bank_slot);
+        if let Some(bank) = &maybe_bank {
             assert_eq!(bank.hash(), expected_hash);
         }
         maybe_bank
@@ -506,10 +506,6 @@ impl BankForks {
         self.snapshot_config = snapshot_config;
     }
 
-    pub fn snapshot_config(&self) -> &Option<SnapshotConfig> {
-        &self.snapshot_config
-    }
-
     pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: u64) {
         self.accounts_hash_interval_slots = accounts_interval_slots;
     }
@@ -707,7 +703,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2, 3, 4]),
                 (1, vec![2]),
@@ -724,7 +720,7 @@ mod tests {
         banks[2].squash();
         assert_eq!(bank_forks.ancestors(), make_hash_map(vec![(2, vec![]),]));
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![(0, vec![2]), (1, vec![2]), (2, vec![]),])
         );
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
@@ -734,7 +730,7 @@ mod tests {
             make_hash_map(vec![(2, vec![]), (5, vec![2]), (6, vec![2, 5])])
         );
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![
                 (0, vec![2]),
                 (1, vec![2]),
@@ -766,7 +762,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2, 3, 4]),
                 (1, vec![2]),
@@ -786,7 +782,7 @@ mod tests {
             make_hash_map(vec![(1, vec![]), (2, vec![]),])
         );
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![(0, vec![1, 2]), (1, vec![2]), (2, vec![]),])
         );
         banks.push(bank_forks.insert(Bank::new_from_parent(&banks[2], &Pubkey::default(), 5)));
@@ -801,7 +797,7 @@ mod tests {
             ])
         );
         assert_eq!(
-            *bank_forks.descendants(),
+            bank_forks.descendants(),
             make_hash_map(vec![
                 (0, vec![1, 2]),
                 (1, vec![2]),
