@@ -4982,12 +4982,15 @@ impl RpcClient {
         &self,
         signature: &Signature,
     ) -> ClientResult<usize> {
+        println!("get_num_blocks_since_signature_confirmation");
         let result: Response<Vec<Option<TransactionStatus>>> = self
             .send(
                 RpcRequest::GetSignatureStatuses,
                 json!([[signature.to_string()]]),
             )
             .await?;
+        
+        println!("{:#?}",result);
 
         let confirmations = result.value[0]
             .clone()
