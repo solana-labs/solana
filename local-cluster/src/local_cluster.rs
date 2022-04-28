@@ -130,6 +130,7 @@ impl LocalCluster {
     }
 
     pub fn new(config: &mut ClusterConfig, socket_addr_space: SocketAddrSpace) -> Self {
+        println!("New LocalCluster");
         assert_eq!(config.validator_configs.len(), config.node_stakes.len());
 
         let mut validator_keys = {
