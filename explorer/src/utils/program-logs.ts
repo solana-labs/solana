@@ -34,6 +34,11 @@ export function prettyProgramLogs(
 
   logs.forEach((log) => {
     if (log.startsWith("Program log:")) {
+      // Use passive tense
+      log = log.replace(/Program log: (.*)/g, (match, p1) => {
+        return `Program logged: "${p1}"`;
+      });
+
       prettyLogs[prettyLogs.length - 1].logs.push({
         prefix: prefixBuilder(depth),
         text: log,
@@ -57,7 +62,7 @@ export function prettyProgramLogs(
           prettyLogs[prettyLogs.length - 1].logs.push({
             prefix: prefixBuilder(depth),
             style: "info",
-            text: `Invoking ${programName}`,
+            text: `Program invoked: ${programName}`,
           });
         }
 
@@ -71,14 +76,12 @@ export function prettyProgramLogs(
         depth--;
       } else if (log.includes("failed")) {
         const instructionLog = prettyLogs[prettyLogs.length - 1];
-        if (!instructionLog.failed) {
-          instructionLog.failed = true;
-          instructionLog.logs.push({
-            prefix: prefixBuilder(depth),
-            style: "warning",
-            text: `Program returned error: ${log.slice(log.indexOf(": ") + 2)}`,
-          });
-        }
+        instructionLog.failed = true;
+        instructionLog.logs.push({
+          prefix: prefixBuilder(depth),
+          style: "warning",
+          text: `Program returned error: "${log.slice(log.indexOf(": ") + 2)}"`,
+        });
         depth--;
       } else {
         if (depth === 0) {
@@ -89,6 +92,12 @@ export function prettyProgramLogs(
           });
           depth++;
         }
+
+        // Remove redundant program address from logs
+        log = log.replace(/Program \w* consumed (.*)/g, (match, p1) => {
+          return `Program consumed: ${p1}`;
+        });
+
         // native program logs don't start with "Program log:"
         prettyLogs[prettyLogs.length - 1].logs.push({
           prefix: prefixBuilder(depth),
@@ -111,12 +120,14 @@ export function prettyProgramLogs(
 
   if (prettyError && prettyError.index === prettyLogs.length - 1) {
     const failedIx = prettyLogs[prettyError.index];
-    failedIx.failed = true;
-    failedIx.logs.push({
-      prefix: prefixBuilder(1),
-      text: `Runtime error: ${prettyError.message}`,
-      style: "warning",
-    });
+    if (!failedIx.failed) {
+      failedIx.failed = true;
+      failedIx.logs.push({
+        prefix: prefixBuilder(1),
+        text: `Runtime error: ${prettyError.message}`,
+        style: "warning",
+      });
+    }
   }
 
   return prettyLogs;
