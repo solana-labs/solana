@@ -969,15 +969,11 @@ impl ForkChoice for HeaviestSubtreeForkChoice {
         (
             r_bank_forks
                 .get_with_checked_hash(self.best_overall_slot())
-                .unwrap()
-                .clone(),
+                .unwrap(),
             self.heaviest_slot_on_same_voted_fork(tower)
                 .map(|slot_hash| {
                     // BankForks should only contain one valid version of this slot
-                    r_bank_forks
-                        .get_with_checked_hash(slot_hash)
-                        .unwrap()
-                        .clone()
+                    r_bank_forks.get_with_checked_hash(slot_hash).unwrap()
                 }),
         )
     }
