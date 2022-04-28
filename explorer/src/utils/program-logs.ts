@@ -12,10 +12,11 @@ export type LogMessage = {
 export type InstructionLogs = {
   invokedProgram: string | null;
   logs: LogMessage[];
+  computeUnits: number;
   failed: boolean;
 };
 
-export function prettyProgramLogs(
+export function parseProgramLogs(
   logs: string[],
   error: TransactionError | null,
   cluster: Cluster
@@ -56,6 +57,7 @@ export function prettyProgramLogs(
           prettyLogs.push({
             invokedProgram: programAddress,
             logs: [],
+            computeUnits: 0,
             failed: false,
           });
         } else {
@@ -88,15 +90,26 @@ export function prettyProgramLogs(
           prettyLogs.push({
             invokedProgram: null,
             logs: [],
+            computeUnits: 0,
             failed: false,
           });
           depth++;
         }
 
         // Remove redundant program address from logs
-        log = log.replace(/Program \w* consumed (.*)/g, (match, p1) => {
-          return `Program consumed: ${p1}`;
-        });
+        log = log.replace(
+          /Program \w* consumed (\d*) (.*)/g,
+          (match, p1, p2) => {
+            // Only aggregate compute units consumed from top-level tx instructions
+            // because they include inner ix compute units as well.
+            if (depth === 1) {
+              prettyLogs[prettyLogs.length - 1].computeUnits +=
+                Number.parseInt(p1);
+            }
+
+            return `Program consumed: ${p1} ${p2}`;
+          }
+        );
 
         // native program logs don't start with "Program log:"
         prettyLogs[prettyLogs.length - 1].logs.push({
@@ -114,6 +127,7 @@ export function prettyProgramLogs(
     prettyLogs.push({
       invokedProgram: null,
       logs: [],
+      computeUnits: 0,
       failed: true,
     });
   }

@@ -6,6 +6,7 @@ import {
   ConfirmedTransactionMeta,
   TransactionSignature,
   PublicKey,
+  VOTE_PROGRAM_ID,
 } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
@@ -13,6 +14,7 @@ import { Address } from "components/common/Address";
 import { useQuery } from "utils/url";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
+import { parseProgramLogs } from "utils/program-logs";
 
 const PAGE_SIZE = 25;
 
@@ -27,12 +29,14 @@ type TransactionWithInvocations = {
   signature?: TransactionSignature;
   meta: ConfirmedTransactionMeta | null;
   invocations: Map<string, number>;
+  computeUnits: number;
 };
 
 export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
   const filter = useQueryFilter();
+  const { cluster } = useCluster();
 
   const { transactions, invokedPrograms } = React.useMemo(() => {
     const invokedPrograms = new Map<string, number>();
@@ -66,21 +70,35 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           invokedPrograms.set(programId, programTransactionCount + 1);
         }
 
+        const parsedLogs = parseProgramLogs(
+          tx.meta?.logMessages ?? [],
+          tx.meta?.err ?? null,
+          cluster
+        );
+        const computeUnits = parsedLogs
+          .map(({ computeUnits }) => computeUnits)
+          .reduce((sum, next) => sum + next);
+
         return {
           index,
           signature,
           meta: tx.meta,
           invocations,
+          computeUnits,
         };
       }
     );
     return { transactions, invokedPrograms };
-  }, [block]);
+  }, [block, cluster]);
 
   const filteredTransactions = React.useMemo(() => {
+    const voteFilter = VOTE_PROGRAM_ID.toBase58();
     return transactions.filter(({ invocations }) => {
       if (filter === ALL_TRANSACTIONS) {
         return true;
+      } else if (filter === HIDE_VOTES) {
+        // hide vote txs that don't invoke any other programs
+        return !(invocations.size === 1 || invocations.has(voteFilter));
       }
       return invocations.has(filter);
     });
@@ -121,6 +139,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
               <th className="text-muted">#</th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
+              <th className="text-muted">Compute</th>
               <th className="text-muted">Invoked Programs</th>
             </tr>
           </thead>
@@ -156,6 +175,9 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                   </td>
 
                   <td>{signature}</td>
+                  <td className="text-end">
+                    {new Intl.NumberFormat("en-US").format(tx.computeUnits)}
+                  </td>
                   <td>
                     {tx.invocations.size === 0
                       ? "NA"
@@ -199,7 +221,8 @@ type FilterProps = {
   totalTransactionCount: number;
 };
 
-const ALL_TRANSACTIONS = "";
+const ALL_TRANSACTIONS = "all";
+const HIDE_VOTES = "";
 
 type FilterOption = {
   name: string;
@@ -217,7 +240,7 @@ const FilterDropdown = ({
   const { cluster } = useCluster();
   const buildLocation = (location: Location, filter: string) => {
     const params = new URLSearchParams(location.search);
-    if (filter === ALL_TRANSACTIONS) {
+    if (filter === HIDE_VOTES) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
@@ -228,12 +251,27 @@ const FilterDropdown = ({
     };
   };
 
-  let currentFilterOption = {
+  let defaultFilterOption: FilterOption = {
+    name: "All Except Votes",
+    programId: HIDE_VOTES,
+    transactionCount:
+      totalTransactionCount -
+      (invokedPrograms.get(VOTE_PROGRAM_ID.toBase58()) || 0),
+  };
+
+  let allTransactionsOption: FilterOption = {
     name: "All Transactions",
     programId: ALL_TRANSACTIONS,
     transactionCount: totalTransactionCount,
   };
-  const filterOptions: FilterOption[] = [currentFilterOption];
+
+  let currentFilterOption =
+    filter !== ALL_TRANSACTIONS ? defaultFilterOption : allTransactionsOption;
+
+  const filterOptions: FilterOption[] = [
+    defaultFilterOption,
+    allTransactionsOption,
+  ];
   const placeholderRegistry = new Map();
 
   [...invokedPrograms.entries()].forEach(([programId, transactionCount]) => {
