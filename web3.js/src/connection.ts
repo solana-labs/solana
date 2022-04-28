@@ -4432,7 +4432,7 @@ export class Connection {
      * - Otherwise, if the `Connection::commitment` is set, use that.
      * - Otherwise, set it to the RPC server default: `finalized`.
      *
-     * This is extrememly important to ensure that these two fundamentally
+     * This is extremely important to ensure that these two fundamentally
      * identical subscriptions produce the same identifying hash:
      *
      * - A subscription made without specifying a commitment.
