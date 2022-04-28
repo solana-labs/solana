@@ -2604,8 +2604,8 @@ impl Bank {
 
     fn inflation_info_during_epoch(
         &self,
-        capitalization : u64,
-        epoch : Epoch
+        capitalization: u64,
+        epoch: Epoch,
     ) -> (u64, f64, f64, f64) {
         let slot_in_year = self.slot_in_year_for_inflation();
         let (validator_rate, foundation_rate) = {
@@ -2622,7 +2622,7 @@ impl Bank {
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64,
             epoch_duration_in_years,
             validator_rate,
-            foundation_rate
+            foundation_rate,
         )
     }
 
@@ -2635,8 +2635,8 @@ impl Bank {
         metrics: &mut RewardsMetrics,
     ) {
         let capitalization = self.capitalization();
-        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate)
-            = self.inflation_info_during_epoch(capitalization, prev_epoch);
+        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate) =
+            self.inflation_info_during_epoch(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -9272,8 +9272,8 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-        let (validator_rewards, _, _, _)
-            = bank1.inflation_info_during_epoch(bank0.capitalization(), bank0.epoch());
+        let (validator_rewards, _, _, _) =
+            bank1.inflation_info_during_epoch(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
