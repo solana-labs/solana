@@ -385,6 +385,7 @@ impl ClusterInfoVoteListener {
         verified_packets_sender: &Sender<Vec<PacketBatch>>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
+        println!("check_for_leader_bank_and_send_votes");
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
         if let Some(bank_vote_sender_state) = bank_vote_sender_state_option {
             if bank_vote_sender_state.bank.slot() != current_working_bank.slot() {
