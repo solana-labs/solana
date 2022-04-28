@@ -11359,22 +11359,31 @@ pub(crate) mod tests {
     #[test]
     fn test_bank_cloned_stake_delegations() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config_with_leader(10_000_000_000, &solana_sdk::pubkey::new_rand(), 1);
+        } = create_genesis_config_with_leader(
+            123_456_000_000_000,
+            &solana_sdk::pubkey::new_rand(),
+            123_000_000_000,
+        );
+        genesis_config.rent = Rent::default();
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let stake_delegations = bank.stakes_cache.stakes().stake_delegations().clone();
         assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
 
-        let balance = {
+        let (vote_balance, stake_balance) = {
             let rent = &bank.rent_collector().rent;
-            let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+            let vote_rent_exempt_reserve = rent.minimum_balance(VoteState::size_of());
+            let stake_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
             let minimum_delegation =
                 solana_stake_program::get_minimum_delegation(&bank.feature_set);
-            rent_exempt_reserve + minimum_delegation
+            (
+                vote_rent_exempt_reserve,
+                stake_rent_exempt_reserve + minimum_delegation,
+            )
         };
 
         let vote_keypair = Keypair::new();
@@ -11387,7 +11396,7 @@ pub(crate) mod tests {
                 authorized_withdrawer: vote_keypair.pubkey(),
                 commission: 0,
             },
-            balance,
+            vote_balance,
         );
 
         let stake_keypair = Keypair::new();
@@ -11397,7 +11406,7 @@ pub(crate) mod tests {
             &vote_keypair.pubkey(),
             &Authorized::auto(&stake_keypair.pubkey()),
             &Lockup::default(),
-            balance,
+            stake_balance,
         ));
 
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
