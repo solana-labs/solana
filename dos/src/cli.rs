@@ -4,7 +4,7 @@ use {
     std::{net::SocketAddr, process::exit},
 };
 
-#[derive(Parser)]
+#[derive(Parser, Debug, PartialEq)]
 #[clap(name = crate_name!(),
     version = crate_version!(),
     about = crate_description!(),
@@ -46,7 +46,7 @@ pub struct DosClientParameters {
     pub transaction_params: TransactionParams,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default)]
+#[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq)]
 #[clap(rename_all = "kebab-case")]
 pub struct TransactionParams {
     #[clap(
@@ -63,7 +63,11 @@ pub struct TransactionParams {
     )]
     pub valid_blockhash: bool,
 
-    #[clap(long, help = "Generate valid signature(s) for transaction")]
+    #[clap(
+        long,
+        requires("num-signatures"),
+        help = "Generate valid signature(s) for transaction"
+    )]
     pub valid_signatures: bool,
 
     #[clap(long, help = "Generate unique transactions")]
@@ -85,7 +89,7 @@ pub struct TransactionParams {
     pub num_instructions: Option<usize>,
 }
 
-#[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Mode {
     Gossip,
     Tvu,
@@ -97,7 +101,7 @@ pub enum Mode {
     Rpc,
 }
 
-#[derive(ArgEnum, Clone, Copy, Eq, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DataType {
     RepairHighest,
     RepairShred,
@@ -108,7 +112,7 @@ pub enum DataType {
     Transaction,
 }
 
-#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone)]
+#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TransactionType {
     Transfer,
     AccountCreation,
@@ -144,4 +148,204 @@ pub fn build_cli_parameters() -> DosClientParameters {
     let cmd_params = DosClientParameters::parse();
     validate_input(&cmd_params);
     cmd_params
+}
+
+#[cfg(test)]
+mod tests {
+
+    use {
+        super::*, //{DosClientParameters, TransactionParams},
+        clap::Parser,
+    };
+
+    #[test]
+    fn test_cli_parse_dos_valid_signatures() {
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--valid-signatures",
+            "--num-signatures",
+            "8",
+        ]);
+        assert!(result.is_ok());
+        let params = result.unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Tpu,
+                data_size: 128,
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: Some(8),
+                    valid_blockhash: false,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    transaction_type: None,
+                    num_instructions: None,
+                },
+            },
+        );
+    }
+
+    #[test]
+    fn test_cli_parse_dos_transfer() {
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--valid-blockhash",
+            "--transaction-type",
+            "transfer",
+            "--num-instructions",
+            "1",
+        ]);
+        assert!(result.is_ok());
+        let params = result.unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Tpu,
+                data_size: 128, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: false,
+                    unique_transactions: true,
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(1),
+                },
+            },
+        );
+
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--transaction-type",
+            "transfer",
+            "--num-instructions",
+            "8",
+        ]);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
+
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--valid-blockhash",
+            "--transaction-type",
+            "transfer",
+            "--num-instructions",
+            "8",
+        ]);
+        assert!(result.is_ok());
+        let params = result.unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Tpu,
+                data_size: 128, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: false,
+                    unique_transactions: true,
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(8),
+                },
+            },
+        );
+    }
+
+    #[test]
+    fn test_cli_parse_dos_create_account() {
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--valid-blockhash",
+            "--transaction-type",
+            "account-creation",
+        ]);
+        assert!(result.is_ok());
+        let params = result.unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Tpu,
+                data_size: 128, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: false,
+                    unique_transactions: true,
+                    transaction_type: Some(TransactionType::AccountCreation),
+                    num_instructions: None,
+                },
+            },
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cli_parse_dos_conflicting_sign_instruction() {
+        // check conflicting args num-signatures and num-instructions
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            "--unique-transactions",
+            "--valid-signatures",
+            "--num-signatures",
+            "8",
+            "--num-instructions",
+            "1",
+        ]);
+        assert!(result.is_err());
+    }
 }
