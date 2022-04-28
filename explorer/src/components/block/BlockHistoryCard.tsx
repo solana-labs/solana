@@ -18,9 +18,19 @@ import { parseProgramLogs } from "utils/program-logs";
 
 const PAGE_SIZE = 25;
 
-const useQueryFilter = (query: URLSearchParams): string => {
+const useQueryProgramFilter = (query: URLSearchParams): string => {
   const filter = query.get("filter");
   return filter || "";
+};
+
+const useQueryAccountFilter = (query: URLSearchParams): PublicKey | null => {
+  const filter = query.get("accountFilter");
+  if (filter !== null) {
+    try {
+      return new PublicKey(filter);
+    } catch {}
+  }
+  return null;
 };
 
 type SortMode = "index" | "compute";
@@ -43,7 +53,8 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
   const query = useQuery();
-  const filter = useQueryFilter(query);
+  const programFilter = useQueryProgramFilter(query);
+  const accountFilter = useQueryAccountFilter(query);
   const sortMode = useQuerySort(query);
   const { cluster } = useCluster();
   const location = useLocation();
@@ -107,26 +118,40 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
 
   const filteredTransactions = React.useMemo(() => {
     const voteFilter = VOTE_PROGRAM_ID.toBase58();
-    const filteredTxs = transactions.filter(({ invocations }) => {
-      if (filter === ALL_TRANSACTIONS) {
-        return true;
-      } else if (filter === HIDE_VOTES) {
-        // hide vote txs that don't invoke any other programs
-        return !(invocations.size === 1 || invocations.has(voteFilter));
-      }
-      return invocations.has(filter);
-    });
+    const filteredTxs = transactions
+      .filter(({ invocations }) => {
+        if (programFilter === ALL_TRANSACTIONS) {
+          return true;
+        } else if (programFilter === HIDE_VOTES) {
+          // hide vote txs that don't invoke any other programs
+          return !(invocations.size === 1 || invocations.has(voteFilter));
+        }
+        return invocations.has(programFilter);
+      })
+      .filter(({ index }) => {
+        if (accountFilter === null) {
+          return true;
+        }
+        const tx = block.transactions[index].transaction;
+        return tx.message.accountKeys.find((key) => key.equals(accountFilter));
+      });
 
     if (sortMode === "compute") {
       filteredTxs.sort((a, b) => b.computeUnits - a.computeUnits);
     }
 
     return filteredTxs;
-  }, [transactions, filter, sortMode]);
+  }, [
+    block.transactions,
+    transactions,
+    programFilter,
+    accountFilter,
+    sortMode,
+  ]);
 
   if (filteredTransactions.length === 0) {
     const errorMessage =
-      filter === ALL_TRANSACTIONS
+      programFilter === ALL_TRANSACTIONS
         ? "This block has no transactions"
         : "No transactions found with this filter";
     return <ErrorCard text={errorMessage} />;
@@ -144,13 +169,22 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
       <div className="card-header align-items-center">
         <h3 className="card-header-title">{title}</h3>
         <FilterDropdown
-          filter={filter}
+          filter={programFilter}
           toggle={() => setDropdown((show) => !show)}
           show={showDropdown}
           invokedPrograms={invokedPrograms}
           totalTransactionCount={transactions.length}
         ></FilterDropdown>
       </div>
+
+      {accountFilter !== null && (
+        <div className="card-body">
+          Showing transactions which load account:
+          <div className="d-inline-block ms-2">
+            <Address pubkey={accountFilter} link />
+          </div>
+        </div>
+      )}
 
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
@@ -234,7 +268,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         </table>
       </div>
 
-      {block.transactions.length > numDisplayed && (
+      {filteredTransactions.length > numDisplayed && (
         <div className="card-footer">
           <button
             className="btn btn-primary w-100"
