@@ -1301,6 +1301,7 @@ impl JsonRpcRequestProcessor {
         signatures: Vec<Signature>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
+        println!("get_signature_statuses 1");
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
         let search_transaction_history = config
@@ -3373,6 +3374,7 @@ pub mod rpc_full {
             signature_strs: Vec<String>,
             config: Option<RpcSignatureStatusConfig>,
         ) -> BoxFuture<Result<RpcResponse<Vec<Option<TransactionStatus>>>>> {
+            println!("get_signature_statuses 2");
             debug!(
                 "get_signature_statuses rpc request received: {:?}",
                 signature_strs.len()

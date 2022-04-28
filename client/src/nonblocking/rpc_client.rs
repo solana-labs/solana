@@ -1550,6 +1550,7 @@ impl RpcClient {
         &self,
         signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
+        println!("get_signature_statuses 4");
         let signatures: Vec<_> = signatures.iter().map(|s| s.to_string()).collect();
         self.send(RpcRequest::GetSignatureStatuses, json!([signatures]))
             .await

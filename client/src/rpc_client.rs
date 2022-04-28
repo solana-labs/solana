@@ -1282,6 +1282,7 @@ impl RpcClient {
         &self,
         signatures: &[Signature],
     ) -> RpcResult<Vec<Option<TransactionStatus>>> {
+        println!("get_signature_statuses 3");
         self.invoke(self.rpc_client.get_signature_statuses(signatures))
     }
 
