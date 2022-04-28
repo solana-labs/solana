@@ -62,10 +62,10 @@ struct SigVerifierStats {
     total_excess_fail: usize,
     total_valid_packets: usize,
     total_shrinks: usize,
-    total_dedup_time: usize,
-    total_discard_time: usize,
-    total_verify_time: usize,
-    total_shrink_time: usize,
+    total_dedup_time_us: usize,
+    total_discard_time_us: usize,
+    total_verify_time_us: usize,
+    total_shrink_time_us: usize,
 }
 
 impl SigVerifierStats {
@@ -176,10 +176,10 @@ impl SigVerifierStats {
             ("total_excess_fail", self.total_excess_fail, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
             ("total_shrinks", self.total_shrinks, i64),
-            ("total_dedup_time", self.total_dedup_time, i64),
-            ("total_discard_time", self.total_discard_time, i64),
-            ("total_verify_time", self.total_verify_time, i64),
-            ("total_shrink_time", self.total_shrink_time, i64),
+            ("total_dedup_time_us", self.total_dedup_time_us, i64),
+            ("total_discard_time_us", self.total_discard_time_us, i64),
+            ("total_verify_time_us", self.total_verify_time_us, i64),
+            ("total_shrink_time_us", self.total_shrink_time_us, i64),
         );
     }
 }
@@ -311,10 +311,10 @@ impl SigVerifyStage {
         stats.total_valid_packets += num_valid_packets;
         stats.total_excess_fail += excess_fail;
         stats.total_shrinks += total_shrinks;
-        stats.total_dedup_time += dedup_time.as_us() as usize;
-        stats.total_discard_time += discard_time.as_us() as usize;
-        stats.total_verify_time += verify_time.as_us() as usize;
-        stats.total_shrink_time += shrink_time.as_us() as usize;
+        stats.total_dedup_time_us += dedup_time.as_us() as usize;
+        stats.total_discard_time_us += discard_time.as_us() as usize;
+        stats.total_verify_time_us += verify_time.as_us() as usize;
+        stats.total_shrink_time_us += shrink_time.as_us() as usize;
 
         Ok(())
     }
