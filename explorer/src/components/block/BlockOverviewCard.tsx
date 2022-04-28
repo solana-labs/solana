@@ -230,7 +230,9 @@ function MoreSection({
       </div>
       {tab === undefined && <BlockHistoryCard block={block} />}
       {tab === "rewards" && <BlockRewardsCard block={block} />}
-      {tab === "accounts" && <BlockAccountsCard block={block} />}
+      {tab === "accounts" && (
+        <BlockAccountsCard block={block} blockSlot={slot} />
+      )}
       {tab === "programs" && <BlockProgramsCard block={block} />}
     </>
   );
