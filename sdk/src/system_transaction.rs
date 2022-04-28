@@ -56,9 +56,9 @@ pub fn transfer(
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    println!("Creating transfer transaction from {} with instruction {}", from_pubkey, instruction);
     let from_pubkey = from_keypair.pubkey();
     let instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    println!("Creating transfer transaction from {} with instruction {}", from_pubkey, instruction);
     let message = Message::new(&[instruction], Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
