@@ -998,7 +998,34 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
 
-        println!("Validator Information: {:#?}",Self);
+        println!("{:#?}",stats_reporter_service);
+        println!("{:#?}",gossip_service);
+        println!("{:#?}",serve_repair_service);
+        println!("{:#?}",json_rpc_service);
+        println!("{:#?}",pubsub_service);
+        println!("{:#?}",rpc_completed_slots_service);
+        println!("{:#?}",optimistically_confirmed_bank_tracker);
+        println!("{:#?}",transaction_status_service);
+        println!("{:#?}",rewards_recorder_service);
+        println!("{:#?}",cache_block_meta_service);
+        println!("{:#?}",system_monitor_service);
+        println!("{:#?}",sample_performance_service);
+        println!("{:#?}",poh_timing_report_service);
+        println!("{:#?}",snapshot_packager_service);
+        println!("{:#?}",completed_data_sets_service);
+        println!("{:#?}",tpu);
+        println!("{:#?}",tvu);
+        println!("{:#?}",poh_service);
+        println!("{:#?}",poh_recorder);
+        println!("{:#?}",ip_echo_server);
+        println!("{:#?}",config.validator_exit.clone());
+        println!("{:#?}",cluster_info);
+        println!("{:#?}",bank_forks);
+        println!("{:#?}",blockstore);
+        println!("{:#?}",geyser_plugin_service);
+        println!("{:#?}",ledger_metric_report_service);
+        println!("{:#?}",accounts_background_service);
+        println!("{:#?}",accounts_hash_verifier);
 
         Self {
             stats_reporter_service,
