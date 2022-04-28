@@ -389,6 +389,7 @@ impl SendTransactionService {
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 let mut stats = SendTransactionServiceStats::default();
+                let mut stats_updated = false;
                 match receiver.recv_timeout(Duration::from_millis(recv_timeout_ms)) {
                     Err(RecvTimeoutError::Disconnected) => {
                         info!("Terminating send-transaction-service.");
@@ -397,6 +398,7 @@ impl SendTransactionService {
                     }
                     Err(RecvTimeoutError::Timeout) => {}
                     Ok(transaction_info) => {
+                        stats_updated = true;
                         stats.received_transactions += 1;
                         let entry = transactions.entry(transaction_info.signature);
                         let mut new_transaction = false;
@@ -420,6 +422,7 @@ impl SendTransactionService {
                     && last_batch_sent.elapsed().as_millis() as u64 >= config.batch_send_rate_ms)
                     || transactions.len() >= config.batch_size
                 {
+                    stats_updated = true;
                     stats.sent_transactions += transactions.len() as u64;
                     let _result = Self::send_transactions_in_batch(
                         &tpu_address,
@@ -449,10 +452,13 @@ impl SendTransactionService {
                             }
                         }
                         stats.retry_queue_overflow += (txns_to_retry - txns_added_to_retry) as u64;
+                        stats.retry_queue_size = retry_transactions.len() as u64;
                     }
                     last_batch_sent = Instant::now();
                 }
-                stats_reporter.update(stats);
+                if stats_updated {
+                    stats_reporter.update(stats);
+                }
             })
             .unwrap()
     }
