@@ -100,7 +100,7 @@ export function ComputeBudgetDetailsCard({
       ix={ix}
       index={index}
       result={result}
-      title="Compute Budget Program: Unknown"
+      title="Compute Budget Program: Unknown Instruction"
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw
