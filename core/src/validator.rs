@@ -998,7 +998,7 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
 
-        println!("\nSTARTING NEW VALIDATOR!");
+        println!("\nSTARTING NEW VALIDATOR! {}",id.to_string());
         println!("{:#?}",stats_reporter_service);
         println!("{:#?}",gossip_service);
         println!("{:#?}",serve_repair_service);

@@ -185,7 +185,7 @@ pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl ClusterInfoVoteListener {
+impl c {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         exit: Arc<AtomicBool>,
@@ -202,7 +202,7 @@ impl ClusterInfoVoteListener {
         bank_notification_sender: Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
     ) -> Self {
-        // Test comment
+        println("Create new ClusterInfoVoteListener");
         let (verified_vote_label_packets_sender, verified_vote_label_packets_receiver) =
             unbounded();
         let (verified_vote_transactions_sender, verified_vote_transactions_receiver) = unbounded();
@@ -336,6 +336,7 @@ impl ClusterInfoVoteListener {
         poh_recorder: Arc<Mutex<PohRecorder>>,
         verified_packets_sender: &Sender<Vec<PacketBatch>>,
     ) -> Result<()> {
+        println!("bank_send_loop");
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
