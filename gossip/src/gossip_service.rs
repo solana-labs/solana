@@ -23,7 +23,7 @@ use {
         time::{Duration, Instant},
     },
 };
-
+#[derive(Debug)]
 pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,
 }

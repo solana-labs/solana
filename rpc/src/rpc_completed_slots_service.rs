@@ -15,7 +15,7 @@ use {
 };
 
 pub const COMPLETE_SLOT_REPORT_SLEEP_MS: u64 = 100;
-
+#[derive(Debug)]
 pub struct RpcCompletedSlotsService;
 impl RpcCompletedSlotsService {
     pub fn spawn(

@@ -1003,7 +1003,7 @@ impl Validator {
         println!("{:#?}",serve_repair_service);
         println!("{:#?}",json_rpc_service);
         println!("{:#?}",pubsub_service);
-        println!("{:#?}",rpc_completed_slots_service);
+        println!("{:#?}",rpc_completed_slots_service);/*
         println!("{:#?}",optimistically_confirmed_bank_tracker);
         println!("{:#?}",transaction_status_service);
         println!("{:#?}",rewards_recorder_service);
@@ -1025,7 +1025,7 @@ impl Validator {
         println!("{:#?}",geyser_plugin_service);
         println!("{:#?}",ledger_metric_report_service);
         println!("{:#?}",accounts_background_service);
-        println!("{:#?}",accounts_hash_verifier);
+        println!("{:#?}",accounts_hash_verifier);*/
 
         Self {
             stats_reporter_service,

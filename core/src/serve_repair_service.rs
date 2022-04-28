@@ -10,7 +10,7 @@ use {
         thread::{self, JoinHandle},
     },
 };
-
+#[derive(Debug)]
 pub struct ServeRepairService {
     thread_hdls: Vec<JoinHandle<()>>,
 }

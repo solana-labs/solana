@@ -69,7 +69,7 @@ impl PubSubConfig {
         }
     }
 }
-
+#[derive(Debug)]
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
 }

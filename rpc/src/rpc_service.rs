@@ -54,7 +54,7 @@ use {
 const FULL_SNAPSHOT_REQUEST_PATH: &str = "/snapshot.tar.bz2";
 const INCREMENTAL_SNAPSHOT_REQUEST_PATH: &str = "/incremental-snapshot.tar.bz2";
 const LARGEST_ACCOUNTS_CACHE_DURATION: u64 = 60 * 60 * 2;
-
+#[derive(Debug)]
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
 
