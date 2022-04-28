@@ -77,7 +77,7 @@ impl RentCollector {
         }
     }
 
-    pub fn clone_with_schedule_and_epoch(
+    pub(crate) fn clone_with_schedule_and_epoch(
         &self,
         epoch_schedule: EpochSchedule,
         epoch: Epoch,
