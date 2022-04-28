@@ -203,6 +203,7 @@ impl ThinClient {
         tries: usize,
         pending_confirmations: usize,
     ) -> TransportResult<Signature> {
+        println!("sending and confirming transaction");
         for x in 0..tries {
             let now = Instant::now();
             let mut num_confirmed = 0;
