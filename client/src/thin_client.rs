@@ -536,6 +536,7 @@ impl SyncClient for ThinClient {
         signature: &Signature,
         min_confirmed_blocks: usize,
     ) -> TransportResult<usize> {
+        println!("poll_for_signature_confirmation - wait for {} confirmed blocks",min_confirmed_blocks);
         self.rpc_client()
             .poll_for_signature_confirmation(signature, min_confirmed_blocks)
             .map_err(|e| e.into())
