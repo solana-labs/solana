@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useHistory, useLocation } from "react-router-dom";
 import { Location } from "history";
 import {
   BlockResponse,
@@ -11,17 +11,23 @@ import {
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
-import { useQuery } from "utils/url";
+import { pickClusterParams, useQuery } from "utils/url";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
 import { parseProgramLogs } from "utils/program-logs";
 
 const PAGE_SIZE = 25;
 
-const useQueryFilter = (): string => {
-  const query = useQuery();
+const useQueryFilter = (query: URLSearchParams): string => {
   const filter = query.get("filter");
   return filter || "";
+};
+
+type SortMode = "index" | "compute";
+const useQuerySort = (query: URLSearchParams): SortMode => {
+  const sort = query.get("sort");
+  if (sort === "compute") return "compute";
+  return "index";
 };
 
 type TransactionWithInvocations = {
@@ -36,8 +42,12 @@ type TransactionWithInvocations = {
 export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
-  const filter = useQueryFilter();
+  const query = useQuery();
+  const filter = useQueryFilter(query);
+  const sortMode = useQuerySort(query);
   const { cluster } = useCluster();
+  const location = useLocation();
+  const history = useHistory();
 
   const { transactions, invokedPrograms } = React.useMemo(() => {
     const invokedPrograms = new Map<string, number>();
@@ -97,7 +107,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
 
   const filteredTransactions = React.useMemo(() => {
     const voteFilter = VOTE_PROGRAM_ID.toBase58();
-    return transactions.filter(({ invocations }) => {
+    const filteredTxs = transactions.filter(({ invocations }) => {
       if (filter === ALL_TRANSACTIONS) {
         return true;
       } else if (filter === HIDE_VOTES) {
@@ -106,7 +116,13 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
       }
       return invocations.has(filter);
     });
-  }, [transactions, filter]);
+
+    if (sortMode === "compute") {
+      filteredTxs.sort((a, b) => b.computeUnits - a.computeUnits);
+    }
+
+    return filteredTxs;
+  }, [transactions, filter, sortMode]);
 
   if (filteredTransactions.length === 0) {
     const errorMessage =
@@ -140,10 +156,26 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">#</th>
+              <th
+                className="text-muted c-pointer"
+                onClick={() => {
+                  query.delete("sort");
+                  history.push(pickClusterParams(location, query));
+                }}
+              >
+                #
+              </th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
-              <th className="text-muted">Compute</th>
+              <th
+                className="text-muted c-pointer"
+                onClick={() => {
+                  query.set("sort", "compute");
+                  history.push(pickClusterParams(location, query));
+                }}
+              >
+                Compute
+              </th>
               <th className="text-muted">Invoked Programs</th>
             </tr>
           </thead>
