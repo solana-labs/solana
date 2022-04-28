@@ -4398,7 +4398,13 @@ export class Connection {
     }
     callbacks.forEach(cb => {
       try {
-        cb(...(callbackArgs as [any, any]));
+        cb(
+          // I failed to find a way to convince TypeScript that `cb` is of type
+          // `TCallback` which is certainly compatible with `Parameters<TCallback>`.
+          // See https://github.com/microsoft/TypeScript/issues/47615
+          // @ts-ignore
+          ...callbackArgs,
+        );
       } catch (e) {
         console.error(e);
       }
