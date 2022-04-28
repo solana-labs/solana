@@ -1442,7 +1442,7 @@ mod test {
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
             &mut bank_forks.read().unwrap().ancestors(),
-            &mut bank_forks.read().unwrap().descendants().clone(),
+            &mut bank_forks.read().unwrap().descendants(),
             &mut progress,
             &bank_forks,
             &requester_blockstore,
