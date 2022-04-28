@@ -3,7 +3,7 @@ import { Account } from "providers/accounts";
 import { useCluster } from "providers/cluster";
 import { BorshAccountsCoder } from "@project-serum/anchor";
 import { IdlTypeDef } from "@project-serum/anchor/dist/cjs/idl";
-import { getProgramName, mapAccountToRows } from "utils/anchor";
+import { getAnchorProgramName, mapAccountToRows } from "utils/anchor";
 import { ErrorCard } from "components/common/ErrorCard";
 import { useAnchorProgram } from "providers/anchor";
 
@@ -15,7 +15,7 @@ export function AnchorAccountCard({ account }: { account: Account }) {
     url
   );
   const rawData = account?.details?.rawData;
-  const programName = getProgramName(anchorProgram) || "Unknown Program";
+  const programName = getAnchorProgramName(anchorProgram) || "Unknown Program";
 
   const { decodedAccountData, accountDef } = useMemo(() => {
     let decodedAccountData: any | null = null;

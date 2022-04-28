@@ -1,6 +1,6 @@
 import { TransactionError } from "@solana/web3.js";
 import { Cluster } from "providers/cluster";
-import { programLabel } from "utils/tx";
+import { getProgramName } from "utils/tx";
 import { getTransactionInstructionError } from "utils/program-err";
 
 export type LogMessage = {
@@ -45,9 +45,7 @@ export function prettyProgramLogs(
 
       if (matches.length > 0) {
         const programAddress = matches[0][1];
-        const programName =
-          programLabel(programAddress, cluster) ||
-          `Unknown (${programAddress}) Program`;
+        const programName = getProgramName(programAddress, cluster);
 
         if (depth === 0) {
           prettyLogs.push({
