@@ -790,6 +790,7 @@ fn do_process_blockstore_from_root(
     );
 
     info!("ledger processing timing: {:?}", timing);
+<<<<<<< HEAD
     info!(
         "ledger processed in {}. root slot is {}, {} fork{} at {}, with {} frozen bank{}",
         HumanTime::from(chrono::Duration::from_std(processing_time).unwrap())
@@ -809,6 +810,24 @@ fn do_process_blockstore_from_root(
         },
     );
     assert!(bank_forks.active_banks().is_empty());
+=======
+    {
+        let bank_forks = bank_forks.read().unwrap();
+        let mut bank_slots = bank_forks.banks().keys().copied().collect::<Vec<_>>();
+        bank_slots.sort_unstable();
+
+        info!(
+            "ledger processed in {}. root slot is {}, {} bank{}: {}",
+            HumanTime::from(chrono::Duration::from_std(processing_time).unwrap())
+                .to_text_en(Accuracy::Precise, Tense::Present),
+            bank_forks.root(),
+            bank_slots.len(),
+            if bank_slots.len() > 1 { "s" } else { "" },
+            bank_slots.iter().map(|slot| slot.to_string()).join(", "),
+        );
+        assert!(bank_forks.active_banks().is_empty());
+    }
+>>>>>>> 4e58b3870 (Update all BankForks methods to return owned values (#24801))
 
     Ok((bank_forks, leader_schedule_cache, last_full_snapshot_slot))
 }
@@ -1207,8 +1226,13 @@ fn load_frozen_forks(
     );
 
     process_next_slots(
+<<<<<<< HEAD
         root_bank,
         root_meta,
+=======
+        &bank_forks.read().unwrap().get(start_slot).unwrap(),
+        start_slot_meta,
+>>>>>>> 4e58b3870 (Update all BankForks methods to return owned values (#24801))
         blockstore,
         leader_schedule_cache,
         &mut pending_slots,
@@ -3218,7 +3242,12 @@ pub mod tests {
         blockstore.set_roots(vec![3, 5].iter()).unwrap();
 
         // Set up bank1
+<<<<<<< HEAD
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+=======
+        let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let bank0 = bank_forks.get(0).unwrap();
+>>>>>>> 4e58b3870 (Update all BankForks methods to return owned values (#24801))
         let opts = ProcessOptions {
             poh_verify: true,
             accounts_db_test_hash_calculation: true,

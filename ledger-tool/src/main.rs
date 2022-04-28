@@ -2199,8 +2199,7 @@ fn main() {
                             .unwrap_or_else(|| {
                                 eprintln!("Error: Slot {} is not available", snapshot_slot);
                                 exit(1);
-                            })
-                            .clone();
+                            });
 
                         let child_bank_required = rent_burn_percentage.is_ok()
                             || hashes_per_tick.is_some()
@@ -2745,7 +2744,7 @@ fn main() {
                                 }
                             };
                             let warped_bank = Bank::new_from_parent_with_tracer(
-                                base_bank,
+                                &base_bank,
                                 base_bank.collector_id(),
                                 next_epoch,
                                 tracer,
@@ -2762,7 +2761,7 @@ fn main() {
 
                             println!("Slot: {} => {}", base_bank.slot(), warped_bank.slot());
                             println!("Epoch: {} => {}", base_bank.epoch(), warped_bank.epoch());
-                            assert_capitalization(base_bank);
+                            assert_capitalization(&base_bank);
                             assert_capitalization(&warped_bank);
                             let interest_per_epoch = ((warped_bank.capitalization() as f64)
                                 / (base_bank.capitalization() as f64)
@@ -3009,7 +3008,7 @@ fn main() {
                                 );
                             }
 
-                            assert_capitalization(bank);
+                            assert_capitalization(&bank);
                             println!("Inflation: {:?}", bank.inflation());
                             println!("RentCollector: {:?}", bank.rent_collector());
                             println!("Capitalization: {}", Sol(bank.capitalization()));
