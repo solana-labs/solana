@@ -185,7 +185,7 @@ pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl c {
+impl ClusterInfoVoteListener {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         exit: Arc<AtomicBool>,
