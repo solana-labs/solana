@@ -942,7 +942,8 @@ impl RpcSubscriptions {
                 SubscriptionParams::Block(params) => {
                     num_blocks_found.fetch_add(1, Ordering::Relaxed);
                     if let Some(slot) = slot {
-                        if let Some(bank) = bank_forks.read().unwrap().get(slot) {
+                        let bank = bank_forks.read().unwrap().get(slot).cloned();
+                        if let Some(bank) = bank {
                             // We're calling it unnotified in this context
                             // because, logically, it gets set to `last_notified_slot + 1`
                             // on the final iteration of the loop down below.
