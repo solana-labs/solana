@@ -13,8 +13,8 @@ pub enum UiExtension {
     TransferFeeConfig(UiTransferFeeConfig),
     TransferFeeAmount(UiTransferFeeAmount),
     MintCloseAuthority(UiMintCloseAuthority),
-    ConfidentialTransferMint,
-    ConfidentialTransferAccount,
+    ConfidentialTransferMint,    // Implementation of extension state to come
+    ConfidentialTransferAccount, // Implementation of extension state to come
     DefaultAccountState(UiDefaultAccountState),
     ImmutableOwner,
     MemoTransfer(UiMemoTransfer),
