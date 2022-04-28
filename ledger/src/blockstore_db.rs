@@ -2006,7 +2006,7 @@ pub struct LedgerColumnOptions {
     // Control how often RocksDB read/write performance samples are collected.
     // If the value is greater than 0, then RocksDB read/write perf sample
     // will be collected once for every `rocks_perf_sample_interval` ops.
-    pub rocks_perf_sample_interval: usize,
+    rocks_perf_sample_interval: usize,
 }
 
 impl Default for LedgerColumnOptions {
@@ -2015,6 +2015,20 @@ impl Default for LedgerColumnOptions {
             shred_storage_type: ShredStorageType::RocksLevel,
             compression_type: BlockstoreCompressionType::default(),
             rocks_perf_sample_interval: 0,
+        }
+    }
+}
+
+impl LedgerColumnOptions {
+    pub fn new(
+        shred_storage_type: ShredStorageType,
+        compression_type: BlockstoreCompressionType,
+        rocks_perf_sample_interval: usize,
+    ) -> Self {
+        Self {
+            shred_storage_type,
+            compression_type,
+            rocks_perf_sample_interval,
         }
     }
 }

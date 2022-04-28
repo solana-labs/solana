@@ -2706,44 +2706,7 @@ pub fn main() {
         validator_config.max_ledger_shreds = Some(limit_ledger_size);
     }
 
-    validator_config.ledger_column_options = LedgerColumnOptions {
-        compression_type: match matches.value_of("rocksdb_ledger_compression") {
-            None => BlockstoreCompressionType::default(),
-            Some(ledger_compression_string) => match ledger_compression_string {
-                "none" => BlockstoreCompressionType::None,
-                "snappy" => BlockstoreCompressionType::Snappy,
-                "lz4" => BlockstoreCompressionType::Lz4,
-                "zlib" => BlockstoreCompressionType::Zlib,
-                _ => panic!(
-                    "Unsupported ledger_compression: {}",
-                    ledger_compression_string
-                ),
-            },
-        },
-        shred_storage_type: match matches.value_of("rocksdb_shred_compaction") {
-            None => ShredStorageType::default(),
-            Some(shred_compaction_string) => match shred_compaction_string {
-                "level" => ShredStorageType::RocksLevel,
-                "fifo" => {
-                    let shred_storage_size =
-                        value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
-                }
-                _ => panic!(
-                    "Unrecognized rocksdb-shred-compaction: {}",
-                    shred_compaction_string
-                ),
-            },
-        },
-        rocks_perf_sample_interval: value_t_or_exit!(
-            matches,
-            "rocksdb-perf-sample-interval",
-            usize
-        ),
-    };
+    validator_config.ledger_column_options = process_ledger_column_options(&matches);
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
         validator_config.halt_on_known_validators_accounts_hash_mismatch = true;
@@ -2996,4 +2959,46 @@ fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
         keys,
         indexes: account_indexes,
     }
+}
+
+fn process_ledger_column_options(matches: &ArgMatches) -> LedgerColumnOptions {
+    let rocks_compression_type = match matches.value_of("rocksdb_ledger_compression") {
+        None => BlockstoreCompressionType::default(),
+        Some(ledger_compression_string) => match ledger_compression_string {
+            "none" => BlockstoreCompressionType::None,
+            "snappy" => BlockstoreCompressionType::Snappy,
+            "lz4" => BlockstoreCompressionType::Lz4,
+            "zlib" => BlockstoreCompressionType::Zlib,
+            _ => panic!(
+                "Unsupported ledger_compression: {}",
+                ledger_compression_string
+            ),
+        },
+    };
+    let rocks_shred_storage_type = match matches.value_of("rocksdb_shred_compaction") {
+        None => ShredStorageType::default(),
+        Some(shred_compaction_string) => match shred_compaction_string {
+            "level" => ShredStorageType::RocksLevel,
+            "fifo" => {
+                let shred_storage_size =
+                    value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+                    shred_data_cf_size: shred_storage_size / 2,
+                    shred_code_cf_size: shred_storage_size / 2,
+                })
+            }
+            _ => panic!(
+                "Unrecognized rocksdb-shred-compaction: {}",
+                shred_compaction_string
+            ),
+        },
+    };
+    let rocks_perf_sample_interval: usize =
+        value_t_or_exit!(matches, "rocksdb-perf-sample-interval", usize);
+
+    LedgerColumnOptions::new(
+        rocks_shred_storage_type,
+        rocks_compression_type,
+        rocks_perf_sample_interval,
+    )
 }

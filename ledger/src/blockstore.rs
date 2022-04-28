@@ -67,7 +67,10 @@ use {
 };
 pub mod blockstore_purge;
 pub use {
-    crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    crate::{
+        blockstore_db::{BlockstoreCompressionType, BlockstoreError},
+        blockstore_meta::SlotMeta,
+    },
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
@@ -3990,12 +3993,13 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::LedgerColumnOptions {
-                shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
+            $crate::blockstore_db::LedgerColumnOptions::new(
+                $crate::blockstore_db::ShredStorageType::RocksFifo(
                     $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
                 ),
-                ..$crate::blockstore_db::LedgerColumnOptions::default()
-            },
+                BlockstoreCompressionType::default(),
+                0, // rocks_perf_sample_interval
+            ),
         )
     };
 }
@@ -4356,12 +4360,11 @@ pub mod tests {
         let blockstore = Blockstore::open_with_options(
             ledger_path.path(),
             BlockstoreOptions {
-                column_options: LedgerColumnOptions {
-                    shred_storage_type: ShredStorageType::RocksFifo(
-                        BlockstoreRocksFifoOptions::default(),
-                    ),
-                    ..LedgerColumnOptions::default()
-                },
+                column_options: LedgerColumnOptions::new(
+                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default()),
+                    BlockstoreCompressionType::default(),
+                    0,
+                ),
                 ..BlockstoreOptions::default()
             },
         )
