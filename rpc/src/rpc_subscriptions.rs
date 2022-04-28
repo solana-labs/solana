@@ -148,7 +148,7 @@ where
     X: Clone + Default,
 {
     let mut notified = false;
-    if let Some(bank) = bank_forks.read().unwrap().get(slot).cloned() {
+    if let Some(bank) = bank_forks.read().unwrap().get(slot) {
         let results = bank_method(&bank, params);
         let mut w_last_notified_slot = subscription.last_notified_slot.write().unwrap();
         let (filter_results, result_slot) =
@@ -1265,7 +1265,7 @@ pub(crate) mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let alice = Keypair::new();
@@ -1842,10 +1842,10 @@ pub(crate) mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap();
 
         // add account for alice and process the transaction at bank1
         let alice = Keypair::new();
@@ -1873,7 +1873,7 @@ pub(crate) mod tests {
             16,
             &stake::program::id(),
         );
-        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap();
 
         bank2.process_transaction(&tx).unwrap();
 
@@ -1890,7 +1890,7 @@ pub(crate) mod tests {
             16,
             &stake::program::id(),
         );
-        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap();
 
         bank3.process_transaction(&tx).unwrap();
 
@@ -2029,10 +2029,10 @@ pub(crate) mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap();
 
         // add account for alice and process the transaction at bank1
         let alice = Keypair::new();
@@ -2060,7 +2060,7 @@ pub(crate) mod tests {
             16,
             &stake::program::id(),
         );
-        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap();
 
         bank2.process_transaction(&tx).unwrap();
 
@@ -2140,10 +2140,10 @@ pub(crate) mod tests {
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
 
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap();
 
         // add account for alice and process the transaction at bank1
         let alice = Keypair::new();
@@ -2171,7 +2171,7 @@ pub(crate) mod tests {
             16,
             &stake::program::id(),
         );
-        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap();
 
         bank2.process_transaction(&tx).unwrap();
 
@@ -2268,7 +2268,7 @@ pub(crate) mod tests {
             16,
             &stake::program::id(),
         );
-        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap();
 
         bank3.process_transaction(&tx).unwrap();
         bank3.freeze();
@@ -2333,7 +2333,7 @@ pub(crate) mod tests {
             .unwrap();
 
         let next_bank = Bank::new_from_parent(
-            &bank_forks.get(0).unwrap().clone(),
+            &bank_forks.get(0).unwrap(),
             &solana_sdk::pubkey::new_rand(),
             1,
         );
@@ -2633,7 +2633,7 @@ pub(crate) mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
         let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
@@ -2680,7 +2680,7 @@ pub(crate) mod tests {
         );
 
         // Add the transaction to the 1st bank and then freeze the bank
-        let bank1 = bank_forks.write().unwrap().get(1).cloned().unwrap();
+        let bank1 = bank_forks.write().unwrap().get(1).unwrap();
         bank1.process_transaction(&tx).unwrap();
         bank1.freeze();
 
@@ -2755,7 +2755,7 @@ pub(crate) mod tests {
             )
             .unwrap();
 
-        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap();
         bank2.freeze();
         highest_confirmed_slot = 0;
         OptimisticallyConfirmedBankTracker::process_notification(
