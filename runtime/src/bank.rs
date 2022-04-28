@@ -2606,7 +2606,6 @@ impl Bank {
         let slot_in_year = self.slot_in_year_for_inflation();
         let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
         let parent_bank = self.parent().unwrap();
-        //let parent_bank = self.rc.parent.read().unwrap().unwrap().as_ref();
         let prev_bank_capitalization = parent_bank.capitalization();
         let prev_bank_epoch = parent_bank.epoch();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
