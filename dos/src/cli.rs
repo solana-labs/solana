@@ -153,10 +153,7 @@ pub fn build_cli_parameters() -> DosClientParameters {
 #[cfg(test)]
 mod tests {
 
-    use {
-        super::*, //{DosClientParameters, TransactionParams},
-        clap::Parser,
-    };
+    use {super::*, clap::Parser};
 
     #[test]
     fn test_cli_parse_dos_valid_signatures() {
