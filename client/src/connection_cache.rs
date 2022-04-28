@@ -1,4 +1,3 @@
-use solana_measure::measure::Measure;
 use {
     crate::{
         quic_client::QuicTpuConnection,
@@ -7,6 +6,7 @@ use {
     },
     lazy_static::lazy_static,
     lru::LruCache,
+    solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
