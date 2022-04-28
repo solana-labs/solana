@@ -1930,11 +1930,17 @@ impl Blockstore {
 
     /// The first complete block that is available in the Blockstore ledger
     pub fn get_first_available_block(&self) -> Result<Slot> {
-        let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot())?;
-        // The block at root-index 0 cannot be complete, because it is missing its parent
-        // blockhash. A parent blockhash must be calculated from the entries of the previous block.
-        // Therefore, the first available complete block is that at root-index 1.
-        Ok(root_iterator.nth(1).unwrap_or_default())
+        let mut root_iterator = self.rooted_slot_iterator(self.lowest_slot_with_genesis())?;
+        let first_root = root_iterator.next().unwrap_or_default();
+        // If the first root is slot 0, it is genesis. Genesis is always complete, so it is correct
+        // to return it as first-available.
+        if first_root == 0 {
+            return Ok(first_root);
+        }
+        // Otherwise, the block at root-index 0 cannot ever be complete, because it is missing its
+        // parent blockhash. A parent blockhash must be calculated from the entries of the previous
+        // block. Therefore, the first available complete block is that at root-index 1.
+        Ok(root_iterator.next().unwrap_or_default())
     }
 
     pub fn get_rooted_block(
@@ -3153,6 +3159,19 @@ impl Blockstore {
             .expect("unable to iterate over meta")
         {
             if slot > 0 && meta.received > 0 {
+                return slot;
+            }
+        }
+        // This means blockstore is empty, should never get here aside from right at boot.
+        self.last_root()
+    }
+
+    fn lowest_slot_with_genesis(&self) -> Slot {
+        for (slot, meta) in self
+            .slot_meta_iterator(0)
+            .expect("unable to iterate over meta")
+        {
+            if meta.received > 0 {
                 return slot;
             }
         }
@@ -6307,6 +6326,31 @@ pub mod tests {
             .insert_shreds(shreds1[..].to_vec(), None, true)
             .unwrap();
         assert!(blockstore.get_data_shred(1, 0).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_get_first_available_block() {
+        let mint_total = 1_000_000_000_000;
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(mint_total);
+        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 0);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 0);
+        assert_eq!(blockstore.lowest_slot(), 0);
+        for slot in 1..4 {
+            let entries = make_slot_entries_with_transactions(100);
+            let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            blockstore.set_roots(vec![slot].iter()).unwrap();
+        }
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 0);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 0);
+        assert_eq!(blockstore.lowest_slot(), 1);
+
+        blockstore.purge_slots(0, 1, PurgeType::CompactionFilter);
+        assert_eq!(blockstore.get_first_available_block().unwrap(), 3);
+        assert_eq!(blockstore.lowest_slot_with_genesis(), 2);
+        assert_eq!(blockstore.lowest_slot(), 2);
     }
 
     #[test]
