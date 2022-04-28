@@ -2216,18 +2216,18 @@ export class Connection {
     simulatedSignatures: [],
   };
 
-  /** @internal */ _nextClientSubscriptionId: ClientSubscriptionId = 0;
-  /** @internal */ _subscriptionDisposeFunctionsByClientSubscriptionId: {
+  /** @internal */ private _nextClientSubscriptionId: ClientSubscriptionId = 0;
+  /** @internal */ private _subscriptionDisposeFunctionsByClientSubscriptionId: {
     [clientSubscriptionId: ClientSubscriptionId]:
       | SubscriptionDisposeFn
       | undefined;
   } = {};
-  /** @internal */ _subscriptionCallbacksByServerSubscriptionId: {
+  /** @internal */ private _subscriptionCallbacksByServerSubscriptionId: {
     [serverSubscriptionId: ServerSubscriptionId]:
       | Set<SubscriptionConfig['callback']>
       | undefined;
   } = {};
-  /** @internal */ _subscriptionsByHash: {
+  /** @internal */ private _subscriptionsByHash: {
     [hash: SubscriptionConfigHash]: Subscription | undefined;
   } = {};
   /**
@@ -2243,7 +2243,7 @@ export class Connection {
    * NOTE: There is a proposal to eliminate this special case, here:
    * https://github.com/solana-labs/solana/issues/18892
    */
-  /** @internal */ _subscriptionsAutoDisposedByRpc: Set<ServerSubscriptionId> =
+  /** @internal */ private _subscriptionsAutoDisposedByRpc: Set<ServerSubscriptionId> =
     new Set();
 
   /**
@@ -4384,10 +4384,11 @@ export class Connection {
   }
 
   /**
-   *
    * @internal
    */
-  _handleServerNotification<TCallback extends SubscriptionConfig['callback']>(
+  private _handleServerNotification<
+    TCallback extends SubscriptionConfig['callback'],
+  >(
     serverSubscriptionId: ServerSubscriptionId,
     callbackArgs: Parameters<TCallback>,
   ): void {
@@ -4426,9 +4427,9 @@ export class Connection {
   }
 
   /**
-   * @private
+   * @internal
    */
-  _makeSubscription(
+  private _makeSubscription(
     subscriptionConfig: SubscriptionConfig,
     /**
      * When preparing `args` for a call to `_makeSubscription`, be sure
@@ -4725,7 +4726,7 @@ export class Connection {
    * @internal
    */
 
-  async _unsubscribeClientSubscription(
+  private async _unsubscribeClientSubscription(
     clientSubscriptionId: ClientSubscriptionId,
     subscriptionName: string,
   ) {
