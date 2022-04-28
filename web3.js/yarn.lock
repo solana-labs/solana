@@ -1829,8 +1829,8 @@
   resolved "https://registry.npmjs.org/@types/minimist/-/minimist-1.2.2.tgz"
 
 "@types/mocha@^9.0.0":
-  version "9.1.0"
-  resolved "https://registry.npmjs.org/@types/mocha/-/mocha-9.1.0.tgz"
+  version "9.1.1"
+  resolved "https://registry.yarnpkg.com/@types/mocha/-/mocha-9.1.1.tgz#e7c4f1001eefa4b8afbd1eee27a237fee3bf29c4"
 
 "@types/mz@^2.7.3":
   version "2.7.4"
