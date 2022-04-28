@@ -77,6 +77,18 @@ impl RentCollector {
         }
     }
 
+    pub fn clone_with_schedule_and_epoch(
+        &self,
+        epoch_schedule: EpochSchedule,
+        epoch: Epoch,
+    ) -> Self {
+        Self {
+            epoch_schedule,
+            epoch,
+            ..self.clone()
+        }
+    }
+
     /// true if it is easy to determine this account should consider having rent collected from it
     pub fn should_collect_rent(&self, address: &Pubkey, account: &impl ReadableAccount) -> bool {
         !(account.executable() // executable accounts must be rent-exempt balance

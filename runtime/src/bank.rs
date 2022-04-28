@@ -1617,8 +1617,12 @@ impl Bank {
         )
     }
 
-    fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
-        rent_collector.clone_with_epoch(epoch)
+    fn get_rent_collector_from(
+        rent_collector: &RentCollector,
+        epoch_schedule: EpochSchedule,
+        epoch: Epoch,
+    ) -> RentCollector {
+        rent_collector.clone_with_schedule_and_epoch(epoch_schedule, epoch)
     }
 
     fn _new_from_parent(
@@ -1749,7 +1753,11 @@ impl Bank {
             genesis_creation_time: parent.genesis_creation_time,
             slots_per_year: parent.slots_per_year,
             collected_rent: AtomicU64::new(0),
-            rent_collector: Self::get_rent_collector_from(&parent.rent_collector, epoch),
+            rent_collector: Self::get_rent_collector_from(
+                &parent.rent_collector,
+                *parent.epoch_schedule(),
+                epoch,
+            ),
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator,
@@ -2121,7 +2129,11 @@ impl Bank {
             fee_rate_governor: fields.fee_rate_governor,
             collected_rent: AtomicU64::new(fields.collected_rent),
             // clone()-ing is needed to consider a gated behavior in rent_collector
-            rent_collector: Self::get_rent_collector_from(&fields.rent_collector, fields.epoch),
+            rent_collector: Self::get_rent_collector_from(
+                &fields.rent_collector,
+                genesis_config.epoch_schedule,
+                fields.epoch,
+            ),
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes_cache: StakesCache::new(stakes),
             epoch_stakes: fields.epoch_stakes,
