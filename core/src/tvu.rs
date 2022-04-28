@@ -162,6 +162,7 @@ impl Tvu {
             fetch_receiver,
             verified_sender,
             ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
+            "shred-verifier",
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
