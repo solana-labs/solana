@@ -13,6 +13,7 @@ export type InstructionLogs = {
   invokedProgram: string | null;
   logs: LogMessage[];
   computeUnits: number;
+  truncated: boolean;
   failed: boolean;
 };
 
@@ -45,6 +46,8 @@ export function parseProgramLogs(
         text: log,
         style: "muted",
       });
+    } else if (log.startsWith("Log truncated")) {
+      prettyLogs[prettyLogs.length - 1].truncated = true;
     } else {
       const regex = /Program (\w*) invoke \[(\d)\]/g;
       const matches = [...log.matchAll(regex)];
@@ -59,6 +62,7 @@ export function parseProgramLogs(
             logs: [],
             computeUnits: 0,
             failed: false,
+            truncated: false,
           });
         } else {
           prettyLogs[prettyLogs.length - 1].logs.push({
@@ -92,6 +96,7 @@ export function parseProgramLogs(
             logs: [],
             computeUnits: 0,
             failed: false,
+            truncated: false,
           });
           depth++;
         }
@@ -129,6 +134,7 @@ export function parseProgramLogs(
       logs: [],
       computeUnits: 0,
       failed: true,
+      truncated: false,
     });
   }
 

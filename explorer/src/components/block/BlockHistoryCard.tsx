@@ -30,6 +30,7 @@ type TransactionWithInvocations = {
   meta: ConfirmedTransactionMeta | null;
   invocations: Map<string, number>;
   computeUnits: number;
+  logTruncated: boolean;
 };
 
 export function BlockHistoryCard({ block }: { block: BlockResponse }) {
@@ -75,6 +76,8 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           tx.meta?.err ?? null,
           cluster
         );
+
+        const logTruncated = parsedLogs[parsedLogs.length - 1].truncated;
         const computeUnits = parsedLogs
           .map(({ computeUnits }) => computeUnits)
           .reduce((sum, next) => sum + next);
@@ -85,6 +88,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           meta: tx.meta,
           invocations,
           computeUnits,
+          logTruncated,
         };
       }
     );
@@ -176,6 +180,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
 
                   <td>{signature}</td>
                   <td className="text-end">
+                    {tx.logTruncated && ">"}
                     {new Intl.NumberFormat("en-US").format(tx.computeUnits)}
                   </td>
                   <td>
