@@ -3663,11 +3663,10 @@ mod tests {
     }
 
     /// Ensure that `initialize()` respects the minimum delegation requirements
-    /// - Assert 1: accounts with a balance equal-to the minimum delegation initialize OK
-    /// - Assert 2: accounts with a balance equal-to the rent exemption initialize OK
-    /// - Assert 3: accounts with a balance less-than the rent exemption do not initialize
+    /// - Assert 1: accounts with a balance equal-to the rent exemption initialize OK
+    /// - Assert 2: accounts with a balance less-than the rent exemption do not initialize
     #[test]
-    fn test_initialize_minimum_stake_delegation() {
+    fn test_initialize_minimum_balance() {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -3691,7 +3690,6 @@ mod tests {
             },
         ];
         for (lamports, expected_result) in [
-            (minimum_delegation + rent_exempt_reserve, Ok(())),
             (rent_exempt_reserve, Ok(())),
             (
                 rent_exempt_reserve - 1,
@@ -3716,7 +3714,7 @@ mod tests {
 
     /// Ensure that `delegate()` respects the minimum delegation requirements
     /// - Assert 1: delegating an amount equal-to the minimum delegates OK
-    /// - Assert 2: delegating an amount less-than the minimum delegates OK
+    /// - Assert 2: delegating an amount less-than the minimum fails
     /// Also test both asserts above over both StakeState::{Initialized and Stake}, since the logic
     /// is slightly different for the variants.
     ///
