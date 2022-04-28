@@ -2602,6 +2602,18 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
+    fn inflation_allocated_during_epoch(&self) -> u64 {
+        let slot_in_year = self.slot_in_year_for_inflation();
+        let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
+        let parent_bank = self.parent().unwrap();
+        //let parent_bank = self.rc.parent.read().unwrap().unwrap().as_ref();
+        let prev_bank_capitalization = parent_bank.capitalization();
+        let prev_bank_epoch = parent_bank.epoch();
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+
+        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards_with_thread_pool(
         &mut self,
@@ -2622,8 +2634,7 @@ impl Bank {
         };
 
         let capitalization = self.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        let validator_rewards = self.inflation_allocated_during_epoch();
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -9259,13 +9270,7 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-
-        let slot_in_year = bank1.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
-        let validator_rate = bank1.inflation.read().unwrap().validator(slot_in_year);
-
-        let allocated_rewards =
-            (validator_rate * bank0.capitalization() as f64 * epoch_duration_in_years) as f64;
+        let allocated_rewards = bank1.inflation_allocated_during_epoch() as f64;
 
         // verify the stake and vote accounts are the right size
         assert!(
