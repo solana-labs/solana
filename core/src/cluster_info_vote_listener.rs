@@ -162,7 +162,7 @@ impl BankVoteSenderState {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct BankSendVotesStats {
     num_votes_sent: usize,
     num_batches_sent: usize,
@@ -343,6 +343,7 @@ impl ClusterInfoVoteListener {
 
         loop {
             if exit.load(Ordering::Relaxed) {
+                println!("Hit the return Ok conditional");
                 return Ok(());
             }
 
@@ -364,6 +365,7 @@ impl ClusterInfoVoteListener {
                 }
             }
 
+            println!("time since lock {}ms",time_since_lock.elapsed().as_millis());
             if time_since_lock.elapsed().as_millis() > BANK_SEND_VOTES_LOOP_SLEEP_MS as u128 {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
@@ -422,6 +424,7 @@ impl ClusterInfoVoteListener {
         // if we sent each vote individually, for instance if we creaed two different
         // leader banks from the same common parent, one leader bank may process
         // only the later votes and ignore the earlier votes.
+        println!("bank_send_votes_stats before {:#?}",bank_send_votes_stats);
         for single_validator_votes in gossip_votes_iterator {
             bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
             bank_send_votes_stats.num_batches_sent += 1;
@@ -429,6 +432,7 @@ impl ClusterInfoVoteListener {
         }
         filter_gossip_votes_timing.stop();
         bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
+        println!("bank_send_votes_stats after {:#?}",bank_send_votes_stats);
 
         Ok(())
     }
