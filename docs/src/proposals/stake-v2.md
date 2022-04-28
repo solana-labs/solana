@@ -26,7 +26,7 @@ The current `StakeState` is 200 bytes, and can be in 4 states:
 * `Uninitialized`
 * `Initialized(Meta)`: the rent-exempt reserve, authorized keys, and lockup
 * `Stake(Meta, Stake)`: `Delegation` (validator, stake amount, activation / deactivation epochs, warmup rate) + `credits_observed` (used for rewards calc)
-* `RewardsPool`: deprecated (?)
+* `RewardsPool`: deprecated
 
 To properly perform a redelegation, we need to store at least the
 next validator's vote pubkey and a redelegation epoch, which means that
@@ -110,10 +110,9 @@ the rewards even after deactivation.
 
 ### UpgradeToV2
 
-Given a V1 stake account and a signature from the stake or withdraw authority,
-reallocate the existing stake account and convert it to a V2 stake. Also reduces
-the delegation due to the higher rent-exemption. Fails if the stake account
-doesn't have enough lamports to cover the new rent-exemption.
+Given a V1 stake account, a signature from the stake or withdraw authority, and
+a funding account, reallocate the existing stake account and convert it to a V2
+stake. The funding account adds the lamports necessary to cover the new rent-exemption.
 
 Side note: this would also be a great time to include the rent-exemption in the
 delegation. That way, smaller stakers get a tiny bit more, and there's a couple of other
@@ -133,6 +132,8 @@ Given only a V2 stake account and the delegated vote account (or two vote accoun
 during multi-epoch redelegation), calculate the rewards gained since the last
 claim, and withdraw the lamports from the vote account.
 
+This instruction is permissionless.
+
 For easier use with existing tools, if a redelegation is complete, move the
 redelegation information over into the main delegation.
 
@@ -149,8 +150,11 @@ BIG ISSUE TO CONSIDER: vote accounts only store 64 epochs of credits, which mean
 that we can only accurately calculate 64 epochs of credits.
 
 Potential solution: if it's been too long, drop rewards. This is easiest, but not great.
-We can include a mechanism where anyone can claim a tiny portion of rewards from
+We can include a mechanism where it's possible to claim a tiny portion of rewards from
 an account if the update is done during the 64th epoch since the last claim.
+
+This slice of the rewards could be claimable by anyone, or only the authorized
+voter on the account.
 
 ## New Vote Account Field
 
