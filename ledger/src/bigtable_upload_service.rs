@@ -76,7 +76,7 @@ impl BigTableUploadService {
         config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) {
-        let mut start_slot: u64 = 0;
+        let mut start_slot = blockstore.get_first_available_block().unwrap_or_default();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
