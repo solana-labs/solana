@@ -381,24 +381,8 @@ lazy_static! {
         (disable_bpf_deprecated_load_instructions::id(), "Disable ldabs* and ldind* BPF instructions"),
         (disable_bpf_unresolved_symbols_at_runtime::id(), "Disable reporting of unresolved BPF symbols at runtime"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
-<<<<<<< HEAD
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
-=======
-        (bank_tranaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
-        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* BPF instructions"),
-        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved BPF symbols at runtime"),
-        (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
-        (syscall_saturated_math::id(), "syscalls use saturated math"),
-        (check_physical_overlapping::id(), "check physical overlapping regions"),
-        (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
-        (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
-        (check_slice_translation_size::id(), "check size when translating slices"),
-        (stake_split_uses_rent_sysvar::id(), "stake split instruction uses rent sysvar"),
-        (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
-        (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
-        (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
->>>>>>> 039488b56 (drops redundant turbine propagation path (#24351))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

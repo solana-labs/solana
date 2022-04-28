@@ -23,10 +23,7 @@ use {
         any::TypeId,
         cmp::Reverse,
         collections::HashMap,
-<<<<<<< HEAD
-=======
-        iter::{once, repeat_with},
->>>>>>> 039488b56 (drops redundant turbine propagation path (#24351))
+        iter::once,
         marker::PhantomData,
         net::SocketAddr,
         ops::Deref,
@@ -414,6 +411,21 @@ impl From<Pubkey> for NodeId {
     }
 }
 
+fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
+    let feature_slot = root_bank
+        .feature_set
+        .activated_slot(&feature_set::drop_redundant_turbine_path::id());
+    match feature_slot {
+        None => false,
+        Some(feature_slot) => {
+            let epoch_schedule = root_bank.epoch_schedule();
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -472,30 +484,6 @@ mod tests {
         }
         (nodes, stakes, cluster_info)
     }
-<<<<<<< HEAD
-=======
-    (nodes, stakes, cluster_info)
-}
-
-fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
-    let feature_slot = root_bank
-        .feature_set
-        .activated_slot(&feature_set::drop_redundant_turbine_path::id());
-    match feature_slot {
-        None => false,
-        Some(feature_slot) => {
-            let epoch_schedule = root_bank.epoch_schedule();
-            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
->>>>>>> 039488b56 (drops redundant turbine propagation path (#24351))
 
     #[test]
     fn test_cluster_nodes_retransmit() {
