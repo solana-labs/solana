@@ -846,13 +846,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^16.2.3":
-  version "16.2.3"
-  resolved "https://registry.npmjs.org/@commitlint/cli/-/cli-16.2.3.tgz"
+"@commitlint/cli@^16.2.4":
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-16.2.4.tgz#f22707918d08c27a19779798788a7c793f1d38e6"
   dependencies:
     "@commitlint/format" "^16.2.1"
-    "@commitlint/lint" "^16.2.1"
-    "@commitlint/load" "^16.2.3"
+    "@commitlint/lint" "^16.2.4"
+    "@commitlint/load" "^16.2.4"
     "@commitlint/read" "^16.2.1"
     "@commitlint/types" "^16.2.1"
     lodash "^4.17.19"
@@ -891,25 +891,25 @@
     "@commitlint/types" "^16.2.1"
     chalk "^4.0.0"
 
-"@commitlint/is-ignored@^16.2.1":
-  version "16.2.1"
-  resolved "https://registry.npmjs.org/@commitlint/is-ignored/-/is-ignored-16.2.1.tgz"
+"@commitlint/is-ignored@^16.2.4":
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/is-ignored/-/is-ignored-16.2.4.tgz#369e40a240ad5451bf2b57a80829253129d7f19b"
   dependencies:
     "@commitlint/types" "^16.2.1"
-    semver "7.3.5"
+    semver "7.3.7"
 
-"@commitlint/lint@^16.2.1":
-  version "16.2.1"
-  resolved "https://registry.npmjs.org/@commitlint/lint/-/lint-16.2.1.tgz"
+"@commitlint/lint@^16.2.4":
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-16.2.4.tgz#575f5a9d227dddfca8386253d9aff27be5b94788"
   dependencies:
-    "@commitlint/is-ignored" "^16.2.1"
+    "@commitlint/is-ignored" "^16.2.4"
     "@commitlint/parse" "^16.2.1"
-    "@commitlint/rules" "^16.2.1"
+    "@commitlint/rules" "^16.2.4"
     "@commitlint/types" "^16.2.1"
 
-"@commitlint/load@^16.2.3":
-  version "16.2.3"
-  resolved "https://registry.npmjs.org/@commitlint/load/-/load-16.2.3.tgz"
+"@commitlint/load@^16.2.4":
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-16.2.4.tgz#32c9f4c6538b21cf48cf40266312bb1adb65f435"
   dependencies:
     "@commitlint/config-validator" "^16.2.1"
     "@commitlint/execute-rule" "^16.2.1"
@@ -955,9 +955,9 @@
     resolve-from "^5.0.0"
     resolve-global "^1.0.0"
 
-"@commitlint/rules@^16.2.1":
-  version "16.2.1"
-  resolved "https://registry.npmjs.org/@commitlint/rules/-/rules-16.2.1.tgz"
+"@commitlint/rules@^16.2.4":
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-16.2.4.tgz#c2fbbf20d9d0e8fcf25690c88a27750d4a3e867b"
   dependencies:
     "@commitlint/ensure" "^16.2.1"
     "@commitlint/message" "^16.2.1"
@@ -976,10 +976,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^16.2.3":
-  version "16.2.3"
-  resolved "https://registry.npmjs.org/@commitlint/travis-cli/-/travis-cli-16.2.3.tgz"
+  version "16.2.4"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-16.2.4.tgz#d80b5953ca9ce2a040139fa61ed1dae132da26f9"
   dependencies:
-    "@commitlint/cli" "^16.2.3"
+    "@commitlint/cli" "^16.2.4"
     execa "^5.0.0"
 
 "@commitlint/types@^16.2.1":
@@ -6869,7 +6869,7 @@ semver-regex@^3.1.2:
   version "3.1.3"
   resolved "https://registry.npmjs.org/semver-regex/-/semver-regex-3.1.3.tgz"
 
-semver@*, semver@7.3.5, semver@^7.1.1, semver@^7.1.2, semver@^7.1.3, semver@^7.2.1, semver@^7.3.2, semver@^7.3.4, semver@^7.3.5:
+semver@*, semver@^7.1.1, semver@^7.1.2, semver@^7.1.3, semver@^7.2.1, semver@^7.3.2, semver@^7.3.4, semver@^7.3.5:
   version "7.3.5"
   resolved "https://registry.npmjs.org/semver/-/semver-7.3.5.tgz"
   dependencies:
@@ -6883,15 +6883,15 @@ semver@7.0.0:
   version "7.0.0"
   resolved "https://registry.npmjs.org/semver/-/semver-7.0.0.tgz"
 
-semver@^6.0.0, semver@^6.1.1, semver@^6.1.2, semver@^6.3.0:
-  version "6.3.0"
-  resolved "https://registry.npmjs.org/semver/-/semver-6.3.0.tgz"
-
-semver@^7.0.0, semver@^7.3.7:
+semver@7.3.7, semver@^7.0.0, semver@^7.3.7:
   version "7.3.7"
   resolved "https://registry.npmjs.org/semver/-/semver-7.3.7.tgz"
   dependencies:
     lru-cache "^6.0.0"
+
+semver@^6.0.0, semver@^6.1.1, semver@^6.1.2, semver@^6.3.0:
+  version "6.3.0"
+  resolved "https://registry.npmjs.org/semver/-/semver-6.3.0.tgz"
 
 send@0.17.2:
   version "0.17.2"
