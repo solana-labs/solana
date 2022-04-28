@@ -44,14 +44,13 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           signature = tx.transaction.signatures[0];
         }
 
-        let programIndexes = tx.transaction.message.instructions.map(
-          (ix) => ix.programIdIndex
-        );
-        programIndexes.concat(
-          tx.meta?.innerInstructions?.flatMap((ix) => {
-            return ix.instructions.map((ix) => ix.programIdIndex);
-          }) || []
-        );
+        let programIndexes = tx.transaction.message.instructions
+          .map((ix) => ix.programIdIndex)
+          .concat(
+            tx.meta?.innerInstructions?.flatMap((ix) => {
+              return ix.instructions.map((ix) => ix.programIdIndex);
+            }) || []
+          );
 
         const indexMap = new Map<number, number>();
         programIndexes.forEach((programIndex) => {
