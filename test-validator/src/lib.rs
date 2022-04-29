@@ -637,6 +637,7 @@ impl TestValidator {
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        println!("Start TestValidator");
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
 

@@ -756,7 +756,7 @@ impl PohRecorder {
         self.report_metrics_us += report_metrics_time.as_us();
 
         loop {
-            println!("record loop");
+            println!("record loop {}", process::id());
             let (flush_cache_res, flush_cache_time) =
                 Measure::this(|_| self.flush_cache(false), (), "flush_cache");
             self.flush_cache_no_tick_us += flush_cache_time.as_us();

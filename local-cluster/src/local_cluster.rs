@@ -536,6 +536,7 @@ impl LocalCluster {
         dest_pubkey: &Pubkey,
         lamports: u64,
     ) -> u64 {
+        println!("transfer_with_client");
         trace!("getting leader blockhash");
         let (blockhash, _) = client
             .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
