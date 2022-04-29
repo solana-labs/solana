@@ -327,6 +327,14 @@ pub mod drop_redundant_turbine_path {
     solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
 }
 
+pub mod spl_token_v3_4_0 {
+    solana_sdk::declare_id!("Ftok4njE8b7tDffYkC5bAbCaQv5sL6jispYrprzatUwN");
+}
+
+pub mod spl_associated_token_account_v1_1_0 {
+    solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -403,6 +411,8 @@ lazy_static! {
         (limit_secp256k1_recovery_id::id(), "limit secp256k1 recovery id"),
         (disable_deprecated_loader::id(), "disable the deprecated BPF loader"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
+        (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
+        (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
