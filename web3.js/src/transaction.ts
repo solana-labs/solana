@@ -2,6 +2,10 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
+import {
+  PACKET_DATA_SIZE,
+  SIGNATURE_LENGTH_IN_BYTES,
+} from './transaction-constants';
 import {Connection} from './connection';
 import {Message} from './message';
 import {PublicKey} from './publickey';
@@ -19,21 +23,8 @@ export type TransactionSignature = string;
 
 /**
  * Default (empty) signature
- *
- * Signatures are 64 bytes in length
  */
-const DEFAULT_SIGNATURE = Buffer.alloc(64).fill(0);
-
-/**
- * Maximum over-the-wire size of a Transaction
- *
- * 1280 is IPv6 minimum MTU
- * 40 bytes is the size of the IPv6 header
- * 8 bytes is the size of the fragment header
- */
-export const PACKET_DATA_SIZE = 1280 - 40 - 8;
-
-const SIGNATURE_LENGTH = 64;
+const DEFAULT_SIGNATURE = Buffer.alloc(SIGNATURE_LENGTH_IN_BYTES).fill(0);
 
 /**
  * Account metadata used to define instructions
@@ -67,6 +58,19 @@ export type SerializeConfig = {
 };
 
 /**
+ * @internal
+ */
+export interface TransactionInstructionJSON {
+  keys: {
+    pubkey: string;
+    isSigner: boolean;
+    isWritable: boolean;
+  }[];
+  programId: string;
+  data: number[];
+}
+
+/**
  * Transaction Instruction class
  */
 export class TransactionInstruction {
@@ -92,6 +96,21 @@ export class TransactionInstruction {
     if (opts.data) {
       this.data = opts.data;
     }
+  }
+
+  /**
+   * @internal
+   */
+  toJSON(): TransactionInstructionJSON {
+    return {
+      keys: this.keys.map(({pubkey, isSigner, isWritable}) => ({
+        pubkey: pubkey.toJSON(),
+        isSigner,
+        isWritable,
+      })),
+      programId: this.programId.toJSON(),
+      data: [...this.data],
+    };
   }
 }
 
@@ -127,6 +146,20 @@ export type NonceInformation = {
   /** AdvanceNonceAccount Instruction */
   nonceInstruction: TransactionInstruction;
 };
+
+/**
+ * @internal
+ */
+export interface TransactionJSON {
+  recentBlockhash: string | null;
+  feePayer: string | null;
+  nonceInfo: {
+    nonce: string;
+    nonceInstruction: TransactionInstructionJSON;
+  } | null;
+  instructions: TransactionInstructionJSON[];
+  signers: string[];
+}
 
 /**
  * Transaction class
@@ -170,10 +203,40 @@ export class Transaction {
   nonceInfo?: NonceInformation;
 
   /**
+   * @internal
+   */
+  _message?: Message;
+
+  /**
+   * @internal
+   */
+  _json?: TransactionJSON;
+
+  /**
    * Construct an empty Transaction
    */
   constructor(opts?: TransactionCtorFields) {
     opts && Object.assign(this, opts);
+  }
+
+  /**
+   * @internal
+   */
+  toJSON(): TransactionJSON {
+    return {
+      recentBlockhash: this.recentBlockhash || null,
+      feePayer: this.feePayer ? this.feePayer.toJSON() : null,
+      nonceInfo: this.nonceInfo
+        ? {
+            nonce: this.nonceInfo.nonce,
+            nonceInstruction: this.nonceInfo.nonceInstruction.toJSON(),
+          }
+        : null,
+      instructions: this.instructions.map(instruction => instruction.toJSON()),
+      signers: this.signatures.map(({publicKey}) => {
+        return publicKey.toJSON();
+      }),
+    };
   }
 
   /**
@@ -204,6 +267,15 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
+    if (this._message) {
+      if (JSON.stringify(this.toJSON()) !== JSON.stringify(this._json)) {
+        throw new Error(
+          'Transaction message mutated after being populated from Message',
+        );
+      }
+      return this._message;
+    }
+
     const {nonceInfo} = this;
     if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
       this.recentBlockhash = nonceInfo.nonce;
@@ -666,8 +738,8 @@ export class Transaction {
     const signatureCount = shortvec.decodeLength(byteArray);
     let signatures = [];
     for (let i = 0; i < signatureCount; i++) {
-      const signature = byteArray.slice(0, SIGNATURE_LENGTH);
-      byteArray = byteArray.slice(SIGNATURE_LENGTH);
+      const signature = byteArray.slice(0, SIGNATURE_LENGTH_IN_BYTES);
+      byteArray = byteArray.slice(SIGNATURE_LENGTH_IN_BYTES);
       signatures.push(bs58.encode(Buffer.from(signature)));
     }
 
@@ -718,6 +790,9 @@ export class Transaction {
         }),
       );
     });
+
+    transaction._message = message;
+    transaction._json = transaction.toJSON();
 
     return transaction;
   }

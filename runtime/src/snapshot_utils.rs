@@ -1632,6 +1632,8 @@ fn rebuild_bank_from_snapshots(
 
     bank.src.append(&slot_deltas);
 
+    bank.prepare_rewrites_for_hash();
+
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
 }
@@ -1918,12 +1920,13 @@ pub fn package_and_archive_full_snapshot(
         Some(SnapshotType::FullSnapshot),
     )?;
 
-    crate::serde_snapshot::reserialize_bank(
+    crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
+        &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -1964,12 +1967,13 @@ pub fn package_and_archive_incremental_snapshot(
         )),
     )?;
 
-    crate::serde_snapshot::reserialize_bank(
+    crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
+        &bank.get_accounts_hash(),
     );
 
-    let snapshot_package = SnapshotPackage::from(accounts_package);
+    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
     archive_snapshot_package(
         &snapshot_package,
         maximum_full_snapshot_archives_to_retain,
@@ -3441,7 +3445,6 @@ mod tests {
                 slot_deltas: Vec::default(),
                 snapshot_links: TempDir::new().unwrap(),
                 snapshot_storages: SnapshotStorages::default(),
-                accounts_hash: Hash::default(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
                 snapshot_archives_dir: PathBuf::default(),
@@ -3450,7 +3453,6 @@ mod tests {
                 cluster_type: solana_sdk::genesis_config::ClusterType::Development,
                 snapshot_type,
                 accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
-                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
                 rent_collector: crate::rent_collector::RentCollector::default(),
             }
         }

@@ -6,9 +6,7 @@ use {
         blockstore::Blockstore,
         blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_runtime::bank::{
-        DurableNonceFee, TransactionExecutionDetails, TransactionExecutionResult,
-    },
+    solana_runtime::bank::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
         extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
     },
@@ -95,13 +93,14 @@ impl TransactionStatusService {
                     token_balances.post_token_balances,
                     rent_debits,
                 ) {
-                    if let TransactionExecutionResult::Executed(details) = execution_result {
+                    if let Some(details) = execution_result {
                         let TransactionExecutionDetails {
                             status,
                             log_messages,
                             inner_instructions,
                             durable_nonce_fee,
                             return_data,
+                            ..
                         } = details;
                         let lamports_per_signature = match durable_nonce_fee {
                             Some(DurableNonceFee::Valid(lamports_per_signature)) => {
@@ -337,22 +336,22 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let transaction_result =
-            TransactionExecutionResult::Executed(TransactionExecutionDetails {
-                status: Ok(()),
-                log_messages: None,
-                inner_instructions: None,
-                durable_nonce_fee: Some(DurableNonceFee::from(
-                    &NonceFull::from_partial(
-                        rollback_partial,
-                        &SanitizedMessage::Legacy(message),
-                        &[(pubkey, nonce_account)],
-                        &rent_debits,
-                    )
-                    .unwrap(),
-                )),
-                return_data: None,
-            });
+        let transaction_result = Some(TransactionExecutionDetails {
+            status: Ok(()),
+            log_messages: None,
+            inner_instructions: None,
+            durable_nonce_fee: Some(DurableNonceFee::from(
+                &NonceFull::from_partial(
+                    rollback_partial,
+                    &SanitizedMessage::Legacy(message),
+                    &[(pubkey, nonce_account)],
+                    &rent_debits,
+                )
+                .unwrap(),
+            )),
+            return_data: None,
+            executed_units: 0u64,
+        });
 
         let balances = TransactionBalancesSet {
             pre_balances: vec![vec![123456]],
@@ -360,11 +359,13 @@ pub(crate) mod tests {
         };
 
         let owner = Pubkey::new_unique().to_string();
+        let token_program_id = Pubkey::new_unique().to_string();
         let pre_token_balance = TransactionTokenBalance {
             account_index: 0,
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(42, 2),
             owner: owner.clone(),
+            program_id: token_program_id.clone(),
         };
 
         let post_token_balance = TransactionTokenBalance {
@@ -372,6 +373,7 @@ pub(crate) mod tests {
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(58, 2),
             owner,
+            program_id: token_program_id,
         };
 
         let token_balances = TransactionTokenBalancesSet {

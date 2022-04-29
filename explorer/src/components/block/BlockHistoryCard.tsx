@@ -1,25 +1,43 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useHistory, useLocation } from "react-router-dom";
 import { Location } from "history";
 import {
   BlockResponse,
   ConfirmedTransactionMeta,
   TransactionSignature,
   PublicKey,
+  VOTE_PROGRAM_ID,
 } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
-import { useQuery } from "utils/url";
+import { pickClusterParams, useQuery } from "utils/url";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
+import { parseProgramLogs } from "utils/program-logs";
 
 const PAGE_SIZE = 25;
 
-const useQueryFilter = (): string => {
-  const query = useQuery();
+const useQueryProgramFilter = (query: URLSearchParams): string => {
   const filter = query.get("filter");
   return filter || "";
+};
+
+const useQueryAccountFilter = (query: URLSearchParams): PublicKey | null => {
+  const filter = query.get("accountFilter");
+  if (filter !== null) {
+    try {
+      return new PublicKey(filter);
+    } catch {}
+  }
+  return null;
+};
+
+type SortMode = "index" | "compute";
+const useQuerySort = (query: URLSearchParams): SortMode => {
+  const sort = query.get("sort");
+  if (sort === "compute") return "compute";
+  return "index";
 };
 
 type TransactionWithInvocations = {
@@ -27,12 +45,20 @@ type TransactionWithInvocations = {
   signature?: TransactionSignature;
   meta: ConfirmedTransactionMeta | null;
   invocations: Map<string, number>;
+  computeUnits: number;
+  logTruncated: boolean;
 };
 
 export function BlockHistoryCard({ block }: { block: BlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
-  const filter = useQueryFilter();
+  const query = useQuery();
+  const programFilter = useQueryProgramFilter(query);
+  const accountFilter = useQueryAccountFilter(query);
+  const sortMode = useQuerySort(query);
+  const { cluster } = useCluster();
+  const location = useLocation();
+  const history = useHistory();
 
   const { transactions, invokedPrograms } = React.useMemo(() => {
     const invokedPrograms = new Map<string, number>();
@@ -44,14 +70,13 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           signature = tx.transaction.signatures[0];
         }
 
-        let programIndexes = tx.transaction.message.instructions.map(
-          (ix) => ix.programIdIndex
-        );
-        programIndexes.concat(
-          tx.meta?.innerInstructions?.flatMap((ix) => {
-            return ix.instructions.map((ix) => ix.programIdIndex);
-          }) || []
-        );
+        let programIndexes = tx.transaction.message.instructions
+          .map((ix) => ix.programIdIndex)
+          .concat(
+            tx.meta?.innerInstructions?.flatMap((ix) => {
+              return ix.instructions.map((ix) => ix.programIdIndex);
+            }) || []
+          );
 
         const indexMap = new Map<number, number>();
         programIndexes.forEach((programIndex) => {
@@ -67,29 +92,66 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           invokedPrograms.set(programId, programTransactionCount + 1);
         }
 
+        const parsedLogs = parseProgramLogs(
+          tx.meta?.logMessages ?? [],
+          tx.meta?.err ?? null,
+          cluster
+        );
+
+        const logTruncated = parsedLogs[parsedLogs.length - 1].truncated;
+        const computeUnits = parsedLogs
+          .map(({ computeUnits }) => computeUnits)
+          .reduce((sum, next) => sum + next);
+
         return {
           index,
           signature,
           meta: tx.meta,
           invocations,
+          computeUnits,
+          logTruncated,
         };
       }
     );
     return { transactions, invokedPrograms };
-  }, [block]);
+  }, [block, cluster]);
 
   const filteredTransactions = React.useMemo(() => {
-    return transactions.filter(({ invocations }) => {
-      if (filter === ALL_TRANSACTIONS) {
-        return true;
-      }
-      return invocations.has(filter);
-    });
-  }, [transactions, filter]);
+    const voteFilter = VOTE_PROGRAM_ID.toBase58();
+    const filteredTxs = transactions
+      .filter(({ invocations }) => {
+        if (programFilter === ALL_TRANSACTIONS) {
+          return true;
+        } else if (programFilter === HIDE_VOTES) {
+          // hide vote txs that don't invoke any other programs
+          return !(invocations.size === 1 || invocations.has(voteFilter));
+        }
+        return invocations.has(programFilter);
+      })
+      .filter(({ index }) => {
+        if (accountFilter === null) {
+          return true;
+        }
+        const tx = block.transactions[index].transaction;
+        return tx.message.accountKeys.find((key) => key.equals(accountFilter));
+      });
+
+    if (sortMode === "compute") {
+      filteredTxs.sort((a, b) => b.computeUnits - a.computeUnits);
+    }
+
+    return filteredTxs;
+  }, [
+    block.transactions,
+    transactions,
+    programFilter,
+    accountFilter,
+    sortMode,
+  ]);
 
   if (filteredTransactions.length === 0) {
     const errorMessage =
-      filter === ALL_TRANSACTIONS
+      programFilter === ALL_TRANSACTIONS
         ? "This block has no transactions"
         : "No transactions found with this filter";
     return <ErrorCard text={errorMessage} />;
@@ -107,7 +169,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
       <div className="card-header align-items-center">
         <h3 className="card-header-title">{title}</h3>
         <FilterDropdown
-          filter={filter}
+          filter={programFilter}
           toggle={() => setDropdown((show) => !show)}
           show={showDropdown}
           invokedPrograms={invokedPrograms}
@@ -115,13 +177,39 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         ></FilterDropdown>
       </div>
 
+      {accountFilter !== null && (
+        <div className="card-body">
+          Showing transactions which load account:
+          <div className="d-inline-block ms-2">
+            <Address pubkey={accountFilter} link />
+          </div>
+        </div>
+      )}
+
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">#</th>
+              <th
+                className="text-muted c-pointer"
+                onClick={() => {
+                  query.delete("sort");
+                  history.push(pickClusterParams(location, query));
+                }}
+              >
+                #
+              </th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
+              <th
+                className="text-muted c-pointer"
+                onClick={() => {
+                  query.set("sort", "compute");
+                  history.push(pickClusterParams(location, query));
+                }}
+              >
+                Compute
+              </th>
               <th className="text-muted">Invoked Programs</th>
             </tr>
           </thead>
@@ -157,6 +245,10 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                   </td>
 
                   <td>{signature}</td>
+                  <td className="text-end">
+                    {tx.logTruncated && ">"}
+                    {new Intl.NumberFormat("en-US").format(tx.computeUnits)}
+                  </td>
                   <td>
                     {tx.invocations.size === 0
                       ? "NA"
@@ -176,7 +268,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         </table>
       </div>
 
-      {block.transactions.length > numDisplayed && (
+      {filteredTransactions.length > numDisplayed && (
         <div className="card-footer">
           <button
             className="btn btn-primary w-100"
@@ -200,7 +292,8 @@ type FilterProps = {
   totalTransactionCount: number;
 };
 
-const ALL_TRANSACTIONS = "";
+const ALL_TRANSACTIONS = "all";
+const HIDE_VOTES = "";
 
 type FilterOption = {
   name: string;
@@ -218,7 +311,7 @@ const FilterDropdown = ({
   const { cluster } = useCluster();
   const buildLocation = (location: Location, filter: string) => {
     const params = new URLSearchParams(location.search);
-    if (filter === ALL_TRANSACTIONS) {
+    if (filter === HIDE_VOTES) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
@@ -229,12 +322,27 @@ const FilterDropdown = ({
     };
   };
 
-  let currentFilterOption = {
+  let defaultFilterOption: FilterOption = {
+    name: "All Except Votes",
+    programId: HIDE_VOTES,
+    transactionCount:
+      totalTransactionCount -
+      (invokedPrograms.get(VOTE_PROGRAM_ID.toBase58()) || 0),
+  };
+
+  let allTransactionsOption: FilterOption = {
     name: "All Transactions",
     programId: ALL_TRANSACTIONS,
     transactionCount: totalTransactionCount,
   };
-  const filterOptions: FilterOption[] = [currentFilterOption];
+
+  let currentFilterOption =
+    filter !== ALL_TRANSACTIONS ? defaultFilterOption : allTransactionsOption;
+
+  const filterOptions: FilterOption[] = [
+    defaultFilterOption,
+    allTransactionsOption,
+  ];
   const placeholderRegistry = new Map();
 
   [...invokedPrograms.entries()].forEach(([programId, transactionCount]) => {

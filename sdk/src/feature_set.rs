@@ -165,6 +165,10 @@ pub mod stake_program_advance_activating_credits_observed {
     solana_sdk::declare_id!("SAdVFw3RZvzbo6DvySbSdBnHN4gkzSTH9dSxesyKKPj");
 }
 
+pub mod credits_auto_rewind {
+    solana_sdk::declare_id!("BUS12ciZ5gCoFafUHWW8qaFMMtwFQGVxjsDheWLdqBE2");
+}
+
 pub mod demote_program_write_locks {
     solana_sdk::declare_id!("3E3jV7v9VcdJL8iYZUMax9DiDno8j7EWUVbhm9RtShj2");
 }
@@ -275,6 +279,10 @@ pub mod update_syscall_base_costs {
     solana_sdk::declare_id!("2h63t332mGCCsWK2nqqqHhN4U9ayyqhLVFvczznHDoTZ");
 }
 
+pub mod stake_deactivate_delinquent_instruction {
+    solana_sdk::declare_id!("437r62HoAdUb63amq3D7ENnBLDhHT2xY8eFkLJYVKK4x");
+}
+
 pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
@@ -335,6 +343,38 @@ pub mod add_get_minimum_delegation_instruction_to_stake_program {
     solana_sdk::declare_id!("St8k9dVXP97xT6faW24YmRSYConLbhsMJA4TJTBLmMT");
 }
 
+pub mod error_on_syscall_bpf_function_hash_collisions {
+    solana_sdk::declare_id!("8199Q2gMD2kwgfopK5qqVWuDbegLgpuFUFHCcUJQDN8b");
+}
+
+pub mod reject_callx_r10 {
+    solana_sdk::declare_id!("3NKRSwpySNwD3TvP5pHnRmkAQRsdkXWRr1WaQh8p4PWX");
+}
+
+pub mod drop_redundant_turbine_path {
+    solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
+}
+
+pub mod executables_incur_cpi_data_cost {
+    solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
+}
+
+pub mod fix_recent_blockhashes {
+    solana_sdk::declare_id!("6iyggb5MTcsvdcugX7bEKbHV8c6jdLbpHwkncrgLMhfo");
+}
+
+pub mod update_rewards_from_cached_accounts {
+    solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9");
+}
+
+pub mod spl_token_v3_4_0 {
+    solana_sdk::declare_id!("Ftok4njE8b7tDffYkC5bAbCaQv5sL6jispYrprzatUwN");
+}
+
+pub mod spl_associated_token_account_v1_1_0 {
+    solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -371,6 +411,7 @@ lazy_static! {
         (libsecp256k1_fail_on_bad_count::id(), "fail libsec256k1_verify if count appears wrong"),
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
         (stake_program_advance_activating_credits_observed::id(), "Enable advancing credits observed for activation epoch #19309"),
+        (credits_auto_rewind::id(), "Auto rewind stake's credits_observed if (accidental) vote recreation is detected #22546"),
         (demote_program_write_locks::id(), "demote program write locks to readonly, except when upgradeable loader present #19593 #20265"),
         (ed25519_program_enabled::id(), "enable builtin ed25519 signature verify program"),
         (return_data_syscall_enabled::id(), "enable sol_{set,get}_return_data syscall"),
@@ -398,6 +439,7 @@ lazy_static! {
         (require_rent_exempt_accounts::id(), "require all new transaction accounts with data to be rent-exempt"),
         (filter_votes_outside_slot_hashes::id(), "filter vote slots older than the slot hashes history"),
         (update_syscall_base_costs::id(), "update syscall base costs"),
+        (stake_deactivate_delinquent_instruction::id(), "enable the deactivate delinquent stake instruction #23932"),
         (vote_withdraw_authority_may_change_authorized_voter::id(), "vote account withdraw authority may change the authorized voter #22521"),
         (spl_associated_token_account_v1_0_4::id(), "SPL Associated Token Account Program release version 1.0.4, tied to token 3.3.0 #22648"),
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
@@ -413,6 +455,14 @@ lazy_static! {
         (check_slice_translation_size::id(), "check size when translating slices"),
         (stake_split_uses_rent_sysvar::id(), "stake split instruction uses rent sysvar"),
         (add_get_minimum_delegation_instruction_to_stake_program::id(), "add GetMinimumDelegation instruction to stake program"),
+        (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
+        (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
+        (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
+        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
+        (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
+        (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
+        (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
+        (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

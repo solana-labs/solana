@@ -10,7 +10,6 @@ fn main() -> Result<(), std::io::Error> {
     tonic_build::configure()
         .build_client(true)
         .build_server(false)
-        .format(true)
         .out_dir(&out_dir)
         .compile(
             &[googleapis.join("google/bigtable/v2/bigtable.proto")],

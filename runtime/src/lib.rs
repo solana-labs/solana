@@ -1,6 +1,11 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
+
+#[macro_use]
+extern crate lazy_static;
+
 pub mod account_info;
+pub mod account_overrides;
 pub mod account_rent_state;
 pub mod accounts;
 pub mod accounts_background_service;
@@ -30,6 +35,7 @@ pub mod cost_model;
 pub mod cost_tracker;
 pub mod epoch_stakes;
 pub mod execute_cost_table;
+mod expected_rent_collection;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod in_mem_accounts_index;
@@ -44,6 +50,7 @@ mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
 mod rolling_bit_field;
+pub mod runtime_config;
 pub mod secondary_index;
 pub mod serde_snapshot;
 mod shared_buffer_reader;
@@ -53,6 +60,7 @@ pub mod snapshot_hash;
 pub mod snapshot_package;
 pub mod snapshot_utils;
 pub mod sorted_storages;
+mod stake_account;
 pub mod stake_history;
 pub mod stake_weighted_timestamp;
 pub mod stakes;
@@ -61,6 +69,7 @@ mod storable_accounts;
 mod system_instruction_processor;
 pub mod transaction_batch;
 pub mod transaction_cost_metrics_sender;
+pub mod transaction_error_metrics;
 pub mod vote_account;
 pub mod vote_parser;
 pub mod vote_sender_types;

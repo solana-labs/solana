@@ -37,6 +37,7 @@ use {
         native_token::lamports_to_sol, pubkey::Pubkey,
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
+    solana_storage_bigtable::CredentialType,
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -295,8 +296,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
 fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<String> {
     match path {
         "/v0/circulating-supply" => {
-            let r_bank_forks = bank_forks.read().unwrap();
-            let bank = r_bank_forks.root_bank();
+            let bank = bank_forks.read().unwrap().root_bank();
             let total_supply = bank.capitalization();
             let non_circulating_supply =
                 solana_runtime::non_circulating_supply::calculate_non_circulating_supply(&bank)
@@ -308,8 +308,7 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             ))
         }
         "/v0/total-supply" => {
-            let r_bank_forks = bank_forks.read().unwrap();
-            let bank = r_bank_forks.root_bank();
+            let bank = bank_forks.read().unwrap().root_bank();
             let total_supply = bank.capitalization();
             Some(format!("{}", lamports_to_sol(total_supply)))
         }
@@ -385,7 +384,7 @@ impl JsonRpcService {
                 let bigtable_config = solana_storage_bigtable::LedgerStorageConfig {
                     read_only: !enable_bigtable_ledger_upload,
                     timeout,
-                    credential_path: None,
+                    credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
                 };
                 runtime

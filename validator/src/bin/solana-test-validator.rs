@@ -297,6 +297,20 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("maybe_clone_account")
+                .long("maybe-clone")
+                .value_name("ADDRESS")
+                .takes_value(true)
+                .validator(is_pubkey_or_keypair)
+                .multiple(true)
+                .requires("json_rpc_url")
+                .help(
+                    "Copy an account from the cluster referenced by the --url argument, \
+                     skipping it if it doesn't exist. \
+                     If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("warp_slot")
                 .required(false)
                 .long("warp-slot")
@@ -353,6 +367,14 @@ fn main() {
                 .validator(is_pubkey)
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
+        )
+        .arg(
+            Arg::with_name("max_compute_units")
+                .long("max-compute-units")
+                .value_name("COMPUTE_UNITS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's maximum compute units")
         )
         .get_matches();
 
@@ -462,6 +484,7 @@ fn main() {
             exit(1);
         })
     });
+    let max_compute_units = value_t!(matches, "max_compute_units", u64).ok();
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -521,6 +544,10 @@ fn main() {
     }
 
     let accounts_to_clone: HashSet<_> = pubkeys_of(&matches, "clone_account")
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default();
+
+    let accounts_to_maybe_clone: HashSet<_> = pubkeys_of(&matches, "maybe_clone_account")
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
 
@@ -678,6 +705,17 @@ fn main() {
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
+            false,
+        );
+    }
+
+    if !accounts_to_maybe_clone.is_empty() {
+        genesis.clone_accounts(
+            accounts_to_maybe_clone,
+            cluster_rpc_client
+                .as_ref()
+                .expect("bug: --url argument missing?"),
+            true,
         );
     }
 
@@ -722,6 +760,10 @@ fn main() {
                 .map(PathBuf::from)
                 .collect(),
         );
+    }
+
+    if let Some(max_compute_units) = max_compute_units {
+        genesis.max_compute_units(max_compute_units);
     }
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {

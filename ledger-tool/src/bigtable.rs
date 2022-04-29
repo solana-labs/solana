@@ -16,6 +16,7 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
+    solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, EncodeError, TransactionDetails,
         UiTransactionEncoding,
@@ -642,16 +643,18 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 instance_name,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
+
             let credential_path = Some(value_t_or_exit!(
                 arg_matches,
                 "reference_credential",
                 String
             ));
+
             let ref_instance_name =
                 value_t_or_exit!(arg_matches, "reference_instance_name", String);
             let ref_config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
-                credential_path,
+                credential_type: CredentialType::Filepath(credential_path),
                 instance_name: ref_instance_name,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };

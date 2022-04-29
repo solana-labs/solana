@@ -2,8 +2,8 @@ use {
     crate::{
         config,
         stake_state::{
-            authorize, authorize_with_seed, deactivate, delegate, initialize, merge, set_lockup,
-            split, withdraw,
+            authorize, authorize_with_seed, deactivate, deactivate_delinquent, delegate,
+            initialize, merge, set_lockup, split, withdraw,
         },
     },
     log::*,
@@ -13,16 +13,37 @@ use {
     solana_sdk::{
         feature_set,
         instruction::InstructionError,
-        keyed_account::keyed_account_at_index,
         program_utils::limited_deserialize,
+        pubkey::Pubkey,
         stake::{
             instruction::{LockupArgs, StakeInstruction},
             program::id,
             state::{Authorized, Lockup},
         },
         sysvar::clock::Clock,
+        transaction_context::{InstructionContext, TransactionContext},
     },
 };
+
+fn get_optional_pubkey<'a>(
+    transaction_context: &'a TransactionContext,
+    instruction_context: &'a InstructionContext,
+    index_in_instruction: usize,
+    should_be_signer: bool,
+) -> Result<Option<&'a Pubkey>, InstructionError> {
+    Ok(
+        if instruction_context.get_number_of_accounts() > index_in_instruction {
+            if should_be_signer && !instruction_context.is_signer(index_in_instruction)? {
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            Some(transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_in_transaction(index_in_instruction)?,
+            )?)
+        } else {
+            None
+        },
+    )
+}
 
 pub fn process_instruction(
     first_instruction_account: usize,
@@ -31,24 +52,32 @@ pub fn process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let data = instruction_context.get_instruction_data();
-    let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
-    trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let me = &keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    if me.owner()? != id() {
-        return Err(InstructionError::InvalidAccountOwner);
-    }
+    let get_stake_account = || {
+        let me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        if *me.get_owner() != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+        Ok(me)
+    };
 
     let signers = instruction_context.get_signers(transaction_context);
-    match limited_deserialize(data)? {
-        StakeInstruction::Initialize(authorized, lockup) => {
+    match limited_deserialize(data) {
+        Ok(StakeInstruction::Initialize(authorized, lockup)) => {
+            let mut me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
-            initialize(me, &authorized, &lockup, &rent, &invoke_context.feature_set)
+            initialize(
+                &mut me,
+                &authorized,
+                &lockup,
+                &rent,
+                &invoke_context.feature_set,
+            )
         }
-        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
-            instruction_context.check_number_of_instruction_accounts(3)?;
+        Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
+            let mut me = get_stake_account()?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
@@ -56,25 +85,26 @@ pub fn process_instruction(
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-                let _current_authority =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                instruction_context.check_number_of_instruction_accounts(3)?;
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 3,
+                    false,
+                )?;
 
                 authorize(
-                    me,
+                    &mut me,
                     &signers,
                     &authorized_pubkey,
                     stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 authorize(
-                    me,
+                    &mut me,
                     &signers,
                     &authorized_pubkey,
                     stake_authorize,
@@ -84,37 +114,41 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::AuthorizeWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
+            let mut me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let authority_base =
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
-
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 3)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 3,
+                    false,
+                )?;
 
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
                     args.stake_authorize,
                     require_custodian_for_locked_stake_authorize,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -125,9 +159,9 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::DelegateStake => {
+        Ok(StakeInstruction::DelegateStake) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -136,25 +170,42 @@ pub fn process_instruction(
                 3,
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
+            drop(me);
             let config_account =
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?;
-            if !config::check_id(config_account.unsigned_key()) {
+                instruction_context.try_borrow_instruction_account(transaction_context, 4)?;
+            if !config::check_id(config_account.get_key()) {
                 return Err(InstructionError::InvalidArgument);
             }
-            let config = config::from(&*config_account.try_account_ref()?)
-                .ok_or(InstructionError::InvalidArgument)?;
-            delegate(me, vote, &clock, &stake_history, &config, &signers)
+            let config = config::from(&config_account).ok_or(InstructionError::InvalidArgument)?;
+            drop(config_account);
+            delegate(
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
+                first_instruction_account + 1,
+                &clock,
+                &stake_history,
+                &config,
+                &signers,
+            )
         }
-        StakeInstruction::Split(lamports) => {
+        Ok(StakeInstruction::Split(lamports)) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let split_stake =
-                &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
-            split(me, invoke_context, lamports, split_stake, &signers)
+            drop(me);
+            split(
+                invoke_context,
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
+                lamports,
+                first_instruction_account + 1,
+                &signers,
+            )
         }
-        StakeInstruction::Merge => {
+        Ok(StakeInstruction::Merge) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let source_stake =
-                &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -162,18 +213,21 @@ pub fn process_instruction(
                 instruction_context,
                 3,
             )?;
+            drop(me);
             merge(
-                me,
                 invoke_context,
-                source_stake,
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
+                first_instruction_account + 1,
                 &clock,
                 &stake_history,
                 &signers,
             )
         }
-        StakeInstruction::Withdraw(lamports) => {
+        Ok(StakeInstruction::Withdraw(lamports)) => {
+            let me = get_stake_account()?;
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let to = &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
             let stake_history = get_sysvar_with_account_check::stake_history(
@@ -182,47 +236,61 @@ pub fn process_instruction(
                 3,
             )?;
             instruction_context.check_number_of_instruction_accounts(5)?;
+            drop(me);
             withdraw(
-                me,
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
                 lamports,
-                to,
+                first_instruction_account + 1,
                 &clock,
                 &stake_history,
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 4)?,
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 5).ok(),
+                first_instruction_account + 4,
+                if instruction_context.get_number_of_instruction_accounts() >= 6 {
+                    Some(first_instruction_account + 5)
+                } else {
+                    None
+                },
                 &invoke_context.feature_set,
             )
         }
-        StakeInstruction::Deactivate => {
+        Ok(StakeInstruction::Deactivate) => {
+            let mut me = get_stake_account()?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
-            deactivate(me, &clock, &signers)
+            deactivate(&mut me, &clock, &signers)
         }
-        StakeInstruction::SetLockup(lockup) => {
+        Ok(StakeInstruction::SetLockup(lockup)) => {
+            let mut me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
-            set_lockup(me, &lockup, &signers, &clock)
+            set_lockup(&mut me, &lockup, &signers, &clock)
         }
-        StakeInstruction::InitializeChecked => {
+        Ok(StakeInstruction::InitializeChecked) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
+                let staker_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 2)?,
+                )?;
+                let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+
                 let authorized = Authorized {
-                    staker: *keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?
-                        .unsigned_key(),
-                    withdrawer: *keyed_account_at_index(
-                        keyed_accounts,
-                        first_instruction_account + 3,
-                    )?
-                    .signer_key()
-                    .ok_or(InstructionError::MissingRequiredSignature)?,
+                    staker: *staker_pubkey,
+                    withdrawer: *withdrawer_pubkey,
                 };
 
                 let rent =
                     get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
                 initialize(
-                    me,
+                    &mut me,
                     &authorized,
                     &Lockup::default(),
                     &rent,
@@ -232,7 +300,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeChecked(stake_authorize) => {
+        Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -240,98 +309,104 @@ pub fn process_instruction(
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
-                let _current_authority =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?;
-                let authorized_pubkey =
-                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
-                        .signer_key()
-                        .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 4)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 4,
+                    false,
+                )?;
 
                 authorize(
-                    me,
+                    &mut me,
                     &signers,
                     authorized_pubkey,
                     stake_authorize,
                     true,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeCheckedWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
                 instruction_context.check_number_of_instruction_accounts(2)?;
-                let authority_base =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
-                let authorized_pubkey =
-                    &keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?
-                        .signer_key()
-                        .ok_or(InstructionError::MissingRequiredSignature)?;
-                let custodian =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 4)
-                        .ok()
-                        .map(|ka| ka.unsigned_key());
+                let authorized_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                )?;
+                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                    return Err(InstructionError::MissingRequiredSignature);
+                }
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 4,
+                    false,
+                )?;
 
                 authorize_with_seed(
-                    me,
-                    authority_base,
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    first_instruction_account + 1,
                     &args.authority_seed,
                     &args.authority_owner,
                     authorized_pubkey,
                     args.stake_authorize,
                     true,
                     &clock,
-                    custodian,
+                    custodian_pubkey,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::SetLockupChecked(lockup_checked) => {
+        Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
+            let mut me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian = if let Ok(custodian) =
-                    keyed_account_at_index(keyed_accounts, first_instruction_account + 2)
-                {
-                    Some(
-                        *custodian
-                            .signer_key()
-                            .ok_or(InstructionError::MissingRequiredSignature)?,
-                    )
-                } else {
-                    None
-                };
+                let custodian_pubkey = get_optional_pubkey(
+                    transaction_context,
+                    instruction_context,
+                    first_instruction_account + 2,
+                    true,
+                )?;
 
                 let lockup = LockupArgs {
                     unix_timestamp: lockup_checked.unix_timestamp,
                     epoch: lockup_checked.epoch,
-                    custodian,
+                    custodian: custodian_pubkey.cloned(),
                 };
                 let clock = invoke_context.get_sysvar_cache().get_clock()?;
-                set_lockup(me, &lockup, &signers, &clock)
+                set_lockup(&mut me, &lockup, &signers, &clock)
             } else {
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::GetMinimumDelegation => {
+        Ok(StakeInstruction::GetMinimumDelegation) => {
             let feature_set = invoke_context.feature_set.as_ref();
             if !feature_set.is_active(
                 &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
             ) {
+                // Retain previous behavior of always checking that the first account
+                // is a stake account until the feature is activated
+                let _ = get_stake_account()?;
                 return Err(InstructionError::InvalidInstructionData);
             }
 
@@ -341,6 +416,35 @@ pub fn process_instruction(
                 .transaction_context
                 .set_return_data(id(), minimum_delegation)
         }
+        Ok(StakeInstruction::DeactivateDelinquent) => {
+            let mut me = get_stake_account()?;
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::stake_deactivate_delinquent_instruction::id())
+            {
+                instruction_context.check_number_of_instruction_accounts(3)?;
+
+                let clock = invoke_context.get_sysvar_cache().get_clock()?;
+                deactivate_delinquent(
+                    transaction_context,
+                    instruction_context,
+                    &mut me,
+                    first_instruction_account + 1,
+                    first_instruction_account + 2,
+                    clock.epoch,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+        Err(err) => {
+            if !invoke_context.feature_set.is_active(
+                &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+            ) {
+                let _ = get_stake_account()?;
+            }
+            Err(err)
+        }
     }
 }
 
@@ -349,8 +453,8 @@ mod tests {
     use {
         super::*,
         crate::stake_state::{
-            authorized_from, create_stake_history_from_delegations, from, stake_from, Delegation,
-            Meta, Stake, StakeState,
+            authorized_from, create_stake_history_from_delegations, from, new_stake, stake_from,
+            Delegation, Meta, Stake, StakeState,
         },
         bincode::serialize,
         solana_program_runtime::{
@@ -372,12 +476,13 @@ mod tests {
                     LockupArgs, StakeError,
                 },
                 state::{Authorized, Lockup, StakeAuthorize},
+                MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION,
             },
             stake_history::{StakeHistory, StakeHistoryEntry},
             system_program, sysvar,
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{collections::HashSet, str::FromStr},
+        std::{borrow::BorrowMut, collections::HashSet, str::FromStr, sync::Arc},
     };
 
     fn create_default_account() -> AccountSharedData {
@@ -433,6 +538,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             sysvar_cache_override,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -578,6 +684,30 @@ mod tests {
             ),
             Err(InstructionError::InvalidAccountData),
         );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+            ),
+            Err(InstructionError::IncorrectProgramId),
+        );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+                &Pubkey::new_unique(),
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &Pubkey::new_unique(),
+                &invalid_vote_state_pubkey(),
+                &invalid_vote_state_pubkey(),
+            ),
+            Err(InstructionError::InvalidAccountData),
+        );
     }
 
     #[test]
@@ -675,6 +805,14 @@ mod tests {
             ),
             Err(InstructionError::InvalidAccountOwner),
         );
+        process_instruction_as_one_arg(
+            &instruction::deactivate_delinquent_stake(
+                &spoofed_stake_state_pubkey(),
+                &Pubkey::new_unique(),
+                &Pubkey::new_unique(),
+            ),
+            Err(InstructionError::InvalidAccountOwner),
+        );
     }
 
     #[test]
@@ -698,7 +836,7 @@ mod tests {
             account::create_account_shared_data_for_test(&sysvar::clock::Clock::default());
         let config_address = stake_config::id();
         let config_account = config::create_account(0, &stake_config::Config::default());
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let withdrawal_amount = rent_exempt_reserve + minimum_delegation;
 
@@ -825,7 +963,7 @@ mod tests {
             &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
-                (vote_address, vote_account),
+                (vote_address, vote_account.clone()),
                 (rewards_address, rewards_account.clone()),
                 (stake_history_address, stake_history_account),
             ],
@@ -870,7 +1008,7 @@ mod tests {
         process_instruction(
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             vec![
-                (stake_address, stake_account),
+                (stake_address, stake_account.clone()),
                 (rewards_address, rewards_account),
             ],
             vec![
@@ -895,6 +1033,41 @@ mod tests {
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
         );
+
+        // Tests correct number of accounts are provided in deactivate_delinquent
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            Vec::new(),
+            Vec::new(),
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            vec![(stake_address, stake_account.clone())],
+            vec![AccountMeta {
+                pubkey: stake_address,
+                is_signer: false,
+                is_writable: false,
+            }],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+        process_instruction(
+            &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+            vec![(stake_address, stake_account), (vote_address, vote_account)],
+            vec![
+                AccountMeta {
+                    pubkey: stake_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: vote_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
     }
 
     #[test]
@@ -914,7 +1087,7 @@ mod tests {
         let rent = Rent::default();
         let rent_address = sysvar::rent::id();
         let rent_account = account::create_account_shared_data_for_test(&rent);
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
 
         // Test InitializeChecked with non-signing withdrawer
@@ -996,7 +1169,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             42,
             &StakeState::Initialized(Meta::auto(&authorized_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1108,7 +1281,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             42,
             &StakeState::Initialized(Meta::auto(&address_with_seed)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1212,7 +1385,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             42,
             &StakeState::Initialized(Meta::auto(&withdrawer)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1249,12 +1422,11 @@ mod tests {
     #[test]
     fn test_stake_initialize() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_account =
-            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>(), &id());
+        let stake_account = AccountSharedData::new(stake_lamports, StakeState::size_of(), &id());
         let custodian_address = solana_sdk::pubkey::new_rand();
         let lockup = Lockup {
             epoch: 1,
@@ -1330,7 +1502,7 @@ mod tests {
 
         // incorrect account sizes
         let stake_account =
-            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>() + 1, &id());
+            AccountSharedData::new(stake_lamports, StakeState::size_of() + 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
             &instruction_data,
@@ -1340,7 +1512,7 @@ mod tests {
         );
 
         let stake_account =
-            AccountSharedData::new(stake_lamports, std::mem::size_of::<StakeState>() - 1, &id());
+            AccountSharedData::new(stake_lamports, StakeState::size_of() - 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
             &instruction_data,
@@ -1359,7 +1531,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::default(),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1412,7 +1584,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1532,7 +1704,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1646,7 +1818,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1751,11 +1923,12 @@ mod tests {
     fn test_authorize_delegated_stake() {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -1949,7 +2122,8 @@ mod tests {
         vote_account_2
             .set_state(&VoteStateVersions::new_current(vote_state))
             .unwrap();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let mut stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -1960,7 +2134,7 @@ mod tests {
                 },
                 ..Meta::default()
             }),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2172,7 +2346,7 @@ mod tests {
     fn test_redelegate_consider_balance_changes() {
         let mut clock = Clock::default();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let initial_lamports = 4242424242;
         let stake_lamports = rent_exempt_reserve + initial_lamports;
         let recipient_address = solana_sdk::pubkey::new_rand();
@@ -2187,7 +2361,7 @@ mod tests {
                 rent_exempt_reserve,
                 ..Meta::auto(&authority_address)
             }),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2388,7 +2562,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2424,7 +2598,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -2470,7 +2644,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &solana_sdk::pubkey::new_rand(),
         )
         .unwrap();
@@ -2494,7 +2668,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2719,7 +2893,7 @@ mod tests {
 
         // overflow
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_account = AccountSharedData::new_data_with_space(
             1_000_000_000,
             &StakeState::Initialized(Meta {
@@ -2730,7 +2904,7 @@ mod tests {
                 },
                 lockup: Lockup::default(),
             }),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2748,7 +2922,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::RewardsPool,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2765,12 +2939,13 @@ mod tests {
     fn test_withdraw_stake_before_warmup() {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
-        let total_lamports = 100;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
+        let total_lamports = stake_lamports + 33;
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2907,7 +3082,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             total_lamports,
             &StakeState::Initialized(meta),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -2981,7 +3156,7 @@ mod tests {
         let stake_account_self_as_custodian = AccountSharedData::new_data_with_space(
             total_lamports,
             &StakeState::Initialized(meta),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3017,7 +3192,7 @@ mod tests {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = 7 * minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
@@ -3026,7 +3201,7 @@ mod tests {
                 rent_exempt_reserve,
                 ..Meta::auto(&stake_address)
             }),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3116,11 +3291,12 @@ mod tests {
     #[test]
     fn test_deactivate() {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let stake_lamports = 42;
+        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Initialized(Meta::auto(&stake_address)),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3240,7 +3416,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3507,7 +3683,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let instruction_data = serialize(&StakeInstruction::Initialize(
             Authorized::auto(&stake_address),
@@ -3535,7 +3711,7 @@ mod tests {
         ] {
             let stake_account = AccountSharedData::new(
                 stake_delegation + rent_exempt_reserve,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             );
             process_instruction(
@@ -3569,7 +3745,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
             rent_exempt_reserve,
@@ -3616,7 +3792,7 @@ mod tests {
                 let stake_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve,
                     stake_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -3660,7 +3836,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let source_address = Pubkey::new_unique();
         let source_meta = Meta {
             rent_exempt_reserve,
@@ -3670,7 +3846,7 @@ mod tests {
         let dest_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3715,7 +3891,7 @@ mod tests {
                 let source_account = AccountSharedData::new_data_with_space(
                     source_starting_balance,
                     source_stake_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -3751,7 +3927,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let source_address = Pubkey::new_unique();
         let source_meta = Meta {
             rent_exempt_reserve,
@@ -3761,7 +3937,7 @@ mod tests {
         let dest_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -3791,7 +3967,7 @@ mod tests {
                 let source_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve,
                     source_stake_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -3819,7 +3995,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let source_address = Pubkey::new_unique();
         let source_meta = Meta {
             rent_exempt_reserve,
@@ -3903,14 +4079,14 @@ mod tests {
                 let source_account = AccountSharedData::new_data_with_space(
                     source_balance,
                     &source_stake_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
                 let dest_account = AccountSharedData::new_data_with_space(
                     destination_starting_balance,
                     &StakeState::Uninitialized,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -3964,7 +4140,7 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
             rent_exempt_reserve,
@@ -4014,7 +4190,7 @@ mod tests {
                 let stake_account = AccountSharedData::new_data_with_space(
                     starting_stake_delegation + rent_exempt_reserve + rewards_balance,
                     stake_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -4067,11 +4243,11 @@ mod tests {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new(
             rent_exempt_reserve + minimum_delegation,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         );
         let vote_address = solana_sdk::pubkey::new_rand();
@@ -4226,6 +4402,7 @@ mod tests {
             ],
             Ok(()),
         );
+        transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         process_instruction(
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
@@ -4238,14 +4415,14 @@ mod tests {
     #[test]
     fn test_split_source_uninitialized() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4253,7 +4430,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4335,7 +4512,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&stake_address), stake_lamports),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4361,7 +4538,7 @@ mod tests {
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
                 split_to_state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4380,7 +4557,7 @@ mod tests {
     #[test]
     fn test_split_more_than_staked() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4393,7 +4570,7 @@ mod tests {
                 },
                 stake_lamports / 2 - 1,
             ),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4401,7 +4578,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4437,7 +4614,7 @@ mod tests {
     #[test]
     fn test_split_with_rent() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let minimum_balance = rent_exempt_reserve + minimum_delegation;
         let stake_lamports = minimum_balance * 2;
@@ -4446,7 +4623,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4476,7 +4653,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4541,7 +4718,7 @@ mod tests {
     #[test]
     fn test_split_to_account_with_rent_exempt_reserve() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4554,7 +4731,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4586,7 +4763,7 @@ mod tests {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4663,9 +4840,8 @@ mod tests {
     #[test]
     fn test_split_from_larger_sized_account() {
         let rent = Rent::default();
-        let source_larger_rent_exempt_reserve =
-            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
-        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = (source_larger_rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4678,7 +4854,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            std::mem::size_of::<StakeState>() + 100,
+            StakeState::size_of() + 100,
             &id(),
         )
         .unwrap();
@@ -4710,7 +4886,7 @@ mod tests {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4792,10 +4968,8 @@ mod tests {
     #[test]
     fn test_split_from_smaller_sized_account() {
         let rent = Rent::default();
-        let source_smaller_rent_exempt_reserve =
-            rent.minimum_balance(std::mem::size_of::<StakeState>());
-        let split_rent_exempt_reserve =
-            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
+        let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
         let stake_lamports = split_rent_exempt_reserve + 1;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -4807,7 +4981,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4836,7 +5010,7 @@ mod tests {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>() + 100,
+                StakeState::size_of() + 100,
                 &id(),
             )
             .unwrap();
@@ -4870,7 +5044,7 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4883,7 +5057,7 @@ mod tests {
         let split_to_account = AccountSharedData::new_data_with_space(
             0,
             &StakeState::Uninitialized,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -4908,7 +5082,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -4964,7 +5138,7 @@ mod tests {
     #[test]
     fn test_split_100_percent_of_source_to_account_with_lamports() {
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4977,7 +5151,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &state,
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -5009,7 +5183,7 @@ mod tests {
             let split_to_account = AccountSharedData::new_data_with_space(
                 initial_balance,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5058,9 +5232,8 @@ mod tests {
     #[test]
     fn test_split_rent_exemptness() {
         let rent = Rent::default();
-        let source_rent_exempt_reserve =
-            rent.minimum_balance(std::mem::size_of::<StakeState>() + 100);
-        let split_rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
+        let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
         let stake_lamports = source_rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -5091,14 +5264,14 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>() + 10000,
+                StakeState::size_of() + 10000,
                 &id(),
             )
             .unwrap();
@@ -5122,14 +5295,14 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 &state,
-                std::mem::size_of::<StakeState>() + 100,
+                StakeState::size_of() + 100,
                 &id(),
             )
             .unwrap();
             let split_to_account = AccountSharedData::new_data_with_space(
                 0,
                 &StakeState::Uninitialized,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5233,7 +5406,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5244,7 +5417,7 @@ mod tests {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -5323,7 +5496,7 @@ mod tests {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_amount = 4242424242;
         let stake_lamports = rent_exempt_reserve + stake_amount;
         let meta = Meta {
@@ -5341,7 +5514,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(meta, stake),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -5435,7 +5608,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5446,7 +5619,7 @@ mod tests {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -5527,7 +5700,7 @@ mod tests {
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
-                std::mem::size_of::<StakeState>(),
+                StakeState::size_of(),
                 &id(),
             )
             .unwrap();
@@ -5535,7 +5708,7 @@ mod tests {
                 let merge_from_account = AccountSharedData::new_data_with_space(
                     stake_lamports,
                     merge_from_state,
-                    std::mem::size_of::<StakeState>(),
+                    StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
@@ -5572,14 +5745,14 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&authorized_address), stake_lamports),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
         let merge_from_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &just_stake(Meta::auto(&authorized_address), stake_lamports),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &solana_sdk::pubkey::new_rand(),
         )
         .unwrap();
@@ -5639,7 +5812,7 @@ mod tests {
         let authorized_address = solana_sdk::pubkey::new_rand();
         let base_lamports = 4242424242;
         let rent = Rent::default();
-        let rent_exempt_reserve = rent.minimum_balance(std::mem::size_of::<StakeState>());
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_amount = base_lamports;
         let stake_lamports = rent_exempt_reserve + stake_amount;
         let merge_from_amount = base_lamports;
@@ -5659,7 +5832,7 @@ mod tests {
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
             &StakeState::Stake(meta, stake),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -5675,7 +5848,7 @@ mod tests {
         let merge_from_account = AccountSharedData::new_data_with_space(
             merge_from_lamports,
             &StakeState::Stake(meta, merge_from_stake),
-            std::mem::size_of::<StakeState>(),
+            StakeState::size_of(),
             &id(),
         )
         .unwrap();
@@ -5879,5 +6052,432 @@ mod tests {
 
         // Both fully deactivated works
         try_merge(transaction_accounts, instruction_accounts, Ok(()));
+    }
+
+    #[test]
+    fn test_stake_get_minimum_delegation() {
+        let stake_address = Pubkey::new_unique();
+        let stake_account = create_default_stake_account();
+        let instruction_data = serialize(&StakeInstruction::GetMinimumDelegation).unwrap();
+        let transaction_accounts = vec![(stake_address, stake_account)];
+        let instruction_accounts = vec![AccountMeta {
+            pubkey: stake_address,
+            is_signer: false,
+            is_writable: false,
+        }];
+
+        mock_process_instruction(
+            &id(),
+            Vec::new(),
+            &instruction_data,
+            transaction_accounts,
+            instruction_accounts,
+            None,
+            None,
+            Ok(()),
+            |first_instruction_account, invoke_context| {
+                super::process_instruction(first_instruction_account, invoke_context)?;
+                let expected_minimum_delegation =
+                    crate::get_minimum_delegation(&invoke_context.feature_set).to_le_bytes();
+                let actual_minimum_delegation =
+                    invoke_context.transaction_context.get_return_data().1;
+                assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+                Ok(())
+            },
+        );
+    }
+
+    // Ensure that the correct errors are returned when processing instructions
+    //
+    // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
+    // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
+    // changes the error *ordering* conditions.  These changes shall only occur when the
+    // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
+    // ensures it.
+    //
+    // For the following combinations of the feature enabled/disabled, if the instruction is
+    // valid/invalid, and if a stake account is passed in or not, assert the result:
+    //
+    //  feature | instruction | account || result
+    // ---------+-------------+---------++--------
+    //  enabled | good        | some    || Ok
+    //  enabled | bad         | some    || Err InvalidInstructionData
+    //  enabled | good        | none    || Err NotEnoughAccountKeys
+    //  enabled | bad         | none    || Err InvalidInstructionData
+    // disabled | good        | some    || Ok
+    // disabled | bad         | some    || Err InvalidInstructionData
+    // disabled | good        | none    || Err NotEnoughAccountKeys
+    // disabled | bad         | none    || Err NotEnoughAccountKeys
+    #[test]
+    fn test_stake_process_instruction_error_ordering() {
+        let rent = Rent::default();
+        let rent_address = sysvar::rent::id();
+        let rent_account = account::create_account_shared_data_for_test(&rent);
+
+        let good_stake_address = Pubkey::new_unique();
+        let good_stake_account = AccountSharedData::new(
+            u64::MAX,
+            std::mem::size_of::<crate::stake_state::StakeState>(),
+            &id(),
+        );
+        let good_instruction = instruction::initialize(
+            &good_stake_address,
+            &Authorized::auto(&good_stake_address),
+            &Lockup::default(),
+        );
+        let good_transaction_accounts = vec![
+            (good_stake_address, good_stake_account),
+            (rent_address, rent_account),
+        ];
+        let good_instruction_accounts = vec![
+            AccountMeta {
+                pubkey: good_stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: rent_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+        let good_accounts = (good_transaction_accounts, good_instruction_accounts);
+
+        // The instruction data needs to deserialize to a bogus StakeInstruction.  We likely never
+        // will have `usize::MAX`-number of instructions, so this should be a safe constant to
+        // always map to an invalid stake instruction.
+        let bad_instruction = Instruction::new_with_bincode(id(), &usize::MAX, Vec::default());
+        let bad_transaction_accounts = Vec::default();
+        let bad_instruction_accounts = Vec::default();
+        let bad_accounts = (bad_transaction_accounts, bad_instruction_accounts);
+
+        for (
+            is_feature_enabled,
+            instruction,
+            (transaction_accounts, instruction_accounts),
+            expected_result,
+        ) in [
+            (true, &good_instruction, &good_accounts, Ok(())),
+            (
+                true,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                true,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                true,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (false, &good_instruction, &good_accounts, Ok(())),
+            (
+                false,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                false,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                false,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+        ] {
+            let mut feature_set = FeatureSet::all_enabled();
+            if !is_feature_enabled {
+                feature_set.deactivate(
+                    &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+                );
+            }
+
+            mock_process_instruction(
+                &id(),
+                Vec::new(),
+                &instruction.data,
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                None,
+                Some(Arc::new(feature_set)),
+                expected_result,
+                super::process_instruction,
+            );
+        }
+    }
+
+    #[test]
+    fn test_deactivate_delinquent() {
+        let mut sysvar_cache_override = SysvarCache::default();
+
+        let reference_vote_address = Pubkey::new_unique();
+        let vote_address = Pubkey::new_unique();
+        let stake_address = Pubkey::new_unique();
+
+        let initial_stake_state = StakeState::Stake(
+            Meta::default(),
+            new_stake(
+                1, /* stake */
+                &vote_address,
+                &VoteState::default(),
+                1, /* activation_epoch */
+                &stake_config::Config::default(),
+            ),
+        );
+
+        let stake_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &initial_stake_state,
+            StakeState::size_of(),
+            &id(),
+        )
+        .unwrap();
+
+        let mut vote_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &VoteStateVersions::new_current(VoteState::default()),
+            VoteState::size_of(),
+            &solana_vote_program::id(),
+        )
+        .unwrap();
+
+        let mut reference_vote_account = AccountSharedData::new_data_with_space(
+            1, /* lamports */
+            &VoteStateVersions::new_current(VoteState::default()),
+            VoteState::size_of(),
+            &solana_vote_program::id(),
+        )
+        .unwrap();
+
+        let current_epoch = 20;
+
+        sysvar_cache_override.set_clock(Clock {
+            epoch: current_epoch,
+            ..Clock::default()
+        });
+
+        let process_instruction_deactivate_delinquent =
+            |stake_address: &Pubkey,
+             stake_account: &AccountSharedData,
+             vote_account: &AccountSharedData,
+             reference_vote_account: &AccountSharedData,
+             expected_result| {
+                process_instruction_with_sysvar_cache(
+                    &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
+                    vec![
+                        (*stake_address, stake_account.clone()),
+                        (vote_address, vote_account.clone()),
+                        (reference_vote_address, reference_vote_account.clone()),
+                    ],
+                    vec![
+                        AccountMeta {
+                            pubkey: *stake_address,
+                            is_signer: false,
+                            is_writable: true,
+                        },
+                        AccountMeta {
+                            pubkey: vote_address,
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                        AccountMeta {
+                            pubkey: reference_vote_address,
+                            is_signer: false,
+                            is_writable: false,
+                        },
+                    ],
+                    Some(&sysvar_cache_override),
+                    expected_result,
+                )
+            };
+
+        // `reference_vote_account` has not voted. Instruction will fail
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has not consistently voted for at least
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will fail
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
+            reference_vote_state.increment_credits(epoch as Epoch);
+        }
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has not consistently voted for the last
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will fail
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..=current_epoch {
+            reference_vote_state.increment_credits(epoch);
+        }
+        assert_eq!(
+            reference_vote_state.epoch_credits[current_epoch as usize - 2].0,
+            current_epoch - 2
+        );
+        reference_vote_state
+            .epoch_credits
+            .remove(current_epoch as usize - 2);
+        assert_eq!(
+            reference_vote_state.epoch_credits[current_epoch as usize - 2].0,
+            current_epoch - 1
+        );
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::InsufficientReferenceVotes.into()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has never voted.
+        // Instruction will succeed
+        let mut reference_vote_state = VoteState::default();
+        for epoch in 0..=current_epoch {
+            reference_vote_state.increment_credits(epoch);
+        }
+        reference_vote_account
+            .borrow_mut()
+            .serialize_data(&VoteStateVersions::new_current(reference_vote_state))
+            .unwrap();
+
+        let post_stake_account = &process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        )[0];
+
+        assert_eq!(
+            stake_from(post_stake_account)
+                .unwrap()
+                .delegation
+                .deactivation_epoch,
+            current_epoch
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has not voted for the
+        // last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`.
+        // Instruction will succeed
+
+        let mut vote_state = VoteState::default();
+        for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
+            vote_state.increment_credits(epoch as Epoch);
+        }
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+
+        let post_stake_account = &process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        )[0];
+
+        assert_eq!(
+            stake_from(post_stake_account)
+                .unwrap()
+                .delegation
+                .deactivation_epoch,
+            current_epoch
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` has not voted for the
+        // last `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION`. Try to deactivate an unrelated stake
+        // account.  Instruction will fail
+        let unrelated_vote_address = Pubkey::new_unique();
+        let unrelated_stake_address = Pubkey::new_unique();
+        let mut unrelated_stake_account = stake_account.clone();
+        assert_ne!(unrelated_vote_address, vote_address);
+        unrelated_stake_account
+            .serialize_data(&StakeState::Stake(
+                Meta::default(),
+                new_stake(
+                    1, /* stake */
+                    &unrelated_vote_address,
+                    &VoteState::default(),
+                    1, /* activation_epoch */
+                    &stake_config::Config::default(),
+                ),
+            ))
+            .unwrap();
+
+        process_instruction_deactivate_delinquent(
+            &unrelated_stake_address,
+            &unrelated_stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::VoteAddressMismatch.into()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` voted once
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` ago.
+        // Instruction will succeed
+        let mut vote_state = VoteState::default();
+        vote_state
+            .increment_credits(current_epoch - MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION as Epoch);
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Ok(()),
+        );
+
+        // `reference_vote_account` has consistently voted and `vote_account` voted once
+        // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` - 1 epochs ago
+        // Instruction will fail
+        let mut vote_state = VoteState::default();
+        vote_state.increment_credits(
+            current_epoch - (MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION - 1) as Epoch,
+        );
+        vote_account
+            .serialize_data(&VoteStateVersions::new_current(vote_state))
+            .unwrap();
+        process_instruction_deactivate_delinquent(
+            &stake_address,
+            &stake_account,
+            &vote_account,
+            &reference_vote_account,
+            Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into()),
+        );
     }
 }

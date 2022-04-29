@@ -273,6 +273,17 @@ pub fn parse_stake(
             instruction_type: "getMinimumDelegation".to_string(),
             info: Value::default(),
         }),
+        StakeInstruction::DeactivateDelinquent => {
+            check_num_stake_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "deactivateDeactive".to_string(),
+                info: json!({
+                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "voteAccount": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "referenceVoteAccount": account_keys[instruction.accounts[3] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 

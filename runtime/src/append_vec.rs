@@ -289,6 +289,11 @@ impl AppendVec {
         self.current_len.store(0, Ordering::Release);
     }
 
+    /// how many more bytes can be stored in this append vec
+    pub fn remaining_bytes(&self) -> u64 {
+        (self.capacity()).saturating_sub(self.len() as u64)
+    }
+
     pub fn len(&self) -> usize {
         self.current_len.load(Ordering::Acquire)
     }
@@ -732,6 +737,21 @@ pub mod tests {
         let account = create_test_account(0);
         let index = av.append_account_test(&account).unwrap();
         assert_eq!(av.get_account_test(index).unwrap(), account);
+    }
+
+    #[test]
+    fn test_remaining_bytes() {
+        let path = get_append_vec_path("test_append");
+        let sz = 1024 * 1024;
+        let sz64 = sz as u64;
+        let av = AppendVec::new(&path.path, true, sz);
+        assert_eq!(av.capacity(), sz64);
+        assert_eq!(av.remaining_bytes(), sz64);
+        let account = create_test_account(0);
+        let acct_size = 136;
+        av.append_account_test(&account).unwrap();
+        assert_eq!(av.capacity(), sz64);
+        assert_eq!(av.remaining_bytes(), sz64 - acct_size);
     }
 
     #[test]

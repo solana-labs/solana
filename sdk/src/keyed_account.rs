@@ -1,3 +1,8 @@
+#![deprecated(
+    since = "1.11.0",
+    note = "Please use BorrowedAccount instead of KeyedAccount"
+)]
+#![allow(deprecated)]
 use {
     crate::{
         account::{AccountSharedData, ReadableAccount},
@@ -249,48 +254,5 @@ where
     }
     fn set_state(&self, state: &T) -> Result<(), InstructionError> {
         self.try_account_ref_mut()?.set_state(state)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use {
-        super::*,
-        crate::{
-            account::{create_account_for_test, from_account, to_account},
-            pubkey::Pubkey,
-            sysvar::Sysvar,
-        },
-    };
-
-    #[repr(C)]
-    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-    struct TestSysvar {
-        something: Pubkey,
-    }
-    crate::declare_id!("TestSysvar111111111111111111111111111111111");
-    impl solana_program::sysvar::SysvarId for TestSysvar {
-        fn id() -> crate::pubkey::Pubkey {
-            id()
-        }
-        fn check_id(pubkey: &crate::pubkey::Pubkey) -> bool {
-            check_id(pubkey)
-        }
-    }
-    impl Sysvar for TestSysvar {}
-
-    #[test]
-    fn test_sysvar_keyed_account_to_from() {
-        let test_sysvar = TestSysvar::default();
-        let key = crate::keyed_account::tests::id();
-
-        let account = create_account_for_test(&test_sysvar);
-        let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
-        assert_eq!(test_sysvar, TestSysvar::default());
-
-        let mut account = AccountSharedData::new(42, TestSysvar::size_of(), &key);
-        to_account(&test_sysvar, &mut account).unwrap();
-        let test_sysvar = from_account::<TestSysvar, _>(&account).unwrap();
-        assert_eq!(test_sysvar, TestSysvar::default());
     }
 }

@@ -11,6 +11,4 @@ with the latest available features.
 If you have questions after reading the docs, feel free to reach out to us on
 our [Telegram](https://t.me/solana).
 
-For **technical support**, reach out to us on
-[Discord](https://discordapp.com/invite/pquxPsq), using the #wallet-support
-channel in our Community section.
+For **technical support**, please ask a question on [StackOverflow](https://stackoverflow.com/questions/tagged/solana) and tag your questions with `solana`.

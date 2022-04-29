@@ -1,10 +1,11 @@
+#[allow(deprecated)]
+use solana_sdk::keyed_account::{create_keyed_accounts_unified, KeyedAccount};
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
-        native_loader::NativeLoader,
         pre_account::PreAccount,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
@@ -16,12 +17,11 @@ use {
         feature_set::{
             cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
             record_instruction_in_transaction_context_push,
-            reject_empty_instruction_without_program, remove_native_loader, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            reject_empty_instruction_without_program, requestable_heap_size, tx_wide_compute_cap,
+            FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
-        keyed_account::{create_keyed_accounts_unified, KeyedAccount},
         native_loader,
         pubkey::Pubkey,
         rent::Rent,
@@ -30,7 +30,15 @@ use {
             InstructionAccount, InstructionContext, TransactionAccount, TransactionContext,
         },
     },
-    std::{borrow::Cow, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc},
+    std::{
+        alloc::Layout,
+        borrow::Cow,
+        cell::RefCell,
+        collections::HashMap,
+        fmt::{self, Debug},
+        rc::Rc,
+        sync::Arc,
+    },
 };
 
 pub type ProcessInstructionWithContext =
@@ -70,6 +78,7 @@ pub type Executors = HashMap<Pubkey, TransactionExecutor>;
 
 /// Tracks whether a given executor is "dirty" and needs to updated in the
 /// executors cache
+#[derive(Debug)]
 pub struct TransactionExecutor {
     executor: Arc<dyn Executor>,
     is_miss: bool,
@@ -150,12 +159,33 @@ impl ComputeMeter {
     }
 }
 
+/// Based loosely on the unstable std::alloc::Alloc trait
+pub trait Alloc {
+    fn alloc(&mut self, layout: Layout) -> Result<u64, AllocErr>;
+    fn dealloc(&mut self, addr: u64, layout: Layout);
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct AllocErr;
+
+impl fmt::Display for AllocErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Error: Memory allocation failed")
+    }
+}
+
+#[deprecated(
+    since = "1.11.0",
+    note = "Please use InstructionContext instead of StackFrame"
+)]
+#[allow(deprecated)]
 pub struct StackFrame<'a> {
     pub number_of_program_accounts: usize,
     pub keyed_accounts: Vec<KeyedAccount<'a>>,
     pub keyed_accounts_range: std::ops::Range<usize>,
 }
 
+#[allow(deprecated)]
 impl<'a> StackFrame<'a> {
     pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
         let keyed_accounts_range = std::ops::Range {
@@ -178,6 +208,7 @@ impl<'a> StackFrame<'a> {
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
+    #[allow(deprecated)]
     invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
@@ -193,6 +224,10 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
+    check_aligned: bool,
+    check_size: bool,
+    orig_account_lengths: Vec<Option<Vec<usize>>>,
+    allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -227,6 +262,10 @@ impl<'a> InvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
+            check_aligned: true,
+            check_size: true,
+            orig_account_lengths: Vec::new(),
+            allocators: Vec::new(),
         }
     }
 
@@ -381,6 +420,7 @@ impl<'a> InvokeContext<'a> {
         }
 
         // Create the KeyedAccounts that will be passed to the program
+        #[allow(deprecated)]
         let keyed_accounts = program_indices
             .iter()
             .map(|account_index| {
@@ -406,12 +446,15 @@ impl<'a> InvokeContext<'a> {
             .collect::<Result<Vec<_>, InstructionError>>()?;
 
         // Unsafe will be removed together with the keyed_accounts
+        #[allow(deprecated)]
         self.invoke_stack.push(StackFrame::new(
             program_indices.len(),
             create_keyed_accounts_unified(unsafe {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
+        self.orig_account_lengths.push(None);
+        self.allocators.push(None);
         self.transaction_context.push(
             program_indices,
             instruction_accounts,
@@ -423,6 +466,8 @@ impl<'a> InvokeContext<'a> {
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
+        self.orig_account_lengths.pop();
+        self.allocators.pop();
         self.invoke_stack.pop();
         self.transaction_context.pop()
     }
@@ -947,12 +992,6 @@ impl<'a> InvokeContext<'a> {
                     );
                 }
             }
-            if !self.feature_set.is_active(&remove_native_loader::id()) {
-                drop(borrowed_root_account);
-                let native_loader = NativeLoader::default();
-                // Call the program via the native loader
-                return native_loader.process_instruction(0, self);
-            }
         } else {
             for entry in self.builtin_programs {
                 if entry.program_id == *owner_id {
@@ -968,23 +1007,11 @@ impl<'a> InvokeContext<'a> {
         Err(InstructionError::UnsupportedProgramId)
     }
 
-    /// Removes the first keyed account
     #[deprecated(
-        since = "1.9.0",
-        note = "To be removed together with remove_native_loader"
+        since = "1.11.0",
+        note = "Please use BorrowedAccount instead of KeyedAccount"
     )]
-    pub fn remove_first_keyed_account(&mut self) -> Result<(), InstructionError> {
-        if !self.feature_set.is_active(&remove_native_loader::id()) {
-            let stack_frame = &mut self
-                .invoke_stack
-                .last_mut()
-                .ok_or(InstructionError::CallDepth)?;
-            stack_frame.keyed_accounts_range.start =
-                stack_frame.keyed_accounts_range.start.saturating_add(1);
-        }
-        Ok(())
-    }
-
+    #[allow(deprecated)]
     /// Get the list of keyed accounts including the chain of program accounts
     pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
         self.invoke_stack
@@ -1047,6 +1074,67 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<&Pubkey, InstructionError> {
         self.transaction_context
             .get_key_of_account_at_index(index_in_transaction)
+    }
+
+    /// Set the original account lengths
+    pub fn set_orig_account_lengths(
+        &mut self,
+        orig_account_lengths: Vec<usize>,
+    ) -> Result<(), InstructionError> {
+        *self
+            .orig_account_lengths
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)? = Some(orig_account_lengths);
+        Ok(())
+    }
+
+    /// Get the original account lengths
+    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+        self.orig_account_lengths
+            .last()
+            .and_then(|orig_account_lengths| orig_account_lengths.as_ref())
+            .map(|orig_account_lengths| orig_account_lengths.as_slice())
+            .ok_or(InstructionError::CallDepth)
+    }
+
+    // Set should alignment be enforced during user pointer translation
+    pub fn set_check_aligned(&mut self, check_aligned: bool) {
+        self.check_aligned = check_aligned;
+    }
+
+    // Should alignment be enforced during user pointer translation
+    pub fn get_check_aligned(&self) -> bool {
+        self.check_aligned
+    }
+
+    // Set should type size be checked during user pointer translation
+    pub fn set_check_size(&mut self, check_size: bool) {
+        self.check_size = check_size;
+    }
+
+    // Set should type size be checked during user pointer translation
+    pub fn get_check_size(&self) -> bool {
+        self.check_size
+    }
+
+    // Get this instruction's memory allocator
+    pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
+        self.allocators
+            .last()
+            .and_then(|allocator| allocator.clone())
+            .ok_or(InstructionError::CallDepth)
+    }
+
+    // Set this instruction's memory allocator
+    pub fn set_allocator(
+        &mut self,
+        allocator: Rc<RefCell<dyn Alloc>>,
+    ) -> Result<(), InstructionError> {
+        *self
+            .allocators
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)? = Some(allocator);
+        Ok(())
     }
 }
 
@@ -1127,6 +1215,7 @@ pub fn mock_process_instruction(
     transaction_accounts: Vec<TransactionAccount>,
     instruction_accounts: Vec<AccountMeta>,
     sysvar_cache_override: Option<&SysvarCache>,
+    feature_set_override: Option<Arc<FeatureSet>>,
     expected_result: Result<(), InstructionError>,
     process_instruction: ProcessInstructionWithContext,
 ) -> Vec<AccountSharedData> {
@@ -1145,6 +1234,9 @@ pub fn mock_process_instruction(
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     if let Some(sysvar_cache) = sysvar_cache_override {
         invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);
+    }
+    if let Some(feature_set) = feature_set_override {
+        invoke_context.feature_set = feature_set;
     }
     let result = invoke_context
         .push(

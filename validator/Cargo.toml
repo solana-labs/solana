@@ -16,7 +16,7 @@ clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-fd-lock = "3.0.4"
+fd-lock = "3.0.5"
 indicatif = "0.16.2"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
@@ -58,7 +58,7 @@ symlink = "0.1.0"
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.120"
+libc = "0.2.124"
 signal-hook = "0.3.13"
 
 [package.metadata.docs.rs]

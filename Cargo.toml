@@ -12,6 +12,7 @@ members = [
     "bloom",
     "bucket_map",
     "clap-utils",
+    "clap-v3-utils",
     "cli",
     "cli-config",
     "cli-output",
@@ -86,3 +87,6 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+# This prevents a Travis CI error when building for Windows.
+resolver = "2"

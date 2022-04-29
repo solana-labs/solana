@@ -5,7 +5,7 @@ use {
         ser::{Serialize, Serializer},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -56,6 +56,10 @@ impl VoteAccount {
         self.0.account.lamports()
     }
 
+    pub(crate) fn owner(&self) -> &Pubkey {
+        self.0.account.owner()
+    }
+
     pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
@@ -76,6 +80,10 @@ impl VoteAccount {
 }
 
 impl VoteAccounts {
+    pub(crate) fn len(&self) -> usize {
+        self.vote_accounts.len()
+    }
+
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.staked_nodes_once.call_once(|| {
             let staked_nodes = self
@@ -196,6 +204,12 @@ impl From<AccountSharedData> for VoteAccount {
     }
 }
 
+impl From<VoteAccount> for AccountSharedData {
+    fn from(account: VoteAccount) -> Self {
+        Self::from(account.0.account.clone())
+    }
+}
+
 impl From<Account> for VoteAccount {
     fn from(account: Account) -> Self {
         Self(Arc::new(VoteAccountInner::from(account)))
@@ -224,7 +238,18 @@ impl Default for VoteAccountInner {
 
 impl PartialEq<VoteAccountInner> for VoteAccountInner {
     fn eq(&self, other: &Self) -> bool {
-        self.account == other.account
+        let Self {
+            account,
+            vote_state: _,
+            vote_state_once: _,
+        } = self;
+        account == &other.account
+    }
+}
+
+impl PartialEq<AccountSharedData> for VoteAccount {
+    fn eq(&self, other: &AccountSharedData) -> bool {
+        accounts_equal(&self.0.account, other)
     }
 }
 
@@ -261,7 +286,12 @@ impl Clone for VoteAccounts {
 
 impl PartialEq<VoteAccounts> for VoteAccounts {
     fn eq(&self, other: &Self) -> bool {
-        self.vote_accounts == other.vote_accounts
+        let Self {
+            vote_accounts,
+            staked_nodes: _,
+            staked_nodes_once: _,
+        } = self;
+        vote_accounts == &other.vote_accounts
     }
 }
 

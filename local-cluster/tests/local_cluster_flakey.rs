@@ -147,7 +147,6 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
 
     default_config.fixed_leader_schedule = Some(FixedSchedule {
-        start_epoch: 0,
         leader_schedule: Arc::new(leader_schedule),
     });
     let mut validator_configs =

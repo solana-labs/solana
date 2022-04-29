@@ -207,7 +207,7 @@ let allocateStruct = {
 };
 ```
 
-The above is created using using u32 and ns64 from `@solana/buffer-layout` to facilitate the payload creation. The `allocate` function takes in the parameter `space`. To interact with the function we must provide the data as a Buffer format. The `buffer-layout` library helps with allocating the buffer and encoding it correctly for Rust programs on Solana to interpret.
+The above is created using `u32` and `ns64` from `@solana/buffer-layout` to facilitate the payload creation. The `allocate` function takes in the parameter `space`. To interact with the function we must provide the data as a Buffer format. The `buffer-layout` library helps with allocating the buffer and encoding it correctly for Rust programs on Solana to interpret.
 
 Let's break down this struct.
 

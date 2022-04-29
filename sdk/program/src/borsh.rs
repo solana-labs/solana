@@ -1,5 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
-//! Borsh utils
+//! Utilities for the [borsh] serialization format.
+//!
+//! [borsh]: https://borsh.io/
 use {
     borsh::{
         maybestd::io::{Error, Write},

@@ -100,12 +100,16 @@ export function InstructionCard({
               children
             )}
             {innerCards && innerCards.length > 0 && (
-              <tr>
-                <td colSpan={2}>
-                  Inner Instructions
-                  <div className="inner-cards">{innerCards}</div>
-                </td>
-              </tr>
+              <>
+                <tr className="table-sep">
+                  <td colSpan={3}>Inner Instructions</td>
+                </tr>
+                <tr>
+                  <td colSpan={3}>
+                    <div className="inner-cards">{innerCards}</div>
+                  </td>
+                </tr>
+              </>
             )}
           </tbody>
         </table>

@@ -14,8 +14,8 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = "2.33.0"
 console = "0.15.0"
 csv = "1.1.6"
-ctrlc = { version = "3.2.1", features = ["termination"] }
-indexmap = "1.8.0"
+ctrlc = { version = "3.2.2", features = ["termination"] }
+indexmap = "1.8.1"
 indicatif = "0.16.2"
 pickledb = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
@@ -27,8 +27,8 @@ solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
 solana-version = { path = "../version", version = "=1.11.0" }
-spl-associated-token-account = { version = "=1.0.3" }
-spl-token = { version = "=3.2.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "=1.0.5" }
+spl-token = { version = "=3.3.0", features = ["no-entrypoint"] }
 tempfile = "3.3.0"
 thiserror = "1.0"
 

@@ -65,7 +65,7 @@ mod tests {
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankSlotDelta},
             bank_forks::BankForks,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
             snapshot_archive_info::FullSnapshotArchiveInfo,
             snapshot_config::SnapshotConfig,
             snapshot_package::{
@@ -124,7 +124,15 @@ mod tests {
             let accounts_dir = TempDir::new().unwrap();
             let bank_snapshots_dir = TempDir::new().unwrap();
             let snapshot_archives_dir = TempDir::new().unwrap();
-            let mut genesis_config_info = create_genesis_config(10_000);
+            // validator_stake_lamports should be non-zero otherwise stake
+            // account will not be stored in accounts-db but still cached in
+            // bank stakes which results in mismatch when banks are loaded from
+            // snapshots.
+            let mut genesis_config_info = create_genesis_config_with_leader(
+                10_000,                          // mint_lamports
+                &solana_sdk::pubkey::new_rand(), // validator_pubkey
+                1,                               // validator_stake_lamports
+            );
             genesis_config_info.genesis_config.cluster_type = cluster_type;
             let bank0 = Bank::new_with_paths_for_tests(
                 &genesis_config_info.genesis_config,
@@ -208,11 +216,8 @@ mod tests {
         )
         .unwrap();
 
-        let bank = old_bank_forks
-            .get(deserialized_bank.slot())
-            .unwrap()
-            .clone();
-        assert_eq!(*bank, deserialized_bank);
+        let bank = old_bank_forks.get(deserialized_bank.slot()).unwrap();
+        assert_eq!(bank.as_ref(), &deserialized_bank);
     }
 
     // creates banks up to "last_slot" and runs the input function `f` on each bank created
@@ -241,8 +246,8 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-        let (s, snapshot_request_receiver) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(s));
+        let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -271,7 +276,7 @@ mod tests {
             snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
                 .expect("no bank snapshots found in path");
         let accounts_package = AccountsPackage::new(
-            last_bank,
+            &last_bank,
             &last_bank_snapshot_info,
             bank_snapshots_dir,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
@@ -283,11 +288,13 @@ mod tests {
             Some(SnapshotType::FullSnapshot),
         )
         .unwrap();
-        solana_runtime::serde_snapshot::reserialize_bank(
+        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
             accounts_package.snapshot_links.path(),
             accounts_package.slot,
+            &last_bank.get_accounts_hash(),
         );
-        let snapshot_package = SnapshotPackage::from(accounts_package);
+        let snapshot_package =
+            SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
@@ -360,7 +367,7 @@ mod tests {
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         let storages = bank0.get_snapshot_storages(None);
-        snapshot_utils::add_bank_snapshot(bank_snapshots_dir, bank0, &storages, snapshot_version)
+        snapshot_utils::add_bank_snapshot(bank_snapshots_dir, &bank0, &storages, snapshot_version)
             .unwrap();
 
         // Set up snapshotting channels
@@ -390,7 +397,6 @@ mod tests {
             let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
-            let accounts_hash = bank.update_accounts_hash();
 
             let pending_accounts_package = {
                 if slot == saved_slot as u64 {
@@ -460,7 +466,9 @@ mod tests {
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
                     snapshot_archives_dir,
                     slot,
-                    &accounts_hash,
+                    // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
+                    // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
+                    &Hash::default(),
                     ArchiveFormat::TarBzip2,
                 ));
             }
@@ -509,11 +517,12 @@ mod tests {
                     .unwrap()
                     .take()
                     .unwrap();
-                solana_runtime::serde_snapshot::reserialize_bank(
+                solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                     accounts_package.snapshot_links.path(),
                     accounts_package.slot,
+                    &Hash::default(),
                 );
-                let snapshot_package = SnapshotPackage::from(accounts_package);
+                let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
                 pending_snapshot_package
                     .lock()
                     .unwrap()
@@ -551,7 +560,11 @@ mod tests {
         .unwrap();
 
         // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
-        solana_runtime::serde_snapshot::reserialize_bank(saved_snapshots_dir.path(), saved_slot);
+        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+            saved_snapshots_dir.path(),
+            saved_slot,
+            &Hash::default(),
+        );
 
         snapshot_utils::verify_snapshot_archive(
             saved_archive_path.unwrap(),
@@ -577,7 +590,7 @@ mod tests {
                 Slot::MAX,
             );
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
-            let request_sender = AbsRequestSender::new(Some(snapshot_sender));
+            let request_sender = AbsRequestSender::new(snapshot_sender);
             for _ in 0..num_set_roots {
                 for _ in 0..*add_root_interval {
                     let new_slot = current_bank.slot() + 1;
@@ -672,7 +685,7 @@ mod tests {
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -910,7 +923,7 @@ mod tests {
             bank.set_callback(Some(Box::new(callback.clone())));
         }
 
-        let abs_request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = Some(SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
@@ -956,7 +969,7 @@ mod tests {
             // Make a new bank and perform some transactions
             let bank = {
                 let bank = Bank::new_from_parent(
-                    bank_forks.read().unwrap().get(slot - 1).unwrap(),
+                    &bank_forks.read().unwrap().get(slot - 1).unwrap(),
                     &Pubkey::default(),
                     slot,
                 );
@@ -1019,14 +1032,15 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(deserialized_bank.slot(), LAST_SLOT,);
+        assert_eq!(deserialized_bank.slot(), LAST_SLOT);
         assert_eq!(
-            deserialized_bank,
-            **bank_forks
+            &deserialized_bank,
+            bank_forks
                 .read()
                 .unwrap()
                 .get(deserialized_bank.slot())
                 .unwrap()
+                .as_ref()
         );
 
         // Stop the background services

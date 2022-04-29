@@ -114,7 +114,7 @@ export function PythDetailsCard(props: {
       ix={ix}
       index={index}
       result={result}
-      title={`Pyth: Unknown`}
+      title={`Pyth: Unknown Instruction`}
       innerCards={innerCards}
       childIndex={childIndex}
       defaultRaw

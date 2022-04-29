@@ -66,9 +66,9 @@ struct SigVerifierStats {
 }
 
 impl SigVerifierStats {
-    fn report(&self) {
+    fn report(&self, name: &'static str) {
         datapoint_info!(
-            "sigverify_stage-total_verify_time",
+            name,
             (
                 "recv_batches_us_90pct",
                 self.recv_batches_us_hist.percentile(90.0).unwrap_or(0),
@@ -195,8 +195,9 @@ impl SigVerifyStage {
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
+        name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verified_sender, verifier);
+        let thread_hdl = Self::verifier_services(packet_receiver, verified_sender, verifier, name);
         Self { thread_hdl }
     }
 
@@ -315,6 +316,7 @@ impl SigVerifyStage {
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: &T,
+        name: &'static str,
     ) -> JoinHandle<()> {
         let verifier = verifier.clone();
         let mut stats = SigVerifierStats::default();
@@ -348,7 +350,7 @@ impl SigVerifyStage {
                         }
                     }
                     if last_print.elapsed().as_secs() > 2 {
-                        stats.report();
+                        stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
                     }
@@ -361,8 +363,9 @@ impl SigVerifyStage {
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verified_sender: Sender<Vec<PacketBatch>>,
         verifier: T,
+        name: &'static str,
     ) -> JoinHandle<()> {
-        Self::verifier_service(packet_receiver, verified_sender, &verifier)
+        Self::verifier_service(packet_receiver, verified_sender, &verifier, name)
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -430,7 +433,7 @@ mod tests {
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
         let verifier = TransactionSigVerifier::default();
-        let stage = SigVerifyStage::new(packet_r, verified_s, verifier);
+        let stage = SigVerifyStage::new(packet_r, verified_s, verifier, "test");
 
         let use_same_tx = true;
         let now = Instant::now();

@@ -356,6 +356,7 @@ pub enum CliValidatorsSortOrder {
     SkipRate,
     Stake,
     VoteAccount,
+    Version,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -493,6 +494,22 @@ impl fmt::Display for CliValidators {
             }
             CliValidatorsSortOrder::Stake => {
                 sorted_validators.sort_by_key(|a| a.activated_stake);
+            }
+            CliValidatorsSortOrder::Version => {
+                sorted_validators.sort_by(|a, b| {
+                    use std::cmp::Ordering;
+                    let a_version = semver::Version::parse(a.version.as_str()).ok();
+                    let b_version = semver::Version::parse(b.version.as_str()).ok();
+                    match (a_version, b_version) {
+                        (None, None) => a.version.cmp(&b.version),
+                        (None, Some(_)) => Ordering::Less,
+                        (Some(_), None) => Ordering::Greater,
+                        (Some(va), Some(vb)) => match va.cmp(&vb) {
+                            Ordering::Equal => a.activated_stake.cmp(&b.activated_stake),
+                            ordering => ordering,
+                        },
+                    }
+                });
             }
         }
 
@@ -2300,7 +2317,7 @@ impl fmt::Display for CliBlock {
                     format!(
                         "{}◎{:<14.9}",
                         sign,
-                        lamports_to_sol(reward.lamports.abs() as u64)
+                        lamports_to_sol(reward.lamports.unsigned_abs())
                     ),
                     if reward.post_balance == 0 {
                         "          -                 -".to_string()
@@ -2325,7 +2342,7 @@ impl fmt::Display for CliBlock {
                 f,
                 "Total Rewards: {}◎{:<12.9}",
                 sign,
-                lamports_to_sol(total_rewards.abs() as u64)
+                lamports_to_sol(total_rewards.unsigned_abs())
             )?;
         }
         for (index, transaction_with_meta) in

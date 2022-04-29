@@ -6,9 +6,15 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
-        sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{borrow::Borrow, convert::TryInto, sync::Mutex},
+    std::{
+        borrow::Borrow,
+        convert::TryInto,
+        sync::{
+            atomic::{AtomicU64, AtomicUsize, Ordering},
+            Mutex,
+        },
+    },
 };
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -34,8 +40,15 @@ pub struct CalcAccountsHashConfig<'a> {
     /// does hash calc need to consider account data that exists in the write cache?
     /// if so, 'ancestors' will be used for this purpose as well as storages.
     pub use_write_cache: bool,
-    pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
+}
+
+impl<'a> CalcAccountsHashConfig<'a> {
+    /// return true if we should cache accounts hash intermediate data between calls
+    pub fn get_should_cache_hash_data() -> bool {
+        // when we are skipping rewrites, we cannot rely on the cached data from old append vecs, so we have to disable caching for now
+        false
+    }
 }
 
 // smallest, 3 quartiles, largest, average
@@ -57,6 +70,17 @@ pub struct HashStats {
     pub min_bin_size: usize,
     pub max_bin_size: usize,
     pub storage_size_quartiles: StorageSizeQuartileStats,
+    /// time spent hashing during rehash calls
+    pub rehash_hash_us: AtomicU64,
+    /// time spent determining whether to rehash during rehash calls
+    pub rehash_calc_us: AtomicU64,
+    /// # rehashes that took place and were necessary
+    pub rehash_required: AtomicUsize,
+    /// # rehashes that took place and were UNnecessary
+    pub rehash_unnecessary: AtomicUsize,
+    pub roots_older_than_epoch: AtomicUsize,
+    pub accounts_in_roots_older_than_epoch: AtomicUsize,
+    pub append_vec_sizes_older_than_epoch: AtomicUsize,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -151,6 +175,43 @@ impl HashStats {
                 i64
             ),
             ("total", total_time_us as i64, i64),
+            (
+                "rehashed_rewrites",
+                self.rehash_required.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_hash_us",
+                self.rehash_hash_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_calc_us",
+                self.rehash_calc_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehashed_rewrites_unnecessary",
+                self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_older_than_epoch",
+                self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "append_vec_sizes_older_than_epoch",
+                self.append_vec_sizes_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "accounts_in_roots_older_than_epoch",
+                self.accounts_in_roots_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
+                i64
+            ),
         );
     }
 }

@@ -180,6 +180,11 @@ function PingBarChart({ pingInfo }: { pingInfo: PingRollupInfo }) {
     if (val.submitted === 0) {
       return "#08a274";
     }
+
+    if (val.loss >= 0.25 && val.loss <= 0.5) {
+      return "#FFA500";
+    }
+
     return val.loss > 0.5 ? "#f00" : "#00D192";
   };
   const chartData: Chart.ChartData = {

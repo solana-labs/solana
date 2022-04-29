@@ -36,6 +36,7 @@ import { TokenTransfersCard } from "components/account/history/TokenTransfersCar
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
+import { MetaplexNFTAttributesCard } from "components/account/MetaplexNFTAttributesCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
@@ -69,6 +70,11 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "metadata",
       title: "Metadata",
       path: "/metadata",
+    },
+    {
+      slug: "attributes",
+      title: "Attributes",
+      path: "/attributes",
     },
   ],
   stake: [
@@ -185,14 +191,34 @@ export function AccountHeader({
     );
   }
 
-  if (tokenDetails && isToken) {
+  if (isToken) {
+    let token;
+    let unverified = false;
+
+    if (tokenDetails) {
+      token = tokenDetails;
+    } else {
+      token = {
+        logoURI: data?.nftData?.json?.image,
+        name: data?.nftData?.json?.name,
+      };
+      unverified = true;
+    }
+
     return (
       <div className="row align-items-end">
+        {unverified && (
+          <div className="alert alert-warning alert-scam" role="alert">
+            Warning! Token names and logos are not unique. This token may have
+            spoofed its name and logo to look like another token. Verify the
+            token's mint address to ensure it is correct.
+          </div>
+        )}
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
-            {tokenDetails?.logoURI ? (
+            {token?.logoURI ? (
               <img
-                src={tokenDetails.logoURI}
+                src={token.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
@@ -208,9 +234,7 @@ export function AccountHeader({
 
         <div className="col mb-3 ms-n3 ms-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">
-            {tokenDetails?.name || "Unknown Token"}
-          </h2>
+          <h2 className="header-title">{token?.name || "Unknown Token"}</h2>
         </div>
       </div>
     );
@@ -271,7 +295,7 @@ function DetailsSections({
           account. Please be cautious sending SOL to this account.
         </div>
       )}
-      {<InfoSection account={account} />}
+      <InfoSection account={account} />
       <MoreSection
         account={account}
         tab={moreTab}
@@ -343,6 +367,7 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
+  | "attributes"
   | "domains"
   | "security"
   | "anchor-program"
@@ -400,6 +425,11 @@ function MoreSection({
         )}
       {tab === "metadata" && (
         <MetaplexMetadataCard
+          nftData={(account.details?.data as TokenProgramData).nftData!}
+        />
+      )}
+      {tab === "attributes" && (
+        <MetaplexNFTAttributesCard
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
@@ -517,17 +547,17 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
     ),
   });
 
-  const anchorAccountTab: Tab = {
+  const accountDataTab: Tab = {
     slug: "anchor-account",
-    title: "Anchor Account",
+    title: "Anchor Data",
     path: "/anchor-account",
   };
   tabComponents.push({
-    tab: anchorAccountTab,
+    tab: accountDataTab,
     component: (
-      <React.Suspense key={anchorAccountTab.slug} fallback={<></>}>
-        <AnchorAccountLink
-          tab={anchorAccountTab}
+      <React.Suspense key={accountDataTab.slug} fallback={<></>}>
+        <AccountDataLink
+          tab={accountDataTab}
           address={pubkey.toString()}
           programId={account.details?.owner}
         />
@@ -567,7 +597,7 @@ function AnchorProgramLink({
   );
 }
 
-function AnchorAccountLink({
+function AccountDataLink({
   address,
   tab,
   programId,

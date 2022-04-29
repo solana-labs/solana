@@ -5,7 +5,7 @@ import {
   ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
-import { programLabel } from "utils/tx";
+import { getProgramName } from "utils/tx";
 import { useCluster } from "providers/cluster";
 
 export function UnknownDetailsCard({
@@ -22,8 +22,7 @@ export function UnknownDetailsCard({
   childIndex?: number;
 }) {
   const { cluster } = useCluster();
-  const programName =
-    programLabel(ix.programId.toBase58(), cluster) || "Unknown Program";
+  const programName = getProgramName(ix.programId.toBase58(), cluster);
   return (
     <InstructionCard
       ix={ix}
