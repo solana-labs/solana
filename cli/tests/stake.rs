@@ -1137,7 +1137,7 @@ fn test_stake_split() {
     check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let minimum_stake_balance = rpc_client
+    let stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap()
         + 10_000_000_000;
@@ -1151,7 +1151,7 @@ fn test_stake_split() {
         withdrawer: Some(offline_pubkey),
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(10 * minimum_stake_balance),
+        amount: SpendAmount::Some(10 * stake_balance),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1162,11 +1162,7 @@ fn test_stake_split() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
 
     // Create nonce account
     let minimum_nonce_balance = rpc_client
@@ -1209,7 +1205,7 @@ fn test_stake_split() {
         memo: None,
         split_stake_account: 1,
         seed: None,
-        lamports: 2 * minimum_stake_balance,
+        lamports: 2 * stake_balance,
         fee_payer: 0,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -1232,20 +1228,12 @@ fn test_stake_split() {
         memo: None,
         split_stake_account: 1,
         seed: None,
-        lamports: 2 * minimum_stake_balance,
+        lamports: 2 * stake_balance,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        8 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
-    check_balance!(
-        2 * minimum_stake_balance,
-        &rpc_client,
-        &split_account.pubkey(),
-    );
+    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey,);
+    check_balance!(2 * stake_balance, &rpc_client, &split_account.pubkey(),);
 }
 
 #[test]
@@ -1298,7 +1286,7 @@ fn test_stake_set_lockup() {
     check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let minimum_stake_balance = rpc_client
+    let stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(StakeState::size_of())
         .unwrap()
         + 10_000_000_000;
@@ -1319,7 +1307,7 @@ fn test_stake_set_lockup() {
         withdrawer: Some(config.signers[0].pubkey()),
         withdrawer_signer: None,
         lockup,
-        amount: SpendAmount::Some(10 * minimum_stake_balance),
+        amount: SpendAmount::Some(10 * stake_balance),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1330,16 +1318,8 @@ fn test_stake_set_lockup() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
 
     // Online set lockup
     let lockup = LockupArgs {
