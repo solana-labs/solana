@@ -5,13 +5,13 @@ use {
         udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
-    lru::LruCache,
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
+        collections::HashMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -158,7 +158,7 @@ impl ConnectionCacheStats {
 }
 
 struct ConnectionMap {
-    map: LruCache<SocketAddr, Connection>,
+    map: HashMap<SocketAddr, Connection>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
@@ -167,7 +167,7 @@ struct ConnectionMap {
 impl ConnectionMap {
     pub fn new() -> Self {
         Self {
-            map: LruCache::new(MAX_CONNECTIONS),
+            map: HashMap::with_capacity(MAX_CONNECTIONS),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             use_quic: false,
@@ -202,7 +202,7 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
             .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
 
         let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
-        let (connection, hit, connection_cache_stats, maybe_stats) = match map.map.peek(addr) {
+        let (connection, hit, connection_cache_stats, maybe_stats) = match map.map.get(addr) {
             Some(connection) => {
                 let mut stats = None;
                 // update connection stats
@@ -226,7 +226,7 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
                 drop(map);
 
                 let mut map = (*CONNECTION_MAP).write().unwrap();
-                map.map.put(*addr, connection.clone());
+                map.map.insert(*addr, connection.clone());
                 (connection, false, map.stats.clone(), None)
             }
         };
@@ -456,7 +456,7 @@ mod tests {
         {
             let map = (*CONNECTION_MAP).read().unwrap();
             addrs.iter().for_each(|a| {
-                let conn = map.map.peek(a).expect("Address not found");
+                let conn = map.map.get(a).expect("Address not found");
                 assert!(a.ip() == ip(conn.clone()));
             });
 
