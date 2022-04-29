@@ -69,14 +69,13 @@ parent. If an invoked program consumes the budget or exceeds a bound, the entire
 invocation chain and the parent are halted.
 
 The current [compute
-budget](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L102)
-can be found in the Solana SDK.
+budget](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/program-runtime/src/compute_budget.rs)
+can be found in the Solana Program Runtime.
 
 For example, if the current budget is:
 
 ```rust
 max_units: 200,000,
-log_units: 100,
 log_u64_units: 100,
 create_program address units: 1500,
 invoke_units: 1000,
@@ -90,7 +89,6 @@ log_pubkey_units: 100,
 Then the program
 
 - Could execute 200,000 BPF instructions, if it does nothing else.
-- Could log 2,000 log messages.
 - Cannot exceed 4k of stack usage.
 - Cannot exceed a BPF call depth of 64.
 - Cannot exceed 4 levels of cross-program invocations.
@@ -115,21 +113,24 @@ Budget](#compute-budget).
 
 With a transaction-wide compute budget the `max_units` cap is applied to the
 entire transaction rather than to each instruction within the transaction. The
-default number of maximum units remains at 200k which means the sum of the
+default number of maximum units will be 1.4M which means the sum of the
 compute units used by each instruction in the transaction must not exceed that
-value. The number of maximum units allows is intentionally kept small to
-facilitate optimized programs and form the bases for a minimum fee level.
+value. The default number of maximum units allows is intentionally kept large to
+avoid breaking existing client behavior.
 
-There are a lot of uses cases that require more than 200k units
-transaction-wide. To enable these uses cases transactions can include a
-[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/0224a8b127ace4c6453dd6492a38c66cb999abd2/sdk/src/compute_budget.rs#L44)
-requesting a higher compute unit cap. Higher compute caps will be charged
-higher fees.
+### Reduce transaction fees
+
+_Note: At the time of writing, transaction fees are still charged by the number of
+signatures but will eventually be calculated from requested compute unit cap._
+
+Most transactions won't use the default number of compute units so they can include a
+[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39)
+to lower the compute unit cap. **Important: Lower compute caps will be charged lower fees.**
 
 Compute Budget instructions don't require any accounts and must lie in the first
 3 instructions of a transaction otherwise they will be ignored.
 
-The `ComputeBudgetInstruction::request_units` function can be used to crate
+The `ComputeBudgetInstruction::request_units` function can be used to create
 these instructions:
 
 ```rust
