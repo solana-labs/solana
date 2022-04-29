@@ -1304,7 +1304,7 @@ impl JsonRpcRequestProcessor {
         signatures: Vec<Signature>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
-        println!("get_signature_statuses 1 {} {}", process::id(), thread::current().id());
+        println!("get_signature_statuses 1 {} {:?}", process::id(), thread::current().id());
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
         let search_transaction_history = config
