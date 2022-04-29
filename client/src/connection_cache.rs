@@ -472,8 +472,8 @@ mod tests {
         get_connection(&addrs[0]);
         get_connection(&get_addr(&mut rng));
 
-        let map = (*CONNECTION_MAP).lock().unwrap();
-        assert!(map.map.peek(&addrs[0]).is_some());
-        assert!(map.map.peek(&addrs[1]).is_none());
+        let map = (*CONNECTION_MAP).read().unwrap();
+        assert!(map.map.get(&addrs[0]).is_some());
+        assert!(map.map.get(&addrs[1]).is_none());
     }
 }
