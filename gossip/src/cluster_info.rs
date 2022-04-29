@@ -97,6 +97,9 @@ use {
     },
 };
 
+use std::process;
+use std::thread;
+
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
 /// milliseconds we sleep for between gossip requests
