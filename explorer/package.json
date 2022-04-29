@@ -12,7 +12,7 @@
     "@project-serum/anchor": "0.23.0",
     "@project-serum/serum": "^0.13.61",
     "@react-hook/debounce": "^4.0.0",
-    "@sentry/react": "^6.16.1",
+    "@sentry/react": "^6.19.7",
     "@solana/buffer-layout": "^3.0.0",
     "@solana/spl-token-registry": "^0.2.1143",
     "@solana/web3.js": "^1.41.0",
