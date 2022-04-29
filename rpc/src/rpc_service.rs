@@ -296,8 +296,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
 fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<String> {
     match path {
         "/v0/circulating-supply" => {
-            let r_bank_forks = bank_forks.read().unwrap();
-            let bank = r_bank_forks.root_bank();
+            let bank = bank_forks.read().unwrap().root_bank();
             let total_supply = bank.capitalization();
             let non_circulating_supply =
                 solana_runtime::non_circulating_supply::calculate_non_circulating_supply(&bank)
@@ -309,8 +308,7 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
             ))
         }
         "/v0/total-supply" => {
-            let r_bank_forks = bank_forks.read().unwrap();
-            let bank = r_bank_forks.root_bank();
+            let bank = bank_forks.read().unwrap().root_bank();
             let total_supply = bank.capitalization();
             Some(format!("{}", lamports_to_sol(total_supply)))
         }
