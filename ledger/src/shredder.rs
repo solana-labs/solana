@@ -1,11 +1,13 @@
 use {
     crate::{
-        erasure::Session,
         shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD},
         shred_stats::ProcessShredsStats,
     },
     rayon::{prelude::*, ThreadPool},
-    reed_solomon_erasure::Error::{InvalidIndex, TooFewDataShards, TooFewShardsPresent},
+    reed_solomon_erasure::{
+        galois_8::Field,
+        Error::{InvalidIndex, TooFewDataShards, TooFewShardsPresent},
+    },
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
@@ -18,6 +20,8 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .thread_name(|ix| format!("shredder_{}", ix))
                     .build()
                     .unwrap()));
+
+type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
 #[derive(Debug)]
 pub struct Shredder {
@@ -235,9 +239,9 @@ impl Shredder {
         let data = data.iter().map(Shred::erasure_shard_as_slice);
         let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
         let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
-        Session::new(num_data, num_coding)
+        ReedSolomon::new(num_data, num_coding)
             .unwrap()
-            .encode(&data, &mut parity[..])
+            .encode_sep(&data, &mut parity[..])
             .unwrap();
         let num_data = u16::try_from(num_data).unwrap();
         let num_coding = u16::try_from(num_coding).unwrap();
@@ -300,7 +304,7 @@ impl Shredder {
                 mask[index] = true;
             }
         }
-        Session::new(num_data_shreds, num_coding_shreds)?.decode_blocks(&mut shards)?;
+        ReedSolomon::new(num_data_shreds, num_coding_shreds)?.reconstruct_data(&mut shards)?;
         let recovered_data = mask
             .into_iter()
             .zip(shards)
