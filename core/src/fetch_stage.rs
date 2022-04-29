@@ -101,11 +101,11 @@ impl FetchStage {
             }
         }
 
-        if poh_recorder
+        let would_be_leader = poh_recorder
             .lock()
             .unwrap()
-            .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET.saturating_mul(DEFAULT_TICKS_PER_SLOT))
-        {
+            .would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET.saturating_mul(DEFAULT_TICKS_PER_SLOT));
+        if would_be_leader {
             inc_new_counter_debug!("fetch_stage-honor_forwards", num_packets);
             for packet_batch in packet_batches {
                 #[allow(clippy::question_mark)]
