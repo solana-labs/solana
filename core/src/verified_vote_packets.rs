@@ -134,6 +134,7 @@ pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (PacketBatch, Signature)>
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);
 
 use std::process;
+use std::thread;
 
 impl VerifiedVotePackets {
     pub fn receive_and_process_vote_packets(
@@ -141,7 +142,7 @@ impl VerifiedVotePackets {
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         would_be_leader: bool,
     ) -> Result<()> {
-        println!("receive_and_process_vote_packets {}", process::id());
+        println!("receive_and_process_vote_packets {} {:?}", process::id(), thread::current().id());
         const RECV_TIMEOUT: Duration = Duration::from_millis(200);
         let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
         let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
