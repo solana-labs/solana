@@ -1,5 +1,6 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
@@ -9,7 +10,6 @@ use {
     solana_sdk::timing::timestamp,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        cell::RefCell,
         collections::HashMap,
         net::IpAddr,
         sync::{Arc, RwLock},
@@ -20,11 +20,13 @@ use {
 
 const IP_TO_STAKE_REFRESH_DURATION: Duration = Duration::from_secs(5);
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
-                    .build()
-                    .unwrap()));
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub type FindPacketSenderStakeSender = Sender<Vec<PacketBatch>>;
 pub type FindPacketSenderStakeReceiver = Receiver<Vec<PacketBatch>>;
@@ -166,16 +168,14 @@ impl FindPacketSenderStakeStage {
     }
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .flat_map(|batch| batch.packets.par_iter_mut())
-                    .for_each(|packet| {
-                        packet.meta.sender_stake =
-                            *ip_to_stake.get(&packet.meta.addr().ip()).unwrap_or(&0);
-                    });
-            })
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .flat_map(|batch| batch.packets.par_iter_mut())
+                .for_each(|packet| {
+                    packet.meta.sender_stake =
+                        *ip_to_stake.get(&packet.meta.addr().ip()).unwrap_or(&0);
+                });
         });
     }
 

@@ -5,6 +5,7 @@ use {
         },
         shred_stats::ProcessShredsStats,
     },
+    lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
     reed_solomon_erasure::{
         galois_8::Field,
@@ -14,14 +15,16 @@ use {
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{clock::Slot, signature::Keypair},
-    std::{cell::RefCell, fmt::Debug},
+    std::fmt::Debug,
 };
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("shredder_{}", ix))
-                    .build()
-                    .unwrap()));
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("shredder_{}", ix))
+        .build()
+        .unwrap();
+}
 
 type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
@@ -138,17 +141,15 @@ impl Shredder {
             shred.sign(keypair);
             shred
         };
-        let data_shreds: Vec<Shred> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                serialized_shreds
-                    .par_chunks(payload_capacity)
-                    .enumerate()
-                    .map(|(i, shred_data)| {
-                        let shred_index = next_shred_index + i as u32;
-                        make_data_shred(shred_index, shred_data)
-                    })
-                    .collect()
-            })
+        let data_shreds: Vec<Shred> = PAR_THREAD_POOL.install(|| {
+            serialized_shreds
+                .par_chunks(payload_capacity)
+                .enumerate()
+                .map(|(i, shred_data)| {
+                    let shred_index = next_shred_index + i as u32;
+                    make_data_shred(shred_index, shred_data)
+                })
+                .collect()
         });
         gen_data_time.stop();
 
@@ -170,43 +171,39 @@ impl Shredder {
         }
         let mut gen_coding_time = Measure::start("gen_coding_shreds");
         // 1) Generate coding shreds
-        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                data_shreds
-                    .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-                    .enumerate()
-                    .flat_map(|(i, shred_data_batch)| {
-                        // Assumption here is that, for now, each fec block has
-                        // as many coding shreds as data shreds (except for the
-                        // last one in the slot).
-                        // TODO: tie this more closely with
-                        // generate_coding_shreds.
-                        let next_code_index = next_code_index
-                            .checked_add(
-                                u32::try_from(i)
-                                    .unwrap()
-                                    .checked_mul(MAX_DATA_SHREDS_PER_FEC_BLOCK)
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        Shredder::generate_coding_shreds(
-                            shred_data_batch,
-                            is_last_in_slot,
-                            next_code_index,
+        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.install(|| {
+            data_shreds
+                .par_chunks(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
+                .enumerate()
+                .flat_map(|(i, shred_data_batch)| {
+                    // Assumption here is that, for now, each fec block has
+                    // as many coding shreds as data shreds (except for the
+                    // last one in the slot).
+                    // TODO: tie this more closely with
+                    // generate_coding_shreds.
+                    let next_code_index = next_code_index
+                        .checked_add(
+                            u32::try_from(i)
+                                .unwrap()
+                                .checked_mul(MAX_DATA_SHREDS_PER_FEC_BLOCK)
+                                .unwrap(),
                         )
-                    })
-                    .collect()
-            })
+                        .unwrap();
+                    Shredder::generate_coding_shreds(
+                        shred_data_batch,
+                        is_last_in_slot,
+                        next_code_index,
+                    )
+                })
+                .collect()
         });
         gen_coding_time.stop();
 
         let mut sign_coding_time = Measure::start("sign_coding_shreds");
         // 2) Sign coding shreds
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                coding_shreds.par_iter_mut().for_each(|coding_shred| {
-                    coding_shred.sign(keypair);
-                })
+        PAR_THREAD_POOL.install(|| {
+            coding_shreds.par_iter_mut().for_each(|coding_shred| {
+                coding_shred.sign(keypair);
             })
         });
         sign_coding_time.stop();
