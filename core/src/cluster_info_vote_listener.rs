@@ -365,7 +365,8 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                if let Some(current_working_bank) = poh_recorder.lock().unwrap().bank() {
+                let current_working_bank = poh_recorder.lock().unwrap().bank();
+                if let Some(current_working_bank) = current_working_bank {
                     Self::check_for_leader_bank_and_send_votes(
                         &mut bank_vote_sender_state_option,
                         current_working_bank,
@@ -1357,7 +1358,7 @@ mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let vote_tracker = VoteTracker::default();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
@@ -1468,7 +1469,7 @@ mod tests {
         let vote_tracker = VoteTracker::default();
         let exit = Arc::new(AtomicBool::new(false));
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank = bank_forks.read().unwrap().get(0).unwrap();
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
