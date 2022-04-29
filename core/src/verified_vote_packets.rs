@@ -14,7 +14,7 @@ use {
 };
 
 const MAX_VOTES_PER_VALIDATOR: usize = 1000;
-
+#[derive(Debug)]
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
     pub vote: VoteTransaction,
