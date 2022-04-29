@@ -638,12 +638,11 @@ impl Blockstore {
         let data_type = match prev_inserted_shreds
             .values()
             .next()
-            .unwrap()
-            .shred_type()
-            .version()
+            .map(|s| s.shred_type().version())
         {
-            ShredCommonHeaderVersion::V1 => ShredType::DataV1,
-            ShredCommonHeaderVersion::V2 => ShredType::DataV2,
+            Some(ShredCommonHeaderVersion::V1) => ShredType::DataV1,
+            Some(ShredCommonHeaderVersion::V2) => ShredType::DataV2,
+            None => ShredType::DataV1, // TODO MERKLE
         };
         erasure_meta.data_shreds_indices().filter_map(move |i| {
             let key = ShredId::new(slot, u32::try_from(i).unwrap(), data_type);
@@ -673,12 +672,11 @@ impl Blockstore {
         let code_type = match prev_inserted_shreds
             .values()
             .next()
-            .unwrap()
-            .shred_type()
-            .version()
+            .map(|s| s.shred_type().version())
         {
-            ShredCommonHeaderVersion::V1 => ShredType::CodeV1,
-            ShredCommonHeaderVersion::V2 => ShredType::CodeV2,
+            Some(ShredCommonHeaderVersion::V1) => ShredType::CodeV1,
+            Some(ShredCommonHeaderVersion::V2) => ShredType::CodeV2,
+            None => ShredType::CodeV1, // TODO MERKLE
         };
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
             let key = ShredId::new(slot, u32::try_from(i).unwrap(), code_type);
@@ -1442,6 +1440,10 @@ impl Blockstore {
         slot: Slot,
         index: u64,
     ) -> Cow<'a, Vec<u8>> {
+        // TODO MERKLE
+        if just_inserted_shreds.is_empty() {
+            return Cow::Owned(self.get_data_shred(slot, index).unwrap().unwrap());
+        }
         let data_type = match just_inserted_shreds
             .values()
             .next()
@@ -1452,6 +1454,7 @@ impl Blockstore {
             ShredCommonHeaderVersion::V1 => ShredType::DataV1,
             ShredCommonHeaderVersion::V2 => ShredType::DataV2,
         };
+        // END TODO MERKLE
         let key = ShredId::new(slot, u32::try_from(index).unwrap(), data_type);
         if let Some(shred) = just_inserted_shreds.get(&key) {
             Cow::Borrowed(shred.payload())
