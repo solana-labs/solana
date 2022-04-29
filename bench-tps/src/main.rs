@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
+    clap::value_t,
     log::*,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_keypairs},
@@ -100,41 +101,60 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-            let nodes = discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
-                .unwrap_or_else(|err| {
-                    eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+            let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
+                let rpc = rpc_addr.parse().unwrap_or_else(|e| {
+                    eprintln!("RPC address should parse as socketaddr {:?}", e);
                     exit(1);
                 });
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
-            let client = if *multi_client {
-                let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
-                if nodes.len() < num_clients {
-                    eprintln!(
-                        "Error: Insufficient nodes discovered.  Expecting {} or more",
-                        num_nodes
-                    );
-                    exit(1);
-                }
-                Arc::new(client)
-            } else if let Some(target_node) = target_node {
-                info!("Searching for target_node: {:?}", target_node);
-                let mut target_client = None;
-                for node in nodes {
-                    if node.id == *target_node {
-                        target_client =
-                            Some(Arc::new(get_client(&[node], &SocketAddrSpace::Unspecified)));
-                        break;
-                    }
-                }
-                target_client.unwrap_or_else(|| {
-                    eprintln!("Target node {} not found", target_node);
-                    exit(1);
-                })
+                let tpu = value_t!(matches, "tpu_addr", String)
+                    .unwrap()
+                    .parse()
+                    .unwrap_or_else(|e| {
+                        eprintln!("TPU address should parse to a socket: {:?}", e);
+                        exit(1);
+                    });
+
+                solana_client::thin_client::create_client(rpc, tpu)
             } else {
-                Arc::new(get_client(&nodes, &SocketAddrSpace::Unspecified))
+                let nodes =
+                    discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
+                        .unwrap_or_else(|err| {
+                            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
+                            exit(1);
+                        });
+                if *use_quic {
+                    connection_cache::set_use_quic(true);
+                }
+                if *multi_client {
+                    let (client, num_clients) =
+                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
+                    if nodes.len() < num_clients {
+                        eprintln!(
+                            "Error: Insufficient nodes discovered.  Expecting {} or more",
+                            num_nodes
+                        );
+                        exit(1);
+                    }
+                    client
+                } else if let Some(target_node) = target_node {
+                    info!("Searching for target_node: {:?}", target_node);
+                    let mut target_client = None;
+                    for node in nodes {
+                        if node.id == *target_node {
+                            target_client =
+                                Some(get_client(&[node], &SocketAddrSpace::Unspecified));
+                            break;
+                        }
+                    }
+                    target_client.unwrap_or_else(|| {
+                        eprintln!("Target node {} not found", target_node);
+                        exit(1);
+                    })
+                } else {
+                    get_client(&nodes, &SocketAddrSpace::Unspecified)
+                }
             };
+            let client = Arc::new(client);
             let keypairs = get_keypairs(
                 client.clone(),
                 id,
