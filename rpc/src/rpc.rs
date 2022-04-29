@@ -107,6 +107,7 @@ use {
 };
 
 use std::process;
+use std::thread;
 
 type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
@@ -1303,7 +1304,7 @@ impl JsonRpcRequestProcessor {
         signatures: Vec<Signature>,
         config: Option<RpcSignatureStatusConfig>,
     ) -> Result<RpcResponse<Vec<Option<TransactionStatus>>>> {
-        println!("get_signature_statuses 1 {}", process::id());
+        println!("get_signature_statuses 1 {} {}", process::id(), thread::current().id());
         let mut statuses: Vec<Option<TransactionStatus>> = vec![];
 
         let search_transaction_history = config

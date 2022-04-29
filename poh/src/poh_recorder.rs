@@ -40,6 +40,7 @@ use {
 };
 
 use std::process;
+use std::thread;
 
 pub const GRACE_TICKS_FACTOR: u64 = 2;
 pub const MAX_GRACE_SLOTS: u64 = 2;
@@ -131,7 +132,7 @@ impl TransactionRecorder {
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
     ) -> Result<()> {
-        println!("record function: bank_slot={} {:?}",bank_slot,transactions);
+        println!("record function: bank_slot={} {:#?}",bank_slot,transactions);
         // create a new channel so that there is only 1 sender and when it goes out of scope, the receiver fails
         let (result_sender, result_receiver) = unbounded();
         let res =
@@ -759,7 +760,7 @@ impl PohRecorder {
         self.report_metrics_us += report_metrics_time.as_us();
 
         loop {
-            println!("record loop {}", process::id());
+            println!("record loop {} {}", process::id(), thread::current().id());
             let (flush_cache_res, flush_cache_time) =
                 Measure::this(|_| self.flush_cache(false), (), "flush_cache");
             self.flush_cache_no_tick_us += flush_cache_time.as_us();
