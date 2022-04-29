@@ -143,7 +143,6 @@ impl VerifiedVotePackets {
     ) -> Result<()> {
         println!("receive_and_process_vote_packets {}", process::id());
         const RECV_TIMEOUT: Duration = Duration::from_millis(200);
-        println!("{:?}",vote_packets_receiver.flavor);
         let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
         let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
         for gossip_votes in vote_packets {
