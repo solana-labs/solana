@@ -1349,6 +1349,14 @@ pub struct NewBankOptions {
     pub vote_only_bank: bool,
 }
 
+#[derive(Debug)]
+struct PrevEpochInflationRewards {
+    validator_rewards: u64,
+    prev_epoch_duration_in_years: f64,
+    validator_rate: f64,
+    foundation_rate: f64,
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -2602,11 +2610,11 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    fn inflation_info_during_epoch(
+    fn calculate_previous_epoch_inflation_rewards(
         &self,
-        capitalization: u64,
-        epoch: Epoch,
-    ) -> (u64, f64, f64, f64) {
+        prev_epoch_capitalization: u64,
+        prev_epoch: Epoch,
+    ) -> PrevEpochInflationRewards {
         let slot_in_year = self.slot_in_year_for_inflation();
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
@@ -2616,14 +2624,16 @@ impl Bank {
             )
         };
 
-        let epoch_duration_in_years = self.epoch_duration_in_years(epoch);
+        let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
+        let validator_rewards = 
+            (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64;
 
-        (
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64,
-            epoch_duration_in_years,
+        PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
             validator_rate,
             foundation_rate,
-        )
+        }
     }
 
     // update rewards based on the previous epoch
@@ -2635,8 +2645,8 @@ impl Bank {
         metrics: &mut RewardsMetrics,
     ) {
         let capitalization = self.capitalization();
-        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate) =
-            self.inflation_info_during_epoch(capitalization, prev_epoch);
+        let PrevEpochInflationRewards{validator_rewards, prev_epoch_duration_in_years, validator_rate, foundation_rate} =
+            self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -2698,7 +2708,7 @@ impl Bank {
             ("epoch", prev_epoch, i64),
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
-            ("epoch_duration_in_years", epoch_duration_in_years, f64),
+            ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
@@ -9272,8 +9282,9 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-        let (validator_rewards, _, _, _) =
-            bank1.inflation_info_during_epoch(bank0.capitalization(), bank0.epoch());
+
+        let PrevEpochInflationRewards{validator_rewards, ..} =
+            bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
