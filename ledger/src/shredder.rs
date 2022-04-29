@@ -232,7 +232,7 @@ impl Shredder {
         } else {
             num_data
         };
-        let data = data.iter().map(Shred::erasure_block_as_slice);
+        let data = data.iter().map(Shred::erasure_shard_as_slice);
         let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
         let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
         Session::new(num_data, num_coding)
@@ -289,27 +289,27 @@ impl Shredder {
         }
         // Mask to exclude data shreds already received from the return value.
         let mut mask = vec![false; num_data_shreds];
-        let mut blocks = vec![None; fec_set_size];
+        let mut shards = vec![None; fec_set_size];
         for shred in shreds {
-            let index = match shred.erasure_block_index() {
+            let index = match shred.erasure_shard_index() {
                 Some(index) if index < fec_set_size => index,
                 _ => return Err(Error::from(InvalidIndex)),
             };
-            blocks[index] = Some(shred.erasure_block()?);
+            shards[index] = Some(shred.erasure_shard()?);
             if index < num_data_shreds {
                 mask[index] = true;
             }
         }
-        Session::new(num_data_shreds, num_coding_shreds)?.decode_blocks(&mut blocks)?;
+        Session::new(num_data_shreds, num_coding_shreds)?.decode_blocks(&mut shards)?;
         let recovered_data = mask
             .into_iter()
-            .zip(blocks)
+            .zip(shards)
             .filter(|(mask, _)| !mask)
-            .filter_map(|(_, block)| Shred::new_from_serialized_shred(block?).ok())
+            .filter_map(|(_, shard)| Shred::new_from_serialized_shred(shard?).ok())
             .filter(|shred| {
                 shred.slot() == slot
                     && shred.is_data()
-                    && match shred.erasure_block_index() {
+                    && match shred.erasure_shard_index() {
                         Some(index) => index < num_data_shreds,
                         None => false,
                     }
