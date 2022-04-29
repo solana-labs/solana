@@ -2625,7 +2625,7 @@ impl Bank {
         };
 
         let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
-        let validator_rewards = 
+        let validator_rewards =
             (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64;
 
         PrevEpochInflationRewards {
@@ -9283,6 +9283,7 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
+        // this assumes that no new builtins or precompiles were activated in bank1
         let PrevEpochInflationRewards{validator_rewards, ..} =
             bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
