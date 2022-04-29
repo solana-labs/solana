@@ -15,7 +15,7 @@ use {
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
-    solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey},
+    solana_sdk::{epoch_schedule::EpochSchedule, genesis_config::ClusterType, pubkey::Pubkey},
     std::{env, fs, path::PathBuf},
 };
 
@@ -118,10 +118,13 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results =
-                accounts
-                    .accounts_db
-                    .update_accounts_hash(0, &ancestors, &RentCollector::default());
+            let epoch_schedule = EpochSchedule::default();
+            let results = accounts.accounts_db.update_accounts_hash(
+                0,
+                &ancestors,
+                &RentCollector::default(),
+                &epoch_schedule,
+            );
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
@@ -132,6 +135,7 @@ fn main() {
                 None,
                 false,
                 &RentCollector::default(),
+                &epoch_schedule,
                 false,
             );
             time_store.stop();

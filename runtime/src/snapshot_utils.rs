@@ -3454,6 +3454,7 @@ mod tests {
                 snapshot_type,
                 accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
                 rent_collector: crate::rent_collector::RentCollector::default(),
+                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
             }
         }
 

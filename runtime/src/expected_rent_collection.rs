@@ -272,6 +272,7 @@ impl ExpectedRentCollection {
         storage_slot: &SlotInfoInEpoch,
         bank_slot: &SlotInfoInEpoch,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
     ) {
@@ -280,6 +281,7 @@ impl ExpectedRentCollection {
             storage_slot,
             bank_slot,
             rent_collector,
+            epoch_schedule,
             pubkey,
             rewrites_skipped_this_slot,
         );
@@ -297,11 +299,12 @@ impl ExpectedRentCollection {
         storage_slot: &SlotInfoInEpoch,
         bank_slot: &SlotInfoInEpoch,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
     ) -> Option<Epoch> {
         if let RentResult::CollectRent((next_epoch, rent_due)) =
-            rent_collector.calculate_rent_result(pubkey, account, None)
+            rent_collector.calculate_rent_result(pubkey, account, epoch_schedule, None)
         {
             if rent_due != 0 {
                 // rent is due on this account in this epoch, so we did not skip a rewrite
@@ -309,10 +312,10 @@ impl ExpectedRentCollection {
             }
 
             // grab epoch infno for bank slot and storage slot
-            let bank_info = bank_slot.get_epoch_info(&rent_collector.epoch_schedule);
+            let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
                 (bank_info.epoch, bank_info.partition_index);
-            let storage_info = storage_slot.get_epoch_info(&rent_collector.epoch_schedule);
+            let storage_info = storage_slot.get_epoch_info(epoch_schedule);
             let (storage_epoch, storage_slot_partition) =
                 (storage_info.epoch, storage_info.partition_index);
             let partition_from_pubkey =
@@ -387,6 +390,7 @@ impl ExpectedRentCollection {
         pubkey: &Pubkey,
         storage_slot: Slot,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         stats: &HashStats,
         max_slot_in_storages_inclusive: Slot,
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
@@ -399,6 +403,7 @@ impl ExpectedRentCollection {
             loaded_account,
             storage_slot,
             rent_collector,
+            epoch_schedule,
             max_slot_in_storages_inclusive,
             find_unskipped_slot,
             filler_account_suffix,
@@ -443,19 +448,17 @@ impl ExpectedRentCollection {
         loaded_account: &impl ReadableAccount,
         storage_slot: Slot,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         max_slot_in_storages_inclusive: Slot,
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Self> {
-        let slots_per_epoch = rent_collector
-            .epoch_schedule
-            .get_slots_in_epoch(rent_collector.epoch);
+        let slots_per_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
 
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
-        let (epoch_of_max_storage_slot, partition_index_from_max_slot) = rent_collector
-            .epoch_schedule
-            .get_epoch_and_slot_index(max_slot_in_storages_inclusive);
+        let (epoch_of_max_storage_slot, partition_index_from_max_slot) =
+            epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages_inclusive);
 
         // now, we have to find the root that is >= the slot where this pubkey's rent would have been collected
         let first_slot_in_max_epoch =
@@ -498,8 +501,12 @@ impl ExpectedRentCollection {
 
         // ask the rent collector what rent should be collected.
         // Rent collector knows the current epoch.
-        let rent_result =
-            rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
+        let rent_result = rent_collector.calculate_rent_result(
+            pubkey,
+            loaded_account,
+            epoch_schedule,
+            filler_account_suffix,
+        );
         let current_rent_epoch = loaded_account.rent_epoch();
         let new_rent_epoch = match rent_result {
             RentResult::CollectRent((mut next_epoch, rent_due)) => {
@@ -566,12 +573,8 @@ pub mod tests {
             epoch_schedule.get_epoch_and_slot_index(storage_slot)
         );
         let genesis_config = GenesisConfig::default();
-        let mut rent_collector = RentCollector::new(
-            epoch,
-            &epoch_schedule,
-            genesis_config.slots_per_year(),
-            &genesis_config.rent,
-        );
+        let mut rent_collector =
+            RentCollector::new(epoch, genesis_config.slots_per_year(), &genesis_config.rent);
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
         let find_unskipped_slot = Some;
         // slot in current epoch
@@ -580,6 +583,7 @@ pub mod tests {
             &account,
             storage_slot,
             &rent_collector,
+            &epoch_schedule,
             max_slot_in_storages_inclusive,
             find_unskipped_slot,
             None,
@@ -607,6 +611,7 @@ pub mod tests {
             &account,
             storage_slot,
             &rent_collector,
+            &epoch_schedule,
             max_slot_in_storages_inclusive,
             find_unskipped_slot,
             None,
@@ -631,6 +636,7 @@ pub mod tests {
                 &account,
                 expected_rent_collection_slot_max_epoch,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -658,6 +664,7 @@ pub mod tests {
                 &account,
                 expected_rent_collection_slot_max_epoch + if greater { 1 } else { 0 },
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -683,6 +690,7 @@ pub mod tests {
                 &account,
                 expected_rent_collection_slot_max_epoch,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive + if previous_epoch { slots_per_epoch } else { 0 },
                 find_unskipped_slot,
                 None,
@@ -716,6 +724,7 @@ pub mod tests {
                 &account,
                 expected_rent_collection_slot_max_epoch,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -755,6 +764,7 @@ pub mod tests {
                     &account,
                     storage_slot,
                     &rent_collector,
+                    &epoch_schedule,
                     max_slot_in_storages_inclusive,
                     find_unskipped_slot,
                     None,
@@ -804,6 +814,7 @@ pub mod tests {
                 &account,
                 storage_slot,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -846,6 +857,7 @@ pub mod tests {
                 &account,
                 storage_slot,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -878,6 +890,7 @@ pub mod tests {
                 &account,
                 storage_slot,
                 &rent_collector,
+                &epoch_schedule,
                 max_slot_in_storages_inclusive,
                 find_unskipped_slot,
                 None,
@@ -926,12 +939,8 @@ pub mod tests {
             epoch_schedule.get_epoch_and_slot_index(storage_slot)
         );
         let genesis_config = GenesisConfig::default();
-        let mut rent_collector = RentCollector::new(
-            epoch,
-            &epoch_schedule,
-            genesis_config.slots_per_year(),
-            &genesis_config.rent,
-        );
+        let mut rent_collector =
+            RentCollector::new(epoch, genesis_config.slots_per_year(), &genesis_config.rent);
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
 
         assert_eq!(
@@ -1005,6 +1014,7 @@ pub mod tests {
                         &account,
                         storage_slot,
                         &rent_collector,
+                        &epoch_schedule,
                         max_slot_in_storages_inclusive,
                         find_unskipped_slot,
                         None,
@@ -1038,6 +1048,7 @@ pub mod tests {
                             &account,
                             storage_slot,
                             &rent_collector,
+                            &epoch_schedule,
                             max_slot_in_storages_inclusive,
                             find_unskipped_slot,
                             // treat this pubkey like a filler account so we get a 'LeaveAloneNoRent' result
@@ -1068,6 +1079,7 @@ pub mod tests {
                         &pubkey,
                         storage_slot,
                         &rent_collector,
+                        &epoch_schedule,
                         &HashStats::default(),
                         max_slot_in_storages_inclusive,
                         find_unskipped_slot,
@@ -1114,12 +1126,8 @@ pub mod tests {
             epoch_schedule.get_epoch_and_slot_index(storage_slot)
         );
         let genesis_config = GenesisConfig::default();
-        let mut rent_collector = RentCollector::new(
-            epoch,
-            &epoch_schedule,
-            genesis_config.slots_per_year(),
-            &genesis_config.rent,
-        );
+        let mut rent_collector =
+            RentCollector::new(epoch, genesis_config.slots_per_year(), &genesis_config.rent);
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
 
         assert_eq!(
@@ -1225,6 +1233,7 @@ pub mod tests {
                                 &get_slot_info(storage_slot),
                                 &get_slot_info(bank_slot),
                                 &rent_collector,
+                                &epoch_schedule,
                                 &pubkey,
                                 &rewrites,
                             );

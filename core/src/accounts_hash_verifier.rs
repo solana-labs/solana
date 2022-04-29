@@ -140,6 +140,7 @@ impl AccountsHashVerifier {
                     ancestors: None,
                     use_write_cache: false,
                     rent_collector: &accounts_package.rent_collector,
+                    epoch_schedule: &accounts_package.epoch_schedule,
                 },
                 &sorted_storages,
                 timings,
@@ -303,6 +304,7 @@ mod tests {
             snapshot_utils::{ArchiveFormat, SnapshotVersion},
         },
         solana_sdk::{
+            epoch_schedule::EpochSchedule,
             genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
@@ -389,6 +391,7 @@ mod tests {
                 snapshot_type: None,
                 accounts: Arc::clone(&accounts),
                 rent_collector: RentCollector::default(),
+                epoch_schedule: EpochSchedule::default(),
             };
 
             AccountsHashVerifier::process_accounts_package(

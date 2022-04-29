@@ -3440,12 +3440,8 @@ impl Bank {
 
         self.inflation = Arc::new(RwLock::new(genesis_config.inflation));
 
-        self.rent_collector = RentCollector::new(
-            self.epoch,
-            &self.epoch_schedule,
-            self.slots_per_year,
-            &genesis_config.rent,
-        );
+        self.rent_collector =
+            RentCollector::new(self.epoch, self.slots_per_year, &genesis_config.rent);
 
         // Add additional builtin programs specified in the genesis config
         for (name, program_id) in &genesis_config.native_instruction_processors {
@@ -4318,6 +4314,7 @@ impl Bank {
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
             &self.rent_collector,
+            self.epoch_schedule(),
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
@@ -4726,6 +4723,7 @@ impl Bank {
             &execution_results,
             loaded_txs,
             &self.rent_collector,
+            self.epoch_schedule(),
             &blockhash,
             lamports_per_signature,
             self.leave_nonce_on_success(),
@@ -5052,6 +5050,7 @@ impl Bank {
             let collected = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
+                self.epoch_schedule(),
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             // only store accounts where we collected rent
@@ -6009,6 +6008,7 @@ impl Bank {
                     &SlotInfoInEpoch::new_small(storage_slot),
                     &SlotInfoInEpoch::new_small(self.slot()),
                     self.rent_collector(),
+                    self.epoch_schedule(),
                     pubkey,
                     &self.rewrites_skipped_this_slot,
                 );
@@ -6242,6 +6242,7 @@ impl Bank {
             self.capitalization(),
             test_hash_calculation,
             &self.rent_collector,
+            self.epoch_schedule(),
         )
     }
 
@@ -6310,6 +6311,7 @@ impl Bank {
             can_cached_slot_be_unflushed,
             debug_verify,
             &self.rent_collector,
+            self.epoch_schedule(),
         )
     }
 
@@ -6363,6 +6365,7 @@ impl Bank {
                 Some(self.capitalization()),
                 false,
                 &self.rent_collector,
+                self.epoch_schedule(),
                 is_startup,
             );
         if total_lamports != self.capitalization() {
@@ -6388,6 +6391,7 @@ impl Bank {
                         Some(self.capitalization()),
                         false,
                         &self.rent_collector,
+                        self.epoch_schedule(),
                         is_startup,
                     );
             }
@@ -7076,7 +7080,9 @@ impl Bank {
             }
 
             if !rent_collector.should_collect_rent(pubkey, account)
-                || rent_collector.get_rent_due(account).is_exempt()
+                || rent_collector
+                    .get_rent_due(account, self.epoch_schedule())
+                    .is_exempt()
             {
                 total_accounts_stats.num_rent_exempt_accounts += 1;
             } else {
@@ -7596,6 +7602,7 @@ pub(crate) mod tests {
             let expected_rent = bank.rent_collector().collect_from_existing_account(
                 &keypairs[4].pubkey(),
                 &mut account_copy,
+                bank.epoch_schedule(),
                 None,
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
@@ -8235,11 +8242,7 @@ pub(crate) mod tests {
         assert_eq!(bank.last_blockhash(), genesis_config.hash());
 
         let slots_elapsed: u64 = (0..=bank.epoch)
-            .map(|epoch| {
-                bank.rent_collector
-                    .epoch_schedule
-                    .get_slots_in_epoch(epoch + 1)
-            })
+            .map(|epoch| bank.epoch_schedule.get_slots_in_epoch(epoch + 1))
             .sum();
         let generic_rent_due_for_system_account = bank
             .rent_collector
@@ -17552,6 +17555,7 @@ pub(crate) mod tests {
             &bank.blockhash_queue.read().unwrap(),
             &mut error_counters,
             &bank.rent_collector,
+            bank.epoch_schedule(),
             &bank.feature_set,
             &FeeStructure::default(),
             None,

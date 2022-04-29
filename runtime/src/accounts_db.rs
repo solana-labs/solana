@@ -5211,6 +5211,7 @@ impl AccountsDb {
                                                 pubkey,
                                                 *slot,
                                                 config.rent_collector,
+                                                config.epoch_schedule,
                                                 &stats,
                                                 max_slot,
                                                 find_unskipped_slot,
@@ -5298,6 +5299,7 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true,
@@ -5307,6 +5309,7 @@ impl AccountsDb {
             None,
             false,
             rent_collector,
+            epoch_schedule,
             false,
         )
     }
@@ -5320,6 +5323,7 @@ impl AccountsDb {
             None,
             false,
             &RentCollector::default(),
+            &EpochSchedule::default(),
             false,
         )
     }
@@ -5455,7 +5459,6 @@ impl AccountsDb {
                 }
 
                 let slots_per_epoch = config
-                    .rent_collector
                     .epoch_schedule
                     .get_slots_in_epoch(config.rent_collector.epoch);
                 let one_epoch_old = snapshot_storages
@@ -5620,10 +5623,7 @@ impl AccountsDb {
                 Some(slot),
             );
 
-            self.mark_old_slots_as_dirty(
-                &storages,
-                Some(config.rent_collector.epoch_schedule.slots_per_epoch),
-            );
+            self.mark_old_slots_as_dirty(&storages, Some(config.epoch_schedule.slots_per_epoch));
             sort_time.stop();
 
             let mut timings = HashStats {
@@ -5636,7 +5636,7 @@ impl AccountsDb {
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
             // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
-            self.remove_old_historical_roots(slot, &config.rent_collector.epoch_schedule);
+            self.remove_old_historical_roots(slot, config.epoch_schedule);
 
             result
         } else {
@@ -5678,6 +5678,7 @@ impl AccountsDb {
         expected_capitalization: Option<u64>,
         can_cached_slot_be_unflushed: bool,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         is_startup: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
@@ -5692,6 +5693,7 @@ impl AccountsDb {
                     ancestors: Some(ancestors),
                     use_write_cache: can_cached_slot_be_unflushed,
                     rent_collector,
+                    epoch_schedule,
                 },
                 expected_capitalization,
             )
@@ -5757,6 +5759,7 @@ impl AccountsDb {
                     pubkey,
                     slot,
                     config.rent_collector,
+                    config.epoch_schedule,
                     stats,
                     storage.range().end.saturating_sub(1), // 'end' is exclusive, convert to inclusive
                     find_unskipped_slot,
@@ -5943,6 +5946,7 @@ impl AccountsDb {
         total_lamports: u64,
         test_hash_calculation: bool,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
             slot,
@@ -5950,6 +5954,7 @@ impl AccountsDb {
             total_lamports,
             test_hash_calculation,
             rent_collector,
+            epoch_schedule,
         )
     }
 
@@ -5961,6 +5966,7 @@ impl AccountsDb {
         total_lamports: u64,
         test_hash_calculation: bool,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -5979,6 +5985,7 @@ impl AccountsDb {
                     ancestors: Some(ancestors),
                     use_write_cache: can_cached_slot_be_unflushed,
                     rent_collector,
+                    epoch_schedule,
                 },
                 None,
             )?;
@@ -6909,6 +6916,7 @@ impl AccountsDb {
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> SlotIndexGenerationInfo {
         if accounts_map.is_empty() {
             return SlotIndexGenerationInfo::default();
@@ -6940,7 +6948,9 @@ impl AccountsDb {
                 }
 
                 if !rent_collector.should_collect_rent(&pubkey, &stored_account)
-                    || rent_collector.get_rent_due(&stored_account).is_exempt()
+                    || rent_collector
+                        .get_rent_due(&stored_account, epoch_schedule)
+                        .is_exempt()
                 {
                     num_accounts_rent_exempt += 1;
                 }
@@ -7128,7 +7138,6 @@ impl AccountsDb {
         let schedule = genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
-            &schedule,
             genesis_config.slots_per_year(),
             &genesis_config.rent,
         );
@@ -7192,7 +7201,12 @@ impl AccountsDb {
                                 num_accounts: total_this_slot,
                                 num_accounts_rent_exempt: rent_exempt_this_slot,
                                 accounts_data_len: accounts_data_len_this_slot,
-                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
+                            } = self.generate_index_for_slot(
+                                accounts_map,
+                                slot,
+                                &rent_collector,
+                                &genesis_config.epoch_schedule,
+                            );
                             rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
@@ -7768,6 +7782,7 @@ pub mod tests {
                     ancestors: None,
                     use_write_cache: false,
                     rent_collector: &RentCollector::default(),
+                    epoch_schedule: &EpochSchedule::default(),
                 },
                 None,
             )
@@ -8156,6 +8171,7 @@ pub mod tests {
                     ancestors: None,
                     use_write_cache: false,
                     rent_collector: &RentCollector::default(),
+                    epoch_schedule: &EpochSchedule::default(),
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -8184,6 +8200,7 @@ pub mod tests {
                     ancestors: None,
                     use_write_cache: false,
                     rent_collector: &RentCollector::default(),
+                    epoch_schedule: &EpochSchedule::default(),
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -8245,6 +8262,7 @@ pub mod tests {
                 ancestors: None,
                 use_write_cache: false,
                 rent_collector: &RentCollector::default(),
+                epoch_schedule: &EpochSchedule::default(),
             },
             &get_storage_refs(&storages),
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
@@ -9612,8 +9630,18 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(latest_slot, &ancestors, &RentCollector::default()),
-            accounts.update_accounts_hash(latest_slot, &ancestors, &RentCollector::default())
+            daccounts.update_accounts_hash(
+                latest_slot,
+                &ancestors,
+                &RentCollector::default(),
+                &EpochSchedule::default()
+            ),
+            accounts.update_accounts_hash(
+                latest_slot,
+                &ancestors,
+                &RentCollector::default(),
+                &EpochSchedule::default()
+            )
         );
     }
 
@@ -9892,7 +9920,12 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(4, &Ancestors::default(), &RentCollector::default());
+        accounts.update_accounts_hash(
+            4,
+            &Ancestors::default(),
+            &RentCollector::default(),
+            &EpochSchedule::default(),
+        );
 
         let accounts = f(accounts, current_slot);
 
@@ -9910,6 +9943,7 @@ pub mod tests {
                 1222,
                 true,
                 &RentCollector::default(),
+                &EpochSchedule::default(),
             )
             .unwrap();
     }
@@ -10221,6 +10255,7 @@ pub mod tests {
                         ancestors: Some(&ancestors),
                         use_write_cache: false,
                         rent_collector: &RentCollector::default(),
+                        epoch_schedule: &EpochSchedule::default(),
                     },
                 )
                 .is_err());
@@ -10252,6 +10287,7 @@ pub mod tests {
                     ancestors: Some(&ancestors),
                     use_write_cache: false,
                     rent_collector: &RentCollector::default(),
+                    epoch_schedule: &EpochSchedule::default(),
                 },
             )
             .unwrap(),
@@ -10264,6 +10300,7 @@ pub mod tests {
                     ancestors: Some(&ancestors),
                     use_write_cache: false,
                     rent_collector: &RentCollector::default(),
+                    epoch_schedule: &EpochSchedule::default(),
                 },
             )
             .unwrap(),
@@ -10291,7 +10328,8 @@ pub mod tests {
                 &ancestors,
                 1,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Ok(_)
         );
@@ -10303,7 +10341,8 @@ pub mod tests {
                 &ancestors,
                 1,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Err(MissingBankHash)
         );
@@ -10324,7 +10363,8 @@ pub mod tests {
                 &ancestors,
                 1,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Err(MismatchedBankHash)
         );
@@ -10351,7 +10391,8 @@ pub mod tests {
                 &ancestors,
                 1,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Ok(_)
         );
@@ -10371,13 +10412,21 @@ pub mod tests {
                 &ancestors,
                 2,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &RentCollector::default()),
+            db.verify_bank_hash_and_lamports(
+                some_slot,
+                &ancestors,
+                10,
+                true,
+                &RentCollector::default(),
+                &EpochSchedule::default(),
+            ),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -10402,7 +10451,8 @@ pub mod tests {
                 &ancestors,
                 0,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Ok(_)
         );
@@ -10438,7 +10488,8 @@ pub mod tests {
                 &ancestors,
                 1,
                 true,
-                &RentCollector::default()
+                &RentCollector::default(),
+                &EpochSchedule::default(),
             ),
             Err(MismatchedBankHash)
         );
@@ -11043,7 +11094,12 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
-            accounts.update_accounts_hash(current_slot, &no_ancestors, &RentCollector::default());
+            accounts.update_accounts_hash(
+                current_slot,
+                &no_ancestors,
+                &RentCollector::default(),
+                &EpochSchedule::default(),
+            );
             accounts
                 .verify_bank_hash_and_lamports(
                     current_slot,
@@ -11051,6 +11107,7 @@ pub mod tests {
                     22300,
                     true,
                     &RentCollector::default(),
+                    &EpochSchedule::default(),
                 )
                 .unwrap();
 
@@ -11062,6 +11119,7 @@ pub mod tests {
                     22300,
                     true,
                     &RentCollector::default(),
+                    &EpochSchedule::default(),
                 )
                 .unwrap();
 

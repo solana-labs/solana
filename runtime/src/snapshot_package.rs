@@ -11,7 +11,9 @@ use {
         },
     },
     log::*,
-    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
+    solana_sdk::{
+        clock::Slot, epoch_schedule::EpochSchedule, genesis_config::ClusterType, hash::Hash,
+    },
     std::{
         fs,
         path::{Path, PathBuf},
@@ -44,6 +46,7 @@ pub struct AccountsPackage {
     pub snapshot_type: Option<SnapshotType>,
     pub accounts: Arc<Accounts>,
     pub rent_collector: RentCollector,
+    pub epoch_schedule: EpochSchedule,
 }
 
 impl AccountsPackage {
@@ -109,6 +112,7 @@ impl AccountsPackage {
             snapshot_type,
             accounts: bank.accounts(),
             rent_collector: bank.rent_collector().clone(),
+            epoch_schedule: *bank.epoch_schedule(),
         })
     }
 }

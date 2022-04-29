@@ -31,6 +31,7 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+        epoch_schedule::EpochSchedule,
         feature_set::{self, tx_wide_compute_cap, FeatureSet},
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -241,6 +242,7 @@ impl Accounts {
         fee: u64,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
@@ -287,6 +289,7 @@ impl Accounts {
                                             .collect_from_existing_account(
                                                 key,
                                                 &mut account,
+                                                epoch_schedule,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
                                             )
                                             .rent_amount;
@@ -505,6 +508,7 @@ impl Accounts {
         hash_queue: &BlockhashQueue,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
@@ -536,6 +540,7 @@ impl Accounts {
                         fee,
                         error_counters,
                         rent_collector,
+                        epoch_schedule,
                         feature_set,
                         account_overrides,
                     ) {
@@ -761,6 +766,7 @@ impl Accounts {
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> u64 {
         let use_index = false;
         let is_startup = false; // there may be conditions where this is called at startup.
@@ -773,6 +779,7 @@ impl Accounts {
                 None,
                 can_cached_slot_be_unflushed,
                 rent_collector,
+                epoch_schedule,
                 is_startup,
             )
             .1
@@ -787,6 +794,7 @@ impl Accounts {
         total_lamports: u64,
         test_hash_calculation: bool,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -794,6 +802,7 @@ impl Accounts {
             total_lamports,
             test_hash_calculation,
             rent_collector,
+            epoch_schedule,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
@@ -1163,6 +1172,7 @@ impl Accounts {
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         blockhash: &Hash,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
@@ -1172,6 +1182,7 @@ impl Accounts {
             res,
             loaded,
             rent_collector,
+            epoch_schedule,
             blockhash,
             lamports_per_signature,
             leave_nonce_on_success,
@@ -1191,6 +1202,7 @@ impl Accounts {
         execution_results: &'a [TransactionExecutionResult],
         load_results: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         blockhash: &Hash,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
@@ -1252,7 +1264,7 @@ impl Accounts {
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
                             let rent = rent_collector
-                                .collect_from_created_account(address, account)
+                                .collect_from_created_account(address, account, epoch_schedule)
                                 .rent_amount;
                             loaded_transaction.rent += rent;
                             loaded_transaction.rent_debits.insert(
@@ -1424,6 +1436,7 @@ mod tests {
         ka: &[TransactionAccount],
         lamports_per_signature: u64,
         rent_collector: &RentCollector,
+        epoch_schedule: &EpochSchedule,
         error_counters: &mut TransactionErrorMetrics,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
@@ -1450,6 +1463,7 @@ mod tests {
             &hash_queue,
             error_counters,
             rent_collector,
+            epoch_schedule,
             feature_set,
             fee_structure,
             None,
@@ -1467,6 +1481,7 @@ mod tests {
             ka,
             lamports_per_signature,
             &RentCollector::default(),
+            &EpochSchedule::default(),
             error_counters,
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
@@ -1673,13 +1688,13 @@ mod tests {
         feature_set.deactivate(&tx_wide_compute_cap::id());
         let rent_collector = RentCollector::new(
             0,
-            &EpochSchedule::default(),
             500_000.0,
             &Rent {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
         );
+        let epoch_schedule = EpochSchedule::default();
         let min_balance = rent_collector.rent.minimum_balance(NonceState::size());
         let nonce = Keypair::new();
         let mut accounts = vec![(
@@ -1706,6 +1721,7 @@ mod tests {
             &accounts,
             min_balance,
             &rent_collector,
+            &epoch_schedule,
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
@@ -1722,6 +1738,7 @@ mod tests {
             &accounts,
             min_balance,
             &rent_collector,
+            &epoch_schedule,
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
@@ -1737,6 +1754,7 @@ mod tests {
             &accounts,
             min_balance,
             &rent_collector,
+            &epoch_schedule,
             &mut error_counters,
             &feature_set,
             &FeeStructure::default(),
@@ -2915,6 +2933,7 @@ mod tests {
         let account2 = AccountSharedData::new(3, 0, &Pubkey::default());
 
         let rent_collector = RentCollector::default();
+        let epoch_schedule = EpochSchedule::default();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2989,6 +3008,7 @@ mod tests {
             &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
+            &epoch_schedule,
             &Hash::default(),
             0,
             true, // leave_nonce_on_success
@@ -3050,6 +3070,7 @@ mod tests {
     ) -> Vec<TransactionLoadResult> {
         let tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let rent_collector = RentCollector::default();
+        let epoch_schedule = EpochSchedule::default();
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(tx.message().recent_blockhash(), 10);
 
@@ -3062,6 +3083,7 @@ mod tests {
             &hash_queue,
             &mut error_counters,
             &rent_collector,
+            &epoch_schedule,
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
@@ -3382,6 +3404,7 @@ mod tests {
     #[test]
     fn test_nonced_failure_accounts_rollback_from_pays() {
         let rent_collector = RentCollector::default();
+        let epoch_schedule = EpochSchedule::default();
 
         let nonce_address = Pubkey::new_unique();
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
@@ -3459,6 +3482,7 @@ mod tests {
             &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
+            &epoch_schedule,
             &next_blockhash,
             0,
             true, // leave_nonce_on_success
@@ -3492,6 +3516,7 @@ mod tests {
     #[test]
     fn test_nonced_failure_accounts_rollback_nonce_pays() {
         let rent_collector = RentCollector::default();
+        let epoch_schedule = EpochSchedule::default();
 
         let nonce_authority = keypair_from_seed(&[0; 32]).unwrap();
         let nonce_address = nonce_authority.pubkey();
@@ -3568,6 +3593,7 @@ mod tests {
             &execution_results,
             loaded.as_mut_slice(),
             &rent_collector,
+            &epoch_schedule,
             &next_blockhash,
             0,
             true, // leave_nonce_on_success
