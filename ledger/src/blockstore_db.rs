@@ -512,12 +512,12 @@ impl OldestSlot {
 }
 
 #[derive(Debug)]
-struct Rocks(
-    rocksdb::DB,
-    ActualAccessType,
-    OldestSlot,
-    LedgerColumnOptions,
-);
+struct Rocks {
+    db: rocksdb::DB,
+    actual_access_type: ActualAccessType,
+    oldest_slot: OldestSlot,
+    column_options: LedgerColumnOptions,
+}
 
 impl Rocks {
     fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
@@ -542,15 +542,20 @@ impl Rocks {
 
         // Open the database
         let db = match access_type {
-            AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks(
-                DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
-                ActualAccessType::Primary,
+            AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks {
+                db: DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
+                actual_access_type: ActualAccessType::Primary,
                 oldest_slot,
                 column_options,
-            ),
+            },
             AccessType::TryPrimaryThenSecondary => {
                 match DB::open_cf_descriptors(&db_options, path, cf_descriptors) {
-                    Ok(db) => Rocks(db, ActualAccessType::Primary, oldest_slot, column_options),
+                    Ok(db) => Rocks {
+                        db,
+                        actual_access_type: ActualAccessType::Primary,
+                        oldest_slot,
+                        column_options,
+                    },
                     Err(err) => {
                         let secondary_path = path.join("solana-secondary");
 
@@ -558,17 +563,17 @@ impl Rocks {
                         warn!("Trying as secondary at : {:?}", secondary_path);
                         warn!("This active secondary db use may temporarily cause the performance of another db use (like by validator) to degrade");
 
-                        Rocks(
-                            DB::open_cf_as_secondary(
+                        Rocks {
+                            db: DB::open_cf_as_secondary(
                                 &db_options,
                                 path,
                                 &secondary_path,
                                 cf_names.clone(),
                             )?,
-                            ActualAccessType::Secondary,
+                            actual_access_type: ActualAccessType::Secondary,
                             oldest_slot,
                             column_options,
-                        )
+                        }
                     }
                 }
             }
@@ -619,14 +624,15 @@ impl Rocks {
                 // (= all) of invalidated SST files, when combined with newer writes happening at the opposite
                 // edge of the key space. This causes a long and heavy disk IOs and possible write
                 // stall and ultimately, the deadly Replay/Banking stage stall at higher layers.
-                db.0.set_options_cf(
-                    db.cf_handle(cf_name),
-                    &[(
-                        "periodic_compaction_seconds",
-                        &format!("{}", PERIODIC_COMPACTION_SECONDS),
-                    )],
-                )
-                .unwrap();
+                db.db
+                    .set_options_cf(
+                        db.cf_handle(cf_name),
+                        &[(
+                            "periodic_compaction_seconds",
+                            &format!("{}", PERIODIC_COMPACTION_SECONDS),
+                        )],
+                    )
+                    .unwrap();
             }
         }
 
@@ -697,23 +703,23 @@ impl Rocks {
     }
 
     fn cf_handle(&self, cf: &str) -> &ColumnFamily {
-        self.0
+        self.db
             .cf_handle(cf)
             .expect("should never get an unknown column")
     }
 
     fn get_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let opt = self.0.get_cf(cf, key)?;
+        let opt = self.db.get_cf(cf, key)?;
         Ok(opt)
     }
 
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
-        self.0.put_cf(cf, key, value)?;
+        self.db.put_cf(cf, key, value)?;
         Ok(())
     }
 
     fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
-        self.0.delete_cf(cf, key)?;
+        self.db.delete_cf(cf, key)?;
         Ok(())
     }
 
@@ -730,11 +736,11 @@ impl Rocks {
             IteratorMode::Start => RocksIteratorMode::Start,
             IteratorMode::End => RocksIteratorMode::End,
         };
-        self.0.iterator_cf(cf, iterator_mode)
+        self.db.iterator_cf(cf, iterator_mode)
     }
 
     fn raw_iterator_cf(&self, cf: &ColumnFamily) -> DBRawIterator {
-        self.0.raw_iterator_cf(cf)
+        self.db.raw_iterator_cf(cf)
     }
 
     fn batch(&self) -> RWriteBatch {
@@ -743,12 +749,12 @@ impl Rocks {
 
     fn write(&self, batch: RWriteBatch) -> Result<()> {
         let is_perf_context_enabled = maybe_collect_perf_context();
-        let result = self.0.write(batch);
+        let result = self.db.write(batch);
         if is_perf_context_enabled {
             report_write_perf_context(rocksdb_metric_header!(
                 "blockstore_rocksdb_write_perf,op=write_batch",
                 "write_batch",
-                self.3
+                self.column_options
             ));
         }
         match result {
@@ -758,7 +764,7 @@ impl Rocks {
     }
 
     fn is_primary_access(&self) -> bool {
-        self.1 == ActualAccessType::Primary
+        self.actual_access_type == ActualAccessType::Primary
     }
 
     /// Retrieves the specified RocksDB integer property of the current
@@ -767,7 +773,7 @@ impl Rocks {
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
     fn get_int_property_cf(&self, cf: &ColumnFamily, name: &str) -> Result<i64> {
-        match self.0.property_int_value_cf(cf, name) {
+        match self.db.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
@@ -2162,7 +2168,7 @@ impl Database {
     }
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
-        self.backend.2.set(oldest_slot);
+        self.backend.oldest_slot.set(oldest_slot);
     }
 }
 
@@ -2229,7 +2235,7 @@ where
         let cf = self.handle();
         let from = Some(C::key(C::as_index(from)));
         let to = Some(C::key(C::as_index(to)));
-        self.backend.0.compact_range_cf(cf, from, to);
+        self.backend.db.compact_range_cf(cf, from, to);
         Ok(true)
     }
 

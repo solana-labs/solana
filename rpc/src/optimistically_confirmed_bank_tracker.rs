@@ -204,7 +204,8 @@ impl OptimisticallyConfirmedBankTracker {
         debug!("received bank notification: {:?}", notification);
         match notification {
             BankNotification::OptimisticallyConfirmed(slot) => {
-                if let Some(bank) = bank_forks.read().unwrap().get(slot) {
+                let bank = bank_forks.read().unwrap().get(slot);
+                if let Some(bank) = bank {
                     let mut w_optimistically_confirmed_bank =
                         optimistically_confirmed_bank.write().unwrap();
 

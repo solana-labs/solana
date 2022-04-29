@@ -145,7 +145,8 @@ where
     X: Clone + Default,
 {
     let mut notified = false;
-    if let Some(bank) = bank_forks.read().unwrap().get(slot) {
+    let bank = bank_forks.read().unwrap().get(slot);
+    if let Some(bank) = bank {
         let results = bank_method(&bank, params);
         let mut w_last_notified_slot = subscription.last_notified_slot.write().unwrap();
         let (filter_results, result_slot) =
@@ -442,7 +443,7 @@ fn initial_last_notified_slot(
     bank_forks: &RwLock<BankForks>,
     block_commitment_cache: &RwLock<BlockCommitmentCache>,
     optimistically_confirmed_bank: &RwLock<OptimisticallyConfirmedBank>,
-) -> Slot {
+) -> Option<Slot> {
     match params {
         SubscriptionParams::Account(params) => {
             let slot = if params.commitment.is_finalized() {
@@ -456,18 +457,10 @@ fn initial_last_notified_slot(
                 block_commitment_cache.read().unwrap().slot()
             };
 
-            if let Some((_account, slot)) = bank_forks
-                .read()
-                .unwrap()
-                .get(slot)
-                .and_then(|bank| bank.get_account_modified_slot(&params.pubkey))
-            {
-                slot
-            } else {
-                0
-            }
+            let bank = bank_forks.read().unwrap().get(slot)?;
+            Some(bank.get_account_modified_slot(&params.pubkey)?.1)
         }
-        _ => 0,
+        _ => None,
     }
 }
 
@@ -754,6 +747,7 @@ impl RpcSubscriptions {
                                     &block_commitment_cache,
                                     &optimistically_confirmed_bank,
                                 )
+                                .unwrap_or(0)
                             });
                         }
                         NotificationEntry::Unsubscribed(params, id) => {
@@ -942,7 +936,8 @@ impl RpcSubscriptions {
                 SubscriptionParams::Block(params) => {
                     num_blocks_found.fetch_add(1, Ordering::Relaxed);
                     if let Some(slot) = slot {
-                        if let Some(bank) = bank_forks.read().unwrap().get(slot) {
+                        let bank = bank_forks.read().unwrap().get(slot);
+                        if let Some(bank) = bank {
                             // We're calling it unnotified in this context
                             // because, logically, it gets set to `last_notified_slot + 1`
                             // on the final iteration of the loop down below.
