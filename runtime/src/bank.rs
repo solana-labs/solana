@@ -6203,12 +6203,12 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
-        if let Some(buf) = self
+        let buf = self
             .hard_forks
             .read()
             .unwrap()
-            .get_hash_data(self.slot(), self.parent_slot())
-        {
+            .get_hash_data(self.slot(), self.parent_slot());
+        if let Some(buf) = buf {
             info!("hard fork at bank {}", self.slot());
             hash = extend_and_hash(&hash, &buf)
         }
