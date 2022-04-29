@@ -180,6 +180,7 @@ impl PohService {
             );
             if remaining_tick_time.is_zero() {
                 last_tick = Instant::now();
+                println!("sleepy_tick_producer");
                 poh_recorder.lock().unwrap().tick();
             }
         }
@@ -226,6 +227,7 @@ impl PohService {
                 Duration::from_millis(0),
             );
             if remaining_tick_time.is_zero() {
+                println!("short_lived_sleepy_tick_producer");
                 last_tick = Instant::now();
                 poh_recorder.lock().unwrap().tick();
                 elapsed_ticks += 1;
@@ -360,6 +362,7 @@ impl PohService {
                     lock_time.stop();
                     timing.total_lock_time_ns += lock_time.as_ns();
                     let mut tick_time = Measure::start("tick");
+                    println!("tick_producer");
                     poh_recorder_l.tick();
                     tick_time.stop();
                     timing.total_tick_time_ns += tick_time.as_ns();
