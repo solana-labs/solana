@@ -351,7 +351,7 @@ impl ClusterInfoVoteListener {
                 .lock()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
-            println!("poh {} {}",poh_recorder.tick_height,poh_recorder.ticks_per_slot);
+            println!("poh {} {}",poh_recorder.lock().unwrap().tick_height, poh_recorder.lock().unwrap().ticks_per_slot);
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
