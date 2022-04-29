@@ -1560,6 +1560,7 @@ impl ClusterInfo {
         sender: &PacketBatchSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
+        println!("\nrun_gossip function\n");
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
@@ -2449,6 +2450,7 @@ impl ClusterInfo {
         sender: &Sender<Vec<(/*from:*/ SocketAddr, Protocol)>>,
         thread_pool: &ThreadPool,
     ) -> Result<(), GossipError> {
+        println!("\nrun_socket_consume function\n");
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.packets.into();
         let mut packets = VecDeque::from(packets);

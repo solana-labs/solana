@@ -131,6 +131,7 @@ impl TransactionRecorder {
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
     ) -> Result<()> {
+        println!("record function: bank_slot={} {:?}",bank_slot,transactions);
         // create a new channel so that there is only 1 sender and when it goes out of scope, the receiver fails
         let (result_sender, result_receiver) = unbounded();
         let res =

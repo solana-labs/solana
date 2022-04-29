@@ -274,7 +274,7 @@ impl SigVerifyStage {
         sendr.send(batches)?;
         verify_batch_time.stop();
 
-        debug!(
+        println!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
