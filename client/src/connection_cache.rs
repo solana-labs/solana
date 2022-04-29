@@ -163,6 +163,11 @@ pub fn set_use_quic(use_quic: bool) {
     map.set_use_quic(use_quic);
 }
 
+pub fn use_quic() -> bool {
+    let map = (*CONNECTION_MAP).lock().unwrap();
+    map.use_quic
+}
+
 // TODO: see https://github.com/solana-labs/solana/issues/23661
 // remove lazy_static and optimize and refactor this
 fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
