@@ -126,8 +126,8 @@ impl fmt::Display for CliFeatures {
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} | {:<23} | {}",
-                    "Feature", "Status", "Description"
+                    "{:<44} | {:<23} | {} | {}",
+                    "Feature", "Status", "Activation Slot", "Description"
                 ))
                 .bold()
             )?;
@@ -135,7 +135,7 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} | {:<23} | {}",
+                "{:<44} | {:<23} | {:<15} | {}",
                 feature.id,
                 match feature.status {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
@@ -147,6 +147,10 @@ impl fmt::Display for CliFeatures {
                         let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
                         style(format!("active since epoch {}", activation_epoch)).green()
                     }
+                },
+                match feature.status {
+                    CliFeatureStatus::Active(activation_slot) => activation_slot.to_string(),
+                    _ => "NA".to_string(),
                 },
                 feature.description,
             )?;
