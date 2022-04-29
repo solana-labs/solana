@@ -118,14 +118,19 @@ compute units used by each instruction in the transaction must not exceed that
 value. The default number of maximum units allows is intentionally kept large to
 avoid breaking existing client behavior.
 
-Most transactions won't require the maximum units so they can include a
+### Reduce transaction fees
+
+_Note: At the time of writing, transaction fees are still charged by the number of
+signatures but will eventually be calculated from requested compute unit cap._
+
+Most transactions won't use the default number of compute units so they can include a
 [``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39)
-to lower the compute unit cap. Lower compute caps will be charged lower fees.
+to lower the compute unit cap. **Important: Lower compute caps will be charged lower fees.**
 
 Compute Budget instructions don't require any accounts and must lie in the first
 3 instructions of a transaction otherwise they will be ignored.
 
-The `ComputeBudgetInstruction::request_units` function can be used to crate
+The `ComputeBudgetInstruction::request_units` function can be used to create
 these instructions:
 
 ```rust
