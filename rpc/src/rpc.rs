@@ -1296,6 +1296,8 @@ impl JsonRpcRequestProcessor {
         Some(status)
     }
 
+    use std::process;
+
     pub async fn get_signature_statuses(
         &self,
         signatures: Vec<Signature>,

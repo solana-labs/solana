@@ -740,6 +740,8 @@ impl PohRecorder {
         }
     }
 
+    use std::process;
+
     pub fn record(
         &mut self,
         bank_slot: Slot,
