@@ -366,7 +366,8 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                if let Some(current_working_bank) = poh_recorder.lock().unwrap().bank() {
+                let current_working_bank = poh_recorder.lock().unwrap().bank();
+                if let Some(current_working_bank) = current_working_bank {
                     Self::check_for_leader_bank_and_send_votes(
                         &mut bank_vote_sender_state_option,
                         current_working_bank,
