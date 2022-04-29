@@ -417,7 +417,7 @@ mod tests {
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
         for shred in data_shreds.iter() {
-            assert!(shred.is_code());
+            assert!(shred.is_data());
             let index = shred.index();
             let is_last = index as u64 == num_expected_data_shreds - 1;
             verify_test_data_shred(
