@@ -106,6 +106,8 @@ use {
     },
 };
 
+use std::process;
+
 type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
 pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
@@ -1295,8 +1297,6 @@ impl JsonRpcRequestProcessor {
         let (_, status) = bank.get_signature_status_slot(&signature)?;
         Some(status)
     }
-
-    use std::process;
 
     pub async fn get_signature_statuses(
         &self,

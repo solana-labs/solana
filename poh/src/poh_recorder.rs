@@ -39,6 +39,8 @@ use {
     thiserror::Error,
 };
 
+use std::process;
+
 pub const GRACE_TICKS_FACTOR: u64 = 2;
 pub const MAX_GRACE_SLOTS: u64 = 2;
 
@@ -739,8 +741,6 @@ impl PohRecorder {
             self.last_metric = Instant::now();
         }
     }
-
-    use std::process;
 
     pub fn record(
         &mut self,
