@@ -79,7 +79,7 @@ impl VoteSimulator {
                 continue;
             }
             let parent = *walk.get_parent().unwrap().data();
-            let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap().clone();
+            let parent_bank = self.bank_forks.read().unwrap().get(parent).unwrap();
             let new_bank = Bank::new_from_parent(&parent_bank, &Pubkey::default(), slot);
             self.progress
                 .entry(slot)
@@ -171,11 +171,10 @@ impl VoteSimulator {
             .read()
             .unwrap()
             .get(vote_slot)
-            .expect("Bank must have been created before vote simulation")
-            .clone();
+            .expect("Bank must have been created before vote simulation");
 
         // Try to vote on the given slot
-        let descendants = self.bank_forks.read().unwrap().descendants().clone();
+        let descendants = self.bank_forks.read().unwrap().descendants();
         let SelectVoteAndResetForkResult {
             heaviest_fork_failures,
             ..

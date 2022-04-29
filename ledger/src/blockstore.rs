@@ -12,8 +12,8 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredType, Shredder,
-            SHRED_PAYLOAD_SIZE,
+            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredCommonHeaderVersion, ShredId,
+            ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
     },
@@ -635,8 +635,18 @@ impl Blockstore {
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         data_cf: &'a LedgerColumn<cf::ShredData>,
     ) -> impl Iterator<Item = Shred> + 'a {
+        let data_type = match prev_inserted_shreds
+            .values()
+            .next()
+            .unwrap()
+            .shred_type()
+            .version()
+        {
+            ShredCommonHeaderVersion::V1 => ShredType::DataV1,
+            ShredCommonHeaderVersion::V2 => ShredType::DataV2,
+        };
         erasure_meta.data_shreds_indices().filter_map(move |i| {
-            let key = ShredId::new(slot, u32::try_from(i).unwrap(), ShredType::Data);
+            let key = ShredId::new(slot, u32::try_from(i).unwrap(), data_type);
             if let Some(shred) = prev_inserted_shreds.get(&key) {
                 return Some(shred.clone());
             }
@@ -660,8 +670,18 @@ impl Blockstore {
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
+        let code_type = match prev_inserted_shreds
+            .values()
+            .next()
+            .unwrap()
+            .shred_type()
+            .version()
+        {
+            ShredCommonHeaderVersion::V1 => ShredType::CodeV1,
+            ShredCommonHeaderVersion::V2 => ShredType::CodeV2,
+        };
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
-            let key = ShredId::new(slot, u32::try_from(i).unwrap(), ShredType::Code);
+            let key = ShredId::new(slot, u32::try_from(i).unwrap(), code_type);
             if let Some(shred) = prev_inserted_shreds.get(&key) {
                 return Some(shred.clone());
             }
@@ -892,7 +912,7 @@ impl Blockstore {
                 ShredSource::Turbine
             };
             match shred.shred_type() {
-                ShredType::Data => {
+                ShredType::DataV1 | ShredType::DataV2 => {
                     match self.check_insert_data_shred(
                         shred,
                         &mut erasure_metas,
@@ -921,7 +941,7 @@ impl Blockstore {
                         }
                     };
                 }
-                ShredType::Code => {
+                ShredType::CodeV1 | ShredType::CodeV2 => {
                     self.check_insert_coding_shred(
                         shred,
                         &mut erasure_metas,
@@ -1246,7 +1266,11 @@ impl Blockstore {
                     return Some(potential_shred.into_payload());
                 }
             } else if let Some(potential_shred) = {
-                let key = ShredId::new(slot, u32::try_from(coding_index).unwrap(), ShredType::Code);
+                let code_type = match shred.shred_type().version() {
+                    ShredCommonHeaderVersion::V1 => ShredType::CodeV1,
+                    ShredCommonHeaderVersion::V2 => ShredType::CodeV2,
+                };
+                let key = ShredId::new(slot, u32::try_from(coding_index).unwrap(), code_type);
                 just_received_shreds.get(&key)
             } {
                 if shred.erasure_mismatch(potential_shred).unwrap() {
@@ -1418,7 +1442,17 @@ impl Blockstore {
         slot: Slot,
         index: u64,
     ) -> Cow<'a, Vec<u8>> {
-        let key = ShredId::new(slot, u32::try_from(index).unwrap(), ShredType::Data);
+        let data_type = match just_inserted_shreds
+            .values()
+            .next()
+            .unwrap()
+            .shred_type()
+            .version()
+        {
+            ShredCommonHeaderVersion::V1 => ShredType::DataV1,
+            ShredCommonHeaderVersion::V2 => ShredType::DataV2,
+        };
+        let key = ShredId::new(slot, u32::try_from(index).unwrap(), data_type);
         if let Some(shred) = just_inserted_shreds.get(&key) {
             Cow::Borrowed(shred.payload())
         } else {
@@ -1637,14 +1671,12 @@ impl Blockstore {
     }
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
-        self.data_shred_cf.get_bytes((slot, index)).map(|data| {
-            data.map(|mut d| {
-                // Only data_header.size bytes stored in the blockstore so
-                // pad the payload out to SHRED_PAYLOAD_SIZE so that the
-                // erasure recovery works properly.
-                d.resize(cmp::max(d.len(), SHRED_PAYLOAD_SIZE), 0);
-                d
-            })
+        let shred = self.data_shred_cf.get_bytes((slot, index))?;
+        let shred = shred.map(Shred::resize_stored_shred).transpose();
+        shred.map_err(|err| {
+            let err = format!("Invalid stored shred: {}", err);
+            let err = Box::new(bincode::ErrorKind::Custom(err));
+            BlockstoreError::InvalidShredData(err)
         })
     }
 
@@ -3107,15 +3139,13 @@ impl Blockstore {
     // Returns the existing shred if `new_shred` is not equal to the existing shred at the
     // given slot and index as this implies the leader generated two different shreds with
     // the same slot and index
-    pub fn is_shred_duplicate(&self, shred: ShredId, mut payload: Vec<u8>) -> Option<Vec<u8>> {
+    pub fn is_shred_duplicate(&self, shred: ShredId, payload: Vec<u8>) -> Option<Vec<u8>> {
         let (slot, index, shred_type) = shred.unwrap();
         let existing_shred = match shred_type {
-            ShredType::Data => self.get_data_shred(slot, index as u64),
-            ShredType::Code => self.get_coding_shred(slot, index as u64),
+            ShredType::DataV1 | ShredType::DataV2 => self.get_data_shred(slot, index as u64),
+            ShredType::CodeV1 | ShredType::CodeV2 => self.get_coding_shred(slot, index as u64),
         }
         .expect("fetch from DuplicateSlots column family failed")?;
-        let size = payload.len().max(SHRED_PAYLOAD_SIZE);
-        payload.resize(size, 0u8);
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
         (existing_shred != *new_shred.payload()).then(|| existing_shred)
     }
@@ -9004,7 +9034,7 @@ pub mod tests {
                 ShredId::new(
                     slot,
                     even_smaller_last_shred_duplicate.index(),
-                    ShredType::Data
+                    ShredType::DataV1
                 ),
                 even_smaller_last_shred_duplicate.payload().clone(),
             )

@@ -300,7 +300,7 @@ pub(crate) mod tests {
             wallclock: u64::MAX,
             slot: Slot::MAX,
             shred_index: u32::MAX,
-            shred_type: ShredType::Data,
+            shred_type: ShredType::DataV1,
             num_chunks: u8::MAX,
             chunk_index: u8::MAX,
             chunk: Vec::default(),

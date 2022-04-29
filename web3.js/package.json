@@ -64,10 +64,12 @@
     "bs58": "^4.0.1",
     "buffer": "6.0.1",
     "cross-fetch": "^3.1.4",
+    "fast-stable-stringify": "^1.0.0",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
+    "sinon-chai": "^3.7.0",
     "superstruct": "^0.14.2",
     "tweetnacl": "^1.0.0"
   },

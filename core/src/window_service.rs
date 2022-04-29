@@ -160,12 +160,12 @@ impl ReceiveWindowStats {
 fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
     match shred.shred_type() {
         // Only data shreds have parent information
-        ShredType::Data => match shred.parent() {
+        ShredType::DataV1 | ShredType::DataV2 => match shred.parent() {
             Ok(parent) => blockstore::verify_shred_slots(shred.slot(), parent, root),
             Err(_) => false,
         },
         // Filter out outdated coding shreds
-        ShredType::Code => shred.slot() >= root,
+        ShredType::CodeV1 | ShredType::CodeV2 => shred.slot() >= root,
     }
 }
 

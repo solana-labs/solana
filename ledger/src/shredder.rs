@@ -1,13 +1,11 @@
 use {
     crate::{
         erasure::Session,
-        shred::{
-            Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE,
-            SIZE_OF_DATA_SHRED_PAYLOAD,
-        },
+        shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD},
         shred_stats::ProcessShredsStats,
     },
     rayon::{prelude::*, ThreadPool},
+    reed_solomon_erasure::Error::{InvalidIndex, TooFewDataShards, TooFewShardsPresent},
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
@@ -234,7 +232,8 @@ impl Shredder {
         } else {
             num_data
         };
-        let data: Vec<_> = data.iter().map(Shred::erasure_block_as_slice).collect();
+        let data = data.iter().map(Shred::erasure_block_as_slice);
+        let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
         let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
         Session::new(num_data, num_coding)
             .unwrap()
@@ -262,10 +261,8 @@ impl Shredder {
     }
 
     pub fn try_recovery(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
-        use reed_solomon_erasure::Error::InvalidIndex;
-        Self::verify_consistent_shred_payload_sizes("try_recovery()", &shreds)?;
         let (slot, fec_set_index) = match shreds.first() {
-            None => return Ok(Vec::default()),
+            None => return Err(Error::from(TooFewShardsPresent)),
             Some(shred) => (shred.slot(), shred.fec_set_index()),
         };
         let (num_data_shreds, num_coding_shreds) = match shreds.iter().find(|shred| shred.is_code())
@@ -298,7 +295,7 @@ impl Shredder {
                 Some(index) if index < fec_set_size => index,
                 _ => return Err(Error::from(InvalidIndex)),
             };
-            blocks[index] = Some(shred.erasure_block());
+            blocks[index] = Some(shred.erasure_block()?);
             if index < num_data_shreds {
                 mask[index] = true;
             }
@@ -323,8 +320,6 @@ impl Shredder {
 
     /// Combines all shreds to recreate the original buffer
     pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, Error> {
-        use reed_solomon_erasure::Error::TooFewDataShards;
-        Self::verify_consistent_shred_payload_sizes("deshred()", shreds)?;
         let index = shreds.first().ok_or(TooFewDataShards)?.index();
         let aligned = shreds.iter().zip(index..).all(|(s, i)| s.index() == i);
         let data_complete = {
@@ -345,30 +340,6 @@ impl Shredder {
             Ok(data)
         }
     }
-
-    fn verify_consistent_shred_payload_sizes(
-        caller: &str,
-        shreds: &[Shred],
-    ) -> Result<(), reed_solomon_erasure::Error> {
-        if shreds.is_empty() {
-            return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
-        }
-        let slot = shreds[0].slot();
-        for shred in shreds {
-            if shred.payload().len() != SHRED_PAYLOAD_SIZE {
-                error!(
-                    "{} Shreds for slot: {} are inconsistent sizes. Expected: {} actual: {}",
-                    caller,
-                    slot,
-                    SHRED_PAYLOAD_SIZE,
-                    shred.payload().len()
-                );
-                return Err(reed_solomon_erasure::Error::IncorrectShardSize);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -376,7 +347,7 @@ mod tests {
     use {
         super::*,
         crate::shred::{
-            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredType,
+            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred,
             SHRED_TICK_REFERENCE_MASK,
         },
         bincode::serialized_size,
@@ -393,7 +364,7 @@ mod tests {
     };
 
     fn verify_test_code_shred(shred: &Shred, index: u32, slot: Slot, pk: &Pubkey, verify: bool) {
-        assert_eq!(shred.payload().len(), SHRED_PAYLOAD_SIZE);
+        assert_matches!(shred.sanitize(), Ok(()));
         assert!(!shred.is_data());
         assert_eq!(shred.index(), index);
         assert_eq!(shred.slot(), slot);
@@ -446,7 +417,7 @@ mod tests {
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
         for shred in data_shreds.iter() {
-            assert_eq!(shred.shred_type(), ShredType::Data);
+            assert!(shred.is_code());
             let index = shred.index();
             let is_last = index as u64 == num_expected_data_shreds - 1;
             verify_test_data_shred(
@@ -465,7 +436,7 @@ mod tests {
 
         for shred in coding_shreds.iter() {
             let index = shred.index();
-            assert_eq!(shred.shred_type(), ShredType::Code);
+            assert!(shred.is_code());
             verify_test_code_shred(shred, index, slot, &keypair.pubkey(), true);
             assert!(!coding_shred_indexes.contains(&index));
             coding_shred_indexes.insert(index);
@@ -783,9 +754,7 @@ mod tests {
         assert_eq!(shreds.len(), 3);
         assert_matches!(
             Shredder::deshred(&shreds),
-            Err(Error::ErasureError(
-                reed_solomon_erasure::Error::TooFewDataShards
-            ))
+            Err(Error::ErasureError(TooFewDataShards))
         );
 
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds

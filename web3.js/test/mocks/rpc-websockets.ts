@@ -93,7 +93,12 @@ class MockClient {
     ];
 
     expect(method).to.eq(mockRequest.method);
-    expect(params).to.eql(mockRequest.params);
+    if (method.endsWith('Unsubscribe')) {
+      expect(params.length).to.eq(1);
+      expect(params[0]).to.be.a('number');
+    } else {
+      expect(params).to.eql(mockRequest.params);
+    }
 
     let id = ++this.subscriptionCounter;
     const response = {

@@ -1,6 +1,8 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import crossFetch from 'cross-fetch';
+// @ts-ignore
+import fastStableStringify from 'fast-stable-stringify';
 import {
   type as pick,
   number,
@@ -22,7 +24,6 @@ import {
 import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
-import {IWSRequestParams} from 'rpc-websockets/dist/lib/client';
 
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
@@ -62,6 +63,130 @@ const BufferFromRawAccountData = coerce(
  * @internal
  */
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
+
+/**
+ * HACK.
+ * Copied from rpc-websockets/dist/lib/client.
+ * Otherwise, `yarn build` fails with:
+ * https://gist.github.com/steveluscher/c057eca81d479ef705cdb53162f9971d
+ */
+interface IWSRequestParams {
+  [x: string]: any;
+  [x: number]: any;
+}
+
+type ClientSubscriptionId = number;
+/** @internal */ type ServerSubscriptionId = number;
+/** @internal */ type SubscriptionConfigHash = string;
+/** @internal */ type SubscriptionDisposeFn = () => Promise<void>;
+/**
+ * @internal
+ * Every subscription contains the args used to open the subscription with
+ * the server, and a list of callers interested in notifications.
+ */
+type BaseSubscription<TMethod = SubscriptionConfig['method']> = Readonly<{
+  args: IWSRequestParams;
+  callbacks: Set<Extract<SubscriptionConfig, {method: TMethod}>['callback']>;
+}>;
+/**
+ * @internal
+ * A subscription may be in various states of connectedness. Only when it is
+ * fully connected will it have a server subscription id associated with it.
+ * This id can be returned to the server to unsubscribe the client entirely.
+ */
+type StatefulSubscription = Readonly<
+  // New subscriptions that have not yet been
+  // sent to the server start in this state.
+  | {
+      state: 'pending';
+    }
+  // These subscriptions have been sent to the server
+  // and are waiting for the server to acknowledge them.
+  | {
+      state: 'subscribing';
+    }
+  // These subscriptions have been acknowledged by the
+  // server and have been assigned server subscription ids.
+  | {
+      serverSubscriptionId: ServerSubscriptionId;
+      state: 'subscribed';
+    }
+  // These subscriptions are intended to be torn down and
+  // are waiting on an acknowledgement from the server.
+  | {
+      serverSubscriptionId: ServerSubscriptionId;
+      state: 'unsubscribing';
+    }
+  // The request to tear down these subscriptions has been
+  // acknowledged by the server. The `serverSubscriptionId`
+  // is the id of the now-dead subscription.
+  | {
+      serverSubscriptionId: ServerSubscriptionId;
+      state: 'unsubscribed';
+    }
+>;
+/**
+ * A type that encapsulates a subscription's RPC method
+ * names and notification (callback) signature.
+ */
+type SubscriptionConfig = Readonly<
+  | {
+      callback: AccountChangeCallback;
+      method: 'accountSubscribe';
+      unsubscribeMethod: 'accountUnsubscribe';
+    }
+  | {
+      callback: LogsCallback;
+      method: 'logsSubscribe';
+      unsubscribeMethod: 'logsUnsubscribe';
+    }
+  | {
+      callback: ProgramAccountChangeCallback;
+      method: 'programSubscribe';
+      unsubscribeMethod: 'programUnsubscribe';
+    }
+  | {
+      callback: RootChangeCallback;
+      method: 'rootSubscribe';
+      unsubscribeMethod: 'rootUnsubscribe';
+    }
+  | {
+      callback: SignatureSubscriptionCallback;
+      method: 'signatureSubscribe';
+      unsubscribeMethod: 'signatureUnsubscribe';
+    }
+  | {
+      callback: SlotChangeCallback;
+      method: 'slotSubscribe';
+      unsubscribeMethod: 'slotUnsubscribe';
+    }
+  | {
+      callback: SlotUpdateCallback;
+      method: 'slotsUpdatesSubscribe';
+      unsubscribeMethod: 'slotsUpdatesUnsubscribe';
+    }
+>;
+/**
+ * @internal
+ * Utility type that keeps tagged unions intact while omitting properties.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+/**
+ * @internal
+ * This type represents a single subscribable 'topic.' It's made up of:
+ *
+ * - The args used to open the subscription with the server,
+ * - The state of the subscription, in terms of its connectedness, and
+ * - The set of callbacks to call when the server publishes notifications
+ *
+ * This record gets indexed by `SubscriptionConfigHash` and is used to
+ * set up subscriptions, fan out notifications, and track subscription state.
+ */
+type Subscription = BaseSubscription &
+  StatefulSubscription &
+  DistributiveOmit<SubscriptionConfig, 'callback'>;
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
@@ -1864,21 +1989,6 @@ export type AccountChangeCallback = (
 ) => void;
 
 /**
- * @internal
- */
-type SubscriptionId = 'subscribing' | number;
-
-/**
- * @internal
- */
-type AccountSubscriptionInfo = {
-  publicKey: string; // PublicKey of the account as a base 58 string
-  callback: AccountChangeCallback;
-  commitment?: Commitment;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-};
-
-/**
  * Callback function for program account change notifications
  */
 export type ProgramAccountChangeCallback = (
@@ -1887,41 +1997,14 @@ export type ProgramAccountChangeCallback = (
 ) => void;
 
 /**
- * @internal
- */
-type ProgramAccountSubscriptionInfo = {
-  programId: string; // PublicKey of the program as a base 58 string
-  callback: ProgramAccountChangeCallback;
-  commitment?: Commitment;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-  filters?: GetProgramAccountsFilter[];
-};
-
-/**
  * Callback function for slot change notifications
  */
 export type SlotChangeCallback = (slotInfo: SlotInfo) => void;
 
 /**
- * @internal
- */
-type SlotSubscriptionInfo = {
-  callback: SlotChangeCallback;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-};
-
-/**
  * Callback function for slot update notifications
  */
 export type SlotUpdateCallback = (slotUpdate: SlotUpdate) => void;
-
-/**
- * @private
- */
-type SlotUpdateSubscriptionInfo = {
-  callback: SlotUpdateCallback;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-};
 
 /**
  * Callback function for signature status notifications
@@ -1963,27 +2046,9 @@ export type SignatureSubscriptionOptions = {
 };
 
 /**
- * @internal
- */
-type SignatureSubscriptionInfo = {
-  signature: TransactionSignature; // TransactionSignature as a base 58 string
-  callback: SignatureSubscriptionCallback;
-  options?: SignatureSubscriptionOptions;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-};
-
-/**
  * Callback function for root change notifications
  */
 export type RootChangeCallback = (root: number) => void;
-
-/**
- * @internal
- */
-type RootSubscriptionInfo = {
-  callback: RootChangeCallback;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-};
 
 /**
  * @internal
@@ -2020,16 +2085,6 @@ export type LogsFilter = PublicKey | 'all' | 'allWithVotes';
  * Callback function for log notifications.
  */
 export type LogsCallback = (logs: Logs, ctx: Context) => void;
-
-/**
- * @private
- */
-type LogsSubscriptionInfo = {
-  callback: LogsCallback;
-  filter: LogsFilter;
-  subscriptionId: SubscriptionId | null; // null when there's no current server subscription id
-  commitment?: Commitment;
-};
 
 /**
  * Signature result
@@ -2120,13 +2175,6 @@ export type ConnectionConfig = {
   confirmTransactionInitialTimeout?: number;
 };
 
-function createSubscriptionWarningMessage(id: number, label: string): string {
-  return (
-    'Ignored unsubscribe request because an active subscription ' +
-    `with id \`${id}\` for '${label}' events could not be found.`
-  );
-}
-
 /**
  * A connection to a fullnode JSON RPC endpoint
  */
@@ -2146,6 +2194,13 @@ export class Connection {
   /** @internal */ _rpcWebSocketIdleTimeout: ReturnType<
     typeof setTimeout
   > | null = null;
+  /** @internal
+   * A number that we increment every time an active connection closes.
+   * Used to determine whether the same socket connection that was open
+   * when an async operation started is the same one that's active when
+   * its continuation fires.
+   *
+   */ private _rpcWebSocketGeneration: number = 0;
 
   /** @internal */ _disableBlockhashCaching: boolean = false;
   /** @internal */ _pollingBlockhash: boolean = false;
@@ -2161,40 +2216,35 @@ export class Connection {
     simulatedSignatures: [],
   };
 
-  /** @internal */ _accountChangeSubscriptionCounter: number = 0;
-  /** @internal */ _accountChangeSubscriptions: {
-    [id: number]: AccountSubscriptionInfo;
+  /** @internal */ private _nextClientSubscriptionId: ClientSubscriptionId = 0;
+  /** @internal */ private _subscriptionDisposeFunctionsByClientSubscriptionId: {
+    [clientSubscriptionId: ClientSubscriptionId]:
+      | SubscriptionDisposeFn
+      | undefined;
   } = {};
-
-  /** @internal */ _programAccountChangeSubscriptionCounter: number = 0;
-  /** @internal */ _programAccountChangeSubscriptions: {
-    [id: number]: ProgramAccountSubscriptionInfo;
+  /** @internal */ private _subscriptionCallbacksByServerSubscriptionId: {
+    [serverSubscriptionId: ServerSubscriptionId]:
+      | Set<SubscriptionConfig['callback']>
+      | undefined;
   } = {};
-
-  /** @internal */ _rootSubscriptionCounter: number = 0;
-  /** @internal */ _rootSubscriptions: {
-    [id: number]: RootSubscriptionInfo;
+  /** @internal */ private _subscriptionsByHash: {
+    [hash: SubscriptionConfigHash]: Subscription | undefined;
   } = {};
-
-  /** @internal */ _signatureSubscriptionCounter: number = 0;
-  /** @internal */ _signatureSubscriptions: {
-    [id: number]: SignatureSubscriptionInfo;
-  } = {};
-
-  /** @internal */ _slotSubscriptionCounter: number = 0;
-  /** @internal */ _slotSubscriptions: {
-    [id: number]: SlotSubscriptionInfo;
-  } = {};
-
-  /** @internal */ _logsSubscriptionCounter: number = 0;
-  /** @internal */ _logsSubscriptions: {
-    [id: number]: LogsSubscriptionInfo;
-  } = {};
-
-  /** @internal */ _slotUpdateSubscriptionCounter: number = 0;
-  /** @internal */ _slotUpdateSubscriptions: {
-    [id: number]: SlotUpdateSubscriptionInfo;
-  } = {};
+  /**
+   * Special case.
+   * After a signature is processed, RPCs automatically dispose of the
+   * subscription on the server side. We need to track which of these
+   * subscriptions have been disposed in such a way, so that we know
+   * whether the client is dealing with a not-yet-processed signature
+   * (in which case we must tear down the server subscription) or an
+   * already-processed signature (in which case the client can simply
+   * clear out the subscription locally without telling the server).
+   *
+   * NOTE: There is a proposal to eliminate this special case, here:
+   * https://github.com/solana-labs/solana/issues/18892
+   */
+  /** @internal */ private _subscriptionsAutoDisposedByRpc: Set<ServerSubscriptionId> =
+    new Set();
 
   /**
    * Establish a JSON RPC connection
@@ -4131,6 +4181,7 @@ export class Connection {
    * @internal
    */
   _wsOnClose(code: number) {
+    this._rpcWebSocketGeneration++;
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
       this._rpcWebSocketHeartbeat = null;
@@ -4143,114 +4194,22 @@ export class Connection {
     }
 
     // implicit close, prepare subscriptions for auto-reconnect
-    this._resetSubscriptions();
+    this._subscriptionCallbacksByServerSubscriptionId = {};
+    Object.entries(
+      this._subscriptionsByHash as Record<SubscriptionConfigHash, Subscription>,
+    ).forEach(([hash, subscription]) => {
+      this._subscriptionsByHash[hash] = {
+        ...subscription,
+        state: 'pending',
+      };
+    });
   }
 
   /**
    * @internal
    */
-  async _subscribe(
-    sub: {subscriptionId: SubscriptionId | null},
-    rpcMethod: string,
-    rpcArgs: IWSRequestParams,
-  ) {
-    if (sub.subscriptionId == null) {
-      sub.subscriptionId = 'subscribing';
-      try {
-        const id = await this._rpcWebSocket.call(rpcMethod, rpcArgs);
-        if (typeof id === 'number' && sub.subscriptionId === 'subscribing') {
-          // eslint-disable-next-line require-atomic-updates
-          sub.subscriptionId = id;
-        }
-      } catch (err) {
-        if (sub.subscriptionId === 'subscribing') {
-          // eslint-disable-next-line require-atomic-updates
-          sub.subscriptionId = null;
-        }
-        if (err instanceof Error) {
-          console.error(
-            `${rpcMethod} error for argument`,
-            rpcArgs,
-            err.message,
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * @internal
-   */
-  async _unsubscribe(
-    sub: {subscriptionId: SubscriptionId | null},
-    rpcMethod: string,
-  ) {
-    const subscriptionId = sub.subscriptionId;
-    if (subscriptionId != null && typeof subscriptionId != 'string') {
-      const unsubscribeId: number = subscriptionId;
-      try {
-        await this._rpcWebSocket.call(rpcMethod, [unsubscribeId]);
-      } catch (err) {
-        if (err instanceof Error) {
-          console.error(`${rpcMethod} error:`, err.message);
-        }
-      }
-    }
-  }
-
-  /**
-   * @internal
-   */
-  _resetSubscriptions() {
-    Object.values(this._accountChangeSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._logsSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._programAccountChangeSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._rootSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._signatureSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._slotSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-    Object.values(this._slotUpdateSubscriptions).forEach(
-      s => (s.subscriptionId = null),
-    );
-  }
-
-  /**
-   * @internal
-   */
-  _updateSubscriptions() {
-    const accountKeys = Object.keys(this._accountChangeSubscriptions).map(
-      Number,
-    );
-    const programKeys = Object.keys(
-      this._programAccountChangeSubscriptions,
-    ).map(Number);
-    const slotKeys = Object.keys(this._slotSubscriptions).map(Number);
-    const slotUpdateKeys = Object.keys(this._slotUpdateSubscriptions).map(
-      Number,
-    );
-    const signatureKeys = Object.keys(this._signatureSubscriptions).map(Number);
-    const rootKeys = Object.keys(this._rootSubscriptions).map(Number);
-    const logsKeys = Object.keys(this._logsSubscriptions).map(Number);
-    if (
-      accountKeys.length === 0 &&
-      programKeys.length === 0 &&
-      slotKeys.length === 0 &&
-      slotUpdateKeys.length === 0 &&
-      signatureKeys.length === 0 &&
-      rootKeys.length === 0 &&
-      logsKeys.length === 0
-    ) {
+  async _updateSubscriptions() {
+    if (Object.keys(this._subscriptionsByHash).length === 0) {
       if (this._rpcWebSocketConnected) {
         this._rpcWebSocketConnected = false;
         this._rpcWebSocketIdleTimeout = setTimeout(() => {
@@ -4281,75 +4240,255 @@ export class Connection {
       return;
     }
 
-    for (let id of accountKeys) {
-      const sub = this._accountChangeSubscriptions[id];
-      this._subscribe(
-        sub,
-        'accountSubscribe',
-        this._buildArgs([sub.publicKey], sub.commitment, 'base64'),
-      );
-    }
+    const activeWebSocketGeneration = this._rpcWebSocketGeneration;
+    const isCurrentConnectionStillActive = () => {
+      return activeWebSocketGeneration === this._rpcWebSocketGeneration;
+    };
 
-    for (let id of programKeys) {
-      const sub = this._programAccountChangeSubscriptions[id];
-      this._subscribe(
-        sub,
-        'programSubscribe',
-        this._buildArgs([sub.programId], sub.commitment, 'base64', {
-          filters: sub.filters,
-        }),
-      );
-    }
+    await Promise.all(
+      // Don't be tempted to change this to `Object.entries`. We call
+      // `_updateSubscriptions` recursively when processing the state,
+      // so it's important that we look up the *current* version of
+      // each subscription, every time we process a hash.
+      Object.keys(this._subscriptionsByHash).map(async hash => {
+        const subscription = this._subscriptionsByHash[hash];
+        if (subscription === undefined) {
+          // This entry has since been deleted. Skip.
+          return;
+        }
+        switch (subscription.state) {
+          case 'pending':
+          case 'unsubscribed':
+            if (subscription.callbacks.size === 0) {
+              /**
+               * You can end up here when:
+               *
+               * - a subscription has recently unsubscribed
+               *   without having new callbacks added to it
+               *   while the unsubscribe was in flight, or
+               * - when a pending subscription has its
+               *   listeners removed before a request was
+               *   sent to the server.
+               *
+               * Being that nobody is interested in this
+               * subscription any longer, delete it.
+               */
+              delete this._subscriptionsByHash[hash];
+              if (subscription.state === 'unsubscribed') {
+                delete this._subscriptionCallbacksByServerSubscriptionId[
+                  subscription.serverSubscriptionId
+                ];
+              }
+              await this._updateSubscriptions();
+              return;
+            }
+            await (async () => {
+              const {args, method} = subscription;
+              try {
+                this._subscriptionsByHash[hash] = {
+                  ...subscription,
+                  state: 'subscribing',
+                };
+                const serverSubscriptionId: ServerSubscriptionId =
+                  (await this._rpcWebSocket.call(method, args)) as number;
+                this._subscriptionsByHash[hash] = {
+                  ...subscription,
+                  serverSubscriptionId,
+                  state: 'subscribed',
+                };
+                this._subscriptionCallbacksByServerSubscriptionId[
+                  serverSubscriptionId
+                ] = subscription.callbacks;
+                await this._updateSubscriptions();
+              } catch (e) {
+                if (e instanceof Error) {
+                  console.error(
+                    `${method} error for argument`,
+                    args,
+                    e.message,
+                  );
+                }
+                if (!isCurrentConnectionStillActive()) {
+                  return;
+                }
+                // TODO: Maybe add an 'errored' state or a retry limit?
+                this._subscriptionsByHash[hash] = {
+                  ...subscription,
+                  state: 'pending',
+                };
+                await this._updateSubscriptions();
+              }
+            })();
+            break;
+          case 'subscribed':
+            if (subscription.callbacks.size === 0) {
+              // By the time we successfully set up a subscription
+              // with the server, the client stopped caring about it.
+              // Tear it down now.
+              await (async () => {
+                const {serverSubscriptionId, unsubscribeMethod} = subscription;
+                if (
+                  this._subscriptionsAutoDisposedByRpc.has(serverSubscriptionId)
+                ) {
+                  /**
+                   * Special case.
+                   * If we're dealing with a subscription that has been auto-
+                   * disposed by the RPC, then we can skip the RPC call to
+                   * tear down the subscription here.
+                   *
+                   * NOTE: There is a proposal to eliminate this special case, here:
+                   * https://github.com/solana-labs/solana/issues/18892
+                   */
+                  this._subscriptionsAutoDisposedByRpc.delete(
+                    serverSubscriptionId,
+                  );
+                } else {
+                  this._subscriptionsByHash[hash] = {
+                    ...subscription,
+                    state: 'unsubscribing',
+                  };
+                  try {
+                    await this._rpcWebSocket.call(unsubscribeMethod, [
+                      serverSubscriptionId,
+                    ]);
+                  } catch (e) {
+                    if (e instanceof Error) {
+                      console.error(`${unsubscribeMethod} error:`, e.message);
+                    }
+                    if (!isCurrentConnectionStillActive()) {
+                      return;
+                    }
+                    // TODO: Maybe add an 'errored' state or a retry limit?
+                    this._subscriptionsByHash[hash] = {
+                      ...subscription,
+                      state: 'subscribed',
+                    };
+                    await this._updateSubscriptions();
+                    return;
+                  }
+                }
+                this._subscriptionsByHash[hash] = {
+                  ...subscription,
+                  state: 'unsubscribed',
+                };
+                await this._updateSubscriptions();
+              })();
+            }
+            break;
+          case 'subscribing':
+          case 'unsubscribing':
+            break;
+        }
+      }),
+    );
+  }
 
-    for (let id of slotKeys) {
-      const sub = this._slotSubscriptions[id];
-      this._subscribe(sub, 'slotSubscribe', []);
+  /**
+   * @internal
+   */
+  private _handleServerNotification<
+    TCallback extends SubscriptionConfig['callback'],
+  >(
+    serverSubscriptionId: ServerSubscriptionId,
+    callbackArgs: Parameters<TCallback>,
+  ): void {
+    const callbacks =
+      this._subscriptionCallbacksByServerSubscriptionId[serverSubscriptionId];
+    if (callbacks === undefined) {
+      return;
     }
-
-    for (let id of slotUpdateKeys) {
-      const sub = this._slotUpdateSubscriptions[id];
-      this._subscribe(sub, 'slotsUpdatesSubscribe', []);
-    }
-
-    for (let id of signatureKeys) {
-      const sub = this._signatureSubscriptions[id];
-      const args: any[] = [sub.signature];
-      if (sub.options) args.push(sub.options);
-      this._subscribe(sub, 'signatureSubscribe', args);
-    }
-
-    for (let id of rootKeys) {
-      const sub = this._rootSubscriptions[id];
-      this._subscribe(sub, 'rootSubscribe', []);
-    }
-
-    for (let id of logsKeys) {
-      const sub = this._logsSubscriptions[id];
-      let filter;
-      if (typeof sub.filter === 'object') {
-        filter = {mentions: [sub.filter.toString()]};
-      } else {
-        filter = sub.filter;
+    callbacks.forEach(cb => {
+      try {
+        cb(
+          // I failed to find a way to convince TypeScript that `cb` is of type
+          // `TCallback` which is certainly compatible with `Parameters<TCallback>`.
+          // See https://github.com/microsoft/TypeScript/issues/47615
+          // @ts-ignore
+          ...callbackArgs,
+        );
+      } catch (e) {
+        console.error(e);
       }
-      this._subscribe(
-        sub,
-        'logsSubscribe',
-        this._buildArgs([filter], sub.commitment),
-      );
-    }
+    });
   }
 
   /**
    * @internal
    */
   _wsOnAccountNotification(notification: object) {
-    const res = create(notification, AccountNotificationResult);
-    for (const sub of Object.values(this._accountChangeSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        sub.callback(res.result.value, res.result.context);
-        return;
-      }
+    const {result, subscription} = create(
+      notification,
+      AccountNotificationResult,
+    );
+    this._handleServerNotification<AccountChangeCallback>(subscription, [
+      result.value,
+      result.context,
+    ]);
+  }
+
+  /**
+   * @internal
+   */
+  private _makeSubscription(
+    subscriptionConfig: SubscriptionConfig,
+    /**
+     * When preparing `args` for a call to `_makeSubscription`, be sure
+     * to carefully apply a default `commitment` property, if necessary.
+     *
+     * - If the user supplied a `commitment` use that.
+     * - Otherwise, if the `Connection::commitment` is set, use that.
+     * - Otherwise, set it to the RPC server default: `finalized`.
+     *
+     * This is extremely important to ensure that these two fundamentally
+     * identical subscriptions produce the same identifying hash:
+     *
+     * - A subscription made without specifying a commitment.
+     * - A subscription made where the commitment specified is the same
+     *   as the default applied to the subscription above.
+     *
+     * Example; these two subscriptions must produce the same hash:
+     *
+     * - An `accountSubscribe` subscription for `'PUBKEY'`
+     * - An `accountSubscribe` subscription for `'PUBKEY'` with commitment
+     *   `'finalized'`.
+     *
+     * See the 'making a subscription with defaulted params omitted' test
+     * in `connection-subscriptions.ts` for more.
+     */
+    args: IWSRequestParams,
+  ): ClientSubscriptionId {
+    const clientSubscriptionId = this._nextClientSubscriptionId++;
+    const hash = fastStableStringify(
+      [subscriptionConfig.method, args],
+      true /* isArrayProp */,
+    );
+    const existingSubscription = this._subscriptionsByHash[hash];
+    if (existingSubscription === undefined) {
+      this._subscriptionsByHash[hash] = {
+        ...subscriptionConfig,
+        args,
+        callbacks: new Set([subscriptionConfig.callback]),
+        state: 'pending',
+      };
+    } else {
+      existingSubscription.callbacks.add(subscriptionConfig.callback);
     }
+    this._subscriptionDisposeFunctionsByClientSubscriptionId[
+      clientSubscriptionId
+    ] = async () => {
+      delete this._subscriptionDisposeFunctionsByClientSubscriptionId[
+        clientSubscriptionId
+      ];
+      const subscription = this._subscriptionsByHash[hash];
+      assert(
+        subscription !== undefined,
+        `Could not find a \`Subscription\` when tearing down client subscription #${clientSubscriptionId}`,
+      );
+      subscription.callbacks.delete(subscriptionConfig.callback);
+      await this._updateSubscriptions();
+    };
+    this._updateSubscriptions();
+    return clientSubscriptionId;
   }
 
   /**
@@ -4364,52 +4503,51 @@ export class Connection {
     publicKey: PublicKey,
     callback: AccountChangeCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._accountChangeSubscriptionCounter;
-    this._accountChangeSubscriptions[id] = {
-      publicKey: publicKey.toBase58(),
-      callback,
-      commitment,
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+  ): ClientSubscriptionId {
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+      'base64',
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'accountSubscribe',
+        unsubscribeMethod: 'accountUnsubscribe',
+      },
+      args,
+    );
   }
 
   /**
    * Deregister an account notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeAccountChangeListener(id: number): Promise<void> {
-    if (this._accountChangeSubscriptions[id]) {
-      const subInfo = this._accountChangeSubscriptions[id];
-      delete this._accountChangeSubscriptions[id];
-      await this._unsubscribe(subInfo, 'accountUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(createSubscriptionWarningMessage(id, 'account change'));
-    }
+  async removeAccountChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'account change',
+    );
   }
 
   /**
    * @internal
    */
   _wsOnProgramAccountNotification(notification: Object) {
-    const res = create(notification, ProgramAccountNotificationResult);
-    for (const sub of Object.values(this._programAccountChangeSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        const {value, context} = res.result;
-        sub.callback(
-          {
-            accountId: value.pubkey,
-            accountInfo: value.account,
-          },
-          context,
-        );
-        return;
-      }
-    }
+    const {result, subscription} = create(
+      notification,
+      ProgramAccountNotificationResult,
+    );
+    this._handleServerNotification<ProgramAccountChangeCallback>(subscription, [
+      {
+        accountId: result.value.pubkey,
+        accountInfo: result.value.account,
+      },
+      result.context,
+    ]);
   }
 
   /**
@@ -4427,35 +4565,35 @@ export class Connection {
     callback: ProgramAccountChangeCallback,
     commitment?: Commitment,
     filters?: GetProgramAccountsFilter[],
-  ): number {
-    const id = ++this._programAccountChangeSubscriptionCounter;
-    this._programAccountChangeSubscriptions[id] = {
-      programId: programId.toBase58(),
-      callback,
-      commitment,
-      subscriptionId: null,
-      filters,
-    };
-    this._updateSubscriptions();
-    return id;
+  ): ClientSubscriptionId {
+    const args = this._buildArgs(
+      [programId.toBase58()],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+      'base64' /* encoding */,
+      filters ? {filters: filters} : undefined /* extra */,
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'programSubscribe',
+        unsubscribeMethod: 'programUnsubscribe',
+      },
+      args,
+    );
   }
 
   /**
    * Deregister an account notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeProgramAccountChangeListener(id: number): Promise<void> {
-    if (this._programAccountChangeSubscriptions[id]) {
-      const subInfo = this._programAccountChangeSubscriptions[id];
-      delete this._programAccountChangeSubscriptions[id];
-      await this._unsubscribe(subInfo, 'programUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(
-        createSubscriptionWarningMessage(id, 'program account change'),
-      );
-    }
+  async removeProgramAccountChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'program account change',
+    );
   }
 
   /**
@@ -4465,60 +4603,49 @@ export class Connection {
     filter: LogsFilter,
     callback: LogsCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._logsSubscriptionCounter;
-    this._logsSubscriptions[id] = {
-      filter,
-      callback,
-      commitment,
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+  ): ClientSubscriptionId {
+    const args = this._buildArgs(
+      [typeof filter === 'object' ? {mentions: [filter.toString()]} : filter],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+    );
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'logsSubscribe',
+        unsubscribeMethod: 'logsUnsubscribe',
+      },
+      args,
+    );
   }
 
   /**
    * Deregister a logs callback.
    *
-   * @param id subscription id to deregister.
+   * @param id client subscription id to deregister.
    */
-  async removeOnLogsListener(id: number): Promise<void> {
-    if (this._logsSubscriptions[id]) {
-      const subInfo = this._logsSubscriptions[id];
-      delete this._logsSubscriptions[id];
-      await this._unsubscribe(subInfo, 'logsUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(createSubscriptionWarningMessage(id, 'logs'));
-    }
+  async removeOnLogsListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(clientSubscriptionId, 'logs');
   }
 
   /**
    * @internal
    */
   _wsOnLogsNotification(notification: Object) {
-    const res = create(notification, LogsNotificationResult);
-    const keys = Object.keys(this._logsSubscriptions).map(Number);
-    for (let id of keys) {
-      const sub = this._logsSubscriptions[id];
-      if (sub.subscriptionId === res.subscription) {
-        sub.callback(res.result.value, res.result.context);
-        return;
-      }
-    }
+    const {result, subscription} = create(notification, LogsNotificationResult);
+    this._handleServerNotification<LogsCallback>(subscription, [
+      result.value,
+      result.context,
+    ]);
   }
 
   /**
    * @internal
    */
   _wsOnSlotNotification(notification: Object) {
-    const res = create(notification, SlotNotificationResult);
-    for (const sub of Object.values(this._slotSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        sub.callback(res.result);
-        return;
-      }
-    }
+    const {result, subscription} = create(notification, SlotNotificationResult);
+    this._handleServerNotification<SlotChangeCallback>(subscription, [result]);
   }
 
   /**
@@ -4527,43 +4654,40 @@ export class Connection {
    * @param callback Function to invoke whenever the slot changes
    * @return subscription id
    */
-  onSlotChange(callback: SlotChangeCallback): number {
-    const id = ++this._slotSubscriptionCounter;
-    this._slotSubscriptions[id] = {
-      callback,
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+  onSlotChange(callback: SlotChangeCallback): ClientSubscriptionId {
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'slotSubscribe',
+        unsubscribeMethod: 'slotUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**
    * Deregister a slot notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSlotChangeListener(id: number): Promise<void> {
-    if (this._slotSubscriptions[id]) {
-      const subInfo = this._slotSubscriptions[id];
-      delete this._slotSubscriptions[id];
-      await this._unsubscribe(subInfo, 'slotUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(createSubscriptionWarningMessage(id, 'slot change'));
-    }
+  async removeSlotChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'slot change',
+    );
   }
 
   /**
    * @internal
    */
   _wsOnSlotUpdatesNotification(notification: Object) {
-    const res = create(notification, SlotUpdateNotificationResult);
-    for (const sub of Object.values(this._slotUpdateSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        sub.callback(res.result);
-        return;
-      }
-    }
+    const {result, subscription} = create(
+      notification,
+      SlotUpdateNotificationResult,
+    );
+    this._handleServerNotification<SlotUpdateCallback>(subscription, [result]);
   }
 
   /**
@@ -4573,29 +4697,51 @@ export class Connection {
    * @param callback Function to invoke whenever the slot updates
    * @return subscription id
    */
-  onSlotUpdate(callback: SlotUpdateCallback): number {
-    const id = ++this._slotUpdateSubscriptionCounter;
-    this._slotUpdateSubscriptions[id] = {
-      callback,
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+  onSlotUpdate(callback: SlotUpdateCallback): ClientSubscriptionId {
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'slotsUpdatesSubscribe',
+        unsubscribeMethod: 'slotsUpdatesUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**
    * Deregister a slot update notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSlotUpdateListener(id: number): Promise<void> {
-    if (this._slotUpdateSubscriptions[id]) {
-      const subInfo = this._slotUpdateSubscriptions[id];
-      delete this._slotUpdateSubscriptions[id];
-      await this._unsubscribe(subInfo, 'slotsUpdatesUnsubscribe');
-      this._updateSubscriptions();
+  async removeSlotUpdateListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'slot update',
+    );
+  }
+
+  /**
+   * @internal
+   */
+
+  private async _unsubscribeClientSubscription(
+    clientSubscriptionId: ClientSubscriptionId,
+    subscriptionName: string,
+  ) {
+    const dispose =
+      this._subscriptionDisposeFunctionsByClientSubscriptionId[
+        clientSubscriptionId
+      ];
+    if (dispose) {
+      await dispose();
     } else {
-      console.warn(createSubscriptionWarningMessage(id, 'slot update'));
+      console.warn(
+        'Ignored unsubscribe request because an active subscription with id ' +
+          `\`${clientSubscriptionId}\` for '${subscriptionName}' events ` +
+          'could not be found.',
+      );
     }
   }
 
@@ -4646,32 +4792,32 @@ export class Connection {
    * @internal
    */
   _wsOnSignatureNotification(notification: Object) {
-    const res = create(notification, SignatureNotificationResult);
-    for (const [id, sub] of Object.entries(this._signatureSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        if (res.result.value === 'receivedSignature') {
-          sub.callback(
-            {
-              type: 'received',
-            },
-            res.result.context,
-          );
-        } else {
-          // Signatures subscriptions are auto-removed by the RPC service so
-          // no need to explicitly send an unsubscribe message
-          delete this._signatureSubscriptions[Number(id)];
-          this._updateSubscriptions();
-          sub.callback(
-            {
-              type: 'status',
-              result: res.result.value,
-            },
-            res.result.context,
-          );
-        }
-        return;
-      }
+    const {result, subscription} = create(
+      notification,
+      SignatureNotificationResult,
+    );
+    if (result.value !== 'receivedSignature') {
+      /**
+       * Special case.
+       * After a signature is processed, RPCs automatically dispose of the
+       * subscription on the server side. We need to track which of these
+       * subscriptions have been disposed in such a way, so that we know
+       * whether the client is dealing with a not-yet-processed signature
+       * (in which case we must tear down the server subscription) or an
+       * already-processed signature (in which case the client can simply
+       * clear out the subscription locally without telling the server).
+       *
+       * NOTE: There is a proposal to eliminate this special case, here:
+       * https://github.com/solana-labs/solana/issues/18892
+       */
+      this._subscriptionsAutoDisposedByRpc.add(subscription);
     }
+    this._handleServerNotification<SignatureSubscriptionCallback>(
+      subscription,
+      result.value === 'receivedSignature'
+        ? [{type: 'received'}, result.context]
+        : [{type: 'status', result: result.value}, result.context],
+    );
   }
 
   /**
@@ -4686,20 +4832,32 @@ export class Connection {
     signature: TransactionSignature,
     callback: SignatureResultCallback,
     commitment?: Commitment,
-  ): number {
-    const id = ++this._signatureSubscriptionCounter;
-    this._signatureSubscriptions[id] = {
-      signature,
-      callback: (notification, context) => {
-        if (notification.type === 'status') {
-          callback(notification.result, context);
-        }
+  ): ClientSubscriptionId {
+    const args = this._buildArgs(
+      [signature],
+      commitment || this._commitment || 'finalized', // Apply connection/server default.
+    );
+    const clientSubscriptionId = this._makeSubscription(
+      {
+        callback: (notification, context) => {
+          if (notification.type === 'status') {
+            callback(notification.result, context);
+            // Signatures subscriptions are auto-removed by the RPC service
+            // so no need to explicitly send an unsubscribe message.
+            try {
+              this.removeSignatureListener(clientSubscriptionId);
+              // eslint-disable-next-line no-empty
+            } catch {
+              // Already removed.
+            }
+          }
+        },
+        method: 'signatureSubscribe',
+        unsubscribeMethod: 'signatureUnsubscribe',
       },
-      options: {commitment},
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+      args,
+    );
+    return clientSubscriptionId;
   }
 
   /**
@@ -4716,45 +4874,59 @@ export class Connection {
     signature: TransactionSignature,
     callback: SignatureSubscriptionCallback,
     options?: SignatureSubscriptionOptions,
-  ): number {
-    const id = ++this._signatureSubscriptionCounter;
-    this._signatureSubscriptions[id] = {
-      signature,
-      callback,
-      options,
-      subscriptionId: null,
+  ): ClientSubscriptionId {
+    const {commitment, ...extra} = {
+      ...options,
+      commitment:
+        (options && options.commitment) || this._commitment || 'finalized', // Apply connection/server default.
     };
-    this._updateSubscriptions();
-    return id;
+    const args = this._buildArgs(
+      [signature],
+      commitment,
+      undefined /* encoding */,
+      extra,
+    );
+    const clientSubscriptionId = this._makeSubscription(
+      {
+        callback: (notification, context) => {
+          callback(notification, context);
+          // Signatures subscriptions are auto-removed by the RPC service
+          // so no need to explicitly send an unsubscribe message.
+          try {
+            this.removeSignatureListener(clientSubscriptionId);
+            // eslint-disable-next-line no-empty
+          } catch {
+            // Already removed.
+          }
+        },
+        method: 'signatureSubscribe',
+        unsubscribeMethod: 'signatureUnsubscribe',
+      },
+      args,
+    );
+    return clientSubscriptionId;
   }
 
   /**
    * Deregister a signature notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeSignatureListener(id: number): Promise<void> {
-    if (this._signatureSubscriptions[id]) {
-      const subInfo = this._signatureSubscriptions[id];
-      delete this._signatureSubscriptions[id];
-      await this._unsubscribe(subInfo, 'signatureUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(createSubscriptionWarningMessage(id, 'signature result'));
-    }
+  async removeSignatureListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'signature result',
+    );
   }
 
   /**
    * @internal
    */
   _wsOnRootNotification(notification: Object) {
-    const res = create(notification, RootNotificationResult);
-    for (const sub of Object.values(this._rootSubscriptions)) {
-      if (sub.subscriptionId === res.subscription) {
-        sub.callback(res.result);
-        return;
-      }
-    }
+    const {result, subscription} = create(notification, RootNotificationResult);
+    this._handleServerNotification<RootChangeCallback>(subscription, [result]);
   }
 
   /**
@@ -4763,29 +4935,28 @@ export class Connection {
    * @param callback Function to invoke whenever the root changes
    * @return subscription id
    */
-  onRootChange(callback: RootChangeCallback): number {
-    const id = ++this._rootSubscriptionCounter;
-    this._rootSubscriptions[id] = {
-      callback,
-      subscriptionId: null,
-    };
-    this._updateSubscriptions();
-    return id;
+  onRootChange(callback: RootChangeCallback): ClientSubscriptionId {
+    return this._makeSubscription(
+      {
+        callback,
+        method: 'rootSubscribe',
+        unsubscribeMethod: 'rootUnsubscribe',
+      },
+      [] /* args */,
+    );
   }
 
   /**
    * Deregister a root notification callback
    *
-   * @param id subscription id to deregister
+   * @param id client subscription id to deregister
    */
-  async removeRootChangeListener(id: number): Promise<void> {
-    if (this._rootSubscriptions[id]) {
-      const subInfo = this._rootSubscriptions[id];
-      delete this._rootSubscriptions[id];
-      await this._unsubscribe(subInfo, 'rootUnsubscribe');
-      this._updateSubscriptions();
-    } else {
-      console.warn(createSubscriptionWarningMessage(id, 'root change'));
-    }
+  async removeRootChangeListener(
+    clientSubscriptionId: ClientSubscriptionId,
+  ): Promise<void> {
+    await this._unsubscribeClientSubscription(
+      clientSubscriptionId,
+      'root change',
+    );
   }
 }

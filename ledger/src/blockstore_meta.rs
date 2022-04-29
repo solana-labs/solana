@@ -231,8 +231,8 @@ impl SlotMeta {
 impl ErasureMeta {
     pub(crate) fn from_coding_shred(shred: &Shred) -> Option<Self> {
         match shred.shred_type() {
-            ShredType::Data => None,
-            ShredType::Code => {
+            ShredType::DataV1 | ShredType::DataV2 => None,
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 let config = ErasureConfig::new(
                     usize::from(shred.num_data_shreds().ok()?),
                     usize::from(shred.num_coding_shreds().ok()?),
