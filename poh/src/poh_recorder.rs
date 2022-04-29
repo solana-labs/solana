@@ -651,7 +651,6 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
-        println!("Tick!");
         let ((poh_entry, target_time), tick_lock_contention_time) = Measure::this(
             |_| {
                 let mut poh_l = self.poh.lock().unwrap();

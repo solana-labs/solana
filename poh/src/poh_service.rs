@@ -180,7 +180,6 @@ impl PohService {
             );
             if remaining_tick_time.is_zero() {
                 last_tick = Instant::now();
-                println!("sleepy_tick_producer");
                 poh_recorder.lock().unwrap().tick();
             }
         }
