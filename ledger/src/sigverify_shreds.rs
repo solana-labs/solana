@@ -459,7 +459,7 @@ pub fn sign_shreds_gpu(
 pub mod tests {
     use {
         super::*,
-        crate::shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
+        crate::shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD_V1},
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -639,7 +639,7 @@ pub mod tests {
                 slot,
                 0xc0de,
                 i as u16,
-                &[5; SIZE_OF_DATA_SHRED_PAYLOAD],
+                &[5; SIZE_OF_DATA_SHRED_PAYLOAD_V1], // TODO MERKLE
                 true,
                 true,
                 1,

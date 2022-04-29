@@ -76,13 +76,14 @@ pub type Nonce = u32;
 const SIZE_OF_MERKLE_HASH: usize = 20;
 const SIZE_OF_MERKLE_ROOT: usize = SIZE_OF_MERKLE_HASH;
 const SIZE_OF_MERKLE_PROOF: usize = SIZE_OF_MERKLE_HASH * 6;
-//const SIZE_OF_MERKLE_PAYLOAD: usize = SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
+const SIZE_OF_MERKLE_PAYLOAD: usize = SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
 const SIZE_OF_COMMON_SHRED_HEADER_V1: usize = 83;
-//const SIZE_OF_COMMON_SHRED_HEADER_V2: usize = 83 + SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
+const SIZE_OF_COMMON_SHRED_HEADER_V2: usize = 83 + SIZE_OF_MERKLE_PAYLOAD;
+
 const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
 const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 const SIZE_OF_SIGNATURE: usize = 64;
@@ -91,22 +92,36 @@ const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
 
-const SIZE_OF_CODING_SHRED_HEADERS: usize =
+const SIZE_OF_CODING_SHRED_HEADERS_V1: usize =
     SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_CODING_SHRED_HEADER;
 
-pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
+const SIZE_OF_CODING_SHRED_HEADERS_V2: usize =
+    SIZE_OF_COMMON_SHRED_HEADER_V2 + SIZE_OF_CODING_SHRED_HEADER;
+
+pub const SIZE_OF_DATA_SHRED_PAYLOAD_V1: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER_V1
     - SIZE_OF_DATA_SHRED_HEADER
-    - SIZE_OF_CODING_SHRED_HEADERS
+    - SIZE_OF_CODING_SHRED_HEADERS_V1
     - SIZE_OF_NONCE;
 
-const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER;
+pub const SIZE_OF_DATA_SHRED_PAYLOAD_V2: usize = PACKET_DATA_SIZE
+    - SIZE_OF_COMMON_SHRED_HEADER_V2
+    - SIZE_OF_DATA_SHRED_HEADER
+    - SIZE_OF_CODING_SHRED_HEADERS_V2
+    - SIZE_OF_NONCE;
+
+const SHRED_DATA_OFFSET_V1: usize = SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER;
+const SHRED_DATA_OFFSET_V2: usize = SIZE_OF_COMMON_SHRED_HEADER_V2 + SIZE_OF_DATA_SHRED_HEADER;
+
 // DataShredHeader.size is sum of common-shred-header, data-shred-header and
 // data.len(). Broadcast stage may create zero length data shreds when the
 // previous slot was interrupted:
 // https://github.com/solana-labs/solana/blob/2d4defa47/core/src/broadcast_stage/standard_broadcast_run.rs#L79
-const DATA_SHRED_SIZE_RANGE: RangeInclusive<usize> =
-    SHRED_DATA_OFFSET..=SHRED_DATA_OFFSET + SIZE_OF_DATA_SHRED_PAYLOAD;
+const DATA_SHRED_SIZE_RANGE_V1: RangeInclusive<usize> =
+    SHRED_DATA_OFFSET_V1..=SHRED_DATA_OFFSET_V1 + SIZE_OF_DATA_SHRED_PAYLOAD_V1;
+
+const DATA_SHRED_SIZE_RANGE_V2: RangeInclusive<usize> =
+    SHRED_DATA_OFFSET_V2..=SHRED_DATA_OFFSET_V2 + SIZE_OF_DATA_SHRED_PAYLOAD_V2;
 
 const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
@@ -114,7 +129,9 @@ const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 // SIZE_OF_CODING_SHRED_HEADERS bytes at the end of data shreds
 // is never used and is not part of erasure coding.
-const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
+const ENCODED_PAYLOAD_SIZE_V1: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS_V1;
+
+const ENCODED_PAYLOAD_SIZE_V2: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS_V2;
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
@@ -444,14 +461,15 @@ impl Shred {
         .expect("Failed to write header into shred buffer");
         Self::serialize_obj_into(
             &mut start,
-            SIZE_OF_CODING_SHRED_HEADER,
+            SIZE_OF_CODING_SHRED_HEADERS_V1, // TODO MERKLE
             &mut payload,
             &coding_header,
         )
         .expect("Failed to write coding header into shred buffer");
         // Tests may have an empty parity_shard.
         if !parity_shard.is_empty() {
-            payload[SIZE_OF_CODING_SHRED_HEADERS..].copy_from_slice(parity_shard);
+            payload[SIZE_OF_CODING_SHRED_HEADERS_V1..].copy_from_slice(parity_shard);
+            // TODO MERKLE
         }
         Shred {
             common_header,
@@ -498,15 +516,20 @@ impl Shred {
     pub(crate) fn data(&self) -> Result<&[u8], Error> {
         match self.shred_type() {
             ShredType::CodeV1 | ShredType::CodeV2 => Err(Error::InvalidShredType),
-            ShredType::DataV1 | ShredType::DataV2 => {
+            t @ (ShredType::DataV1 | ShredType::DataV2) => {
+                let (range, data_offset) = match t {
+                    ShredType::DataV1 => (DATA_SHRED_SIZE_RANGE_V1, SHRED_DATA_OFFSET_V1),
+                    ShredType::DataV2 => (DATA_SHRED_SIZE_RANGE_V2, SHRED_DATA_OFFSET_V2),
+                    _ => panic!("unreachable"),
+                };
                 let size = usize::from(self.data_header.size);
-                if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
+                if size > self.payload.len() || !range.contains(&size) {
                     return Err(Error::InvalidDataSize {
                         size: self.data_header.size,
                         payload: self.payload.len(),
                     });
                 }
-                Ok(&self.payload[SHRED_DATA_OFFSET..size])
+                Ok(&self.payload[data_offset..size])
             }
         }
     }
@@ -585,13 +608,18 @@ impl Shred {
             return Err(Error::InvalidErasureShardIndex(headers));
         }
         match self.shred_type() {
-            ShredType::DataV1 | ShredType::DataV2 => {
+            t @ (ShredType::DataV1 | ShredType::DataV2) => {
+                let range = match t {
+                    ShredType::DataV1 => DATA_SHRED_SIZE_RANGE_V1,
+                    ShredType::DataV2 => DATA_SHRED_SIZE_RANGE_V2,
+                    _ => panic!("unreachable"),
+                };
                 if self.index() as usize >= MAX_DATA_SHREDS_PER_SLOT {
                     return Err(Error::InvalidDataShredIndex(self.index()));
                 }
                 let _parent = self.parent()?;
                 let size = usize::from(self.data_header.size);
-                if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
+                if size > self.payload.len() || !range.contains(&size) {
                     return Err(Error::InvalidDataSize {
                         size: self.data_header.size,
                         payload: self.payload.len(),
@@ -653,14 +681,20 @@ impl Shred {
         let shred_type = self.shred_type();
         let mut shard = self.payload;
         match shred_type {
-            ShredType::DataV1 | ShredType::DataV2 => {
-                shard.resize(ENCODED_PAYLOAD_SIZE, 0u8); // TODO MERKLE
+            ShredType::DataV1 => {
+                shard.resize(ENCODED_PAYLOAD_SIZE_V1, 0u8); // TODO MERKLE
             }
-            ShredType::CodeV1 | ShredType::CodeV2 => {
+            ShredType::DataV2 => {
+                shard.resize(ENCODED_PAYLOAD_SIZE_V2, 0u8);
+            }
+            ShredType::CodeV1 => {
                 // SIZE_OF_CODING_SHRED_HEADERS bytes at the beginning of the
                 // coding shreds contains the header and is not part of erasure
                 // coding.
-                shard.drain(..SIZE_OF_CODING_SHRED_HEADERS);
+                shard.drain(..SIZE_OF_CODING_SHRED_HEADERS_V1);
+            }
+            ShredType::CodeV2 => {
+                shard.drain(..SIZE_OF_CODING_SHRED_HEADERS_V2);
             }
         }
         Ok(shard)
@@ -672,8 +706,10 @@ impl Shred {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
         Ok(match self.shred_type() {
-            ShredType::DataV1 | ShredType::DataV2 => &self.payload[..ENCODED_PAYLOAD_SIZE], // TODO MERKLE
-            ShredType::CodeV1 | ShredType::CodeV2 => &self.payload[SIZE_OF_CODING_SHRED_HEADERS..],
+            ShredType::DataV1 => &self.payload[..ENCODED_PAYLOAD_SIZE_V1], // TODO merkle
+            ShredType::DataV2 => &self.payload[..ENCODED_PAYLOAD_SIZE_V2],
+            ShredType::CodeV1 => &self.payload[SIZE_OF_CODING_SHRED_HEADERS_V1..],
+            ShredType::CodeV2 => &self.payload[SIZE_OF_CODING_SHRED_HEADERS_V2..],
         })
     }
 
@@ -896,7 +932,7 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let shred_data_size = shred_data_size.unwrap_or(SIZE_OF_DATA_SHRED_PAYLOAD) as u64;
+    let shred_data_size = shred_data_size.unwrap_or(SIZE_OF_DATA_SHRED_PAYLOAD_V2) as u64; // TODO MERKLE
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -1133,7 +1169,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_data_shred() {
-        let data = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+        let data = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]; // TODO MERKLE
         let mut shred = Shred::new_from_data(
             420, // slot
             19,  // index

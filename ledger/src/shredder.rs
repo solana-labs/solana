@@ -1,7 +1,7 @@
 use {
     crate::{
         erasure::Session,
-        shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD},
+        shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD_V1},
         shred_stats::ProcessShredsStats,
     },
     rayon::{prelude::*, ThreadPool},
@@ -103,8 +103,8 @@ impl Shredder {
         serialize_time.stop();
 
         let mut gen_data_time = Measure::start("shred_gen_data_time");
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
-        // Integer division to ensure we have enough shreds to fit all the data
+        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD_V1; // TODO MERKLE
+                                                              // Integer division to ensure we have enough shreds to fit all the data
         let num_shreds = (serialized_shreds.len() + payload_capacity - 1) / payload_capacity;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
         // 1) Generate data shreds
@@ -335,7 +335,7 @@ impl Shredder {
             // For backward compatibility. This is needed when the data shred
             // payload is None, so that deserializing to Vec<Entry> results in
             // an empty vector.
-            Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD])
+            Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]) // TODO MERKLE
         } else {
             Ok(data)
         }
@@ -398,7 +398,7 @@ mod tests {
 
         let size = serialized_size(&entries).unwrap();
         // Integer division to ensure we have enough shreds to fit all the data
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
+        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD_V1 as u64; // TODO MERKLE
         let num_expected_data_shreds = (size + payload_capacity - 1) / payload_capacity;
         let num_expected_coding_shreds = (2 * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
             .saturating_sub(num_expected_data_shreds as usize)
@@ -565,7 +565,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
         // Create enough entries to make > 1 shred
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
+        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD_V1; // TODO MERKLE
         let num_entries = max_ticks_per_n_shreds(1, Some(payload_capacity)) + 1;
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
@@ -614,7 +614,7 @@ mod tests {
         let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
 
         let num_data_shreds: usize = 5;
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
+        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD_V1; // TODO MERKLE
         let num_entries =
             max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(payload_capacity));
         let entries: Vec<_> = (0..num_entries)
