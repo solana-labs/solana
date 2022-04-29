@@ -73,10 +73,16 @@ use {
 
 pub type Nonce = u32;
 
+const SIZE_OF_MERKLE_HASH: usize = 20;
+const SIZE_OF_MERKLE_ROOT: usize = SIZE_OF_MERKLE_HASH;
+const SIZE_OF_MERKLE_PROOF: usize = SIZE_OF_MERKLE_HASH * 6;
+const SIZE_OF_MERKLE_PAYLOAD: usize = SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
+
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
+const SIZE_OF_COMMON_SHRED_HEADER_V1: usize = 83;
+const SIZE_OF_COMMON_SHRED_HEADEV_V2: usize = 83 + SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
 const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
 const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 const SIZE_OF_SIGNATURE: usize = 64;
@@ -84,14 +90,17 @@ const SIZE_OF_SHRED_TYPE: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
+
 const SIZE_OF_CODING_SHRED_HEADERS: usize =
-    SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
+    SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_CODING_SHRED_HEADER;
+
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
-    - SIZE_OF_COMMON_SHRED_HEADER
+    - SIZE_OF_COMMON_SHRED_HEADER_V1
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_CODING_SHRED_HEADERS
     - SIZE_OF_NONCE;
-const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
+
+const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER;
 // DataShredHeader.size is sum of common-shred-header, data-shred-header and
 // data.len(). Broadcast stage may create zero length data shreds when the
 // previous slot was interrupted:
@@ -137,6 +146,16 @@ pub enum Error {
     InvalidShredType(ShredType),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShredCommonHeaderVersion {
+    V1,
+    V2,
+}
+
+pub fn slot_to_shred_common_header_version(_slot: Slot) -> ShredCommonHeaderVersion {
+    ShredCommonHeaderVersion::V1 // TODO enabled with feature
+}
+
 #[repr(u8)]
 #[derive(
     Clone,
@@ -154,13 +173,40 @@ pub enum Error {
 )]
 #[serde(into = "u8", try_from = "u8")]
 pub enum ShredType {
-    Data = 0b1010_0101,
-    Code = 0b0101_1010,
+    DataV1 = 0b1010_0101,
+    CodeV1 = 0b0101_1010,
+    DataV2 = 0b0000_0011,
+    CodeV2 = 0b0000_0111,
 }
 
 impl Default for ShredType {
     fn default() -> Self {
-        ShredType::Data
+        ShredType::DataV1
+    }
+}
+
+impl ShredType {
+    fn is_data(&self) -> bool {
+        matches!(self, ShredType::DataV1 | ShredType::DataV2)
+    }
+
+    fn is_code(&self) -> bool {
+        matches!(self, ShredType::CodeV1 | ShredType::CodeV2)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MerklePayload {
+    root: [u8; SIZE_OF_MERKLE_ROOT],
+    proof: [u8; SIZE_OF_MERKLE_PROOF],
+}
+
+impl Default for MerklePayload {
+    fn default() -> Self {
+        MerklePayload {
+            root: [0u8; SIZE_OF_MERKLE_ROOT],
+            proof: [0u8; SIZE_OF_MERKLE_PROOF],
+        }
     }
 }
 
@@ -173,6 +219,9 @@ struct ShredCommonHeader {
     index: u32,
     version: u16,
     fec_set_index: u32,
+    #[serde(skip_deserializing)]
+    #[serde(skip_serializing)]
+    merkle: Option<MerklePayload>,
 }
 
 /// The data shred header has parent offset and flags
@@ -284,7 +333,7 @@ impl Shred {
             ..ShredCommonHeader::default()
         };
 
-        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER) as u16;
+        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER_V1) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
             flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
@@ -302,7 +351,7 @@ impl Shred {
         let mut start = 0;
         Self::serialize_obj_into(
             &mut start,
-            SIZE_OF_COMMON_SHRED_HEADER,
+            SIZE_OF_COMMON_SHRED_HEADER_V1,
             &mut payload,
             &common_header,
         )
@@ -328,19 +377,19 @@ impl Shred {
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut start = 0;
         let common_header: ShredCommonHeader =
-            Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER, &payload)?;
+            Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER_V1, &payload)?;
 
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
         // so that erasure generation/recovery works correctly
         // But only the data_header.size is stored in blockstore.
         payload.resize(SHRED_PAYLOAD_SIZE, 0);
         let (data_header, coding_header) = match common_header.shred_type {
-            ShredType::Code => {
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 let coding_header: CodingShredHeader =
                     Self::deserialize_obj(&mut start, SIZE_OF_CODING_SHRED_HEADER, &payload)?;
                 (DataShredHeader::default(), coding_header)
             }
-            ShredType::Data => {
+            ShredType::DataV1 | ShredType::DataV2 => {
                 let data_header: DataShredHeader =
                     Self::deserialize_obj(&mut start, SIZE_OF_DATA_SHRED_HEADER, &payload)?;
                 (data_header, CodingShredHeader::default())
@@ -366,7 +415,7 @@ impl Shred {
         version: u16,
     ) -> Self {
         let common_header = ShredCommonHeader {
-            shred_type: ShredType::Code,
+            shred_type: ShredType::CodeV1,
             index,
             slot,
             version,
@@ -382,7 +431,7 @@ impl Shred {
         let mut start = 0;
         Self::serialize_obj_into(
             &mut start,
-            SIZE_OF_COMMON_SHRED_HEADER,
+            SIZE_OF_COMMON_SHRED_HEADER_V1,
             &mut payload,
             &common_header,
         )
@@ -417,7 +466,7 @@ impl Shred {
 
     pub fn parent(&self) -> Result<Slot, Error> {
         match self.shred_type() {
-            ShredType::Data => {
+            ShredType::DataV1 | ShredType::DataV2 => {
                 let slot = self.slot();
                 let parent_offset = self.data_header.parent_offset;
                 if parent_offset == 0 && slot != 0 {
@@ -432,7 +481,7 @@ impl Shred {
                         parent_offset,
                     })
             }
-            ShredType::Code => Err(Error::InvalidShredType(ShredType::Code)),
+            ShredType::CodeV1 | ShredType::CodeV2 => Err(Error::InvalidShredType(self.shred_type())),
         }
     }
 
@@ -442,8 +491,8 @@ impl Shred {
 
     pub(crate) fn data(&self) -> Result<&[u8], Error> {
         match self.shred_type() {
-            ShredType::Code => Err(Error::InvalidShredType(ShredType::Code)),
-            ShredType::Data => {
+            ShredType::CodeV1 | ShredType::CodeV2 => Err(Error::InvalidShredType(self.shred_type())),
+            ShredType::DataV1 | ShredType::DataV2 => {
                 let size = usize::from(self.data_header.size);
                 if size > self.payload.len() || !DATA_SHRED_SIZE_RANGE.contains(&size) {
                     return Err(Error::InvalidDataSize {
@@ -465,8 +514,8 @@ impl Shred {
     // Should only be used when storing shreds to blockstore.
     pub(crate) fn bytes_to_store(&self) -> &[u8] {
         match self.shred_type() {
-            ShredType::Code => &self.payload,
-            ShredType::Data => {
+            ShredType::CodeV1 | ShredType::CodeV2 => &self.payload,
+            ShredType::DataV1 | ShredType::DataV2 => {
                 // Payload will be padded out to SHRED_PAYLOAD_SIZE.
                 // But only need to store the bytes within data_header.size.
                 &self.payload[..self.data_header.size as usize]
@@ -484,8 +533,8 @@ impl Shred {
 
     pub(crate) fn first_coding_index(&self) -> Option<u32> {
         match self.shred_type() {
-            ShredType::Data => None,
-            ShredType::Code => {
+            ShredType::DataV1 | ShredType::DataV2 => None,
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 let position = u32::from(self.coding_header.position);
                 self.index().checked_sub(position)
             }
@@ -501,13 +550,13 @@ impl Shred {
         }
         if self.erasure_block_index().is_none() {
             let headers: Box<dyn Debug> = match self.shred_type() {
-                ShredType::Data => Box::new((self.common_header, self.data_header)),
-                ShredType::Code => Box::new((self.common_header, self.coding_header)),
+                ShredType::DataV1 | ShredType::DataV2 => Box::new((self.common_header, self.data_header)),
+                ShredType::CodeV1 | ShredType::CodeV2 => Box::new((self.common_header, self.coding_header)),
             };
             return Err(Error::InvalidErasureBlockIndex(headers));
         }
         match self.shred_type() {
-            ShredType::Data => {
+            ShredType::DataV1 | ShredType::DataV2 => {
                 if self.index() as usize >= MAX_DATA_SHREDS_PER_SLOT {
                     return Err(Error::InvalidDataShredIndex {
                         index: self.index(),
@@ -522,7 +571,7 @@ impl Shred {
                     });
                 }
             }
-            ShredType::Code => {
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 let num_coding_shreds = u32::from(self.coding_header.num_coding_shreds);
                 if num_coding_shreds > 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK {
                     return Err(Error::InvalidNumCodingShreds(
@@ -546,11 +595,11 @@ impl Shred {
     // Returns the block index within the erasure coding set.
     pub(crate) fn erasure_block_index(&self) -> Option<usize> {
         match self.shred_type() {
-            ShredType::Data => {
+            ShredType::DataV1 | ShredType::DataV2 => {
                 let index = self.index().checked_sub(self.fec_set_index())?;
                 usize::try_from(index).ok()
             }
-            ShredType::Code => {
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 // Assert that the last shred index in the erasure set does not
                 // overshoot u32.
                 self.fec_set_index().checked_add(u32::from(
@@ -574,10 +623,10 @@ impl Shred {
         let shred_type = self.shred_type();
         let mut block = self.payload;
         match shred_type {
-            ShredType::Data => {
+            ShredType::DataV1 | ShredType::DataV2 => {
                 block.resize(ENCODED_PAYLOAD_SIZE, 0u8);
             }
-            ShredType::Code => {
+            ShredType::CodeV1 | ShredType::CodeV2 => {
                 // SIZE_OF_CODING_SHRED_HEADERS bytes at the beginning of the
                 // coding shreds contains the header and is not part of erasure
                 // coding.
@@ -591,8 +640,8 @@ impl Shred {
     // Like Shred::erasure_block but returning a slice
     pub(crate) fn erasure_block_as_slice(&self) -> &[u8] {
         match self.shred_type() {
-            ShredType::Data => &self.payload[..ENCODED_PAYLOAD_SIZE],
-            ShredType::Code => &self.payload[SIZE_OF_CODING_SHRED_HEADERS..],
+            ShredType::DataV1 | ShredType::DataV2 => &self.payload[..ENCODED_PAYLOAD_SIZE],
+            ShredType::CodeV1 | ShredType::CodeV2 => &self.payload[SIZE_OF_CODING_SHRED_HEADERS..],
         }
     }
 
@@ -600,7 +649,7 @@ impl Shred {
         self.common_header.index = index;
         Self::serialize_obj_into(
             &mut 0,
-            SIZE_OF_COMMON_SHRED_HEADER,
+            SIZE_OF_COMMON_SHRED_HEADER_V1,
             &mut self.payload,
             &self.common_header,
         )
@@ -611,7 +660,7 @@ impl Shred {
         self.common_header.slot = slot;
         Self::serialize_obj_into(
             &mut 0,
-            SIZE_OF_COMMON_SHRED_HEADER,
+            SIZE_OF_COMMON_SHRED_HEADER_V1,
             &mut self.payload,
             &self.common_header,
         )
@@ -644,10 +693,10 @@ impl Shred {
     }
 
     pub fn is_data(&self) -> bool {
-        self.shred_type() == ShredType::Data
+        self.shred_type().is_data()
     }
     pub fn is_code(&self) -> bool {
-        self.shred_type() == ShredType::Code
+        self.shred_type().is_code()
     }
 
     pub fn last_in_slot(&self) -> bool {
@@ -713,7 +762,7 @@ impl Shred {
     }
 
     pub(crate) fn reference_tick_from_data(data: &[u8]) -> u8 {
-        let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER
+        let flags = data[SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER
             - size_of::<u8>()
             - size_of::<u16>()];
         flags & SHRED_TICK_REFERENCE_MASK
@@ -727,7 +776,7 @@ impl Shred {
     // Returns true if the erasure coding of the two shreds mismatch.
     pub(crate) fn erasure_mismatch(self: &Shred, other: &Shred) -> Result<bool, Error> {
         match (self.shred_type(), other.shred_type()) {
-            (ShredType::Code, ShredType::Code) => {
+            (ShredType::CodeV1, ShredType::CodeV1) => {
                 let CodingShredHeader {
                     num_data_shreds,
                     num_coding_shreds,
@@ -737,21 +786,21 @@ impl Shred {
                     || num_data_shreds != other.coding_header.num_data_shreds
                     || self.first_coding_index() != other.first_coding_index())
             }
-            _ => Err(Error::InvalidShredType(ShredType::Data)),
+            _ => Err(Error::InvalidShredType(self.shred_type())),
         }
     }
 
     pub(crate) fn num_data_shreds(self: &Shred) -> Result<u16, Error> {
         match self.shred_type() {
-            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
-            ShredType::Code => Ok(self.coding_header.num_data_shreds),
+            ShredType::DataV1 | ShredType::DataV2 => Err(Error::InvalidShredType(self.shred_type())),
+            ShredType::CodeV1 | ShredType::CodeV2 => Ok(self.coding_header.num_data_shreds),
         }
     }
 
     pub(crate) fn num_coding_shreds(self: &Shred) -> Result<u16, Error> {
         match self.shred_type() {
-            ShredType::Data => Err(Error::InvalidShredType(ShredType::Data)),
-            ShredType::Code => Ok(self.coding_header.num_coding_shreds),
+            ShredType::DataV1 | ShredType::DataV2 => Err(Error::InvalidShredType(self.shred_type())),
+            ShredType::CodeV1 | ShredType::CodeV2 => Ok(self.coding_header.num_coding_shreds),
         }
     }
 }
