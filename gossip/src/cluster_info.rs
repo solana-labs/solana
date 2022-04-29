@@ -1560,7 +1560,8 @@ impl ClusterInfo {
         sender: &PacketBatchSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
-        println!("\nrun_gossip function\n");
+        println!("run_gossip function {} {:?}", process::id(), thread::current().id());
+        println!("gossip_validators {:?}",gossip_validators.unwrap());
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
