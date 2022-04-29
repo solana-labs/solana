@@ -1776,7 +1776,10 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
         // Convert packets to transactions
-        let (transactions_and_indexes, packet_conversion_time) = Measure::this(
+        let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
+            (Vec<SanitizedTransaction>, Vec<usize>),
+            _,
+        ) = Measure::this(
             |_| {
                 deserialized_packets
                     .iter()
@@ -1790,14 +1793,12 @@ impl BankingStage {
                         )
                         .map(|transaction| (transaction, i))
                     })
-                    .collect_vec()
+                    .unzip()
             },
             (),
             "packet_conversion",
         );
 
-        let (transactions, transaction_to_packet_indexes): (Vec<SanitizedTransaction>, Vec<usize>) =
-            transactions_and_indexes.into_iter().unzip();
         let packet_conversion_us = packet_conversion_time.as_us();
         slot_metrics_tracker.increment_transactions_from_packets_us(packet_conversion_us);
         banking_stage_stats
