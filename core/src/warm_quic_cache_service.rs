@@ -45,19 +45,15 @@ impl WarmQuicCacheService {
                             if maybe_last_leader
                                 .map_or(true, |last_leader| last_leader != leader_pubkey)
                             {
-                                if maybe_last_leader
-                                    .map_or(true, |last_leader| last_leader != leader_pubkey)
+                                maybe_last_leader = Some(leader_pubkey);
+                                if let Some(addr) = cluster_info
+                                    .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
                                 {
-                                    maybe_last_leader = Some(leader_pubkey);
-                                    if let Some(addr) = cluster_info
-                                        .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
-                                    {
-                                        if let Err(err) = send_wire_transaction(&[0u8], &addr) {
-                                            warn!(
-                                                "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
-                                                leader_pubkey, err
-                                            );
-                                        }
+                                    if let Err(err) = send_wire_transaction(&[0u8], &addr) {
+                                        warn!(
+                                            "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
+                                            leader_pubkey, err
+                                        );
                                     }
                                 }
                             }
