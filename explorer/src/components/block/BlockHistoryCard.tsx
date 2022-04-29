@@ -45,7 +45,7 @@ type TransactionWithInvocations = {
   signature?: TransactionSignature;
   meta: ConfirmedTransactionMeta | null;
   invocations: Map<string, number>;
-  computeUnits: number;
+  computeUnits?: number;
   logTruncated: boolean;
 };
 
@@ -92,16 +92,22 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           invokedPrograms.set(programId, programTransactionCount + 1);
         }
 
-        const parsedLogs = parseProgramLogs(
-          tx.meta?.logMessages ?? [],
-          tx.meta?.err ?? null,
-          cluster
-        );
+        let logTruncated = false;
+        let computeUnits: number | undefined = undefined;
+        try {
+          const parsedLogs = parseProgramLogs(
+            tx.meta?.logMessages ?? [],
+            tx.meta?.err ?? null,
+            cluster
+          );
 
-        const logTruncated = parsedLogs[parsedLogs.length - 1].truncated;
-        const computeUnits = parsedLogs
-          .map(({ computeUnits }) => computeUnits)
-          .reduce((sum, next) => sum + next);
+          logTruncated = parsedLogs[parsedLogs.length - 1].truncated;
+          computeUnits = parsedLogs
+            .map(({ computeUnits }) => computeUnits)
+            .reduce((sum, next) => sum + next);
+        } catch (err) {
+          // ignore parsing errors because some old logs aren't parsable
+        }
 
         return {
           index,
@@ -116,9 +122,12 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
     return { transactions, invokedPrograms };
   }, [block, cluster]);
 
-  const filteredTransactions = React.useMemo(() => {
+  const [filteredTransactions, showComputeUnits] = React.useMemo((): [
+    TransactionWithInvocations[],
+    boolean
+  ] => {
     const voteFilter = VOTE_PROGRAM_ID.toBase58();
-    const filteredTxs = transactions
+    const filteredTxs: TransactionWithInvocations[] = transactions
       .filter(({ invocations }) => {
         if (programFilter === ALL_TRANSACTIONS) {
           return true;
@@ -136,11 +145,15 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         return tx.message.accountKeys.find((key) => key.equals(accountFilter));
       });
 
-    if (sortMode === "compute") {
-      filteredTxs.sort((a, b) => b.computeUnits - a.computeUnits);
+    const showComputeUnits = filteredTxs.every(
+      (tx) => tx.computeUnits !== undefined
+    );
+
+    if (sortMode === "compute" && showComputeUnits) {
+      filteredTxs.sort((a, b) => b.computeUnits! - a.computeUnits!);
     }
 
-    return filteredTxs;
+    return [filteredTxs, showComputeUnits];
   }, [
     block.transactions,
     transactions,
@@ -201,15 +214,17 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
               </th>
               <th className="text-muted">Result</th>
               <th className="text-muted">Transaction Signature</th>
-              <th
-                className="text-muted c-pointer"
-                onClick={() => {
-                  query.set("sort", "compute");
-                  history.push(pickClusterParams(location, query));
-                }}
-              >
-                Compute
-              </th>
+              {showComputeUnits && (
+                <th
+                  className="text-muted c-pointer"
+                  onClick={() => {
+                    query.set("sort", "compute");
+                    history.push(pickClusterParams(location, query));
+                  }}
+                >
+                  Compute
+                </th>
+              )}
               <th className="text-muted">Invoked Programs</th>
             </tr>
           </thead>
@@ -245,10 +260,14 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                   </td>
 
                   <td>{signature}</td>
-                  <td className="text-end">
-                    {tx.logTruncated && ">"}
-                    {new Intl.NumberFormat("en-US").format(tx.computeUnits)}
-                  </td>
+                  {showComputeUnits && (
+                    <td className="text-end">
+                      {tx.logTruncated && ">"}
+                      {tx.computeUnits !== undefined
+                        ? new Intl.NumberFormat("en-US").format(tx.computeUnits)
+                        : "Unknown"}
+                    </td>
+                  )}
                   <td>
                     {tx.invocations.size === 0
                       ? "NA"
