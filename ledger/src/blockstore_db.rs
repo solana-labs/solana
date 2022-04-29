@@ -4,7 +4,7 @@ use {
         blockstore_meta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
-            ColumnMetrics,
+            BlockstoreRocksDbColumnFamilyMetrics, ColumnMetrics,
         },
         rocksdb_metric_header,
     },
@@ -22,7 +22,6 @@ use {
         WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
-    solana_metrics::datapoint_info,
     solana_runtime::hardened_unpack::UnpackError,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -108,173 +107,6 @@ const PROGRAM_COSTS_CF: &str = "program_costs";
 
 // 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
 const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
-
-#[derive(Default)]
-/// A metrics struct that exposes RocksDB's column family properties.
-///
-/// Here we only expose a subset of all the internal properties which are
-/// relevant to the ledger store performance.
-///
-/// The list of completed RocksDB internal properties can be found
-/// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-pub struct BlockstoreRocksDbColumnFamilyMetrics {
-    // Size related
-
-    // The storage size occupied by the column family.
-    // RocksDB's internal property key: "rocksdb.total-sst-files-size"
-    pub total_sst_files_size: i64,
-    // The memory size occupied by the column family's in-memory buffer.
-    // RocksDB's internal property key: "rocksdb.size-all-mem-tables"
-    pub size_all_mem_tables: i64,
-
-    // Snapshot related
-
-    // Number of snapshots hold for the column family.
-    // RocksDB's internal property key: "rocksdb.num-snapshots"
-    pub num_snapshots: i64,
-    // Unit timestamp of the oldest unreleased snapshot.
-    // RocksDB's internal property key: "rocksdb.oldest-snapshot-time"
-    pub oldest_snapshot_time: i64,
-
-    // Write related
-
-    // The current actual delayed write rate. 0 means no delay.
-    // RocksDB's internal property key: "rocksdb.actual-delayed-write-rate"
-    pub actual_delayed_write_rate: i64,
-    // A flag indicating whether writes are stopped on this column family.
-    // 1 indicates writes have been stopped.
-    // RocksDB's internal property key: "rocksdb.is-write-stopped"
-    pub is_write_stopped: i64,
-
-    // Memory / block cache related
-
-    // The block cache capacity of the column family.
-    // RocksDB's internal property key: "rocksdb.block-cache-capacity"
-    pub block_cache_capacity: i64,
-    // The memory size used by the column family in the block cache.
-    // RocksDB's internal property key: "rocksdb.block-cache-usage"
-    pub block_cache_usage: i64,
-    // The memory size used by the column family in the block cache where
-    // entries are pinned.
-    // RocksDB's internal property key: "rocksdb.block-cache-pinned-usage"
-    pub block_cache_pinned_usage: i64,
-
-    // The estimated memory size used for reading SST tables in this column
-    // family such as filters and index blocks. Note that this number does not
-    // include the memory used in block cache.
-    // RocksDB's internal property key: "rocksdb.estimate-table-readers-mem"
-    pub estimate_table_readers_mem: i64,
-
-    // Flush and compaction
-
-    // A 1 or 0 flag indicating whether a memtable flush is pending.
-    // If this number is 1, it means a memtable is waiting for being flushed,
-    // but there might be too many L0 files that prevents it from being flushed.
-    // RocksDB's internal property key: "rocksdb.mem-table-flush-pending"
-    pub mem_table_flush_pending: i64,
-
-    // A 1 or 0 flag indicating whether a compaction job is pending.
-    // If this number is 1, it means some part of the column family requires
-    // compaction in order to maintain shape of LSM tree, but the compaction
-    // is pending because the desired compaction job is either waiting for
-    // other dependnent compactions to be finished or waiting for an available
-    // compaction thread.
-    // RocksDB's internal property key: "rocksdb.compaction-pending"
-    pub compaction_pending: i64,
-
-    // The number of compactions that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-compactions"
-    pub num_running_compactions: i64,
-
-    // The number of flushes that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-flushes"
-    pub num_running_flushes: i64,
-
-    // FIFO Compaction related
-
-    // returns an estimation of the oldest key timestamp in the DB. Only vailable
-    // for FIFO compaction with compaction_options_fifo.allow_compaction = false.
-    // RocksDB's internal property key: "rocksdb.estimate-oldest-key-time"
-    pub estimate_oldest_key_time: i64,
-
-    // Misc
-
-    // The accumulated number of RocksDB background errors.
-    // RocksDB's internal property key: "rocksdb.background-errors"
-    pub background_errors: i64,
-}
-
-impl BlockstoreRocksDbColumnFamilyMetrics {
-    /// Report metrics with the specified metric name and column family tag.
-    /// The metric name and the column family tag is embeded in the parameter
-    /// `metric_name_and_cf_tag` with the following format.
-    ///
-    /// For example, "blockstore_rocksdb_cfs,cf_name=shred_data".
-    pub fn report_metrics(&self, metric_name_and_cf_tag: &'static str) {
-        datapoint_info!(
-            metric_name_and_cf_tag,
-            // Size related
-            (
-                "total_sst_files_size",
-                self.total_sst_files_size as i64,
-                i64
-            ),
-            ("size_all_mem_tables", self.size_all_mem_tables as i64, i64),
-            // Snapshot related
-            ("num_snapshots", self.num_snapshots as i64, i64),
-            (
-                "oldest_snapshot_time",
-                self.oldest_snapshot_time as i64,
-                i64
-            ),
-            // Write related
-            (
-                "actual_delayed_write_rate",
-                self.actual_delayed_write_rate as i64,
-                i64
-            ),
-            ("is_write_stopped", self.is_write_stopped as i64, i64),
-            // Memory / block cache related
-            (
-                "block_cache_capacity",
-                self.block_cache_capacity as i64,
-                i64
-            ),
-            ("block_cache_usage", self.block_cache_usage as i64, i64),
-            (
-                "block_cache_pinned_usage",
-                self.block_cache_pinned_usage as i64,
-                i64
-            ),
-            (
-                "estimate_table_readers_mem",
-                self.estimate_table_readers_mem as i64,
-                i64
-            ),
-            // Flush and compaction
-            (
-                "mem_table_flush_pending",
-                self.mem_table_flush_pending as i64,
-                i64
-            ),
-            ("compaction_pending", self.compaction_pending as i64, i64),
-            (
-                "num_running_compactions",
-                self.num_running_compactions as i64,
-                i64
-            ),
-            ("num_running_flushes", self.num_running_flushes as i64, i64),
-            // FIFO Compaction related
-            (
-                "estimate_oldest_key_time",
-                self.estimate_oldest_key_time as i64,
-                i64
-            ),
-            // Misc
-            ("background_errors", self.background_errors as i64, i64),
-        );
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
