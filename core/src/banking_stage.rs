@@ -664,28 +664,22 @@ impl BankingStage {
                         .map(|i| packets_to_process[*i].clone())
                         .collect_vec();
 
-                    // Remove the packets that were either
-                    // 1) Successfully processed or
+                    // Remove the non-retryable packets, packets that were either:
+                    // 1) Successfully processed
                     // 2) Failed but not retryable
-                    for (i, retryable_index) in retryable_transaction_indexes
-                        .iter()
-                        .chain(std::iter::once(&packets_to_process.len()))
-                        .enumerate()
-                    {
-                        let start = if i == 0 {
-                            0
-                        } else {
-                            retryable_transaction_indexes[i - 1] + 1
-                        };
+                    Self::filter_processed_packets(
+                        retryable_transaction_indexes
+                            .iter()
+                            .chain(std::iter::once(&packets_to_process.len())),
+                        |start, end| {
+                            for processed_packet in &packets_to_process[start..end] {
+                                buffered_packet_batches
+                                    .message_hash_to_transaction
+                                    .remove(&processed_packet.immutable_section().message_hash());
+                            }
+                        },
+                    );
 
-                        let end = *retryable_index;
-
-                        for processed_packet in &packets_to_process[start..end] {
-                            buffered_packet_batches
-                                .message_hash_to_transaction
-                                .remove(&processed_packet.immutable_section().message_hash());
-                        }
-                    }
                     result
                 } else if reached_end_of_slot.is_some() {
                     packets_to_process
@@ -1790,6 +1784,25 @@ impl BankingStage {
         );
 
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
+    }
+
+    fn filter_processed_packets<'a, F>(
+        retryable_transaction_indexes: impl Iterator<Item = &'a usize>,
+        mut f: F,
+    ) where
+        F: FnMut(usize, usize),
+    {
+        let mut prev_retryable_index = 0;
+        for (i, retryable_index) in retryable_transaction_indexes.enumerate() {
+            let start = if i == 0 { 0 } else { prev_retryable_index + 1 };
+
+            let end = *retryable_index;
+            prev_retryable_index = *retryable_index;
+
+            if start < end {
+                f(start, end)
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4379,5 +4392,56 @@ mod tests {
 
         assert_eq!(expected_units, units);
         assert_eq!(expected_us, us);
+    }
+
+    #[test]
+    fn test_filter_processed_packets() {
+        let retryable_indexes = [0, 1, 2, 3];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert!(non_retryable_indexes.is_empty());
+
+        let retryable_indexes = [0, 1, 2, 3, 5];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(4, 5)]);
+
+        let retryable_indexes = [1, 2, 3];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1)]);
+
+        let retryable_indexes = [1, 2, 3, 5];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5)]);
+
+        let retryable_indexes = [1, 2, 3, 5, 8];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
+
+        let retryable_indexes = [1, 2, 3, 5, 8, 8];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
     }
 }
