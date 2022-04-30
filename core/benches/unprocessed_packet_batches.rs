@@ -86,6 +86,7 @@ fn insert_packet_batches(
 }
 
 #[bench]
+#[allow(clippy::unit_arg)]
 fn bench_packet_clone(bencher: &mut Bencher) {
     let batch_count = 1000;
     let packet_per_batch_count = 128;
