@@ -54,6 +54,14 @@ for votes must be already activated in domain 1.
 
 Replay of banks is split up into 2 modes ForkHash and BankHash.
 
+=== ComputeBudget ===
+
+Compute budget metering should average out the compute units per
+state over a period of time at most 1/2 the epoch. This is to allow
+state hotspots to smooth out congestion fees over a longer period
+of time.
+
+
 === ForkHash ===
 
 Computing the ForkHash only evaluates the VoteProgram instructions.
