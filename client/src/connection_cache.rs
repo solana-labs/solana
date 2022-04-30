@@ -6,13 +6,14 @@ use {
     },
     lazy_static::lazy_static,
     quinn_proto::ConnectionStats,
+    rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
-        collections::HashMap,
+        collections::BTreeMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -159,7 +160,7 @@ impl ConnectionCacheStats {
 }
 
 struct ConnectionMap {
-    map: HashMap<SocketAddr, Connection>,
+    map: BTreeMap<SocketAddr, Connection>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
@@ -168,7 +169,7 @@ struct ConnectionMap {
 impl ConnectionMap {
     pub fn new() -> Self {
         Self {
-            map: HashMap::with_capacity(MAX_CONNECTIONS),
+            map: BTreeMap::new(),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             use_quic: false,
@@ -239,6 +240,15 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             if let Some(connection) = map.map.get(addr) {
                 (use_existing_connection(connection), true, map.stats.clone())
             } else {
+                while map.map.len() >= MAX_CONNECTIONS {
+                    let mut rng = thread_rng();
+                    let n = rng.gen_range(0, MAX_CONNECTIONS);
+                    if let Some((nth_addr, _)) = map.map.iter().nth(n) {
+                        let nth_addr = *nth_addr;
+                        map.map.remove(&nth_addr);
+                    }
+                }
+
                 let (_, send_socket) = solana_net_utils::bind_in_range(
                     IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                     VALIDATOR_PORT_RANGE,
@@ -483,8 +493,6 @@ mod tests {
         // we can actually connect to those addresses - TPUConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
-        let first_addr = get_addr(&mut rng);
-        assert!(ip(get_connection(&first_addr).0) == first_addr.ip());
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
@@ -495,10 +503,18 @@ mod tests {
             .collect::<Vec<_>>();
         {
             let map = (*CONNECTION_MAP).read().unwrap();
+            assert!(map.map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
                 let conn = map.map.get(a).expect("Address not found");
                 assert!(a.ip() == ip(conn.clone()));
             });
         }
+
+        let addr = get_addr(&mut rng);
+        get_connection(&addr);
+
+        let map = (*CONNECTION_MAP).read().unwrap();
+        assert!(map.map.len() == MAX_CONNECTIONS);
+        let _conn = map.map.get(&addr).expect("Address not found");
     }
 }
