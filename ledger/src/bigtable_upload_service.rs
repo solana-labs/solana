@@ -82,6 +82,8 @@ impl BigTableUploadService {
                 break;
             }
 
+            // The highest slot eligible for upload is the highest root that has complete
+            // transaction-status metadata
             let end_slot = min(
                 max_complete_transaction_status_slot.load(Ordering::SeqCst),
                 block_commitment_cache.read().unwrap().root(),
