@@ -871,7 +871,18 @@ pub fn verify_test_data_shred(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, bincode::serialized_size, matches::assert_matches, solana_sdk::shred_version};
+    use {
+        super::*,
+        bincode::serialized_size,
+        matches::assert_matches,
+        rand::Rng,
+        rand_chacha::{rand_core::SeedableRng, ChaChaRng},
+        solana_sdk::shred_version,
+    };
+
+    fn bs58_decode<T: AsRef<[u8]>>(data: T) -> Vec<u8> {
+        bs58::decode(data).into_vec().unwrap()
+    }
 
     #[test]
     fn test_shred_constants() {
@@ -1195,5 +1206,98 @@ mod tests {
             shred.coding_header.num_coding_shreds = u16::MAX;
             assert_matches!(shred.sanitize(), Err(Error::InvalidNumCodingShreds(65535)));
         }
+    }
+
+    #[test]
+    fn test_serde_compat_shred_data() {
+        const SEED: &str = "6qG9NGWEtoTugS4Zgs46u8zTccEJuRHtrNMiUayLHCxt";
+        const PAYLOAD: &str = "Cuk5B7qosCx42HcZjwcUKPpeqE43sDhx1RFut5rEAk54dV\
+        JFPrGEBYuPJSwaaNNbGyas9AuLS66NcFxNAcBzmBcb3gSmNrfQzmTUev5jSEeQRyqE5WG\
+        rGwC67mS5QXmokCtVEdXu9B1SLQFBMB62CQGVEjqV1r6jz4xd5Zg1AyyVCjGpRe8ooqMB\
+        1doeATLCEBhjnPPYLLyZGqPfrqfz5huq8BCoVC8DCMWFJhxtPLA5XHPPpxieAhDBmS";
+        let mut rng = {
+            let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
+            ChaChaRng::from_seed(seed)
+        };
+        let mut data = [0u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+        rng.fill(&mut data[..]);
+        let keypair = Keypair::generate(&mut rng);
+        let mut shred = Shred::new_from_data(
+            141939602, // slot
+            28685,     // index
+            36390,     // parent_offset
+            &data,     // data
+            false,     // is_last_data
+            true,      // is_last_in_slot
+            37,        // reference_tick
+            45189,     // version
+            28657,     // fec_set_index
+        );
+        shred.sign(&keypair);
+        assert!(shred.verify(&keypair.pubkey()));
+        assert_matches!(shred.sanitize(), Ok(()));
+        let mut payload = bs58_decode(PAYLOAD);
+        payload.extend({
+            let skip = payload.len() - SHRED_DATA_OFFSET;
+            data.iter().skip(skip).copied()
+        });
+        let mut packet = Packet::default();
+        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.meta.size = payload.len();
+        assert_eq!(shred.bytes_to_store(), payload);
+        assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
+        assert_eq!(
+            shred.reference_tick(),
+            Shred::reference_tick_from_data(&packet.data)
+        );
+        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(
+            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
+            Some((shred.slot(), shred.index(), shred.shred_type()))
+        );
+    }
+
+    #[test]
+    fn test_serde_compat_shred_code() {
+        const SEED: &str = "4jfjh3UZVyaEgvyG9oQmNyFY9yHDmbeH9eUhnBKkrcrN";
+        const PAYLOAD: &str = "3xGsXwzkPpLFuKwbbfKMUxt1B6VqQPzbvvAkxRNCX9kNEP\
+        sa2VifwGBtFuNm3CWXdmQizDz5vJjDHu6ZqqaBCSfrHurag87qAXwTtjNPhZzKEew5pLc\
+        aY6cooiAch2vpfixNYSDjnirozje5cmUtGuYs1asXwsAKSN3QdWHz3XGParWkZeUMAzRV\
+        1UPEDZ7vETKbxeNixKbzZzo47Lakh3C35hS74ocfj23CWoW1JpkETkXjUpXcfcv6cS";
+        let mut rng = {
+            let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
+            ChaChaRng::from_seed(seed)
+        };
+        let mut parity_shard = vec![0u8; ENCODED_PAYLOAD_SIZE];
+        rng.fill(&mut parity_shard[..]);
+        let keypair = Keypair::generate(&mut rng);
+        let mut shred = Shred::new_from_parity_shard(
+            141945197, // slot
+            23418,     // index
+            &parity_shard,
+            21259, // fec_set_index
+            32,    // num_data_shreds
+            58,    // num_coding_shreds
+            43,    // position
+            47298, // version
+        );
+        shred.sign(&keypair);
+        assert!(shred.verify(&keypair.pubkey()));
+        assert_matches!(shred.sanitize(), Ok(()));
+        let mut payload = bs58_decode(PAYLOAD);
+        payload.extend({
+            let skip = payload.len() - SIZE_OF_CODING_SHRED_HEADERS;
+            parity_shard.iter().skip(skip).copied()
+        });
+        let mut packet = Packet::default();
+        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.meta.size = payload.len();
+        assert_eq!(shred.bytes_to_store(), payload);
+        assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
+        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(
+            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
+            Some((shred.slot(), shred.index(), shred.shred_type()))
+        );
     }
 }
