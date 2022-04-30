@@ -440,15 +440,15 @@ pub mod columns {
     // - Account for column in `analyze_storage()` in ledger-tool/src/main.rs
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum AccessType {
-    PrimaryOnly,
-    PrimaryOnlyForMaintenance, // this indicates no compaction
-    TryPrimaryThenSecondary,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ActualAccessType {
+    /// Primary (read/write) access; only one process can have Primary access.
     Primary,
+    /// Primary (read/write) access with RocksDB automatic compaction disabled.
+    PrimaryForMaintenance,
+    /// Secondary (read) access; multiple processes can have Secondary access.
+    /// Additionally, Secondary access can be obtained while another process
+    /// already has Primary access.
     Secondary,
 }
 
@@ -514,73 +514,66 @@ impl OldestSlot {
 #[derive(Debug)]
 struct Rocks {
     db: rocksdb::DB,
-    actual_access_type: ActualAccessType,
+    access_type: AccessType,
     oldest_slot: OldestSlot,
     column_options: LedgerColumnOptions,
 }
 
 impl Rocks {
     fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
-        let access_type = &options.access_type;
+        let access_type = options.access_type.clone();
         let recovery_mode = options.recovery_mode.clone();
 
         fs::create_dir_all(&path)?;
 
         // Use default database options
-        if should_disable_auto_compactions(access_type) {
-            warn!("Disabling rocksdb's auto compaction for maintenance bulk ledger update...");
+        if should_disable_auto_compactions(&access_type) {
+            info!("Disabling rocksdb's automatic compactions...");
         }
-        let mut db_options = get_db_options(access_type);
+        let mut db_options = get_db_options(&access_type);
         if let Some(recovery_mode) = recovery_mode {
             db_options.set_wal_recovery_mode(recovery_mode.into());
         }
-
         let oldest_slot = OldestSlot::default();
-        let cf_descriptors = Self::cf_descriptors(&options, &oldest_slot);
-        let cf_names = Self::columns();
         let column_options = options.column_options.clone();
 
         // Open the database
         let db = match access_type {
-            AccessType::PrimaryOnly | AccessType::PrimaryOnlyForMaintenance => Rocks {
-                db: DB::open_cf_descriptors(&db_options, path, cf_descriptors)?,
-                actual_access_type: ActualAccessType::Primary,
+            AccessType::Primary | AccessType::PrimaryForMaintenance => Rocks {
+                db: DB::open_cf_descriptors(
+                    &db_options,
+                    path,
+                    Self::cf_descriptors(&options, &oldest_slot),
+                )?,
+                access_type: access_type.clone(),
                 oldest_slot,
                 column_options,
             },
-            AccessType::TryPrimaryThenSecondary => {
-                match DB::open_cf_descriptors(&db_options, path, cf_descriptors) {
-                    Ok(db) => Rocks {
-                        db,
-                        actual_access_type: ActualAccessType::Primary,
-                        oldest_slot,
-                        column_options,
-                    },
-                    Err(err) => {
-                        let secondary_path = path.join("solana-secondary");
+            AccessType::Secondary => {
+                let secondary_path = path.join("solana-secondary");
 
-                        warn!("Error when opening as primary: {}", err);
-                        warn!("Trying as secondary at : {:?}", secondary_path);
-                        warn!("This active secondary db use may temporarily cause the performance of another db use (like by validator) to degrade");
+                info!(
+                    "Opening Rocks with secondary (read only) access at: {:?}",
+                    secondary_path
+                );
+                info!("This secondary access could temporarily degrade other accesses, such as by solana-validator");
 
-                        Rocks {
-                            db: DB::open_cf_as_secondary(
-                                &db_options,
-                                path,
-                                &secondary_path,
-                                cf_names.clone(),
-                            )?,
-                            actual_access_type: ActualAccessType::Secondary,
-                            oldest_slot,
-                            column_options,
-                        }
-                    }
+                Rocks {
+                    db: DB::open_cf_descriptors_as_secondary(
+                        &db_options,
+                        path,
+                        &secondary_path,
+                        Self::cf_descriptors(&options, &oldest_slot),
+                    )?,
+                    access_type: access_type.clone(),
+                    oldest_slot,
+                    column_options,
                 }
             }
         };
-        // this is only needed for LedgerCleanupService. so guard with PrimaryOnly (i.e. running solana-validator)
-        if matches!(access_type, AccessType::PrimaryOnly) {
-            for cf_name in cf_names {
+        // This is only needed by solana-validator for LedgerCleanupService so guard with AccessType::Primary
+        if matches!(access_type, AccessType::Primary) {
+            for cf_name in Self::columns() {
                 // these special column families must be excluded from LedgerCleanupService's rocksdb
                 // compactions
                 if should_exclude_from_compaction(cf_name) {
@@ -767,7 +760,8 @@ impl Rocks {
     }
 
     fn is_primary_access(&self) -> bool {
-        self.actual_access_type == ActualAccessType::Primary
+        self.access_type == AccessType::Primary
+            || self.access_type == AccessType::PrimaryForMaintenance
     }
 
     /// Retrieves the specified RocksDB integer property of the current
@@ -2045,7 +2039,7 @@ impl LedgerColumnOptions {
 }
 
 pub struct BlockstoreOptions {
-    // The access type of blockstore. Default: PrimaryOnly
+    // The access type of blockstore. Default: Primary
     pub access_type: AccessType,
     // Whether to open a blockstore under a recovery mode. Default: None.
     pub recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -2058,7 +2052,7 @@ impl Default for BlockstoreOptions {
     /// The default options are the values used by [`Blockstore::open`].
     fn default() -> Self {
         Self {
-            access_type: AccessType::PrimaryOnly,
+            access_type: AccessType::Primary,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
             column_options: LedgerColumnOptions::default(),
@@ -2989,8 +2983,9 @@ fn get_db_options(access_type: &AccessType) -> Options {
 
 // Returns whether automatic compactions should be disabled based upon access type
 fn should_disable_auto_compactions(access_type: &AccessType) -> bool {
-    // Disable automatic compactions in maintenance mode to prevent accidental cleaning
-    matches!(access_type, AccessType::PrimaryOnlyForMaintenance)
+    // Leave automatic compactions enabled (do not disable) in Primary mode;
+    // disable in all other modes to prevent accidental cleaning
+    !matches!(access_type, AccessType::Primary)
 }
 
 // Returns whether the supplied column (name) should be excluded from compaction
@@ -3075,6 +3070,15 @@ pub mod tests {
             Rocks::columns().len(),
             Rocks::cf_descriptors(&options, &oldest_slot).len()
         );
+    }
+
+    #[test]
+    fn test_should_disable_auto_compactions() {
+        assert!(!should_disable_auto_compactions(&AccessType::Primary));
+        assert!(should_disable_auto_compactions(
+            &AccessType::PrimaryForMaintenance
+        ));
+        assert!(should_disable_auto_compactions(&AccessType::Secondary));
     }
 
     #[test]

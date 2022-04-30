@@ -763,7 +763,7 @@ fn load_bank_forks(
         vec![blockstore.ledger_path().join("accounts")]
     } else {
         let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
-        warn!(
+        info!(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
         );
@@ -1714,11 +1714,7 @@ fn main() {
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 let only_rooted = arg_matches.is_present("only_rooted");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::TryPrimaryThenSecondary,
-                        wal_recovery_mode,
-                    ),
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
@@ -1732,9 +1728,8 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-                let source =
-                    open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
-                let target = open_blockstore(&target_db, AccessType::PrimaryOnly, None);
+                let source = open_blockstore(&ledger_path, AccessType::Secondary, None);
+                let target = open_blockstore(&target_db, AccessType::Primary, None);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -1807,11 +1802,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -1857,8 +1849,7 @@ fn main() {
                 }
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                let ledger =
-                    open_blockstore(&ledger_path, AccessType::TryPrimaryThenSecondary, None);
+                let ledger = open_blockstore(&ledger_path, AccessType::Secondary, None);
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
                     .unwrap()
@@ -1892,11 +1883,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -1916,11 +1904,8 @@ fn main() {
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 for slot in slots {
                     println!("Slot {}", slot);
                     if let Err(err) = output_slot(
@@ -1938,11 +1923,7 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 output_ledger(
-                    open_blockstore(
-                        &ledger_path,
-                        AccessType::TryPrimaryThenSecondary,
-                        wal_recovery_mode,
-                    ),
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
@@ -1953,22 +1934,16 @@ fn main() {
                 );
             }
             ("dead-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
@@ -1977,7 +1952,7 @@ fn main() {
             ("set-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let blockstore =
-                    open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
+                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
                         Ok(_) => println!("Slot {} dead", slot),
@@ -1988,7 +1963,7 @@ fn main() {
             ("remove-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let blockstore =
-                    open_blockstore(&ledger_path, AccessType::PrimaryOnly, wal_recovery_mode);
+                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
                         Ok(_) => println!("Slot {} not longer marked dead", slot),
@@ -2001,11 +1976,8 @@ fn main() {
             ("parse_full_frozen", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let mut ancestors = BTreeSet::new();
                 assert!(
                     blockstore.meta(ending_slot).unwrap().is_some(),
@@ -2144,11 +2116,8 @@ fn main() {
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
                 );
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2178,11 +2147,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
 
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 match load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2271,11 +2237,8 @@ fn main() {
                     usize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let is_incremental = arg_matches.is_present("incremental");
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
@@ -2605,11 +2568,8 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2667,11 +2627,8 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -3195,9 +3152,9 @@ fn main() {
                 let dead_slots_only = arg_matches.is_present("dead_slots_only");
                 let batch_size = value_t_or_exit!(arg_matches, "batch_size", usize);
                 let access_type = if !no_compaction {
-                    AccessType::PrimaryOnly
+                    AccessType::Primary
                 } else {
-                    AccessType::PrimaryOnlyForMaintenance
+                    AccessType::PrimaryForMaintenance
                 };
                 let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
 
@@ -3270,11 +3227,8 @@ fn main() {
                 }
             }
             ("list-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                     usize::from_str(height).expect("Maximum height must be a number")
                 } else {
@@ -3336,11 +3290,8 @@ fn main() {
                     });
             }
             ("repair-roots", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
                     Slot::from_str(root).expect("Before root must be a number")
                 } else {
@@ -3388,11 +3339,8 @@ fn main() {
                 }
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
                         let all = arg_matches.is_present("all");
@@ -3453,21 +3401,13 @@ fn main() {
             }
             ("analyze-storage", _) => {
                 analyze_storage(
-                    &open_blockstore(
-                        &ledger_path,
-                        AccessType::TryPrimaryThenSecondary,
-                        wal_recovery_mode,
-                    )
-                    .db(),
+                    &open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode).db(),
                 );
                 println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::TryPrimaryThenSecondary,
-                    wal_recovery_mode,
-                );
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {
