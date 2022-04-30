@@ -768,6 +768,11 @@ impl BankingStage {
             (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
+        // Assert unprocessed queue is still consistent
+        assert_eq!(
+            buffered_packet_batches.packet_priority_queue.len(),
+            buffered_packet_batches.message_hash_to_transaction.len()
+        );
         banking_stage_stats
             .consume_buffered_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
