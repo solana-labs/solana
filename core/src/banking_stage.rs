@@ -668,9 +668,18 @@ impl BankingStage {
                     // 1) Successfully processed or
                     // 2) Failed but not retryable
                     retryable_transaction_indexes.push(packets_to_process.len());
-                    for range in retryable_transaction_indexes.windows(2) {
+                    let first_range = vec![
+                        0,
+                        retryable_transaction_indexes.first().cloned().unwrap_or(0),
+                    ];
+                    for range in std::iter::once(&first_range[..])
+                        .chain(retryable_transaction_indexes.windows(2))
+                    {
                         let start = range[0] + 1;
                         let end = range[1];
+                        if start >= end {
+                            continue;
+                        }
                         for processed_packet in &packets_to_process[start..end] {
                             buffered_packet_batches
                                 .message_hash_to_transaction
