@@ -6,6 +6,7 @@ import { AddressWithContext, programValidator } from "./AddressWithContext";
 import { useCluster } from "providers/cluster";
 import { getProgramName } from "utils/tx";
 import { HexData } from "components/common/HexData";
+import getInstructionCardScrollAnchorId from "utils/get-instruction-card-scroll-anchor-id";
 
 export function InstructionsSection({ message }: { message: Message }) {
   return (
@@ -32,7 +33,11 @@ function InstructionCard({
   const programName = getProgramName(programId.toBase58(), cluster);
 
   return (
-    <div className="card" id={`instruction-index-${index + 1}`} key={index}>
+    <div
+      className="card"
+      id={getInstructionCardScrollAnchorId([index + 1])}
+      key={index}
+    >
       <div className={`card-header${!expanded ? " border-bottom-none" : ""}`}>
         <h3 className="card-header-title mb-0 d-flex align-items-center">
           <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>
