@@ -5,6 +5,7 @@ use {
         udp_client::UdpTpuConnection,
     },
     lazy_static::lazy_static,
+    quinn_proto::ConnectionStats,
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
@@ -188,30 +189,56 @@ pub fn set_use_quic(use_quic: bool) {
     map.set_use_quic(use_quic);
 }
 
-// TODO: see https://github.com/solana-labs/solana/issues/23661
-// remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
-    let mut get_connection_measure = Measure::start("get_connection_measure");
+struct GetConnectionResult {
+    connection: Connection,
+    cache_hit: bool,
+    report_stats: bool,
+    map_timing: u64,
+    lock_timing: u64,
+    connection_cache_stats: Arc<ConnectionCacheStats>,
+    other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
+}
+
+fn use_existing_connection(
+    connection: &Connection,
+) -> (Connection, Option<(Arc<ClientStats>, ConnectionStats)>) {
+    let mut stats = None;
+    // update connection stats
+    if let Connection::Quic(conn) = connection {
+        stats = conn.stats().map(|s| (conn.base_stats(), s));
+    }
+    (connection.clone(), stats)
+}
+
+fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
     let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
-    let (connection, hit, map_measure, report_stats, connection_cache_stats, maybe_stats) = {
-        let map = (*CONNECTION_MAP).read().unwrap();
-        get_connection_map_lock_measure.stop();
+    let map = (*CONNECTION_MAP).read().unwrap();
+    get_connection_map_lock_measure.stop();
 
-        let report_stats = map
-            .last_stats
-            .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
+    let mut lock_timing = get_connection_map_lock_measure.as_ms();
 
-        let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
-        let (connection, hit, connection_cache_stats, maybe_stats) = match map.map.get(addr) {
-            Some(connection) => {
-                let mut stats = None;
-                // update connection stats
-                if let Connection::Quic(conn) = connection {
-                    stats = conn.stats().map(|s| (conn.base_stats(), s));
-                }
-                (connection.clone(), true, map.stats.clone(), stats)
-            }
-            None => {
+    let report_stats = map
+        .last_stats
+        .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
+
+    let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
+    let ((connection, maybe_stats), hit, connection_cache_stats) = match map.map.get(addr) {
+        Some(connection) => (use_existing_connection(connection), true, map.stats.clone()),
+        None => {
+            // Upgrade to write access by dropping read lock and acquire write lock
+            drop(map);
+            let mut get_connection_map_lock_measure =
+                Measure::start("get_connection_map_lock_measure");
+            let mut map = (*CONNECTION_MAP).write().unwrap();
+            get_connection_map_lock_measure.stop();
+
+            lock_timing = lock_timing.saturating_add(get_connection_map_lock_measure.as_ms());
+
+            // Check if any other thread inserted an entry between when we dropped read lock
+            // and acquired write lock.
+            if let Some(connection) = map.map.get(addr) {
+                (use_existing_connection(connection), true, map.stats.clone())
+            } else {
                 let (_, send_socket) = solana_net_utils::bind_in_range(
                     IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                     VALIDATOR_PORT_RANGE,
@@ -223,30 +250,43 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
                     Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
                 };
 
-                drop(map);
-
-                let mut map = (*CONNECTION_MAP).write().unwrap();
                 map.map.insert(*addr, connection.clone());
-                (connection, false, map.stats.clone(), None)
+                ((connection, None), false, map.stats.clone())
             }
-        };
-        get_connection_map_measure.stop();
-
-        (
-            connection,
-            hit,
-            get_connection_map_measure.as_ms(),
-            report_stats,
-            connection_cache_stats,
-            maybe_stats,
-        )
+        }
     };
+    get_connection_map_measure.stop();
+
+    GetConnectionResult {
+        connection,
+        cache_hit: hit,
+        report_stats,
+        map_timing: get_connection_map_measure.as_ms(),
+        lock_timing,
+        connection_cache_stats,
+        other_stats: maybe_stats,
+    }
+}
+
+// TODO: see https://github.com/solana-labs/solana/issues/23661
+// remove lazy_static and optimize and refactor this
+fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
+    let mut get_connection_measure = Measure::start("get_connection_measure");
+    let GetConnectionResult {
+        connection,
+        cache_hit,
+        report_stats,
+        map_timing,
+        lock_timing,
+        connection_cache_stats,
+        other_stats,
+    } = get_or_add_connection(addr);
 
     if report_stats {
         connection_cache_stats.report();
     }
 
-    if let Some((connection_stats, new_stats)) = maybe_stats {
+    if let Some((connection_stats, new_stats)) = other_stats {
         connection_cache_stats
             .total_client_stats
             .congestion_events
@@ -277,26 +317,26 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
             .update_stat(&connection_stats.tx_acks, new_stats.frame_tx.acks);
     }
 
-    if hit {
+    if cache_hit {
         connection_cache_stats
             .cache_hits
             .fetch_add(1, Ordering::Relaxed);
         connection_cache_stats
             .get_connection_hit_ms
-            .fetch_add(map_measure, Ordering::Relaxed);
+            .fetch_add(map_timing, Ordering::Relaxed);
     } else {
         connection_cache_stats
             .cache_misses
             .fetch_add(1, Ordering::Relaxed);
         connection_cache_stats
             .get_connection_miss_ms
-            .fetch_add(map_measure, Ordering::Relaxed);
+            .fetch_add(map_timing, Ordering::Relaxed);
     }
 
     get_connection_measure.stop();
     connection_cache_stats
         .get_connection_lock_ms
-        .fetch_add(get_connection_map_lock_measure.as_ms(), Ordering::Relaxed);
+        .fetch_add(lock_timing, Ordering::Relaxed);
     connection_cache_stats
         .get_connection_ms
         .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
