@@ -608,7 +608,7 @@ impl BankingStage {
 
                     let ProcessTransactionsSummary {
                         reached_max_poh_height,
-                        mut retryable_transaction_indexes,
+                        retryable_transaction_indexes,
                         ..
                     } = process_transactions_summary;
 
@@ -667,19 +667,19 @@ impl BankingStage {
                     // Remove the packets that were either
                     // 1) Successfully processed or
                     // 2) Failed but not retryable
-                    retryable_transaction_indexes.push(packets_to_process.len());
-                    let first_range = vec![
-                        0,
-                        retryable_transaction_indexes.first().cloned().unwrap_or(0),
-                    ];
-                    for range in std::iter::once(&first_range[..])
-                        .chain(retryable_transaction_indexes.windows(2))
+                    for (i, retryable_index) in retryable_transaction_indexes
+                        .iter()
+                        .chain(std::iter::once(&packets_to_process.len()))
+                        .enumerate()
                     {
-                        let start = range[0] + 1;
-                        let end = range[1];
-                        if start >= end {
-                            continue;
-                        }
+                        let start = if i == 0 {
+                            0
+                        } else {
+                            retryable_transaction_indexes[i - 1] + 1
+                        };
+
+                        let end = *retryable_index;
+
                         for processed_packet in &packets_to_process[start..end] {
                             buffered_packet_batches
                                 .message_hash_to_transaction
