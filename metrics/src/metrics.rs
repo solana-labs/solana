@@ -20,8 +20,8 @@ use {
 
 type CounterMap = HashMap<(&'static str, u64), CounterPoint>;
 
-impl From<CounterPoint> for DataPoint {
-    fn from(counter_point: CounterPoint) -> Self {
+impl From<&CounterPoint> for DataPoint {
+    fn from(counter_point: &CounterPoint) -> Self {
         let mut point = Self::new(counter_point.name);
         point.timestamp = counter_point.timestamp;
         point.add_field_i64("count", counter_point.count);
@@ -159,6 +159,7 @@ impl MetricsAgent {
         Self { sender }
     }
 
+<<<<<<< HEAD
     fn collect_points(
         points_map: &mut HashMap<log::Level, (CounterMap, Vec<DataPoint>)>,
     ) -> Vec<DataPoint> {
@@ -178,6 +179,14 @@ impl MetricsAgent {
         .collect();
         points_map.clear();
         points
+=======
+    fn collect_points(points: &mut Vec<DataPoint>, counters: &mut CounterMap) -> Vec<DataPoint> {
+        let mut ret: Vec<DataPoint> = Vec::default();
+        std::mem::swap(&mut ret, points);
+        ret.extend(counters.values().map(|v| v.into()));
+        counters.clear();
+        ret
+>>>>>>> 591bfc3e0 (optimize counter submission: avoid copy when converting counters to datapoints (#24802))
     }
 
     fn write(
