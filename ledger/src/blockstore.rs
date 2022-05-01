@@ -6110,6 +6110,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore] // TODO MERKLE
     pub fn test_insert_multiple_is_last() {
         solana_logger::setup();
         let (shreds, _) = make_slot_entries(0, 0, 20);

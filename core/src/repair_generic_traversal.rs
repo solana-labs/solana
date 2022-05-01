@@ -227,6 +227,7 @@ pub mod test {
     }
 
     #[test]
+    #[ignore] // TODO MERKLE
     fn test_get_closest_completion() {
         let (blockstore, heaviest_subtree_fork_choice) = setup_forks();
         let mut slot_meta_cache = HashMap::default();
