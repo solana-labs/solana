@@ -528,27 +528,54 @@ impl RetransmitStage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, solana_ledger::shred::ShredFlags};
 
     #[test]
     fn test_already_received() {
         let slot = 1;
         let index = 5;
         let version = 0x40;
-        let shred = Shred::new_from_data(slot, index, 0, &[], true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 2, &[], true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            2,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         // first duplicate shred for (1, 5) passed
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 8, &[], true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            8,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         // 2nd duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));

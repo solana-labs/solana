@@ -1,6 +1,8 @@
 use {
     crate::{
-        shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD},
+        shred::{
+            Error, Shred, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
+        },
         shred_stats::ProcessShredsStats,
     },
     rayon::{prelude::*, ThreadPool},
@@ -113,8 +115,14 @@ impl Shredder {
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
         // 1) Generate data shreds
         let make_data_shred = |shred_index: u32, data| {
-            let is_last_data = shred_index == last_shred_index;
-            let is_last_in_slot = is_last_data && is_last_in_slot;
+            let flags = if shred_index != last_shred_index {
+                ShredFlags::empty()
+            } else if is_last_in_slot {
+                // LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED.
+                ShredFlags::LAST_SHRED_IN_SLOT
+            } else {
+                ShredFlags::DATA_COMPLETE_SHRED
+            };
             let parent_offset = self.slot - self.parent_slot;
             let fec_set_index = Self::fec_set_index(shred_index, fec_set_offset);
             let mut shred = Shred::new_from_data(
@@ -122,8 +130,7 @@ impl Shredder {
                 shred_index,
                 parent_offset as u16,
                 data,
-                is_last_data,
-                is_last_in_slot,
+                flags,
                 self.reference_tick,
                 self.version,
                 fec_set_index.unwrap(),
@@ -351,8 +358,7 @@ mod tests {
     use {
         super::*,
         crate::shred::{
-            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredFlags,
-            ShredType,
+            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredType,
         },
         bincode::serialized_size,
         matches::assert_matches,

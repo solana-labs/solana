@@ -8,8 +8,8 @@ use {
     raptorq::{Decoder, Encoder},
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
-        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, Shredder,
-        MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
+        max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, ShredFlags,
+        Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
     },
     solana_perf::test_tx,
     solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
@@ -123,7 +123,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
 fn bench_deserialize_hdr(bencher: &mut Bencher) {
     let data = vec![0; SIZE_OF_DATA_SHRED_PAYLOAD];
 
-    let shred = Shred::new_from_data(2, 1, 1, &data, true, true, 0, 0, 1);
+    let shred = Shred::new_from_data(2, 1, 1, &data, ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 1);
 
     bencher.iter(|| {
         let payload = shred.payload().clone();
