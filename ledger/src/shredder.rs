@@ -351,8 +351,8 @@ mod tests {
     use {
         super::*,
         crate::shred::{
-            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredType,
-            SHRED_TICK_REFERENCE_MASK,
+            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredFlags,
+            ShredType,
         },
         bincode::serialized_size,
         matches::assert_matches,
@@ -549,10 +549,13 @@ mod tests {
             0,    // next_code_index
         );
         data_shreds.iter().for_each(|s| {
-            assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+            assert_eq!(
+                s.reference_tick(),
+                ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
+            );
             assert_eq!(
                 Shred::reference_tick_from_data(s.payload()),
-                SHRED_TICK_REFERENCE_MASK
+                ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
             );
         });
 
@@ -561,7 +564,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             deserialized_shred.reference_tick(),
-            SHRED_TICK_REFERENCE_MASK
+            ShredFlags::SHRED_TICK_REFERENCE_MASK.bits(),
         );
     }
 
