@@ -200,17 +200,6 @@ struct GetConnectionResult {
     other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
 }
 
-fn use_existing_connection(
-    connection: &Connection,
-) -> (Connection, Option<(Arc<ClientStats>, ConnectionStats)>) {
-    let mut stats = None;
-    // update connection stats
-    if let Connection::Quic(conn) = connection {
-        stats = conn.stats().map(|s| (conn.base_stats(), s));
-    }
-    (connection.clone(), stats)
-}
-
 fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
     let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
     let map = (*CONNECTION_MAP).read().unwrap();
@@ -223,9 +212,28 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
 
     let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
-    let ((connection, maybe_stats), hit, connection_cache_stats) = match map.map.get(addr) {
-        Some(connection) => (use_existing_connection(connection), true, map.stats.clone()),
+    let (connection, cache_hit, connection_cache_stats, maybe_stats) = match map.map.get(addr) {
+        Some(connection) => {
+            let mut stats = None;
+            // update connection stats
+            if let Connection::Quic(conn) = connection {
+                stats = conn.stats().map(|s| (conn.base_stats(), s));
+            }
+            (connection.clone(), true, map.stats.clone(), stats)
+        }
         None => {
+            let (_, send_socket) = solana_net_utils::bind_in_range(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                VALIDATOR_PORT_RANGE,
+            )
+            .unwrap();
+
+            let connection = if map.use_quic {
+                Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
+            } else {
+                Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
+            };
+
             // Upgrade to write access by dropping read lock and acquire write lock
             drop(map);
             let mut get_connection_map_lock_measure =
@@ -235,41 +243,25 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
 
             lock_timing = lock_timing.saturating_add(get_connection_map_lock_measure.as_ms());
 
-            // Check if any other thread inserted an entry between when we dropped read lock
-            // and acquired write lock.
-            if let Some(connection) = map.map.get(addr) {
-                (use_existing_connection(connection), true, map.stats.clone())
-            } else {
-                while map.map.len() >= MAX_CONNECTIONS {
-                    let mut rng = thread_rng();
-                    let n = rng.gen_range(0, MAX_CONNECTIONS);
-                    if let Some((nth_addr, _)) = map.map.iter().nth(n) {
-                        let nth_addr = *nth_addr;
-                        map.map.remove(&nth_addr);
-                    }
+            // evict a connection if the map is reaching upper bounds
+            while map.map.len() >= MAX_CONNECTIONS {
+                let mut rng = thread_rng();
+                let n = rng.gen_range(0, MAX_CONNECTIONS);
+                if let Some((nth_addr, _)) = map.map.iter().nth(n) {
+                    let nth_addr = *nth_addr;
+                    map.map.remove(&nth_addr);
                 }
-
-                let (_, send_socket) = solana_net_utils::bind_in_range(
-                    IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                    VALIDATOR_PORT_RANGE,
-                )
-                .unwrap();
-                let connection = if map.use_quic {
-                    Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
-                } else {
-                    Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
-                };
-
-                map.map.insert(*addr, connection.clone());
-                ((connection, None), false, map.stats.clone())
             }
+
+            map.map.insert(*addr, connection.clone());
+            (connection, false, map.stats.clone(), None)
         }
     };
     get_connection_map_measure.stop();
 
     GetConnectionResult {
         connection,
-        cache_hit: hit,
+        cache_hit,
         report_stats,
         map_timing: get_connection_map_measure.as_ms(),
         lock_timing,
