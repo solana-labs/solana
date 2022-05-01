@@ -123,6 +123,26 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("WebSocket URL for the solana cluster"),
         )
         .arg(
+            Arg::with_name("rpc_addr")
+                .long("rpc-addr")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .conflicts_with("tpu_client")
+                .conflicts_with("rpc_client")
+                .requires("tpu_addr")
+                .help("Specify custom rpc_addr to create thin_client"),
+        )
+        .arg(
+            Arg::with_name("tpu_addr")
+                .long("tpu-addr")
+                .value_name("HOST:PORT")
+                .conflicts_with("tpu_client")
+                .conflicts_with("rpc_client")
+                .takes_value(true)
+                .requires("rpc_addr")
+                .help("Specify custom tpu_addr to create thin_client"),
+        )
+        .arg(
             Arg::with_name("entrypoint")
                 .short("n")
                 .long("entrypoint")
