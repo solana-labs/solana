@@ -165,6 +165,9 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
+
+    #[rpc(meta, name = "setTpuAddress")]
+    fn set_tpu_address(&self, meta: Self::Metadata, tpu_address: SocketAddr) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -279,6 +282,15 @@ impl AdminRpc for AdminRpcImpl {
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+
+    fn set_tpu_address(&self, meta: Self::Metadata, tpu_address: SocketAddr) -> Result<()> {
+        debug!("set_tpu_address({}) request received", tpu_address);
+
+        meta.with_post_init(|post_init| {
+            post_init.cluster_info.set_tpu_address(tpu_address);
+            Ok(())
+        })
     }
 }
 

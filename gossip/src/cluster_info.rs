@@ -664,6 +664,12 @@ impl ClusterInfo {
         self.my_contact_info.read().unwrap().shred_version
     }
 
+    /// Sets the node's own TPU address in gossip cluster info.
+    pub fn set_tpu_address(&self, tpu_address: SocketAddr) {
+        self.my_contact_info.write().unwrap().tpu = tpu_address;
+        self.push_self(&HashMap::new(), None);
+    }
+
     fn lookup_epoch_slots(&self, ix: EpochSlotsIndex) -> EpochSlots {
         let self_pubkey = self.id();
         let label = CrdsValueLabel::EpochSlots(ix, self_pubkey);
