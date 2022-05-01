@@ -56,6 +56,7 @@ pub use crate::{
 use {
     crate::blockstore::MAX_DATA_SHREDS_PER_SLOT,
     bincode::config::Options,
+    bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
@@ -109,9 +110,14 @@ const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HE
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
-pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
-const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
-const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
+bitflags! {
+    #[derive(Default, Serialize, Deserialize)]
+    pub struct ShredFlags:u8 {
+        const SHRED_TICK_REFERENCE_MASK = 0b0011_1111;
+        const DATA_COMPLETE_SHRED = 0b0100_0000;
+        const LAST_SHRED_IN_SLOT = 0b1000_0000;
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -173,7 +179,7 @@ struct ShredCommonHeader {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
 struct DataShredHeader {
     parent_offset: u16,
-    flags: u8,
+    flags: ShredFlags,
     size: u16, // common shred header + data shred header + data
 }
 
@@ -282,16 +288,22 @@ impl Shred {
         let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
-            flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
+            flags: unsafe {
+                ShredFlags::from_bits_unchecked(
+                    ShredFlags::SHRED_TICK_REFERENCE_MASK
+                        .bits()
+                        .min(reference_tick),
+                )
+            },
             size,
         };
 
         if is_last_data {
-            data_header.flags |= DATA_COMPLETE_SHRED
+            data_header.flags |= ShredFlags::DATA_COMPLETE_SHRED
         }
 
         if is_last_in_slot {
-            data_header.flags |= LAST_SHRED_IN_SLOT
+            data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
         }
 
         let mut start = 0;
@@ -669,7 +681,9 @@ impl Shred {
 
     pub fn last_in_slot(&self) -> bool {
         if self.is_data() {
-            self.data_header.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT
+            self.data_header
+                .flags
+                .contains(ShredFlags::LAST_SHRED_IN_SLOT)
         } else {
             false
         }
@@ -679,14 +693,16 @@ impl Shred {
     /// Use this only for test code which doesn't care about actual shred
     pub fn set_last_in_slot(&mut self) {
         if self.is_data() {
-            self.data_header.flags |= LAST_SHRED_IN_SLOT
+            self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
         }
     }
 
     #[cfg(test)]
     pub(crate) fn unset_data_complete(&mut self) {
         if self.is_data() {
-            self.data_header.flags &= !DATA_COMPLETE_SHRED;
+            self.data_header
+                .flags
+                .remove(ShredFlags::DATA_COMPLETE_SHRED);
         }
 
         // Data header starts after the shred common header
@@ -703,7 +719,9 @@ impl Shred {
 
     pub fn data_complete(&self) -> bool {
         if self.is_data() {
-            self.data_header.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED
+            self.data_header
+                .flags
+                .contains(ShredFlags::DATA_COMPLETE_SHRED)
         } else {
             false
         }
@@ -711,10 +729,11 @@ impl Shred {
 
     pub(crate) fn reference_tick(&self) -> u8 {
         if self.is_data() {
-            self.data_header.flags & SHRED_TICK_REFERENCE_MASK
+            self.data_header.flags & ShredFlags::SHRED_TICK_REFERENCE_MASK
         } else {
-            SHRED_TICK_REFERENCE_MASK
+            ShredFlags::SHRED_TICK_REFERENCE_MASK
         }
+        .bits()
     }
 
     // Get slot from a shred packet with partial deserialize
@@ -733,7 +752,7 @@ impl Shred {
         let flags = data[SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER
             - size_of::<u8>()
             - size_of::<u16>()];
-        flags & SHRED_TICK_REFERENCE_MASK
+        flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -1299,5 +1318,48 @@ mod tests {
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
         );
+    }
+
+    #[test]
+    fn test_shred_flags() {
+        fn make_shred(is_last_data: bool, is_last_in_slot: bool, reference_tick: u8) -> Shred {
+            Shred::new_from_data(
+                0,   // slot
+                0,   // index
+                0,   // parent_offset
+                &[], // data
+                is_last_data,
+                is_last_in_slot,
+                reference_tick,
+                0, // version
+                0, // fec_set_index
+            )
+        }
+        fn check_shred_flags(
+            shred: &Shred,
+            is_last_data: bool,
+            is_last_in_slot: bool,
+            reference_tick: u8,
+        ) {
+            assert_eq!(shred.data_complete(), is_last_data);
+            assert_eq!(shred.last_in_slot(), is_last_in_slot);
+            assert_eq!(shred.reference_tick(), reference_tick.min(63u8));
+            assert_eq!(
+                Shred::reference_tick_from_data(&shred.payload),
+                reference_tick.min(63u8),
+            );
+        }
+        for is_last_data in [false, true] {
+            for is_last_in_slot in [false, true] {
+                for reference_tick in [0, 37, 63, 64, 80, 128, 255] {
+                    let mut shred = make_shred(is_last_data, is_last_in_slot, reference_tick);
+                    check_shred_flags(&shred, is_last_data, is_last_in_slot, reference_tick);
+                    shred.set_last_in_slot();
+                    check_shred_flags(&shred, is_last_data, true, reference_tick);
+                    shred.unset_data_complete();
+                    check_shred_flags(&shred, false, true, reference_tick);
+                }
+            }
+        }
     }
 }
