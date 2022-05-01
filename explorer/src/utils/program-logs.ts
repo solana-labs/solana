@@ -24,10 +24,22 @@ export function parseProgramLogs(
 ): InstructionLogs[] {
   let depth = 0;
   let prettyLogs: InstructionLogs[] = [];
-  const prefixBuilder = (depth: number) => {
-    const prefix = new Array(depth - 1).fill("\u00A0\u00A0").join("");
+  function prefixBuilder(
+    // Indent level starts at 1.
+    indentLevel: number
+  ) {
+    let prefix;
+    if (indentLevel <= 0) {
+      console.warn(
+        `Tried to build a prefix for a program log at indent level \`${indentLevel}\`. ` +
+          "Logs should only ever be built at indent level 1 or higher."
+      );
+      prefix = "";
+    } else {
+      prefix = new Array(indentLevel - 1).fill("\u00A0\u00A0").join("");
+    }
     return prefix + "> ";
-  };
+  }
 
   let prettyError;
   if (error) {
