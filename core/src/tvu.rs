@@ -150,12 +150,8 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
-<<<<<<< HEAD
         pruned_banks_receiver: DroppedSlotsReceiver,
-=======
-        accounts_background_request_sender: AbsRequestSender,
         use_quic: bool,
->>>>>>> 88c16c017 (Check if quic is enabled before warming up quic connections (#24821))
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -520,12 +516,8 @@ pub mod tests {
             None,
             None,
             None,
-<<<<<<< HEAD
             pruned_banks_receiver,
-=======
-            AbsRequestSender::default(),
             false, // use_quic
->>>>>>> 88c16c017 (Check if quic is enabled before warming up quic connections (#24821))
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
