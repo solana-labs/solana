@@ -2163,6 +2163,7 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
+                    false, // use_quic
                 )
             })
             .collect();
