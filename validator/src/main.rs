@@ -2857,6 +2857,7 @@ pub fn main() {
         should_check_duplicate_instance,
         start_progress,
         socket_addr_space,
+        tpu_use_quic,
     );
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {

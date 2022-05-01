@@ -369,6 +369,7 @@ impl Validator {
         should_check_duplicate_instance: bool,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
+        use_quic: bool,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -930,7 +931,12 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
+<<<<<<< HEAD
             pruned_banks_receiver,
+=======
+            accounts_background_request_sender,
+            use_quic,
+>>>>>>> 88c16c017 (Check if quic is enabled before warming up quic connections (#24821))
         );
 
         let tpu = Tpu::new(
@@ -1843,6 +1849,7 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
+            false, // use_quic
         );
         assert_eq!(
             *start_progress.read().unwrap(),
@@ -1924,6 +1931,7 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
+                    false, // use_quic
                 )
             })
             .collect();
