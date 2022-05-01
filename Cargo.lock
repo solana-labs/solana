@@ -4964,6 +4964,7 @@ dependencies = [
  "assert_matches",
  "bincode",
  "bitflags",
+ "bs58",
  "byteorder",
  "chrono",
  "chrono-humanize",
