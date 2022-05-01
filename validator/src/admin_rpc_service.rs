@@ -90,6 +90,9 @@ pub trait AdminRpc {
         keypair_file: String,
         require_tower: bool,
     ) -> Result<()>;
+
+    #[rpc(meta, name = "setTpuAddress")]
+    fn set_tpu_address(&self, meta: Self::Metadata, tpu_address: SocketAddr) -> Result<()>;
 }
 
 pub struct AdminRpcImpl;
@@ -198,6 +201,15 @@ impl AdminRpc for AdminRpcImpl {
                 .cluster_info
                 .set_keypair(Arc::new(identity_keypair));
             warn!("Identity set to {}", post_init.cluster_info.id());
+            Ok(())
+        })
+    }
+
+    fn set_tpu_address(&self, meta: Self::Metadata, tpu_address: SocketAddr) -> Result<()> {
+        debug!("set_tpu_address({}) request received", tpu_address);
+
+        meta.with_post_init(|post_init| {
+            post_init.cluster_info.set_tpu_address(tpu_address);
             Ok(())
         })
     }
