@@ -51,7 +51,7 @@ pub type TxOffset = PinnedVec<u32>;
 type TxOffsets = (TxOffset, TxOffset, TxOffset, TxOffset, Vec<Vec<u32>>);
 
 #[derive(Debug, PartialEq, Eq)]
-struct PacketOffsets {
+pub struct PacketOffsets {
     pub sig_len: u32,
     pub sig_start: u32,
     pub msg_start: u32,
@@ -293,7 +293,7 @@ fn do_get_packet_offsets(
     ))
 }
 
-fn get_packet_offsets(
+pub fn get_packet_offsets(
     packet: &mut Packet,
     current_offset: usize,
     reject_non_vote: bool,

@@ -13,6 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::{
         packet::PacketBatch,
+        rate_limit_accounts::{RateLimitByPubkey, DEFAULT_TIMEOUT_MS},
         sigverify::{count_valid_packets, shrink_batches, Deduper},
     },
     solana_sdk::timing,
@@ -228,6 +229,7 @@ impl SigVerifyStage {
 
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
+        pubkey_rate_limit: &mut RateLimitByPubkey,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sendr: &Sender<Vec<PacketBatch>>,
         verifier: &T,
@@ -241,6 +243,10 @@ impl SigVerifyStage {
             timing::timestamp(),
             num_packets,
         );
+
+        let mut rate_limit_time = Measure::start("rate_limit_time");
+        pubkey_rate_limit.rate_limit_batch(&mut batches);
+        rate_limit_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let dedup_fail = deduper.dedup_packets(&mut batches) as usize;
@@ -327,10 +333,12 @@ impl SigVerifyStage {
             .name("solana-verifier".to_string())
             .spawn(move || {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                let mut rate_limit = RateLimitByPubkey::new(DEFAULT_TIMEOUT_MS);
                 loop {
                     deduper.reset();
                     if let Err(e) = Self::verifier(
                         &deduper,
+                        &mut rate_limit,
                         &packet_receiver,
                         &verified_sender,
                         &verifier,
