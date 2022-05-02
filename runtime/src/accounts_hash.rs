@@ -6,6 +6,7 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         borrow::Borrow,
