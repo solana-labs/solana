@@ -59,7 +59,7 @@ use {
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::{limited_deserialize, Packet},
+    solana_perf::packet::{deserialize_from_with_limit, limited_deserialize, Packet},
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
@@ -290,16 +290,16 @@ impl Shred {
 
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut cursor = Cursor::new(&payload[..]);
-        let common_header: ShredCommonHeader = bincode::deserialize_from(&mut cursor)?;
+        let common_header: ShredCommonHeader = deserialize_from_with_limit(&mut cursor)?;
         let (data_header, coding_header) = match common_header.shred_type {
             ShredType::Code => {
-                let coding_header = bincode::deserialize_from(&mut cursor)?;
+                let coding_header = deserialize_from_with_limit(&mut cursor)?;
                 // see: https://github.com/solana-labs/solana/pull/10109
                 payload.truncate(SHRED_PAYLOAD_SIZE);
                 (DataShredHeader::default(), coding_header)
             }
             ShredType::Data => {
-                let data_header = bincode::deserialize_from(&mut cursor)?;
+                let data_header = deserialize_from_with_limit(&mut cursor)?;
                 // see: https://github.com/solana-labs/solana/pull/16602
                 payload.resize(SHRED_PAYLOAD_SIZE, 0u8);
                 (data_header, CodingShredHeader::default())
