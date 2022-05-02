@@ -5210,6 +5210,7 @@ impl AccountsDb {
                                                 &loaded_hash,
                                                 pubkey,
                                                 *slot,
+                                                config.epoch_schedule,
                                                 config.rent_collector,
                                                 &stats,
                                                 max_slot,
@@ -5758,6 +5759,7 @@ impl AccountsDb {
                     &loaded_hash,
                     pubkey,
                     slot,
+                    config.epoch_schedule,
                     config.rent_collector,
                     stats,
                     storage.range().end.saturating_sub(1), // 'end' is exclusive, convert to inclusive

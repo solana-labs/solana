@@ -386,6 +386,7 @@ impl ExpectedRentCollection {
         loaded_hash: &Hash,
         pubkey: &Pubkey,
         storage_slot: Slot,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         stats: &HashStats,
         max_slot_in_storages_inclusive: Slot,
@@ -398,6 +399,7 @@ impl ExpectedRentCollection {
             pubkey,
             loaded_account,
             storage_slot,
+            epoch_schedule,
             rent_collector,
             max_slot_in_storages_inclusive,
             find_unskipped_slot,
@@ -442,20 +444,18 @@ impl ExpectedRentCollection {
         pubkey: &Pubkey,
         loaded_account: &impl ReadableAccount,
         storage_slot: Slot,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         max_slot_in_storages_inclusive: Slot,
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Self> {
-        let slots_per_epoch = rent_collector
-            .epoch_schedule
-            .get_slots_in_epoch(rent_collector.epoch);
+        let slots_per_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
 
         let partition_from_pubkey =
             crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
-        let (epoch_of_max_storage_slot, partition_index_from_max_slot) = rent_collector
-            .epoch_schedule
-            .get_epoch_and_slot_index(max_slot_in_storages_inclusive);
+        let (epoch_of_max_storage_slot, partition_index_from_max_slot) =
+            epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages_inclusive);
 
         // now, we have to find the root that is >= the slot where this pubkey's rent would have been collected
         let first_slot_in_max_epoch =
