@@ -102,7 +102,7 @@ impl ComputeBudget {
         &mut self,
         message: &SanitizedMessage,
         requestable_heap_size: bool,
-        per_instruction_default: bool,
+        default_units_per_instruction: bool,
     ) -> Result<u64, TransactionError> {
         let mut num_instructions = message.instructions().len();
         let mut requested_additional_fee = 0;
@@ -122,7 +122,7 @@ impl ComputeBudget {
                             units,
                             additional_fee,
                         }) => {
-                            requested_units = Some(units.min(MAX_UNITS) as u64);
+                            requested_units = Some(units as u64);
                             requested_additional_fee = additional_fee as u64;
                         }
                         Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
@@ -141,15 +141,14 @@ impl ComputeBudget {
             }
         }
 
-        self.max_units = if let Some(units) = requested_units {
-            units
-        } else if per_instruction_default {
-            num_instructions
-                .saturating_mul(DEFAULT_UNITS as usize)
-                .min(MAX_UNITS as usize) as u64
+        self.max_units = if default_units_per_instruction {
+            requested_units
+                .or_else(|| Some(num_instructions.saturating_mul(DEFAULT_UNITS as usize) as u64))
         } else {
-            MAX_UNITS as u64
-        };
+            requested_units
+        }
+        .unwrap_or(MAX_UNITS as u64)
+        .min(MAX_UNITS as u64);
 
         Ok(requested_additional_fee)
     }
