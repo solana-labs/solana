@@ -117,13 +117,13 @@ fn generate_chunked_transfers(
     let mut last_blockhash_time = Instant::now();
     let mut old_blockhash = {
         let recent_blockhash_guard = recent_blockhash.read().unwrap();
-        recent_blockhash_guard.clone()
+        *recent_blockhash_guard
     };
 
     while start.elapsed() < duration {
         let new_blockhash = {
             let recent_blockhash_guard = recent_blockhash.read().unwrap();
-            recent_blockhash_guard.clone()
+            *recent_blockhash_guard
         };
         if old_blockhash != new_blockhash {
             old_blockhash = new_blockhash;
