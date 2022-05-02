@@ -3566,16 +3566,6 @@ failed:
             std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
         if !shrink_candidates_slots.is_empty() {
             self.shrink_ancient_slots();
-            error!(
-                "ancient_append_vec: shrink_candidate_slots, len: {}",
-                shrink_candidates_slots.len()
-            );
-        }
-        else {
-            error!(
-                "ancient_append_vec skipping: shrink_candidate_slots, len: {}",
-                shrink_candidates_slots.len()
-            );
         }
 
         let (shrink_slots, shrink_slots_next_batch) = {
