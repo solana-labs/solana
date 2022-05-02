@@ -58,7 +58,7 @@ export function InstructionCard({
   };
   const scrollAnchorRef = useScrollAnchor(
     getInstructionCardScrollAnchorId(
-      childIndex != null ? [index + 1, childIndex] : [index + 1]
+      childIndex != null ? [index + 1, childIndex + 1] : [index + 1]
     )
   );
   return (
