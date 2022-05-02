@@ -222,19 +222,20 @@ impl ShredType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct MerklePayload {
-    root: [u8; SIZE_OF_MERKLE_ROOT],
-    proof: [u8; SIZE_OF_MERKLE_PROOF],
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+struct MerkleHash([u8; SIZE_OF_MERKLE_HASH]);
+
+impl From<&[u8]> for MerkleHash {
+    fn from(buf: &[u8]) -> Self {
+        assert!(buf.len() == SIZE_OF_MERKLE_HASH);
+        MerkleHash(buf.try_into().unwrap())
+    }
 }
 
-impl Default for MerklePayload {
-    fn default() -> Self {
-        MerklePayload {
-            root: [0u8; SIZE_OF_MERKLE_ROOT],
-            proof: [0u8; SIZE_OF_MERKLE_PROOF],
-        }
-    }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+struct MerklePayload {
+    root: MerkleHash,
+    proof: [MerkleHash; 6],
 }
 
 /// A common header that is present in data and code shred headers
@@ -340,6 +341,7 @@ impl Shred {
     }
 
     // TODO: Should this sanitize output?
+    #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_data(
         slot: Slot,
         index: u32,
@@ -352,7 +354,7 @@ impl Shred {
         fec_set_index: u32,
     ) -> Self {
         let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
-        let common_header = ShredCommonHeader {
+        let mut common_header = ShredCommonHeader {
             signature: Signature::default(),
             shred_type: ShredType::DataV1, // TODO MERKLE
             slot,
@@ -392,6 +394,28 @@ impl Shred {
         )
         .expect("Failed to write common header into shred buffer");
 
+        // TODO MERKLE
+        {
+            let mut start = 83;
+            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+
+            let mut merkle = MerklePayload::default();
+            merkle.root = hash13s;
+            for i in 0..6 {
+                merkle.proof[i] = hash13s;
+            }
+            common_header.merkle = Some(merkle);
+
+            Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
+                .expect("Failed to write merkle root");
+
+            for _i in 0..6 {
+                Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
+                    .expect("Failed to write merkle proof");
+            }
+        }
+        // TODO END MERKLE
+
         Self::serialize_obj_into(
             &mut start,
             SIZE_OF_DATA_SHRED_HEADER,
@@ -409,10 +433,43 @@ impl Shred {
         }
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut start = 0;
-        let common_header: ShredCommonHeader =
+        let mut common_header: ShredCommonHeader =
             Self::deserialize_obj(&mut start, SIZE_OF_COMMON_SHRED_HEADER_V1, &payload)?;
+
+        /*
+        match common_header.shred_type.version() {
+            ShredCommonHeaderVersion::V2 => {
+                let mut merkle = MerklePayload::default();
+                merkle.root = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
+                for i in 0..6 {
+                    merkle.proof[i] = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
+                }
+                common_header.merkle = Some(merkle);
+            }
+            _ => (),
+        }
+        */
+
+        // TODO MERKLE
+        {
+            let mut start = 83;
+            let mut merkle = MerklePayload::default();
+            merkle.root = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
+            for i in 0..6 {
+                merkle.proof[i] = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
+            }
+            common_header.merkle = Some(merkle);
+
+            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            assert_eq!(&common_header.merkle.unwrap().root, &hash13s);
+            for i in 0..6 {
+                assert_eq!(&common_header.merkle.unwrap().proof[i], &hash13s);
+            }
+        }
+        // TODO END MERKLE
 
         // Shreds should be padded out to SHRED_PAYLOAD_SIZE
         // so that erasure generation/recovery works correctly
@@ -439,6 +496,7 @@ impl Shred {
         shred.sanitize().map(|_| shred)
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_parity_shard(
         slot: Slot,
         index: u32,
@@ -449,7 +507,7 @@ impl Shred {
         position: u16,
         version: u16,
     ) -> Self {
-        let common_header = ShredCommonHeader {
+        let mut common_header = ShredCommonHeader {
             signature: Signature::default(),
             shred_type: ShredType::CodeV1, // TODO MERKLE
             index,
@@ -472,6 +530,29 @@ impl Shred {
             &common_header,
         )
         .expect("Failed to write header into shred buffer");
+
+        // TODO MERKLE
+        {
+            let mut start = 83;
+            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+
+            let mut merkle = MerklePayload::default();
+            merkle.root = hash13s;
+            for i in 0..6 {
+                merkle.proof[i] = hash13s;
+            }
+            common_header.merkle = Some(merkle);
+
+            Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
+                .expect("Failed to write merkle root");
+
+            for _i in 0..6 {
+                Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
+                    .expect("Failed to write merkle proof");
+            }
+        }
+        // TODO END MERKLE
+
         Self::serialize_obj_into(
             &mut start,
             SIZE_OF_CODING_SHRED_HEADERS_V1, // TODO MERKLE
@@ -857,8 +938,34 @@ impl Shred {
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
-        self.signature()
-            .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..])
+        let ret = match self.shred_type().version() {
+            ShredCommonHeaderVersion::V1 => self
+                .signature()
+                .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..]),
+            ShredCommonHeaderVersion::V2 => {
+                let x = self.signature().verify(
+                    pubkey.as_ref(),
+                    &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + SIZE_OF_MERKLE_ROOT],
+                );
+                if !x {
+                    return false;
+                }
+                // TODO MERKLE verify merkle proof
+                true
+            }
+        };
+
+        // TODO MERKLE
+        {
+            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            assert_eq!(&self.common_header.merkle.unwrap().root, &hash13s);
+            for i in 0..6 {
+                assert_eq!(&self.common_header.merkle.unwrap().proof[i], &hash13s);
+            }
+        }
+        // TODO END MERKLE
+
+        ret
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
