@@ -13,7 +13,7 @@ use {
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
-        collections::BTreeMap,
+        collections::HashMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -160,7 +160,8 @@ impl ConnectionCacheStats {
 }
 
 struct ConnectionMap {
-    map: BTreeMap<SocketAddr, Connection>,
+    map: HashMap<SocketAddr, Connection>,
+    list_of_peers: Vec<SocketAddr>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
@@ -169,7 +170,8 @@ struct ConnectionMap {
 impl ConnectionMap {
     pub fn new() -> Self {
         Self {
-            map: BTreeMap::new(),
+            map: HashMap::with_capacity(MAX_CONNECTIONS),
+            list_of_peers: vec![],
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             use_quic: false,
@@ -194,8 +196,8 @@ struct GetConnectionResult {
     connection: Connection,
     cache_hit: bool,
     report_stats: bool,
-    map_timing: u64,
-    lock_timing: u64,
+    map_timing_ms: u64,
+    lock_timing_ms: u64,
     connection_cache_stats: Arc<ConnectionCacheStats>,
     other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
 }
@@ -243,17 +245,16 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
 
             lock_timing = lock_timing.saturating_add(get_connection_map_lock_measure.as_ms());
 
-            // evict a connection if the map is reaching upper bounds
-            while map.map.len() >= MAX_CONNECTIONS {
+            // evict a connection if the cache is reaching upper bounds
+            while map.list_of_peers.len() >= MAX_CONNECTIONS {
                 let mut rng = thread_rng();
                 let n = rng.gen_range(0, MAX_CONNECTIONS);
-                if let Some((nth_addr, _)) = map.map.iter().nth(n) {
-                    let nth_addr = *nth_addr;
-                    map.map.remove(&nth_addr);
-                }
+                let nth_addr = map.list_of_peers.remove(n);
+                map.map.remove(&nth_addr);
             }
 
             map.map.insert(*addr, connection.clone());
+            map.list_of_peers.push(*addr);
             (connection, false, map.stats.clone(), None)
         }
     };
@@ -263,8 +264,8 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         connection,
         cache_hit,
         report_stats,
-        map_timing: get_connection_map_measure.as_ms(),
-        lock_timing,
+        map_timing_ms: get_connection_map_measure.as_ms(),
+        lock_timing_ms: lock_timing,
         connection_cache_stats,
         other_stats: maybe_stats,
     }
@@ -278,8 +279,8 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
         connection,
         cache_hit,
         report_stats,
-        map_timing,
-        lock_timing,
+        map_timing_ms: map_timing,
+        lock_timing_ms: lock_timing,
         connection_cache_stats,
         other_stats,
     } = get_or_add_connection(addr);
