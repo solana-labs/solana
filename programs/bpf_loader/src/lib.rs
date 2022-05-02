@@ -150,6 +150,8 @@ pub fn create_executor(
         dynamic_stack_frames: false,
         enable_sdiv: false,
         optimize_rodata: false,
+        static_syscalls: false,
+        enable_elf_vaddr: false,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();

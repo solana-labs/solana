@@ -8,7 +8,7 @@ import {
 } from "@project-serum/anchor";
 import {
   getAnchorNameForInstruction,
-  getProgramName,
+  getAnchorProgramName,
   getAnchorAccountsFromInstruction,
   mapIxArgsToRows,
 } from "utils/anchor";
@@ -28,7 +28,7 @@ export default function AnchorDetailsCard(props: {
   anchorProgram: Program<Idl>;
 }) {
   const { ix, anchorProgram } = props;
-  const programName = getProgramName(anchorProgram) ?? "Unknown Program";
+  const programName = getAnchorProgramName(anchorProgram) ?? "Unknown Program";
 
   const ixName =
     getAnchorNameForInstruction(ix, anchorProgram) ?? "Unknown Instruction";
@@ -94,7 +94,7 @@ function AnchorDetails({
     );
   }
 
-  const programName = getProgramName(anchorProgram) ?? "Unknown Program";
+  const programName = getAnchorProgramName(anchorProgram) ?? "Unknown Program";
 
   return (
     <>

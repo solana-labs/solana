@@ -54,6 +54,9 @@ if (process.env.TEST_LIVE) {
       expect(connection._rpcWebSocketIdleTimeout).not.to.eq(null);
 
       const nextId = connection.onSignature(testSignature, () => {});
+
+      // wait for websocket to connect
+      await sleep(100);
       expect(connection._rpcWebSocketIdleTimeout).to.eq(null);
 
       await connection.removeSignatureListener(nextId);

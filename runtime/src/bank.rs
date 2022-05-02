@@ -6203,12 +6203,12 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
-        if let Some(buf) = self
+        let buf = self
             .hard_forks
             .read()
             .unwrap()
-            .get_hash_data(self.slot(), self.parent_slot())
-        {
+            .get_hash_data(self.slot(), self.parent_slot());
+        if let Some(buf) = buf {
             info!("hard fork at bank {}", self.slot());
             hash = extend_and_hash(&hash, &buf)
         }
@@ -6828,20 +6828,20 @@ impl Bank {
             self.rent_collector.rent.burn_percent = 50; // 50% rent burn
         }
 
-        if new_feature_activations.contains(&feature_set::spl_token_v3_3_0_release::id()) {
+        if new_feature_activations.contains(&feature_set::spl_token_v3_4_0::id()) {
             self.replace_program_account(
                 &inline_spl_token::id(),
-                &inline_spl_token::new_token_program::id(),
-                "bank-apply_spl_token_v3_3_0_release",
+                &inline_spl_token::program_v3_4_0::id(),
+                "bank-apply_spl_token_v3_4_0",
             );
         }
 
-        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_0_4::id())
+        if new_feature_activations.contains(&feature_set::spl_associated_token_account_v1_1_0::id())
         {
             self.replace_program_account(
                 &inline_spl_associated_token_account::id(),
-                &inline_spl_associated_token_account::program_v1_0_4::id(),
-                "bank-apply_spl_associated_token_account_v1_4_0",
+                &inline_spl_associated_token_account::program_v1_1_0::id(),
+                "bank-apply_spl_associated_token_account_v1_1_0",
             );
         }
 
@@ -9118,13 +9118,25 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        // this should be a no-op because of just_rewrites=true
         assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
         bank.collect_rent_in_partition((0, 0, 1), true);
         {
             let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
-            assert_eq!(rewrites_skipped.len(), 90);
+            // `rewrites_skipped.len()` is the number of non-rent paying accounts in the slot. This
+            // is always at least the number of features in the Bank, due to
+            // `activate_all_features`. These accounts will stop being written to the append vec
+            // when we start skipping rewrites.
+            // 'collect_rent_in_partition' fills 'rewrites_skipped_this_slot' with rewrites that
+            // were skipped during rent collection but should still be considered in the slot's
+            // bank hash. If the slot is also written in the append vec, then the bank hash calc
+            // code ignores the contents of this list. This assert is confirming that the expected #
+            // of accounts were included in 'rewrites_skipped' by the call to
+            // 'collect_rent_in_partition(..., true)' above.
+            let num_features = bank.feature_set.inactive.len() + bank.feature_set.active.len();
+            assert!(rewrites_skipped.len() >= num_features);
+            // should have skipped 'rent_exempt_pubkey'
             assert!(rewrites_skipped.contains_key(&rent_exempt_pubkey));
+            // should NOT have skipped 'rent_exempt_pubkey'
             assert!(!rewrites_skipped.contains_key(&rent_due_pubkey));
         }
 
@@ -11351,15 +11363,32 @@ pub(crate) mod tests {
     #[test]
     fn test_bank_cloned_stake_delegations() {
         let GenesisConfigInfo {
-            genesis_config,
+            mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config_with_leader(500, &solana_sdk::pubkey::new_rand(), 1);
+        } = create_genesis_config_with_leader(
+            123_456_000_000_000,
+            &solana_sdk::pubkey::new_rand(),
+            123_000_000_000,
+        );
+        genesis_config.rent = Rent::default();
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         let stake_delegations = bank.stakes_cache.stakes().stake_delegations().clone();
         assert_eq!(stake_delegations.len(), 1); // bootstrap validator has
                                                 // to have a stake delegation
+
+        let (vote_balance, stake_balance) = {
+            let rent = &bank.rent_collector().rent;
+            let vote_rent_exempt_reserve = rent.minimum_balance(VoteState::size_of());
+            let stake_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+            let minimum_delegation =
+                solana_stake_program::get_minimum_delegation(&bank.feature_set);
+            (
+                vote_rent_exempt_reserve,
+                stake_rent_exempt_reserve + minimum_delegation,
+            )
+        };
 
         let vote_keypair = Keypair::new();
         let mut instructions = vote_instruction::create_account(
@@ -11371,7 +11400,7 @@ pub(crate) mod tests {
                 authorized_withdrawer: vote_keypair.pubkey(),
                 commission: 0,
             },
-            10,
+            vote_balance,
         );
 
         let stake_keypair = Keypair::new();
@@ -11381,7 +11410,7 @@ pub(crate) mod tests {
             &vote_keypair.pubkey(),
             &Authorized::auto(&stake_keypair.pubkey()),
             &Lockup::default(),
-            10,
+            stake_balance,
         ));
 
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));

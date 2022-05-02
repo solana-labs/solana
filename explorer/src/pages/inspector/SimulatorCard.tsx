@@ -2,7 +2,7 @@ import React from "react";
 import bs58 from "bs58";
 import { Connection, Message, Transaction } from "@solana/web3.js";
 import { useCluster } from "providers/cluster";
-import { InstructionLogs, prettyProgramLogs } from "utils/program-logs";
+import { InstructionLogs, parseProgramLogs } from "utils/program-logs";
 import { ProgramLogsCardBody } from "components/ProgramLogsCardBody";
 
 const DEFAULT_SIGNATURE = bs58.encode(Buffer.alloc(64).fill(0));
@@ -111,7 +111,7 @@ function useSimulator(message: Message) {
         }
 
         // Prettify logs
-        setLogs(prettyProgramLogs(resp.value.logs, resp.value.err, cluster));
+        setLogs(parseProgramLogs(resp.value.logs, resp.value.err, cluster));
       } catch (err) {
         console.error(err);
         setLogs(null);

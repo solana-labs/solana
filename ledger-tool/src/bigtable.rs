@@ -582,7 +582,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore = crate::open_blockstore(
                 &canonicalize_ledger_path(ledger_path),
-                AccessType::TryPrimaryThenSecondary,
+                AccessType::Secondary,
                 None,
             );
             let config = solana_storage_bigtable::LedgerStorageConfig {
