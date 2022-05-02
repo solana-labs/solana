@@ -31,6 +31,7 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+        epoch_schedule::EpochSchedule,
         feature_set::{self, tx_wide_compute_cap, FeatureSet},
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -760,6 +761,7 @@ impl Accounts {
         slot: Slot,
         can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
         let use_index = false;
@@ -772,6 +774,7 @@ impl Accounts {
                 ancestors,
                 None,
                 can_cached_slot_be_unflushed,
+                epoch_schedule,
                 rent_collector,
                 is_startup,
             )
@@ -786,6 +789,7 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
@@ -793,6 +797,7 @@ impl Accounts {
             ancestors,
             total_lamports,
             test_hash_calculation,
+            epoch_schedule,
             rent_collector,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);

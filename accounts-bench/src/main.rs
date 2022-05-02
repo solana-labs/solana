@@ -118,10 +118,12 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results =
-                accounts
-                    .accounts_db
-                    .update_accounts_hash(0, &ancestors, &RentCollector::default());
+            let results = accounts.accounts_db.update_accounts_hash(
+                0,
+                &ancestors,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+            );
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
@@ -131,6 +133,7 @@ fn main() {
                 &ancestors,
                 None,
                 false,
+                &EpochSchedule::default(),
                 &RentCollector::default(),
                 false,
             );
