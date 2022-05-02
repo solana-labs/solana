@@ -101,6 +101,9 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
+            if *use_quic {
+                connection_cache::set_use_quic(true);
+            }
             let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
                     eprintln!("RPC address should parse as socketaddr {:?}", e);
@@ -122,9 +125,6 @@ fn main() {
                             eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                             exit(1);
                         });
-                if *use_quic {
-                    connection_cache::set_use_quic(true);
-                }
                 if *multi_client {
                     let (client, num_clients) =
                         get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
