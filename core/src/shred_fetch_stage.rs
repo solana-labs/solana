@@ -216,7 +216,10 @@ impl ShredFetchStage {
 mod tests {
     use {
         super::*,
-        solana_ledger::{blockstore::MAX_DATA_SHREDS_PER_SLOT, shred::Shred},
+        solana_ledger::{
+            blockstore::MAX_DATA_SHREDS_PER_SLOT,
+            shred::{Shred, ShredFlags},
+        },
     };
 
     #[test]
@@ -229,14 +232,13 @@ mod tests {
         let slot = 1;
         let shred = Shred::new_from_data(
             slot,
-            3,    // shred index
-            0,    // parent offset
-            &[],  // data
-            true, // is_last_in_fec_set
-            true, // is_last_in_slot
-            0,    // reference_tick
-            0,    // version
-            3,    // fec_set_index
+            3,   // shred index
+            0,   // parent offset
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
+            0, // version
+            3, // fec_set_index
         );
         shred.copy_to_packet(&mut packet);
 
@@ -300,7 +302,7 @@ mod tests {
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard());
-        let shred = Shred::new_from_data(1, 3, 0, &[], true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
 
         // rejected slot is 1, root is 3
@@ -342,7 +344,16 @@ mod tests {
         );
         assert!(packet.meta.discard());
 
-        let shred = Shred::new_from_data(1_000_000, 3, 0, &[], true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1_000_000,
+            3,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0,
+        );
         shred.copy_to_packet(&mut packet);
 
         // Slot 1 million is too high
@@ -359,7 +370,7 @@ mod tests {
         assert!(packet.meta.discard());
 
         let index = MAX_DATA_SHREDS_PER_SLOT as u32;
-        let shred = Shred::new_from_data(5, index, 0, &[], true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(5, index, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,

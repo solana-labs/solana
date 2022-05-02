@@ -3,7 +3,7 @@
 extern crate test;
 use {
     solana_ledger::{
-        shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
+        shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
         sigverify_shreds::{sign_shreds_cpu, sign_shreds_gpu, sign_shreds_gpu_pinned_keypair},
     },
     solana_perf::{
@@ -33,8 +33,7 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
             0xc0de,
             0xdead,
             &[5; SIZE_OF_DATA_SHRED_PAYLOAD],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             1,
             2,
             0,
@@ -65,8 +64,7 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
             0xc0de,
             0xdead,
             &[5; SIZE_OF_DATA_SHRED_PAYLOAD],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             1,
             2,
             0,

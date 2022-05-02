@@ -4286,7 +4286,7 @@ pub mod tests {
             blockstore_db::BlockstoreRocksFifoOptions,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
-            shred::max_ticks_per_n_shreds,
+            shred::{max_ticks_per_n_shreds, ShredFlags},
         },
         assert_matches::assert_matches,
         bincode::serialize,
@@ -5719,8 +5719,7 @@ pub mod tests {
                     (i * gap) as u32,
                     0,
                     &[],
-                    false,
-                    false,
+                    ShredFlags::empty(),
                     i as u8,
                     0,
                     (i * gap) as u32,
@@ -5850,10 +5849,9 @@ pub mod tests {
                 let parent_offset = shred5.slot() - shred5.parent().unwrap();
                 parent_offset as u16
             },
-            &[],  // data
-            true, // is_last_data
-            true, // is_last_in_slot
-            0,    // reference_tick
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
             shred5.version(),
             shred5.fec_set_index(),
         );
@@ -6255,8 +6253,7 @@ pub mod tests {
             next_shred_index as u32,
             1,
             &[1, 1, 1],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             next_shred_index as u32,
@@ -8774,26 +8771,6 @@ pub mod tests {
                 protobuf_status
             );
         }
-    }
-
-    #[test]
-    fn test_remove_shred_data_complete_flag() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        let (mut shreds, entries) = make_slot_entries(0, 0, 1);
-
-        // Remove the data complete flag from the last shred
-        shreds[0].unset_data_complete();
-
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        // Check that the `data_complete` flag was unset in the stored shred, but the
-        // `last_in_slot` flag is set.
-        let stored_shred = &blockstore.get_data_shreds_for_slot(0, 0).unwrap()[0];
-        assert!(!stored_shred.data_complete());
-        assert!(stored_shred.last_in_slot());
-        assert_eq!(entries, blockstore.get_any_valid_slot_entries(0, 0));
     }
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {

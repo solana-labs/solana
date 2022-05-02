@@ -109,12 +109,14 @@ const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HE
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
+// LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED.
+// So it cannot be LAST_SHRED_IN_SLOT if not also DATA_COMPLETE_SHRED.
 bitflags! {
     #[derive(Default, Serialize, Deserialize)]
     pub struct ShredFlags:u8 {
         const SHRED_TICK_REFERENCE_MASK = 0b0011_1111;
-        const DATA_COMPLETE_SHRED = 0b0100_0000;
-        const LAST_SHRED_IN_SLOT = 0b1000_0000;
+        const DATA_COMPLETE_SHRED       = 0b0100_0000;
+        const LAST_SHRED_IN_SLOT        = 0b1100_0000;
     }
 }
 
@@ -138,6 +140,8 @@ pub enum Error {
     InvalidParentSlot { slot: Slot, parent_slot: Slot },
     #[error("Invalid payload size: {0}")]
     InvalidPayloadSize(/*payload size:*/ usize),
+    #[error("Invalid shred flags: {0}")]
+    InvalidShredFlags(u8),
     #[error("Invalid shred type")]
     InvalidShredType,
 }
@@ -240,8 +244,7 @@ impl Shred {
         index: u32,
         parent_offset: u16,
         data: &[u8],
-        is_last_data: bool,
-        is_last_in_slot: bool,
+        flags: ShredFlags,
         reference_tick: u8,
         version: u16,
         fec_set_index: u32,
@@ -257,26 +260,19 @@ impl Shred {
         };
 
         let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER) as u16;
-        let mut data_header = DataShredHeader {
-            parent_offset,
-            flags: unsafe {
+        let flags = flags
+            | unsafe {
                 ShredFlags::from_bits_unchecked(
                     ShredFlags::SHRED_TICK_REFERENCE_MASK
                         .bits()
                         .min(reference_tick),
                 )
-            },
+            };
+        let data_header = DataShredHeader {
+            parent_offset,
+            flags,
             size,
         };
-
-        if is_last_data {
-            data_header.flags |= ShredFlags::DATA_COMPLETE_SHRED
-        }
-
-        if is_last_in_slot {
-            data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
-        }
-
         let mut cursor = Cursor::new(&mut payload[..]);
         bincode::serialize_into(&mut cursor, &common_header).unwrap();
         bincode::serialize_into(&mut cursor, &data_header).unwrap();
@@ -496,6 +492,12 @@ impl Shred {
                         payload: self.payload.len(),
                     });
                 }
+                let flags = self.data_header.flags;
+                if flags.intersects(ShredFlags::LAST_SHRED_IN_SLOT)
+                    && !flags.contains(ShredFlags::DATA_COMPLETE_SHRED)
+                {
+                    return Err(Error::InvalidShredFlags(self.data_header.flags.bits()));
+                }
             }
             ShredType::Code => {
                 let num_coding_shreds = u32::from(self.coding_header.num_coding_shreds);
@@ -634,18 +636,6 @@ impl Shred {
         if self.is_data() {
             self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
         }
-        let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
-        bincode::serialize_into(buffer, &self.data_header).unwrap();
-    }
-
-    #[cfg(test)]
-    pub(crate) fn unset_data_complete(&mut self) {
-        if self.is_data() {
-            self.data_header
-                .flags
-                .remove(ShredFlags::DATA_COMPLETE_SHRED);
-        }
-        // Data header starts after the shred common header
         let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
         bincode::serialize_into(buffer, &self.data_header).unwrap();
     }
@@ -909,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_invalid_parent_offset() {
-        let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], false, false, 0, 1, 0);
+        let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
         let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
@@ -933,7 +923,7 @@ mod tests {
     fn test_shred_offsets() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, &[], true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
         let ret = get_shred_slot_index_type(&packet, &mut stats);
@@ -979,7 +969,16 @@ mod tests {
             get_shred_slot_index_type(&packet, &mut stats)
         );
 
-        let shred = Shred::new_from_data(1, std::u32::MAX - 10, 0, &[], true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1,
+            std::u32::MAX - 10,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0,
+        );
         shred.copy_to_packet(&mut packet);
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
@@ -1036,11 +1035,11 @@ mod tests {
             420, // slot
             19,  // index
             5,   // parent_offset
-            &data, true,  // is_last_data
-            false, // is_last_in_slot
-            3,     // reference_tick
-            1,     // version
-            16,    // fec_set_index
+            &data,
+            ShredFlags::DATA_COMPLETE_SHRED,
+            3,  // reference_tick
+            1,  // version
+            16, // fec_set_index
         );
         assert_matches!(shred.sanitize(), Ok(()));
         // Corrupt shred by making it too large
@@ -1075,6 +1074,15 @@ mod tests {
             let mut shred = shred.clone();
             shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
             assert_matches!(shred.sanitize(), Err(Error::InvalidDataShredIndex(32768)));
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
+            assert_matches!(shred.sanitize(), Ok(()));
+            shred.data_header.flags &= !ShredFlags::DATA_COMPLETE_SHRED;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(131u8)));
+            shred.data_header.flags |= ShredFlags::SHRED_TICK_REFERENCE_MASK;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(191u8)));
         }
         {
             shred.data_header.size = shred.payload().len() as u16 + 1;
@@ -1163,10 +1171,10 @@ mod tests {
     #[test]
     fn test_serde_compat_shred_data() {
         const SEED: &str = "6qG9NGWEtoTugS4Zgs46u8zTccEJuRHtrNMiUayLHCxt";
-        const PAYLOAD: &str = "Cuk5B7qosCx42HcZjwcUKPpeqE43sDhx1RFut5rEAk54dV\
-        JFPrGEBYuPJSwaaNNbGyas9AuLS66NcFxNAcBzmBcb3gSmNrfQzmTUev5jSEeQRyqE5WG\
-        rGwC67mS5QXmokCtVEdXu9B1SLQFBMB62CQGVEjqV1r6jz4xd5Zg1AyyVCjGpRe8ooqMB\
-        1doeATLCEBhjnPPYLLyZGqPfrqfz5huq8BCoVC8DCMWFJhxtPLA5XHPPpxieAhDBmS";
+        const PAYLOAD: &str = "hNX8YgJCQwSFGJkZ6qZLiepwPjpctC9UCsMD1SNNQurBXv\
+        rm7KKfLmPRMM9CpWHt6MsJuEWpDXLGwH9qdziJzGKhBMfYH63avcchjdaUiMqzVip7cUD\
+        kqZ9zZJMrHCCUDnxxKMupsJWKroUSjKeo7hrug2KfHah85VckXpRna4R9QpH7tf2WVBTD\
+        M4m3EerctsEQs8eZaTRxzTVkhtJYdNf74KZbH58dc3Yn2qUxF1mexWoPS6L5oZBatx";
         let mut rng = {
             let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
             ChaChaRng::from_seed(seed)
@@ -1179,11 +1187,10 @@ mod tests {
             28685,     // index
             36390,     // parent_offset
             &data,     // data
-            false,     // is_last_data
-            true,      // is_last_in_slot
-            37,        // reference_tick
-            45189,     // version
-            28657,     // fec_set_index
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            37,    // reference_tick
+            45189, // version
+            28657, // fec_set_index
         );
         shred.sign(&keypair);
         assert!(shred.verify(&keypair.pubkey()));
@@ -1225,11 +1232,10 @@ mod tests {
             21443,     // index
             51279,     // parent_offset
             &[],       // data
-            true,      // is_last_data
-            false,     // is_last_in_slot
-            49,        // reference_tick
-            59445,     // version
-            21414,     // fec_set_index
+            ShredFlags::DATA_COMPLETE_SHRED,
+            49,    // reference_tick
+            59445, // version
+            21414, // fec_set_index
         );
         shred.sign(&keypair);
         assert!(shred.verify(&keypair.pubkey()));
@@ -1298,13 +1304,20 @@ mod tests {
     #[test]
     fn test_shred_flags() {
         fn make_shred(is_last_data: bool, is_last_in_slot: bool, reference_tick: u8) -> Shred {
+            let flags = if is_last_in_slot {
+                assert!(is_last_data);
+                ShredFlags::LAST_SHRED_IN_SLOT
+            } else if is_last_data {
+                ShredFlags::DATA_COMPLETE_SHRED
+            } else {
+                ShredFlags::empty()
+            };
             Shred::new_from_data(
                 0,   // slot
                 0,   // index
                 0,   // parent_offset
                 &[], // data
-                is_last_data,
-                is_last_in_slot,
+                flags,
                 reference_tick,
                 0, // version
                 0, // fec_set_index
@@ -1326,15 +1339,37 @@ mod tests {
         }
         for is_last_data in [false, true] {
             for is_last_in_slot in [false, true] {
+                // LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED. So it
+                // cannot be LAST_SHRED_IN_SLOT if not DATA_COMPLETE_SHRED.
+                let is_last_in_slot = is_last_in_slot && is_last_data;
                 for reference_tick in [0, 37, 63, 64, 80, 128, 255] {
                     let mut shred = make_shred(is_last_data, is_last_in_slot, reference_tick);
                     check_shred_flags(&shred, is_last_data, is_last_in_slot, reference_tick);
                     shred.set_last_in_slot();
-                    check_shred_flags(&shred, is_last_data, true, reference_tick);
-                    shred.unset_data_complete();
-                    check_shred_flags(&shred, false, true, reference_tick);
+                    check_shred_flags(&shred, true, true, reference_tick);
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_shred_flags_serde() {
+        let flags: ShredFlags = bincode::deserialize(&[0b0111_0001]).unwrap();
+        assert!(flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 49u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b0111_0001]);
+
+        let flags: ShredFlags = bincode::deserialize(&[0b1110_0101]).unwrap();
+        assert!(flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 37u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b1110_0101]);
+
+        let flags: ShredFlags = bincode::deserialize(&[0b1011_1101]).unwrap();
+        assert!(!flags.contains(ShredFlags::DATA_COMPLETE_SHRED));
+        assert!(!flags.contains(ShredFlags::LAST_SHRED_IN_SLOT));
+        assert_eq!((flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits(), 61u8);
+        assert_eq!(bincode::serialize(&flags).unwrap(), [0b1011_1101]);
     }
 }
