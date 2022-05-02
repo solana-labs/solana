@@ -19,7 +19,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 /// NOTE: This is also used to calculate the minimum balance of a stake account, which is the
 /// rent exempt reserve _plus_ the minimum stake delegation.
 #[inline(always)]
-pub(crate) fn get_minimum_delegation(_feature_set: &FeatureSet) -> u64 {
+pub fn get_minimum_delegation(_feature_set: &FeatureSet) -> u64 {
     // If/when the minimum delegation amount is changed, the `feature_set` parameter will be used
     // to chose the correct value.  And since the MINIMUM_STAKE_DELEGATION constant cannot be
     // removed, use it here as to not duplicate magic constants.
