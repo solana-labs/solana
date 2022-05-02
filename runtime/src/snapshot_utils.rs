@@ -134,7 +134,7 @@ impl PartialOrd for BankSnapshotInfo {
     }
 }
 
-// Order BankSnapshotInfo by slot (ascending), which practially is sorting chronologically
+// Order BankSnapshotInfo by slot (ascending), which practically is sorting chronologically
 impl Ord for BankSnapshotInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.slot.cmp(&other.slot)
