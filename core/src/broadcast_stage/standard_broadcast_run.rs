@@ -326,6 +326,8 @@ impl StandardBroadcastRun {
 
                 assert_eq!(batch_shreds.len(), NUM_FEC_SET_SHREDS);
 
+                // TODO MERKLE create tree, proofs, root, root sig
+
                 let batch_shreds = Arc::new(batch_shreds);
                 debug_assert!(batch_shreds.iter().all(|shred| shred.slot() == bank.slot()));
                 socket_sender.send((batch_shreds.clone(), batch_info.clone()))?;
@@ -511,7 +513,7 @@ impl BroadcastRun for StandardBroadcastRun {
             socket_sender,
             blockstore_sender,
             receive_results,
-            false,
+            true,
         )
     }
     fn transmit(
