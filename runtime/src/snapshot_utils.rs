@@ -3461,6 +3461,7 @@ mod tests {
                 cluster_type: solana_sdk::genesis_config::ClusterType::Development,
                 snapshot_type,
                 accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
+                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
                 rent_collector: crate::rent_collector::RentCollector::default(),
             }
         }

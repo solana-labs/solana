@@ -21,6 +21,7 @@ use {
         hash::Hash,
         lamports::LamportsError,
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -108,10 +109,12 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
-    let (_, total_lamports) =
-        accounts
-            .accounts_db
-            .update_accounts_hash(0, &ancestors, &RentCollector::default());
+    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
+        0,
+        &ancestors,
+        &EpochSchedule::default(),
+        &RentCollector::default(),
+    );
     let test_hash_calculation = false;
     bencher.iter(|| {
         assert!(accounts.verify_bank_hash_and_lamports(
@@ -119,6 +122,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             &ancestors,
             total_lamports,
             test_hash_calculation,
+            &EpochSchedule::default(),
             &RentCollector::default()
         ))
     });
@@ -138,9 +142,12 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
-        accounts
-            .accounts_db
-            .update_accounts_hash(0, &ancestors, &RentCollector::default());
+        accounts.accounts_db.update_accounts_hash(
+            0,
+            &ancestors,
+            &EpochSchedule::default(),
+            &RentCollector::default(),
+        );
     });
 }
 

@@ -139,6 +139,7 @@ impl AccountsHashVerifier {
                     check_hash: false,
                     ancestors: None,
                     use_write_cache: false,
+                    epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
                 },
                 &sorted_storages,
@@ -306,6 +307,7 @@ mod tests {
             genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
+            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
         std::str::FromStr,
@@ -388,6 +390,7 @@ mod tests {
                 cluster_type: ClusterType::MainnetBeta,
                 snapshot_type: None,
                 accounts: Arc::clone(&accounts),
+                epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
             };
 
