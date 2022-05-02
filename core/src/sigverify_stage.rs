@@ -24,7 +24,7 @@ use {
     thiserror::Error,
 };
 
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+const MAX_SIGVERIFY_BATCH: usize = 2_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
