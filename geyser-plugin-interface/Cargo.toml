@@ -13,7 +13,7 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 log = "0.4.11"
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
-thiserror = "1.0.30"
+thiserror = "1.0.31"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
