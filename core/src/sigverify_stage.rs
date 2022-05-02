@@ -164,9 +164,19 @@ impl SigVerifyStage {
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
         let (mut batches, _, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let batches_len = batches.len();
         let num_packets = count_valid_packets(&batches);
 
-        let batches_len = batches.len();
+        stats
+            .recv_batches_us_hist
+            .increment(recv_duration.as_micros() as u64)
+            .unwrap();
+        stats.batches_hist.increment(batches_len as u64).unwrap();
+        stats.total_batches += batches_len;
+        if num_packets == 0 {
+            return Ok(());
+        }
+
         debug!(
             "@{:?} verifier: verifying: {}",
             timing::timestamp(),
@@ -217,16 +227,10 @@ impl SigVerifyStage {
         );
 
         stats
-            .recv_batches_us_hist
-            .increment(recv_duration.as_micros() as u64)
-            .unwrap();
-        stats
             .verify_batches_pp_us_hist
             .increment(verify_batch_time.as_us() / (num_packets as u64))
             .unwrap();
-        stats.batches_hist.increment(batches_len as u64).unwrap();
         stats.packets_hist.increment(num_packets as u64).unwrap();
-        stats.total_batches += batches_len;
         stats.total_packets += num_packets;
         stats.total_excess_fail += excess_fail;
         stats.total_valid_packets += num_valid_packets;

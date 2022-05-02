@@ -8,28 +8,26 @@ use {
     crossbeam_channel::unbounded,
     log::*,
     rand::{thread_rng, Rng},
-    solana_core::{find_packet_sender_stake_stage::FindPacketSenderStakeStage},
+    solana_core::find_packet_sender_stake_stage::FindPacketSenderStakeStage,
+    solana_gossip::cluster_info::{ClusterInfo, Node},
+    solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
     solana_perf::{
         packet::{to_packet_batches, PacketBatch},
         test_tx::test_tx,
     },
-    solana_gossip::{
-        cluster_info::{ClusterInfo, Node},
-    },
-    solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
-    solana_streamer::socket::SocketAddrSpace,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         hash::Hash,
+        pubkey,
         signature::{Keypair, Signer},
         system_transaction,
         timing::duration_as_ms,
-        pubkey,
     },
+    solana_streamer::socket::SocketAddrSpace,
     std::{
-        time::{Duration, Instant},
         sync::{Arc, RwLock},
-        },
+        time::{Duration, Instant},
+    },
     test::Bencher,
 };
 

@@ -11,8 +11,8 @@ use {
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
     solana_perf::{
         packet::{to_packet_batches, PacketBatch},
-        test_tx::test_tx,
         sigverify::discard_excess_packets,
+        test_tx::test_tx,
     },
     solana_sdk::{
         hash::Hash,
