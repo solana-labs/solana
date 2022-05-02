@@ -11,7 +11,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::{
         packet::PacketBatch,
-        sigverify::{count_valid_packets, shrink_batches},
+        sigverify::{count_valid_packets, discard_excess_packets, shrink_batches},
     },
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
@@ -21,6 +21,8 @@ use {
     },
     thiserror::Error,
 };
+
+const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -52,10 +54,12 @@ struct SigVerifierStats {
     packets_hist: histogram::Histogram,         // number of packets per verify call
     total_batches: usize,
     total_packets: usize,
-    total_valid_packets: usize,
+    total_excess_fail: usize,
+    total_discard_time: usize,
     total_verify_time: usize,
     total_shrink_time: usize,
     total_shrinks: usize,
+    total_valid_packets: usize,
 }
 
 impl SigVerifierStats {
@@ -120,7 +124,9 @@ impl SigVerifierStats {
             ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
+            ("total_excess_fail", self.total_excess_fail, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
+            ("total_discard_time_us", self.total_discard_time, i64),
             ("total_verify_time_us", self.total_verify_time, i64),
             ("total_shrink_time_us", self.total_shrink_time, i64),
             ("total_shrinks", self.total_shrinks, i64),
@@ -157,7 +163,7 @@ impl SigVerifyStage {
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         let batches_len = batches.len();
         debug!(
@@ -166,10 +172,26 @@ impl SigVerifyStage {
             num_packets,
         );
 
+        // Discard packets early if more than the target amount remain.
+        // This is important because sigverify can be slow (particularly on CPU)
+        // and the preceeding stages can produce packets more quickly that sigverify
+        // can process them.
+        let mut discard_time = Measure::start("sigverify_discard_time");
+        let mut num_packets_to_verify = num_packets;
+        if num_packets > MAX_SIGVERIFY_BATCH {
+            discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
+            num_packets_to_verify = MAX_SIGVERIFY_BATCH;
+        }
+        let excess_fail = num_packets.saturating_sub(num_packets_to_verify);
+        discard_time.stop();
+
         let mut verify_batch_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_packets);
+        let mut batches = verifier.verify_batches(batches, num_packets_to_verify);
         verify_batch_time.stop();
 
+        // Shrink, if the previous stages significantly reduced the packet count.
+        // This produces full batches at the cost of copying packet data. It also
+        // releases memory.
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_valid_packets = count_valid_packets(&batches);
         let start_len = batches.len();
@@ -205,7 +227,9 @@ impl SigVerifyStage {
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
+        stats.total_excess_fail += excess_fail;
         stats.total_valid_packets += num_valid_packets;
+        stats.total_discard_time += discard_time.as_us() as usize;
         stats.total_shrink_time += shrink_time.as_us() as usize;
         stats.total_verify_time += verify_batch_time.as_us() as usize;
         stats.total_shrinks += total_shrinks;

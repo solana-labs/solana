@@ -11,6 +11,7 @@ use {
         recycler::Recycler,
     },
     ahash::AHasher,
+    itertools::Itertools,
     rand::{thread_rng, Rng},
     rayon::ThreadPool,
     solana_metrics::inc_new_counter_debug,
@@ -538,6 +539,34 @@ pub fn shrink_batches(batches: &mut [PacketBatch]) -> usize {
         }
     }
     last_valid_batch
+}
+
+// reduce to only max_packets non-discard packets
+pub fn discard_excess_packets(batches: &mut [PacketBatch], mut max_packets: usize) {
+    // TODO: let sender_stake influence the discard decision
+
+    // Group packets by their incoming IP address.
+    let mut addrs = batches
+        .iter_mut()
+        .rev()
+        .flat_map(|batch| batch.packets.iter_mut().rev())
+        .filter(|packet| !packet.meta.discard())
+        .map(|packet| (packet.meta.addr, packet))
+        .into_group_map();
+    // Allocate max_packets evenly across addresses.
+    while max_packets > 0 && !addrs.is_empty() {
+        let num_addrs = addrs.len();
+        addrs.retain(|_, packets| {
+            let cap = (max_packets + num_addrs - 1) / num_addrs;
+            max_packets -= packets.len().min(cap);
+            packets.truncate(packets.len().saturating_sub(cap));
+            !packets.is_empty()
+        });
+    }
+    // Discard excess packets from each address.
+    for packet in addrs.into_values().flatten() {
+        packet.meta.set_discard(true);
+    }
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
@@ -1682,5 +1711,35 @@ mod tests {
             batches.truncate(shrunken_batch_count);
             assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
         }
+    }
+
+    fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
+        packet_batches
+            .iter()
+            .map(|batch| {
+                batch
+                    .packets
+                    .iter()
+                    .map(|p| if p.meta.discard() { 0 } else { 1 })
+                    .sum::<usize>()
+            })
+            .sum::<usize>()
+    }
+
+    #[test]
+    fn test_packet_discard() {
+        solana_logger::setup();
+        let mut batch = PacketBatch::default();
+        batch.packets.resize(10, Packet::default());
+        batch.packets[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
+        batch.packets[3].meta.set_discard(true);
+        batch.packets[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
+        let mut batches = vec![batch];
+        let max = 3;
+        FindPacketSenderStake::discard_excess_packets(&mut batches, max);
+        assert_eq!(count_non_discard(&batches), max);
+        assert!(!batches[0].packets[0].meta.discard());
+        assert!(batches[0].packets[3].meta.discard());
+        assert!(!batches[0].packets[4].meta.discard());
     }
 }

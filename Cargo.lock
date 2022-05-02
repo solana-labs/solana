@@ -5208,6 +5208,7 @@ dependencies = [
  "dlopen",
  "dlopen_derive",
  "fnv",
+ "itertools",
  "lazy_static",
  "libc",
  "log",
