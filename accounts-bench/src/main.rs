@@ -123,6 +123,7 @@ fn main() {
             let results = accounts.accounts_db.update_accounts_hash(
                 0,
                 &ancestors,
+                &EpochSchedule::default(),
                 &RentCollector::default(),
             );
             time.stop();
@@ -134,6 +135,7 @@ fn main() {
                 &ancestors,
                 None,
                 false,
+                &EpochSchedule::default(),
                 &RentCollector::default(),
                 false,
             );
