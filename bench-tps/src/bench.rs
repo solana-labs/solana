@@ -114,7 +114,29 @@ fn generate_chunked_transfers(
     let keypair_chunks = source_keypair_chunks.len();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut chunk_index = 0;
+    let mut last_blockhash_time = Instant::now();
+    let mut old_blockhash = {
+        let recent_blockhash_guard = recent_blockhash.read().unwrap();
+        recent_blockhash_guard.clone()
+    };
+
     while start.elapsed() < duration {
+        let new_blockhash = {
+            let recent_blockhash_guard = recent_blockhash.read().unwrap();
+            recent_blockhash_guard.clone()
+        };
+        if old_blockhash != new_blockhash {
+            old_blockhash = new_blockhash;
+            datapoint_info!(
+                "blockhash_stats",
+                (
+                    "time_elapsed_since_blockhash_refreshed",
+                    last_blockhash_time.elapsed().as_millis(),
+                    i64
+                )
+            );
+            last_blockhash_time = Instant::now();
+        }
         generate_txs(
             shared_txs,
             &recent_blockhash,
@@ -433,6 +455,14 @@ fn poll_blockhash<T: BenchTpsClient>(
         if blockhash_updated {
             let balance = client.get_balance(id).unwrap_or(0);
             metrics_submit_lamport_balance(balance);
+            datapoint_info!(
+                "poll_blockhash_stats",
+                (
+                    "time_elapsed_since_last_blockhash_update",
+                    blockhash_last_updated.elapsed().as_millis(),
+                    i64
+                )
+            )
         }
 
         if exit_signal.load(Ordering::Relaxed) {
@@ -466,15 +496,26 @@ fn do_tx_transfers<T: BenchTpsClient>(
             let transfer_start = Instant::now();
             let mut old_transactions = false;
             let mut transactions = Vec::<_>::new();
+            let mut min_timestamp = u64::MAX;
             for tx in txs0 {
                 let now = timestamp();
                 // Transactions that are too old will be rejected by the cluster Don't bother
                 // sending them.
+                if tx.1 < min_timestamp {
+                    min_timestamp = tx.1;
+                }
                 if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
                     old_transactions = true;
                     continue;
                 }
                 transactions.push(tx.0);
+            }
+
+            if min_timestamp != u64::MAX {
+                datapoint_info!(
+                    "bench-tps-do_tx_transfers",
+                    ("oldest-blockhash-age", timestamp() - min_timestamp, i64),
+                );
             }
 
             if let Err(error) = client.send_batch(transactions) {
