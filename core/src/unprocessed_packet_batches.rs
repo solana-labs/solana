@@ -1,8 +1,10 @@
 use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_runtime::bank::Bank,
     solana_sdk::{
+        feature_set::tx_wide_compute_cap,
         hash::Hash,
         message::{Message, SanitizedVersionedMessage},
         sanitize::SanitizeError,
@@ -372,9 +374,40 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-/// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
-fn compute_fee_per_cu(_message: &SanitizedVersionedMessage, _bank: &Bank) -> u64 {
-    1
+/// Computes `(addition_fee / requested_cu)` if feature tx_wide_compute_cap is enabled,
+/// otherwise return default 0u64
+fn compute_fee_per_cu(message: &VersionedMessage, bank: &Bank) -> u64 {
+    if bank.feature_set.is_active(&tx_wide_compute_cap::id()) {
+        if let Some(sanitized_message) = sanitize_message(message, bank) {
+            let mut compute_budget = ComputeBudget::default();
+            match compute_budget.process_message(&sanitized_message, false, true) {
+                Ok(requested_additional_fee) => requested_additional_fee / compute_budget.max_units,
+                _ => 0u64,
+            };
+        }
+    }
+
+    0u64
+}
+
+fn sanitize_message(
+    versioned_message: &VersionedMessage,
+    address_loader: impl AddressLoader,
+) -> Option<SanitizedMessage> {
+    versioned_message.sanitize().ok()?;
+
+    match versioned_message {
+        VersionedMessage::Legacy(message) => Some(SanitizedMessage::Legacy(message.clone())),
+        VersionedMessage::V0(message) => {
+            let loaded_addresses = address_loader
+                .load_addresses(&message.address_table_lookups)
+                .ok()?;
+            Some(SanitizedMessage::V0(v0::LoadedMessage::new(
+                message.clone(),
+                loaded_addresses,
+            )))
+        }
+    }
 }
 
 pub fn transactions_to_deserialized_packets(
