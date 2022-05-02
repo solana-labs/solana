@@ -11,7 +11,9 @@ use {
         },
     },
     log::*,
-    solana_sdk::{clock::Slot, genesis_config::ClusterType, hash::Hash},
+    solana_sdk::{
+        clock::Slot, genesis_config::ClusterType, hash::Hash,
+    },
     std::{
         fs,
         path::{Path, PathBuf},

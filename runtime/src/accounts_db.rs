@@ -5620,10 +5620,7 @@ impl AccountsDb {
                 Some(slot),
             );
 
-            self.mark_old_slots_as_dirty(
-                &storages,
-                Some(config.rent_collector.epoch_schedule.slots_per_epoch),
-            );
+            self.mark_old_slots_as_dirty(&storages, Some(config.rent_collector.epoch_schedule.slots_per_epoch));
             sort_time.stop();
 
             let mut timings = HashStats {
@@ -9612,8 +9609,16 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(latest_slot, &ancestors, &RentCollector::default()),
-            accounts.update_accounts_hash(latest_slot, &ancestors, &RentCollector::default())
+            daccounts.update_accounts_hash(
+                latest_slot,
+                &ancestors,
+                &RentCollector::default()
+            ),
+            accounts.update_accounts_hash(
+                latest_slot,
+                &ancestors,
+                &RentCollector::default()
+            )
         );
     }
 
@@ -9892,7 +9897,11 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(4, &Ancestors::default(), &RentCollector::default());
+        accounts.update_accounts_hash(
+            4,
+            &Ancestors::default(),
+            &RentCollector::default(),
+        );
 
         let accounts = f(accounts, current_slot);
 
@@ -11043,7 +11052,11 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
-            accounts.update_accounts_hash(current_slot, &no_ancestors, &RentCollector::default());
+            accounts.update_accounts_hash(
+                current_slot,
+                &no_ancestors,
+                &RentCollector::default(),
+            );
             accounts
                 .verify_bank_hash_and_lamports(
                     current_slot,
