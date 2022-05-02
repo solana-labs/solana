@@ -16,7 +16,7 @@ use {
         rent_collector::RentCollector,
     },
     solana_sdk::{
-        genesis_config::ClusterType, pubkey::Pubkey,
+        genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
     },
     std::{env, fs, path::PathBuf},
 };
