@@ -365,7 +365,7 @@ mod tests {
             sysvar::{self, stake_history::StakeHistory},
         },
         solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
-        std::{collections::HashSet, str::FromStr},
+        std::{collections::HashSet, str::FromStr, sync::Arc},
     };
 
     fn create_default_account() -> AccountSharedData {
@@ -3489,5 +3489,137 @@ mod tests {
                 Ok(())
             },
         );
+    }
+
+    // Ensure that the correct errors are returned when processing instructions
+    //
+    // The GetMinimumDelegation instruction does not take any accounts; so when it was added,
+    // `process_instruction()` needed to be updated to *not* need a stake account passed in, which
+    // changes the error *ordering* conditions.  These changes shall only occur when the
+    // `add_get_minimum_delegation_instruction_to_stake_program` feature is enabled, and this test
+    // ensures it.
+    //
+    // For the following combinations of the feature enabled/disabled, if the instruction is
+    // valid/invalid, and if a stake account is passed in or not, assert the result:
+    //
+    //  feature | instruction | account || result
+    // ---------+-------------+---------++--------
+    //  enabled | good        | some    || Ok
+    //  enabled | bad         | some    || Err InvalidInstructionData
+    //  enabled | good        | none    || Err NotEnoughAccountKeys
+    //  enabled | bad         | none    || Err InvalidInstructionData
+    // disabled | good        | some    || Ok
+    // disabled | bad         | some    || Err InvalidInstructionData
+    // disabled | good        | none    || Err NotEnoughAccountKeys
+    // disabled | bad         | none    || Err NotEnoughAccountKeys
+    #[test]
+    fn test_stake_process_instruction_error_ordering() {
+        let rent = Rent::default();
+        let rent_address = sysvar::rent::id();
+        let rent_account = account::create_account_shared_data_for_test(&rent);
+
+        let good_stake_address = Pubkey::new_unique();
+        let good_stake_account = AccountSharedData::new(
+            u64::MAX,
+            std::mem::size_of::<crate::stake_state::StakeState>(),
+            &id(),
+        );
+        let good_instruction = instruction::initialize(
+            &good_stake_address,
+            &Authorized::auto(&good_stake_address),
+            &Lockup::default(),
+        );
+        let good_transaction_accounts = vec![
+            (good_stake_address, good_stake_account),
+            (rent_address, rent_account),
+        ];
+        let good_instruction_accounts = vec![
+            AccountMeta {
+                pubkey: good_stake_address,
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: rent_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+        let good_accounts = (good_transaction_accounts, good_instruction_accounts);
+
+        // The instruction data needs to deserialize to a bogus StakeInstruction.  We likely never
+        // will have `usize::MAX`-number of instructions, so this should be a safe constant to
+        // always map to an invalid stake instruction.
+        let bad_instruction = Instruction::new_with_bincode(id(), &usize::MAX, Vec::default());
+        let bad_transaction_accounts = Vec::default();
+        let bad_instruction_accounts = Vec::default();
+        let bad_accounts = (bad_transaction_accounts, bad_instruction_accounts);
+
+        for (
+            is_feature_enabled,
+            instruction,
+            (transaction_accounts, instruction_accounts),
+            expected_result,
+        ) in [
+            (true, &good_instruction, &good_accounts, Ok(())),
+            (
+                true,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                true,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                true,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (false, &good_instruction, &good_accounts, Ok(())),
+            (
+                false,
+                &bad_instruction,
+                &good_accounts,
+                Err(InstructionError::InvalidInstructionData),
+            ),
+            (
+                false,
+                &good_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+            (
+                false,
+                &bad_instruction,
+                &bad_accounts,
+                Err(InstructionError::NotEnoughAccountKeys),
+            ),
+        ] {
+            mock_process_instruction(
+                &id(),
+                Vec::new(),
+                &instruction.data,
+                transaction_accounts.clone(),
+                instruction_accounts.clone(),
+                expected_result,
+                if is_feature_enabled {
+                    |first_instruction_account, data, invoke_context| {
+                        super::process_instruction(first_instruction_account, data, invoke_context)
+                    }
+                } else {
+                    |first_instruction_account, data, invoke_context| {
+                        let mut feature_set = FeatureSet::all_enabled();
+                        feature_set.deactivate(&feature_set::add_get_minimum_delegation_instruction_to_stake_program::id());
+                        invoke_context.feature_set = Arc::new(feature_set);
+                        super::process_instruction(first_instruction_account, data, invoke_context)
+                    }
+                },
+            );
+        }
     }
 }
