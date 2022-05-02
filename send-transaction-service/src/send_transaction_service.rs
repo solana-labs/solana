@@ -7,8 +7,8 @@ use {
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature, transport::TransportError,
-        timing::AtomicInterval,
+        hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature, timing::AtomicInterval,
+        transport::TransportError,
     },
     std::{
         collections::{
@@ -240,31 +240,86 @@ struct SendTransactionServiceStatsReport {
 impl SendTransactionServiceStatsReport {
     /// report metrics of the send transaction service
     fn report(&self) {
-        if self.last_report.should_update(SEND_TRANSACTION_METRICS_REPORT_RATE_MS) {
+        if self
+            .last_report
+            .should_update(SEND_TRANSACTION_METRICS_REPORT_RATE_MS)
+        {
             datapoint_info!(
                 "send_transaction_service",
-                ("recv-tx", self.stats.received_transactions.swap(0, Ordering::Relaxed), i64),
+                (
+                    "recv-tx",
+                    self.stats.received_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                ),
                 (
                     "recv-duplicate",
-                    self.stats.received_duplicate_transactions.swap(0, Ordering::Relaxed),
+                    self.stats
+                        .received_duplicate_transactions
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
-                ("sent-tx", self.stats.sent_transactions.swap(0, Ordering::Relaxed), i64),
-                ("retry-queue-overflow", self.stats.retry_queue_overflow.swap(0, Ordering::Relaxed), i64),
-                ("retey-queue-size", self.stats.retry_queue_size.swap(0, Ordering::Relaxed), i64),
-                ("send-us", self.stats.send_us.swap(0, Ordering::Relaxed), i64),
-                ("send-count", self.stats.send_count.swap(0, Ordering::Relaxed), i64),
-                ("send-failure-count", self.stats.send_failure_count.swap(0, Ordering::Relaxed), i64),
-                ("nonced-tx", self.stats.nonced_transactions.swap(0, Ordering::Relaxed), i64),
-                ("rooted-tx", self.stats.rooted_transactions.swap(0, Ordering::Relaxed), i64),
-                ("expired-tx", self.stats.expired_transactions.swap(0, Ordering::Relaxed), i64),
+                (
+                    "sent-tx",
+                    self.stats.sent_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "retry-queue-overflow",
+                    self.stats.retry_queue_overflow.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "retey-queue-size",
+                    self.stats.retry_queue_size.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "send-us",
+                    self.stats.send_us.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "send-count",
+                    self.stats.send_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "send-failure-count",
+                    self.stats.send_failure_count.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "nonced-tx",
+                    self.stats.nonced_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "rooted-tx",
+                    self.stats.rooted_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "expired-tx",
+                    self.stats.expired_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                ),
                 (
                     "max-retries-exceeded-tx",
-                    self.stats.transactions_exceeding_max_retries.swap(0, Ordering::Relaxed),
+                    self.stats
+                        .transactions_exceeding_max_retries
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
-                ("retries", self.stats.retries.swap(0, Ordering::Relaxed), i64),
-                ("failed-tx", self.stats.failed_transactions.swap(0, Ordering::Relaxed), i64)
+                (
+                    "retries",
+                    self.stats.retries.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "failed-tx",
+                    self.stats.failed_transactions.swap(0, Ordering::Relaxed),
+                    i64
+                )
             );
         }
     }
@@ -377,7 +432,9 @@ impl SendTransactionService {
                             }
                         }
                         if !new_transaction {
-                            stats.received_duplicate_transactions.fetch_add(1, Ordering::Relaxed);
+                            stats
+                                .received_duplicate_transactions
+                                .fetch_add(1, Ordering::Relaxed);
                         }
                     }
                 }
@@ -386,7 +443,9 @@ impl SendTransactionService {
                     && last_batch_sent.elapsed().as_millis() as u64 >= config.batch_send_rate_ms)
                     || transactions.len() >= config.batch_size
                 {
-                    stats.sent_transactions.fetch_add(transactions.len() as u64, Ordering::Relaxed);
+                    stats
+                        .sent_transactions
+                        .fetch_add(transactions.len() as u64, Ordering::Relaxed);
                     let _result = Self::send_transactions_in_batch(
                         &tpu_address,
                         &mut transactions,
@@ -414,8 +473,13 @@ impl SendTransactionService {
                                 }
                             }
                         }
-                        stats.retry_queue_overflow.fetch_add((txns_to_retry - txns_added_to_retry) as u64, Ordering::Relaxed);
-                        stats.retry_queue_size.store(retry_transactions.len() as u64, Ordering::Relaxed);
+                        stats.retry_queue_overflow.fetch_add(
+                            (txns_to_retry - txns_added_to_retry) as u64,
+                            Ordering::Relaxed,
+                        );
+                        stats
+                            .retry_queue_size
+                            .store(retry_transactions.len() as u64, Ordering::Relaxed);
                     }
                     last_batch_sent = Instant::now();
                 }
@@ -452,7 +516,9 @@ impl SendTransactionService {
                 }
                 let mut transactions = retry_transactions.lock().unwrap();
                 if !transactions.is_empty() {
-                    stats.retry_queue_size.store(transactions.len() as u64, Ordering::Relaxed);
+                    stats
+                        .retry_queue_size
+                        .store(transactions.len() as u64, Ordering::Relaxed);
                     let (root_bank, working_bank) = {
                         let bank_forks = bank_forks.read().unwrap();
                         (
@@ -556,7 +622,9 @@ impl SendTransactionService {
                 if transaction_info.retries >= max_retries {
                     info!("Dropping transaction due to max retries: {}", signature);
                     result.max_retries_elapsed += 1;
-                    stats.transactions_exceeding_max_retries.fetch_add(1, Ordering::Relaxed);
+                    stats
+                        .transactions_exceeding_max_retries
+                        .fetch_add(1, Ordering::Relaxed);
                     return false;
                 }
             }
