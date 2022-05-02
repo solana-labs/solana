@@ -144,7 +144,9 @@ impl ComputeBudget {
         self.max_units = if let Some(units) = requested_units {
             units
         } else if per_instruction_default {
-            num_instructions.saturating_mul(DEFAULT_UNITS as usize) as u64
+            num_instructions
+                .saturating_mul(DEFAULT_UNITS as usize)
+                .min(MAX_UNITS as usize) as u64
         } else {
             MAX_UNITS as u64
         };
@@ -327,6 +329,24 @@ mod tests {
             Ok(0),
             ComputeBudget {
                 max_units: DEFAULT_UNITS as u64 * 3,
+                ..ComputeBudget::default()
+            }
+        );
+
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Ok(0),
+            ComputeBudget {
+                max_units: DEFAULT_UNITS as u64 * 7,
                 ..ComputeBudget::default()
             }
         );
