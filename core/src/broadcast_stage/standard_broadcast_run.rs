@@ -853,19 +853,17 @@ mod test {
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
-        assert!(shreds.len() < 32, "shreds.len(): {}", shreds.len());
-        assert!(shreds.iter().all(|shred| shred.is_data()));
+        assert_eq!(shreds.len(), 64);
+        assert_eq!(shreds.iter().filter(|s| s.is_data()).count(), 32);
+        assert_eq!(shreds.iter().filter(|s| s.is_code()).count(), 32);
+
         process_ticks(75);
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
-        assert!(shreds.len() == 64, "shreds.len(): {}", shreds.len());
-        let num_coding_shreds = shreds.iter().filter(|shred| shred.is_code()).count();
-        assert_eq!(
-            num_coding_shreds, 32,
-            "num coding shreds: {}",
-            num_coding_shreds
-        );
+        assert_eq!(shreds.len(), 64);
+        assert_eq!(shreds.iter().filter(|s| s.is_data()).count(), 32);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_code()).count(), 32);
     }
 
     #[test]

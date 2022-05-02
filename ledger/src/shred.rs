@@ -60,7 +60,14 @@ use {
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::{limited_deserialize, Packet},
+    solana_perf::{
+        packet::{limited_deserialize, Packet},
+        turbine_merkle::{
+            TurbineMerkleHash, TurbineMerkleProofFec64, TURBINE_MERKLE_HASH_BYTES,
+            TURBINE_MERKLE_PROOF_BYTES_FEC64, TURBINE_MERKLE_PROOF_LENGTH_FEC64,
+            TURBINE_MERKLE_ROOT_BYTES,
+        },
+    },
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
@@ -74,10 +81,7 @@ use {
 
 pub type Nonce = u32;
 
-const SIZE_OF_MERKLE_HASH: usize = 20;
-const SIZE_OF_MERKLE_ROOT: usize = SIZE_OF_MERKLE_HASH;
-const SIZE_OF_MERKLE_PROOF: usize = SIZE_OF_MERKLE_HASH * 6;
-const SIZE_OF_MERKLE_PAYLOAD: usize = SIZE_OF_MERKLE_ROOT + SIZE_OF_MERKLE_PROOF;
+const SIZE_OF_MERKLE_PAYLOAD: usize = TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE_PROOF_BYTES_FEC64;
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
@@ -223,19 +227,9 @@ impl ShredType {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
-struct MerkleHash([u8; SIZE_OF_MERKLE_HASH]);
-
-impl From<&[u8]> for MerkleHash {
-    fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() == SIZE_OF_MERKLE_HASH);
-        MerkleHash(buf.try_into().unwrap())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 struct MerklePayload {
-    root: MerkleHash,
-    proof: [MerkleHash; 6],
+    root: TurbineMerkleHash,
+    proof: TurbineMerkleProofFec64,
 }
 
 /// A common header that is present in data and code shred headers
@@ -397,21 +391,31 @@ impl Shred {
         // TODO MERKLE
         {
             let mut start = 83;
-            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
 
             let mut merkle = MerklePayload::default();
             merkle.root = hash13s;
-            for i in 0..6 {
-                merkle.proof[i] = hash13s;
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                merkle.proof.0[i] = hash13s;
             }
             common_header.merkle = Some(merkle);
 
-            Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
-                .expect("Failed to write merkle root");
+            Self::serialize_obj_into(
+                &mut start,
+                TURBINE_MERKLE_ROOT_BYTES,
+                &mut payload,
+                &hash13s,
+            )
+            .expect("Failed to write merkle root");
 
-            for _i in 0..6 {
-                Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
-                    .expect("Failed to write merkle proof");
+            for _i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                Self::serialize_obj_into(
+                    &mut start,
+                    TURBINE_MERKLE_HASH_BYTES,
+                    &mut payload,
+                    &hash13s,
+                )
+                .expect("Failed to write merkle proof");
             }
         }
         // TODO END MERKLE
@@ -457,16 +461,17 @@ impl Shred {
         {
             let mut start = 83;
             let mut merkle = MerklePayload::default();
-            merkle.root = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
-            for i in 0..6 {
-                merkle.proof[i] = Self::deserialize_obj(&mut start, SIZE_OF_MERKLE_HASH, &payload)?;
+            merkle.root = Self::deserialize_obj(&mut start, TURBINE_MERKLE_ROOT_BYTES, &payload)?;
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                merkle.proof.0[i] =
+                    Self::deserialize_obj(&mut start, TURBINE_MERKLE_HASH_BYTES, &payload)?;
             }
             common_header.merkle = Some(merkle);
 
-            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
             assert_eq!(&common_header.merkle.unwrap().root, &hash13s);
-            for i in 0..6 {
-                assert_eq!(&common_header.merkle.unwrap().proof[i], &hash13s);
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                assert_eq!(&common_header.merkle.unwrap().proof.0[i], &hash13s);
             }
         }
         // TODO END MERKLE
@@ -534,21 +539,31 @@ impl Shred {
         // TODO MERKLE
         {
             let mut start = 83;
-            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
 
             let mut merkle = MerklePayload::default();
             merkle.root = hash13s;
-            for i in 0..6 {
-                merkle.proof[i] = hash13s;
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                merkle.proof.0[i] = hash13s;
             }
             common_header.merkle = Some(merkle);
 
-            Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
-                .expect("Failed to write merkle root");
+            Self::serialize_obj_into(
+                &mut start,
+                TURBINE_MERKLE_ROOT_BYTES,
+                &mut payload,
+                &hash13s,
+            )
+            .expect("Failed to write merkle root");
 
-            for _i in 0..6 {
-                Self::serialize_obj_into(&mut start, SIZE_OF_MERKLE_HASH, &mut payload, &hash13s)
-                    .expect("Failed to write merkle proof");
+            for _i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                Self::serialize_obj_into(
+                    &mut start,
+                    TURBINE_MERKLE_HASH_BYTES,
+                    &mut payload,
+                    &hash13s,
+                )
+                .expect("Failed to write merkle proof");
             }
         }
         // TODO END MERKLE
@@ -945,7 +960,7 @@ impl Shred {
             ShredCommonHeaderVersion::V2 => {
                 let x = self.signature().verify(
                     pubkey.as_ref(),
-                    &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + SIZE_OF_MERKLE_ROOT],
+                    &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + TURBINE_MERKLE_ROOT_BYTES],
                 );
                 if !x {
                     return false;
@@ -957,10 +972,10 @@ impl Shred {
 
         // TODO MERKLE
         {
-            let hash13s = MerkleHash([13u8; SIZE_OF_MERKLE_HASH]);
+            let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
             assert_eq!(&self.common_header.merkle.unwrap().root, &hash13s);
-            for i in 0..6 {
-                assert_eq!(&self.common_header.merkle.unwrap().proof[i], &hash13s);
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                assert_eq!(&self.common_header.merkle.unwrap().proof.0[i], &hash13s);
             }
         }
         // TODO END MERKLE

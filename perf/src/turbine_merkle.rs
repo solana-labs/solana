@@ -5,7 +5,10 @@ use {
 };
 
 pub const TURBINE_MERKLE_HASH_BYTES: usize = 20;
-pub const TURBINE_MERKLE_PROOF_BYTES_FEC64: usize = TURBINE_MERKLE_HASH_BYTES * 6;
+pub const TURBINE_MERKLE_ROOT_BYTES: usize = TURBINE_MERKLE_HASH_BYTES;
+pub const TURBINE_MERKLE_PROOF_LENGTH_FEC64: usize = 6;
+pub const TURBINE_MERKLE_PROOF_BYTES_FEC64: usize =
+    TURBINE_MERKLE_HASH_BYTES * TURBINE_MERKLE_PROOF_LENGTH_FEC64;
 
 #[repr(transparent)]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -14,6 +17,10 @@ pub struct TurbineMerkleHash(pub [u8; TURBINE_MERKLE_HASH_BYTES]);
 #[repr(transparent)]
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleProof(pub Vec<TurbineMerkleHash>);
+
+#[repr(transparent)]
+#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_LENGTH_FEC64]);
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleTree {
@@ -50,18 +57,41 @@ impl AsRef<[u8]> for TurbineMerkleHash {
 
 impl TurbineMerkleProof {
     #[allow(clippy::integer_arithmetic)]
-    fn compute_root(&self, leaf_hash: &TurbineMerkleHash, leaf_index: usize) -> TurbineMerkleHash {
+    fn generic_compute_root(
+        proof: &[TurbineMerkleHash],
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> TurbineMerkleHash {
         let mut hash = *leaf_hash;
         let mut idx = leaf_index;
-        for i in 0..self.0.len() {
+
+        for elem in proof {
             hash = if idx & 1 == 0 {
-                TurbineMerkleHash::hash(&[&hash.0, &self.0[i].0])
+                TurbineMerkleHash::hash(&[&hash.0, &elem.0])
             } else {
-                TurbineMerkleHash::hash(&[&self.0[i].0, &hash.0])
+                TurbineMerkleHash::hash(&[&elem.0, &hash.0])
             };
             idx >>= 1;
         }
+
         hash
+    }
+
+    fn generic_verify(
+        proof: &[TurbineMerkleHash],
+        root_hash: &TurbineMerkleHash,
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> bool {
+        &Self::generic_compute_root(proof, leaf_hash, leaf_index) == root_hash
+    }
+
+    pub fn compute_root(
+        &self,
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> TurbineMerkleHash {
+        Self::generic_compute_root(&self.0, leaf_hash, leaf_index)
     }
 
     pub fn verify(
@@ -70,7 +100,7 @@ impl TurbineMerkleProof {
         leaf_hash: &TurbineMerkleHash,
         leaf_index: usize,
     ) -> bool {
-        &self.compute_root(leaf_hash, leaf_index) == root_hash
+        Self::generic_verify(&self.0, root_hash, leaf_hash, leaf_index)
     }
 }
 
@@ -82,6 +112,36 @@ impl From<&[u8]> for TurbineMerkleProof {
             .map(|x| x.into())
             .collect();
         TurbineMerkleProof(v)
+    }
+}
+
+impl TurbineMerkleProofFec64 {
+    pub fn compute_root(
+        &self,
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> TurbineMerkleHash {
+        TurbineMerkleProof::generic_compute_root(&self.0, leaf_hash, leaf_index)
+    }
+
+    pub fn verify(
+        &self,
+        root_hash: &TurbineMerkleHash,
+        leaf_hash: &TurbineMerkleHash,
+        leaf_index: usize,
+    ) -> bool {
+        TurbineMerkleProof::generic_verify(&self.0, root_hash, leaf_hash, leaf_index)
+    }
+}
+
+impl From<&[u8]> for TurbineMerkleProofFec64 {
+    fn from(buf: &[u8]) -> Self {
+        assert!(buf.len() == TURBINE_MERKLE_PROOF_BYTES_FEC64);
+        let v: Vec<TurbineMerkleHash> = buf
+            .chunks_exact(TURBINE_MERKLE_HASH_BYTES)
+            .map(|x| x.into())
+            .collect();
+        TurbineMerkleProofFec64(v.try_into().expect("expect 6 elements"))
     }
 }
 
