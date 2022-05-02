@@ -398,7 +398,6 @@ fn main() {
                     bank.transaction_count(),
                     txs_processed
                 );
-                //assert!(txs_processed < bank.transaction_count());
                 txs_processed = bank.transaction_count();
                 tx_total_us += duration_as_us(&now.elapsed());
 
