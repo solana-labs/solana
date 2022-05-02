@@ -273,7 +273,7 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             while map.list_of_peers.len() >= MAX_CONNECTIONS {
                 let mut rng = thread_rng();
                 let n = rng.gen_range(0, MAX_CONNECTIONS);
-                let nth_addr = map.list_of_peers.remove(n);
+                let nth_addr = map.list_of_peers.swap_remove(n);
                 map.map.remove(&nth_addr);
                 num_evictions += 1;
             }
