@@ -60,6 +60,7 @@ use {
         collections::HashMap,
         env,
         net::SocketAddr,
+        rc::Rc,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
@@ -561,7 +562,7 @@ impl BankingStage {
             &mut retryable_packets,
         );
 
-        let mut retryable_packets: MinMaxHeap<PacketPriorityQueueEntry> = retryable_packets
+        let mut retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
             .chunks(num_packets_to_process_per_iteration)
             .into_iter()
@@ -591,7 +592,7 @@ impl BankingStage {
                                     &working_bank,
                                     &bank_creation_time,
                                     recorder,
-                                    packets_to_process.iter().map(|p| &**p.immutable_section()),
+                                    packets_to_process.iter().map(|p| &**p),
                                     transaction_status_sender.clone(),
                                     gossip_vote_sender,
                                     banking_stage_stats,
@@ -675,7 +676,7 @@ impl BankingStage {
                             for processed_packet in &packets_to_process[start..end] {
                                 buffered_packet_batches
                                     .message_hash_to_transaction
-                                    .remove(&processed_packet.immutable_section().message_hash());
+                                    .remove(&processed_packet.message_hash());
                             }
                         },
                     );
