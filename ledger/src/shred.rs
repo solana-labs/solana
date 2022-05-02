@@ -640,19 +640,6 @@ impl Shred {
         bincode::serialize_into(buffer, &self.data_header).unwrap();
     }
 
-    // This also effectively unsets LAST_SHRED_IN_SLOT.
-    #[cfg(test)]
-    pub(crate) fn unset_data_complete(&mut self) {
-        if self.is_data() {
-            self.data_header
-                .flags
-                .remove(ShredFlags::DATA_COMPLETE_SHRED);
-        }
-        // Data header starts after the shred common header
-        let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
-        bincode::serialize_into(buffer, &self.data_header).unwrap();
-    }
-
     pub fn data_complete(&self) -> bool {
         if self.is_data() {
             self.data_header
@@ -1360,8 +1347,6 @@ mod tests {
                     check_shred_flags(&shred, is_last_data, is_last_in_slot, reference_tick);
                     shred.set_last_in_slot();
                     check_shred_flags(&shred, true, true, reference_tick);
-                    shred.unset_data_complete();
-                    check_shred_flags(&shred, false, false, reference_tick);
                 }
             }
         }
