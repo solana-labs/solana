@@ -6,6 +6,7 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
         borrow::Borrow,
@@ -40,6 +41,7 @@ pub struct CalcAccountsHashConfig<'a> {
     /// does hash calc need to consider account data that exists in the write cache?
     /// if so, 'ancestors' will be used for this purpose as well as storages.
     pub use_write_cache: bool,
+    pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
 }
 
