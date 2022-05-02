@@ -33,21 +33,26 @@ pub fn process_instruction(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    let me = &keyed_account_at_index(keyed_accounts, first_instruction_account)?;
-    if me.owner()? != id() {
-        return Err(InstructionError::InvalidAccountOwner);
-    }
+    let get_stake_account = || {
+        let me = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+        if me.owner()? != id() {
+            return Err(InstructionError::InvalidAccountOwner);
+        }
+        Ok(me)
+    };
 
     let signers = get_signers(&keyed_accounts[first_instruction_account..]);
-    match limited_deserialize(data)? {
-        StakeInstruction::Initialize(authorized, lockup) => {
+    match limited_deserialize(data) {
+        Ok(StakeInstruction::Initialize(authorized, lockup)) => {
+            let me = get_stake_account()?;
             let rent = get_sysvar_with_account_check::rent(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
             me.initialize(&authorized, &lockup, &rent, &invoke_context.feature_set)
         }
-        StakeInstruction::Authorize(authorized_pubkey, stake_authorize) => {
+        Ok(StakeInstruction::Authorize(authorized_pubkey, stake_authorize)) => {
+            let me = get_stake_account()?;
             let require_custodian_for_locked_stake_authorize = invoke_context
                 .feature_set
                 .is_active(&feature_set::require_custodian_for_locked_stake_authorize::id());
@@ -83,7 +88,8 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::AuthorizeWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeWithSeed(args)) => {
+            let me = get_stake_account()?;
             let authority_base =
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let require_custodian_for_locked_stake_authorize = invoke_context
@@ -123,7 +129,8 @@ pub fn process_instruction(
                 )
             }
         }
-        StakeInstruction::DelegateStake => {
+        Ok(StakeInstruction::DelegateStake) => {
+            let me = get_stake_account()?;
             let vote = keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
@@ -142,12 +149,14 @@ pub fn process_instruction(
                 .ok_or(InstructionError::InvalidArgument)?;
             me.delegate(vote, &clock, &stake_history, &config, &signers)
         }
-        StakeInstruction::Split(lamports) => {
+        Ok(StakeInstruction::Split(lamports)) => {
+            let me = get_stake_account()?;
             let split_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             me.split(lamports, split_stake, &signers, &invoke_context.feature_set)
         }
-        StakeInstruction::Merge => {
+        Ok(StakeInstruction::Merge) => {
+            let me = get_stake_account()?;
             let source_stake =
                 &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock = get_sysvar_with_account_check::clock(
@@ -166,7 +175,8 @@ pub fn process_instruction(
                 &signers,
             )
         }
-        StakeInstruction::Withdraw(lamports) => {
+        Ok(StakeInstruction::Withdraw(lamports)) => {
+            let me = get_stake_account()?;
             let to = &keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
@@ -186,18 +196,21 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-        StakeInstruction::Deactivate => {
+        Ok(StakeInstruction::Deactivate) => {
+            let me = get_stake_account()?;
             let clock = get_sysvar_with_account_check::clock(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
             )?;
             me.deactivate(&clock, &signers)
         }
-        StakeInstruction::SetLockup(lockup) => {
+        Ok(StakeInstruction::SetLockup(lockup)) => {
+            let me = get_stake_account()?;
             let clock = invoke_context.get_sysvar_cache().get_clock()?;
             me.set_lockup(&lockup, &signers, &clock)
         }
-        StakeInstruction::InitializeChecked => {
+        Ok(StakeInstruction::InitializeChecked) => {
+            let me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -227,7 +240,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeChecked(stake_authorize) => {
+        Ok(StakeInstruction::AuthorizeChecked(stake_authorize)) => {
+            let me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -259,7 +273,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::AuthorizeCheckedWithSeed(args) => {
+        Ok(StakeInstruction::AuthorizeCheckedWithSeed(args)) => {
+            let me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -293,7 +308,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::SetLockupChecked(lockup_checked) => {
+        Ok(StakeInstruction::SetLockupChecked(lockup_checked)) => {
+            let me = get_stake_account()?;
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
@@ -321,11 +337,14 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        StakeInstruction::GetMinimumDelegation => {
+        Ok(StakeInstruction::GetMinimumDelegation) => {
             let feature_set = invoke_context.feature_set.as_ref();
             if !feature_set.is_active(
                 &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
             ) {
+                // Retain previous behavior of always checking that the first account
+                // is a stake account until the feature is activated
+                let _ = get_stake_account()?;
                 return Err(InstructionError::InvalidInstructionData);
             }
 
@@ -334,6 +353,14 @@ pub fn process_instruction(
             invoke_context
                 .transaction_context
                 .set_return_data(id(), minimum_delegation)
+        }
+        Err(err) => {
+            if !invoke_context.feature_set.is_active(
+                &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
+            ) {
+                let _ = get_stake_account()?;
+            }
+            Err(err)
         }
     }
 }
