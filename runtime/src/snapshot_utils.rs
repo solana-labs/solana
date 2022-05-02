@@ -22,6 +22,7 @@ use {
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
+    memmap2::Mmap,
     rayon::prelude::*,
     regex::Regex,
     solana_measure::measure::Measure,
@@ -34,6 +35,7 @@ use {
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
         process::ExitStatus,
+        slice,
         str::FromStr,
         sync::Arc,
     },
@@ -1048,7 +1050,7 @@ where
         parallel_divisions,
     )?;
     measure_untar.stop();
-    info!("{}", measure_untar);
+    info!("haha: {}", measure_untar);
 
     let unpacked_version_file = unpack_dir.path().join("version");
     let snapshot_version = snapshot_version_from_file(&unpacked_version_file)?;
@@ -1464,33 +1466,53 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
-    let open_file = || File::open(&snapshot_tar).unwrap();
+    let file = File::open(&snapshot_tar).unwrap();
+
+    // Map the file into immutable memory for better I/O performance
+    let mmap = unsafe { Mmap::map(&file) };
+    let mmap = mmap.unwrap_or_else(|e| {
+        error!(
+            "Failed to map the snapshot file: {} {}.\n
+                    Please increase the virtual memory on the system.",
+            snapshot_tar.as_ref().display(),
+            e,
+        );
+        std::process::exit(1);
+    });
+
+    // The following code is safe because the lifetime of mmap last till the end of the function
+    // while the usage of mmap, BufReader's lifetime only last within fn unpack_snapshot_local.
+    let len = &mmap[..].len();
+    let ptr = &mmap[0] as *const u8;
+    let slice = unsafe { slice::from_raw_parts(ptr, *len) };
+
     let account_paths_map = match archive_format {
         ArchiveFormat::TarBzip2 => unpack_snapshot_local(
-            || BzDecoder::new(BufReader::new(open_file())),
+            || BzDecoder::new(slice),
             unpack_dir,
             account_paths,
             parallel_divisions,
         )?,
         ArchiveFormat::TarGzip => unpack_snapshot_local(
-            || GzDecoder::new(BufReader::new(open_file())),
+            || GzDecoder::new(slice),
             unpack_dir,
             account_paths,
             parallel_divisions,
         )?,
         ArchiveFormat::TarZstd => unpack_snapshot_local(
-            || zstd::stream::read::Decoder::new(BufReader::new(open_file())).unwrap(),
+            || zstd::stream::read::Decoder::new(slice).unwrap(),
             unpack_dir,
             account_paths,
             parallel_divisions,
         )?,
         ArchiveFormat::Tar => unpack_snapshot_local(
-            || BufReader::new(open_file()),
+            || BufReader::new(slice),
             unpack_dir,
             account_paths,
             parallel_divisions,
         )?,
     };
+
     Ok(account_paths_map)
 }
 
