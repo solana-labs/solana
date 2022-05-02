@@ -162,19 +162,15 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
     sortMode,
   ]);
 
-  if (filteredTransactions.length === 0) {
-    const errorMessage =
-      programFilter === ALL_TRANSACTIONS
-        ? "This block has no transactions"
-        : "No transactions found with this filter";
-    return <ErrorCard text={errorMessage} />;
+  if (transactions.length === 0) {
+    return <ErrorCard text="This block has no transactions" />;
   }
 
   let title: string;
   if (filteredTransactions.length === transactions.length) {
     title = `Block Transactions (${filteredTransactions.length})`;
   } else {
-    title = `Block Transactions`;
+    title = `Filtered Block Transactions (${filteredTransactions.length}/${transactions.length})`;
   }
 
   return (
@@ -199,93 +195,113 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         </div>
       )}
 
-      <div className="table-responsive mb-0">
-        <table className="table table-sm table-nowrap card-table">
-          <thead>
-            <tr>
-              <th
-                className="text-muted c-pointer"
-                onClick={() => {
-                  query.delete("sort");
-                  history.push(pickClusterParams(location, query));
-                }}
-              >
-                #
-              </th>
-              <th className="text-muted">Result</th>
-              <th className="text-muted">Transaction Signature</th>
-              {showComputeUnits && (
+      {filteredTransactions.length === 0 ? (
+        <div className="card-body">
+          {accountFilter === null && programFilter === HIDE_VOTES
+            ? "This block doesn't contain any non-vote transactions"
+            : "No transactions found with this filter"}
+        </div>
+      ) : (
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
                 <th
                   className="text-muted c-pointer"
                   onClick={() => {
-                    query.set("sort", "compute");
+                    query.delete("sort");
                     history.push(pickClusterParams(location, query));
                   }}
                 >
-                  Compute
+                  #
                 </th>
-              )}
-              <th className="text-muted">Invoked Programs</th>
-            </tr>
-          </thead>
-          <tbody className="list">
-            {filteredTransactions.slice(0, numDisplayed).map((tx, i) => {
-              let statusText;
-              let statusClass;
-              let signature: React.ReactNode;
-              if (tx.meta?.err || !tx.signature) {
-                statusClass = "warning";
-                statusText = "Failed";
-              } else {
-                statusClass = "success";
-                statusText = "Success";
-              }
+                <th className="text-muted">Result</th>
+                <th className="text-muted">Transaction Signature</th>
+                {showComputeUnits && (
+                  <th
+                    className="text-muted c-pointer"
+                    onClick={() => {
+                      query.set("sort", "compute");
+                      history.push(pickClusterParams(location, query));
+                    }}
+                  >
+                    Compute
+                  </th>
+                )}
+                <th className="text-muted">Invoked Programs</th>
+              </tr>
+            </thead>
+            <tbody className="list">
+              {filteredTransactions.slice(0, numDisplayed).map((tx, i) => {
+                let statusText;
+                let statusClass;
+                let signature: React.ReactNode;
+                if (tx.meta?.err || !tx.signature) {
+                  statusClass = "warning";
+                  statusText = "Failed";
+                } else {
+                  statusClass = "success";
+                  statusText = "Success";
+                }
 
-              if (tx.signature) {
-                signature = (
-                  <Signature signature={tx.signature} link truncateChars={48} />
-                );
-              }
+                if (tx.signature) {
+                  signature = (
+                    <Signature
+                      signature={tx.signature}
+                      link
+                      truncateChars={48}
+                    />
+                  );
+                }
 
-              const entries = [...tx.invocations.entries()];
-              entries.sort();
+                const entries = [...tx.invocations.entries()];
+                entries.sort();
 
-              return (
-                <tr key={i}>
-                  <td>{tx.index + 1}</td>
-                  <td>
-                    <span className={`badge bg-${statusClass}-soft`}>
-                      {statusText}
-                    </span>
-                  </td>
-
-                  <td>{signature}</td>
-                  {showComputeUnits && (
-                    <td className="text-end">
-                      {tx.logTruncated && ">"}
-                      {tx.computeUnits !== undefined
-                        ? new Intl.NumberFormat("en-US").format(tx.computeUnits)
-                        : "Unknown"}
+                return (
+                  <tr key={i}>
+                    <td>{tx.index + 1}</td>
+                    <td>
+                      <span className={`badge bg-${statusClass}-soft`}>
+                        {statusText}
+                      </span>
                     </td>
-                  )}
-                  <td>
-                    {tx.invocations.size === 0
-                      ? "NA"
-                      : entries.map(([programId, count], i) => {
-                          return (
-                            <div key={i} className="d-flex align-items-center">
-                              <Address pubkey={new PublicKey(programId)} link />
-                              <span className="ms-2 text-muted">{`(${count})`}</span>
-                            </div>
-                          );
-                        })}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+
+                    <td>{signature}</td>
+                    {showComputeUnits && (
+                      <td className="text-end">
+                        {tx.logTruncated && ">"}
+                        {tx.computeUnits !== undefined
+                          ? new Intl.NumberFormat("en-US").format(
+                              tx.computeUnits
+                            )
+                          : "Unknown"}
+                      </td>
+                    )}
+                    <td>
+                      {tx.invocations.size === 0
+                        ? "NA"
+                        : entries.map(([programId, count], i) => {
+                            return (
+                              <div
+                                key={i}
+                                className="d-flex align-items-center"
+                              >
+                                <Address
+                                  pubkey={new PublicKey(programId)}
+                                  link
+                                />
+                                <span className="ms-2 text-muted">{`(${count})`}</span>
+                              </div>
+                            );
+                          })}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {filteredTransactions.length > numDisplayed && (
         <div className="card-footer">

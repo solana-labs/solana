@@ -73,14 +73,27 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
     Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
-            access_type: AccessType::TryPrimaryThenSecondary,
+            access_type: AccessType::Primary,
             recovery_mode: None,
             enforce_ulimit_nofile: true,
             ..BlockstoreOptions::default()
         },
     )
-    .unwrap_or_else(|e| {
-        panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+    // Fall back on Secondary if Primary fails; Primary will fail if
+    // a handle to Blockstore is being held somewhere else
+    .unwrap_or_else(|_| {
+        Blockstore::open_with_options(
+            ledger_path,
+            BlockstoreOptions {
+                access_type: AccessType::Secondary,
+                recovery_mode: None,
+                enforce_ulimit_nofile: true,
+                ..BlockstoreOptions::default()
+            },
+        )
+        .unwrap_or_else(|e| {
+            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+        })
     })
 }
 

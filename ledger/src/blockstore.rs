@@ -518,7 +518,7 @@ impl Blockstore {
     /// compaction.
     ///
     /// To disable RocksDB's background compaction, open the Blockstore
-    /// with AccessType::PrimaryOnlyForMaintenance.
+    /// with AccessType::PrimaryForMaintenance.
     pub fn set_no_compaction(&mut self, no_compaction: bool) {
         self.no_compaction = no_compaction;
     }
@@ -3238,6 +3238,7 @@ impl Blockstore {
         shred_code_cf.get_int_property(RocksProperties::TOTAL_SST_FILES_SIZE)
     }
 
+    /// Returns whether the blockstore has primary (read and write) access
     pub fn is_primary_access(&self) -> bool {
         self.db.is_primary_access()
     }
@@ -3836,7 +3837,7 @@ pub fn create_new_ledger(
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
-            access_type: AccessType::PrimaryOnly,
+            access_type: AccessType::Primary,
             recovery_mode: None,
             enforce_ulimit_nofile: false,
             column_options: column_options.clone(),

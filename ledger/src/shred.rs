@@ -56,6 +56,7 @@ pub use crate::{
 use {
     crate::blockstore::MAX_DATA_SHREDS_PER_SLOT,
     bincode::config::Options,
+    bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
@@ -136,9 +137,14 @@ const ENCODED_PAYLOAD_SIZE_V2: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
 
-pub const SHRED_TICK_REFERENCE_MASK: u8 = 0b0011_1111;
-const LAST_SHRED_IN_SLOT: u8 = 0b1000_0000;
-const DATA_COMPLETE_SHRED: u8 = 0b0100_0000;
+bitflags! {
+    #[derive(Default, Serialize, Deserialize)]
+    pub struct ShredFlags:u8 {
+        const SHRED_TICK_REFERENCE_MASK = 0b0011_1111;
+        const DATA_COMPLETE_SHRED = 0b0100_0000;
+        const LAST_SHRED_IN_SLOT = 0b1000_0000;
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -249,7 +255,7 @@ struct ShredCommonHeader {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Deserialize, Serialize)]
 struct DataShredHeader {
     parent_offset: u16,
-    flags: u8,
+    flags: ShredFlags,
     size: u16, // common shred header + data shred header + data
 }
 
@@ -359,16 +365,22 @@ impl Shred {
         let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER_V1) as u16;
         let mut data_header = DataShredHeader {
             parent_offset,
-            flags: reference_tick.min(SHRED_TICK_REFERENCE_MASK),
+            flags: unsafe {
+                ShredFlags::from_bits_unchecked(
+                    ShredFlags::SHRED_TICK_REFERENCE_MASK
+                        .bits()
+                        .min(reference_tick),
+                )
+            },
             size,
         };
 
         if is_last_data {
-            data_header.flags |= DATA_COMPLETE_SHRED
+            data_header.flags |= ShredFlags::DATA_COMPLETE_SHRED
         }
 
         if is_last_in_slot {
-            data_header.flags |= LAST_SHRED_IN_SLOT
+            data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
         }
 
         let mut start = 0;
@@ -770,7 +782,9 @@ impl Shred {
 
     pub fn last_in_slot(&self) -> bool {
         if self.is_data() {
-            self.data_header.flags & LAST_SHRED_IN_SLOT == LAST_SHRED_IN_SLOT
+            self.data_header
+                .flags
+                .contains(ShredFlags::LAST_SHRED_IN_SLOT)
         } else {
             false
         }
@@ -780,14 +794,16 @@ impl Shred {
     /// Use this only for test code which doesn't care about actual shred
     pub fn set_last_in_slot(&mut self) {
         if self.is_data() {
-            self.data_header.flags |= LAST_SHRED_IN_SLOT
+            self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT
         }
     }
 
     #[cfg(test)]
     pub(crate) fn unset_data_complete(&mut self) {
         if self.is_data() {
-            self.data_header.flags &= !DATA_COMPLETE_SHRED;
+            self.data_header
+                .flags
+                .remove(ShredFlags::DATA_COMPLETE_SHRED);
         }
 
         // Data header starts after the shred common header
@@ -804,7 +820,9 @@ impl Shred {
 
     pub fn data_complete(&self) -> bool {
         if self.is_data() {
-            self.data_header.flags & DATA_COMPLETE_SHRED == DATA_COMPLETE_SHRED
+            self.data_header
+                .flags
+                .contains(ShredFlags::DATA_COMPLETE_SHRED)
         } else {
             false
         }
@@ -812,10 +830,11 @@ impl Shred {
 
     pub(crate) fn reference_tick(&self) -> u8 {
         if self.is_data() {
-            self.data_header.flags & SHRED_TICK_REFERENCE_MASK
+            self.data_header.flags & ShredFlags::SHRED_TICK_REFERENCE_MASK
         } else {
-            SHRED_TICK_REFERENCE_MASK
+            ShredFlags::SHRED_TICK_REFERENCE_MASK
         }
+        .bits()
     }
 
     // Get slot from a shred packet with partial deserialize
@@ -834,7 +853,7 @@ impl Shred {
         let flags = data[SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER
             - size_of::<u8>()
             - size_of::<u16>()];
-        flags & SHRED_TICK_REFERENCE_MASK
+        flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -971,7 +990,18 @@ pub fn verify_test_data_shred(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, bincode::serialized_size, matches::assert_matches, solana_sdk::shred_version};
+    use {
+        super::*,
+        bincode::serialized_size,
+        matches::assert_matches,
+        rand::Rng,
+        rand_chacha::{rand_core::SeedableRng, ChaChaRng},
+        solana_sdk::shred_version,
+    };
+
+    fn bs58_decode<T: AsRef<[u8]>>(data: T) -> Vec<u8> {
+        bs58::decode(data).into_vec().unwrap()
+    }
 
     #[test]
     #[ignore] // TODO MERKLE
@@ -1297,6 +1327,144 @@ mod tests {
         {
             shred.coding_header.num_coding_shreds = u16::MAX;
             assert_matches!(shred.sanitize(), Err(Error::InvalidNumCodingShreds(65535)));
+        }
+    }
+
+    #[test]
+    #[ignore] // TODO MERKLE
+    fn test_serde_compat_shred_data() {
+        const SEED: &str = "6qG9NGWEtoTugS4Zgs46u8zTccEJuRHtrNMiUayLHCxt";
+        const PAYLOAD: &str = "Cuk5B7qosCx42HcZjwcUKPpeqE43sDhx1RFut5rEAk54dV\
+        JFPrGEBYuPJSwaaNNbGyas9AuLS66NcFxNAcBzmBcb3gSmNrfQzmTUev5jSEeQRyqE5WG\
+        rGwC67mS5QXmokCtVEdXu9B1SLQFBMB62CQGVEjqV1r6jz4xd5Zg1AyyVCjGpRe8ooqMB\
+        1doeATLCEBhjnPPYLLyZGqPfrqfz5huq8BCoVC8DCMWFJhxtPLA5XHPPpxieAhDBmS";
+        let mut rng = {
+            let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
+            ChaChaRng::from_seed(seed)
+        };
+        let mut data = [0u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]; // TODO MERKLE
+        rng.fill(&mut data[..]);
+        let keypair = Keypair::generate(&mut rng);
+        let mut shred = Shred::new_from_data(
+            141939602, // slot
+            28685,     // index
+            36390,     // parent_offset
+            &data,     // data
+            false,     // is_last_data
+            true,      // is_last_in_slot
+            37,        // reference_tick
+            45189,     // version
+            28657,     // fec_set_index
+        );
+        shred.sign(&keypair);
+        assert!(shred.verify(&keypair.pubkey()));
+        assert_matches!(shred.sanitize(), Ok(()));
+        let mut payload = bs58_decode(PAYLOAD);
+        payload.extend({
+            let skip = payload.len() - SHRED_DATA_OFFSET_V1; // TODO MERKLE
+            data.iter().skip(skip).copied()
+        });
+        let mut packet = Packet::default();
+        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.meta.size = payload.len();
+        assert_eq!(shred.bytes_to_store(), payload);
+        assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
+        assert_eq!(
+            shred.reference_tick(),
+            Shred::reference_tick_from_data(&packet.data)
+        );
+        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(
+            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
+            Some((shred.slot(), shred.index(), shred.shred_type()))
+        );
+    }
+
+    #[test]
+    #[ignore] // TODO MERKLE
+    fn test_serde_compat_shred_code() {
+        const SEED: &str = "4jfjh3UZVyaEgvyG9oQmNyFY9yHDmbeH9eUhnBKkrcrN";
+        const PAYLOAD: &str = "3xGsXwzkPpLFuKwbbfKMUxt1B6VqQPzbvvAkxRNCX9kNEP\
+        sa2VifwGBtFuNm3CWXdmQizDz5vJjDHu6ZqqaBCSfrHurag87qAXwTtjNPhZzKEew5pLc\
+        aY6cooiAch2vpfixNYSDjnirozje5cmUtGuYs1asXwsAKSN3QdWHz3XGParWkZeUMAzRV\
+        1UPEDZ7vETKbxeNixKbzZzo47Lakh3C35hS74ocfj23CWoW1JpkETkXjUpXcfcv6cS";
+        let mut rng = {
+            let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
+            ChaChaRng::from_seed(seed)
+        };
+        let mut parity_shard = vec![0u8; ENCODED_PAYLOAD_SIZE_V1]; // TODO MERKLE
+        rng.fill(&mut parity_shard[..]);
+        let keypair = Keypair::generate(&mut rng);
+        let mut shred = Shred::new_from_parity_shard(
+            141945197, // slot
+            23418,     // index
+            &parity_shard,
+            21259, // fec_set_index
+            32,    // num_data_shreds
+            58,    // num_coding_shreds
+            43,    // position
+            47298, // version
+        );
+        shred.sign(&keypair);
+        assert!(shred.verify(&keypair.pubkey()));
+        assert_matches!(shred.sanitize(), Ok(()));
+        let mut payload = bs58_decode(PAYLOAD);
+        payload.extend({
+            let skip = payload.len() - SIZE_OF_CODING_SHRED_HEADERS_V1; // TODO MERKLE
+            parity_shard.iter().skip(skip).copied()
+        });
+        let mut packet = Packet::default();
+        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.meta.size = payload.len();
+        assert_eq!(shred.bytes_to_store(), payload);
+        assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
+        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(
+            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
+            Some((shred.slot(), shred.index(), shred.shred_type()))
+        );
+    }
+
+    #[test]
+    fn test_shred_flags() {
+        fn make_shred(is_last_data: bool, is_last_in_slot: bool, reference_tick: u8) -> Shred {
+            Shred::new_from_data(
+                0,   // slot
+                0,   // index
+                0,   // parent_offset
+                &[], // data
+                is_last_data,
+                is_last_in_slot,
+                reference_tick,
+                0, // version
+                0, // fec_set_index
+            )
+        }
+        fn check_shred_flags(
+            shred: &Shred,
+            is_last_data: bool,
+            is_last_in_slot: bool,
+            reference_tick: u8,
+        ) {
+            assert_eq!(shred.data_complete(), is_last_data);
+            assert_eq!(shred.last_in_slot(), is_last_in_slot);
+            assert_eq!(shred.reference_tick(), reference_tick.min(63u8));
+            assert_eq!(
+                Shred::reference_tick_from_data(&shred.payload),
+                reference_tick.min(63u8),
+            );
+        }
+        for is_last_data in [false, true] {
+            for is_last_in_slot in [false, true] {
+                for reference_tick in [0, 37, 63, 64, 80, 128, 255] {
+                    let mut shred = make_shred(is_last_data, is_last_in_slot, reference_tick);
+                    check_shred_flags(&shred, is_last_data, is_last_in_slot, reference_tick);
+                    shred.set_last_in_slot();
+                    check_shred_flags(&shred, is_last_data, true, reference_tick);
+                    shred.unset_data_complete();
+                    check_shred_flags(&shred, false, true, reference_tick);
+                }
+            }
         }
     }
 }

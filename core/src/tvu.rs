@@ -68,7 +68,7 @@ pub struct Tvu {
     ledger_cleanup_service: Option<LedgerCleanupService>,
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
-    warm_quic_cache_service: WarmQuicCacheService,
+    warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
     transaction_cost_metrics_service: TransactionCostMetricsService,
 }
@@ -132,6 +132,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
+        use_quic: bool,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -225,9 +226,15 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service =
-            WarmQuicCacheService::new(cluster_info.clone(), poh_recorder.clone(), exit.clone());
-
+        let warm_quic_cache_service = if use_quic {
+            Some(WarmQuicCacheService::new(
+                cluster_info.clone(),
+                poh_recorder.clone(),
+                exit.clone(),
+            ))
+        } else {
+            None
+        };
         let (cost_update_sender, cost_update_receiver) = unbounded();
         let cost_update_service =
             CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
@@ -319,7 +326,9 @@ impl Tvu {
         self.replay_stage.join()?;
         self.cost_update_service.join()?;
         self.voting_service.join()?;
-        self.warm_quic_cache_service.join()?;
+        if let Some(warmup_service) = self.warm_quic_cache_service {
+            warmup_service.join()?;
+        }
         self.drop_bank_service.join()?;
         self.transaction_cost_metrics_service.join()?;
         Ok(())
@@ -439,6 +448,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
+            false, // use_quic
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

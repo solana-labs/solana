@@ -10,8 +10,7 @@ use {
     },
     solana_entry::entry::Entry,
     solana_ledger::shred::{
-        ProcessShredsStats, Shred, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SHRED_TICK_REFERENCE_MASK,
+        ProcessShredsStats, Shred, ShredFlags, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
     },
     solana_sdk::{
         signature::Keypair,
@@ -63,6 +62,7 @@ impl StandardBroadcastRun {
         max_ticks_in_slot: u8,
         stats: &mut ProcessShredsStats,
     ) -> Vec<Shred> {
+        const SHRED_TICK_REFERENCE_MASK: u8 = ShredFlags::SHRED_TICK_REFERENCE_MASK.bits();
         let (current_slot, _) = self.current_slot_and_parent.unwrap();
         match self.unfinished_slot {
             None => Vec::default(),
