@@ -240,7 +240,7 @@ struct SendTransactionServiceStatsReport {
 impl SendTransactionServiceStatsReport {
     /// report metrics of the send transaction service
     fn report(&self) {
-        if self.last_report.should_update(SEND_TRANSACTION_METRICS_REPORT_RATE_IN_SEC) {
+        if self.last_report.should_update(SEND_TRANSACTION_METRICS_REPORT_RATE_MS) {
             datapoint_info!(
                 "send_transaction_service",
                 ("recv-tx", self.stats.received_transactions.swap(0, Ordering::Relaxed), i64),
@@ -271,7 +271,7 @@ impl SendTransactionServiceStatsReport {
 }
 
 /// Report the send transaction memtrics for every 5 seconds.
-pub const SEND_TRANSACTION_METRICS_REPORT_RATE_IN_SEC: u64 = 5;
+pub const SEND_TRANSACTION_METRICS_REPORT_RATE_MS: u64 = 5000;
 
 impl SendTransactionService {
     pub fn new<T: TpuInfo + std::marker::Send + 'static>(
