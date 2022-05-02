@@ -306,6 +306,7 @@ mod tests {
             genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
+            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
         std::str::FromStr,
@@ -388,6 +389,7 @@ mod tests {
                 cluster_type: ClusterType::MainnetBeta,
                 snapshot_type: None,
                 accounts: Arc::clone(&accounts),
+                epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
             };
 
