@@ -203,10 +203,10 @@ struct SendTransactionServiceStats {
     /// retry queue size
     retry_queue_size: AtomicU64,
 
-    /// The count of batches
+    /// The count of calls of sending transactions which can be in batch or single.
     send_count: AtomicU64,
 
-    /// Time spent on transactions in non-batch mode in micro seconds
+    /// Time spent on transactions in micro seconds
     send_us: AtomicU64,
 
     /// Send failure count
