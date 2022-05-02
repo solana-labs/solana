@@ -1299,9 +1299,9 @@ dependencies = [
 
 [[package]]
 name = "etcd-client"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4504e955d596cc27543aa77ecb075dec41c7b0c7749fe6b5536a82548f5073b1"
+checksum = "c434d2800b273a506b82397aad2f20971636f65e47b27c027f77d498530c5954"
 dependencies = [
  "http",
  "prost",
@@ -4964,6 +4964,7 @@ dependencies = [
  "assert_matches",
  "bincode",
  "bitflags",
+ "bs58",
  "byteorder",
  "chrono",
  "chrono-humanize",
@@ -6119,9 +6120,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.27"
+version = "0.2.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dec11db92171a996e44d36fb1d223233f2cefacf9ba6884b33e5baa92a81d37"
+checksum = "036b2de45fa94424288070fe8f4cb5fa266c203af6e5ec56a33ccf0909d9448d"
 dependencies = [
  "byteorder",
  "combine",
@@ -6545,9 +6546,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.17.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2af73ac49756f3f7c01172e34a23e5d0216f6c32333757c2c61feb2bbff5a5ee"
+checksum = "0f48b6d60512a392e34dbf7fd456249fd2de3c83669ab642e021903f4015185b"
 dependencies = [
  "bytes",
  "libc",

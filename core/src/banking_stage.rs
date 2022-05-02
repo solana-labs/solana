@@ -2094,11 +2094,11 @@ fn next_leader_x<F>(
 where
     F: FnOnce(&ContactInfo) -> SocketAddr,
 {
-    if let Some(leader_pubkey) = poh_recorder
+    let leader_pubkey = poh_recorder
         .lock()
         .unwrap()
-        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET)
-    {
+        .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
+    if let Some(leader_pubkey) = leader_pubkey {
         cluster_info.lookup_contact_info(&leader_pubkey, port_selector)
     } else {
         None

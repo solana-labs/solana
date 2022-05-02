@@ -46,7 +46,12 @@ export function BlockOverviewCard({
 
   const { block, blockLeader, childSlot, childLeader, parentLeader } =
     confirmedBlock.data;
-  const committedTxs = block.transactions.filter((tx) => tx.meta?.err === null);
+  const showSuccessfulCount = block.transactions.every(
+    (tx) => tx.meta !== null
+  );
+  const successfulTxs = block.transactions.filter(
+    (tx) => tx.meta?.err === null
+  );
   const epoch = clusterInfo?.epochSchedule.getEpoch(slot);
 
   return (
@@ -153,12 +158,14 @@ export function BlockOverviewCard({
               <span>{block.transactions.length}</span>
             </td>
           </tr>
-          <tr>
-            <td className="w-100">Successful Transactions</td>
-            <td className="text-lg-end font-monospace">
-              <span>{committedTxs.length}</span>
-            </td>
-          </tr>
+          {showSuccessfulCount && (
+            <tr>
+              <td className="w-100">Successful Transactions</td>
+              <td className="text-lg-end font-monospace">
+                <span>{successfulTxs.length}</span>
+              </td>
+            </tr>
+          )}
         </TableCardBody>
       </div>
 
@@ -230,7 +237,9 @@ function MoreSection({
       </div>
       {tab === undefined && <BlockHistoryCard block={block} />}
       {tab === "rewards" && <BlockRewardsCard block={block} />}
-      {tab === "accounts" && <BlockAccountsCard block={block} />}
+      {tab === "accounts" && (
+        <BlockAccountsCard block={block} blockSlot={slot} />
+      )}
       {tab === "programs" && <BlockProgramsCard block={block} />}
     </>
   );

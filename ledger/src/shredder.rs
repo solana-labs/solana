@@ -1,13 +1,13 @@
 use {
     crate::{
-        erasure::Session,
-        shred::{
-            Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SHRED_PAYLOAD_SIZE,
-            SIZE_OF_DATA_SHRED_PAYLOAD,
-        },
+        shred::{Error, Shred, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD},
         shred_stats::ProcessShredsStats,
     },
     rayon::{prelude::*, ThreadPool},
+    reed_solomon_erasure::{
+        galois_8::Field,
+        Error::{InvalidIndex, TooFewDataShards, TooFewShardsPresent},
+    },
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
@@ -20,6 +20,8 @@ thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::
                     .thread_name(|ix| format!("shredder_{}", ix))
                     .build()
                     .unwrap()));
+
+type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
 #[derive(Debug)]
 pub struct Shredder {
@@ -234,11 +236,12 @@ impl Shredder {
         } else {
             num_data
         };
-        let data: Vec<_> = data.iter().map(Shred::erasure_block_as_slice).collect();
+        let data = data.iter().map(Shred::erasure_shard_as_slice);
+        let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
         let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
-        Session::new(num_data, num_coding)
+        ReedSolomon::new(num_data, num_coding)
             .unwrap()
-            .encode(&data, &mut parity[..])
+            .encode_sep(&data, &mut parity[..])
             .unwrap();
         let num_data = u16::try_from(num_data).unwrap();
         let num_coding = u16::try_from(num_coding).unwrap();
@@ -262,10 +265,8 @@ impl Shredder {
     }
 
     pub fn try_recovery(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
-        use reed_solomon_erasure::Error::InvalidIndex;
-        Self::verify_consistent_shred_payload_sizes("try_recovery()", &shreds)?;
         let (slot, fec_set_index) = match shreds.first() {
-            None => return Ok(Vec::default()),
+            None => return Err(Error::from(TooFewShardsPresent)),
             Some(shred) => (shred.slot(), shred.fec_set_index()),
         };
         let (num_data_shreds, num_coding_shreds) = match shreds.iter().find(|shred| shred.is_code())
@@ -292,27 +293,27 @@ impl Shredder {
         }
         // Mask to exclude data shreds already received from the return value.
         let mut mask = vec![false; num_data_shreds];
-        let mut blocks = vec![None; fec_set_size];
+        let mut shards = vec![None; fec_set_size];
         for shred in shreds {
-            let index = match shred.erasure_block_index() {
+            let index = match shred.erasure_shard_index() {
                 Some(index) if index < fec_set_size => index,
                 _ => return Err(Error::from(InvalidIndex)),
             };
-            blocks[index] = Some(shred.erasure_block());
+            shards[index] = Some(shred.erasure_shard()?);
             if index < num_data_shreds {
                 mask[index] = true;
             }
         }
-        Session::new(num_data_shreds, num_coding_shreds)?.decode_blocks(&mut blocks)?;
+        ReedSolomon::new(num_data_shreds, num_coding_shreds)?.reconstruct_data(&mut shards)?;
         let recovered_data = mask
             .into_iter()
-            .zip(blocks)
+            .zip(shards)
             .filter(|(mask, _)| !mask)
-            .filter_map(|(_, block)| Shred::new_from_serialized_shred(block?).ok())
+            .filter_map(|(_, shard)| Shred::new_from_serialized_shred(shard?).ok())
             .filter(|shred| {
                 shred.slot() == slot
                     && shred.is_data()
-                    && match shred.erasure_block_index() {
+                    && match shred.erasure_shard_index() {
                         Some(index) => index < num_data_shreds,
                         None => false,
                     }
@@ -323,8 +324,6 @@ impl Shredder {
 
     /// Combines all shreds to recreate the original buffer
     pub fn deshred(shreds: &[Shred]) -> Result<Vec<u8>, Error> {
-        use reed_solomon_erasure::Error::TooFewDataShards;
-        Self::verify_consistent_shred_payload_sizes("deshred()", shreds)?;
         let index = shreds.first().ok_or(TooFewDataShards)?.index();
         let aligned = shreds.iter().zip(index..).all(|(s, i)| s.index() == i);
         let data_complete = {
@@ -345,30 +344,6 @@ impl Shredder {
             Ok(data)
         }
     }
-
-    fn verify_consistent_shred_payload_sizes(
-        caller: &str,
-        shreds: &[Shred],
-    ) -> Result<(), reed_solomon_erasure::Error> {
-        if shreds.is_empty() {
-            return Err(reed_solomon_erasure::Error::TooFewShardsPresent);
-        }
-        let slot = shreds[0].slot();
-        for shred in shreds {
-            if shred.payload().len() != SHRED_PAYLOAD_SIZE {
-                error!(
-                    "{} Shreds for slot: {} are inconsistent sizes. Expected: {} actual: {}",
-                    caller,
-                    slot,
-                    SHRED_PAYLOAD_SIZE,
-                    shred.payload().len()
-                );
-                return Err(reed_solomon_erasure::Error::IncorrectShardSize);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -376,8 +351,8 @@ mod tests {
     use {
         super::*,
         crate::shred::{
-            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredType,
-            SHRED_TICK_REFERENCE_MASK,
+            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred, ShredFlags,
+            ShredType,
         },
         bincode::serialized_size,
         matches::assert_matches,
@@ -393,7 +368,7 @@ mod tests {
     };
 
     fn verify_test_code_shred(shred: &Shred, index: u32, slot: Slot, pk: &Pubkey, verify: bool) {
-        assert_eq!(shred.payload().len(), SHRED_PAYLOAD_SIZE);
+        assert_matches!(shred.sanitize(), Ok(()));
         assert!(!shred.is_data());
         assert_eq!(shred.index(), index);
         assert_eq!(shred.slot(), slot);
@@ -574,10 +549,13 @@ mod tests {
             0,    // next_code_index
         );
         data_shreds.iter().for_each(|s| {
-            assert_eq!(s.reference_tick(), SHRED_TICK_REFERENCE_MASK);
+            assert_eq!(
+                s.reference_tick(),
+                ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
+            );
             assert_eq!(
                 Shred::reference_tick_from_data(s.payload()),
-                SHRED_TICK_REFERENCE_MASK
+                ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
             );
         });
 
@@ -586,7 +564,7 @@ mod tests {
                 .unwrap();
         assert_eq!(
             deserialized_shred.reference_tick(),
-            SHRED_TICK_REFERENCE_MASK
+            ShredFlags::SHRED_TICK_REFERENCE_MASK.bits(),
         );
     }
 
@@ -783,9 +761,7 @@ mod tests {
         assert_eq!(shreds.len(), 3);
         assert_matches!(
             Shredder::deshred(&shreds),
-            Err(Error::ErasureError(
-                reed_solomon_erasure::Error::TooFewDataShards
-            ))
+            Err(Error::ErasureError(TooFewDataShards))
         );
 
         // Test5: Try recovery/reassembly with non zero index full slot with 3 missing data shreds

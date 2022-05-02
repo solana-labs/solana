@@ -13,6 +13,7 @@ use {
     solana_sdk::{
         account::Account,
         clock::Slot,
+        epoch_schedule::EpochSchedule,
         feature::{self, Feature},
         feature_set::FEATURE_NAMES,
         message::Message,
@@ -107,6 +108,10 @@ impl Ord for CliFeature {
 #[serde(rename_all = "camelCase")]
 pub struct CliFeatures {
     pub features: Vec<CliFeature>,
+    #[serde(skip)]
+    pub epoch_schedule: EpochSchedule,
+    #[serde(skip)]
+    pub current_slot: Slot,
     pub feature_activation_allowed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_feature_sets: Option<CliClusterFeatureSets>,
@@ -116,13 +121,13 @@ pub struct CliFeatures {
 
 impl fmt::Display for CliFeatures {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.features.len() > 1 {
+        if !self.features.is_empty() {
             writeln!(
                 f,
                 "{}",
                 style(format!(
-                    "{:<44} | {:<27} | {}",
-                    "Feature", "Status", "Description"
+                    "{:<44} | {:<23} | {} | {}",
+                    "Feature", "Status", "Activation Slot", "Description"
                 ))
                 .bold()
             )?;
@@ -130,13 +135,22 @@ impl fmt::Display for CliFeatures {
         for feature in &self.features {
             writeln!(
                 f,
-                "{:<44} | {:<27} | {}",
+                "{:<44} | {:<23} | {:<15} | {}",
                 feature.id,
                 match feature.status {
                     CliFeatureStatus::Inactive => style("inactive".to_string()).red(),
-                    CliFeatureStatus::Pending => style("activation pending".to_string()).yellow(),
-                    CliFeatureStatus::Active(activation_slot) =>
-                        style(format!("active since slot {:>9}", activation_slot)).green(),
+                    CliFeatureStatus::Pending => {
+                        let current_epoch = self.epoch_schedule.get_epoch(self.current_slot);
+                        style(format!("pending until epoch {}", current_epoch + 1)).yellow()
+                    }
+                    CliFeatureStatus::Active(activation_slot) => {
+                        let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
+                        style(format!("active since epoch {}", activation_epoch)).green()
+                    }
+                },
+                match feature.status {
+                    CliFeatureStatus::Active(activation_slot) => activation_slot.to_string(),
+                    _ => "NA".to_string(),
                 },
                 feature.description,
             )?;
@@ -443,7 +457,8 @@ pub fn parse_feature_subcommand(
             } else {
                 FEATURE_NAMES.keys().cloned().collect()
             };
-            let display_all = matches.is_present("display_all");
+            let display_all =
+                matches.is_present("display_all") || features.len() < FEATURE_NAMES.len();
             features.sort();
             CliCommandInfo {
                 command: CliCommand::Feature(FeatureCliCommand::Status {
@@ -680,9 +695,9 @@ fn process_status(
     feature_ids: &[Pubkey],
     display_all: bool,
 ) -> ProcessResult {
+    let current_slot = rpc_client.get_slot()?;
     let filter = if !display_all {
-        let now = rpc_client.get_slot()?;
-        now.checked_sub(DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS)
+        current_slot.checked_sub(DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS)
     } else {
         None
     };
@@ -721,8 +736,11 @@ fn process_status(
 
     let (feature_activation_allowed, cluster_feature_sets) =
         feature_activation_allowed(rpc_client, features.len() <= 1)?;
+    let epoch_schedule = rpc_client.get_epoch_schedule()?;
     let feature_set = CliFeatures {
         features,
+        current_slot,
+        epoch_schedule,
         feature_activation_allowed,
         cluster_feature_sets,
         inactive,

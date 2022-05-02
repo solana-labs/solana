@@ -3,7 +3,7 @@ import { Cluster } from "providers/cluster";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program, Idl } from "@project-serum/anchor";
 import { useAnchorProgram } from "providers/anchor";
-import { programLabel } from "utils/tx";
+import { getProgramName } from "utils/tx";
 import { snakeToTitleCase, camelToTitleCase, numberWithSeparator } from "utils";
 import {
   IdlInstruction,
@@ -13,7 +13,9 @@ import {
 import { Address } from "components/common/Address";
 import ReactJson from "react-json-view";
 
-export function getProgramName(program: Program | null): string | undefined {
+export function getAnchorProgramName(
+  program: Program | null
+): string | undefined {
   return program ? snakeToTitleCase(program.idl.name) : undefined;
 }
 
@@ -27,7 +29,7 @@ export function AnchorProgramName({
   defaultName?: string;
 }) {
   const program = useAnchorProgram(programId.toString(), url);
-  const programName = getProgramName(program) || defaultName;
+  const programName = getAnchorProgramName(program) || defaultName;
   return <>{programName}</>;
 }
 
@@ -40,8 +42,7 @@ export function ProgramName({
   cluster: Cluster;
   url: string;
 }) {
-  const defaultProgramName =
-    programLabel(programId.toBase58(), cluster) || "Unknown Program";
+  const defaultProgramName = getProgramName(programId.toBase58(), cluster);
   return (
     <React.Suspense fallback={<>{defaultProgramName}</>}>
       <AnchorProgramName

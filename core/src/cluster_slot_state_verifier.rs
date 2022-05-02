@@ -1336,14 +1336,7 @@ mod test {
         // Create simple fork 0 -> 1 -> 2 -> 3
         let forks = tr(0) / (tr(1) / (tr(2) / tr(3)));
         let (vote_simulator, blockstore) = setup_forks_from_tree(forks, 1, None);
-
-        let descendants = vote_simulator
-            .bank_forks
-            .read()
-            .unwrap()
-            .descendants()
-            .clone();
-
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         InitialState {
             heaviest_subtree_fork_choice: vote_simulator.heaviest_subtree_fork_choice,
             progress: vote_simulator.progress,

@@ -209,10 +209,8 @@ impl JsonRpcRequestProcessor {
     #[allow(deprecated)]
     fn bank(&self, commitment: Option<CommitmentConfig>) -> Arc<Bank> {
         debug!("RPC commitment_config: {:?}", commitment);
-        let r_bank_forks = self.bank_forks.read().unwrap();
 
         let commitment = commitment.unwrap_or_default();
-
         if commitment.is_confirmed() {
             let bank = self
                 .optimistically_confirmed_bank
@@ -250,7 +248,8 @@ impl JsonRpcRequestProcessor {
             CommitmentLevel::SingleGossip | CommitmentLevel::Confirmed => unreachable!(), // SingleGossip variant is deprecated
         };
 
-        r_bank_forks.get(slot).cloned().unwrap_or_else(|| {
+        let r_bank_forks = self.bank_forks.read().unwrap();
+        r_bank_forks.get(slot).unwrap_or_else(|| {
             // We log a warning instead of returning an error, because all known error cases
             // are due to known bugs that should be fixed instead.
             //
@@ -1066,8 +1065,7 @@ impl JsonRpcRequestProcessor {
                                 || confirmed_block.block_height.is_none()
                             {
                                 let r_bank_forks = self.bank_forks.read().unwrap();
-                                let bank = r_bank_forks.get(slot).cloned();
-                                if let Some(bank) = bank {
+                                if let Some(bank) = r_bank_forks.get(slot) {
                                     if confirmed_block.block_time.is_none() {
                                         confirmed_block.block_time =
                                             Some(bank.clock().unix_timestamp);
@@ -1124,7 +1122,10 @@ impl JsonRpcRequestProcessor {
             )));
         }
 
-        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+        let lowest_blockstore_slot = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
             // [start_slot..end_slot] can be fetched from BigTable. This range should not ever run
@@ -1188,7 +1189,10 @@ impl JsonRpcRequestProcessor {
             )));
         }
 
-        let lowest_blockstore_slot = self.blockstore.lowest_slot();
+        let lowest_blockstore_slot = self
+            .blockstore
+            .get_first_available_block()
+            .unwrap_or_default();
 
         if start_slot < lowest_blockstore_slot {
             // If the starting slot is lower than what's available in blockstore assume the entire
@@ -6677,6 +6681,7 @@ pub mod tests {
     #[test]
     fn test_get_blocks() {
         let rpc = RpcHandler::start();
+        let _ = rpc.create_test_transactions_and_populate_blockstore();
         rpc.add_roots_to_blockstore(vec![0, 1, 3, 4, 8]);
         rpc.block_commitment_cache
             .write()
@@ -6685,7 +6690,7 @@ pub mod tests {
 
         let request = create_test_request("getBlocks", Some(json!([0u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4, 8]);
+        assert_eq!(result, vec![0, 1, 3, 4, 8]);
 
         let request = create_test_request("getBlocks", Some(json!([2u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -6693,11 +6698,11 @@ pub mod tests {
 
         let request = create_test_request("getBlocks", Some(json!([0u64, 4u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4]);
+        assert_eq!(result, vec![0, 1, 3, 4]);
 
         let request = create_test_request("getBlocks", Some(json!([0u64, 7u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4]);
+        assert_eq!(result, vec![0, 1, 3, 4]);
 
         let request = create_test_request("getBlocks", Some(json!([9u64, 11u64])));
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
@@ -6713,7 +6718,7 @@ pub mod tests {
             Some(json!([0u64, MAX_GET_CONFIRMED_BLOCKS_RANGE])),
         );
         let result: Vec<Slot> = parse_success_result(rpc.handle_request_sync(request));
-        assert_eq!(result, vec![1, 3, 4, 8]);
+        assert_eq!(result, vec![0, 1, 3, 4, 8]);
 
         let request = create_test_request(
             "getBlocks",
@@ -7636,13 +7641,13 @@ pub mod tests {
         let bank = Bank::new_for_tests(&genesis_config);
 
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let bank0 = bank_forks.read().unwrap().get(0).unwrap().clone();
+        let bank0 = bank_forks.read().unwrap().get(0).unwrap();
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank_forks.write().unwrap().insert(bank1);
-        let bank1 = bank_forks.read().unwrap().get(1).unwrap().clone();
+        let bank1 = bank_forks.read().unwrap().get(1).unwrap();
         let bank2 = Bank::new_from_parent(&bank1, &Pubkey::default(), 2);
         bank_forks.write().unwrap().insert(bank2);
-        let bank2 = bank_forks.read().unwrap().get(2).unwrap().clone();
+        let bank2 = bank_forks.read().unwrap().get(2).unwrap();
         let bank3 = Bank::new_from_parent(&bank2, &Pubkey::default(), 3);
         bank_forks.write().unwrap().insert(bank3);
 
@@ -7743,7 +7748,7 @@ pub mod tests {
         assert_eq!(slot, 2);
 
         // Test freezing an optimistically confirmed bank will update cache
-        let bank3 = bank_forks.read().unwrap().get(3).unwrap().clone();
+        let bank3 = bank_forks.read().unwrap().get(3).unwrap();
         OptimisticallyConfirmedBankTracker::process_notification(
             BankNotification::Frozen(bank3),
             &bank_forks,

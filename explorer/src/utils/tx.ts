@@ -412,6 +412,12 @@ export const SYSVAR_IDS = {
   Sysvar1nstructions1111111111111111111111111: "Sysvar: Instructions",
 };
 
+export function getProgramName(address: string, cluster: Cluster): string {
+  const label = programLabel(address, cluster);
+  if (label) return label;
+  return `Unknown Program (${address})`;
+}
+
 export function programLabel(
   address: string,
   cluster: Cluster

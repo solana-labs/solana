@@ -739,6 +739,7 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
+            false, // use_quic
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

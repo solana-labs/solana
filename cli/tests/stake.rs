@@ -49,8 +49,13 @@ fn test_stake_delegation_force() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
 
     // Create vote account
     let vote_keypair = Keypair::new();
@@ -82,7 +87,7 @@ fn test_stake_delegation_force() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -150,10 +155,14 @@ fn test_seed_stake_delegation_and_deactivation() {
         &rpc_client,
         &config_validator,
         &config_validator.signers[0].pubkey(),
-        100_000,
+        100_000_000_000,
     )
     .unwrap();
-    check_balance!(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_balance!(
+        100_000_000_000,
+        &rpc_client,
+        &config_validator.signers[0].pubkey()
+    );
 
     let stake_address = Pubkey::create_with_seed(
         &config_validator.signers[0].pubkey(),
@@ -171,7 +180,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -240,10 +249,14 @@ fn test_stake_delegation_and_deactivation() {
         &rpc_client,
         &config_validator,
         &config_validator.signers[0].pubkey(),
-        100_000,
+        100_000_000_000,
     )
     .unwrap();
-    check_balance!(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_balance!(
+        100_000_000_000,
+        &rpc_client,
+        &config_validator.signers[0].pubkey()
+    );
 
     // Create stake account
     config_validator.signers.push(&stake_keypair);
@@ -254,7 +267,7 @@ fn test_stake_delegation_and_deactivation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -335,19 +348,27 @@ fn test_offline_stake_delegation_and_deactivation() {
         &rpc_client,
         &config_validator,
         &config_validator.signers[0].pubkey(),
-        100_000,
+        100_000_000_000,
     )
     .unwrap();
-    check_balance!(100_000, &rpc_client, &config_validator.signers[0].pubkey());
+    check_balance!(
+        100_000_000_000,
+        &rpc_client,
+        &config_validator.signers[0].pubkey()
+    );
 
     request_and_confirm_airdrop(
         &rpc_client,
         &config_offline,
         &config_offline.signers[0].pubkey(),
-        100_000,
+        100_000_000_000,
     )
     .unwrap();
-    check_balance!(100_000, &rpc_client, &config_offline.signers[0].pubkey());
+    check_balance!(
+        100_000_000_000,
+        &rpc_client,
+        &config_offline.signers[0].pubkey()
+    );
 
     // Create stake account
     config_validator.signers.push(&stake_keypair);
@@ -358,7 +379,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -468,8 +489,13 @@ fn test_nonced_stake_delegation_and_deactivation() {
         .get_minimum_balance_for_rent_exemption(NonceState::size())
         .unwrap();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
 
     // Create stake account
     let stake_keypair = Keypair::new();
@@ -481,7 +507,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -583,8 +609,13 @@ fn test_stake_authorize() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
 
     let offline_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let mut config_offline = CliConfig::recent_for_tests();
@@ -599,7 +630,7 @@ fn test_stake_authorize() {
         &rpc_client,
         &config_offline,
         &config_offline.signers[0].pubkey(),
-        100_000,
+        100_000_000_000,
     )
     .unwrap();
 
@@ -614,7 +645,7 @@ fn test_stake_authorize() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -919,14 +950,21 @@ fn test_stake_authorize_with_fee_payer() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &default_pubkey, 5_000_000).unwrap();
-    check_balance!(5_000_000, &rpc_client, &config.signers[0].pubkey());
+    request_and_confirm_airdrop(&rpc_client, &config, &default_pubkey, 5_000_000_000_000).unwrap();
+    check_balance!(5_000_000_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_payer, &payer_pubkey, 5_000_000).unwrap();
-    check_balance!(5_000_000, &rpc_client, &payer_pubkey);
+    request_and_confirm_airdrop(&rpc_client, &config_payer, &payer_pubkey, 5_000_000_000_000)
+        .unwrap();
+    check_balance!(5_000_000_000_000, &rpc_client, &payer_pubkey);
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 5_000_000).unwrap();
-    check_balance!(5_000_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config_offline,
+        &offline_pubkey,
+        5_000_000_000_000,
+    )
+    .unwrap();
+    check_balance!(5_000_000_000_000, &rpc_client, &offline_pubkey);
 
     check_ready(&rpc_client);
 
@@ -941,7 +979,7 @@ fn test_stake_authorize_with_fee_payer() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(1_000_000),
+        amount: SpendAmount::Some(1_000_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -952,7 +990,11 @@ fn test_stake_authorize_with_fee_payer() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
+    check_balance!(
+        4_000_000_000_000 - fee_two_sig,
+        &rpc_client,
+        &default_pubkey
+    );
 
     // Assign authority with separate fee payer
     config.signers = vec![&default_signer, &payer_keypair];
@@ -976,10 +1018,14 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
-    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
+    check_balance!(
+        4_000_000_000_000 - fee_two_sig,
+        &rpc_client,
+        &default_pubkey
+    );
     // `config_payer` however has paid `config`'s authority sig
     // and `config_payer`'s fee sig
-    check_balance!(5_000_000 - fee_two_sig, &rpc_client, &payer_pubkey);
+    check_balance!(5_000_000_000_000 - fee_two_sig, &rpc_client, &payer_pubkey);
 
     // Assign authority with offline fee payer
     let blockhash = rpc_client.get_latest_blockhash().unwrap();
@@ -1027,10 +1073,18 @@ fn test_stake_authorize_with_fee_payer() {
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
-    check_balance!(4_000_000 - fee_two_sig, &rpc_client, &default_pubkey);
+    check_balance!(
+        4_000_000_000_000 - fee_two_sig,
+        &rpc_client,
+        &default_pubkey
+    );
     // `config_offline` however has paid 1 sig due to being both authority
     // and fee payer
-    check_balance!(5_000_000 - fee_one_sig, &rpc_client, &offline_pubkey);
+    check_balance!(
+        5_000_000_000_000 - fee_one_sig,
+        &rpc_client,
+        &offline_pubkey
+    );
 }
 
 #[test]
@@ -1068,18 +1122,25 @@ fn test_stake_split() {
         &rpc_client,
         &config,
         &config.signers[0].pubkey(),
-        50_000_000,
+        50_000_000_000_000,
     )
     .unwrap();
-    check_balance!(50_000_000, &rpc_client, &config.signers[0].pubkey());
+    check_balance!(50_000_000_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 1_000_000).unwrap();
-    check_balance!(1_000_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config_offline,
+        &offline_pubkey,
+        1_000_000_000_000,
+    )
+    .unwrap();
+    check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let minimum_stake_balance = rpc_client
+    let stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(StakeState::size_of())
-        .unwrap();
+        .unwrap()
+        + 10_000_000_000;
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
     config.signers.push(&stake_keypair);
@@ -1090,7 +1151,7 @@ fn test_stake_split() {
         withdrawer: Some(offline_pubkey),
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(10 * minimum_stake_balance),
+        amount: SpendAmount::Some(10 * stake_balance),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1101,11 +1162,7 @@ fn test_stake_split() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
 
     // Create nonce account
     let minimum_nonce_balance = rpc_client
@@ -1148,7 +1205,7 @@ fn test_stake_split() {
         memo: None,
         split_stake_account: 1,
         seed: None,
-        lamports: 2 * minimum_stake_balance,
+        lamports: 2 * stake_balance,
         fee_payer: 0,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
@@ -1171,20 +1228,12 @@ fn test_stake_split() {
         memo: None,
         split_stake_account: 1,
         seed: None,
-        lamports: 2 * minimum_stake_balance,
+        lamports: 2 * stake_balance,
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        8 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
-    check_balance!(
-        2 * minimum_stake_balance,
-        &rpc_client,
-        &split_account.pubkey(),
-    );
+    check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey,);
+    check_balance!(2 * stake_balance, &rpc_client, &split_account.pubkey(),);
 }
 
 #[test]
@@ -1218,17 +1267,29 @@ fn test_stake_set_lockup() {
     config_offline.command = CliCommand::ClusterVersion;
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 5_000_000)
-        .unwrap();
-    check_balance!(5_000_000, &rpc_client, &config.signers[0].pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        5_000_000_000_000,
+    )
+    .unwrap();
+    check_balance!(5_000_000_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 1_000_000).unwrap();
-    check_balance!(1_000_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config_offline,
+        &offline_pubkey,
+        1_000_000_000_000,
+    )
+    .unwrap();
+    check_balance!(1_000_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create stake account, identity is authority
-    let minimum_stake_balance = rpc_client
+    let stake_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(StakeState::size_of())
-        .unwrap();
+        .unwrap()
+        + 10_000_000_000;
 
     let stake_keypair = keypair_from_seed(&[0u8; 32]).unwrap();
     let stake_account_pubkey = stake_keypair.pubkey();
@@ -1246,7 +1307,7 @@ fn test_stake_set_lockup() {
         withdrawer: Some(config.signers[0].pubkey()),
         withdrawer_signer: None,
         lockup,
-        amount: SpendAmount::Some(10 * minimum_stake_balance),
+        amount: SpendAmount::Some(10 * stake_balance),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1257,16 +1318,8 @@ fn test_stake_set_lockup() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
-    check_balance!(
-        10 * minimum_stake_balance,
-        &rpc_client,
-        &stake_account_pubkey,
-    );
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
+    check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
 
     // Online set lockup
     let lockup = LockupArgs {
@@ -1489,12 +1542,23 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     // Verify that we cannot reach the cluster
     process_command(&config_offline).unwrap_err();
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 200_000)
-        .unwrap();
-    check_balance!(200_000, &rpc_client, &config.signers[0].pubkey());
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        200_000_000_000,
+    )
+    .unwrap();
+    check_balance!(200_000_000_000, &rpc_client, &config.signers[0].pubkey());
 
-    request_and_confirm_airdrop(&rpc_client, &config_offline, &offline_pubkey, 100_000).unwrap();
-    check_balance!(100_000, &rpc_client, &offline_pubkey);
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config_offline,
+        &offline_pubkey,
+        100_000_000_000,
+    )
+    .unwrap();
+    check_balance!(100_000_000_000, &rpc_client, &offline_pubkey);
 
     // Create nonce account
     let minimum_nonce_balance = rpc_client
@@ -1533,7 +1597,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(nonce_hash),
@@ -1557,7 +1621,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
@@ -1571,7 +1635,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         from: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(50_000, &rpc_client, &stake_pubkey);
+    check_balance!(50_000_000_000, &rpc_client, &stake_pubkey);
 
     // Fetch nonce hash
     let nonce_hash = nonce_utils::get_account_with_commitment(
@@ -1590,7 +1654,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     config_offline.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
         destination_account_pubkey: recipient_pubkey,
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         withdraw_authority: 0,
         custodian: None,
         sign_only: true,
@@ -1609,7 +1673,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     config.command = CliCommand::WithdrawStake {
         stake_account_pubkey: stake_pubkey,
         destination_account_pubkey: recipient_pubkey,
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         withdraw_authority: 0,
         custodian: None,
         sign_only: false,
@@ -1625,7 +1689,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         fee_payer: 0,
     };
     process_command(&config).unwrap();
-    check_balance!(50_000, &rpc_client, &recipient_pubkey);
+    check_balance!(50_000_000_000, &rpc_client, &recipient_pubkey);
 
     // Fetch nonce hash
     let nonce_hash = nonce_utils::get_account_with_commitment(
@@ -1647,7 +1711,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         withdrawer: None,
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: true,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::None(nonce_hash),
@@ -1669,7 +1733,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         withdrawer: Some(offline_pubkey),
         withdrawer_signer: None,
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::FeeCalculator(
@@ -1685,7 +1749,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     process_command(&config).unwrap();
     let seed_address =
         Pubkey::create_with_seed(&stake_pubkey, seed, &stake::program::id()).unwrap();
-    check_balance!(50_000, &rpc_client, &seed_address);
+    check_balance!(50_000_000_000, &rpc_client, &seed_address);
 }
 
 #[test]
@@ -1706,8 +1770,13 @@ fn test_stake_checked_instructions() {
     config.json_rpc_url = test_validator.rpc_url();
     config.signers = vec![&default_signer];
 
-    request_and_confirm_airdrop(&rpc_client, &config, &config.signers[0].pubkey(), 100_000)
-        .unwrap();
+    request_and_confirm_airdrop(
+        &rpc_client,
+        &config,
+        &config.signers[0].pubkey(),
+        100_000_000_000,
+    )
+    .unwrap();
 
     // Create stake account with withdrawer
     let stake_keypair = Keypair::new();
@@ -1722,7 +1791,7 @@ fn test_stake_checked_instructions() {
         withdrawer: Some(withdrawer_pubkey),
         withdrawer_signer: Some(1),
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
@@ -1742,7 +1811,7 @@ fn test_stake_checked_instructions() {
         withdrawer: Some(withdrawer_pubkey),
         withdrawer_signer: Some(1),
         lockup: Lockup::default(),
-        amount: SpendAmount::Some(50_000),
+        amount: SpendAmount::Some(50_000_000_000),
         sign_only: false,
         dump_transaction_message: false,
         blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
