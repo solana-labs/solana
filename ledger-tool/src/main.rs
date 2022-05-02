@@ -1375,7 +1375,7 @@ fn main() {
                     .index(2)
                     .value_name("DIR")
                     .takes_value(true)
-                    .help("Output directory for the snapshot [default: --ledger directory]"),
+                    .help("Output directory for the snapshot [default: --snapshot-archive-path if present else --ledger directory]"),
             )
             .arg(
                 Arg::with_name("warp_slot")
@@ -2185,7 +2185,10 @@ fn main() {
             }
             ("create-snapshot", Some(arg_matches)) => {
                 let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
-                    .unwrap_or_else(|_| ledger_path.clone());
+                    .unwrap_or_else(|_| match &snapshot_archive_path {
+                        Some(snapshot_archive_path) => snapshot_archive_path.clone(),
+                        None => ledger_path.clone(),
+                    });
                 let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
                 let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
                 let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
