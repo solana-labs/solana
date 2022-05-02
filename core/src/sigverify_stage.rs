@@ -163,7 +163,8 @@ impl SigVerifyStage {
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, _, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let num_packets = count_valid_packets(&batches);
 
         let batches_len = batches.len();
         debug!(

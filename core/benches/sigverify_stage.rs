@@ -12,6 +12,7 @@ use {
     solana_perf::{
         packet::{to_packet_batches, PacketBatch},
         test_tx::test_tx,
+        sigverify::discard_excess_packets,
     },
     solana_sdk::{
         hash::Hash,
@@ -51,7 +52,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     info!("total packets: {}", total);
 
     bencher.iter(move || {
-        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        discard_excess_packets(&mut batches, 10_000);
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.packets.iter_mut() {
@@ -98,7 +99,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         }
     }
     bencher.iter(move || {
-        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        discard_excess_packets(&mut batches, 10_000);
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for packet in batch.packets.iter_mut() {

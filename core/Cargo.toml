@@ -94,6 +94,9 @@ name = "gen_keys"
 name = "sigverify_stage"
 
 [[bench]]
+name = "dedup_stage"
+
+[[bench]]
 name = "retransmit_stage"
 
 [package.metadata.docs.rs]
