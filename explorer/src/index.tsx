@@ -1,5 +1,4 @@
-import React from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter as Router } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 import "./scss/theme-dark.scss";
@@ -20,7 +19,8 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-ReactDOM.render(
+const root = createRoot(document.getElementById("root")!);
+root.render(
   <Router>
     <ClusterProvider>
       <StatsProvider>
@@ -41,6 +41,5 @@ ReactDOM.render(
         </SupplyProvider>
       </StatsProvider>
     </ClusterProvider>
-  </Router>,
-  document.getElementById("root")
+  </Router>
 );
