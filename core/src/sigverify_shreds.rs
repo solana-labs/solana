@@ -92,7 +92,7 @@ pub mod tests {
         let mut batches = [PacketBatch::default(), PacketBatch::default()];
 
         let keypair = Keypair::new();
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();
@@ -108,7 +108,7 @@ pub mod tests {
             0,
             0xc0de,
         );
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         batches[1].packets.resize(1, Packet::default());
         batches[1].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[1].packets[0].meta.size = shred.payload().len();
@@ -133,14 +133,14 @@ pub mod tests {
 
         let mut shred =
             Shred::new_from_data(0, 0xc0de, 0xdead, &[1, 2, 3, 4], true, true, 0, 0, 0xc0de);
-        shred.sign(&leader_keypair);
+        shred.sign_v1(&leader_keypair);
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();
 
         let mut shred =
             Shred::new_from_data(0, 0xbeef, 0xc0de, &[1, 2, 3, 4], true, true, 0, 0, 0xc0de);
         let wrong_keypair = Keypair::new();
-        shred.sign(&wrong_keypair);
+        shred.sign_v1(&wrong_keypair);
         batches[0].packets[1].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[1].meta.size = shred.payload().len();
 

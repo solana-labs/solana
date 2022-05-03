@@ -300,6 +300,16 @@ impl ErasureSetId {
 }
 
 impl Shred {
+    pub fn merkle_index(&self) -> usize {
+        match self.shred_type() {
+            ShredType::DataV1 | ShredType::DataV2 => (self.index() % 64) as usize,
+            //ShredType::CodeV1 | ShredType::CodeV2 => self.coding_header.num_data_shreds as usize + self.index() as usize,
+            ShredType::CodeV1 | ShredType::CodeV2 => {
+                self.coding_header.num_data_shreds as usize + self.coding_header.position as usize
+            }
+        }
+    }
+
     fn deserialize_obj<'de, T>(index: &mut usize, size: usize, buf: &'de [u8]) -> bincode::Result<T>
     where
         T: Deserialize<'de>,
@@ -437,6 +447,40 @@ impl Shred {
         }
     }
 
+    /*
+    pub fn serialize_merkle_into_payload(&mut self) {
+        let mut start = 0;
+        Self::serialize_obj_into(
+            &mut start,
+            SIZE_OF_COMMON_SHRED_HEADER_V1, // TODO MERKLE
+            &mut self.payload,
+            &self.common_header,
+        )
+        .expect("Failed to write common header into shred buffer");
+
+        if let Some(merkle) = self.common_header.merkle {
+            let mut start = 83;
+            Self::serialize_obj_into(
+                &mut start,
+                TURBINE_MERKLE_ROOT_BYTES,
+                &mut self.payload,
+                &merkle.root,
+            )
+            .expect("Failed to write merkle root");
+
+            for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+                Self::serialize_obj_into(
+                    &mut start,
+                    TURBINE_MERKLE_HASH_BYTES,
+                    &mut self.payload,
+                    &merkle.proof.0[i],
+                )
+                .expect("Failed to write merkle proof");
+            }
+        }
+    }
+    */
+
     #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_serialized_shred(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut start = 0;
@@ -468,11 +512,13 @@ impl Shred {
             }
             common_header.merkle = Some(merkle);
 
+            /*
             let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
             assert_eq!(&common_header.merkle.unwrap().root, &hash13s);
             for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
                 assert_eq!(&common_header.merkle.unwrap().proof.0[i], &hash13s);
             }
+            */
         }
         // TODO END MERKLE
 
@@ -848,7 +894,13 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn sign(&mut self, keypair: &Keypair) {
+    pub fn set_signature(&mut self, signature: &Signature) {
+        self.common_header.signature = *signature;
+        bincode::serialize_into(&mut self.payload[..SIZE_OF_SIGNATURE], signature)
+            .expect("Failed to generate serialized signature");
+    }
+
+    pub fn sign_v1(&mut self, keypair: &Keypair) {
         let signature = keypair.sign_message(&self.payload[SIZE_OF_SIGNATURE..]);
         bincode::serialize_into(&mut self.payload[..SIZE_OF_SIGNATURE], &signature)
             .expect("Failed to generate serialized signature");
@@ -953,6 +1005,7 @@ impl Shred {
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        /*
         let ret = match self.shred_type().version() {
             ShredCommonHeaderVersion::V1 => self
                 .signature()
@@ -969,18 +1022,77 @@ impl Shred {
                 true
             }
         };
+        */
 
         // TODO MERKLE
         {
+            /*
             let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
             assert_eq!(&self.common_header.merkle.unwrap().root, &hash13s);
             for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
                 assert_eq!(&self.common_header.merkle.unwrap().proof.0[i], &hash13s);
             }
+            */
+            if let Some(merkle) = self.common_header.merkle {
+                let r = self
+                    .signature()
+                    .verify(pubkey.as_ref(), merkle.root.as_bytes());
+                if !r {
+                    error!("failed to verify signature for slot={}", self.slot());
+                }
+                //assert!(r);
+                let r =
+                    merkle
+                        .proof
+                        .verify(&merkle.root, &self.payload_hash(), self.merkle_index());
+                if !r {
+                    error!("failed to verify merkle proof for slot={}", self.slot());
+                }
+                //assert!(r);
+            }
         }
         // TODO END MERKLE
 
-        ret
+        true // TODO MERKLE
+    }
+
+    pub fn payload_hash(&self) -> TurbineMerkleHash {
+        let x = 83 + TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE_PROOF_BYTES_FEC64; // TODO MERKLE cleanup
+        TurbineMerkleHash::hash(&[&self.payload[SIZE_OF_SIGNATURE..83], &self.payload[x..]])
+    }
+
+    pub fn merkle_payload_bufs(&self) -> Vec<&[u8]> {
+        let x =
+            SIZE_OF_SIGNATURE + 83 + TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE_PROOF_BYTES_FEC64;
+        vec![
+            &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + 83],
+            &self.payload[x..],
+        ]
+    }
+
+    pub fn set_merkle(&mut self, root: &TurbineMerkleHash, proof: &TurbineMerkleProofFec64) {
+        self.common_header.merkle = Some(MerklePayload {
+            root: *root,
+            proof: *proof,
+        });
+        let mut start = 83; // TODO MERKLE
+        Self::serialize_obj_into(
+            &mut start,
+            TURBINE_MERKLE_ROOT_BYTES,
+            &mut self.payload,
+            root,
+        )
+        .expect("Failed to write merkle root");
+
+        for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
+            Self::serialize_obj_into(
+                &mut start,
+                TURBINE_MERKLE_HASH_BYTES,
+                &mut self.payload,
+                &proof.0[i],
+            )
+            .expect("Failed to write merkle proof");
+        }
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
@@ -1478,7 +1590,7 @@ mod tests {
             45189,     // version
             28657,     // fec_set_index
         );
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         assert!(shred.verify(&keypair.pubkey()));
         assert_matches!(shred.sanitize(), Ok(()));
         let mut payload = bs58_decode(PAYLOAD);
@@ -1527,7 +1639,7 @@ mod tests {
             43,    // position
             47298, // version
         );
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         assert!(shred.verify(&keypair.pubkey()));
         assert_matches!(shred.sanitize(), Ok(()));
         let mut payload = bs58_decode(PAYLOAD);

@@ -241,6 +241,67 @@ impl TurbineMerkleTree {
         Self { tree }
     }
 
+    /*
+    #[allow(clippy::integer_arithmetic)]
+    pub fn new_from_buf_vecs_par<T>(bufs: &Vec<Vec<T>>, chunk: usize) -> Self
+    where
+        T: Sync + AsRef<[u8]>,
+    {
+        // compute subtrees of chunk width in parallel
+        let sub_trees: Vec<Vec<TurbineMerkleHash>> = bufs
+            .par_chunks(chunk)
+            .map(|slice: &[&[T]]| {
+                let mut tree = Vec::with_capacity(chunk * 2 - 1);
+                slice
+                    .iter()
+                    .for_each(|v: &[T]| tree.push(TurbineMerkleHash::hash(v)));
+                let mut base = 0;
+                let mut level_leaves = slice.len();
+                while level_leaves > 1 {
+                    for i in (0..level_leaves).step_by(2) {
+                        let hash =
+                            TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                        tree.push(hash);
+                    }
+                    base += level_leaves;
+                    level_leaves >>= 1;
+                }
+                tree
+            })
+            .collect();
+
+        let tree_size = bufs.len() * 2 - 1;
+        let mut tree = Vec::with_capacity(tree_size);
+
+        // copy subtrees
+        let mut level_leaves = chunk;
+        let mut base = 0;
+        while level_leaves >= 1 {
+            for sub_tree in sub_trees.iter() {
+                for i in 0..level_leaves {
+                    tree.push(sub_tree[base + i]);
+                }
+            }
+            base += level_leaves;
+            level_leaves >>= 1;
+        }
+
+        // compute final levels of tree
+        level_leaves = bufs.len() / chunk;
+        base = (chunk * 2 - 1) * level_leaves - level_leaves;
+        while level_leaves > 1 {
+            for i in (0..level_leaves).step_by(2) {
+                let hash = TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                tree.push(hash);
+            }
+            base += level_leaves;
+            level_leaves >>= 1;
+        }
+
+        Self { tree }
+    }
+    */
+
     #[allow(clippy::integer_arithmetic)]
     pub fn leaf_count(&self) -> usize {
         (self.tree.len() + 1) / 2
@@ -272,6 +333,25 @@ impl TurbineMerkleTree {
             level_leaves >>= 1;
         }
         TurbineMerkleProof(proof)
+    }
+
+    #[allow(clippy::integer_arithmetic)]
+    pub fn prove_fec64(&self, leaf_index: usize) -> TurbineMerkleProofFec64 {
+        let mut proof = Vec::new();
+        let mut level_leaves = self.leaf_count();
+        let mut i = leaf_index;
+        let mut base = 0;
+        while level_leaves > 1 {
+            if i & 1 == 0 {
+                proof.push(self.tree[base + i + 1]);
+            } else {
+                proof.push(self.tree[base + i - 1]);
+            }
+            base += level_leaves;
+            i >>= 1;
+            level_leaves >>= 1;
+        }
+        TurbineMerkleProofFec64(proof.try_into().expect("6 elements"))
     }
 
     #[allow(clippy::integer_arithmetic)]

@@ -479,7 +479,7 @@ pub mod tests {
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         trace!("signature {}", shred.signature());
         packet.data[0..shred.payload().len()].copy_from_slice(shred.payload());
         packet.meta.size = shred.payload().len();
@@ -524,7 +524,7 @@ pub mod tests {
             0xc0de,
         );
         let keypair = Keypair::new();
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();
@@ -579,7 +579,7 @@ pub mod tests {
             0xc0de,
         );
         let keypair = Keypair::new();
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();

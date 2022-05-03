@@ -78,7 +78,7 @@ mod test {
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        shred.sign(&keypair);
+        shred.sign_v1(&keypair);
         trace!("signature {}", shred.signature());
         let nonce = 9;
         let mut packet = repair_response_packet_from_bytes(
