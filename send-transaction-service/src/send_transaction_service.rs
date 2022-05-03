@@ -204,7 +204,7 @@ struct SendTransactionServiceStats {
     retry_queue_size: AtomicU64,
 
     /// The count of calls of sending transactions which can be in batch or single.
-    send_count: AtomicU64,
+    send_attempt_count: AtomicU64,
 
     /// Time spent on transactions in micro seconds
     send_us: AtomicU64,
@@ -269,7 +269,7 @@ impl SendTransactionServiceStatsReport {
                     i64
                 ),
                 (
-                    "retey-queue-size",
+                    "retry-queue-size",
                     self.stats.retry_queue_size.swap(0, Ordering::Relaxed),
                     i64
                 ),
@@ -279,8 +279,8 @@ impl SendTransactionServiceStatsReport {
                     i64
                 ),
                 (
-                    "send-count",
-                    self.stats.send_count.swap(0, Ordering::Relaxed),
+                    "send-attempt-count",
+                    self.stats.send_attempt_count.swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
@@ -725,7 +725,7 @@ impl SendTransactionService {
 
         measure.stop();
         stats.send_us.fetch_add(measure.as_us(), Ordering::Relaxed);
-        stats.send_count.fetch_add(1, Ordering::Relaxed);
+        stats.send_attempt_count.fetch_add(1, Ordering::Relaxed);
     }
 
     fn get_tpu_addresses<'a, T: TpuInfo>(
