@@ -2695,11 +2695,7 @@ impl ReplayStage {
                 failure_reasons.push(HeaviestForkFailures::NoPropagatedConfirmation(bank.slot()));
             }
 
-            if !is_locked_out
-                && vote_threshold
-                && propagation_confirmed
-                && switch_fork_decision.can_vote()
-            {
+            if failure_reasons.is_empty() && switch_fork_decision.can_vote() {
                 info!("voting: {} {}", bank.slot(), fork_weight);
                 SelectVoteAndResetForkResult {
                     vote_bank: Some((bank.clone(), switch_fork_decision)),
