@@ -79,7 +79,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
-        compute_budget::ComputeBudget,
+        compute_budget::{self, ComputeBudget},
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
             TransactionAccountRefCells, TransactionExecutor,
@@ -4134,9 +4134,14 @@ impl Bank {
                     );
 
                     let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
+                    let compute_budget_max_units = if tx_wide_compute_cap {
+                        compute_budget::MAX_UNITS
+                    } else {
+                        compute_budget::DEFAULT_UNITS
+                    };
                     let mut compute_budget = self
                         .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(tx_wide_compute_cap));
+                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
                     if tx_wide_compute_cap {
                         let mut compute_budget_process_transaction_time =
                             Measure::start("compute_budget_process_transaction_time");

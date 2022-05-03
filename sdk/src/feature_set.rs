@@ -311,33 +311,10 @@ pub mod drop_redundant_turbine_path {
     solana_sdk::declare_id!("4Di3y24QFLt5QEUPZtbnjyfQKfm6ZMTfa6Dw1psfoMKU");
 }
 
-<<<<<<< HEAD
-=======
-pub mod executables_incur_cpi_data_cost {
-    solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
-}
-
-pub mod fix_recent_blockhashes {
-    solana_sdk::declare_id!("6iyggb5MTcsvdcugX7bEKbHV8c6jdLbpHwkncrgLMhfo");
-}
-
-pub mod update_rewards_from_cached_accounts {
-    solana_sdk::declare_id!("28s7i3htzhahXQKqmS2ExzbEoUypg9krwvtK2M9UWXh9");
-}
-
-pub mod spl_token_v3_4_0 {
-    solana_sdk::declare_id!("Ftok4njE8b7tDffYkC5bAbCaQv5sL6jispYrprzatUwN");
-}
-
-pub mod spl_associated_token_account_v1_1_0 {
-    solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
-}
-
 pub mod default_units_per_instruction {
     solana_sdk::declare_id!("J2QdYx8crLbTVK8nur1jeLsmc3krDbfjoxoea2V1Uy5Q");
 }
 
->>>>>>> e070c5ca3 (default compute units per instruction (#24899))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -410,15 +387,7 @@ lazy_static! {
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
-<<<<<<< HEAD
-=======
-        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
-        (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
-        (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
-        (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
-        (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
->>>>>>> e070c5ca3 (default compute units per instruction (#24899))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
