@@ -256,10 +256,6 @@ pub enum InstructionError {
     /// Active vote account close
     #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
     ActiveVoteAccountClose,
-
-    // Insufficient stake delegation
-    #[error("Stake amount is below the minimum delegation requirements")]
-    InsufficientStakeDelegation,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }

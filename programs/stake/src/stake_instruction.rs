@@ -3248,7 +3248,7 @@ mod tests {
             },
         ];
 
-        // should pass, withdrawing account down to minimum balance
+        // should pass, withdrawing initialized account down to minimum balance
         process_instruction(
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts.clone(),
@@ -3765,10 +3765,7 @@ mod tests {
         ];
         for (stake_delegation, expected_result) in [
             (minimum_delegation, Ok(())),
-            (
-                minimum_delegation - 1,
-                Err(InstructionError::InsufficientStakeDelegation),
-            ),
+            (minimum_delegation - 1, Err(StakeError::InsufficientStake)),
         ] {
             for stake_state in &[
                 StakeState::Initialized(meta),
@@ -3800,7 +3797,7 @@ mod tests {
                         ),
                     ],
                     instruction_accounts.clone(),
-                    expected_result.clone(),
+                    expected_result.clone().map_err(|e| e.into()),
                 );
             }
         }

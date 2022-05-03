@@ -706,7 +706,6 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     49 => InstructionError::IllegalOwner,
                     50 => InstructionError::MaxAccountsDataSizeExceeded,
                     51 => InstructionError::ActiveVoteAccountClose,
-                    52 => InstructionError::InsufficientStakeDelegation,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -1003,9 +1002,6 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::ActiveVoteAccountClose => {
                                 tx_by_addr::InstructionErrorType::ActiveVoteAccountClose
-                            }
-                            InstructionError::InsufficientStakeDelegation => {
-                                tx_by_addr::InstructionErrorType::InsufficientStakeDelegation
                             }
                         } as i32,
                         custom: match instruction_error {
