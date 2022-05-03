@@ -416,9 +416,7 @@ impl Shredder {
 mod tests {
     use {
         super::*,
-        crate::shred::{
-            max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred,
-        },
+        crate::shred::{max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred},
         bincode::serialized_size,
         matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
