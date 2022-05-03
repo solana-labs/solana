@@ -1,0 +1,11 @@
+diff --git a/node_modules/buffer/package.json b/node_modules/buffer/package.json
+index 534d53d..f3d54c6 100644
+--- a/node_modules/buffer/package.json
++++ b/node_modules/buffer/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "buffer",
++  "sideEffects": false,
+   "description": "Node.js Buffer API, for the browser",
+   "version": "6.0.1",
+   "author": {
