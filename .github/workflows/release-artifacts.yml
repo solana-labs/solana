@@ -1,0 +1,138 @@
+name: release-artifacts
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+
+jobs:
+  osx-build:
+    runs-on: macos-12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      # copy the newest version env.sh before switching version.
+      - name: Copy Env Script
+        shell: bash
+        run: |
+          cp -r ci/env.sh /tmp/env.sh
+
+      - name: Switch Version
+        if: ${{ inputs.tag }}
+        run: |
+          git checkout ${{ inputs.tag }}
+
+      - name: Build
+        shell: bash
+        run: |
+          brew install coreutils
+          PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+          brew install gnu-tar
+          PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+          source /tmp/env.sh
+          ci/publish-tarball.sh
+          mkdir -p "github-action-s3-upload/${{ inputs.tag }}"
+          cp -v "solana-release-x86_64-apple-darwin.tar.bz2" "github-action-s3-upload/${{ inputs.tag }}/"
+          cp -v "solana-release-x86_64-apple-darwin.yml" "github-action-s3-upload/${{ inputs.tag }}/"
+          cp -v "solana-install-init-x86_64-apple-darwin"* "github-action-s3-upload/${{ inputs.tag }}/"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: osx-artifact
+          path: github-action-s3-upload/
+
+  osx-s3-upload:
+    needs: [osx-build]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v3
+        with:
+          name: osx-artifact
+          path: ./github-action-s3-upload
+
+      - name: Upload
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks --delete
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: "us-west-1"
+          SOURCE_DIR: "github-action-s3-upload"
+
+  windows-build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      # copy the newest version env.sh before switching version.
+      - name: Copy Env Script
+        shell: bash
+        run: |
+          cp -r ci/env.sh /tmp/env.sh
+
+      - name: Switch Version
+        if: ${{ inputs.tag }}
+        run: |
+          git checkout ${{ inputs.tag }}
+
+      - name: Build
+        shell: bash
+        run: |
+          choco install openssl
+          export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
+          choco install protoc
+          source /tmp/env.sh
+          ci/publish-tarball.sh
+          mkdir -p "github-action-s3-upload/${{ inputs.tag }}"
+          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.tag }}/"
+          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.tag }}/"
+          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.tag }}/"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-artifact
+          path: github-action-s3-upload/
+
+  windows-s3-upload:
+    needs: [windows-build]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-artifact
+          path: ./github-action-s3-upload
+
+      - name: Upload
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --acl public-read --follow-symlinks --delete
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: "us-west-1"
+          SOURCE_DIR: "github-action-s3-upload"
