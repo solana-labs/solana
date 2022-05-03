@@ -13,6 +13,7 @@ pub mod blockstore;
 pub mod ancestor_iterator;
 pub mod blockstore_db;
 pub mod blockstore_meta;
+#[macro_use]
 pub mod blockstore_metrics;
 pub mod blockstore_processor;
 pub mod builtins;
