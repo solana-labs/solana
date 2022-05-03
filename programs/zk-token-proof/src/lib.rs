@@ -50,13 +50,8 @@ pub fn process_instruction(
             verify::<WithdrawData>(input, invoke_context)
         }
         ProofInstruction::VerifyWithdrawWithheldTokens => {
-<<<<<<< HEAD
-            ic_msg!(invoke_context, "VerifyWithdraw");
-            verify::<WithdrawData>(input, invoke_context)
-=======
             ic_msg!(invoke_context, "VerifyWithdrawWithheldTokens");
             verify::<WithdrawWithheldTokensData>(invoke_context)
->>>>>>> 342a94620 (zk-token-sdk: verify WithdrawWithheldTokens proof under the correct context (#24923))
         }
         ProofInstruction::VerifyTransfer => {
             ic_msg!(invoke_context, "VerifyTransfer");
