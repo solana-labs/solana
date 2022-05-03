@@ -35,6 +35,18 @@ function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
+let isSchemaRegistered = false;
+function registerSchema() {
+  if (isSchemaRegistered) {
+    return;
+  }
+  isSchemaRegistered = true;
+  SOLANA_SCHEMA.set(PublicKey, {
+    kind: 'struct',
+    fields: [['_bn', 'u256']],
+  });
+}
+
 let _memoizedDefault: PublicKey;
 
 /**
@@ -49,6 +61,7 @@ export class PublicKey extends Struct {
    * @param value ed25519 public key as buffer or base-58 encoded string
    */
   constructor(value: PublicKeyInitData) {
+    registerSchema();
     super({});
     if (isPublicKeyData(value)) {
       this._bn = value._bn;
@@ -234,11 +247,6 @@ export class PublicKey extends Struct {
     return is_on_curve(pubkey.toBytes()) == 1;
   }
 }
-
-SOLANA_SCHEMA.set(PublicKey, {
-  kind: 'struct',
-  fields: [['_bn', 'u256']],
-});
 
 // @ts-ignore
 let naclLowLevel = nacl.lowlevel;
