@@ -22,7 +22,6 @@ use {
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
-    memmap2::Mmap,
     rayon::prelude::*,
     regex::Regex,
     solana_measure::measure::Measure,
@@ -35,7 +34,6 @@ use {
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
         process::ExitStatus,
-        slice,
         str::FromStr,
         sync::Arc,
     },
@@ -1460,6 +1458,7 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     Ok(unpacked_append_vec_map)
 }
 
+#[cfg(not(target_os = "linux"))]
 fn untar_snapshot_in<P: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: &Path,
@@ -1467,22 +1466,65 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
-    let file = File::open(&snapshot_tar).unwrap();
+    let open_file = || File::open(&snapshot_tar).unwrap();
+    let account_paths_map = match archive_format {
+        ArchiveFormat::TarBzip2 => unpack_snapshot_local(
+            || BzDecoder::new(BufReader::new(open_file())),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarGzip => unpack_snapshot_local(
+            || GzDecoder::new(BufReader::new(open_file())),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarZstd => unpack_snapshot_local(
+            || zstd::stream::read::Decoder::new(BufReader::new(open_file())).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::Tar => unpack_snapshot_local(
+            || BufReader::new(open_file()),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+    };
+    Ok(account_paths_map)
+}
 
-    // Map the file into immutable memory for better I/O performance
-    let mmap = unsafe { Mmap::map(&file) };
-    let mmap = mmap.unwrap_or_else(|e| {
+#[cfg(target_os = "linux")]
+fn untar_snapshot_in<P: AsRef<Path>>(
+    snapshot_tar: P,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
+    use {
+        mmarinus::{perms, Map, Private},
+        std::slice,
+    };
+
+    let mmap = Map::load(&snapshot_tar, Private, perms::Read).unwrap_or_else(|e| {
         error!(
             "Failed to map the snapshot file: {} {}.\n
-                    Please increase the virtual memory on the system.",
+                        Please increase the virtual memory on the system.",
             snapshot_tar.as_ref().display(),
             e,
         );
         std::process::exit(1);
     });
 
-    // The following code is safe because the lifetime of mmap last till the end of the function
-    // while the usage of mmap, BufReader's lifetime only last within fn unpack_snapshot_local.
+    // `unpack_snapshot_local` takes a BufReader creator, which requires a
+    // static lifetime because of its background reader thread. Therefore, we
+    // can't pass the &mmap. Instead, we construct and pass a a slice
+    // explicitly. However, the following code is guaranteed to be safe because
+    // the lifetime of mmap last till the end of the function while the usage of
+    // mmap, BufReader's lifetime only last within fn unpack_snapshot_local.
     let len = &mmap[..].len();
     let ptr = &mmap[0] as *const u8;
     let slice = unsafe { slice::from_raw_parts(ptr, *len) };
