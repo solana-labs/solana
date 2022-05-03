@@ -5388,7 +5388,6 @@ pub(crate) fn parse_keyed_accounts(
     Ok(pubkey_accounts)
 }
 
-
 #[doc(hidden)]
 pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
     let mut mocks = std::collections::HashMap::new();
@@ -5408,7 +5407,7 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
             UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None)
         },
     })
-        .unwrap();
+    .unwrap();
 
     mocks.insert(get_account_request, get_account_response);
 
