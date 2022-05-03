@@ -1,0 +1,11 @@
+diff --git a/node_modules/bs58/package.json b/node_modules/bs58/package.json
+index da0ca3c..25924da 100644
+--- a/node_modules/bs58/package.json
++++ b/node_modules/bs58/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "bs58",
++  "sideEffects": false,
+   "version": "4.0.1",
+   "description": "Base 58 encoding / decoding",
+   "keywords": [
