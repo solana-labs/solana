@@ -1714,7 +1714,7 @@ pub fn process_withdraw_stake(
             config.commitment,
         )?;
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
-        log_instruction_custom_error::<SystemError>(result, config)
+        log_instruction_custom_error::<StakeError>(result, config)
     }
 }
 
