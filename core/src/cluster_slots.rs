@@ -77,18 +77,14 @@ impl ClusterSlots {
                     .zip(std::iter::repeat((epoch_slots.from, stake)))
             })
             .into_group_map();
-        let slot_nodes_stakes: Vec<_> = {
+        {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
             slot_nodes_stakes
                 .into_iter()
-                .map(|(slot, nodes_stakes)| {
+                .for_each(|(slot, nodes_stakes)| {
                     let slot_nodes = cluster_slots.entry(slot).or_default().clone();
-                    (slot_nodes, nodes_stakes)
-                })
-                .collect()
-        };
-        for (slot_nodes, nodes_stakes) in slot_nodes_stakes {
-            slot_nodes.write().unwrap().extend(nodes_stakes);
+                    slot_nodes.write().unwrap().extend(nodes_stakes);
+                });
         }
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
