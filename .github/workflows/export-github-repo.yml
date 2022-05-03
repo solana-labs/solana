@@ -2,7 +2,10 @@ name: export-github-repo
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+    paths:
+      - "web3.js/**"
 
 env:
   GITHUB_TOKEN: ${{secrets.PAT}}
