@@ -35,4 +35,4 @@ export class Enum extends Struct {
   }
 }
 
-export const SOLANA_SCHEMA: Map<Function, any> = new Map();
+export const SOLANA_SCHEMA: Map<Function, any> = /*#__PURE__*/ new Map();
