@@ -736,8 +736,7 @@ mod test {
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
         let (data_shreds, _) = shredder.entries_to_shreds(
-            keypair,
-            entries, true, // is_last_in_slot
+            keypair, entries, true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
