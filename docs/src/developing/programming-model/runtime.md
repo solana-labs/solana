@@ -113,10 +113,11 @@ Budget](#compute-budget).
 
 With a transaction-wide compute budget the `max_units` cap is applied to the
 entire transaction rather than to each instruction within the transaction. The
-default number of maximum units will calculated per instruction which means the
-sum of the compute units used by each instruction in the transaction must not
-exceed that value. The default number of maximum units allowed matches existing
-values to avoid breaking existing client behavior.
+transaction-wide default maximum number of units will be calculated as the product
+of the instruction count and the existing per-instruction maximum units. This means
+that the sum of the compute units used by each instruction in the transaction must
+not exceed that value. This default maximum value attempts to retain existing behavior
+to avoid breaking client logic.
 
 ### Reduce transaction fees
 
