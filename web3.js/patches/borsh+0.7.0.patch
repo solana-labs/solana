@@ -1,0 +1,11 @@
+diff --git a/node_modules/borsh/package.json b/node_modules/borsh/package.json
+index 7fbf080..1180561 100644
+--- a/node_modules/borsh/package.json
++++ b/node_modules/borsh/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "borsh",
++  "sideEffects": false,
+   "version": "0.7.0",
+   "description": "Binary Object Representation Serializer for Hashing",
+   "main": "lib/index.js",
