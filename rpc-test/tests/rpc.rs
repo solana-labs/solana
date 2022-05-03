@@ -164,6 +164,7 @@ fn test_rpc_invalid_requests() {
 }
 
 #[test]
+#[ignore] // TODO MERKLE
 fn test_rpc_slot_updates() {
     solana_logger::setup();
 

@@ -1,0 +1,15 @@
+name: release-artifacts-manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        required: true
+        description: tag
+
+jobs:
+  release-artifacts:
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      tag: ${{ github.event.inputs.tag }}

@@ -107,8 +107,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            self, default_units_per_instruction, disable_fee_calculator, nonce_must_be_writable,
+            requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1350,6 +1350,14 @@ struct LoadVoteAndStakeAccountsResult {
 #[derive(Debug, Default)]
 pub struct NewBankOptions {
     pub vote_only_bank: bool,
+}
+
+#[derive(Debug)]
+struct PrevEpochInflationRewards {
+    validator_rewards: u64,
+    prev_epoch_duration_in_years: f64,
+    validator_rate: f64,
+    foundation_rate: f64,
 }
 
 impl Bank {
@@ -2605,17 +2613,12 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    // update rewards based on the previous epoch
-    fn update_rewards_with_thread_pool(
-        &mut self,
+    fn calculate_previous_epoch_inflation_rewards(
+        &self,
+        prev_epoch_capitalization: u64,
         prev_epoch: Epoch,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        thread_pool: &ThreadPool,
-        metrics: &mut RewardsMetrics,
-    ) {
+    ) -> PrevEpochInflationRewards {
         let slot_in_year = self.slot_in_year_for_inflation();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
-
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
             (
@@ -2624,16 +2627,41 @@ impl Bank {
             )
         };
 
+        let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
+        let validator_rewards = (validator_rate
+            * prev_epoch_capitalization as f64
+            * prev_epoch_duration_in_years) as u64;
+
+        PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        }
+    }
+
+    // update rewards based on the previous epoch
+    fn update_rewards_with_thread_pool(
+        &mut self,
+        prev_epoch: Epoch,
+        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
+        thread_pool: &ThreadPool,
+        metrics: &mut RewardsMetrics,
+    ) {
         let capitalization = self.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        let PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
+        self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2642,19 +2670,6 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
-
-        if !self
-            .feature_set
-            .is_active(&feature_set::deprecate_rewards_sysvar::id())
-        {
-            // this sysvar can be retired once `pico_inflation` is enabled on all clusters
-            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                create_account(
-                    &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
-        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -2701,7 +2716,7 @@ impl Bank {
             ("epoch", prev_epoch, i64),
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
-            ("epoch_duration_in_years", epoch_duration_in_years, f64),
+            ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
@@ -4356,6 +4371,7 @@ impl Bank {
                         let process_transaction_result = compute_budget.process_message(
                             tx.message(),
                             feature_set.is_active(&requestable_heap_size::id()),
+                            feature_set.is_active(&default_units_per_instruction::id()),
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -4582,7 +4598,7 @@ impl Bank {
 
             let mut compute_budget = ComputeBudget::default();
             let additional_fee = compute_budget
-                .process_message(message, false)
+                .process_message(message, false, false)
                 .unwrap_or_default();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
@@ -6241,6 +6257,7 @@ impl Bank {
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
+            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -6309,6 +6326,7 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
+            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -6362,6 +6380,7 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
+                self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
             );
@@ -6387,6 +6406,7 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
+                        self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
                     );
@@ -7189,7 +7209,6 @@ pub(crate) mod tests {
             },
             system_instruction::{self, SystemError},
             system_program,
-            sysvar::rewards::Rewards,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
@@ -7501,11 +7520,6 @@ pub(crate) mod tests {
     fn bank1_sysvar_delta() -> u64 {
         const SLOT_HASHES_SYSVAR_MIN_BALANCE: u64 = 143_487_360;
         SLOT_HASHES_SYSVAR_MIN_BALANCE
-    }
-
-    fn new_epoch_sysvar_delta() -> u64 {
-        const REWARDS_SYSVAR_MIN_BALANCE: u64 = 1_002_240;
-        REWARDS_SYSVAR_MIN_BALANCE
     }
 
     #[test]
@@ -9322,32 +9336,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
-            .vote_with_stake_delegations_map
-            .into_iter()
-            .map(
-                |(
-                    _vote_pubkey,
-                    VoteWithStakeDelegations {
-                        vote_state,
-                        delegations,
-                        ..
-                    },
-                )| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
-                                stake_account.stake_state(),
-                                &vote_state,
-                                None, // stake_history
-                            )
-                            .unwrap_or_default()
-                        })
-                        .sum::<u128>()
-                },
-            )
-            .sum();
+        load_vote_and_stake_accounts(&bank0);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -9358,29 +9347,25 @@ pub(crate) mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
-        // verify the inflation is represented in validator_points *
-        let paid_rewards = bank1.capitalization()
-            - bank0.capitalization()
-            - bank1_sysvar_delta()
-            - new_epoch_sysvar_delta();
+        // verify the inflation is represented in validator_points
+        let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        let rewards = bank1
-            .get_account(&sysvar::rewards::id())
-            .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();
+        // this assumes that no new builtins or precompiles were activated in bank1
+        let PrevEpochInflationRewards {
+            validator_rewards, ..
+        } = bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - rewards.validator_point_value * validator_points as f64)
+                - validator_rewards as f64)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
-        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
+        assert!((validator_rewards as f64 - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
@@ -9389,7 +9374,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
+                    lamports: validator_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
@@ -13501,19 +13486,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
+                    "AxphC8xDj9gmFosor5gyiovNvPVMydJCFRUTxn2wFiQf"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
+                    "4vZCSbBuL8xjE43rCy9Cm3dCh1BMj45heMiMb6n6qgzA"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
+                    "46LUpeBdJuisnfwgYisvh4x7jnxzBaLfHF614GtcTs59"
                 );
                 break;
             }
