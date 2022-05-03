@@ -16,6 +16,7 @@ dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 lazy_static = "1.4.0"
 log = "0.4.17"
+num_cpus = "1.13.1"
 rand = "0.7.0"
 rayon = "1.5.2"
 serde = "1.0.137"
@@ -23,7 +24,6 @@ solana-measure = { path = "../measure", version = "=1.11.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "=1.11.0" }
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
 solana-perf = { path = "../perf", version = "=1.11.0" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 
 [dev-dependencies]
