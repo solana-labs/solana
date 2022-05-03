@@ -82,16 +82,16 @@ impl PacketBatch {
 }
 
 pub fn to_packet_batches<T: Serialize>(xs: &[T], chunks: usize) -> Vec<PacketBatch> {
-    let mut out = vec![];
-    for x in xs.chunks(chunks) {
-        let mut batch = PacketBatch::with_capacity(x.len());
-        batch.packets.resize(x.len(), Packet::default());
-        for (i, packet) in x.iter().zip(batch.packets.iter_mut()) {
-            Packet::populate_packet(packet, None, i).expect("serialize request");
-        }
-        out.push(batch);
-    }
-    out
+    xs.chunks(chunks)
+        .map(|x| {
+            let mut batch = PacketBatch::with_capacity(x.len());
+            batch.packets.resize(x.len(), Packet::default());
+            for (i, packet) in x.iter().zip(batch.packets.iter_mut()) {
+                Packet::populate_packet(packet, None, i).expect("serialize request");
+            }
+            batch
+        })
+        .collect()
 }
 
 #[cfg(test)]
