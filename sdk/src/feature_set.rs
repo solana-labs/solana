@@ -375,6 +375,10 @@ pub mod spl_associated_token_account_v1_1_0 {
     solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
 }
 
+pub mod default_units_per_instruction {
+    solana_sdk::declare_id!("J2QdYx8crLbTVK8nur1jeLsmc3krDbfjoxoea2V1Uy5Q");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -463,6 +467,7 @@ lazy_static! {
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
+        (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
