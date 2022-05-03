@@ -18,6 +18,9 @@ use {
         hash::Hash,
         signature::{Keypair, Signer},
         system_transaction,
+        system_instruction,
+        message::Message,
+        transaction::Transaction,
         timing::duration_as_ms,
     },
     std::time::{Duration, Instant},
@@ -178,5 +181,83 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         }
         trace!("received: {}", received);
     });
+    stage.join().unwrap();
+}
+
+
+fn gen_dup_and_valid(offset: usize, num_packets: usize, num_batches: usize, gen_valid: usize, gen_dups: usize) -> Vec<PacketBatch> {
+    let chunk_size = num_packets / num_batches;
+    let from_keypair = Keypair::new();
+    let from_pubkey = from_keypair.pubkey();
+    let to_keypair = Keypair::new();
+    let to_pubkey = to_keypair.pubkey();
+
+    // dedup scales with packet size, use a reasonably sized tx
+    // this is 1048 bytes, instead of 215 bytes that a single transfer ix would be
+    let dup_tx = {
+        let instructions = (0..50).map(|i| system_instruction::transfer(&from_pubkey, &to_pubkey, i)).collect::<Vec<_>>();
+        let message = Message::new(&instructions, Some(&from_pubkey));
+        Transaction::new(&[&from_keypair], message, Hash::default())
+    };
+
+    let txs: Vec<_> = (offset..offset + num_packets)
+        .map(|i| {
+            let tx_type = i % (gen_valid + gen_dups);
+            if tx_type < gen_valid {
+                let amount = i as u64;
+                system_transaction::transfer(
+                    &from_keypair,
+                    &to_pubkey,
+                    amount,
+                    Hash::default(),
+                )
+            } else {
+                dup_tx.clone()
+            }
+        })
+        .collect();
+    to_packet_batches(&txs, chunk_size)
+}
+
+#[bench]
+fn bench_sigverify_stage2(bencher: &mut Bencher) {
+    use {
+        std::time::{Instant, Duration},
+        std::thread,
+    };
+
+    solana_logger::setup();
+    trace!("start");
+    let (packet_s, packet_r) = unbounded();
+    let (verified_s, verified_r) = unbounded();
+    let verifier = TransactionSigVerifier::default();
+    let stage = SigVerifyStage::new(packet_r, verified_s, verifier, "bench");
+
+    warn!("gen");
+    let packets_per_sec = 1_500_000;
+    let batches_per_sec = 1000;
+    let calls_per_sec: usize = 100;
+    let packets_per_call = packets_per_sec / calls_per_sec;
+    let batches_per_call = batches_per_sec / calls_per_sec;
+    let num_secs = 4;
+    let chunked_tx = (0..num_secs * calls_per_sec).map(|i| gen_dup_and_valid(i * packets_per_call, packets_per_call, batches_per_call, 1, 9)).collect::<Vec<Vec<_>>>();
+    warn!("gen done {} {}", chunked_tx[0][0].packets[0].meta.size, chunked_tx[0][0].packets[1].meta.size);
+
+    // start a thread to feed batches every 10ms
+    thread::spawn(move || {
+        let wait_ms = Duration::from_millis(1000 / calls_per_sec as u64);
+        let mut last_send = Instant::now();
+        for batches in chunked_tx {
+            last_send = Instant::now();
+            packet_s.send(batches);
+            let elapsed = last_send.elapsed();
+            if elapsed < wait_ms {
+                thread::sleep(wait_ms - elapsed);
+            }
+        }
+    });
+
+    // observe the output
+
     stage.join().unwrap();
 }
