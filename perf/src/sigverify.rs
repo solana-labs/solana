@@ -1443,7 +1443,7 @@ mod tests {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
             discard += filter.dedup_packets(&mut batches) as usize;
-            println!("{} {}", i, discard);
+            debug!("{} {}", i, discard);
             if filter.saturated.load(Ordering::Relaxed) {
                 break;
             }
@@ -1459,7 +1459,7 @@ mod tests {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
             discard += filter.dedup_packets(&mut batches) as usize;
-            println!("false positive rate: {}/{}", discard, i * 1024);
+            debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely
         assert!(discard < 2);
@@ -1653,7 +1653,7 @@ mod tests {
 
         let test_cases = set_discards.iter().zip(&expect_valids).enumerate();
         for (i, (set_discard, (expect_batch_count, expect_valid_packets))) in test_cases {
-            println!("test_shrink case: {}", i);
+            debug!("test_shrink case: {}", i);
             let mut batches = to_packet_batches(
                 &(0..PACKET_COUNT).map(|_| test_tx()).collect::<Vec<_>>(),
                 PACKETS_PER_BATCH,
@@ -1667,17 +1667,17 @@ mod tests {
                     .for_each(|(j, p)| p.meta.set_discard(set_discard(i, j)))
             });
             assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
-            println!("show valid packets for case {}", i);
+            debug!("show valid packets for case {}", i);
             batches.iter_mut().enumerate().for_each(|(i, b)| {
                 b.packets.iter_mut().enumerate().for_each(|(j, p)| {
                     if !p.meta.discard() {
-                        println!("{} {}", i, j)
+                        debug!("{} {}", i, j)
                     }
                 })
             });
-            println!("done show valid packets for case {}", i);
+            debug!("done show valid packets for case {}", i);
             let shrunken_batch_count = shrink_batches(&mut batches);
-            println!("shrunk batch test {} count: {}", i, shrunken_batch_count);
+            debug!("shrunk batch test {} count: {}", i, shrunken_batch_count);
             assert_eq!(shrunken_batch_count, *expect_batch_count);
             batches.truncate(shrunken_batch_count);
             assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
