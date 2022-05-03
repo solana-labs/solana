@@ -113,15 +113,15 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
-    let packet_offsets = get_packet_offsets(packet, 0, reject_non_vote);
-    let mut sig_start = packet_offsets.sig_start as usize;
-    let mut pubkey_start = packet_offsets.pubkey_start as usize;
-    let msg_start = packet_offsets.msg_start as usize;
-
     // If this packet was already marked as discard, drop it
     if packet.meta.discard() {
         return;
     }
+
+    let packet_offsets = get_packet_offsets(packet, 0, reject_non_vote);
+    let mut sig_start = packet_offsets.sig_start as usize;
+    let mut pubkey_start = packet_offsets.pubkey_start as usize;
+    let msg_start = packet_offsets.msg_start as usize;
 
     if packet_offsets.sig_len == 0 {
         packet.meta.set_discard(true);
