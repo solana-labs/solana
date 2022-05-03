@@ -7,7 +7,8 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 
-const MAX_UNITS: u32 = 1_400_000;
+pub const DEFAULT_UNITS: u32 = 200_000;
+pub const MAX_UNITS: u32 = 1_400_000;
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -65,19 +66,14 @@ pub struct ComputeBudget {
 
 impl Default for ComputeBudget {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(MAX_UNITS)
     }
 }
 
 impl ComputeBudget {
-    pub fn new(use_max_units_default: bool) -> Self {
-        let max_units = if use_max_units_default {
-            MAX_UNITS
-        } else {
-            200_000
-        } as u64;
+    pub fn new(max_units: u32) -> Self {
         ComputeBudget {
-            max_units,
+            max_units: max_units as u64,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -103,35 +99,54 @@ impl ComputeBudget {
         &mut self,
         message: &SanitizedMessage,
         requestable_heap_size: bool,
+        default_units_per_instruction: bool,
     ) -> Result<u64, TransactionError> {
+        let mut num_instructions = message.instructions().len();
         let mut requested_additional_fee = 0;
+        let mut requested_units = None;
+
         let error = TransactionError::InstructionError(0, InstructionError::InvalidInstructionData);
-        // Compute budget instruction must be in the 1st 3 instructions (avoid
-        // nonce marker), otherwise ignored
-        for (program_id, instruction) in message.program_instructions_iter().take(3) {
+        for (i, (program_id, instruction)) in message.program_instructions_iter().enumerate() {
             if compute_budget::check_id(program_id) {
-                match try_from_slice_unchecked(&instruction.data) {
-                    Ok(ComputeBudgetInstruction::RequestUnits {
-                        units,
-                        additional_fee,
-                    }) => {
-                        self.max_units = units.min(MAX_UNITS) as u64;
-                        requested_additional_fee = additional_fee as u64;
-                    }
-                    Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                        if !requestable_heap_size
-                            || bytes > MAX_HEAP_FRAME_BYTES
-                            || bytes < MIN_HEAP_FRAME_BYTES as u32
-                            || bytes % 1024 != 0
-                        {
-                            return Err(error);
+                // don't include request instructions in default max calc
+                num_instructions = num_instructions.saturating_sub(1);
+
+                // Compute budget instruction must be in the 1st 3 instructions (avoid
+                // nonce marker), otherwise ignored
+                if i < 3 {
+                    match try_from_slice_unchecked(&instruction.data) {
+                        Ok(ComputeBudgetInstruction::RequestUnits {
+                            units,
+                            additional_fee,
+                        }) => {
+                            requested_units = Some(units as u64);
+                            requested_additional_fee = additional_fee as u64;
                         }
-                        self.heap_size = Some(bytes as usize);
+                        Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                            if !requestable_heap_size
+                                || bytes > MAX_HEAP_FRAME_BYTES
+                                || bytes < MIN_HEAP_FRAME_BYTES as u32
+                                || bytes % 1024 != 0
+                            {
+                                return Err(error);
+                            }
+                            self.heap_size = Some(bytes as usize);
+                        }
+                        _ => return Err(error),
                     }
-                    _ => return Err(error),
                 }
             }
         }
+
+        self.max_units = if default_units_per_instruction {
+            requested_units
+                .or_else(|| Some(num_instructions.saturating_mul(DEFAULT_UNITS as usize) as u64))
+        } else {
+            requested_units
+        }
+        .unwrap_or(MAX_UNITS as u64)
+        .min(MAX_UNITS as u64);
+
         Ok(requested_additional_fee)
     }
 }
@@ -160,7 +175,7 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget.process_message(&tx.message(), true);
+            let result = compute_budget.process_message(&tx.message(), true, true);
             assert_eq!($expected_error, result);
             assert_eq!(compute_budget, $expected_budget);
         };
@@ -169,7 +184,14 @@ mod tests {
     #[test]
     fn test_process_mesage() {
         // Units
-        test!(&[], Ok(0), ComputeBudget::default());
+        test!(
+            &[],
+            Ok(0),
+            ComputeBudget {
+                max_units: 0,
+                ..ComputeBudget::default()
+            }
+        );
         test!(
             &[
                 ComputeBudgetInstruction::request_units(1, 0),
@@ -187,7 +209,10 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
             ],
             Ok(0),
-            ComputeBudget::default()
+            ComputeBudget {
+                max_units: MAX_UNITS as u64,
+                ..ComputeBudget::default()
+            }
         );
         test!(
             &[
@@ -205,14 +230,34 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::request_units(1, 0),
+                ComputeBudgetInstruction::request_units(1, 0), // ignored
             ],
             Ok(0),
-            ComputeBudget::default()
+            ComputeBudget {
+                max_units: DEFAULT_UNITS as u64 * 3,
+                ..ComputeBudget::default()
+            }
+        );
+
+        // Additional fee
+        test!(
+            &[ComputeBudgetInstruction::request_units(1, 42),],
+            Ok(42),
+            ComputeBudget {
+                max_units: 1,
+                ..ComputeBudget::default()
+            }
         );
 
         // HeapFrame
-        test!(&[], Ok(0), ComputeBudget::default());
+        test!(
+            &[],
+            Ok(0),
+            ComputeBudget {
+                max_units: 0,
+                ..ComputeBudget::default()
+            }
+        );
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(40 * 1024),
@@ -220,6 +265,7 @@ mod tests {
             ],
             Ok(0),
             ComputeBudget {
+                max_units: DEFAULT_UNITS as u64,
                 heap_size: Some(40 * 1024),
                 ..ComputeBudget::default()
             }
@@ -264,6 +310,7 @@ mod tests {
             ],
             Ok(0),
             ComputeBudget {
+                max_units: DEFAULT_UNITS as u64,
                 heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             }
@@ -276,7 +323,28 @@ mod tests {
                 ComputeBudgetInstruction::request_heap_frame(1), // ignored
             ],
             Ok(0),
-            ComputeBudget::default()
+            ComputeBudget {
+                max_units: DEFAULT_UNITS as u64 * 3,
+                ..ComputeBudget::default()
+            }
+        );
+
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+            ],
+            Ok(0),
+            ComputeBudget {
+                max_units: DEFAULT_UNITS as u64 * 7,
+                ..ComputeBudget::default()
+            }
         );
 
         // Combined

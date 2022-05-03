@@ -79,7 +79,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
-        compute_budget::ComputeBudget,
+        compute_budget::{self, ComputeBudget},
         invoke_context::{
             BuiltinProgram, Executor, Executors, ProcessInstructionWithContext,
             TransactionAccountRefCells, TransactionExecutor,
@@ -104,8 +104,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            self, default_units_per_instruction, disable_fee_calculator, nonce_must_be_writable,
+            requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -4134,15 +4134,21 @@ impl Bank {
                     );
 
                     let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
+                    let compute_budget_max_units = if tx_wide_compute_cap {
+                        compute_budget::MAX_UNITS
+                    } else {
+                        compute_budget::DEFAULT_UNITS
+                    };
                     let mut compute_budget = self
                         .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(tx_wide_compute_cap));
+                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
                     if tx_wide_compute_cap {
                         let mut compute_budget_process_transaction_time =
                             Measure::start("compute_budget_process_transaction_time");
                         let process_transaction_result = compute_budget.process_message(
                             tx.message(),
                             feature_set.is_active(&requestable_heap_size::id()),
+                            feature_set.is_active(&default_units_per_instruction::id()),
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -4366,7 +4372,7 @@ impl Bank {
 
             let mut compute_budget = ComputeBudget::default();
             let additional_fee = compute_budget
-                .process_message(message, false)
+                .process_message(message, false, false)
                 .unwrap_or_default();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
