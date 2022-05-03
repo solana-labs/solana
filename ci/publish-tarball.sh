@@ -136,6 +136,14 @@ for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.
       mkdir -p travis-release-upload/
       cp -v "$file" travis-release-upload/
     fi
+  elif [[ -n $GITHUB_ACTIONS ]]; then
+    mkdir -p github-action-s3-upload/"$CHANNEL_OR_TAG"
+    cp -v "$file" github-action-s3-upload/"$CHANNEL_OR_TAG"/
+
+    if [[ -n $TAG ]]; then
+      mkdir -p github-action-release-upload/
+      cp -v "$file" github-action-release-upload/
+    fi
   elif [[ -n $APPVEYOR ]]; then
     # Add artifacts for .appveyor.yml to upload
     appveyor PushArtifact "$file" -FileName "$CHANNEL_OR_TAG"/"$file"
