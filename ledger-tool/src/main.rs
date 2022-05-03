@@ -963,6 +963,9 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let no_os_memory_stats_reporting_arg = Arg::with_name("no_os_memory_stats_reporting")
+        .long("no-os-memory-stats-reporting")
+        .help("Disable reporting of OS memory statistics.");
     let skip_rewrites_arg = Arg::with_name("accounts_db_skip_rewrites")
         .long("accounts-db-skip-rewrites")
         .help(
@@ -1306,6 +1309,7 @@ fn main() {
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
+            .arg(&no_os_memory_stats_reporting_arg)
             .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2045,8 +2049,14 @@ fn main() {
                 }
 
                 let exit_signal = Arc::new(AtomicBool::new(false));
-                let system_monitor_service =
-                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
+
+                let no_os_memory_stats_reporting =
+                    arg_matches.is_present("no_os_memory_stats_reporting");
+                let system_monitor_service = SystemMonitorService::new(
+                    Arc::clone(&exit_signal),
+                    !no_os_memory_stats_reporting,
+                    false,
+                );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
