@@ -5899,18 +5899,11 @@ impl AccountsDb {
         self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
-<<<<<<< HEAD
-=======
-        self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
-    }
-
     /// helper to return
     /// 1. pubkey, hash pairs for the slot
     /// 2. us spent scanning
     /// 3. Measure started when we began accumulating
     fn get_pubkey_hash_for_slot(&self, slot: Slot) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
->>>>>>> 40986dadd (log write cache contents from purge_slots_from_cache_and_store (#24948))
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -5950,11 +5943,7 @@ impl AccountsDb {
         (hashes, scan.as_us(), accumulate)
     }
 
-    pub fn get_accounts_delta_hash_with_rewrites(
-        &self,
-        slot: Slot,
-        skipped_rewrites: &Rewrites,
-    ) -> Hash {
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
 
