@@ -5730,6 +5730,7 @@ dependencies = [
 name = "solana-stake-program"
 version = "1.11.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "log",
  "num-derive",

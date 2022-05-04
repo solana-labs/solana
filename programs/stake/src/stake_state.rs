@@ -15,7 +15,8 @@ use {
         account_utils::StateMut,
         clock::{Clock, Epoch},
         feature_set::{
-            stake_merge_with_unmatched_credits_observed, stake_split_uses_rent_sysvar, FeatureSet,
+            stake_allow_zero_undelegated_amount, stake_merge_with_unmatched_credits_observed,
+            stake_split_uses_rent_sysvar, FeatureSet,
         },
         instruction::{checked_add, InstructionError},
         pubkey::Pubkey,
@@ -453,8 +454,13 @@ pub fn initialize(
     }
     if let StakeState::Uninitialized = stake_account.get_state()? {
         let rent_exempt_reserve = rent.minimum_balance(stake_account.get_data().len());
-        let minimum_delegation = crate::get_minimum_delegation(feature_set);
-        let minimum_balance = rent_exempt_reserve + minimum_delegation;
+        // when removing this feature, remove `minimum_balance` and just use `rent_exempt_reserve`
+        let minimum_balance = if feature_set.is_active(&stake_allow_zero_undelegated_amount::id()) {
+            rent_exempt_reserve
+        } else {
+            let minimum_delegation = crate::get_minimum_delegation(feature_set);
+            rent_exempt_reserve + minimum_delegation
+        };
 
         if stake_account.get_lamports() >= minimum_balance {
             stake_account.set_state(&StakeState::Initialized(Meta {
@@ -558,6 +564,7 @@ pub fn delegate(
     stake_history: &StakeHistory,
     config: &Config,
     signers: &HashSet<Pubkey>,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let vote_account =
         instruction_context.try_borrow_account(transaction_context, vote_account_index)?;
@@ -574,7 +581,7 @@ pub fn delegate(
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let ValidatedDelegatedInfo { stake_amount } =
-                validate_delegated_amount(&stake_account, &meta)?;
+                validate_delegated_amount(&stake_account, &meta, feature_set)?;
             let stake = new_stake(
                 stake_amount,
                 &vote_pubkey,
@@ -587,7 +594,7 @@ pub fn delegate(
         StakeState::Stake(meta, mut stake) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
             let ValidatedDelegatedInfo { stake_amount } =
-                validate_delegated_amount(&stake_account, &meta)?;
+                validate_delegated_amount(&stake_account, &meta, feature_set)?;
             redelegate(
                 &mut stake,
                 stake_amount,
@@ -669,6 +676,7 @@ pub fn split(
     match stake_state {
         StakeState::Stake(meta, mut stake) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
+            let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
             let validated_split_info = validate_split_amount(
                 invoke_context,
                 transaction_context,
@@ -678,6 +686,7 @@ pub fn split(
                 lamports,
                 &meta,
                 Some(&stake),
+                minimum_delegation,
             )?;
 
             // split the stake, subtract rent_exempt_balance unless
@@ -725,6 +734,14 @@ pub fn split(
         }
         StakeState::Initialized(meta) => {
             meta.authorized.check(signers, StakeAuthorize::Staker)?;
+            let additional_required_lamports = if invoke_context
+                .feature_set
+                .is_active(&stake_allow_zero_undelegated_amount::id())
+            {
+                0
+            } else {
+                crate::get_minimum_delegation(&invoke_context.feature_set)
+            };
             let validated_split_info = validate_split_amount(
                 invoke_context,
                 transaction_context,
@@ -734,6 +751,7 @@ pub fn split(
                 lamports,
                 &meta,
                 None,
+                additional_required_lamports,
             )?;
             let mut split_meta = meta;
             split_meta.rent_exempt_reserve = validated_split_info.destination_rent_exempt_reserve;
@@ -877,11 +895,15 @@ pub fn withdraw(
         StakeState::Initialized(meta) => {
             meta.authorized
                 .check(&signers, StakeAuthorize::Withdrawer)?;
-            // stake accounts must have a balance >= rent_exempt_reserve + minimum_stake_delegation
-            let reserve = checked_add(
-                meta.rent_exempt_reserve,
-                crate::get_minimum_delegation(feature_set),
-            )?;
+            // stake accounts must have a balance >= rent_exempt_reserve
+            let reserve = if feature_set.is_active(&stake_allow_zero_undelegated_amount::id()) {
+                meta.rent_exempt_reserve
+            } else {
+                checked_add(
+                    meta.rent_exempt_reserve,
+                    crate::get_minimum_delegation(feature_set),
+                )?
+            };
 
             (meta.lockup, reserve, false)
         }
@@ -1000,10 +1022,22 @@ struct ValidatedDelegatedInfo {
 fn validate_delegated_amount(
     account: &BorrowedAccount,
     meta: &Meta,
+    feature_set: &FeatureSet,
 ) -> Result<ValidatedDelegatedInfo, InstructionError> {
     let stake_amount = account
         .get_lamports()
         .saturating_sub(meta.rent_exempt_reserve); // can't stake the rent
+
+    // Previously, `initialize` checked that the stake account balance met
+    // the minimum delegation amount.
+    // With the `stake_allow_zero_undelegated_amount` feature, stake accounts
+    // may be initialized with a lower balance, so check the minimum in this
+    // function, on delegation.
+    if feature_set.is_active(&stake_allow_zero_undelegated_amount::id())
+        && stake_amount < crate::get_minimum_delegation(feature_set)
+    {
+        return Err(StakeError::InsufficientStake.into());
+    }
     Ok(ValidatedDelegatedInfo { stake_amount })
 }
 
@@ -1028,6 +1062,7 @@ fn validate_split_amount(
     lamports: u64,
     source_meta: &Meta,
     source_stake: Option<&Stake>,
+    additional_required_lamports: u64,
 ) -> Result<ValidatedSplitInfo, InstructionError> {
     let source_account =
         instruction_context.try_borrow_account(transaction_context, source_account_index)?;
@@ -1054,10 +1089,9 @@ fn validate_split_amount(
     // EITHER at least the minimum balance, OR zero (in this case the source
     // account is transferring all lamports to new destination account, and the source
     // account will be closed)
-    let minimum_delegation = crate::get_minimum_delegation(&invoke_context.feature_set);
     let source_minimum_balance = source_meta
         .rent_exempt_reserve
-        .saturating_add(minimum_delegation);
+        .saturating_add(additional_required_lamports);
     let source_remaining_balance = source_lamports.saturating_sub(lamports);
     if source_remaining_balance == 0 {
         // full amount is a withdrawal
@@ -1088,7 +1122,7 @@ fn validate_split_amount(
         )
     };
     let destination_minimum_balance =
-        destination_rent_exempt_reserve.saturating_add(minimum_delegation);
+        destination_rent_exempt_reserve.saturating_add(additional_required_lamports);
     let destination_balance_deficit =
         destination_minimum_balance.saturating_sub(destination_lamports);
     if lamports < destination_balance_deficit {
@@ -1105,7 +1139,7 @@ fn validate_split_amount(
     // account, the split amount must be at least the minimum stake delegation.  So if the minimum
     // stake delegation was 10 lamports, then a split amount of 1 lamport would not meet the
     // *delegation* requirements.
-    if source_stake.is_some() && lamports < minimum_delegation {
+    if source_stake.is_some() && lamports < additional_required_lamports {
         return Err(InstructionError::InsufficientFunds);
     }
 
