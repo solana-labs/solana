@@ -123,7 +123,8 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             total_lamports,
             test_hash_calculation,
             &EpochSchedule::default(),
-            &RentCollector::default()
+            &RentCollector::default(),
+            false
         ))
     });
 }
