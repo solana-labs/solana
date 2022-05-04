@@ -85,11 +85,12 @@ fn recv_loop(
                 if len > 0 {
                     if channel.len() < options.max_queued_batches {
                         channel.send(packet_batch)?;
+                        break;
                     } else {
                         drop_count += len;
+                        packet_batch.packets.truncate(0);
                     }
                 }
-                break;
             }
         }
         if recv_count > 1024 {
