@@ -13,28 +13,34 @@ import {toBuffer} from './util/to-buffer';
  *
  * @internal
  */
-const NonceAccountLayout = BufferLayout.struct<
-  Readonly<{
-    authorizedPubkey: Uint8Array;
-    feeCalculator: Readonly<{
-      lamportsPerSignature: number;
-    }>;
-    nonce: Uint8Array;
-    state: number;
-    version: number;
-  }>
->([
-  BufferLayout.u32('version'),
-  BufferLayout.u32('state'),
-  Layout.publicKey('authorizedPubkey'),
-  Layout.publicKey('nonce'),
-  BufferLayout.struct<Readonly<{lamportsPerSignature: number}>>(
-    [FeeCalculatorLayout],
-    'feeCalculator',
-  ),
-]);
+const NonceAccountLayout =
+  /*#__PURE__*/
+  (function () {
+    return BufferLayout.struct<
+      Readonly<{
+        authorizedPubkey: Uint8Array;
+        feeCalculator: Readonly<{
+          lamportsPerSignature: number;
+        }>;
+        nonce: Uint8Array;
+        state: number;
+        version: number;
+      }>
+    >([
+      BufferLayout.u32('version'),
+      BufferLayout.u32('state'),
+      Layout.publicKey('authorizedPubkey'),
+      Layout.publicKey('nonce'),
+      BufferLayout.struct<Readonly<{lamportsPerSignature: number}>>(
+        [FeeCalculatorLayout],
+        'feeCalculator',
+      ),
+    ]);
+  })();
 
-export const NONCE_ACCOUNT_LENGTH = NonceAccountLayout.span;
+export const NONCE_ACCOUNT_LENGTH = /*#__PURE__*/ (function () {
+  return NonceAccountLayout.span;
+})();
 
 type NonceAccountArgs = {
   authorizedPubkey: PublicKey;
