@@ -6150,6 +6150,11 @@ impl AccountsDb {
 
     // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
     //  that there are no items we would have put in reclaims that are not cached
+    // This function may be invoked from both foreground and background
+    // processes. As such it takes an explicit thread-pool argument which is
+    // set to either self.thread_pool or self.thread_pool_clean accordingly by
+    // the call-stack. Specifying wrong thread-pool here may cause deadlock
+    // panics in bank_hashes.write().
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
         thread_pool: &ThreadPool,
@@ -6158,8 +6163,6 @@ impl AccountsDb {
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         let target_slot = accounts.target_slot();
-        // using a thread pool here results in deadlock panics from bank_hashes.write()
-        // so, instead we limit how many threads will be created to the same size as the bg thread pool
         let len = std::cmp::min(accounts.len(), infos.len());
         let chunk_size = std::cmp::max(1, len / quarter_thread_count()); // # pubkeys/thread
         let batches = 1 + len / chunk_size;
@@ -6629,7 +6632,6 @@ impl AccountsDb {
         }
     }
 
-    // TODO: confirm this is only called from replay and fg processes.
     fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
@@ -6644,6 +6646,8 @@ impl AccountsDb {
         // hold just 1 ref from this slot.
         let reset_accounts = true;
 
+        // self.thread_pool (and not self.thread_pool_clean) here because this
+        // function is only invoked from replay and fg processes.
         self.store_accounts_custom(
             &self.thread_pool,
             accounts,
@@ -6655,7 +6659,6 @@ impl AccountsDb {
         );
     }
 
-    // TODO: confirm this is only called from cleanup & bg processes.
     fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         accounts: impl StorableAccounts<'a, T>,
@@ -6668,6 +6671,8 @@ impl AccountsDb {
         // and accounts in the append_vec can be unrefed correctly
         let reset_accounts = false;
         let is_cached_store = false;
+        // self.thread_pool_clean (and not self.thread_pool) here because this
+        // function is only invoked from cleanup and bg processes.
         self.store_accounts_custom(
             &self.thread_pool_clean,
             accounts,
