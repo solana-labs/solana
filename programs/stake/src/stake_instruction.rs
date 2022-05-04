@@ -4309,18 +4309,19 @@ mod tests {
         }
     }
 
-    /// The stake program currently allows delegations below the minimum stake delegation (see also
-    /// `test_delegate_minimum_stake_delegation()`).  This is not the ultimate desired behavior,
-    /// but this test ensures the existing behavior is not changed inadvertently.
+    /// The stake program does not allow delegations below the minimum even after
+    /// partial withdrawal. This used to succeed, and this test ensures the behavior
+    /// is not changed inadvertently.
+    /// See also `test_delegate_minimum_stake_delegation()`.
     ///
     /// This test:
     /// 1. Initialises a stake account (with sufficient balance for both rent and minimum delegation)
     /// 2. Delegates the minimum amount
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
-    /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
+    /// 5. Re-delegates, now with less than the minimum delegation, but it fails
     #[test]
-    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
+    fn test_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation_fails() {
         let feature_set = FeatureSet::all_enabled();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4451,7 +4452,7 @@ mod tests {
         );
         let withdraw_amount =
             accounts[0].lamports() - (rent_exempt_reserve + minimum_delegation - 1);
-        process_instruction(
+        let accounts = process_instruction(
             &serialize(&StakeInstruction::Withdraw(withdraw_amount)).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -4489,7 +4490,7 @@ mod tests {
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Ok(()),
+            Err(StakeError::InsufficientStake.into()),
         );
     }
 
