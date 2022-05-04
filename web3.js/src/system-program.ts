@@ -593,109 +593,115 @@ type SystemInstructionInputData = {
  * An enumeration of valid system InstructionType's
  * @internal
  */
-export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze<{
-  [Instruction in SystemInstructionType]: InstructionType<
-    SystemInstructionInputData[Instruction]
-  >;
-}>({
-  Create: {
-    index: 0,
-    layout: BufferLayout.struct<SystemInstructionInputData['Create']>([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
-      BufferLayout.ns64('space'),
-      Layout.publicKey('programId'),
-    ]),
-  },
-  Assign: {
-    index: 1,
-    layout: BufferLayout.struct<SystemInstructionInputData['Assign']>([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('programId'),
-    ]),
-  },
-  Transfer: {
-    index: 2,
-    layout: BufferLayout.struct<SystemInstructionInputData['Transfer']>([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
-    ]),
-  },
-  CreateWithSeed: {
-    index: 3,
-    layout: BufferLayout.struct<SystemInstructionInputData['CreateWithSeed']>([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('base'),
-      Layout.rustString('seed'),
-      BufferLayout.ns64('lamports'),
-      BufferLayout.ns64('space'),
-      Layout.publicKey('programId'),
-    ]),
-  },
-  AdvanceNonceAccount: {
-    index: 4,
-    layout: BufferLayout.struct<
-      SystemInstructionInputData['AdvanceNonceAccount']
-    >([BufferLayout.u32('instruction')]),
-  },
-  WithdrawNonceAccount: {
-    index: 5,
-    layout: BufferLayout.struct<
-      SystemInstructionInputData['WithdrawNonceAccount']
-    >([BufferLayout.u32('instruction'), BufferLayout.ns64('lamports')]),
-  },
-  InitializeNonceAccount: {
-    index: 6,
-    layout: BufferLayout.struct<
-      SystemInstructionInputData['InitializeNonceAccount']
-    >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
-  },
-  AuthorizeNonceAccount: {
-    index: 7,
-    layout: BufferLayout.struct<
-      SystemInstructionInputData['AuthorizeNonceAccount']
-    >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
-  },
-  Allocate: {
-    index: 8,
-    layout: BufferLayout.struct<SystemInstructionInputData['Allocate']>([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('space'),
-    ]),
-  },
-  AllocateWithSeed: {
-    index: 9,
-    layout: BufferLayout.struct<SystemInstructionInputData['AllocateWithSeed']>(
-      [
+export const SYSTEM_INSTRUCTION_LAYOUTS = /*#__PURE__*/ (function () {
+  return Object.freeze<{
+    [Instruction in SystemInstructionType]: InstructionType<
+      SystemInstructionInputData[Instruction]
+    >;
+  }>({
+    Create: {
+      index: 0,
+      layout: BufferLayout.struct<SystemInstructionInputData['Create']>([
+        BufferLayout.u32('instruction'),
+        BufferLayout.ns64('lamports'),
+        BufferLayout.ns64('space'),
+        Layout.publicKey('programId'),
+      ]),
+    },
+    Assign: {
+      index: 1,
+      layout: BufferLayout.struct<SystemInstructionInputData['Assign']>([
+        BufferLayout.u32('instruction'),
+        Layout.publicKey('programId'),
+      ]),
+    },
+    Transfer: {
+      index: 2,
+      layout: BufferLayout.struct<SystemInstructionInputData['Transfer']>([
+        BufferLayout.u32('instruction'),
+        BufferLayout.ns64('lamports'),
+      ]),
+    },
+    CreateWithSeed: {
+      index: 3,
+      layout: BufferLayout.struct<SystemInstructionInputData['CreateWithSeed']>(
+        [
+          BufferLayout.u32('instruction'),
+          Layout.publicKey('base'),
+          Layout.rustString('seed'),
+          BufferLayout.ns64('lamports'),
+          BufferLayout.ns64('space'),
+          Layout.publicKey('programId'),
+        ],
+      ),
+    },
+    AdvanceNonceAccount: {
+      index: 4,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['AdvanceNonceAccount']
+      >([BufferLayout.u32('instruction')]),
+    },
+    WithdrawNonceAccount: {
+      index: 5,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['WithdrawNonceAccount']
+      >([BufferLayout.u32('instruction'), BufferLayout.ns64('lamports')]),
+    },
+    InitializeNonceAccount: {
+      index: 6,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['InitializeNonceAccount']
+      >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
+    },
+    AuthorizeNonceAccount: {
+      index: 7,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['AuthorizeNonceAccount']
+      >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
+    },
+    Allocate: {
+      index: 8,
+      layout: BufferLayout.struct<SystemInstructionInputData['Allocate']>([
+        BufferLayout.u32('instruction'),
+        BufferLayout.ns64('space'),
+      ]),
+    },
+    AllocateWithSeed: {
+      index: 9,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['AllocateWithSeed']
+      >([
         BufferLayout.u32('instruction'),
         Layout.publicKey('base'),
         Layout.rustString('seed'),
         BufferLayout.ns64('space'),
         Layout.publicKey('programId'),
-      ],
-    ),
-  },
-  AssignWithSeed: {
-    index: 10,
-    layout: BufferLayout.struct<SystemInstructionInputData['AssignWithSeed']>([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('base'),
-      Layout.rustString('seed'),
-      Layout.publicKey('programId'),
-    ]),
-  },
-  TransferWithSeed: {
-    index: 11,
-    layout: BufferLayout.struct<SystemInstructionInputData['TransferWithSeed']>(
-      [
+      ]),
+    },
+    AssignWithSeed: {
+      index: 10,
+      layout: BufferLayout.struct<SystemInstructionInputData['AssignWithSeed']>(
+        [
+          BufferLayout.u32('instruction'),
+          Layout.publicKey('base'),
+          Layout.rustString('seed'),
+          Layout.publicKey('programId'),
+        ],
+      ),
+    },
+    TransferWithSeed: {
+      index: 11,
+      layout: BufferLayout.struct<
+        SystemInstructionInputData['TransferWithSeed']
+      >([
         BufferLayout.u32('instruction'),
         BufferLayout.ns64('lamports'),
         Layout.rustString('seed'),
         Layout.publicKey('programId'),
-      ],
-    ),
-  },
-});
+      ]),
+    },
+  });
+})();
 
 let _memoizedProgramId: PublicKey;
 
