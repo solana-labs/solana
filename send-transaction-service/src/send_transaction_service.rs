@@ -326,7 +326,7 @@ impl SendTransactionServiceStatsReport {
 }
 
 /// Report the send transaction memtrics for every 5 seconds.
-pub const SEND_TRANSACTION_METRICS_REPORT_RATE_MS: u64 = 5000;
+const SEND_TRANSACTION_METRICS_REPORT_RATE_MS: u64 = 5000;
 
 impl SendTransactionService {
     pub fn new<T: TpuInfo + std::marker::Send + 'static>(
@@ -457,8 +457,8 @@ impl SendTransactionService {
                     {
                         // take a lock of retry_transactions and move the batch to the retry set.
                         let mut retry_transactions = retry_transactions.lock().unwrap();
-                        let txns_to_retry = transactions.len();
-                        let mut txns_added_to_retry: usize = 0;
+                        let transactions_to_retry = transactions.len();
+                        let mut transactions_added_to_retry: usize = 0;
                         for (signature, mut transaction_info) in transactions.drain() {
                             let retry_len = retry_transactions.len();
                             let entry = retry_transactions.entry(signature);
@@ -468,13 +468,14 @@ impl SendTransactionService {
                                     break;
                                 } else {
                                     transaction_info.last_sent_time = Some(last_sent_time);
-                                    saturating_add_assign!(txns_added_to_retry, 1);
+                                    saturating_add_assign!(transactions_added_to_retry, 1);
                                     entry.or_insert(transaction_info);
                                 }
                             }
                         }
                         stats.retry_queue_overflow.fetch_add(
-                            txns_to_retry.saturating_sub(txns_added_to_retry) as u64,
+                            transactions_to_retry.saturating_sub(transactions_added_to_retry)
+                                as u64,
                             Ordering::Relaxed,
                         );
                         stats
