@@ -13,8 +13,6 @@ on:
         required: true
       AWS_S3_BUCKET:
         required: true
-      GITHUB_TOKEN:
-        required: true
 
 jobs:
   osx-build:
@@ -97,7 +95,6 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           draft: true
-          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             github-action-s3-upload/${{ inputs.tag }}/*
 
@@ -180,6 +177,5 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           draft: true
-          token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             github-action-s3-upload/${{ inputs.tag }}/*
