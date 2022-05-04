@@ -74,61 +74,63 @@ type VoteAccountData = Readonly<{
  *
  * @internal
  */
-const VoteAccountLayout = BufferLayout.struct<VoteAccountData>([
-  Layout.publicKey('nodePubkey'),
-  Layout.publicKey('authorizedWithdrawer'),
-  BufferLayout.u8('commission'),
-  BufferLayout.nu64(), // votes.length
-  BufferLayout.seq<Lockout>(
-    BufferLayout.struct([
-      BufferLayout.nu64('slot'),
-      BufferLayout.u32('confirmationCount'),
-    ]),
-    BufferLayout.offset(BufferLayout.u32(), -8),
-    'votes',
-  ),
-  BufferLayout.u8('rootSlotValid'),
-  BufferLayout.nu64('rootSlot'),
-  BufferLayout.nu64(), // authorizedVoters.length
-  BufferLayout.seq<AuthorizedVoterRaw>(
-    BufferLayout.struct([
-      BufferLayout.nu64('epoch'),
-      Layout.publicKey('authorizedVoter'),
-    ]),
-    BufferLayout.offset(BufferLayout.u32(), -8),
-    'authorizedVoters',
-  ),
-  BufferLayout.struct<PriorVoters>(
-    [
-      BufferLayout.seq(
-        BufferLayout.struct([
-          Layout.publicKey('authorizedPubkey'),
-          BufferLayout.nu64('epochOfLastAuthorizedSwitch'),
-          BufferLayout.nu64('targetEpoch'),
-        ]),
-        32,
-        'buf',
-      ),
-      BufferLayout.nu64('idx'),
-      BufferLayout.u8('isEmpty'),
-    ],
-    'priorVoters',
-  ),
-  BufferLayout.nu64(), // epochCredits.length
-  BufferLayout.seq<EpochCredits>(
-    BufferLayout.struct([
-      BufferLayout.nu64('epoch'),
-      BufferLayout.nu64('credits'),
-      BufferLayout.nu64('prevCredits'),
-    ]),
-    BufferLayout.offset(BufferLayout.u32(), -8),
-    'epochCredits',
-  ),
-  BufferLayout.struct<BlockTimestamp>(
-    [BufferLayout.nu64('slot'), BufferLayout.nu64('timestamp')],
-    'lastTimestamp',
-  ),
-]);
+const VoteAccountLayout = /*#__PURE__*/ (function () {
+  return BufferLayout.struct<VoteAccountData>([
+    Layout.publicKey('nodePubkey'),
+    Layout.publicKey('authorizedWithdrawer'),
+    BufferLayout.u8('commission'),
+    BufferLayout.nu64(), // votes.length
+    BufferLayout.seq<Lockout>(
+      BufferLayout.struct([
+        BufferLayout.nu64('slot'),
+        BufferLayout.u32('confirmationCount'),
+      ]),
+      BufferLayout.offset(BufferLayout.u32(), -8),
+      'votes',
+    ),
+    BufferLayout.u8('rootSlotValid'),
+    BufferLayout.nu64('rootSlot'),
+    BufferLayout.nu64(), // authorizedVoters.length
+    BufferLayout.seq<AuthorizedVoterRaw>(
+      BufferLayout.struct([
+        BufferLayout.nu64('epoch'),
+        Layout.publicKey('authorizedVoter'),
+      ]),
+      BufferLayout.offset(BufferLayout.u32(), -8),
+      'authorizedVoters',
+    ),
+    BufferLayout.struct<PriorVoters>(
+      [
+        BufferLayout.seq(
+          BufferLayout.struct([
+            Layout.publicKey('authorizedPubkey'),
+            BufferLayout.nu64('epochOfLastAuthorizedSwitch'),
+            BufferLayout.nu64('targetEpoch'),
+          ]),
+          32,
+          'buf',
+        ),
+        BufferLayout.nu64('idx'),
+        BufferLayout.u8('isEmpty'),
+      ],
+      'priorVoters',
+    ),
+    BufferLayout.nu64(), // epochCredits.length
+    BufferLayout.seq<EpochCredits>(
+      BufferLayout.struct([
+        BufferLayout.nu64('epoch'),
+        BufferLayout.nu64('credits'),
+        BufferLayout.nu64('prevCredits'),
+      ]),
+      BufferLayout.offset(BufferLayout.u32(), -8),
+      'epochCredits',
+    ),
+    BufferLayout.struct<BlockTimestamp>(
+      [BufferLayout.nu64('slot'), BufferLayout.nu64('timestamp')],
+      'lastTimestamp',
+    ),
+  ]);
+})();
 
 type VoteAccountArgs = {
   nodePubkey: PublicKey;
