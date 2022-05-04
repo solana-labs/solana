@@ -474,7 +474,7 @@ impl SendTransactionService {
                             }
                         }
                         stats.retry_queue_overflow.fetch_add(
-                            (txns_to_retry - txns_added_to_retry) as u64,
+                            txns_to_retry.saturating_sub(txns_added_to_retry) as u64,
                             Ordering::Relaxed,
                         );
                         stats
