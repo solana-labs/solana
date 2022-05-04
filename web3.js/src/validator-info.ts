@@ -36,13 +36,6 @@ export type Info = {
   keybaseUsername?: string;
 };
 
-const InfoString = pick({
-  name: string(),
-  website: optional(string()),
-  details: optional(string()),
-  keybaseUsername: optional(string()),
-});
-
 /**
  * ValidatorInfo class
  */
@@ -96,7 +89,15 @@ export class ValidatorInfo {
       if (configKeys[1].isSigner) {
         const rawInfo: any = Layout.rustString().decode(Buffer.from(byteArray));
         const info = JSON.parse(rawInfo as string);
-        assertType(info, InfoString);
+        assertType(
+          info,
+          pick({
+            name: string(),
+            website: optional(string()),
+            details: optional(string()),
+            keybaseUsername: optional(string()),
+          }),
+        );
         return new ValidatorInfo(configKeys[1].publicKey, info);
       }
     }
