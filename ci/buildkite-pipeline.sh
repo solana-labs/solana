@@ -305,9 +305,19 @@ EOF
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
     10
 
+<<<<<<< HEAD
   command_step "local-cluster-slow" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
     30
+=======
+  command_step "local-cluster-slow-1" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-1.sh" \
+    40
+
+  command_step "local-cluster-slow-2" \
+    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-2.sh" \
+    40
+>>>>>>> e1866aaca (Move long-running local-cluster tests to local-cluster-slow (#24952))
 }
 
 pull_or_push_steps() {
