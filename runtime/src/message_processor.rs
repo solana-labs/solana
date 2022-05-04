@@ -89,12 +89,11 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
-            let is_precompile =
-                is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
+            let is_precompile = invoke_context
+                .feature_set
+                .is_active(&prevent_calling_precompiles_as_programs::id())
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
             if is_precompile
-                && invoke_context
-                    .feature_set
-                    .is_active(&prevent_calling_precompiles_as_programs::id())
                 && !invoke_context
                     .feature_set
                     .is_active(&record_instruction_in_transaction_context_push::id())
