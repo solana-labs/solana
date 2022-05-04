@@ -721,12 +721,11 @@ pub fn main() {
                 .help("Path to accounts shrink path which can hold a compacted account set."),
         )
         .arg(
-            Arg::with_name("snapshots_path")
-                .alias("snapshots")
-                .long("snapshots-path")
+            Arg::with_name("snapshots")
+                .long("snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as snapshots location [default: --ledger value]"),
+                .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
             Arg::with_name("full_snapshots_path")
@@ -734,15 +733,7 @@ pub fn main() {
                 .conflicts_with("no-incremental-snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as full snapshots location [default: --snapshots-path value]"),
-        )
-        .arg(
-            Arg::with_name("incremental_snapshots_path")
-                .long("incremental-snapshots-path")
-                .conflicts_with("no-incremental-snapshots")
-                .value_name("DIR")
-                .takes_value(true)
-                .help("Use DIR as incremental snapshots location [default: --snapshots-path value]"),
+                .help("Use DIR as separate location for full snapshot archives [default: --snapshots value]"),
         )
         .arg(
             Arg::with_name("tower")
@@ -2619,12 +2610,12 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let common_snapshot_dir = if matches.is_present("snapshots_path") {
-        PathBuf::from(matches.value_of("snapshots_path").unwrap())
+    let incremental_snapshot_archives_dir = if matches.is_present("snapshots") {
+        PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
-    let bank_snapshots_dir = common_snapshot_dir.join("snapshot");
+    let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
@@ -2633,29 +2624,19 @@ pub fn main() {
         exit(1);
     });
     let full_snapshot_archives_dir = if matches.is_present("full_snapshots_path") {
-        PathBuf::from(matches.value_of("full_snapshots_path").unwrap())
+        let full_snapshot_archives_dir =
+            PathBuf::from(matches.value_of("full_snapshots_path").unwrap());
+        fs::create_dir_all(&full_snapshot_archives_dir).unwrap_or_else(|err| {
+            eprintln!(
+                "Failed to create full snapshots directory {:?}: {}",
+                full_snapshot_archives_dir, err
+            );
+            exit(1);
+        });
+        full_snapshot_archives_dir
     } else {
-        common_snapshot_dir.clone()
+        incremental_snapshot_archives_dir.clone()
     };
-    fs::create_dir_all(&full_snapshot_archives_dir).unwrap_or_else(|err| {
-        eprintln!(
-            "Failed to create full snapshot archives directory {:?}: {}",
-            full_snapshot_archives_dir, err
-        );
-        exit(1);
-    });
-    let incremental_snapshot_archives_dir = if matches.is_present("incremental_snapshots_path") {
-        PathBuf::from(matches.value_of("incremental_snapshots_path").unwrap())
-    } else {
-        common_snapshot_dir
-    };
-    fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
-        eprintln!(
-            "Failed to create incremental snapshot archives directory {:?}: {}",
-            incremental_snapshot_archives_dir, err
-        );
-        exit(1);
-    });
 
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
