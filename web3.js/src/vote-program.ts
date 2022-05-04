@@ -280,6 +280,8 @@ export const VoteAuthorizationLayout = Object.freeze({
   },
 });
 
+let _memoizedProgramId: PublicKey;
+
 /**
  * Factory class for transactions to interact with the Vote program
  */
@@ -292,9 +294,14 @@ export class VoteProgram {
   /**
    * Public key that identifies the Vote program
    */
-  static programId: PublicKey = new PublicKey(
-    'Vote111111111111111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey(
+        'Vote111111111111111111111111111111111111111',
+      );
+    }
+    return _memoizedProgramId;
+  }
 
   /**
    * Max space of a Vote account

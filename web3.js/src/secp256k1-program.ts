@@ -74,6 +74,8 @@ const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct<
   BufferLayout.u8('recoveryId'),
 ]);
 
+let _memoizedProgramId: PublicKey;
+
 export class Secp256k1Program {
   /**
    * @internal
@@ -83,9 +85,14 @@ export class Secp256k1Program {
   /**
    * Public key that identifies the secp256k1 program
    */
-  static programId: PublicKey = new PublicKey(
-    'KeccakSecp256k11111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey(
+        'KeccakSecp256k11111111111111111111111111111',
+      );
+    }
+    return _memoizedProgramId;
+  }
 
   /**
    * Construct an Ethereum address from a secp256k1 public key buffer.

@@ -35,6 +35,8 @@ function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
+let _memoizedDefault: PublicKey;
+
 /**
  * A public key
  */
@@ -71,7 +73,12 @@ export class PublicKey extends Struct {
   /**
    * Default public key value. (All zeros)
    */
-  static default: PublicKey = new PublicKey('11111111111111111111111111111111');
+  static get default(): PublicKey {
+    if (_memoizedDefault === undefined) {
+      _memoizedDefault = new PublicKey('11111111111111111111111111111111');
+    }
+    return _memoizedDefault;
+  }
 
   /**
    * Checks if two publicKeys are equal

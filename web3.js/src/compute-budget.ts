@@ -149,6 +149,8 @@ export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze<{
   },
 });
 
+let _memoizedProgramId: PublicKey;
+
 /**
  * Factory class for transaction instructions to interact with the Compute Budget program
  */
@@ -161,9 +163,14 @@ export class ComputeBudgetProgram {
   /**
    * Public key that identifies the Compute Budget program
    */
-  static programId: PublicKey = new PublicKey(
-    'ComputeBudget111111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey(
+        'ComputeBudget111111111111111111111111111111',
+      );
+    }
+    return _memoizedProgramId;
+  }
 
   static requestUnits(params: RequestUnitsParams): TransactionInstruction {
     const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestUnits;

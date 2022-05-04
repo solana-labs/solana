@@ -54,6 +54,7 @@ const ED25519_INSTRUCTION_LAYOUT = BufferLayout.struct<
   BufferLayout.u16('messageInstructionIndex'),
 ]);
 
+let _memoizedProgramId: PublicKey;
 export class Ed25519Program {
   /**
    * @internal
@@ -63,9 +64,14 @@ export class Ed25519Program {
   /**
    * Public key that identifies the ed25519 program
    */
-  static programId: PublicKey = new PublicKey(
-    'Ed25519SigVerify111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey(
+        'Ed25519SigVerify111111111111111111111111111',
+      );
+    }
+    return _memoizedProgramId;
+  }
 
   /**
    * Create an ed25519 instruction with a public key and signature. The

@@ -50,6 +50,8 @@ type AuthorizedRaw = Readonly<{
   withdrawer: Uint8Array;
 }>;
 
+let _memoizedDefault: Lockup;
+
 /**
  * Stake account lockup info
  */
@@ -73,7 +75,12 @@ export class Lockup {
   /**
    * Default, inactive Lockup value
    */
-  static default: Lockup = new Lockup(0, 0, PublicKey.default);
+  static get default(): Lockup {
+    if (_memoizedDefault === undefined) {
+      _memoizedDefault = new Lockup(0, 0, PublicKey.default);
+    }
+    return _memoizedDefault;
+  }
 }
 
 type LockupRaw = Readonly<{
@@ -581,6 +588,8 @@ export const StakeAuthorizationLayout = Object.freeze({
   },
 });
 
+let _memoizedProgramId: PublicKey;
+
 /**
  * Factory class for transactions to interact with the Stake program
  */
@@ -593,9 +602,14 @@ export class StakeProgram {
   /**
    * Public key that identifies the Stake program
    */
-  static programId: PublicKey = new PublicKey(
-    'Stake11111111111111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey(
+        'Stake11111111111111111111111111111111111111',
+      );
+    }
+    return _memoizedProgramId;
+  }
 
   /**
    * Max space of a Stake account

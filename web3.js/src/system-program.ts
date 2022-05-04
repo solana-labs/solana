@@ -697,6 +697,8 @@ export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze<{
   },
 });
 
+let _memoizedProgramId: PublicKey;
+
 /**
  * Factory class for transactions to interact with the System program
  */
@@ -709,9 +711,12 @@ export class SystemProgram {
   /**
    * Public key that identifies the System program
    */
-  static programId: PublicKey = new PublicKey(
-    '11111111111111111111111111111111',
-  );
+  static get programId(): PublicKey {
+    if (_memoizedProgramId === undefined) {
+      _memoizedProgramId = new PublicKey('11111111111111111111111111111111');
+    }
+    return _memoizedProgramId;
+  }
 
   /**
    * Generate a transaction instruction that creates a new account
