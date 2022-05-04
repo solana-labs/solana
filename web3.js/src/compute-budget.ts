@@ -126,28 +126,30 @@ export type RequestHeapFrameParams = {
  * An enumeration of valid ComputeBudget InstructionType's
  * @internal
  */
-export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = Object.freeze<{
-  [Instruction in ComputeBudgetInstructionType]: InstructionType<
-    ComputeBudgetInstructionInputData[Instruction]
-  >;
-}>({
-  RequestUnits: {
-    index: 0,
-    layout: BufferLayout.struct<
-      ComputeBudgetInstructionInputData['RequestUnits']
-    >([
-      BufferLayout.u8('instruction'),
-      BufferLayout.u32('units'),
-      BufferLayout.u32('additionalFee'),
-    ]),
-  },
-  RequestHeapFrame: {
-    index: 1,
-    layout: BufferLayout.struct<
-      ComputeBudgetInstructionInputData['RequestHeapFrame']
-    >([BufferLayout.u8('instruction'), BufferLayout.u32('bytes')]),
-  },
-});
+export const COMPUTE_BUDGET_INSTRUCTION_LAYOUTS = /*#__PURE__*/ (function () {
+  return Object.freeze<{
+    [Instruction in ComputeBudgetInstructionType]: InstructionType<
+      ComputeBudgetInstructionInputData[Instruction]
+    >;
+  }>({
+    RequestUnits: {
+      index: 0,
+      layout: BufferLayout.struct<
+        ComputeBudgetInstructionInputData['RequestUnits']
+      >([
+        BufferLayout.u8('instruction'),
+        BufferLayout.u32('units'),
+        BufferLayout.u32('additionalFee'),
+      ]),
+    },
+    RequestHeapFrame: {
+      index: 1,
+      layout: BufferLayout.struct<
+        ComputeBudgetInstructionInputData['RequestHeapFrame']
+      >([BufferLayout.u8('instruction'), BufferLayout.u32('bytes')]),
+    },
+  });
+})();
 
 let _memoizedProgramId: PublicKey;
 
