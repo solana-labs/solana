@@ -2965,7 +2965,7 @@ impl ReplayStage {
                 std::mem::take(voted_signatures);
             }
         }
-        progress.handle_new_root(&r_bank_forks);
+        progress.handle_new_root(new_root, &r_bank_forks);
         heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
         let mut slots_ge_root = duplicate_slots_tracker.split_off(&new_root);
         // duplicate_slots_tracker now only contains entries >= `new_root`
@@ -4848,7 +4848,7 @@ pub(crate) mod tests {
         bank_forks.insert(bank5);
 
         // Should purge only `previous_leader_slot` from the progress map
-        progress_map.handle_new_root(&bank_forks);
+        progress_map.handle_new_root(5, &bank_forks);
 
         // Should succeed
         assert!(ReplayStage::check_propagation_for_start_leader(

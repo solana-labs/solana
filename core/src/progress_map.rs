@@ -667,9 +667,15 @@ impl ProgressMap {
             .unwrap_or(None)
     }
 
-    pub fn handle_new_root(&mut self, bank_forks: &BankForks) {
+    pub fn handle_new_root(&mut self, new_root: Slot, bank_forks: &BankForks) {
+        let before = self.progress_map.len();
         self.progress_map
             .retain(|k, _| bank_forks.get(*k).is_some());
+        let after = self.progress_map.len();
+        info!(
+            "progress map prune {}: before={}, after={}",
+            new_root, before, after
+        );
     }
 
     pub fn log_propagated_stats(&self, slot: Slot, bank_forks: &RwLock<BankForks>) {
