@@ -106,6 +106,7 @@ impl TurbineMerkleProof {
 }
 
 impl From<&[u8]> for TurbineMerkleProof {
+    #[allow(clippy::integer_arithmetic)]
     fn from(buf: &[u8]) -> Self {
         assert!(buf.len() % TURBINE_MERKLE_HASH_BYTES == 0);
         let v: Vec<TurbineMerkleHash> = buf

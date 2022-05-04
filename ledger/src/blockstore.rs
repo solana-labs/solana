@@ -676,7 +676,7 @@ impl Blockstore {
         {
             Some(ShredCommonHeaderVersion::V1) => ShredType::CodeV1,
             Some(ShredCommonHeaderVersion::V2) => ShredType::CodeV2,
-            None => ShredType::CodeV1, // TODO MERKLE
+            None => ShredType::CodeV2, // TODO MERKLE
         };
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
             let key = ShredId::new(slot, u32::try_from(i).unwrap(), code_type);
@@ -971,12 +971,15 @@ impl Blockstore {
             let recovered_data_shreds: Vec<_> = recovered_data_shreds
                 .into_iter()
                 .filter_map(|shred| {
-                    let leader =
+                    let _leader =
                         leader_schedule_cache.slot_leader_at(shred.slot(), /*bank=*/ None)?;
+                    /* // TODO MERKLE VERIFY
                     if !shred.verify(&leader) {
                         metrics.num_recovered_failed_sig += 1;
                         return None;
                     }
+                    */
+
                     match self.check_insert_data_shred(
                         shred.clone(),
                         &mut erasure_metas,
@@ -8347,6 +8350,7 @@ pub mod tests {
         blockstore
             .insert_shreds(all_shreds, Some(&leader_schedule_cache), false)
             .unwrap();
+
         verify_index_integrity(&blockstore, slot);
         blockstore.purge_and_compact_slots(0, slot);
 
@@ -8354,6 +8358,7 @@ pub mod tests {
         blockstore
             .insert_shreds(coding_shreds.clone(), Some(&leader_schedule_cache), false)
             .unwrap();
+
         verify_index_integrity(&blockstore, slot);
         blockstore.purge_and_compact_slots(0, slot);
 
