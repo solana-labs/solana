@@ -13,3 +13,7 @@ jobs:
     uses: ./.github/workflows/release-artifacts.yml
     with:
       tag: ${{ github.event.inputs.tag }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
