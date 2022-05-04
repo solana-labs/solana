@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-version"
 edition = "2021"
 
 [dependencies]
-log = "0.4.14"
+log = "0.4.17"
 serde = "1.0.137"
 serde_derive = "1.0.103"
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.0" }

@@ -11,7 +11,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-log = "0.4.14"
+log = "0.4.17"
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 
 [package.metadata.docs.rs]

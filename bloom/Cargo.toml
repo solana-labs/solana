@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 bv = { version = "0.11.1", features = ["serde"] }
 fnv = "1.0.7"
-log = "0.4.14"
+log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.2"
 serde = { version = "1.0.137", features = ["rc"] }
