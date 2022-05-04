@@ -116,6 +116,7 @@ fn generate_chunked_transfers(
     let mut chunk_index = 0;
     let mut last_blockhash_time = Instant::now();
     let mut old_blockhash = *recent_blockhash.read().unwrap();
+    let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
         generate_txs(
@@ -128,6 +129,17 @@ fn generate_chunked_transfers(
             &mut old_blockhash,
             &mut last_blockhash_time,
         );
+
+        datapoint_info!(
+            "blockhash_stats",
+            (
+                "time_elapsed_since_last_generate_txs",
+                last_generate_txs_time.elapsed().as_millis(),
+                i64
+            )
+        );
+
+        last_generate_txs_time = Instant::now();
 
         // In sustained mode, overlap the transfers with generation. This has higher average
         // performance but lower peak performance in tested environments.
@@ -478,6 +490,7 @@ fn do_tx_transfers<T: BenchTpsClient>(
     thread_batch_sleep_ms: usize,
     client: &Arc<T>,
 ) {
+    let mut last_sent_time = timestamp();
     loop {
         if thread_batch_sleep_ms > 0 {
             sleep(Duration::from_millis(thread_batch_sleep_ms as u64));
@@ -518,6 +531,17 @@ fn do_tx_transfers<T: BenchTpsClient>(
             if let Err(error) = client.send_batch(transactions) {
                 warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
+
+            datapoint_info!(
+                "bench-tps-do_tx_transfers",
+                (
+                    "time-elapsed-since-last-send",
+                    timestamp() - last_sent_time,
+                    i64
+                ),
+            );
+
+            last_sent_time = timestamp();
 
             if old_transactions {
                 let mut shared_txs_wl = shared_txs.write().expect("write lock in do_tx_transfers");
