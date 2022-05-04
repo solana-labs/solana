@@ -468,7 +468,7 @@ impl SendTransactionService {
                                     break;
                                 } else {
                                     transaction_info.last_sent_time = Some(last_sent_time);
-                                    txns_added_to_retry += 1;
+                                    saturating_add_assign!(txns_added_to_retry, 1);
                                     entry.or_insert(transaction_info);
                                 }
                             }
