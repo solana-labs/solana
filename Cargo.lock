@@ -4725,7 +4725,6 @@ dependencies = [
  "lazy_static",
  "log",
  "matches",
- "num_cpus",
  "rand 0.7.3",
  "rayon",
  "serde",
@@ -4734,6 +4733,7 @@ dependencies = [
  "solana-merkle-tree",
  "solana-metrics",
  "solana-perf",
+ "solana-rayon-threadlimit",
  "solana-sdk 1.11.0",
 ]
 
