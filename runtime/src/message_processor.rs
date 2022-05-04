@@ -10,7 +10,10 @@ use {
     },
     solana_sdk::{
         account::WritableAccount,
-        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
+        feature_set::{
+            prevent_calling_precompiles_as_programs,
+            record_instruction_in_transaction_context_push, FeatureSet,
+        },
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
@@ -86,10 +89,14 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
-            if invoke_context
+            let is_precompile = invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id))
+                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
+            if is_precompile
+                && !invoke_context
+                    .feature_set
+                    .is_active(&record_instruction_in_transaction_context_push::id())
             {
                 // Precompiled programs don't have an instruction processor
                 continue;
@@ -125,29 +132,48 @@ impl MessageProcessor {
                     }
                 })
                 .collect::<Vec<_>>();
-            let mut time = Measure::start("execute_instruction");
-            let mut compute_units_consumed = 0;
-            let result = invoke_context.process_instruction(
-                &instruction.data,
-                &instruction_accounts,
-                program_indices,
-                &mut compute_units_consumed,
-                timings,
-            );
-            time.stop();
-            *accumulated_consumed_units =
-                accumulated_consumed_units.saturating_add(compute_units_consumed);
-            timings.details.accumulate_program(
-                program_id,
-                time.as_us(),
-                compute_units_consumed,
-                result.is_err(),
-            );
-            timings.details.accumulate(&invoke_context.timings);
-            saturating_add_assign!(
-                timings.execute_accessories.process_instructions.total_us,
-                time.as_us()
-            );
+
+            let result = if is_precompile
+                && invoke_context
+                    .feature_set
+                    .is_active(&record_instruction_in_transaction_context_push::id())
+            {
+                invoke_context
+                    .transaction_context
+                    .push(
+                        program_indices,
+                        &instruction_accounts,
+                        &instruction.data,
+                        true,
+                    )
+                    .and_then(|_| invoke_context.transaction_context.pop())
+            } else {
+                let mut time = Measure::start("execute_instruction");
+                let mut compute_units_consumed = 0;
+                let result = invoke_context.process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    program_indices,
+                    &mut compute_units_consumed,
+                    timings,
+                );
+                time.stop();
+                *accumulated_consumed_units =
+                    accumulated_consumed_units.saturating_add(compute_units_consumed);
+                timings.details.accumulate_program(
+                    program_id,
+                    time.as_us(),
+                    compute_units_consumed,
+                    result.is_err(),
+                );
+                timings.details.accumulate(&invoke_context.timings);
+                saturating_add_assign!(
+                    timings.execute_accessories.process_instructions.total_us,
+                    time.as_us()
+                );
+                result
+            };
+
             result
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
         }
@@ -625,7 +651,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 2);
 
         let message = SanitizedMessage::Legacy(Message::new(
             &[
@@ -663,5 +689,6 @@ mod tests {
                 InstructionError::Custom(0xbabb1e)
             ))
         );
+        assert_eq!(transaction_context.get_instruction_trace().len(), 2);
     }
 }
