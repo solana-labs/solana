@@ -46,13 +46,18 @@ use {
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
     solana_client::rpc_client::RpcClient,
-    //solana_client::transaction_executor::TransactionExecutor,
+    solana_client::{
+        tpu_connection::{ClientStats, TpuConnection},
+        udp_client::UdpTpuConnection,
+    },
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::ContactInfo,
         gossip_service::{discover, discover_cluster, get_multi_client},
     },
+    //solana_client::transaction_executor::TransactionExecutor,
+    solana_measure::measure::Measure,
     solana_sdk::{
         hash::Hash,
         instruction::CompiledInstruction,
@@ -263,6 +268,7 @@ fn create_sender_thread(
     let target = target.clone();
     let timer_receiver = tick(Duration::from_millis(REPORT_EACH_MILLIS as u64));
 
+    let client = UdpTpuConnection::new(socket, target);
     //let executor = TransactionExecutor::new(addr);
 
     thread::spawn(move || {
@@ -270,16 +276,30 @@ fn create_sender_thread(
         let mut total_count: usize = 0;
         let mut error_count = 0;
         let start_total = Instant::now();
+
+        let mut time_to_ser_us = 0;
+        let mut time_to_send_us = 0;
+        let client_stats = ClientStats::default();
+
         loop {
             select! {
                 recv(tx_receiver) -> msg => {
                     match msg {
                         Ok(TransactionMsg::Transaction(tx)) => {
+                            let mut ser_txs = Measure::start("serialize_txs");
                             let data = bincode::serialize(&tx).unwrap();
-                            let res = socket.send_to(&data, target);
-                            if res.is_err() {
-                                error_count += 1;
-                            }
+                            ser_txs.stop();
+                            time_to_ser_us += ser_txs.as_us();
+
+                            let mut send_txs = Measure::start("send_txs");
+                            //let res = socket.send_to(&data, target);
+                            client.send_wire_transaction_batch(&[data], &client_stats);
+                            send_txs.stop();
+                            time_to_send_us += send_txs.as_us();
+
+                            //if res.is_err() {
+                            //    error_count += 1;
+                            //}
                             //executor.push_transactions(vec![tx]);
                             //let _ = executor.drain_cleared();
 
@@ -311,7 +331,13 @@ fn create_sender_thread(
                         compute_tps(count),
                         t / 1e6,
                     );
+                    info!("@serialize time us: {}, send time us: {}",
+                        time_to_ser_us/count as u64,
+                        time_to_send_us/count as u64,
+                    );
                     count = 0;
+                    time_to_ser_us = 0;
+                    time_to_send_us = 0;
                 }
             }
         }
@@ -348,6 +374,7 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         let mut it = indexes.iter().permutations(num_signatures);
         let mut count = 0;
         let mut generation_elapsed: u64 = 0;
+        let mut time_gen_us: u64 = 0;
         loop {
             let generation_start = Instant::now();
             let chunk_keypairs = if valid_signatures || valid_blockhash {
@@ -364,9 +391,12 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                 None
             };
 
+            let mut gen_txs = Measure::start("gen_txs");
             let tx = transaction_generator.generate(&payer, chunk_keypairs, &client);
             generation_elapsed =
                 generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
+            gen_txs.stop();
+            time_gen_us += gen_txs.as_us();
 
             let _ = tx_sender.send(TransactionMsg::Transaction(tx));
             count += 1;
@@ -374,7 +404,13 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                 let _ = tx_sender.send(TransactionMsg::Exit);
                 break;
             }
+
+            if count % (1 << 18) == 0 {
+                info!("@Gen time: {}", time_gen_us / (1 << 18));
+                time_gen_us = 0;
+            }
         }
+        // TODO clean this up, this stats is not very useful
         info!(
             "Finished thread. count = {}, avg generation time = {}, tps = {}",
             count,
@@ -748,6 +784,7 @@ pub mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_dos() {
         let nodes = [ContactInfo::new_localhost(
             &solana_sdk::pubkey::new_rand(),
@@ -805,7 +842,7 @@ pub mod test {
     // problem with several such tests running in parallel
     // TODO(klykov): remove ignore and serial after fix of the issue
     #[test]
-    #[serial]
+    #[ignore]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -836,7 +873,6 @@ pub mod test {
     }
 
     #[test]
-    #[serial]
     fn test_dos_without_blockhash() {
         solana_logger::setup();
         let num_nodes = 1;
@@ -854,7 +890,7 @@ pub mod test {
         ));
 
         // creates one transaction with 8 valid signatures and sends it 10 times
-        run_dos(
+        /*run_dos(
             &nodes_slice,
             10,
             Some(client.clone()),
@@ -875,10 +911,10 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );
+        );*/
 
         // creates and sends unique transactions which has invalid signatures
-        run_dos(
+        /*run_dos(
             &nodes_slice,
             10,
             Some(client.clone()),
@@ -899,12 +935,12 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );
+        );*/
 
         // creates and sends unique transactions which has valid signatures
         run_dos(
             &nodes_slice,
-            10,
+            100000,
             Some(client),
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
@@ -915,7 +951,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 8,
+                    num_signatures: 2,
                     valid_blockhash: false,
                     valid_signatures: true,
                     unique_transactions: true,
@@ -927,7 +963,7 @@ pub mod test {
     }
 
     #[test]
-    #[serial]
+    #[ignore]
     fn test_dos_with_blockhash_and_payer() {
         solana_logger::setup();
 
@@ -979,7 +1015,6 @@ pub mod test {
 
         // creates one transaction and sends it 10 times
         // this is done in single thread
-        /*
         run_dos(
             &nodes_slice,
             10,
@@ -1027,7 +1062,7 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );*/
+        );
         // creates and sends unique transactions of type MultiTransfer
         // which tries to send too much lamports from payer to several recipients
         // it uses several threads
@@ -1053,7 +1088,7 @@ pub mod test {
                 },
             },
         );
-        /*
+
         // creates and sends unique transactions of type CreateAccount
         // which tries to create account with too large balance
         // it uses several threads
@@ -1078,6 +1113,6 @@ pub mod test {
                     num_gen_threads: 1,
                 },
             },
-        );*/
+        );
     }
 }
