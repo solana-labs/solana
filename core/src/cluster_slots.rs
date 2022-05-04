@@ -3,6 +3,7 @@ use {
     solana_gossip::{
         cluster_info::ClusterInfo, contact_info::ContactInfo, crds::Cursor, epoch_slots::EpochSlots,
     },
+    solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, epoch_stakes::NodeIdToVoteAccounts},
     solana_sdk::{
         clock::{Slot, DEFAULT_SLOTS_PER_EPOCH},
@@ -77,14 +78,19 @@ impl ClusterSlots {
                     .zip(std::iter::repeat((epoch_slots.from, stake)))
             })
             .into_group_map();
+
         {
+            let mut time = Measure::start("cluster_slot");
             let mut cluster_slots = self.cluster_slots.write().unwrap();
+            let len = cluster_slots.len();
             slot_nodes_stakes
                 .into_iter()
                 .for_each(|(slot, nodes_stakes)| {
                     let slot_nodes = cluster_slots.entry(slot).or_default().clone();
                     slot_nodes.write().unwrap().extend(nodes_stakes);
                 });
+            time.stop();
+            info!("haha cluster_slot {} {}", len, time.as_us());
         }
         {
             let mut cluster_slots = self.cluster_slots.write().unwrap();
