@@ -7,8 +7,8 @@ use {
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
-        hash::Hash, nonce_account, pubkey::Pubkey, signature::Signature, timing::AtomicInterval,
-        transport::TransportError,
+        hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
+        timing::AtomicInterval, transport::TransportError,
     },
     std::{
         collections::{
@@ -458,7 +458,7 @@ impl SendTransactionService {
                         // take a lock of retry_transactions and move the batch to the retry set.
                         let mut retry_transactions = retry_transactions.lock().unwrap();
                         let txns_to_retry = transactions.len();
-                        let mut txns_added_to_retry = 0;
+                        let mut txns_added_to_retry: usize = 0;
                         for (signature, mut transaction_info) in transactions.drain() {
                             let retry_len = retry_transactions.len();
                             let entry = retry_transactions.entry(signature);
