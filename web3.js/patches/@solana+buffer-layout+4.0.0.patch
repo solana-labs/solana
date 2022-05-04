@@ -1,0 +1,11 @@
+diff --git a/node_modules/@solana/buffer-layout/package.json b/node_modules/@solana/buffer-layout/package.json
+index f8b41aa..41d9ced 100644
+--- a/node_modules/@solana/buffer-layout/package.json
++++ b/node_modules/@solana/buffer-layout/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "@solana/buffer-layout",
++  "sideEffects": false,
+   "version": "4.0.0",
+   "description": "Translation between JavaScript values and Buffers",
+   "keywords": [
