@@ -46,33 +46,35 @@ export type CreateSecp256k1InstructionWithPrivateKeyParams = {
   instructionIndex?: number;
 };
 
-const SECP256K1_INSTRUCTION_LAYOUT = BufferLayout.struct<
-  Readonly<{
-    ethAddress: Uint8Array;
-    ethAddressInstructionIndex: number;
-    ethAddressOffset: number;
-    messageDataOffset: number;
-    messageDataSize: number;
-    messageInstructionIndex: number;
-    numSignatures: number;
-    recoveryId: number;
-    signature: Uint8Array;
-    signatureInstructionIndex: number;
-    signatureOffset: number;
-  }>
->([
-  BufferLayout.u8('numSignatures'),
-  BufferLayout.u16('signatureOffset'),
-  BufferLayout.u8('signatureInstructionIndex'),
-  BufferLayout.u16('ethAddressOffset'),
-  BufferLayout.u8('ethAddressInstructionIndex'),
-  BufferLayout.u16('messageDataOffset'),
-  BufferLayout.u16('messageDataSize'),
-  BufferLayout.u8('messageInstructionIndex'),
-  BufferLayout.blob(20, 'ethAddress'),
-  BufferLayout.blob(64, 'signature'),
-  BufferLayout.u8('recoveryId'),
-]);
+const SECP256K1_INSTRUCTION_LAYOUT = /*#__PURE__*/ (function () {
+  return BufferLayout.struct<
+    Readonly<{
+      ethAddress: Uint8Array;
+      ethAddressInstructionIndex: number;
+      ethAddressOffset: number;
+      messageDataOffset: number;
+      messageDataSize: number;
+      messageInstructionIndex: number;
+      numSignatures: number;
+      recoveryId: number;
+      signature: Uint8Array;
+      signatureInstructionIndex: number;
+      signatureOffset: number;
+    }>
+  >([
+    BufferLayout.u8('numSignatures'),
+    BufferLayout.u16('signatureOffset'),
+    BufferLayout.u8('signatureInstructionIndex'),
+    BufferLayout.u16('ethAddressOffset'),
+    BufferLayout.u8('ethAddressInstructionIndex'),
+    BufferLayout.u16('messageDataOffset'),
+    BufferLayout.u16('messageDataSize'),
+    BufferLayout.u8('messageInstructionIndex'),
+    BufferLayout.blob(20, 'ethAddress'),
+    BufferLayout.blob(64, 'signature'),
+    BufferLayout.u8('recoveryId'),
+  ]);
+})();
 
 let _memoizedProgramId: PublicKey;
 
