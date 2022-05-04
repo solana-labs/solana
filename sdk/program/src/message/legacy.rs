@@ -530,7 +530,7 @@ impl Message {
                 let key = self.account_keys[i];
                 sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
             }
-            && (!self.is_key_called_as_program(i) || self.is_upgradeable_loader_present()) // !demote_program_id
+            && (/* !demote_program_id */ !self.is_key_called_as_program(i) || self.is_upgradeable_loader_present())
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
