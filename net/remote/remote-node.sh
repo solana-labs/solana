@@ -272,6 +272,7 @@ EOF
       --gossip-host "$entrypointIp"
       --gossip-port 8001
       --init-complete-file "$initCompleteFile"
+      --tpu-use-quic
     )
 
     if [[ "$tmpfsAccounts" = "true" ]]; then
