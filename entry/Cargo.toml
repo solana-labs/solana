@@ -17,7 +17,7 @@ dlopen_derive = "0.1.4"
 log = "0.4.11"
 rand = "0.7.0"
 rayon = "1.5.2"
-serde = "1.0.136"
+serde = "1.0.137"
 solana-measure = { path = "../measure", version = "=1.11.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "=1.11.0" }
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
