@@ -1,0 +1,11 @@
+diff --git a/node_modules/rpc-websockets/package.json b/node_modules/rpc-websockets/package.json
+index 10b6778..509eca5 100644
+--- a/node_modules/rpc-websockets/package.json
++++ b/node_modules/rpc-websockets/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "rpc-websockets",
++  "sideEffects": false,
+   "version": "7.4.18",
+   "description": "JSON-RPC 2.0 implementation over WebSockets for Node.js",
+   "main": "./dist/index.js",
