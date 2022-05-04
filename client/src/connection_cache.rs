@@ -4,6 +4,7 @@ use {
         tpu_connection::{ClientStats, TpuConnection},
         udp_client::UdpTpuConnection,
     },
+    indexmap::map::IndexMap,
     lazy_static::lazy_static,
     quinn_proto::ConnectionStats,
     rand::{thread_rng, Rng},
@@ -13,7 +14,6 @@ use {
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
-        collections::HashMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -172,8 +172,7 @@ impl ConnectionCacheStats {
 }
 
 struct ConnectionMap {
-    map: HashMap<SocketAddr, Connection>,
-    list_of_peers: Vec<SocketAddr>,
+    map: IndexMap<SocketAddr, Connection>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
@@ -182,8 +181,7 @@ struct ConnectionMap {
 impl ConnectionMap {
     pub fn new() -> Self {
         Self {
-            map: HashMap::with_capacity(MAX_CONNECTIONS),
-            list_of_peers: vec![],
+            map: IndexMap::with_capacity(MAX_CONNECTIONS),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             use_quic: false,
@@ -270,17 +268,15 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             let mut num_evictions = 0;
             let mut get_connection_cache_eviction_measure =
                 Measure::start("get_connection_cache_eviction_measure");
-            while map.list_of_peers.len() >= MAX_CONNECTIONS {
+            while map.map.len() >= MAX_CONNECTIONS {
                 let mut rng = thread_rng();
                 let n = rng.gen_range(0, MAX_CONNECTIONS);
-                let nth_addr = map.list_of_peers.swap_remove(n);
-                map.map.remove(&nth_addr);
+                map.map.swap_remove_index(n);
                 num_evictions += 1;
             }
             get_connection_cache_eviction_measure.stop();
 
             map.map.insert(*addr, connection.clone());
-            map.list_of_peers.push(*addr);
             (
                 connection,
                 false,
