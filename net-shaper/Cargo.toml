@@ -13,7 +13,7 @@ publish = false
 rand = "0.7.0"
 clap = { version = "3.1.5", features = ["cargo"] }
 serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.80"
+serde_json = "1.0.81"
 solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [[bin]]
