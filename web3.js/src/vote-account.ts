@@ -5,9 +5,9 @@ import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {toBuffer} from './util/to-buffer';
 
-export const VOTE_PROGRAM_ID = new PublicKey(
-  'Vote111111111111111111111111111111111111111',
-);
+export const VOTE_PROGRAM_ID = /*#__PURE__*/ (function () {
+  return new PublicKey('Vote111111111111111111111111111111111111111');
+})();
 
 export type Lockout = {
   slot: number;

@@ -5,9 +5,9 @@ import {Loader} from './loader';
 import type {Connection} from './connection';
 import type {Signer} from './keypair';
 
-export const BPF_LOADER_PROGRAM_ID = new PublicKey(
-  'BPFLoader2111111111111111111111111111111111',
-);
+export const BPF_LOADER_PROGRAM_ID = /*#__PURE__*/ (function () {
+  return new PublicKey('BPFLoader2111111111111111111111111111111111');
+})();
 
 /**
  * Factory class for transactions to interact with a program loader

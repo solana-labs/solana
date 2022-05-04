@@ -21,9 +21,9 @@ import {toBuffer} from './util/to-buffer';
  * Address of the stake config account which configures the rate
  * of stake warmup and cooldown as well as the slashing penalty.
  */
-export const STAKE_CONFIG_ID = new PublicKey(
-  'StakeConfig11111111111111111111111111111111',
-);
+export const STAKE_CONFIG_ID = /*#__PURE__*/ (function () {
+  return new PublicKey('StakeConfig11111111111111111111111111111111');
+})();
 
 /**
  * Stake account authority info

@@ -10,9 +10,9 @@ import * as Layout from './layout';
 import * as shortvec from './util/shortvec-encoding';
 import {PublicKey} from './publickey';
 
-export const VALIDATOR_INFO_KEY = new PublicKey(
-  'Va1idator1nfo111111111111111111111111111111',
-);
+export const VALIDATOR_INFO_KEY = /*#__PURE__*/ (function () {
+  return new PublicKey('Va1idator1nfo111111111111111111111111111111');
+})();
 
 /**
  * @internal
