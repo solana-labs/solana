@@ -2292,7 +2292,7 @@ impl Bank {
     }
 
     pub fn first_normal_epoch(&self) -> Epoch {
-        self.epoch_schedule.first_normal_epoch
+        self.epoch_schedule().first_normal_epoch
     }
 
     pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
@@ -2383,7 +2383,7 @@ impl Bank {
             } else {
                 self.epoch()
             };
-            let first_slot_in_epoch = self.epoch_schedule.get_first_slot_in_epoch(epoch);
+            let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(epoch);
             Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
         };
         let max_allowable_drift = if self
@@ -2431,8 +2431,8 @@ impl Bank {
         let clock = sysvar::clock::Clock {
             slot: self.slot,
             epoch_start_timestamp,
-            epoch: self.epoch_schedule.get_epoch(self.slot),
-            leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
+            epoch: self.epoch_schedule().get_epoch(self.slot),
+            leader_schedule_epoch: self.epoch_schedule().get_leader_schedule_epoch(self.slot),
             unix_timestamp,
         };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
@@ -2549,7 +2549,7 @@ impl Bank {
     fn update_epoch_schedule(&self) {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
             create_account(
-                &self.epoch_schedule,
+                self.epoch_schedule(),
                 self.inherit_specially_retained_account_fields(account),
             )
         });
@@ -2572,7 +2572,7 @@ impl Bank {
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
         //  calculated as: slots_elapsed / (slots / year)
-        self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
+        self.epoch_schedule().get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
     }
 
     // Calculates the starting-slot for inflation from the activation slot.
@@ -2598,12 +2598,12 @@ impl Bank {
     fn get_inflation_num_slots(&self) -> u64 {
         let inflation_activation_slot = self.get_inflation_start_slot();
         // Normalize inflation_start to align with the start of rewards accrual.
-        let inflation_start_slot = self.epoch_schedule.get_first_slot_in_epoch(
-            self.epoch_schedule
+        let inflation_start_slot = self.epoch_schedule().get_first_slot_in_epoch(
+            self.epoch_schedule()
                 .get_epoch(inflation_activation_slot)
                 .saturating_sub(1),
         );
-        self.epoch_schedule.get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
+        self.epoch_schedule().get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
     }
 
     pub fn slot_in_year_for_inflation(&self) -> f64 {
@@ -3457,7 +3457,7 @@ impl Bank {
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-            &self.epoch_schedule,
+            self.epoch_schedule(),
             self.slots_per_year,
             &genesis_config.rent,
         );
@@ -6516,13 +6516,13 @@ impl Bank {
 
     /// Return the number of slots per epoch for the given epoch
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
-        self.epoch_schedule.get_slots_in_epoch(epoch)
+        self.epoch_schedule().get_slots_in_epoch(epoch)
     }
 
     /// returns the epoch for which this bank's leader_schedule_slot_offset and slot would
     ///  need to cache leader_schedule
     pub fn get_leader_schedule_epoch(&self, slot: Slot) -> Epoch {
-        self.epoch_schedule.get_leader_schedule_epoch(slot)
+        self.epoch_schedule().get_leader_schedule_epoch(slot)
     }
 
     /// a bank-level cache of vote accounts and stake delegation info
@@ -6628,7 +6628,7 @@ impl Bank {
     ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
     ///
     pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, SlotIndex) {
-        self.epoch_schedule.get_epoch_and_slot_index(slot)
+        self.epoch_schedule().get_epoch_and_slot_index(slot)
     }
 
     pub fn get_epoch_info(&self) -> EpochInfo {
