@@ -37,7 +37,7 @@ rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
 semver = "1.0.7"
 serde = "1.0.137"
 serde_derive = "1.0.103"
-serde_json = "1.0.80"
+serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-faucet = { path = "../faucet", version = "=1.11.0" }
