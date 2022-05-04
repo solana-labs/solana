@@ -22,7 +22,7 @@ use {
         recycler::Recycler,
         sigverify,
     },
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{
         hash::Hash,
         packet::Meta,
@@ -44,9 +44,11 @@ use {
     },
 };
 
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
+        .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("entry_{}", ix))
         .build()
         .unwrap();

@@ -28,7 +28,7 @@ use {
         datapoint_debug, datapoint_error,
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
@@ -75,9 +75,11 @@ pub use {
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
+        .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("blockstore_{}", ix))
         .build()
         .unwrap();

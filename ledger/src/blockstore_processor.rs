@@ -15,7 +15,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -93,9 +93,11 @@ impl BlockCostCapacityMeter {
     }
 }
 
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
+        .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("blockstore_processor_{}", ix))
         .build()
         .unwrap();
