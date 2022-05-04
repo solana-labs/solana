@@ -260,21 +260,13 @@ pub fn recv_vec_packet_batches(
     recvr: &Receiver<Vec<PacketBatch>>,
 ) -> Result<(Vec<PacketBatch>, usize, Duration)> {
     let timer = Duration::new(1, 0);
-    let mut packet_batches = recvr.recv_timeout(timer)?;
+    let packet_batches = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
     trace!("got packets");
-    let mut num_packets = packet_batches
+    let num_packets = packet_batches
         .iter()
         .map(|packets| packets.packets.len())
         .sum::<usize>();
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch
-            .iter()
-            .map(|packets| packets.packets.len())
-            .sum::<usize>();
-        packet_batches.extend(packet_batch);
-    }
     let recv_duration = recv_start.elapsed();
     trace!(
         "packet batches len: {}, num packets: {}",
@@ -286,6 +278,7 @@ pub fn recv_vec_packet_batches(
 
 pub fn recv_packet_batches(
     recvr: &PacketBatchReceiver,
+    max_num_packets: usize,
 ) -> Result<(Vec<PacketBatch>, usize, Duration)> {
     let timer = Duration::new(1, 0);
     let packet_batch = recvr.recv_timeout(timer)?;
@@ -293,10 +286,17 @@ pub fn recv_packet_batches(
     trace!("got packets");
     let mut num_packets = packet_batch.packets.len();
     let mut packet_batches = vec![packet_batch];
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch.packets.len();
-        packet_batches.push(packet_batch);
+    loop {
+        if num_packets >= max_num_packets {
+            break;
+        }
+        if let Ok(packet_batch) = recvr.try_recv() {
+            trace!("got more packets");
+            num_packets += packet_batch.packets.len();
+            packet_batches.push(packet_batch);
+        } else {
+            break;
+        }
     }
     let recv_duration = recv_start.elapsed();
     trace!(

@@ -24,7 +24,9 @@ use {
     thiserror::Error,
 };
 
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+/// Maximum number of valid, filtered packets that can be sent along for
+/// signature verification.
+const MAX_SIGVERIFY_VALID_PACKETS: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -255,11 +257,11 @@ impl SigVerifyStage {
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
-            num_valid_packets = MAX_SIGVERIFY_BATCH;
+        if num_unique > MAX_SIGVERIFY_VALID_PACKETS {
+            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_VALID_PACKETS);
+            num_valid_packets = MAX_SIGVERIFY_VALID_PACKETS;
         }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_VALID_PACKETS);
         discard_time.stop();
 
         let mut verify_time = Measure::start("sigverify_batch_time");
