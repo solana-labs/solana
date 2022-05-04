@@ -34,12 +34,13 @@ fn test_cluster_partition_1_1() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_cluster_partition(
-        &[1, 1],
+        &[vec![1], vec![1]],
         None,
         (),
         empty,
         empty,
         on_partition_resolved,
+        None,
         None,
         vec![],
     )
@@ -53,12 +54,13 @@ fn test_cluster_partition_1_1_1() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_cluster_partition(
-        &[1, 1, 1],
+        &[vec![1], vec![1], vec![1]],
         None,
         (),
         empty,
         empty,
         on_partition_resolved,
+        None,
         None,
         vec![],
     )
