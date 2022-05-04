@@ -24,7 +24,9 @@ export type TransactionSignature = string;
 /**
  * Default (empty) signature
  */
-const DEFAULT_SIGNATURE = Buffer.alloc(SIGNATURE_LENGTH_IN_BYTES).fill(0);
+const DEFAULT_SIGNATURE = /*#__PURE__*/ Buffer.alloc(
+  SIGNATURE_LENGTH_IN_BYTES,
+).fill(0);
 
 /**
  * Account metadata used to define instructions
