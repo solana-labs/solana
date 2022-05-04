@@ -23,7 +23,7 @@ use {
     solana_perf::{
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
-        packet::{limited_deserialize, Packet, PacketBatch, PACKETS_PER_BATCH},
+        packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
@@ -45,13 +45,10 @@ use {
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
         feature_set,
-        message::Message,
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
-        transaction::{
-            self, AddressLoader, SanitizedTransaction, TransactionError, VersionedTransaction,
-        },
+        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
         transport::TransportError,
     },
     solana_transaction_status::token_balances::{
@@ -565,7 +562,6 @@ impl BankingStage {
         let mut reached_end_of_slot: Option<EndOfSlot> = None;
 
         RetainMut::retain_mut(buffered_packet_batches, |deserialized_packet_batch| {
-            let packet_batch = &deserialized_packet_batch.packet_batch;
             let original_unprocessed_indexes = deserialized_packet_batch
                 .unprocessed_packets
                 .keys()
@@ -579,8 +575,7 @@ impl BankingStage {
                 let should_retain = if let Some(bank) = &end_of_slot.working_bank {
                     let new_unprocessed_indexes = Self::filter_unprocessed_packets_at_end_of_slot(
                         bank,
-                        packet_batch,
-                        &original_unprocessed_indexes,
+                        &deserialized_packet_batch.unprocessed_packets,
                         my_pubkey,
                         end_of_slot.next_slot_leader,
                         banking_stage_stats,
@@ -631,8 +626,7 @@ impl BankingStage {
                                     &working_bank,
                                     &bank_creation_time,
                                     recorder,
-                                    packet_batch,
-                                    original_unprocessed_indexes.to_owned(),
+                                    &deserialized_packet_batch.unprocessed_packets,
                                     transaction_status_sender.clone(),
                                     gossip_vote_sender,
                                     banking_stage_stats,
@@ -1725,32 +1719,27 @@ impl BankingStage {
     // with their packet indexes.
     #[allow(clippy::needless_collect)]
     fn transactions_from_packets(
-        packet_batch: &PacketBatch,
-        transaction_indexes: &[usize],
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,
         address_loader: impl AddressLoader,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
-        transaction_indexes
+        deserialized_packet_batch
             .iter()
-            .filter_map(|tx_index| {
-                let p = &packet_batch.packets[*tx_index];
-                if votes_only && !p.meta.is_simple_vote_tx() {
+            .filter_map(|(&tx_index, deserialized_packet)| {
+                if votes_only && !deserialized_packet.is_simple_vote {
                     return None;
                 }
 
-                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                let message_bytes = DeserializedPacketBatch::packet_message(p)?;
-                let message_hash = Message::hash_raw_message(message_bytes);
                 let tx = SanitizedTransaction::try_create(
-                    tx,
-                    message_hash,
-                    Some(p.meta.is_simple_vote_tx()),
+                    deserialized_packet.versioned_transaction.clone(),
+                    deserialized_packet.message_hash,
+                    Some(deserialized_packet.is_simple_vote),
                     address_loader.clone(),
                 )
                 .ok()?;
                 tx.verify_precompiles(feature_set).ok()?;
-                Some((tx, *tx_index))
+                Some((tx, tx_index))
             })
             .unzip()
     }
@@ -1799,8 +1788,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &TransactionRecorder,
-        packet_batch: &PacketBatch,
-        packet_indexes: Vec<usize>,
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -1811,8 +1799,7 @@ impl BankingStage {
         let ((transactions, transaction_to_packet_indexes), packet_conversion_time) = Measure::this(
             |_| {
                 Self::transactions_from_packets(
-                    packet_batch,
-                    &packet_indexes,
+                    deserialized_packet_batch,
                     &bank.feature_set,
                     bank.vote_only_bank(),
                     bank.as_ref(),
@@ -1902,8 +1889,7 @@ impl BankingStage {
 
     fn filter_unprocessed_packets_at_end_of_slot(
         bank: &Arc<Bank>,
-        packet_batch: &PacketBatch,
-        transaction_indexes: &[usize],
+        deserialized_packet_batch: &HashMap<usize, DeserializedPacket>,
         my_pubkey: &Pubkey,
         next_leader: Option<Pubkey>,
         banking_stage_stats: &BankingStageStats,
@@ -1913,15 +1899,17 @@ impl BankingStage {
         // Filtering helps if we were going to forward the packets to some other node
         if let Some(leader) = next_leader {
             if leader == *my_pubkey {
-                return transaction_indexes.to_vec();
+                return deserialized_packet_batch
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<usize>>();
             }
         }
 
         let mut unprocessed_packet_conversion_time =
             Measure::start("unprocessed_packet_conversion");
         let (transactions, transaction_to_packet_indexes) = Self::transactions_from_packets(
-            packet_batch,
-            transaction_indexes,
+            deserialized_packet_batch,
             &bank.feature_set,
             bank.vote_only_bank(),
             bank.as_ref(),
@@ -2159,7 +2147,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::{to_packet_batches, PacketFlags},
+        solana_perf::packet::{limited_deserialize, to_packet_batches, PacketFlags},
         solana_poh::{
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
@@ -2179,7 +2167,10 @@ mod tests {
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
-            transaction::{MessageHash, SimpleAddressLoader, Transaction, TransactionError},
+            transaction::{
+                MessageHash, SimpleAddressLoader, Transaction, TransactionError,
+                VersionedTransaction,
+            },
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
@@ -4291,7 +4282,7 @@ mod tests {
     fn make_test_packets(
         transactions: Vec<Transaction>,
         vote_indexes: Vec<usize>,
-    ) -> (PacketBatch, Vec<usize>) {
+    ) -> DeserializedPacketBatch {
         let capacity = transactions.len();
         let mut packet_batch = PacketBatch::with_capacity(capacity);
         let mut packet_indexes = Vec::with_capacity(capacity);
@@ -4303,7 +4294,7 @@ mod tests {
         for index in vote_indexes.iter() {
             packet_batch.packets[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
-        (packet_batch, packet_indexes)
+        DeserializedPacketBatch::new(packet_batch, packet_indexes, false)
     }
 
     #[test]
@@ -4321,28 +4312,30 @@ mod tests {
             &keypair,
             None,
         );
+        let sorted = |mut v: Vec<usize>| {
+            v.sort_unstable();
+            v
+        };
 
         // packets with no votes
         {
             let vote_indexes = vec![];
-            let (packet_batch, packet_indexes) =
+            let deserialized_packet_batch =
                 make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
-            assert_eq!(vec![0, 1], tx_packet_index);
+            assert_eq!(vec![0, 1], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
@@ -4354,63 +4347,59 @@ mod tests {
         // packets with some votes
         {
             let vote_indexes = vec![0, 2];
-            let (packet_batch, packet_indexes) = make_test_packets(
+            let deserialized_packet_batch = make_test_packets(
                 vec![vote_tx.clone(), transfer_tx, vote_tx.clone()],
                 vote_indexes,
             );
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(2, txs.len());
-            assert_eq!(vec![0, 2], tx_packet_index);
+            assert_eq!(vec![0, 2], sorted(tx_packet_index));
         }
 
         // packets with all votes
         {
             let vote_indexes = vec![0, 1, 2];
-            let (packet_batch, packet_indexes) = make_test_packets(
+            let deserialized_packet_batch = make_test_packets(
                 vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
                 vote_indexes,
             );
 
             let mut votes_only = false;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
 
             votes_only = true;
             let (txs, tx_packet_index) = BankingStage::transactions_from_packets(
-                &packet_batch,
-                &packet_indexes,
+                &deserialized_packet_batch.unprocessed_packets,
                 &Arc::new(FeatureSet::default()),
                 votes_only,
                 SimpleAddressLoader::Disabled,
             );
             assert_eq!(3, txs.len());
-            assert_eq!(vec![0, 1, 2], tx_packet_index);
+            assert_eq!(vec![0, 1, 2], sorted(tx_packet_index));
         }
     }
 
