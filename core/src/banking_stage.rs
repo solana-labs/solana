@@ -676,7 +676,7 @@ impl BankingStage {
                             for processed_packet in &packets_to_process[start..end] {
                                 buffered_packet_batches
                                     .message_hash_to_transaction
-                                    .remove(&processed_packet.message_hash());
+                                    .remove(processed_packet.message_hash());
                             }
                         },
                     );
@@ -1739,7 +1739,7 @@ impl BankingStage {
 
         let tx = SanitizedTransaction::try_create(
             deserialized_packet.versioned_transaction().clone(),
-            deserialized_packet.message_hash(),
+            *deserialized_packet.message_hash(),
             Some(deserialized_packet.is_simple_vote()),
             address_loader,
         )
@@ -1946,7 +1946,7 @@ impl BankingStage {
             let mut unprocessed_packet_conversion_time =
                 Measure::start("unprocessed_packet_conversion");
 
-            let should_retain = |deserialized_packet: &DeserializedPacket| {
+            let should_retain = |deserialized_packet: &mut DeserializedPacket| {
                 Self::transaction_from_deserialized_packet(
                     deserialized_packet.immutable_section(),
                     &bank.feature_set,
@@ -1955,7 +1955,7 @@ impl BankingStage {
                 )
                 .is_some()
             };
-            unprocessed_packets.retain(|deserialized_packet| should_retain(deserialized_packet));
+            unprocessed_packets.retain(should_retain);
             unprocessed_packet_conversion_time.stop();
             banking_stage_stats
                 .unprocessed_packet_conversion_elapsed
@@ -3926,7 +3926,7 @@ mod tests {
                         );
                     let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
                         .iter()
-                        .map(|packet| packet.immutable_section().message_hash())
+                        .map(|packet| *packet.immutable_section().message_hash())
                         .collect();
                     BankingStage::consume_buffered_packets(
                         &Pubkey::default(),
@@ -3951,7 +3951,7 @@ mod tests {
                     );
                     for packet in buffered_packet_batches.iter() {
                         assert!(all_packet_message_hashes
-                            .contains(&packet.immutable_section().message_hash()));
+                            .contains(packet.immutable_section().message_hash()));
                     }
                 })
                 .unwrap();

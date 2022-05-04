@@ -52,8 +52,8 @@ impl ImmutableDeserializedPacket {
         self.original_packet.meta.sender_stake
     }
 
-    pub fn message_hash(&self) -> Hash {
-        self.message_hash
+    pub fn message_hash(&self) -> &Hash {
+        &self.message_hash
     }
 
     pub fn is_simple_vote(&self) -> bool {
@@ -210,7 +210,7 @@ impl UnprocessedPacketBatches {
     pub fn push(&mut self, deserialized_packet: DeserializedPacket) -> Option<DeserializedPacket> {
         if self
             .message_hash_to_transaction
-            .contains_key(&deserialized_packet.immutable_section().message_hash())
+            .contains_key(deserialized_packet.immutable_section().message_hash())
         {
             return None;
         }
@@ -244,7 +244,7 @@ impl UnprocessedPacketBatches {
             .filter(|immutable_packet| {
                 match self
                     .message_hash_to_transaction
-                    .entry(immutable_packet.message_hash())
+                    .entry(*immutable_packet.message_hash())
                 {
                     Entry::Vacant(_vacant_entry) => {
                         panic!(
@@ -280,7 +280,7 @@ impl UnprocessedPacketBatches {
 
         // Keep track of the original packet in the tracking hashmap
         self.message_hash_to_transaction.insert(
-            deserialized_packet.immutable_section().message_hash(),
+            *deserialized_packet.immutable_section().message_hash(),
             deserialized_packet,
         );
     }
@@ -299,12 +299,12 @@ impl UnprocessedPacketBatches {
             // because the priority queue and hashmap are kept consistent at all times.
             let removed_min = self
                 .message_hash_to_transaction
-                .remove(&popped_immutable_packet.message_hash())
+                .remove(popped_immutable_packet.message_hash())
                 .unwrap();
 
             // Keep track of the original packet in the tracking hashmap
             self.message_hash_to_transaction.insert(
-                deserialized_packet.immutable_section().message_hash(),
+                *deserialized_packet.immutable_section().message_hash(),
                 deserialized_packet,
             );
             removed_min
@@ -318,7 +318,7 @@ impl UnprocessedPacketBatches {
             .pop_max()
             .map(|immutable_packet| {
                 self.message_hash_to_transaction
-                    .remove(&immutable_packet.message_hash())
+                    .remove(immutable_packet.message_hash())
                     .unwrap()
             })
     }
