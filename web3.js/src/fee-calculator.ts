@@ -5,7 +5,9 @@ import * as BufferLayout from '@solana/buffer-layout';
  *
  * @internal
  */
-export const FeeCalculatorLayout = BufferLayout.nu64('lamportsPerSignature');
+export const FeeCalculatorLayout = /*#__PURE__*/ BufferLayout.nu64(
+  'lamportsPerSignature',
+);
 
 /**
  * Calculator for transaction fees.
