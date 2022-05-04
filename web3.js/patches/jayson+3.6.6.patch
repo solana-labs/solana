@@ -1,0 +1,11 @@
+diff --git a/node_modules/jayson/package.json b/node_modules/jayson/package.json
+index 329d677..42f066e 100644
+--- a/node_modules/jayson/package.json
++++ b/node_modules/jayson/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "jayson",
++  "sideEffects": false,
+   "version": "3.6.6",
+   "description": "JSON-RPC 1.0/2.0 compliant server and client",
+   "license": "MIT",
