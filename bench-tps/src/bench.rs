@@ -115,28 +115,9 @@ fn generate_chunked_transfers(
     let mut reclaim_lamports_back_to_source_account = false;
     let mut chunk_index = 0;
     let mut last_blockhash_time = Instant::now();
-    let mut old_blockhash = {
-        let recent_blockhash_guard = recent_blockhash.read().unwrap();
-        *recent_blockhash_guard
-    };
+    let mut old_blockhash = *recent_blockhash.read().unwrap();
 
     while start.elapsed() < duration {
-        let new_blockhash = {
-            let recent_blockhash_guard = recent_blockhash.read().unwrap();
-            *recent_blockhash_guard
-        };
-        if old_blockhash != new_blockhash {
-            old_blockhash = new_blockhash;
-            datapoint_info!(
-                "blockhash_stats",
-                (
-                    "time_elapsed_since_blockhash_refreshed",
-                    last_blockhash_time.elapsed().as_millis(),
-                    i64
-                )
-            );
-            last_blockhash_time = Instant::now();
-        }
         generate_txs(
             shared_txs,
             &recent_blockhash,
@@ -144,6 +125,8 @@ fn generate_chunked_transfers(
             &dest_keypair_chunks[chunk_index],
             threads,
             reclaim_lamports_back_to_source_account,
+            &mut old_blockhash,
+            &mut last_blockhash_time,
         );
 
         // In sustained mode, overlap the transfers with generation. This has higher average
@@ -370,8 +353,22 @@ fn generate_txs(
     dest: &VecDeque<&Keypair>,
     threads: usize,
     reclaim: bool,
+    old_blockhash: &mut Hash,
+    last_blockhash_time: &mut Instant,
 ) {
     let blockhash = *blockhash.read().unwrap();
+    if *old_blockhash != blockhash {
+        *old_blockhash = blockhash;
+        datapoint_info!(
+            "blockhash_stats",
+            (
+                "time_elapsed_since_blockhash_refreshed",
+                last_blockhash_time.elapsed().as_millis(),
+                i64
+            )
+        );
+        *last_blockhash_time = Instant::now();
+    }
     let tx_count = source.len();
     info!(
         "Signing transactions... {} (reclaim={}, blockhash={})",
