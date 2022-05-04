@@ -41,25 +41,25 @@ struct FindPacketSenderStakeStats {
 }
 
 impl FindPacketSenderStakeStats {
-    fn report(&mut self) {
+    fn report(&mut self, name: &'static str) {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 2000 {
             datapoint_info!(
-                "find_packet_sender_stake-services_stats",
+                name,
                 (
-                    "refresh_ip_to_stake_time",
+                    "refresh_ip_to_stake_time_us",
                     self.refresh_ip_to_stake_time as i64,
                     i64
                 ),
                 (
-                    "apply_sender_stakes_time",
+                    "apply_sender_stakes_time_us",
                     self.apply_sender_stakes_time as i64,
                     i64
                 ),
-                ("send_batches_time", self.send_batches_time as i64, i64),
+                ("send_batches_time_us", self.send_batches_time as i64, i64),
                 (
-                    "receive_batches_time",
+                    "receive_batches_time_ns",
                     self.receive_batches_time as i64,
                     i64
                 ),
@@ -82,6 +82,7 @@ impl FindPacketSenderStakeStage {
         sender: FindPacketSenderStakeSender,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
+        name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
         let thread_hdl = Builder::new()
@@ -137,7 +138,7 @@ impl FindPacketSenderStakeStage {
                         },
                     }
 
-                    stats.report();
+                    stats.report(name);
                 }
             })
             .unwrap();
