@@ -672,9 +672,12 @@ impl ProgressMap {
         self.progress_map
             .retain(|k, _| bank_forks.get(*k).is_some());
         let after = self.progress_map.len();
-        info!(
-            "progress map prune {}: before={}, after={}",
-            new_root, before, after
+        datapoint_info!(
+            "progress-map-prune",
+            ("slot", new_root as i64, i64),
+            ("before", before as i64, i64),
+            ("after", after as i64, i64),
+            ("diff", (before - after) as i64, i64),
         );
     }
 
