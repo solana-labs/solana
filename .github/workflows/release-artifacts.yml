@@ -80,6 +80,24 @@ jobs:
           AWS_REGION: "us-west-1"
           SOURCE_DIR: "github-action-s3-upload"
 
+  osx-gh-release:
+    needs: [osx-build]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v3
+        with:
+          name: osx-artifact
+          path: ./github-action-s3-upload
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          files: |
+            github-action-s3-upload/${{ inputs.tag }}/*
+
   windows-build:
     runs-on: windows-2022
     steps:
@@ -143,3 +161,21 @@ jobs:
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_REGION: "us-west-1"
           SOURCE_DIR: "github-action-s3-upload"
+
+  windows-gh-release:
+    needs: [windows-build]
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-artifact
+          path: ./github-action-s3-upload
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          files: |
+            github-action-s3-upload/${{ inputs.tag }}/*
