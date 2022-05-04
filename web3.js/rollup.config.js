@@ -1,4 +1,5 @@
 import babel from '@rollup/plugin-babel';
+import alias from '@rollup/plugin-alias';
 import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
@@ -130,6 +131,14 @@ function generateConfig(configType, format) {
           break;
         }
       }
+
+      // Don't supply a `fetch` ponyfill in the browser build.
+      // Just use the browser-native `window.fetch`.
+      config.plugins.unshift(
+        alias({
+          entries: [{find: 'cross-fetch', replacement: './util/browser-fetch'}],
+        }),
+      );
 
       // TODO: Find a workaround to avoid resolving the following JSON file:
       // `node_modules/secp256k1/node_modules/elliptic/package.json`
