@@ -254,9 +254,10 @@ impl TransactionGenerator {
 //
 // |TxGenerator|{n} -> |Tx channel|{1} -> |Sender|{1}
 enum TransactionMsg {
-    Transaction(Transaction),
+    Transaction(Vec<Transaction>),
     Exit,
 }
+static TRANS_BATCH_SIZE: usize = 128;
 
 fn create_sender_thread(
     tx_receiver: Receiver<TransactionMsg>,
@@ -285,26 +286,27 @@ fn create_sender_thread(
             select! {
                 recv(tx_receiver) -> msg => {
                     match msg {
-                        Ok(TransactionMsg::Transaction(tx)) => {
+                        Ok(TransactionMsg::Transaction(txs)) => {
                             let mut ser_txs = Measure::start("serialize_txs");
-                            let data = bincode::serialize(&tx).unwrap();
+                            let data: Vec<_> = txs.into_iter().map(|tx| bincode::serialize(&tx).unwrap()).collect();
+                            //let data = bincode::serialize(&tx).unwrap();
                             ser_txs.stop();
                             time_to_ser_us += ser_txs.as_us();
 
                             let mut send_txs = Measure::start("send_txs");
                             //let res = socket.send_to(&data, target);
-                            client.send_wire_transaction_batch(&[data], &client_stats);
+                            let res = client.send_wire_transaction_batch(&data, &client_stats);
                             send_txs.stop();
                             time_to_send_us += send_txs.as_us();
 
-                            //if res.is_err() {
-                            //    error_count += 1;
-                            //}
+                            if res.is_err() {
+                                error_count += 1;
+                            }
                             //executor.push_transactions(vec![tx]);
                             //let _ = executor.drain_cleared();
 
-                            count += 1;
-                            total_count += 1;
+                            count += TRANS_BATCH_SIZE;
+                            total_count += TRANS_BATCH_SIZE;
                         }
                         Ok(TransactionMsg::Exit) => {
                             info!("Worker is done");
@@ -377,29 +379,34 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         let mut time_gen_us: u64 = 0;
         loop {
             let generation_start = Instant::now();
-            let chunk_keypairs = if valid_signatures || valid_blockhash {
-                let permut = it.next();
-                if permut.is_none() {
-                    // if ran out of permutations, regenerate keys
-                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                    info!("Regenerate keypairs");
-                    continue;
-                }
-                let permut = permut.unwrap();
-                Some(apply_permutation(permut, &keypairs_flat))
-            } else {
-                None
-            };
 
             let mut gen_txs = Measure::start("gen_txs");
-            let tx = transaction_generator.generate(&payer, chunk_keypairs, &client);
+            let txs: Vec<Transaction> = (0..TRANS_BATCH_SIZE)
+                .map(|_| {
+                    let chunk_keypairs = if valid_signatures || valid_blockhash {
+                        let mut permut = it.next();
+                        if permut.is_none() {
+                            // if ran out of permutations, regenerate keys
+                            keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                            info!("Regenerate keypairs");
+                            permut = it.next();
+                        }
+                        let permut = permut.unwrap();
+                        Some(apply_permutation(permut, &keypairs_flat))
+                    } else {
+                        None
+                    };
+                    transaction_generator.generate(&payer, chunk_keypairs, &client)
+                })
+                .collect();
+
             generation_elapsed =
                 generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
             gen_txs.stop();
             time_gen_us += gen_txs.as_us();
 
-            let _ = tx_sender.send(TransactionMsg::Transaction(tx));
-            count += 1;
+            let _ = tx_sender.send(TransactionMsg::Transaction(txs));
+            count += TRANS_BATCH_SIZE;
             if max_iter_per_thread != 0 && count >= max_iter_per_thread {
                 let _ = tx_sender.send(TransactionMsg::Exit);
                 break;
