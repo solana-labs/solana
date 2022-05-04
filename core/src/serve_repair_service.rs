@@ -37,8 +37,11 @@ impl ServeRepairService {
             request_sender,
             Recycler::default(),
             "serve_repair_receiver",
-            1,
-            false,
+            streamer::ReceiverOptions {
+                coalesce_ms: 1,
+                max_queued_batches: usize::MAX,
+                use_pinned_memory: false,
+            },
         );
         let (response_sender, response_receiver) = unbounded();
         let t_responder = streamer::responder(

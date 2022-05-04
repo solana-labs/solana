@@ -153,8 +153,11 @@ impl AncestorHashesService {
             response_sender,
             Recycler::default(),
             "ancestor_hashes_response_receiver",
-            1,
-            false,
+            streamer::ReceiverOptions {
+                coalesce_ms: 1,
+                max_queued_batches: usize::MAX,
+                use_pinned_memory: false,
+            },
         );
 
         let ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>> =
@@ -914,8 +917,11 @@ mod test {
                 requests_sender,
                 Recycler::default(),
                 "serve_repair_receiver",
-                1,
-                false,
+                streamer::ReceiverOptions {
+                    coalesce_ms: 1,
+                    max_queued_batches: usize::MAX,
+                    use_pinned_memory: false,
+                },
             );
             let t_listen = ServeRepair::listen(
                 responder_serve_repair,

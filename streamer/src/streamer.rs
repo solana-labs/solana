@@ -45,21 +45,27 @@ pub enum StreamerError {
 
 pub type Result<T> = std::result::Result<T, StreamerError>;
 
+pub struct ReceiverOptions {
+    pub coalesce_ms: u64,
+    pub max_queued_batches: usize,
+    pub use_pinned_memory: bool,
+}
+
 fn recv_loop(
     sock: &UdpSocket,
     exit: Arc<AtomicBool>,
     channel: &PacketBatchSender,
     recycler: &PacketBatchRecycler,
     name: &'static str,
-    coalesce_ms: u64,
-    use_pinned_memory: bool,
+    options: ReceiverOptions,
 ) -> Result<()> {
     let mut recv_count = 0;
+    let mut drop_count = 0;
     let mut call_count = 0;
     let mut now = Instant::now();
     let mut num_max_received = 0; // Number of times maximum packets were received
     loop {
-        let mut packet_batch = if use_pinned_memory {
+        let mut packet_batch = if options.use_pinned_memory {
             PacketBatch::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, name)
         } else {
             PacketBatch::with_capacity(PACKETS_PER_BATCH)
@@ -70,14 +76,18 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if let Ok(len) = packet::recv_from(&mut packet_batch, sock, coalesce_ms) {
+            if let Ok(len) = packet::recv_from(&mut packet_batch, sock, options.coalesce_ms) {
                 if len == NUM_RCVMMSGS {
                     num_max_received += 1;
                 }
                 recv_count += len;
                 call_count += 1;
                 if len > 0 {
-                    channel.send(packet_batch)?;
+                    if channel.len() < options.max_queued_batches {
+                        channel.send(packet_batch)?;
+                    } else {
+                        drop_count += len;
+                    }
                 }
                 break;
             }
@@ -86,11 +96,13 @@ fn recv_loop(
             datapoint_debug!(
                 name,
                 ("received", recv_count as i64, i64),
+                ("dropped", drop_count as i64, i64),
                 ("call_count", i64::from(call_count), i64),
                 ("elapsed", now.elapsed().as_millis() as i64, i64),
                 ("max_received", i64::from(num_max_received), i64),
             );
             recv_count = 0;
+            drop_count = 0;
             call_count = 0;
             num_max_received = 0;
         }
@@ -104,8 +116,7 @@ pub fn receiver(
     packet_sender: PacketBatchSender,
     recycler: PacketBatchRecycler,
     name: &'static str,
-    coalesce_ms: u64,
-    use_pinned_memory: bool,
+    options: ReceiverOptions,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
@@ -119,8 +130,7 @@ pub fn receiver(
                 &packet_sender,
                 &recycler.clone(),
                 name,
-                coalesce_ms,
-                use_pinned_memory,
+                options,
             );
         })
         .unwrap()
@@ -411,8 +421,11 @@ mod test {
             s_reader,
             Recycler::default(),
             "test",
-            1,
-            true,
+            ReceiverOptions {
+                coalesce_ms: 1,
+                max_queued_batches: usize::MAX,
+                use_pinned_memory: true,
+            },
         );
         let t_responder = {
             let (s_responder, r_responder) = unbounded();

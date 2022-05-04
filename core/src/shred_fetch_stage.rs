@@ -140,8 +140,11 @@ impl ShredFetchStage {
                     packet_sender.clone(),
                     recycler.clone(),
                     "packet_modifier",
-                    1,
-                    true,
+                    streamer::ReceiverOptions {
+                        coalesce_ms: 1,
+                        max_queued_batches: usize::MAX,
+                        use_pinned_memory: true,
+                    },
                 )
             })
             .collect();

@@ -52,8 +52,11 @@ impl GossipService {
             request_sender,
             Recycler::default(),
             "gossip_receiver",
-            1,
-            false,
+            streamer::ReceiverOptions {
+                coalesce_ms: 1,
+                max_queued_batches: usize::MAX,
+                use_pinned_memory: false,
+            },
         );
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(

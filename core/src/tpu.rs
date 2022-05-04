@@ -41,6 +41,12 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
+/// The default maximum number of batches in the queue that leaves the
+/// fetch stage.
+///
+/// 50k batches means up to 6.4M packets, roughly 8GB of memory
+pub const DEFAULT_TPU_MAX_QUEUED_BATCHES: usize = 50_000;
+
 /// Timeout interval when joining threads during TPU close
 const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
@@ -90,6 +96,7 @@ impl Tpu {
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
+        tpu_max_queued_batches: usize,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
@@ -113,6 +120,7 @@ impl Tpu {
             &vote_packet_sender,
             poh_recorder,
             tpu_coalesce_ms,
+            tpu_max_queued_batches,
         );
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
