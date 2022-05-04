@@ -44,20 +44,6 @@ import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
 
-const PublicKeyFromString = coerce(
-  instance(PublicKey),
-  string(),
-  value => new PublicKey(value),
-);
-
-const RawAccountDataResult = tuple([string(), literal('base64')]);
-
-const BufferFromRawAccountData = coerce(
-  instance(Buffer),
-  RawAccountDataResult,
-  value => Buffer.from(value[0], 'base64'),
-);
-
 /**
  * Attempt to use a recent blockhash for up to 30 seconds
  * @internal
@@ -303,13 +289,11 @@ function createRpcResult<T, U>(result: Struct<T, U>) {
   ]);
 }
 
-const UnknownRpcResult = createRpcResult(unknown());
-
 /**
  * @internal
  */
 function jsonRpcResult<T, U>(schema: Struct<T, U>) {
-  return coerce(createRpcResult(schema), UnknownRpcResult, value => {
+  return coerce(createRpcResult(schema), createRpcResult(unknown()), value => {
     if ('error' in value) {
       return value;
     } else {
@@ -469,14 +453,6 @@ export type InflationGovernor = {
   terminal: number;
 };
 
-const GetInflationGovernorResult = pick({
-  foundation: number(),
-  foundationTerm: number(),
-  initial: number(),
-  taper: number(),
-  terminal: number(),
-});
-
 /**
  * The inflation reward for an epoch
  */
@@ -492,22 +468,6 @@ export type InflationReward = {
 };
 
 /**
- * Expected JSON RPC response for the "getInflationReward" message
- */
-const GetInflationRewardResult = jsonRpcResult(
-  array(
-    nullable(
-      pick({
-        epoch: number(),
-        effectiveSlot: number(),
-        amount: number(),
-        postBalance: number(),
-      }),
-    ),
-  ),
-);
-
-/**
  * Information about the current epoch
  */
 export type EpochInfo = {
@@ -519,23 +479,6 @@ export type EpochInfo = {
   transactionCount?: number;
 };
 
-const GetEpochInfoResult = pick({
-  epoch: number(),
-  slotIndex: number(),
-  slotsInEpoch: number(),
-  absoluteSlot: number(),
-  blockHeight: optional(number()),
-  transactionCount: optional(number()),
-});
-
-const GetEpochScheduleResult = pick({
-  slotsPerEpoch: number(),
-  leaderScheduleSlotOffset: number(),
-  warmup: boolean(),
-  firstNormalEpoch: number(),
-  firstNormalSlot: number(),
-});
-
 /**
  * Leader schedule
  * (see https://docs.solana.com/terminology#leader-schedule)
@@ -543,25 +486,6 @@ const GetEpochScheduleResult = pick({
 export type LeaderSchedule = {
   [address: string]: number[];
 };
-
-const GetLeaderScheduleResult = record(string(), array(number()));
-
-/**
- * Transaction error or null
- */
-const TransactionErrorResult = nullable(union([pick({}), string()]));
-
-/**
- * Signature status for a transaction
- */
-const SignatureStatusResult = pick({
-  err: TransactionErrorResult,
-});
-
-/**
- * Transaction signature received notification
- */
-const SignatureReceivedResult = literal('receivedSignature');
 
 /**
  * Version info for a node
@@ -571,11 +495,6 @@ export type Version = {
   'solana-core': string;
   'feature-set'?: number;
 };
-
-const VersionResult = pick({
-  'solana-core': string(),
-  'feature-set': optional(number()),
-});
 
 export type SimulatedTransactionAccountInfo = {
   /** `true` if this account's data contains a loaded program */
@@ -596,29 +515,6 @@ export type SimulatedTransactionResponse = {
   accounts?: (SimulatedTransactionAccountInfo | null)[] | null;
   unitsConsumed?: number;
 };
-
-const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
-  pick({
-    err: nullable(union([pick({}), string()])),
-    logs: nullable(array(string())),
-    accounts: optional(
-      nullable(
-        array(
-          nullable(
-            pick({
-              executable: boolean(),
-              owner: string(),
-              lamports: number(),
-              data: array(string()),
-              rentEpoch: optional(number()),
-            }),
-          ),
-        ),
-      ),
-    ),
-    unitsConsumed: optional(number()),
-  }),
-);
 
 export type ParsedInnerInstruction = {
   index: number;
@@ -909,19 +805,6 @@ export type GetBlockProductionConfig = {
 };
 
 /**
- * Expected JSON RPC response for the "getBlockProduction" message
- */
-const BlockProductionResponseStruct = jsonRpcResultAndContext(
-  pick({
-    byIdentity: record(string(), array(number())),
-    range: pick({
-      firstSlot: number(),
-      lastSlot: number(),
-    }),
-  }),
-);
-
-/**
  * A performance sample
  */
 export type PerfSample = {
@@ -1064,31 +947,6 @@ function createRpcBatchRequest(client: RpcClient): RpcBatchRequest {
 }
 
 /**
- * Expected JSON RPC response for the "getInflationGovernor" message
- */
-const GetInflationGovernorRpcResult = jsonRpcResult(GetInflationGovernorResult);
-
-/**
- * Expected JSON RPC response for the "getEpochInfo" message
- */
-const GetEpochInfoRpcResult = jsonRpcResult(GetEpochInfoResult);
-
-/**
- * Expected JSON RPC response for the "getEpochSchedule" message
- */
-const GetEpochScheduleRpcResult = jsonRpcResult(GetEpochScheduleResult);
-
-/**
- * Expected JSON RPC response for the "getLeaderSchedule" message
- */
-const GetLeaderScheduleRpcResult = jsonRpcResult(GetLeaderScheduleResult);
-
-/**
- * Expected JSON RPC response for the "minimumLedgerSlot" and "getFirstAvailableBlock" messages
- */
-const SlotRpcResult = jsonRpcResult(number());
-
-/**
  * Supply
  */
 export type Supply = {
@@ -1101,18 +959,6 @@ export type Supply = {
   /** List of non-circulating account addresses */
   nonCirculatingAccounts: Array<PublicKey>;
 };
-
-/**
- * Expected JSON RPC response for the "getSupply" message
- */
-const GetSupplyRpcResult = jsonRpcResultAndContext(
-  pick({
-    total: number(),
-    circulating: number(),
-    nonCirculating: number(),
-    nonCirculatingAccounts: array(PublicKeyFromString),
-  }),
-);
 
 /**
  * Token amount object which returns a token amount in different formats
@@ -1128,16 +974,6 @@ export type TokenAmount = {
   /** Token amount as string, accounts for decimals */
   uiAmountString?: string;
 };
-
-/**
- * Expected JSON RPC structure for token amounts
- */
-const TokenAmountResult = pick({
-  amount: string(),
-  uiAmount: nullable(number()),
-  decimals: number(),
-  uiAmountString: optional(string()),
-});
 
 /**
  * Token address and balance.
@@ -1156,214 +992,12 @@ export type TokenAccountBalancePair = {
 };
 
 /**
- * Expected JSON RPC response for the "getTokenLargestAccounts" message
- */
-const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
-  array(
-    pick({
-      address: PublicKeyFromString,
-      amount: string(),
-      uiAmount: nullable(number()),
-      decimals: number(),
-      uiAmountString: optional(string()),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getTokenAccountsByOwner" message
- */
-const GetTokenAccountsByOwner = jsonRpcResultAndContext(
-  array(
-    pick({
-      pubkey: PublicKeyFromString,
-      account: pick({
-        executable: boolean(),
-        owner: PublicKeyFromString,
-        lamports: number(),
-        data: BufferFromRawAccountData,
-        rentEpoch: number(),
-      }),
-    }),
-  ),
-);
-
-const ParsedAccountDataResult = pick({
-  program: string(),
-  parsed: unknown(),
-  space: number(),
-});
-
-/**
- * Expected JSON RPC response for the "getTokenAccountsByOwner" message with parsed data
- */
-const GetParsedTokenAccountsByOwner = jsonRpcResultAndContext(
-  array(
-    pick({
-      pubkey: PublicKeyFromString,
-      account: pick({
-        executable: boolean(),
-        owner: PublicKeyFromString,
-        lamports: number(),
-        data: ParsedAccountDataResult,
-        rentEpoch: number(),
-      }),
-    }),
-  ),
-);
-
-/**
  * Pair of an account address and its balance
  */
 export type AccountBalancePair = {
   address: PublicKey;
   lamports: number;
 };
-
-/**
- * Expected JSON RPC response for the "getLargestAccounts" message
- */
-const GetLargestAccountsRpcResult = jsonRpcResultAndContext(
-  array(
-    pick({
-      lamports: number(),
-      address: PublicKeyFromString,
-    }),
-  ),
-);
-
-/**
- * @internal
- */
-const AccountInfoResult = pick({
-  executable: boolean(),
-  owner: PublicKeyFromString,
-  lamports: number(),
-  data: BufferFromRawAccountData,
-  rentEpoch: number(),
-});
-
-/**
- * @internal
- */
-const KeyedAccountInfoResult = pick({
-  pubkey: PublicKeyFromString,
-  account: AccountInfoResult,
-});
-
-const ParsedOrRawAccountData = coerce(
-  union([instance(Buffer), ParsedAccountDataResult]),
-  union([RawAccountDataResult, ParsedAccountDataResult]),
-  value => {
-    if (Array.isArray(value)) {
-      return create(value, BufferFromRawAccountData);
-    } else {
-      return value;
-    }
-  },
-);
-
-/**
- * @internal
- */
-const ParsedAccountInfoResult = pick({
-  executable: boolean(),
-  owner: PublicKeyFromString,
-  lamports: number(),
-  data: ParsedOrRawAccountData,
-  rentEpoch: number(),
-});
-
-const KeyedParsedAccountInfoResult = pick({
-  pubkey: PublicKeyFromString,
-  account: ParsedAccountInfoResult,
-});
-
-/**
- * @internal
- */
-const StakeActivationResult = pick({
-  state: union([
-    literal('active'),
-    literal('inactive'),
-    literal('activating'),
-    literal('deactivating'),
-  ]),
-  active: number(),
-  inactive: number(),
-});
-
-/**
- * Expected JSON RPC response for the "getConfirmedSignaturesForAddress2" message
- */
-
-const GetConfirmedSignaturesForAddress2RpcResult = jsonRpcResult(
-  array(
-    pick({
-      signature: string(),
-      slot: number(),
-      err: TransactionErrorResult,
-      memo: nullable(string()),
-      blockTime: optional(nullable(number())),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getSignaturesForAddress" message
- */
-const GetSignaturesForAddressRpcResult = jsonRpcResult(
-  array(
-    pick({
-      signature: string(),
-      slot: number(),
-      err: TransactionErrorResult,
-      memo: nullable(string()),
-      blockTime: optional(nullable(number())),
-    }),
-  ),
-);
-
-/***
- * Expected JSON RPC response for the "accountNotification" message
- */
-const AccountNotificationResult = pick({
-  subscription: number(),
-  result: notificationResultAndContext(AccountInfoResult),
-});
-
-/**
- * @internal
- */
-const ProgramAccountInfoResult = pick({
-  pubkey: PublicKeyFromString,
-  account: AccountInfoResult,
-});
-
-/***
- * Expected JSON RPC response for the "programNotification" message
- */
-const ProgramAccountNotificationResult = pick({
-  subscription: number(),
-  result: notificationResultAndContext(ProgramAccountInfoResult),
-});
-
-/**
- * @internal
- */
-const SlotInfoResult = pick({
-  parent: number(),
-  slot: number(),
-  root: number(),
-});
-
-/**
- * Expected JSON RPC response for the "slotNotification" message
- */
-const SlotNotificationResult = pick({
-  subscription: number(),
-  result: SlotInfoResult,
-});
 
 /**
  * Slot updates which can be used for tracking the live progress of a cluster.
@@ -1423,431 +1057,6 @@ export type SlotUpdate =
       slot: number;
       timestamp: number;
     };
-
-/**
- * @internal
- */
-const SlotUpdateResult = union([
-  pick({
-    type: union([
-      literal('firstShredReceived'),
-      literal('completed'),
-      literal('optimisticConfirmation'),
-      literal('root'),
-    ]),
-    slot: number(),
-    timestamp: number(),
-  }),
-  pick({
-    type: literal('createdBank'),
-    parent: number(),
-    slot: number(),
-    timestamp: number(),
-  }),
-  pick({
-    type: literal('frozen'),
-    slot: number(),
-    timestamp: number(),
-    stats: pick({
-      numTransactionEntries: number(),
-      numSuccessfulTransactions: number(),
-      numFailedTransactions: number(),
-      maxTransactionsPerEntry: number(),
-    }),
-  }),
-  pick({
-    type: literal('dead'),
-    slot: number(),
-    timestamp: number(),
-    err: string(),
-  }),
-]);
-
-/**
- * Expected JSON RPC response for the "slotsUpdatesNotification" message
- */
-const SlotUpdateNotificationResult = pick({
-  subscription: number(),
-  result: SlotUpdateResult,
-});
-
-/**
- * Expected JSON RPC response for the "signatureNotification" message
- */
-const SignatureNotificationResult = pick({
-  subscription: number(),
-  result: notificationResultAndContext(
-    union([SignatureStatusResult, SignatureReceivedResult]),
-  ),
-});
-
-/**
- * Expected JSON RPC response for the "rootNotification" message
- */
-const RootNotificationResult = pick({
-  subscription: number(),
-  result: number(),
-});
-
-const ContactInfoResult = pick({
-  pubkey: string(),
-  gossip: nullable(string()),
-  tpu: nullable(string()),
-  rpc: nullable(string()),
-  version: nullable(string()),
-});
-
-const VoteAccountInfoResult = pick({
-  votePubkey: string(),
-  nodePubkey: string(),
-  activatedStake: number(),
-  epochVoteAccount: boolean(),
-  epochCredits: array(tuple([number(), number(), number()])),
-  commission: number(),
-  lastVote: number(),
-  rootSlot: nullable(number()),
-});
-
-/**
- * Expected JSON RPC response for the "getVoteAccounts" message
- */
-const GetVoteAccounts = jsonRpcResult(
-  pick({
-    current: array(VoteAccountInfoResult),
-    delinquent: array(VoteAccountInfoResult),
-  }),
-);
-
-const ConfirmationStatus = union([
-  literal('processed'),
-  literal('confirmed'),
-  literal('finalized'),
-]);
-
-const SignatureStatusResponse = pick({
-  slot: number(),
-  confirmations: nullable(number()),
-  err: TransactionErrorResult,
-  confirmationStatus: optional(ConfirmationStatus),
-});
-
-/**
- * Expected JSON RPC response for the "getSignatureStatuses" message
- */
-const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
-  array(nullable(SignatureStatusResponse)),
-);
-
-/**
- * Expected JSON RPC response for the "getMinimumBalanceForRentExemption" message
- */
-const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult(number());
-
-const ConfirmedTransactionResult = pick({
-  signatures: array(string()),
-  message: pick({
-    accountKeys: array(string()),
-    header: pick({
-      numRequiredSignatures: number(),
-      numReadonlySignedAccounts: number(),
-      numReadonlyUnsignedAccounts: number(),
-    }),
-    instructions: array(
-      pick({
-        accounts: array(number()),
-        data: string(),
-        programIdIndex: number(),
-      }),
-    ),
-    recentBlockhash: string(),
-  }),
-});
-
-const ParsedInstructionResult = pick({
-  parsed: unknown(),
-  program: string(),
-  programId: PublicKeyFromString,
-});
-
-const RawInstructionResult = pick({
-  accounts: array(PublicKeyFromString),
-  data: string(),
-  programId: PublicKeyFromString,
-});
-
-const InstructionResult = union([
-  RawInstructionResult,
-  ParsedInstructionResult,
-]);
-
-const UnknownInstructionResult = union([
-  pick({
-    parsed: unknown(),
-    program: string(),
-    programId: string(),
-  }),
-  pick({
-    accounts: array(string()),
-    data: string(),
-    programId: string(),
-  }),
-]);
-
-const ParsedOrRawInstruction = coerce(
-  InstructionResult,
-  UnknownInstructionResult,
-  value => {
-    if ('accounts' in value) {
-      return create(value, RawInstructionResult);
-    } else {
-      return create(value, ParsedInstructionResult);
-    }
-  },
-);
-
-/**
- * @internal
- */
-const ParsedConfirmedTransactionResult = pick({
-  signatures: array(string()),
-  message: pick({
-    accountKeys: array(
-      pick({
-        pubkey: PublicKeyFromString,
-        signer: boolean(),
-        writable: boolean(),
-      }),
-    ),
-    instructions: array(ParsedOrRawInstruction),
-    recentBlockhash: string(),
-  }),
-});
-
-const TokenBalanceResult = pick({
-  accountIndex: number(),
-  mint: string(),
-  owner: optional(string()),
-  uiTokenAmount: TokenAmountResult,
-});
-
-/**
- * @internal
- */
-const ConfirmedTransactionMetaResult = pick({
-  err: TransactionErrorResult,
-  fee: number(),
-  innerInstructions: optional(
-    nullable(
-      array(
-        pick({
-          index: number(),
-          instructions: array(
-            pick({
-              accounts: array(number()),
-              data: string(),
-              programIdIndex: number(),
-            }),
-          ),
-        }),
-      ),
-    ),
-  ),
-  preBalances: array(number()),
-  postBalances: array(number()),
-  logMessages: optional(nullable(array(string()))),
-  preTokenBalances: optional(nullable(array(TokenBalanceResult))),
-  postTokenBalances: optional(nullable(array(TokenBalanceResult))),
-});
-
-/**
- * @internal
- */
-const ParsedConfirmedTransactionMetaResult = pick({
-  err: TransactionErrorResult,
-  fee: number(),
-  innerInstructions: optional(
-    nullable(
-      array(
-        pick({
-          index: number(),
-          instructions: array(ParsedOrRawInstruction),
-        }),
-      ),
-    ),
-  ),
-  preBalances: array(number()),
-  postBalances: array(number()),
-  logMessages: optional(nullable(array(string()))),
-  preTokenBalances: optional(nullable(array(TokenBalanceResult))),
-  postTokenBalances: optional(nullable(array(TokenBalanceResult))),
-});
-
-/**
- * Expected JSON RPC response for the "getBlock" message
- */
-const GetBlockRpcResult = jsonRpcResult(
-  nullable(
-    pick({
-      blockhash: string(),
-      previousBlockhash: string(),
-      parentSlot: number(),
-      transactions: array(
-        pick({
-          transaction: ConfirmedTransactionResult,
-          meta: nullable(ConfirmedTransactionMetaResult),
-        }),
-      ),
-      rewards: optional(
-        array(
-          pick({
-            pubkey: string(),
-            lamports: number(),
-            postBalance: nullable(number()),
-            rewardType: nullable(string()),
-          }),
-        ),
-      ),
-      blockTime: nullable(number()),
-      blockHeight: nullable(number()),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getConfirmedBlock" message
- *
- * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetBlockRpcResult} instead.
- */
-const GetConfirmedBlockRpcResult = jsonRpcResult(
-  nullable(
-    pick({
-      blockhash: string(),
-      previousBlockhash: string(),
-      parentSlot: number(),
-      transactions: array(
-        pick({
-          transaction: ConfirmedTransactionResult,
-          meta: nullable(ConfirmedTransactionMetaResult),
-        }),
-      ),
-      rewards: optional(
-        array(
-          pick({
-            pubkey: string(),
-            lamports: number(),
-            postBalance: nullable(number()),
-            rewardType: nullable(string()),
-          }),
-        ),
-      ),
-      blockTime: nullable(number()),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getBlock" message
- */
-const GetBlockSignaturesRpcResult = jsonRpcResult(
-  nullable(
-    pick({
-      blockhash: string(),
-      previousBlockhash: string(),
-      parentSlot: number(),
-      signatures: array(string()),
-      blockTime: nullable(number()),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getTransaction" message
- */
-const GetTransactionRpcResult = jsonRpcResult(
-  nullable(
-    pick({
-      slot: number(),
-      meta: ConfirmedTransactionMetaResult,
-      blockTime: optional(nullable(number())),
-      transaction: ConfirmedTransactionResult,
-    }),
-  ),
-);
-
-/**
- * Expected parsed JSON RPC response for the "getTransaction" message
- */
-const GetParsedTransactionRpcResult = jsonRpcResult(
-  nullable(
-    pick({
-      slot: number(),
-      transaction: ParsedConfirmedTransactionResult,
-      meta: nullable(ParsedConfirmedTransactionMetaResult),
-      blockTime: optional(nullable(number())),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "getRecentBlockhash" message
- *
- * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetLatestBlockhashRpcResult} instead.
- */
-const GetRecentBlockhashAndContextRpcResult = jsonRpcResultAndContext(
-  pick({
-    blockhash: string(),
-    feeCalculator: pick({
-      lamportsPerSignature: number(),
-    }),
-  }),
-);
-
-/**
- * Expected JSON RPC response for the "getLatestBlockhash" message
- */
-const GetLatestBlockhashRpcResult = jsonRpcResultAndContext(
-  pick({
-    blockhash: string(),
-    lastValidBlockHeight: number(),
-  }),
-);
-
-const PerfSampleResult = pick({
-  slot: number(),
-  numTransactions: number(),
-  numSlots: number(),
-  samplePeriodSecs: number(),
-});
-
-/*
- * Expected JSON RPC response for "getRecentPerformanceSamples" message
- */
-const GetRecentPerformanceSamplesRpcResult = jsonRpcResult(
-  array(PerfSampleResult),
-);
-
-/**
- * Expected JSON RPC response for the "getFeeCalculatorForBlockhash" message
- */
-const GetFeeCalculatorRpcResult = jsonRpcResultAndContext(
-  nullable(
-    pick({
-      feeCalculator: pick({
-        lamportsPerSignature: number(),
-      }),
-    }),
-  ),
-);
-
-/**
- * Expected JSON RPC response for the "requestAirdrop" message
- */
-const RequestAirdropRpcResult = jsonRpcResult(string());
-
-/**
- * Expected JSON RPC response for the "sendTransaction" message
- */
-const SendTransactionRpcResult = jsonRpcResult(string());
 
 /**
  * Information about the latest slot being processed by a node
@@ -2051,15 +1260,6 @@ export type SignatureSubscriptionOptions = {
 export type RootChangeCallback = (root: number) => void;
 
 /**
- * @internal
- */
-const LogsResult = pick({
-  err: TransactionErrorResult,
-  logs: array(string()),
-  signature: string(),
-});
-
-/**
  * Logs result.
  */
 export type Logs = {
@@ -2067,14 +1267,6 @@ export type Logs = {
   logs: string[];
   signature: string;
 };
-
-/**
- * Expected JSON RPC response for the "logsNotification" message.
- */
-const LogsNotificationResult = pick({
-  result: notificationResultAndContext(LogsResult),
-  subscription: number(),
-});
 
 /**
  * Filter for log subscriptions.
@@ -2413,7 +1605,7 @@ export class Connection {
    */
   async getFirstAvailableBlock(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getFirstAvailableBlock', []);
-    const res = create(unsafeRes, SlotRpcResult);
+    const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
       throw new Error(
         'failed to get first available block: ' + res.error.message,
@@ -2443,7 +1635,17 @@ export class Connection {
     }
 
     const unsafeRes = await this._rpcRequest('getSupply', [configArg]);
-    const res = create(unsafeRes, GetSupplyRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        pick({
+          total: number(),
+          circulating: number(),
+          nonCirculating: number(),
+          nonCirculatingAccounts: array(getPublicKeyFromString()),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get supply: ' + res.error.message);
     }
@@ -2459,7 +1661,10 @@ export class Connection {
   ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._buildArgs([tokenMintAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenSupply', args);
-    const res = create(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(getTokenAmountResult()),
+    );
     if ('error' in res) {
       throw new Error('failed to get token supply: ' + res.error.message);
     }
@@ -2475,7 +1680,10 @@ export class Connection {
   ): Promise<RpcResponseAndContext<TokenAmount>> {
     const args = this._buildArgs([tokenAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
-    const res = create(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(getTokenAmountResult()),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get token account balance: ' + res.error.message,
@@ -2507,7 +1715,23 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'base64');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = create(unsafeRes, GetTokenAccountsByOwner);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        array(
+          pick({
+            pubkey: getPublicKeyFromString(),
+            account: pick({
+              executable: boolean(),
+              owner: getPublicKeyFromString(),
+              lamports: number(),
+              data: getBufferFromRawAccountData(),
+              rentEpoch: number(),
+            }),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -2542,7 +1766,23 @@ export class Connection {
 
     const args = this._buildArgs(_args, commitment, 'jsonParsed');
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
-    const res = create(unsafeRes, GetParsedTokenAccountsByOwner);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        array(
+          pick({
+            pubkey: getPublicKeyFromString(),
+            account: pick({
+              executable: boolean(),
+              owner: getPublicKeyFromString(),
+              lamports: number(),
+              data: getParsedAccountDataResult(),
+              rentEpoch: number(),
+            }),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get token accounts owned by account ' +
@@ -2566,7 +1806,17 @@ export class Connection {
     };
     const args = arg.filter || arg.commitment ? [arg] : [];
     const unsafeRes = await this._rpcRequest('getLargestAccounts', args);
-    const res = create(unsafeRes, GetLargestAccountsRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        array(
+          pick({
+            lamports: number(),
+            address: getPublicKeyFromString(),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get largest accounts: ' + res.error.message);
     }
@@ -2583,7 +1833,20 @@ export class Connection {
   ): Promise<RpcResponseAndContext<Array<TokenAccountBalancePair>>> {
     const args = this._buildArgs([mintAddress.toBase58()], commitment);
     const unsafeRes = await this._rpcRequest('getTokenLargestAccounts', args);
-    const res = create(unsafeRes, GetTokenLargestAccountsResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        array(
+          pick({
+            address: getPublicKeyFromString(),
+            amount: string(),
+            uiAmount: nullable(number()),
+            decimals: number(),
+            uiAmountString: optional(string()),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get token largest accounts: ' + res.error.message,
@@ -2603,7 +1866,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(nullable(AccountInfoResult)),
+      jsonRpcResultAndContext(nullable(getAccountInfoResult())),
     );
     if ('error' in res) {
       throw new Error(
@@ -2633,7 +1896,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(nullable(ParsedAccountInfoResult)),
+      jsonRpcResultAndContext(nullable(getParsedAccountInfoResult())),
     );
     if ('error' in res) {
       throw new Error(
@@ -2675,7 +1938,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
-      jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
+      jsonRpcResultAndContext(array(nullable(getAccountInfoResult()))),
     );
     if ('error' in res) {
       throw new Error(
@@ -2715,7 +1978,21 @@ export class Connection {
     );
 
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
-    const res = create(unsafeRes, jsonRpcResult(StakeActivationResult));
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          state: union([
+            literal('active'),
+            literal('inactive'),
+            literal('activating'),
+            literal('deactivating'),
+          ]),
+          active: number(),
+          inactive: number(),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         `failed to get Stake Activation ${publicKey.toBase58()}: ${
@@ -2762,7 +2039,17 @@ export class Connection {
       extra,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
-    const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          pick({
+            pubkey: getPublicKeyFromString(),
+            account: getAccountInfoResult(),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get accounts owned by program ' +
@@ -2812,7 +2099,14 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(
       unsafeRes,
-      jsonRpcResult(array(KeyedParsedAccountInfoResult)),
+      jsonRpcResult(
+        array(
+          pick({
+            pubkey: getPublicKeyFromString(),
+            account: getParsedAccountInfoResult(),
+          }),
+        ),
+      ),
     );
     if ('error' in res) {
       throw new Error(
@@ -2906,7 +2200,20 @@ export class Connection {
    */
   async getClusterNodes(): Promise<Array<ContactInfo>> {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
-    const res = create(unsafeRes, jsonRpcResult(array(ContactInfoResult)));
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          pick({
+            pubkey: string(),
+            gossip: nullable(string()),
+            tpu: nullable(string()),
+            rpc: nullable(string()),
+            version: nullable(string()),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get cluster nodes: ' + res.error.message);
     }
@@ -2919,7 +2226,15 @@ export class Connection {
   async getVoteAccounts(commitment?: Commitment): Promise<VoteAccountStatus> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
-    const res = create(unsafeRes, GetVoteAccounts);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          current: array(getVoteAccountInfoResult()),
+          delinquent: array(getVoteAccountInfoResult()),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get vote accounts: ' + res.error.message);
     }
@@ -2964,7 +2279,10 @@ export class Connection {
   ): Promise<Array<PublicKey>> {
     const args = [startSlot, limit];
     const unsafeRes = await this._rpcRequest('getSlotLeaders', args);
-    const res = create(unsafeRes, jsonRpcResult(array(PublicKeyFromString)));
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(array(getPublicKeyFromString())),
+    );
     if ('error' in res) {
       throw new Error('failed to get slot leaders: ' + res.error.message);
     }
@@ -2999,7 +2317,27 @@ export class Connection {
       params.push(config);
     }
     const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
-    const res = create(unsafeRes, GetSignatureStatusesRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        array(
+          nullable(
+            pick({
+              slot: number(),
+              confirmations: nullable(number()),
+              err: getTransactionErrorResult(),
+              confirmationStatus: optional(
+                union([
+                  literal('processed'),
+                  literal('confirmed'),
+                  literal('finalized'),
+                ]),
+              ),
+            }),
+          ),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get signature status: ' + res.error.message);
     }
@@ -3040,7 +2378,18 @@ export class Connection {
   ): Promise<InflationGovernor> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
-    const res = create(unsafeRes, GetInflationGovernorRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          foundation: number(),
+          foundationTerm: number(),
+          initial: number(),
+          taper: number(),
+          terminal: number(),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get inflation: ' + res.error.message);
     }
@@ -3064,7 +2413,21 @@ export class Connection {
       },
     );
     const unsafeRes = await this._rpcRequest('getInflationReward', args);
-    const res = create(unsafeRes, GetInflationRewardResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          nullable(
+            pick({
+              epoch: number(),
+              effectiveSlot: number(),
+              amount: number(),
+              postBalance: number(),
+            }),
+          ),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get inflation reward: ' + res.error.message);
     }
@@ -3077,7 +2440,19 @@ export class Connection {
   async getEpochInfo(commitment?: Commitment): Promise<EpochInfo> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
-    const res = create(unsafeRes, GetEpochInfoRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          epoch: number(),
+          slotIndex: number(),
+          slotsInEpoch: number(),
+          absoluteSlot: number(),
+          blockHeight: optional(number()),
+          transactionCount: optional(number()),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get epoch info: ' + res.error.message);
     }
@@ -3089,7 +2464,18 @@ export class Connection {
    */
   async getEpochSchedule(): Promise<EpochSchedule> {
     const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
-    const res = create(unsafeRes, GetEpochScheduleRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          slotsPerEpoch: number(),
+          leaderScheduleSlotOffset: number(),
+          warmup: boolean(),
+          firstNormalEpoch: number(),
+          firstNormalSlot: number(),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get epoch schedule: ' + res.error.message);
     }
@@ -3109,7 +2495,10 @@ export class Connection {
    */
   async getLeaderSchedule(): Promise<LeaderSchedule> {
     const unsafeRes = await this._rpcRequest('getLeaderSchedule', []);
-    const res = create(unsafeRes, GetLeaderScheduleRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(record(string(), array(number()))),
+    );
     if ('error' in res) {
       throw new Error('failed to get leader schedule: ' + res.error.message);
     }
@@ -3129,7 +2518,7 @@ export class Connection {
       'getMinimumBalanceForRentExemption',
       args,
     );
-    const res = create(unsafeRes, GetMinimumBalanceForRentExemptionRpcResult);
+    const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
       console.warn('Unable to fetch minimum balance for rent exemption');
       return 0;
@@ -3150,7 +2539,17 @@ export class Connection {
   > {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
-    const res = create(unsafeRes, GetRecentBlockhashAndContextRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        pick({
+          blockhash: string(),
+          feeCalculator: pick({
+            lamportsPerSignature: number(),
+          }),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get recent blockhash: ' + res.error.message);
     }
@@ -3169,7 +2568,19 @@ export class Connection {
       'getRecentPerformanceSamples',
       args,
     );
-    const res = create(unsafeRes, GetRecentPerformanceSamplesRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          pick({
+            slot: number(),
+            numTransactions: number(),
+            numSlots: number(),
+            samplePeriodSecs: number(),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get recent performance samples: ' + res.error.message,
@@ -3194,7 +2605,18 @@ export class Connection {
       args,
     );
 
-    const res = create(unsafeRes, GetFeeCalculatorRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        nullable(
+          pick({
+            feeCalculator: pick({
+              lamportsPerSignature: number(),
+            }),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get fee calculator: ' + res.error.message);
     }
@@ -3269,7 +2691,15 @@ export class Connection {
   > {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
-    const res = create(unsafeRes, GetLatestBlockhashRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        pick({
+          blockhash: string(),
+          lastValidBlockHeight: number(),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get latest blockhash: ' + res.error.message);
     }
@@ -3281,7 +2711,15 @@ export class Connection {
    */
   async getVersion(): Promise<Version> {
     const unsafeRes = await this._rpcRequest('getVersion', []);
-    const res = create(unsafeRes, jsonRpcResult(VersionResult));
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        pick({
+          'solana-core': string(),
+          'feature-set': optional(number()),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error('failed to get version: ' + res.error.message);
     }
@@ -3312,7 +2750,36 @@ export class Connection {
       opts && opts.commitment,
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
-    const res = create(unsafeRes, GetBlockRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        nullable(
+          pick({
+            blockhash: string(),
+            previousBlockhash: string(),
+            parentSlot: number(),
+            transactions: array(
+              pick({
+                transaction: getConfirmedTransactionResult(),
+                meta: nullable(getConfirmedTransactionMetaResult()),
+              }),
+            ),
+            rewards: optional(
+              array(
+                pick({
+                  pubkey: string(),
+                  lamports: number(),
+                  postBalance: nullable(number()),
+                  rewardType: nullable(string()),
+                }),
+              ),
+            ),
+            blockTime: nullable(number()),
+            blockHeight: nullable(number()),
+          }),
+        ),
+      ),
+    );
 
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
@@ -3371,7 +2838,18 @@ export class Connection {
 
     const args = this._buildArgs([], commitment, 'base64', extra);
     const unsafeRes = await this._rpcRequest('getBlockProduction', args);
-    const res = create(unsafeRes, BlockProductionResponseStruct);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        pick({
+          byIdentity: record(string(), array(number())),
+          range: pick({
+            firstSlot: number(),
+            lastSlot: number(),
+          }),
+        }),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get block production information: ' + res.error.message,
@@ -3393,7 +2871,7 @@ export class Connection {
       opts && opts.commitment,
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
-    const res = create(unsafeRes, GetTransactionRpcResult);
+    const res = create(unsafeRes, getTransactionRpcResult());
     if ('error' in res) {
       throw new Error('failed to get transaction: ' + res.error.message);
     }
@@ -3423,7 +2901,7 @@ export class Connection {
       'jsonParsed',
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
-    const res = create(unsafeRes, GetParsedTransactionRpcResult);
+    const res = create(unsafeRes, getParsedTransactionRpcResult());
     if ('error' in res) {
       throw new Error('failed to get transaction: ' + res.error.message);
     }
@@ -3451,7 +2929,7 @@ export class Connection {
 
     const unsafeRes = await this._rpcBatchRequest(batch);
     const res = unsafeRes.map((unsafeRes: any) => {
-      const res = create(unsafeRes, GetParsedTransactionRpcResult);
+      const res = create(unsafeRes, getParsedTransactionRpcResult());
       if ('error' in res) {
         throw new Error('failed to get transactions: ' + res.error.message);
       }
@@ -3479,7 +2957,7 @@ export class Connection {
 
     const unsafeRes = await this._rpcBatchRequest(batch);
     const res = unsafeRes.map((unsafeRes: any) => {
-      const res = create(unsafeRes, GetTransactionRpcResult);
+      const res = create(unsafeRes, getTransactionRpcResult());
       if ('error' in res) {
         throw new Error('failed to get transactions: ' + res.error.message);
       }
@@ -3501,7 +2979,35 @@ export class Connection {
   ): Promise<ConfirmedBlock> {
     const args = this._buildArgsAtLeastConfirmed([slot], commitment);
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetConfirmedBlockRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        nullable(
+          pick({
+            blockhash: string(),
+            previousBlockhash: string(),
+            parentSlot: number(),
+            transactions: array(
+              pick({
+                transaction: getConfirmedTransactionResult(),
+                meta: nullable(getConfirmedTransactionMetaResult()),
+              }),
+            ),
+            rewards: optional(
+              array(
+                pick({
+                  pubkey: string(),
+                  lamports: number(),
+                  postBalance: nullable(number()),
+                  rewardType: nullable(string()),
+                }),
+              ),
+            ),
+            blockTime: nullable(number()),
+          }),
+        ),
+      ),
+    );
 
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
@@ -3577,7 +3083,7 @@ export class Connection {
       },
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
-    const res = create(unsafeRes, GetBlockSignaturesRpcResult);
+    const res = create(unsafeRes, getBlockSignaturesRpcResult());
     if ('error' in res) {
       throw new Error('failed to get block: ' + res.error.message);
     }
@@ -3607,7 +3113,7 @@ export class Connection {
       },
     );
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
-    const res = create(unsafeRes, GetBlockSignaturesRpcResult);
+    const res = create(unsafeRes, getBlockSignaturesRpcResult());
     if ('error' in res) {
       throw new Error('failed to get confirmed block: ' + res.error.message);
     }
@@ -3629,7 +3135,7 @@ export class Connection {
   ): Promise<ConfirmedTransaction | null> {
     const args = this._buildArgsAtLeastConfirmed([signature], commitment);
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetTransactionRpcResult);
+    const res = create(unsafeRes, getTransactionRpcResult());
     if ('error' in res) {
       throw new Error('failed to get transaction: ' + res.error.message);
     }
@@ -3660,7 +3166,7 @@ export class Connection {
       'jsonParsed',
     );
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
-    const res = create(unsafeRes, GetParsedTransactionRpcResult);
+    const res = create(unsafeRes, getParsedTransactionRpcResult());
     if ('error' in res) {
       throw new Error(
         'failed to get confirmed transaction: ' + res.error.message,
@@ -3692,7 +3198,7 @@ export class Connection {
 
     const unsafeRes = await this._rpcBatchRequest(batch);
     const res = unsafeRes.map((unsafeRes: any) => {
-      const res = create(unsafeRes, GetParsedTransactionRpcResult);
+      const res = create(unsafeRes, getParsedTransactionRpcResult());
       if ('error' in res) {
         throw new Error(
           'failed to get confirmed transactions: ' + res.error.message,
@@ -3798,7 +3304,20 @@ export class Connection {
       'getConfirmedSignaturesForAddress2',
       args,
     );
-    const res = create(unsafeRes, GetConfirmedSignaturesForAddress2RpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          pick({
+            signature: string(),
+            slot: number(),
+            err: getTransactionErrorResult(),
+            memo: nullable(string()),
+            blockTime: optional(nullable(number())),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get confirmed signatures for address: ' + res.error.message,
@@ -3827,7 +3346,20 @@ export class Connection {
       options,
     );
     const unsafeRes = await this._rpcRequest('getSignaturesForAddress', args);
-    const res = create(unsafeRes, GetSignaturesForAddressRpcResult);
+    const res = create(
+      unsafeRes,
+      jsonRpcResult(
+        array(
+          pick({
+            signature: string(),
+            slot: number(),
+            err: getTransactionErrorResult(),
+            memo: nullable(string()),
+            blockTime: optional(nullable(number())),
+          }),
+        ),
+      ),
+    );
     if ('error' in res) {
       throw new Error(
         'failed to get signatures for address: ' + res.error.message,
@@ -3900,7 +3432,7 @@ export class Connection {
       to.toBase58(),
       lamports,
     ]);
-    const res = create(unsafeRes, RequestAirdropRpcResult);
+    const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
       throw new Error(
         'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
@@ -4045,7 +3577,31 @@ export class Connection {
 
     const args = [encodedTransaction, config];
     const unsafeRes = await this._rpcRequest('simulateTransaction', args);
-    const res = create(unsafeRes, SimulatedTransactionResponseStruct);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(
+        pick({
+          err: nullable(union([pick({}), string()])),
+          logs: nullable(array(string())),
+          accounts: optional(
+            nullable(
+              array(
+                nullable(
+                  pick({
+                    executable: boolean(),
+                    owner: string(),
+                    lamports: number(),
+                    data: array(string()),
+                    rentEpoch: optional(number()),
+                  }),
+                ),
+              ),
+            ),
+          ),
+          unitsConsumed: optional(number()),
+        }),
+      ),
+    );
     if ('error' in res) {
       let logs;
       if ('data' in res.error) {
@@ -4144,7 +3700,7 @@ export class Connection {
 
     const args = [encodedTransaction, config];
     const unsafeRes = await this._rpcRequest('sendTransaction', args);
-    const res = create(unsafeRes, SendTransactionRpcResult);
+    const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
       let logs;
       if ('data' in res.error) {
@@ -4418,7 +3974,10 @@ export class Connection {
   _wsOnAccountNotification(notification: object) {
     const {result, subscription} = create(
       notification,
-      AccountNotificationResult,
+      pick({
+        subscription: number(),
+        result: notificationResultAndContext(getAccountInfoResult()),
+      }),
     );
     this._handleServerNotification<AccountChangeCallback>(subscription, [
       result.value,
@@ -4539,7 +4098,15 @@ export class Connection {
   _wsOnProgramAccountNotification(notification: Object) {
     const {result, subscription} = create(
       notification,
-      ProgramAccountNotificationResult,
+      pick({
+        subscription: number(),
+        result: notificationResultAndContext(
+          pick({
+            pubkey: getPublicKeyFromString(),
+            account: getAccountInfoResult(),
+          }),
+        ),
+      }),
     );
     this._handleServerNotification<ProgramAccountChangeCallback>(subscription, [
       {
@@ -4633,7 +4200,19 @@ export class Connection {
    * @internal
    */
   _wsOnLogsNotification(notification: Object) {
-    const {result, subscription} = create(notification, LogsNotificationResult);
+    const {result, subscription} = create(
+      notification,
+      pick({
+        result: notificationResultAndContext(
+          pick({
+            err: getTransactionErrorResult(),
+            logs: array(string()),
+            signature: string(),
+          }),
+        ),
+        subscription: number(),
+      }),
+    );
     this._handleServerNotification<LogsCallback>(subscription, [
       result.value,
       result.context,
@@ -4644,7 +4223,17 @@ export class Connection {
    * @internal
    */
   _wsOnSlotNotification(notification: Object) {
-    const {result, subscription} = create(notification, SlotNotificationResult);
+    const {result, subscription} = create(
+      notification,
+      pick({
+        subscription: number(),
+        result: pick({
+          parent: number(),
+          slot: number(),
+          root: number(),
+        }),
+      }),
+    );
     this._handleServerNotification<SlotChangeCallback>(subscription, [result]);
   }
 
@@ -4685,7 +4274,44 @@ export class Connection {
   _wsOnSlotUpdatesNotification(notification: Object) {
     const {result, subscription} = create(
       notification,
-      SlotUpdateNotificationResult,
+      pick({
+        subscription: number(),
+        result: union([
+          pick({
+            type: union([
+              literal('firstShredReceived'),
+              literal('completed'),
+              literal('optimisticConfirmation'),
+              literal('root'),
+            ]),
+            slot: number(),
+            timestamp: number(),
+          }),
+          pick({
+            type: literal('createdBank'),
+            parent: number(),
+            slot: number(),
+            timestamp: number(),
+          }),
+          pick({
+            type: literal('frozen'),
+            slot: number(),
+            timestamp: number(),
+            stats: pick({
+              numTransactionEntries: number(),
+              numSuccessfulTransactions: number(),
+              numFailedTransactions: number(),
+              maxTransactionsPerEntry: number(),
+            }),
+          }),
+          pick({
+            type: literal('dead'),
+            slot: number(),
+            timestamp: number(),
+            err: string(),
+          }),
+        ]),
+      }),
     );
     this._handleServerNotification<SlotUpdateCallback>(subscription, [result]);
   }
@@ -4792,9 +4418,18 @@ export class Connection {
    * @internal
    */
   _wsOnSignatureNotification(notification: Object) {
+    const SignatureReceivedResult = literal('receivedSignature');
+    const SignatureStatusResult = pick({
+      err: getTransactionErrorResult(),
+    });
     const {result, subscription} = create(
       notification,
-      SignatureNotificationResult,
+      pick({
+        subscription: number(),
+        result: notificationResultAndContext(
+          union([SignatureStatusResult, SignatureReceivedResult]),
+        ),
+      }),
     );
     if (result.value !== 'receivedSignature') {
       /**
@@ -4925,7 +4560,13 @@ export class Connection {
    * @internal
    */
   _wsOnRootNotification(notification: Object) {
-    const {result, subscription} = create(notification, RootNotificationResult);
+    const {result, subscription} = create(
+      notification,
+      pick({
+        subscription: number(),
+        result: number(),
+      }),
+    );
     this._handleServerNotification<RootChangeCallback>(subscription, [result]);
   }
 
@@ -4959,4 +4600,246 @@ export class Connection {
       'root change',
     );
   }
+}
+
+/**
+ * Helper methods for commonly used result structures.
+ */
+function getAccountInfoResult() {
+  return pick({
+    executable: boolean(),
+    owner: getPublicKeyFromString(),
+    lamports: number(),
+    data: getBufferFromRawAccountData(),
+    rentEpoch: number(),
+  });
+}
+function getBlockSignaturesRpcResult() {
+  return jsonRpcResult(
+    nullable(
+      pick({
+        blockhash: string(),
+        previousBlockhash: string(),
+        parentSlot: number(),
+        signatures: array(string()),
+        blockTime: nullable(number()),
+      }),
+    ),
+  );
+}
+function getBufferFromRawAccountData() {
+  return coerce(instance(Buffer), getRawAccountDataResult(), value =>
+    Buffer.from(value[0], 'base64'),
+  );
+}
+function getConfirmedTransactionMetaResult() {
+  return pick({
+    err: getTransactionErrorResult(),
+    fee: number(),
+    innerInstructions: optional(
+      nullable(
+        array(
+          pick({
+            index: number(),
+            instructions: array(
+              pick({
+                accounts: array(number()),
+                data: string(),
+                programIdIndex: number(),
+              }),
+            ),
+          }),
+        ),
+      ),
+    ),
+    preBalances: array(number()),
+    postBalances: array(number()),
+    logMessages: optional(nullable(array(string()))),
+    preTokenBalances: optional(nullable(array(getTokenBalanceResult()))),
+    postTokenBalances: optional(nullable(array(getTokenBalanceResult()))),
+  });
+}
+function getConfirmedTransactionResult() {
+  return pick({
+    signatures: array(string()),
+    message: pick({
+      accountKeys: array(string()),
+      header: pick({
+        numRequiredSignatures: number(),
+        numReadonlySignedAccounts: number(),
+        numReadonlyUnsignedAccounts: number(),
+      }),
+      instructions: array(
+        pick({
+          accounts: array(number()),
+          data: string(),
+          programIdIndex: number(),
+        }),
+      ),
+      recentBlockhash: string(),
+    }),
+  });
+}
+function getParsedAccountDataResult() {
+  return pick({
+    program: string(),
+    parsed: unknown(),
+    space: number(),
+  });
+}
+function getParsedAccountInfoResult() {
+  return pick({
+    executable: boolean(),
+    owner: getPublicKeyFromString(),
+    lamports: number(),
+    data: coerce(
+      union([instance(Buffer), getParsedAccountDataResult()]),
+      union([getRawAccountDataResult(), getParsedAccountDataResult()]),
+      value => {
+        if (Array.isArray(value)) {
+          return create(value, getBufferFromRawAccountData());
+        } else {
+          return value;
+        }
+      },
+    ),
+    rentEpoch: number(),
+  });
+}
+function getParsedInstructionResult() {
+  return pick({
+    parsed: unknown(),
+    program: string(),
+    programId: getPublicKeyFromString(),
+  });
+}
+function getParsedOrRawInstruction() {
+  const InstructionResult = union([
+    getRawInstructionResult(),
+    getParsedInstructionResult(),
+  ]);
+  const UnknownInstructionResult = union([
+    pick({
+      parsed: unknown(),
+      program: string(),
+      programId: string(),
+    }),
+    pick({
+      accounts: array(string()),
+      data: string(),
+      programId: string(),
+    }),
+  ]);
+  return coerce(InstructionResult, UnknownInstructionResult, value => {
+    if ('accounts' in value) {
+      return create(value, getRawInstructionResult());
+    } else {
+      return create(value, getParsedInstructionResult());
+    }
+  });
+}
+function getParsedTransactionRpcResult() {
+  return jsonRpcResult(
+    nullable(
+      pick({
+        slot: number(),
+        transaction: pick({
+          signatures: array(string()),
+          message: pick({
+            accountKeys: array(
+              pick({
+                pubkey: getPublicKeyFromString(),
+                signer: boolean(),
+                writable: boolean(),
+              }),
+            ),
+            instructions: array(getParsedOrRawInstruction()),
+            recentBlockhash: string(),
+          }),
+        }),
+        meta: nullable(
+          pick({
+            err: getTransactionErrorResult(),
+            fee: number(),
+            innerInstructions: optional(
+              nullable(
+                array(
+                  pick({
+                    index: number(),
+                    instructions: array(getParsedOrRawInstruction()),
+                  }),
+                ),
+              ),
+            ),
+            preBalances: array(number()),
+            postBalances: array(number()),
+            logMessages: optional(nullable(array(string()))),
+            preTokenBalances: optional(
+              nullable(array(getTokenBalanceResult())),
+            ),
+            postTokenBalances: optional(
+              nullable(array(getTokenBalanceResult())),
+            ),
+          }),
+        ),
+        blockTime: optional(nullable(number())),
+      }),
+    ),
+  );
+}
+function getPublicKeyFromString() {
+  return coerce(instance(PublicKey), string(), value => new PublicKey(value));
+}
+function getRawAccountDataResult() {
+  return tuple([string(), literal('base64')]);
+}
+function getRawInstructionResult() {
+  return pick({
+    accounts: array(getPublicKeyFromString()),
+    data: string(),
+    programId: getPublicKeyFromString(),
+  });
+}
+function getTokenAmountResult() {
+  return pick({
+    amount: string(),
+    uiAmount: nullable(number()),
+    decimals: number(),
+    uiAmountString: optional(string()),
+  });
+}
+function getTokenBalanceResult() {
+  return pick({
+    accountIndex: number(),
+    mint: string(),
+    owner: optional(string()),
+    uiTokenAmount: getTokenAmountResult(),
+  });
+}
+function getTransactionErrorResult() {
+  return nullable(union([pick({}), string()]));
+}
+function getTransactionRpcResult() {
+  return jsonRpcResult(
+    nullable(
+      pick({
+        slot: number(),
+        meta: getConfirmedTransactionMetaResult(),
+        blockTime: optional(nullable(number())),
+        transaction: getConfirmedTransactionResult(),
+      }),
+    ),
+  );
+}
+function getVoteAccountInfoResult() {
+  return pick({
+    votePubkey: string(),
+    nodePubkey: string(),
+    activatedStake: number(),
+    epochVoteAccount: boolean(),
+    epochCredits: array(tuple([number(), number(), number()])),
+    commission: number(),
+    lastVote: number(),
+    rootSlot: nullable(number()),
+  });
 }
