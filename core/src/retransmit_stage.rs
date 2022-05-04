@@ -580,19 +580,19 @@ mod tests {
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_parity_shard(slot, index, &[], 0, 1, 1, 0, version);
+        let shred = Shred::new_coding(slot, index, None, 0, 1, 1, 0, version);
         // Coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_parity_shard(slot, index, &[], 2, 1, 1, 0, version);
+        let shred = Shred::new_coding(slot, index, None, 2, 1, 1, 0, version);
         // 2nd unique coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // same again is blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_parity_shard(slot, index, &[], 3, 1, 1, 0, version);
+        let shred = Shred::new_coding(slot, index, None, 3, 1, 1, 0, version);
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));

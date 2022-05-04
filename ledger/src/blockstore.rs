@@ -5949,15 +5949,14 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
-        let coding_shred = Shred::new_from_parity_shard(
-            slot,
-            11,  // index
-            &[], // parity_shard
-            11,  // fec_set_index
-            11,  // num_data_shreds
-            11,  // num_coding_shreds
-            8,   // position
-            0,   // version
+        let coding_shred = Shred::new_coding(
+            slot, 11,   // index
+            None, // parity_shard
+            11,   // fec_set_index
+            11,   // num_data_shreds
+            11,   // num_coding_shreds
+            8,    // position
+            0,    // version
         );
 
         let mut erasure_metas = HashMap::new();
@@ -6007,15 +6006,14 @@ pub mod tests {
         let last_root = RwLock::new(0);
 
         let slot = 1;
-        let mut coding_shred = Shred::new_from_parity_shard(
-            slot,
-            11,  // index
-            &[], // parity_shard
-            11,  // fec_set_index
-            11,  // num_data_shreds
-            11,  // num_coding_shreds
-            8,   // position
-            0,   // version
+        let mut coding_shred = Shred::new_coding(
+            slot, 11,   // index
+            None, // parity_shard
+            11,   // fec_set_index
+            11,   // num_data_shreds
+            11,   // num_coding_shreds
+            8,    // position
+            0,    // version
         );
 
         // Insert a good coding shred

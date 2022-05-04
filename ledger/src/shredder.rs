@@ -245,30 +245,38 @@ impl Shredder {
         };
         let data = data.iter().map(Shred::erasure_shard_as_slice);
         let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
-        let mut parity = vec![vec![0u8; data[0].len()]; num_coding];
+
+        let mut coding = {
+            let num_data = u16::try_from(num_data).unwrap();
+            let num_coding = u16::try_from(num_coding).unwrap();
+            (0..num_coding)
+                .map(|i| {
+                    let index = next_code_index + u32::try_from(i).unwrap();
+                    Shred::new_coding(
+                        slot,
+                        index,
+                        None,
+                        fec_set_index,
+                        num_data,
+                        num_coding,
+                        i, // position
+                        version,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut parity: Vec<_> = coding
+            .iter_mut()
+            .map(|s| &mut s.erasure_shard_as_slice_mut().unwrap()[..data[0].len()])
+            .collect();
+
         ReedSolomon::new(num_data, num_coding)
             .unwrap()
             .encode_sep(&data, &mut parity[..])
             .unwrap();
-        let num_data = u16::try_from(num_data).unwrap();
-        let num_coding = u16::try_from(num_coding).unwrap();
-        parity
-            .iter()
-            .enumerate()
-            .map(|(i, parity)| {
-                let index = next_code_index + u32::try_from(i).unwrap();
-                Shred::new_from_parity_shard(
-                    slot,
-                    index,
-                    parity,
-                    fec_set_index,
-                    num_data,
-                    num_coding,
-                    u16::try_from(i).unwrap(), // position
-                    version,
-                )
-            })
-            .collect()
+
+        coding
     }
 
     pub fn try_recovery(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
