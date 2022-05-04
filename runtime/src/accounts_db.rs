@@ -6152,6 +6152,7 @@ impl AccountsDb {
     //  that there are no items we would have put in reclaims that are not cached
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
+        thread_pool: &ThreadPool,
         infos: Vec<AccountInfo>,
         accounts: impl StorableAccounts<'a, T>,
         previous_slot_entry_was_cached: bool,
@@ -6162,7 +6163,7 @@ impl AccountsDb {
         let len = std::cmp::min(accounts.len(), infos.len());
         let chunk_size = std::cmp::max(1, len / quarter_thread_count()); // # pubkeys/thread
         let batches = 1 + len / chunk_size;
-        self.thread_pool.install(|| {
+        thread_pool.install(|| {
             (0..batches)
                 .into_par_iter()
                 .map(|batch| {
@@ -6628,6 +6629,7 @@ impl AccountsDb {
         }
     }
 
+    // TODO: confirm this is only called from replay and fg processes.
     fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
@@ -6643,6 +6645,7 @@ impl AccountsDb {
         let reset_accounts = true;
 
         self.store_accounts_custom(
+            &self.thread_pool,
             accounts,
             hashes,
             None::<StorageFinder>,
@@ -6652,6 +6655,7 @@ impl AccountsDb {
         );
     }
 
+    // TODO: confirm this is only called from cleanup & bg processes.
     fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         accounts: impl StorableAccounts<'a, T>,
@@ -6665,6 +6669,7 @@ impl AccountsDb {
         let reset_accounts = false;
         let is_cached_store = false;
         self.store_accounts_custom(
+            &self.thread_pool_clean,
             accounts,
             hashes,
             storage_finder,
@@ -6676,6 +6681,7 @@ impl AccountsDb {
 
     fn store_accounts_custom<'a, 'b, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
+        thread_pool: &ThreadPool,
         accounts: impl StorableAccounts<'b, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
@@ -6723,7 +6729,8 @@ impl AccountsDb {
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(infos, accounts, previous_slot_entry_was_cached);
+        let mut reclaims =
+            self.update_index(thread_pool, infos, accounts, previous_slot_entry_was_cached);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
