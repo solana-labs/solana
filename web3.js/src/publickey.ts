@@ -2,7 +2,7 @@ import BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
-import {sha256} from '@ethersproject/sha2';
+import {Sha256} from 'asmcrypto.js/dist_es8/hash/sha256/sha256';
 
 import {Struct, SOLANA_SCHEMA} from './util/borsh-schema';
 import {toBuffer} from './util/to-buffer';
@@ -45,6 +45,12 @@ function registerSchema() {
     kind: 'struct',
     fields: [['_bn', 'u256']],
   });
+}
+
+function sha256(bytes: Uint8Array): string {
+  const hash = new Sha256();
+  hash.process(bytes);
+  return hash.finish().result!.toString();
 }
 
 let _memoizedDefault: PublicKey;
