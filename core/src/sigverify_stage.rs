@@ -24,9 +24,11 @@ use {
     thiserror::Error,
 };
 
-/// Maximum number of valid, filtered packets that can be sent along for
-/// signature verification.
-const MAX_SIGVERIFY_VALID_PACKETS: usize = 10_000;
+/// Maximum number of packets that can be received from the input channel per loop.
+const MAX_RECEIVED_PACKETS_PER_LOOP: usize = 100_000;
+
+/// Maximum number of filtered packets that can have signatures verified per loop.
+const MAX_VERIFIED_PACKETS_PER_LOOP: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -241,7 +243,8 @@ impl SigVerifyStage {
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, recv_duration) =
+            streamer::recv_vec_packet_batches(recvr, MAX_RECEIVED_PACKETS_PER_LOOP)?;
 
         let batches_len = batches.len();
         debug!(
@@ -257,11 +260,11 @@ impl SigVerifyStage {
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_VALID_PACKETS {
-            Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_VALID_PACKETS);
-            num_valid_packets = MAX_SIGVERIFY_VALID_PACKETS;
+        if num_unique > MAX_VERIFIED_PACKETS_PER_LOOP {
+            Self::discard_excess_packets(&mut batches, MAX_VERIFIED_PACKETS_PER_LOOP);
+            num_valid_packets = MAX_VERIFIED_PACKETS_PER_LOOP;
         }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_VALID_PACKETS);
+        let excess_fail = num_unique.saturating_sub(MAX_VERIFIED_PACKETS_PER_LOOP);
         discard_time.stop();
 
         let mut verify_time = Measure::start("sigverify_batch_time");
