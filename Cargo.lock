@@ -4287,7 +4287,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.10.12"
 dependencies = [
- "clap 2.34.0",
+ "clap 3.1.12",
  "crossbeam-channel",
  "log",
  "rand 0.7.3",
