@@ -1,0 +1,22 @@
+diff --git a/node_modules/tweetnacl/nacl-fast.js b/node_modules/tweetnacl/nacl-fast.js
+index 7ea5fb5..e10477a 100644
+--- a/node_modules/tweetnacl/nacl-fast.js
++++ b/node_modules/tweetnacl/nacl-fast.js
+@@ -1,3 +1,4 @@
++/*#__PURE__*/
+ (function(nacl) {
+ 'use strict';
+ 
+@@ -2388,4 +2389,11 @@ nacl.setPRNG = function(fn) {
+   }
+ })();
+ 
+-})(typeof module !== 'undefined' && module.exports ? module.exports : (self.nacl = self.nacl || {}));
++})(
++  /*#__PURE__*/
++  (function(_module) {
++    return typeof _module !== 'undefined' && _module.exports
++      ? _module.exports
++      : (self.nacl = self.nacl || {});
++  })(module)
++);
