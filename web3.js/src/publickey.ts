@@ -248,13 +248,34 @@ export class PublicKey extends Struct {
   }
 }
 
-// @ts-ignore
-let naclLowLevel = nacl.lowlevel;
+let _gf: any;
+function getGf() {
+  if (_gf === undefined) {
+    const naclLowLevel = (nacl as any).lowlevel;
+    _gf = naclLowLevel.gf([
+      0xa0b0, 0x4a0e, 0x1b27, 0xc4ee, 0xe478, 0xad2f, 0x1806, 0x2f43, 0xd7a7,
+      0x3dfb, 0x0099, 0x2b4d, 0xdf0b, 0x4fc1, 0x2480, 0x2b83,
+    ]);
+  }
+  return _gf;
+}
+
+let _gf1: any;
+function getGf1() {
+  if (_gf1 === undefined) {
+    const naclLowLevel = (nacl as any).lowlevel;
+    _gf1 = naclLowLevel.gf([1]);
+  }
+  return _gf1;
+}
 
 // Check that a pubkey is on the curve.
 // This function and its dependents were sourced from:
 // https://github.com/dchest/tweetnacl-js/blob/f1ec050ceae0861f34280e62498b1d3ed9c350c6/nacl.js#L792
 function is_on_curve(p: any) {
+  const naclLowLevel = (nacl as any).lowlevel;
+  const gf1 = getGf1();
+  const I = getGf();
   var r = [
     naclLowLevel.gf(),
     naclLowLevel.gf(),
@@ -298,12 +319,8 @@ function is_on_curve(p: any) {
   if (neq25519(chk, num)) return 0;
   return 1;
 }
-let gf1 = naclLowLevel.gf([1]);
-let I = naclLowLevel.gf([
-  0xa0b0, 0x4a0e, 0x1b27, 0xc4ee, 0xe478, 0xad2f, 0x1806, 0x2f43, 0xd7a7,
-  0x3dfb, 0x0099, 0x2b4d, 0xdf0b, 0x4fc1, 0x2480, 0x2b83,
-]);
 function neq25519(a: any, b: any) {
+  const naclLowLevel = (nacl as any).lowlevel;
   var c = new Uint8Array(32),
     d = new Uint8Array(32);
   naclLowLevel.pack25519(c, a);
