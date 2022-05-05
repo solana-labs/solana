@@ -1,9 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, App, Arg},
     solana_streamer::{
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
-        streamer::{receiver, PacketBatchReceiver},
+        streamer::{receiver, PacketBatchReceiver, StreamerReceiveStats},
     },
     std::{
         cmp::max,
@@ -82,8 +83,19 @@ fn main() -> Result<()> {
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
     let recycler = PacketBatchRecycler::default();
+<<<<<<< HEAD
     for _ in 0..num_sockets {
         let read = solana_net_utils::bind_to(ip_addr, port, false).unwrap();
+=======
+    let (_port, read_sockets) = solana_net_utils::multi_bind_in_range(
+        ip_addr,
+        (port, port + num_sockets as u16),
+        num_sockets,
+    )
+    .unwrap();
+    let stats = Arc::new(StreamerReceiveStats::new("bench-streamer-test"));
+    for read in read_sockets {
+>>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();
@@ -93,10 +105,10 @@ fn main() -> Result<()> {
         read_channels.push(r_reader);
         read_threads.push(receiver(
             Arc::new(read),
-            &exit,
+            exit.clone(),
             s_reader,
             recycler.clone(),
-            "bench-streamer-test",
+            stats.clone(),
             1,
             true,
         ));
