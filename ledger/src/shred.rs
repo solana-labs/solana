@@ -363,9 +363,7 @@ impl Shred {
 
     pub fn merkle_root(&self) -> Result<Option<TurbineMerkleHash>, Error> {
         match self.shred_type() {
-            ShredType::DataV2 | ShredType::CodeV2 => {
-                Ok(self.common_header.merkle.map(|m| m.root))
-            }
+            ShredType::DataV2 | ShredType::CodeV2 => Ok(self.common_header.merkle.map(|m| m.root)),
             _ => Err(Error::InvalidShredType),
         }
     }

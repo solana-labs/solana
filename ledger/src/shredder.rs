@@ -16,7 +16,10 @@ use {
     solana_measure::measure::Measure,
     solana_perf::turbine_merkle::TurbineMerkleTree,
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{clock::Slot, signature::{Keypair, Signer}},
+    solana_sdk::{
+        clock::Slot,
+        signature::{Keypair, Signer},
+    },
     std::fmt::Debug,
 };
 
