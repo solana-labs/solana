@@ -231,34 +231,37 @@ type VoteInstructionInputData = {
   };
 };
 
-const VOTE_INSTRUCTION_LAYOUTS = Object.freeze<{
-  [Instruction in VoteInstructionType]: InstructionType<
-    VoteInstructionInputData[Instruction]
-  >;
-}>({
-  InitializeAccount: {
-    index: 0,
-    layout: BufferLayout.struct<VoteInstructionInputData['InitializeAccount']>([
-      BufferLayout.u32('instruction'),
-      Layout.voteInit(),
-    ]),
-  },
-  Authorize: {
-    index: 1,
-    layout: BufferLayout.struct<VoteInstructionInputData['Authorize']>([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('newAuthorized'),
-      BufferLayout.u32('voteAuthorizationType'),
-    ]),
-  },
-  Withdraw: {
-    index: 3,
-    layout: BufferLayout.struct<VoteInstructionInputData['Withdraw']>([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
-    ]),
-  },
-});
+const VOTE_INSTRUCTION_LAYOUTS =
+  /*#__PURE__*/
+  (function () {
+    return Object.freeze<{
+      [Instruction in VoteInstructionType]: InstructionType<
+        VoteInstructionInputData[Instruction]
+      >;
+    }>({
+      InitializeAccount: {
+        index: 0,
+        layout: BufferLayout.struct<
+          VoteInstructionInputData['InitializeAccount']
+        >([BufferLayout.u32('instruction'), Layout.voteInit()]),
+      },
+      Authorize: {
+        index: 1,
+        layout: BufferLayout.struct<VoteInstructionInputData['Authorize']>([
+          BufferLayout.u32('instruction'),
+          Layout.publicKey('newAuthorized'),
+          BufferLayout.u32('voteAuthorizationType'),
+        ]),
+      },
+      Withdraw: {
+        index: 3,
+        layout: BufferLayout.struct<VoteInstructionInputData['Withdraw']>([
+          BufferLayout.u32('instruction'),
+          BufferLayout.ns64('lamports'),
+        ]),
+      },
+    });
+  })();
 
 /**
  * VoteAuthorize type
@@ -271,7 +274,7 @@ export type VoteAuthorizationType = {
 /**
  * An enumeration of valid VoteAuthorization layouts.
  */
-export const VoteAuthorizationLayout = Object.freeze({
+export const VoteAuthorizationLayout = /*#__PURE__*/ Object.freeze({
   Voter: {
     index: 0,
   },
@@ -310,7 +313,9 @@ export class VoteProgram {
    * `VoteState::size_of()`:
    * https://docs.rs/solana-vote-program/1.9.5/solana_vote_program/vote_state/struct.VoteState.html#method.size_of
    */
-  static space: number = 3731;
+  static get space() {
+    return 3731;
+  }
 
   /**
    * Generate an Initialize instruction.
