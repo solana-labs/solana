@@ -5,7 +5,7 @@ use {
         banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
         result::{Error, Result},
     },
-    crossbeam_channel::{unbounded, RecvTimeoutError},
+    crossbeam_channel::{unbounded, RecvTimeoutError, TrySendError},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
@@ -108,9 +108,13 @@ impl FetchStage {
         {
             inc_new_counter_debug!("fetch_stage-honor_forwards", num_packets);
             for packet_batch in packet_batches {
-                #[allow(clippy::question_mark)]
-                if sendr.send(packet_batch).is_err() {
-                    return Err(Error::Send);
+                match sendr.try_send(packet_batch) {
+                    Ok(_) => {}
+                    Err(TrySendError::Disconnected(_)) => return Err(Error::Send),
+                    Err(TrySendError::Full(_)) => {
+                        // discard this and the remaining batches
+                        break;
+                    }
                 }
             }
         } else {
