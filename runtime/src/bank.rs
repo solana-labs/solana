@@ -2910,7 +2910,7 @@ impl Bank {
             {
                 vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
             }
-            Some(VoteAccount::from(account))
+            VoteAccount::try_from(account).ok()
         };
         let invalid_vote_keys = DashMap::<Pubkey, InvalidCacheEntryReason>::new();
         let make_vote_delegations_entry = |vote_pubkey| {

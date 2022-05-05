@@ -3780,7 +3780,7 @@ pub mod tests {
                     VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                     (
                         solana_sdk::pubkey::new_rand(),
-                        (stake, VoteAccount::from(vote_account)),
+                        (stake, VoteAccount::try_from(vote_account).unwrap()),
                     )
                 })
                 .collect()
