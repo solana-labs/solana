@@ -57,14 +57,16 @@ pub struct TpuSockets {
 
 pub struct Tpu {
     fetch_stage: FetchStage,
-    sigverify_stage: SigVerifyStage,
-    vote_sigverify_stage: SigVerifyStage,
+    udp_sigverify_stage: SigVerifyStage,
+    quic_sigverify_stage: SigVerifyStage,
+    udp_vote_sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
-    find_packet_sender_stake_stage: FindPacketSenderStakeStage,
-    vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    udp_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    quic_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
+    udp_vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
 }
 
@@ -102,38 +104,51 @@ impl Tpu {
             transactions_quic: transactions_quic_sockets,
         } = sockets;
 
-        let (packet_sender, packet_receiver) = unbounded();
-        let (vote_packet_sender, vote_packet_receiver) = unbounded();
+        let (udp_packet_sender, udp_packet_receiver) = unbounded();
+        let (udp_vote_packet_sender, udp_vote_packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
             tpu_vote_sockets,
             exit,
-            &packet_sender,
-            &vote_packet_sender,
+            &udp_packet_sender,
+            &udp_vote_packet_sender,
             poh_recorder,
             tpu_coalesce_ms,
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
+        let (udp_find_packet_sender_stake_sender, udp_find_packet_sender_stake_receiver) =
+            unbounded();
 
-        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            packet_receiver,
-            find_packet_sender_stake_sender,
+        let udp_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
+            udp_packet_receiver,
+            udp_find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
             "tpu-find-packet-sender-stake",
         );
 
-        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
+        let (udp_vote_find_packet_sender_stake_sender, udp_vote_find_packet_sender_stake_receiver) =
             unbounded();
 
-        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
-            vote_packet_receiver,
-            vote_find_packet_sender_stake_sender,
+        let udp_vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
+            udp_vote_packet_receiver,
+            udp_vote_find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
             "tpu-vote-find-packet-sender-stake",
+        );
+
+        let (quic_packet_sender, quic_packet_receiver) = unbounded();
+        let (quic_find_packet_sender_stake_sender, quic_find_packet_sender_stake_receiver) =
+            unbounded();
+
+        let quic_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
+            quic_packet_receiver,
+            quic_find_packet_sender_stake_sender,
+            bank_forks.clone(),
+            cluster_info.clone(),
+            "tpu-find-packet-sender-stake-quic",
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -149,7 +164,7 @@ impl Tpu {
             transactions_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
-            packet_sender,
+            quic_packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
             staked_nodes,
@@ -158,22 +173,32 @@ impl Tpu {
         )
         .unwrap();
 
-        let sigverify_stage = {
+        let udp_sigverify_stage = {
             let verifier = TransactionSigVerifier::default();
             SigVerifyStage::new(
-                find_packet_sender_stake_receiver,
-                verified_sender,
+                udp_find_packet_sender_stake_receiver,
+                verified_sender.clone(),
                 verifier,
                 "tpu-verifier",
             )
         };
 
+        let quic_sigverify_stage = {
+            let verifier = TransactionSigVerifier::default();
+            SigVerifyStage::new(
+                quic_find_packet_sender_stake_receiver,
+                verified_sender,
+                verifier,
+                "tpu-verifier-quic",
+            )
+        };
+
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
 
-        let vote_sigverify_stage = {
+        let udp_vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote();
             SigVerifyStage::new(
-                vote_find_packet_sender_stake_receiver,
+                udp_vote_find_packet_sender_stake_receiver,
                 verified_tpu_vote_packets_sender,
                 verifier,
                 "tpu-vote-verifier",
@@ -222,14 +247,16 @@ impl Tpu {
 
         Self {
             fetch_stage,
-            sigverify_stage,
-            vote_sigverify_stage,
+            udp_sigverify_stage,
+            quic_sigverify_stage,
+            udp_vote_sigverify_stage,
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
             tpu_quic_t,
-            find_packet_sender_stake_stage,
-            vote_find_packet_sender_stake_stage,
+            udp_find_packet_sender_stake_stage,
+            quic_find_packet_sender_stake_stage,
+            udp_vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
         }
     }
@@ -253,12 +280,14 @@ impl Tpu {
     fn do_join(self) -> thread::Result<()> {
         let results = vec![
             self.fetch_stage.join(),
-            self.sigverify_stage.join(),
-            self.vote_sigverify_stage.join(),
+            self.udp_sigverify_stage.join(),
+            self.quic_sigverify_stage.join(),
+            self.udp_vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
             self.banking_stage.join(),
-            self.find_packet_sender_stake_stage.join(),
-            self.vote_find_packet_sender_stake_stage.join(),
+            self.udp_find_packet_sender_stake_stage.join(),
+            self.quic_find_packet_sender_stake_stage.join(),
+            self.udp_vote_find_packet_sender_stake_stage.join(),
             self.staked_nodes_updater_service.join(),
         ];
         self.tpu_quic_t.join()?;
