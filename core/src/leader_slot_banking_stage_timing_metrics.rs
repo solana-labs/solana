@@ -134,6 +134,10 @@ pub(crate) struct OuterLoopTimings {
 
     // Time spent processing new incoming packets to the banking thread
     pub receive_and_buffer_packets_us: u64,
+
+    // The number of times the function to receive and buffer new packets
+    // was called
+    pub receive_and_buffer_packets_invoked_count: u64,
 }
 
 impl OuterLoopTimings {
@@ -144,6 +148,7 @@ impl OuterLoopTimings {
             process_buffered_packets_us: 0,
             slot_metrics_check_slot_boundary_us: 0,
             receive_and_buffer_packets_us: 0,
+            receive_and_buffer_packets_invoked_count: 0,
         }
     }
 
@@ -179,6 +184,11 @@ impl OuterLoopTimings {
                 self.receive_and_buffer_packets_us,
                 i64
             ),
+            (
+                "receive_and_buffer_packets_invoked_count",
+                self.receive_and_buffer_packets_invoked_count,
+                i64
+            )
         );
     }
 }
