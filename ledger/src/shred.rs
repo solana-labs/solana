@@ -77,6 +77,7 @@ use {
 
 mod common;
 mod legacy;
+mod merkle;
 mod shred_code;
 mod shred_data;
 mod stats;
@@ -129,6 +130,8 @@ pub enum Error {
     InvalidDataSize { size: u16, payload: usize },
     #[error("Invalid erasure shard index: {0:?}")]
     InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug>),
+    #[error("Invalid merkle proof")]
+    InvalidMerkleProof,
     #[error("Invalid num coding shreds: {0}")]
     InvalidNumCodingShreds(u16),
     #[error("Invalid parent_offset: {parent_offset}, slot: {slot}")]
@@ -137,12 +140,16 @@ pub enum Error {
     InvalidParentSlot { slot: Slot, parent_slot: Slot },
     #[error("Invalid payload size: {0}")]
     InvalidPayloadSize(/*payload size:*/ usize),
+    #[error("Invalid proof size: {0}")]
+    InvalidProofSize(/*proof_size:*/ u8),
     #[error("Invalid shred flags: {0}")]
     InvalidShredFlags(u8),
     #[error("Invalid shred type")]
     InvalidShredType,
     #[error("Invalid shred variant")]
     InvalidShredVariant,
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 #[repr(u8)]
@@ -171,6 +178,9 @@ pub enum ShredType {
 enum ShredVariant {
     LegacyCode, // 0b0101_1010
     LegacyData, // 0b1010_0101
+    // proof_size is the number of proof entries in the merkle tree branch.
+    MerkleCode(/*proof_size:*/ u8), // 0b0100_????
+    MerkleData(/*proof_size:*/ u8), // 0b1000_????
 }
 
 /// A common header that is present in data and code shred headers
@@ -323,6 +333,14 @@ impl Shred {
             }
             ShredVariant::LegacyData => {
                 let shred = legacy::ShredData::from_payload(shred)?;
+                Self::from(ShredData::from(shred))
+            }
+            ShredVariant::MerkleCode(_) => {
+                let shred = merkle::ShredCode::from_payload(shred)?;
+                Self::from(ShredCode::from(shred))
+            }
+            ShredVariant::MerkleData(_) => {
+                let shred = merkle::ShredData::from_payload(shred)?;
                 Self::from(ShredData::from(shred))
             }
         })
@@ -557,6 +575,12 @@ pub mod layout {
     pub(crate) fn get_signed_message_range(shred: &[u8]) -> Option<Range<usize>> {
         let range = match get_shred_variant(shred).ok()? {
             ShredVariant::LegacyCode | ShredVariant::LegacyData => legacy::SIGNED_MESSAGE_RANGE,
+            ShredVariant::MerkleCode(proof_size) => {
+                merkle::ShredCode::get_signed_message_range(proof_size)?
+            }
+            ShredVariant::MerkleData(proof_size) => {
+                merkle::ShredData::get_signed_message_range(proof_size)?
+            }
         };
         (shred.len() <= range.end).then(|| range)
     }
@@ -593,6 +617,8 @@ impl From<ShredVariant> for ShredType {
         match shred_variant {
             ShredVariant::LegacyCode => ShredType::Code,
             ShredVariant::LegacyData => ShredType::Data,
+            ShredVariant::MerkleCode(_) => ShredType::Code,
+            ShredVariant::MerkleData(_) => ShredType::Data,
         }
     }
 }
@@ -602,6 +628,8 @@ impl From<ShredVariant> for u8 {
         match shred_variant {
             ShredVariant::LegacyCode => u8::from(ShredType::Code),
             ShredVariant::LegacyData => u8::from(ShredType::Data),
+            ShredVariant::MerkleCode(proof_size) => proof_size | 0x40,
+            ShredVariant::MerkleData(proof_size) => proof_size | 0x80,
         }
     }
 }
@@ -614,7 +642,11 @@ impl TryFrom<u8> for ShredVariant {
         } else if shred_variant == u8::from(ShredType::Data) {
             Ok(ShredVariant::LegacyData)
         } else {
-            Err(Error::InvalidShredVariant)
+            match shred_variant & 0xF0 {
+                0x40 => Ok(ShredVariant::MerkleCode(shred_variant & 0x0F)),
+                0x80 => Ok(ShredVariant::MerkleData(shred_variant & 0x0F)),
+                _ => Err(Error::InvalidShredVariant),
+            }
         }
     }
 }
@@ -673,7 +705,7 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let data_buffer_size = ShredData::capacity().unwrap();
+    let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
     let shred_data_size = shred_data_size.unwrap_or(data_buffer_size) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
@@ -786,7 +818,7 @@ mod tests {
         );
         assert_eq!(
             SIZE_OF_SHRED_VARIANT,
-            bincode::serialized_size(&ShredVariant::LegacyCode).unwrap() as usize
+            bincode::serialized_size(&ShredVariant::MerkleCode(15)).unwrap() as usize
         );
         assert_eq!(
             SIZE_OF_SHRED_SLOT,
@@ -988,6 +1020,74 @@ mod tests {
             bincode::deserialize::<ShredVariant>(&[0b1010_0101]),
             Ok(ShredVariant::LegacyData)
         );
+        // Merkle coding shred.
+        assert_eq!(u8::from(ShredVariant::MerkleCode(5)), 0b0100_0101);
+        assert_eq!(
+            ShredType::from(ShredVariant::MerkleCode(5)),
+            ShredType::Code
+        );
+        assert_matches!(
+            ShredVariant::try_from(0b0100_0101),
+            Ok(ShredVariant::MerkleCode(5))
+        );
+        let buf = bincode::serialize(&ShredVariant::MerkleCode(5)).unwrap();
+        assert_eq!(buf, vec![0b0100_0101]);
+        assert_matches!(
+            bincode::deserialize::<ShredVariant>(&[0b0100_0101]),
+            Ok(ShredVariant::MerkleCode(5))
+        );
+        for proof_size in 0..=15u8 {
+            let byte = proof_size | 0b0100_0000;
+            assert_eq!(u8::from(ShredVariant::MerkleCode(proof_size)), byte);
+            assert_eq!(
+                ShredType::from(ShredVariant::MerkleCode(proof_size)),
+                ShredType::Code
+            );
+            assert_eq!(
+                ShredVariant::try_from(byte).unwrap(),
+                ShredVariant::MerkleCode(proof_size)
+            );
+            let buf = bincode::serialize(&ShredVariant::MerkleCode(proof_size)).unwrap();
+            assert_eq!(buf, vec![byte]);
+            assert_eq!(
+                bincode::deserialize::<ShredVariant>(&[byte]).unwrap(),
+                ShredVariant::MerkleCode(proof_size)
+            );
+        }
+        // Merkle data shred.
+        assert_eq!(u8::from(ShredVariant::MerkleData(10)), 0b1000_1010);
+        assert_eq!(
+            ShredType::from(ShredVariant::MerkleData(10)),
+            ShredType::Data
+        );
+        assert_matches!(
+            ShredVariant::try_from(0b1000_1010),
+            Ok(ShredVariant::MerkleData(10))
+        );
+        let buf = bincode::serialize(&ShredVariant::MerkleData(10)).unwrap();
+        assert_eq!(buf, vec![0b1000_1010]);
+        assert_matches!(
+            bincode::deserialize::<ShredVariant>(&[0b1000_1010]),
+            Ok(ShredVariant::MerkleData(10))
+        );
+        for proof_size in 0..=15u8 {
+            let byte = proof_size | 0b1000_0000;
+            assert_eq!(u8::from(ShredVariant::MerkleData(proof_size)), byte);
+            assert_eq!(
+                ShredType::from(ShredVariant::MerkleData(proof_size)),
+                ShredType::Data
+            );
+            assert_eq!(
+                ShredVariant::try_from(byte).unwrap(),
+                ShredVariant::MerkleData(proof_size)
+            );
+            let buf = bincode::serialize(&ShredVariant::MerkleData(proof_size)).unwrap();
+            assert_eq!(buf, vec![byte]);
+            assert_eq!(
+                bincode::deserialize::<ShredVariant>(&[byte]).unwrap(),
+                ShredVariant::MerkleData(proof_size)
+            );
+        }
     }
 
     #[test]
