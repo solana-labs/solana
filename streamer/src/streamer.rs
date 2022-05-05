@@ -8,7 +8,7 @@ use {
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
     histogram::Histogram,
     solana_sdk::{packet::Packet, timing::timestamp},
     std::{
@@ -47,7 +47,6 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 
 pub struct ReceiverOptions {
     pub coalesce_ms: u64,
-    pub max_queued_batches: usize,
     pub use_pinned_memory: bool,
 }
 
@@ -83,12 +82,17 @@ fn recv_loop(
                 recv_count += len;
                 call_count += 1;
                 if len > 0 {
-                    if channel.len() < options.max_queued_batches {
-                        channel.send(packet_batch)?;
-                        break;
-                    } else {
-                        drop_count += len;
-                        packet_batch.packets.truncate(0);
+                    match channel.try_send(packet_batch) {
+                        Ok(_) => break,
+                        Err(TrySendError::Full(unsent_batch)) => {
+                            drop_count += len;
+                            // reuse the memory
+                            packet_batch = unsent_batch;
+                            packet_batch.packets.truncate(0);
+                        }
+                        Err(TrySendError::Disconnected(unsent_batch)) => {
+                            return Err(SendError(unsent_batch).into());
+                        }
                     }
                 }
             }
@@ -424,7 +428,6 @@ mod test {
             "test",
             ReceiverOptions {
                 coalesce_ms: 1,
-                max_queued_batches: usize::MAX,
                 use_pinned_memory: true,
             },
         );

@@ -34,7 +34,6 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
-        max_queued_batches: usize,
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -48,7 +47,6 @@ impl FetchStage {
                 &vote_sender,
                 poh_recorder,
                 coalesce_ms,
-                max_queued_batches,
             ),
             receiver,
             vote_receiver,
@@ -64,7 +62,6 @@ impl FetchStage {
         vote_sender: &PacketBatchSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
-        max_queued_batches: usize,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -78,7 +75,6 @@ impl FetchStage {
             vote_sender,
             poh_recorder,
             coalesce_ms,
-            max_queued_batches,
         )
     }
 
@@ -133,7 +129,6 @@ impl FetchStage {
         vote_sender: &PacketBatchSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
-        max_queued_batches: usize,
     ) -> Self {
         let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
 
@@ -146,7 +141,6 @@ impl FetchStage {
                 "fetch_stage",
                 streamer::ReceiverOptions {
                     coalesce_ms,
-                    max_queued_batches,
                     use_pinned_memory: true,
                 },
             )
@@ -162,7 +156,6 @@ impl FetchStage {
                 "fetch_forward_stage",
                 streamer::ReceiverOptions {
                     coalesce_ms,
-                    max_queued_batches,
                     use_pinned_memory: true,
                 },
             )
@@ -177,7 +170,6 @@ impl FetchStage {
                 "fetch_vote_stage",
                 streamer::ReceiverOptions {
                     coalesce_ms,
-                    max_queued_batches,
                     use_pinned_memory: true,
                 },
             )

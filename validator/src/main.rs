@@ -26,7 +26,7 @@ use {
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
-        tpu::{DEFAULT_TPU_COALESCE_MS, DEFAULT_TPU_MAX_QUEUED_BATCHES},
+        tpu::{DEFAULT_TPU_COALESCE_MS, DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP},
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
@@ -1190,12 +1190,12 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
-            Arg::with_name("tpu_max_queued_batches")
-                .long("tpu-max-queued-batches")
+            Arg::with_name("tpu_max_queued_batches_udp")
+                .long("tpu-max-queued-batches-udp")
                 .value_name("BATCHES")
                 .takes_value(true)
                 .validator(|s| is_larger_or_equal::<usize>(s, 2000))
-                .help("Maximum number of batches that the fetch stage will queue up for processing."),
+                .help("Maximum number of batches that the fetch stage will queue up for processing from UDP sockets."),
         )
         .arg(
             Arg::with_name("tpu_use_quic")
@@ -2142,8 +2142,8 @@ pub fn main() {
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
-    let tpu_max_queued_batches = value_t!(matches, "tpu_max_queued_batches", usize)
-        .unwrap_or(DEFAULT_TPU_MAX_QUEUED_BATCHES);
+    let tpu_max_queued_batches_udp = value_t!(matches, "tpu_max_queued_batches_udp", usize)
+        .unwrap_or(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -2527,7 +2527,7 @@ pub fn main() {
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         tpu_coalesce_ms,
-        tpu_max_queued_batches,
+        tpu_max_queued_batches_udp,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {

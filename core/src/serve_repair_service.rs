@@ -39,7 +39,6 @@ impl ServeRepairService {
             "serve_repair_receiver",
             streamer::ReceiverOptions {
                 coalesce_ms: 1,
-                max_queued_batches: usize::MAX,
                 use_pinned_memory: false,
             },
         );
