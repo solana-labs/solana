@@ -2,9 +2,9 @@ use {solana_sdk::pubkey::Pubkey, std::collections::HashSet};
 
 #[derive(Default)]
 pub struct VoteThresholdCheckResult {
-    check_duplicate: bool,
-    check_vote: bool,
-    is_new: bool,
+    pub check_duplicate: bool,
+    pub check_vote: bool,
+    pub is_new: bool,
 }
 #[derive(Default)]
 pub struct VoteStakeTracker {
@@ -40,7 +40,7 @@ impl VoteStakeTracker {
                 is_new: true,
             }
         } else {
-            VoteThresholdCheckResult::Default()
+            Default::default()
         }
     }
 
@@ -63,14 +63,22 @@ mod test {
         let mut vote_stake_tracker = VoteStakeTracker::default();
         for i in 0..10 {
             let pubkey = solana_sdk::pubkey::new_rand();
-            let (duplicate_check, vote_check, is_new) = vote_stake_tracker.add_vote_pubkey(
+            let VoteThresholdCheckResult {
+                check_duplicate: duplicate_check,
+                check_vote: vote_check,
+                is_new,
+            } = vote_stake_tracker.add_vote_pubkey(
                 pubkey,
                 1,
                 total_epoch_stake,
                 &[VOTE_THRESHOLD_SIZE, 0.0],
             );
             let stake = vote_stake_tracker.stake();
-            let (duplicate_check2, vote_check2, is_new2) = vote_stake_tracker.add_vote_pubkey(
+            let VoteThresholdCheckResult {
+                check_duplicate: duplicate_check2,
+                check_vote: vote_check2,
+                is_new: is_new2,
+            } = vote_stake_tracker.add_vote_pubkey(
                 pubkey,
                 1,
                 total_epoch_stake,

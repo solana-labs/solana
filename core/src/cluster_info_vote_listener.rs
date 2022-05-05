@@ -7,7 +7,7 @@ use {
         verified_vote_packets::{
             ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
         },
-        vote_stake_tracker::VoteStakeTracker,
+        vote_stake_tracker::{VoteStakeTracker, VoteThresholdCheckResult},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
@@ -618,15 +618,18 @@ impl ClusterInfoVoteListener {
                 // Fast track processing of the last slot in a vote transactions
                 // so that notifications for optimistic confirmation can be sent
                 // as soon as possible.
-                let (check_duplicate, check_vote, is_new) =
-                    Self::track_optimistic_confirmation_vote(
-                        vote_tracker,
-                        last_vote_slot,
-                        last_vote_hash,
-                        *vote_pubkey,
-                        stake,
-                        total_stake,
-                    );
+                let VoteThresholdCheckResult {
+                    check_duplicate,
+                    check_vote,
+                    is_new,
+                } = Self::track_optimistic_confirmation_vote(
+                    vote_tracker,
+                    last_vote_slot,
+                    last_vote_hash,
+                    *vote_pubkey,
+                    stake,
+                    total_stake,
+                );
 
                 if is_gossip_vote && is_new && stake > 0 {
                     let _ = gossip_verified_vote_hash_sender.send((
