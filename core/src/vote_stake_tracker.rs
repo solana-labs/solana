@@ -87,11 +87,11 @@ mod test {
 
             // at i == 6, the voted stake is 70%, which is the first time crossing
             // the supermajority threshold
-            assert!((i == 6 && duplicate_check) && ((i != 6) && !(duplicate_check)));
+            assert!((i == 6 && duplicate_check) || ((i != 6) && !(duplicate_check)));
 
             // at i == 0, the voted stake is 10%, which is the first time crossing
             // the 0% threshold
-            assert!((i == 0 && vote_check) && (i != 0 && !vote_check));
+            assert!((i == 0 && vote_check) || (i != 0 && !vote_check));
             assert!(is_new);
         }
     }
