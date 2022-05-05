@@ -1,10 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, Arg, Command},
     crossbeam_channel::unbounded,
     solana_streamer::{
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
-        streamer::{receiver, PacketBatchReceiver},
+        streamer::{receiver, PacketBatchReceiver, StreamerReceiveStats},
     },
     std::{
         cmp::max,
@@ -97,6 +98,7 @@ fn main() -> Result<()> {
         num_sockets,
     )
     .unwrap();
+    let stats = Arc::new(StreamerReceiveStats::new("bench-streamer-test"));
     for read in read_sockets {
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
@@ -105,10 +107,10 @@ fn main() -> Result<()> {
         read_channels.push(r_reader);
         read_threads.push(receiver(
             Arc::new(read),
-            &exit,
+            exit.clone(),
             s_reader,
             recycler.clone(),
-            "bench-streamer-test",
+            stats.clone(),
             1,
             true,
         ));
