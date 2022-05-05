@@ -271,6 +271,7 @@ impl ExpectedRentCollection {
         account: &mut AccountSharedData,
         storage_slot: &SlotInfoInEpoch,
         bank_slot: &SlotInfoInEpoch,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
@@ -279,6 +280,7 @@ impl ExpectedRentCollection {
             account,
             storage_slot,
             bank_slot,
+            epoch_schedule,
             rent_collector,
             pubkey,
             rewrites_skipped_this_slot,
@@ -296,6 +298,7 @@ impl ExpectedRentCollection {
         account: &AccountSharedData,
         storage_slot: &SlotInfoInEpoch,
         bank_slot: &SlotInfoInEpoch,
+        epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
@@ -309,10 +312,10 @@ impl ExpectedRentCollection {
             }
 
             // grab epoch infno for bank slot and storage slot
-            let bank_info = bank_slot.get_epoch_info(&rent_collector.epoch_schedule);
+            let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
                 (bank_info.epoch, bank_info.partition_index);
-            let storage_info = storage_slot.get_epoch_info(&rent_collector.epoch_schedule);
+            let storage_info = storage_slot.get_epoch_info(epoch_schedule);
             let (storage_epoch, storage_slot_partition) =
                 (storage_info.epoch, storage_info.partition_index);
             let partition_from_pubkey =
@@ -1237,6 +1240,7 @@ pub mod tests {
                                 &account,
                                 &get_slot_info(storage_slot),
                                 &get_slot_info(bank_slot),
+                                &epoch_schedule,
                                 &rent_collector,
                                 &pubkey,
                                 &rewrites,
