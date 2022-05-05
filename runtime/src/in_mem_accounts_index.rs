@@ -229,6 +229,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
+                if entry.disk_unknown() {
+                    // we found the pubkey
+                    // but, we haven't checked to see if there is more on disk
+                    // so, we have to load from disk first, then merge with in-mem
+                    // right now we have a read lock on the in-mem idx, fwiw
+                }
                 entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
             } else {
@@ -242,7 +248,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let mut map = self.map().write().unwrap();
                 let entry = map.entry(*pubkey);
                 match entry {
-                    Entry::Occupied(occupied) => callback(Some(occupied.get())).1,
+                    Entry::Occupied(occupied) => {
+                        let entry = occupied.get();
+                        if entry.disk_unknown() {
+                            // we found the pubkey
+                            // but, we haven't checked to see if there is more on disk
+                            // so, we have to load from disk first, then merge with in-mem
+                            // right now we have a write lock on the in-mem idx, fwiw
+                            // NB: we remove a slot from the slot list through calling slot_list_mut
+                            // we need to make sure this gets covered
+                        }
+                        callback(Some(entry)).1
+                    }
                     Entry::Vacant(vacant) => {
                         let (add_to_cache, rt) = callback(Some(&disk_entry));
 
@@ -255,6 +272,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
             }
         })
+    }
+
+    /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
+    /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
+    fn merge_slot_lists(in_mem: AccountMapEntry<T>, disk: (SlotList<T>, RefCount)) {
+        // have to consider changes that have occurred to refcount
+        // depends on being in cache or not
+        // slots in 'in_mem' take precendence over slots in 'disk'
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -319,6 +344,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let entry = map.entry(pubkey);
         m.stop();
         let found = matches!(entry, Entry::Occupied(_));
+        // if entry.disk_unknown(), we don't know if the slot list is empty because we haven't checked on disk.
         let result = self.remove_if_slot_list_empty_entry(entry);
         drop(map);
 
@@ -364,6 +390,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // try to get it just from memory first using only a read lock
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
+                // if entry.disk_unknown(), that is ok.
+                // updating the slot list here will either update the same slot we already updated or insert a new slot that we also don't know if it is on disk or not
                 Self::lock_and_update_slot_list(
                     entry,
                     new_value.into(),
@@ -381,6 +409,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 match entry {
                     Entry::Occupied(mut occupied) => {
                         let current = occupied.get_mut();
+                        // if current.disk_unknown(), that is ok.
+                        // updating the slot list here will either update the same slot we already updated or insert a new slot that we also don't know if it is on disk or not
                         Self::lock_and_update_slot_list(
                             current,
                             new_value.into(),
@@ -397,6 +427,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // desired to be this for filler accounts: self.storage.get_startup();
                         // but, this has proven to be far too slow at high account counts
                         let directly_to_disk = false;
+                        let enable_disk_unknown = true;
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.
@@ -412,9 +443,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 self.stats().insert_or_delete(true, self.bin);
                             }
                         } else {
-                            // go to in-mem cache first
-                            let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                            let new_value = if let Some(disk_entry) = disk_entry {
+                            // put new_value in in-mem cache. First we have to see if it already exists on disk and if so, merge.
+                            let new_value = if let Some(disk_entry) = (!enable_disk_unknown)
+                                .then(|| self.load_account_entry_from_disk(vacant.key()))
+                                .flatten()
+                            {
                                 // on disk, so merge new_value with what was on disk
                                 Self::lock_and_update_slot_list(
                                     &disk_entry,
@@ -427,7 +460,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             } else {
                                 // not on disk, so insert new thing
                                 self.stats().insert_or_delete(true, self.bin);
-                                new_value.into_account_map_entry(&self.storage)
+                                let entry = new_value.into_account_map_entry(&self.storage);
+                                if enable_disk_unknown {
+                                    entry.set_disk_unknown();
+                                }
+                                entry
                             };
                             assert!(new_value.dirty());
                             vacant.insert(new_value);
