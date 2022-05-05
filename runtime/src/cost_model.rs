@@ -148,17 +148,6 @@ impl CostModel {
             });
     }
 
-    fn get_data_bytes_cost(&self, transaction: &SanitizedTransaction) -> u64 {
-        let mut data_bytes_cost: u64 = 0;
-        transaction
-            .message()
-            .program_instructions_iter()
-            .for_each(|(_, ix)| {
-                data_bytes_cost += ix.data.len() as u64 / DATA_BYTES_UNITS;
-            });
-        data_bytes_cost
-    }
-
     fn get_transaction_cost(&self, transaction: &SanitizedTransaction) -> (u64, u64, u64) {
         let mut builtin_costs = 0u64;
         let mut bpf_costs = 0u64;
@@ -389,7 +378,7 @@ mod tests {
         let expected_cost = program_cost * 2;
 
         let testee = CostModel::default();
-        assert_eq!((expected_cost, 0, 0), testee.get_transaction_cost(&tx));
+        assert_eq!((expected_cost, 0, 1), testee.get_transaction_cost(&tx));
     }
 
     #[test]
