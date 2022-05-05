@@ -25,7 +25,7 @@ nix = "0.24.0"
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 semver = "1.0.9"
 serde = { version = "1.0.137", features = ["derive"] }
-serde_yaml = "0.8.23"
+serde_yaml = "0.8.24"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-client = { path = "../client", version = "=1.11.0" }
 solana-config-program = { path = "../programs/config", version = "=1.11.0" }
