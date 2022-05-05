@@ -30,29 +30,33 @@ export type CreateEd25519InstructionWithPrivateKeyParams = {
   instructionIndex?: number;
 };
 
-const ED25519_INSTRUCTION_LAYOUT = BufferLayout.struct<
-  Readonly<{
-    messageDataOffset: number;
-    messageDataSize: number;
-    messageInstructionIndex: number;
-    numSignatures: number;
-    padding: number;
-    publicKeyInstructionIndex: number;
-    publicKeyOffset: number;
-    signatureInstructionIndex: number;
-    signatureOffset: number;
-  }>
->([
-  BufferLayout.u8('numSignatures'),
-  BufferLayout.u8('padding'),
-  BufferLayout.u16('signatureOffset'),
-  BufferLayout.u16('signatureInstructionIndex'),
-  BufferLayout.u16('publicKeyOffset'),
-  BufferLayout.u16('publicKeyInstructionIndex'),
-  BufferLayout.u16('messageDataOffset'),
-  BufferLayout.u16('messageDataSize'),
-  BufferLayout.u16('messageInstructionIndex'),
-]);
+const ED25519_INSTRUCTION_LAYOUT =
+  /*#__PURE__*/
+  (function () {
+    return BufferLayout.struct<
+      Readonly<{
+        messageDataOffset: number;
+        messageDataSize: number;
+        messageInstructionIndex: number;
+        numSignatures: number;
+        padding: number;
+        publicKeyInstructionIndex: number;
+        publicKeyOffset: number;
+        signatureInstructionIndex: number;
+        signatureOffset: number;
+      }>
+    >([
+      BufferLayout.u8('numSignatures'),
+      BufferLayout.u8('padding'),
+      BufferLayout.u16('signatureOffset'),
+      BufferLayout.u16('signatureInstructionIndex'),
+      BufferLayout.u16('publicKeyOffset'),
+      BufferLayout.u16('publicKeyInstructionIndex'),
+      BufferLayout.u16('messageDataOffset'),
+      BufferLayout.u16('messageDataSize'),
+      BufferLayout.u16('messageInstructionIndex'),
+    ]);
+  })();
 
 let _memoizedProgramId: PublicKey;
 export class Ed25519Program {
