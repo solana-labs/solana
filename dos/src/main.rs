@@ -203,6 +203,39 @@ impl TransactionGenerator {
         Transaction::new(&signers, message, self.blockhash)
     }
 
+    // TODO(klykov)just to check performance
+    fn generate_without_blockhash_batch(
+        &mut self,
+        kpvals: Vec<Option<Vec<&Keypair>>>, // provided for valid signatures
+    ) -> Vec<Transaction> {
+        // create an arbitrary valid instruction
+        let lamports = 5;
+        let transfer_instruction = SystemInstruction::Transfer { lamports };
+        let program_ids = vec![system_program::id(), stake::program::id()];
+        let instructions = vec![CompiledInstruction::new(
+            0,
+            &transfer_instruction,
+            vec![0, 1],
+        )];
+
+        let res: Vec<Transaction> = (&kpvals)
+            .into_iter()
+            .map(|keypairs| {
+                let keypairs = keypairs.as_ref().unwrap();
+                // Since we don't provide a payer, this transaction will end up
+                // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
+                Transaction::new_with_compiled_instructions(
+                    keypairs,
+                    &[],
+                    self.blockhash,
+                    program_ids.clone(),
+                    instructions.clone(),
+                )
+            })
+            .collect();
+        return res;
+    }
+
     fn generate_without_blockhash(
         &mut self,
         kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
@@ -257,7 +290,9 @@ enum TransactionMsg {
     Transaction(Vec<Transaction>),
     Exit,
 }
-static TRANS_BATCH_SIZE: usize = 128;
+static TRANS_BATCH_SIZE: usize = 1 << 14;
+// TODO(klykov): later make a parameter
+static DUPLICATE_COEF: usize = 8; // how many duplicates for each message
 
 fn create_sender_thread(
     tx_receiver: Receiver<TransactionMsg>,
@@ -278,8 +313,8 @@ fn create_sender_thread(
         let mut error_count = 0;
         let start_total = Instant::now();
 
-        let mut time_to_ser_us = 0;
-        let mut time_to_send_us = 0;
+        let mut time_to_ser_ns = 0;
+        let mut time_to_send_ns = 0;
         let client_stats = ClientStats::default();
 
         loop {
@@ -289,15 +324,20 @@ fn create_sender_thread(
                         Ok(TransactionMsg::Transaction(txs)) => {
                             let mut ser_txs = Measure::start("serialize_txs");
                             let data: Vec<_> = txs.into_iter().map(|tx| bincode::serialize(&tx).unwrap()).collect();
+                            let mut data_not_unique = Vec::with_capacity(DUPLICATE_COEF*data.len());
+                            for i in 0..DUPLICATE_COEF*data.len() {
+                                let j = i % data.len();
+                                data_not_unique.push(data[j].clone());
+                            }
                             //let data = bincode::serialize(&tx).unwrap();
                             ser_txs.stop();
-                            time_to_ser_us += ser_txs.as_us();
+                            time_to_ser_ns += ser_txs.as_ns();
 
                             let mut send_txs = Measure::start("send_txs");
                             //let res = socket.send_to(&data, target);
                             let res = client.send_wire_transaction_batch(&data, &client_stats);
                             send_txs.stop();
-                            time_to_send_us += send_txs.as_us();
+                            time_to_send_ns += send_txs.as_ns();
 
                             if res.is_err() {
                                 error_count += 1;
@@ -305,8 +345,8 @@ fn create_sender_thread(
                             //executor.push_transactions(vec![tx]);
                             //let _ = executor.drain_cleared();
 
-                            count += TRANS_BATCH_SIZE;
-                            total_count += TRANS_BATCH_SIZE;
+                            count += TRANS_BATCH_SIZE * DUPLICATE_COEF;
+                            total_count += TRANS_BATCH_SIZE * DUPLICATE_COEF;
                         }
                         Ok(TransactionMsg::Exit) => {
                             info!("Worker is done");
@@ -334,12 +374,12 @@ fn create_sender_thread(
                         t / 1e6,
                     );
                     info!("@serialize time us: {}, send time us: {}",
-                        time_to_ser_us/count as u64,
-                        time_to_send_us/count as u64,
+                        time_to_ser_ns/count as u64,
+                        time_to_send_ns/count as u64,
                     );
                     count = 0;
-                    time_to_ser_us = 0;
-                    time_to_send_us = 0;
+                    time_to_ser_ns = 0;
+                    time_to_send_ns = 0;
                 }
             }
         }
@@ -368,17 +408,17 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
     // and hence this choice of n provides large enough number of permutations
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
     if valid_signatures || valid_blockhash {
-        keypairs_flat = (0..1000 * num_signatures).map(|_| Keypair::new()).collect();
+        keypairs_flat = (0..1024 * num_signatures).map(|_| Keypair::new()).collect();
     }
 
     thread::spawn(move || {
         let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
         let mut it = indexes.iter().permutations(num_signatures);
         let mut count = 0;
-        let mut generation_elapsed: u64 = 0;
-        let mut time_gen_us: u64 = 0;
+        //let mut generation_elapsed: u64 = 0;
+        let mut time_gen_ns: u64 = 0;
         loop {
-            let generation_start = Instant::now();
+            //let generation_start = Instant::now();
 
             let mut gen_txs = Measure::start("gen_txs");
             let txs: Vec<Transaction> = (0..TRANS_BATCH_SIZE)
@@ -400,10 +440,12 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                 })
                 .collect();
 
-            generation_elapsed =
-                generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
+            //let txs = transaction_generator.generate_without_blockhash_batch(kpvals_batch);
+
+            //generation_elapsed =
+            //    generation_elapsed.saturating_add(generation_start.elapsed().as_micros() as u64);
             gen_txs.stop();
-            time_gen_us += gen_txs.as_us();
+            time_gen_ns += gen_txs.as_ns();
 
             let _ = tx_sender.send(TransactionMsg::Transaction(txs));
             count += TRANS_BATCH_SIZE;
@@ -413,17 +455,17 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
             }
 
             if count % (1 << 18) == 0 {
-                info!("@Gen time: {}", time_gen_us / (1 << 18));
-                time_gen_us = 0;
+                info!("@Gen time: {}", time_gen_ns / (1 << 18));
+                time_gen_ns = 0;
             }
         }
         // TODO clean this up, this stats is not very useful
-        info!(
-            "Finished thread. count = {}, avg generation time = {}, tps = {}",
-            count,
-            generation_elapsed / 1_000,
-            (count as f64) / (generation_elapsed as f64) * 1e6
-        );
+        //info!(
+        //    "Finished thread. count = {}, avg generation time = {}, tps = {}",
+        //    count,
+        //    //generation_elapsed / 1_000,
+        //    (count as f64) / (generation_elapsed as f64) * 1e6
+        //);
     })
 }
 
