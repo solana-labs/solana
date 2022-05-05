@@ -1,16 +1,15 @@
 use {solana_sdk::pubkey::Pubkey, std::collections::HashSet};
 
 #[derive(Default)]
-pub struct VoteStakeTracker {
-    voted: HashSet<Pubkey>,
-    stake: u64,
-}
-
-#[derive(Default)]
 pub struct VoteThresholdCheckResult {
     check_duplicate: bool,
     check_vote: bool,
     is_new: bool,
+}
+#[derive(Default)]
+pub struct VoteStakeTracker {
+    voted: HashSet<Pubkey>,
+    stake: u64,
 }
 
 impl VoteStakeTracker {
