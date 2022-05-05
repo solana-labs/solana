@@ -618,14 +618,15 @@ impl ClusterInfoVoteListener {
                 // Fast track processing of the last slot in a vote transactions
                 // so that notifications for optimistic confirmation can be sent
                 // as soon as possible.
-                let (reached_threshold_results, is_new) = Self::track_optimistic_confirmation_vote(
-                    vote_tracker,
-                    last_vote_slot,
-                    last_vote_hash,
-                    *vote_pubkey,
-                    stake,
-                    total_stake,
-                );
+                let (check_duplicate, check_vote, is_new) =
+                    Self::track_optimistic_confirmation_vote(
+                        vote_tracker,
+                        last_vote_slot,
+                        last_vote_hash,
+                        *vote_pubkey,
+                        stake,
+                        total_stake,
+                    );
 
                 if is_gossip_vote && is_new && stake > 0 {
                     let _ = gossip_verified_vote_hash_sender.send((
@@ -635,12 +636,12 @@ impl ClusterInfoVoteListener {
                     ));
                 }
 
-                if reached_threshold_results[0] {
+                if check_duplicate {
                     if let Some(sender) = cluster_confirmed_slot_sender {
                         let _ = sender.send(vec![(last_vote_slot, last_vote_hash)]);
                     }
                 }
-                if reached_threshold_results[1] {
+                if check_vote {
                     new_optimistic_confirmed_slots.push((last_vote_slot, last_vote_hash));
                     // Notify subscribers about new optimistic confirmation
                     if let Some(sender) = bank_notification_sender {
@@ -780,7 +781,7 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
-    ) -> (Vec<bool>, bool) {
+    ) -> VoteThresholdCheckResult {
         let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
