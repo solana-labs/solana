@@ -3134,7 +3134,7 @@ failed:
 [2022-04-21T18:39:45.863178526Z ERROR solana_runtime::accounts_db] jwash: ancient_append_vec: slots: [130142117], total: 13450
 
         */
-        let epoch_width = DEFAULT_SLOTS_PER_EPOCH * 60/100;// 996300 / 1000000; // put some 'in-this-epoch' slots into an ancient append vec
+        let epoch_width = DEFAULT_SLOTS_PER_EPOCH;// 996300 / 1000000; // put some 'in-this-epoch' slots into an ancient append vec
         let old_root = max_root.saturating_sub(epoch_width + 1000);// + 16096 + 6096 -1000);
 
         let mut m = Measure::start("get slots");
