@@ -1,9 +1,7 @@
 use {
-    crate::{
-        shred::{
-            Error, Shred, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD,
-        },
-        shred_stats::ProcessShredsStats,
+    crate::shred::{
+        Error, ProcessShredsStats, Shred, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        SIZE_OF_DATA_SHRED_PAYLOAD,
     },
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
