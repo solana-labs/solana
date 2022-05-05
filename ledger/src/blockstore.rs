@@ -5949,7 +5949,7 @@ pub mod tests {
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
         let slot = 1;
-        let coding_shred = Shred::new_coding(
+        let coding_shred = Shred::new_code(
             slot, 11,   // index
             None, // parity_shard
             11,   // fec_set_index
@@ -6006,7 +6006,7 @@ pub mod tests {
         let last_root = RwLock::new(0);
 
         let slot = 1;
-        let mut coding_shred = Shred::new_coding(
+        let mut coding_shred = Shred::new_code(
             slot, 11,   // index
             None, // parity_shard
             11,   // fec_set_index

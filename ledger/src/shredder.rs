@@ -246,13 +246,13 @@ impl Shredder {
         let data = data.iter().map(Shred::erasure_shard_as_slice);
         let data: Vec<_> = data.collect::<Result<_, _>>().unwrap();
 
-        let mut coding = {
+        let mut code = {
             let num_data = u16::try_from(num_data).unwrap();
             let num_coding = u16::try_from(num_coding).unwrap();
             (0..num_coding)
                 .map(|i| {
                     let index = next_code_index + u32::try_from(i).unwrap();
-                    Shred::new_coding(
+                    Shred::new_code(
                         slot,
                         index,
                         None,
@@ -266,7 +266,7 @@ impl Shredder {
                 .collect::<Vec<_>>()
         };
 
-        let mut parity: Vec<_> = coding
+        let mut parity: Vec<_> = code
             .iter_mut()
             .map(|s| &mut s.erasure_shard_as_slice_mut().unwrap()[..data[0].len()])
             .collect();
@@ -276,7 +276,7 @@ impl Shredder {
             .encode_sep(&data, &mut parity[..])
             .unwrap();
 
-        coding
+        code
     }
 
     pub fn try_recovery(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {

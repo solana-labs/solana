@@ -863,7 +863,7 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let mut coding_shred = Shred::new_coding(
+        let mut coding_shred = Shred::new_code(
             5,    // slot
             5,    // index
             None, // parity_shard
@@ -946,7 +946,7 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let shred = Shred::new_coding(
+        let shred = Shred::new_code(
             5,    // slot
             5,    // index
             None, // parity_shard

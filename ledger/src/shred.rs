@@ -314,7 +314,7 @@ impl Shred {
         shred.sanitize().map(|_| shred)
     }
 
-    pub fn new_coding(
+    pub fn new_code(
         slot: Slot,
         index: u32,
         parity_shard: Option<&[u8]>,
@@ -962,7 +962,7 @@ mod tests {
         );
         assert_eq!(stats.index_overrun, 4);
 
-        let shred = Shred::new_coding(
+        let shred = Shred::new_code(
             8,    // slot
             2,    // index
             None, // parity_shard
@@ -992,7 +992,7 @@ mod tests {
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let shred = Shred::new_coding(
+        let shred = Shred::new_code(
             8,    // slot
             2,    // index
             None, // parity_shard
@@ -1107,7 +1107,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_coding_shred() {
-        let mut shred = Shred::new_coding(
+        let mut shred = Shred::new_code(
             1,    // slot
             12,   // index
             None, // parity_shard
@@ -1280,7 +1280,7 @@ mod tests {
         let mut parity_shard = vec![0u8; ENCODED_PAYLOAD_SIZE];
         rng.fill(&mut parity_shard[..]);
         let keypair = Keypair::generate(&mut rng);
-        let mut shred = Shred::new_coding(
+        let mut shred = Shred::new_code(
             141945197, // slot
             23418,     // index
             Some(&parity_shard),
