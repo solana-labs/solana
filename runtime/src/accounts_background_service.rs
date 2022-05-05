@@ -225,7 +225,7 @@ impl SnapshotRequestHandler {
                     let use_index_hash_calculation = false;
                     let check_hash = false;
 
-                    let (this_hash, _cap) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
+                    let (this_hash, capitalization) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
                         use_index_hash_calculation,
                         snapshot_root_bank.slot(),
                         &CalcAccountsHashConfig {
@@ -238,6 +238,7 @@ impl SnapshotRequestHandler {
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);
+                    assert_eq!(capitalization, snapshot_root_bank.capitalization());
                     Some(this_hash)
                 } else {
                     None
