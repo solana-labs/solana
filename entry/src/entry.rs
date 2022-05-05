@@ -7,6 +7,7 @@ use {
     crossbeam_channel::{Receiver, Sender},
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
+    lazy_static::lazy_static,
     log::*,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
@@ -21,7 +22,7 @@ use {
         recycler::Recycler,
         sigverify,
     },
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{
         hash::Hash,
         packet::Meta,
@@ -32,7 +33,6 @@ use {
         },
     },
     std::{
-        cell::RefCell,
         cmp,
         ffi::OsStr,
         sync::{
@@ -44,11 +44,15 @@ use {
     },
 };
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("entry_{}", ix))
-                    .build()
-                    .unwrap()));
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("entry_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -341,25 +345,22 @@ impl EntryVerificationState {
                     .expect("unwrap Arc")
                     .into_inner()
                     .expect("into_inner");
-                let res = PAR_THREAD_POOL.with(|thread_pool| {
-                    thread_pool.borrow().install(|| {
-                        hashes
-                            .into_par_iter()
-                            .cloned()
-                            .zip(verification_state.verifications.take().unwrap())
-                            .all(|(hash, (action, expected))| {
-                                let actual = match action {
-                                    VerifyAction::Mixin(mixin) => {
-                                        Poh::new(hash, None).record(mixin).unwrap().hash
-                                    }
-                                    VerifyAction::Tick => Poh::new(hash, None).tick().unwrap().hash,
-                                    VerifyAction::None => hash,
-                                };
-                                actual == expected
-                            })
-                    })
+                let res = PAR_THREAD_POOL.install(|| {
+                    hashes
+                        .into_par_iter()
+                        .cloned()
+                        .zip(verification_state.verifications.take().unwrap())
+                        .all(|(hash, (action, expected))| {
+                            let actual = match action {
+                                VerifyAction::Mixin(mixin) => {
+                                    Poh::new(hash, None).record(mixin).unwrap().hash
+                                }
+                                VerifyAction::Tick => Poh::new(hash, None).tick().unwrap().hash,
+                                VerifyAction::None => hash,
+                            };
+                            actual == expected
+                        })
                 });
-
                 verify_check_time.stop();
                 self.poh_duration_us += gpu_time_us + verify_check_time.as_us();
 
@@ -381,25 +382,23 @@ pub fn verify_transactions(
     entries: Vec<Entry>,
     verify: Arc<dyn Fn(VersionedTransaction) -> Result<SanitizedTransaction> + Send + Sync>,
 ) -> Result<Vec<EntryType>> {
-    PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool.borrow().install(|| {
-            entries
-                .into_par_iter()
-                .map(|entry| {
-                    if entry.transactions.is_empty() {
-                        Ok(EntryType::Tick(entry.hash))
-                    } else {
-                        Ok(EntryType::Transactions(
-                            entry
-                                .transactions
-                                .into_par_iter()
-                                .map(verify.as_ref())
-                                .collect::<Result<Vec<_>>>()?,
-                        ))
-                    }
-                })
-                .collect()
-        })
+    PAR_THREAD_POOL.install(|| {
+        entries
+            .into_par_iter()
+            .map(|entry| {
+                if entry.transactions.is_empty() {
+                    Ok(EntryType::Tick(entry.hash))
+                } else {
+                    Ok(EntryType::Transactions(
+                        entry
+                            .transactions
+                            .into_par_iter()
+                            .map(verify.as_ref())
+                            .collect::<Result<Vec<_>>>()?,
+                    ))
+                }
+            })
+            .collect()
     })
 }
 
@@ -615,23 +614,20 @@ impl EntrySlice for [Entry] {
             transactions: vec![],
         }];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        let res = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                entry_pairs.all(|(x0, x1)| {
-                    let r = x1.verify(&x0.hash);
-                    if !r {
-                        warn!(
-                            "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
-                            x0.hash,
-                            x1.hash,
-                            x1.transactions.len()
-                        );
-                    }
-                    r
-                })
+        let res = PAR_THREAD_POOL.install(|| {
+            entry_pairs.all(|(x0, x1)| {
+                let r = x1.verify(&x0.hash);
+                if !r {
+                    warn!(
+                        "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
+                        x0.hash,
+                        x1.hash,
+                        x1.transactions.len()
+                    );
+                }
+                r
             })
         });
-
         let poh_duration_us = timing::duration_as_us(&now.elapsed());
         EntryVerificationState {
             verification_status: if res {
@@ -675,45 +671,43 @@ impl EntrySlice for [Entry] {
         num_hashes.resize(aligned_len, 0);
         let num_hashes: Vec<_> = num_hashes.chunks(simd_len).collect();
 
-        let res = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                hashes_chunked
-                    .par_iter_mut()
-                    .zip(num_hashes)
-                    .enumerate()
-                    .all(|(i, (chunk, num_hashes))| {
-                        match simd_len {
-                            8 => unsafe {
-                                (api().unwrap().poh_verify_many_simd_avx2)(
-                                    chunk.as_mut_ptr(),
-                                    num_hashes.as_ptr(),
-                                );
-                            },
-                            16 => unsafe {
-                                (api().unwrap().poh_verify_many_simd_avx512skx)(
-                                    chunk.as_mut_ptr(),
-                                    num_hashes.as_ptr(),
-                                );
-                            },
-                            _ => {
-                                panic!("unsupported simd len: {}", simd_len);
-                            }
+        let res = PAR_THREAD_POOL.install(|| {
+            hashes_chunked
+                .par_iter_mut()
+                .zip(num_hashes)
+                .enumerate()
+                .all(|(i, (chunk, num_hashes))| {
+                    match simd_len {
+                        8 => unsafe {
+                            (api().unwrap().poh_verify_many_simd_avx2)(
+                                chunk.as_mut_ptr(),
+                                num_hashes.as_ptr(),
+                            );
+                        },
+                        16 => unsafe {
+                            (api().unwrap().poh_verify_many_simd_avx512skx)(
+                                chunk.as_mut_ptr(),
+                                num_hashes.as_ptr(),
+                            );
+                        },
+                        _ => {
+                            panic!("unsupported simd len: {}", simd_len);
                         }
-                        let entry_start = i * simd_len;
-                        // The last chunk may produce indexes larger than what we have in the reference entries
-                        // because it is aligned to simd_len.
-                        let entry_end = std::cmp::min(entry_start + simd_len, self.len());
-                        self[entry_start..entry_end]
-                            .iter()
-                            .enumerate()
-                            .all(|(j, ref_entry)| {
-                                let start = j * HASH_BYTES;
-                                let end = start + HASH_BYTES;
-                                let hash = Hash::new(&chunk[start..end]);
-                                compare_hashes(hash, ref_entry)
-                            })
-                    })
-            })
+                    }
+                    let entry_start = i * simd_len;
+                    // The last chunk may produce indexes larger than what we have in the reference entries
+                    // because it is aligned to simd_len.
+                    let entry_end = std::cmp::min(entry_start + simd_len, self.len());
+                    self[entry_start..entry_end]
+                        .iter()
+                        .enumerate()
+                        .all(|(j, ref_entry)| {
+                            let start = j * HASH_BYTES;
+                            let end = start + HASH_BYTES;
+                            let hash = Hash::new(&chunk[start..end]);
+                            compare_hashes(hash, ref_entry)
+                        })
+                })
         });
         let poh_duration_us = timing::duration_as_us(&now.elapsed());
         EntryVerificationState {
@@ -812,26 +806,23 @@ impl EntrySlice for [Entry] {
             timing::duration_as_us(&gpu_wait.elapsed())
         });
 
-        let verifications = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.into_par_iter()
-                    .map(|entry| {
-                        let answer = entry.hash;
-                        let action = if entry.transactions.is_empty() {
-                            if entry.num_hashes == 0 {
-                                VerifyAction::None
-                            } else {
-                                VerifyAction::Tick
-                            }
+        let verifications = PAR_THREAD_POOL.install(|| {
+            self.into_par_iter()
+                .map(|entry| {
+                    let answer = entry.hash;
+                    let action = if entry.transactions.is_empty() {
+                        if entry.num_hashes == 0 {
+                            VerifyAction::None
                         } else {
-                            VerifyAction::Mixin(hash_transactions(&entry.transactions))
-                        };
-                        (action, answer)
-                    })
-                    .collect()
-            })
+                            VerifyAction::Tick
+                        }
+                    } else {
+                        VerifyAction::Mixin(hash_transactions(&entry.transactions))
+                    };
+                    (action, answer)
+                })
+                .collect()
         });
-
         let device_verification_data = DeviceVerificationData::Gpu(GpuVerificationData {
             thread_h: Some(gpu_verify_thread),
             verifications: Some(verifications),

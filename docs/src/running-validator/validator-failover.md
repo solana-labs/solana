@@ -30,10 +30,10 @@ First install `etcd` as desired for your machine. Then TLS certificates must be
 created for authentication between the etcd cluster and your validator.  Here is
 one way to do this:
 
-With [Golang](https://golang.org/) installed, run `go get
-github.com/cloudflare/cfssl/cmd/cfssl`.  The `cfssl` program should now be
-available at `~/go/bin/cfssl`.  Ensure `~/go/bin` is in your PATH by running
-`PATH=$PATH:~/go/bin/`.
+With [Golang](https://golang.org/) installed, run
+`go install github.com/cloudflare/cfssl/cmd/cfssl@latest`.  The `cfssl` program
+should now be available at `~/go/bin/cfssl`.  Ensure `~/go/bin` is in your PATH
+by running `PATH=$PATH:~/go/bin/`.
 
 Now create a certificate directory and configuration file:
 ```

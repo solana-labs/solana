@@ -1804,17 +1804,23 @@ impl AccountsDb {
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
-        let reclaim_vecs = purges
-            .par_chunks(INDEX_CLEAN_BULK_COUNT)
-            .map(|pubkeys: &[Pubkey]| {
-                let mut reclaims = Vec::new();
-                for pubkey in pubkeys {
-                    self.accounts_index
-                        .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
-                }
-                reclaims
-            });
-        let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
+        let reclaims: Vec<_> = self.thread_pool_clean.install(|| {
+            purges
+                .par_chunks(INDEX_CLEAN_BULK_COUNT)
+                .map(|pubkeys: &[Pubkey]| {
+                    let mut reclaims = Vec::new();
+                    for pubkey in pubkeys {
+                        self.accounts_index.clean_rooted_entries(
+                            pubkey,
+                            &mut reclaims,
+                            max_clean_root,
+                        );
+                    }
+                    reclaims
+                })
+                .flatten()
+                .collect()
+        });
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
@@ -4104,12 +4110,21 @@ impl AccountsDb {
     /// entries in the accounts index, cache entries, and any backing storage entries.
     fn purge_slots_from_cache_and_store<'a>(
         &self,
-        removed_slots: impl Iterator<Item = &'a Slot>,
+        removed_slots: impl Iterator<Item = &'a Slot> + Clone,
         purge_stats: &PurgeStats,
+        log_accounts: bool,
     ) {
         let mut remove_cache_elapsed_across_slots = 0;
         let mut num_cached_slots_removed = 0;
         let mut total_removed_cached_bytes = 0;
+        if log_accounts {
+            if let Some(min) = removed_slots.clone().min() {
+                info!(
+                    "purge_slots_from_cache_and_store: {:?}",
+                    self.get_pubkey_hash_for_slot(*min).0
+                );
+            }
+        }
         for remove_slot in removed_slots {
             // This function is only currently safe with respect to `flush_slot_cache()` because
             // both functions run serially in AccountsBackgroundService.
@@ -4314,7 +4329,7 @@ impl AccountsDb {
     }
 
     #[allow(clippy::needless_collect)]
-    fn purge_slots<'a>(&self, slots: impl Iterator<Item = &'a Slot>) {
+    fn purge_slots<'a>(&self, slots: impl Iterator<Item = &'a Slot> + Clone) {
         // `add_root()` should be called first
         let mut safety_checks_elapsed = Measure::start("safety_checks_elapsed");
         let non_roots = slots
@@ -4332,7 +4347,7 @@ impl AccountsDb {
         self.external_purge_slots_stats
             .safety_checks_elapsed
             .fetch_add(safety_checks_elapsed.as_us(), Ordering::Relaxed);
-        self.purge_slots_from_cache_and_store(non_roots, &self.external_purge_slots_stats);
+        self.purge_slots_from_cache_and_store(non_roots, &self.external_purge_slots_stats, false);
         self.external_purge_slots_stats
             .report("external_purge_slots_stats", Some(1000));
     }
@@ -4415,6 +4430,7 @@ impl AccountsDb {
         self.purge_slots_from_cache_and_store(
             remove_slots.iter().map(|(slot, _)| slot),
             &remove_unrooted_purge_stats,
+            true,
         );
         remove_unrooted_purge_stats.report("remove_unrooted_slots_purge_slots_stats", Some(0));
 
@@ -5948,6 +5964,7 @@ impl AccountsDb {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        can_cached_slot_be_unflushed: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
             slot,
@@ -5956,6 +5973,7 @@ impl AccountsDb {
             test_hash_calculation,
             epoch_schedule,
             rent_collector,
+            can_cached_slot_be_unflushed,
         )
     }
 
@@ -5968,13 +5986,13 @@ impl AccountsDb {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        can_cached_slot_be_unflushed: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let use_index = false;
         let check_hash = false; // this will not be supported anymore
         let is_startup = true;
-        let can_cached_slot_be_unflushed = false;
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
@@ -6061,11 +6079,12 @@ impl AccountsDb {
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
     }
-    pub fn get_accounts_delta_hash_with_rewrites(
-        &self,
-        slot: Slot,
-        skipped_rewrites: &Rewrites,
-    ) -> Hash {
+
+    /// helper to return
+    /// 1. pubkey, hash pairs for the slot
+    /// 2. us spent scanning
+    /// 3. Measure started when we began accumulating
+    fn get_pubkey_hash_for_slot(&self, slot: Slot) -> (Vec<(Pubkey, Hash)>, u64, Measure) {
         let mut scan = Measure::start("scan");
 
         let scan_result: ScanStorageResult<(Pubkey, Hash), DashMapVersionHash> = self
@@ -6094,14 +6113,23 @@ impl AccountsDb {
             );
         scan.stop();
 
-        let mut accumulate = Measure::start("accumulate");
-        let mut hashes: Vec<_> = match scan_result {
+        let accumulate = Measure::start("accumulate");
+        let hashes: Vec<_> = match scan_result {
             ScanStorageResult::Cached(cached_result) => cached_result,
             ScanStorageResult::Stored(stored_result) => stored_result
                 .into_iter()
                 .map(|(pubkey, (_latest_write_version, hash))| (pubkey, hash))
                 .collect(),
         };
+        (hashes, scan.as_us(), accumulate)
+    }
+
+    pub fn get_accounts_delta_hash_with_rewrites(
+        &self,
+        slot: Slot,
+        skipped_rewrites: &Rewrites,
+    ) -> Hash {
+        let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
 
         if self.filler_accounts_enabled() {
@@ -6122,7 +6150,7 @@ impl AccountsDb {
 
         self.stats
             .delta_hash_scan_time_total_us
-            .fetch_add(scan.as_us(), Ordering::Relaxed);
+            .fetch_add(scan_us, Ordering::Relaxed);
         self.stats
             .delta_hash_accumulate_time_total_us
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
@@ -6144,44 +6172,50 @@ impl AccountsDb {
 
     // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
     //  that there are no items we would have put in reclaims that are not cached
+    // This function may be invoked from both foreground and background
+    // processes. As such it takes an explicit thread-pool argument which is
+    // set to either self.thread_pool or self.thread_pool_clean accordingly by
+    // the call-stack. Specifying wrong thread-pool here may cause deadlock
+    // panics in bank_hashes.write().
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
+        thread_pool: &ThreadPool,
         infos: Vec<AccountInfo>,
         accounts: impl StorableAccounts<'a, T>,
         previous_slot_entry_was_cached: bool,
     ) -> SlotList<AccountInfo> {
         let target_slot = accounts.target_slot();
-        // using a thread pool here results in deadlock panics from bank_hashes.write()
-        // so, instead we limit how many threads will be created to the same size as the bg thread pool
         let len = std::cmp::min(accounts.len(), infos.len());
         let chunk_size = std::cmp::max(1, len / quarter_thread_count()); // # pubkeys/thread
         let batches = 1 + len / chunk_size;
-        (0..batches)
-            .into_par_iter()
-            .map(|batch| {
-                let start = batch * chunk_size;
-                let end = std::cmp::min(start + chunk_size, len);
-                let mut reclaims = Vec::with_capacity((end - start) / 2);
-                (start..end).into_iter().for_each(|i| {
-                    let info = infos[i];
-                    let pubkey_account = (accounts.pubkey(i), accounts.account(i));
-                    let pubkey = pubkey_account.0;
-                    let old_slot = accounts.slot(i);
-                    self.accounts_index.upsert(
-                        target_slot,
-                        old_slot,
-                        pubkey,
-                        pubkey_account.1,
-                        &self.account_indexes,
-                        info,
-                        &mut reclaims,
-                        previous_slot_entry_was_cached,
-                    );
-                });
-                reclaims
-            })
-            .flatten()
-            .collect::<Vec<_>>()
+        thread_pool.install(|| {
+            (0..batches)
+                .into_par_iter()
+                .map(|batch| {
+                    let start = batch * chunk_size;
+                    let end = std::cmp::min(start + chunk_size, len);
+                    let mut reclaims = Vec::with_capacity((end - start) / 2);
+                    (start..end).into_iter().for_each(|i| {
+                        let info = infos[i];
+                        let pubkey_account = (accounts.pubkey(i), accounts.account(i));
+                        let pubkey = pubkey_account.0;
+                        let old_slot = accounts.slot(i);
+                        self.accounts_index.upsert(
+                            target_slot,
+                            old_slot,
+                            pubkey,
+                            pubkey_account.1,
+                            &self.account_indexes,
+                            info,
+                            &mut reclaims,
+                            previous_slot_entry_was_cached,
+                        );
+                    });
+                    reclaims
+                })
+                .flatten()
+                .collect::<Vec<_>>()
+        })
     }
 
     fn should_not_shrink(aligned_bytes: u64, total_bytes: u64, num_stores: usize) -> bool {
@@ -6634,7 +6668,10 @@ impl AccountsDb {
         // hold just 1 ref from this slot.
         let reset_accounts = true;
 
+        // self.thread_pool (and not self.thread_pool_clean) here because this
+        // function is only invoked from replay and fg processes.
         self.store_accounts_custom(
+            &self.thread_pool,
             accounts,
             hashes,
             None::<StorageFinder>,
@@ -6656,7 +6693,10 @@ impl AccountsDb {
         // and accounts in the append_vec can be unrefed correctly
         let reset_accounts = false;
         let is_cached_store = false;
+        // self.thread_pool_clean (and not self.thread_pool) here because this
+        // function is only invoked from cleanup and bg processes.
         self.store_accounts_custom(
+            &self.thread_pool_clean,
             accounts,
             hashes,
             storage_finder,
@@ -6668,6 +6708,7 @@ impl AccountsDb {
 
     fn store_accounts_custom<'a, 'b, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
+        thread_pool: &ThreadPool,
         accounts: impl StorableAccounts<'b, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
         storage_finder: Option<StorageFinder<'a>>,
@@ -6715,7 +6756,8 @@ impl AccountsDb {
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(infos, accounts, previous_slot_entry_was_cached);
+        let mut reclaims =
+            self.update_index(thread_pool, infos, accounts, previous_slot_entry_was_cached);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -9938,6 +9980,7 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+                false,
             )
             .unwrap();
     }
@@ -10323,7 +10366,8 @@ pub mod tests {
                 1,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false,
             ),
             Ok(_)
         );
@@ -10336,7 +10380,8 @@ pub mod tests {
                 1,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false,
             ),
             Err(MissingBankHash)
         );
@@ -10358,7 +10403,8 @@ pub mod tests {
                 1,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false,
             ),
             Err(MismatchedBankHash)
         );
@@ -10386,7 +10432,8 @@ pub mod tests {
                 1,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false
             ),
             Ok(_)
         );
@@ -10407,13 +10454,14 @@ pub mod tests {
                 2,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default()),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -10439,7 +10487,8 @@ pub mod tests {
                 0,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false
             ),
             Ok(_)
         );
@@ -10476,7 +10525,8 @@ pub mod tests {
                 1,
                 true,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                false
             ),
             Err(MismatchedBankHash)
         );
@@ -11095,6 +11145,7 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
+                    false,
                 )
                 .unwrap();
 
@@ -11107,6 +11158,7 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
+                    false,
                 )
                 .unwrap();
 

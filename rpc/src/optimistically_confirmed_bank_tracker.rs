@@ -120,16 +120,16 @@ impl OptimisticallyConfirmedBankTracker {
 
     fn notify_slot_status(
         bank_notification_subscribers: &Option<Arc<RwLock<Vec<BankNotificationSender>>>>,
-        notifcation: BankNotification,
+        notification: BankNotification,
     ) {
         if let Some(bank_notification_subscribers) = bank_notification_subscribers {
             for sender in bank_notification_subscribers.read().unwrap().iter() {
-                match sender.send(notifcation.clone()) {
+                match sender.send(notification.clone()) {
                     Ok(_) => {}
                     Err(err) => {
                         info!(
                             "Failed to send notification {:?}, error: {:?}",
-                            notifcation, err
+                            notification, err
                         );
                     }
                 }

@@ -1472,7 +1472,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let mut program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         program_account.set_executable(false);
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
@@ -1536,7 +1536,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let mut program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -1627,7 +1627,7 @@ mod tests {
         let loader_id = bpf_loader_deprecated::id();
         let program_id = Pubkey::new_unique();
         let program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_unaligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_unaligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -1668,7 +1668,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -2046,7 +2046,7 @@ mod tests {
         let upgrade_authority_keypair = Keypair::new();
 
         // Load program file
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
@@ -2729,10 +2729,10 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_upgradeable_upgrade() {
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf_orig = Vec::new();
         file.read_to_end(&mut elf_orig).unwrap();
-        let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_unaligned.so").expect("file open failed");
         let mut elf_new = Vec::new();
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
@@ -3764,7 +3764,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
 
         // Create program account
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 

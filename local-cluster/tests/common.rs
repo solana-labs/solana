@@ -5,7 +5,7 @@ use {
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD},
-        tower_storage::FileTowerStorage,
+        tower_storage::{FileTowerStorage, SavedTower, SavedTowerVersions, TowerStorage},
         validator::ValidatorConfig,
     },
     solana_gossip::gossip_service::discover_cluster,
@@ -21,6 +21,7 @@ use {
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
     },
+    solana_runtime::snapshot_config::SnapshotConfig,
     solana_sdk::{
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
@@ -32,7 +33,7 @@ use {
     std::{
         collections::HashSet,
         fs, iter,
-        path::Path,
+        path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
@@ -40,6 +41,7 @@ use {
         thread::sleep,
         time::Duration,
     },
+    tempfile::TempDir,
 };
 
 pub const RUST_LOG_FILTER: &str =
@@ -414,4 +416,104 @@ pub fn test_faulty_node(
         .collect();
 
     (cluster, validator_keys)
+}
+
+pub fn farf_dir() -> PathBuf {
+    std::env::var("FARF_DIR")
+        .unwrap_or_else(|_| "farf".to_string())
+        .into()
+}
+
+pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<PathBuf>) {
+    let account_storage_dirs: Vec<TempDir> = (0..num_account_paths)
+        .map(|_| tempfile::tempdir_in(farf_dir()).unwrap())
+        .collect();
+    let account_storage_paths: Vec<_> = account_storage_dirs
+        .iter()
+        .map(|a| a.path().to_path_buf())
+        .collect();
+    (account_storage_dirs, account_storage_paths)
+}
+
+pub struct SnapshotValidatorConfig {
+    pub bank_snapshots_dir: TempDir,
+    pub snapshot_archives_dir: TempDir,
+    pub account_storage_dirs: Vec<TempDir>,
+    pub validator_config: ValidatorConfig,
+}
+
+impl SnapshotValidatorConfig {
+    pub fn new(
+        full_snapshot_archive_interval_slots: Slot,
+        incremental_snapshot_archive_interval_slots: Slot,
+        accounts_hash_interval_slots: Slot,
+        num_account_paths: usize,
+    ) -> SnapshotValidatorConfig {
+        assert!(accounts_hash_interval_slots > 0);
+        assert!(full_snapshot_archive_interval_slots > 0);
+        assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
+        if incremental_snapshot_archive_interval_slots != Slot::MAX {
+            assert!(incremental_snapshot_archive_interval_slots > 0);
+            assert!(
+                incremental_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0
+            );
+            assert!(
+                full_snapshot_archive_interval_slots % incremental_snapshot_archive_interval_slots
+                    == 0
+            );
+        }
+
+        // Create the snapshot config
+        let _ = fs::create_dir_all(farf_dir());
+        let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+        let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+        let snapshot_config = SnapshotConfig {
+            full_snapshot_archive_interval_slots,
+            incremental_snapshot_archive_interval_slots,
+            snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            maximum_full_snapshot_archives_to_retain: usize::MAX,
+            maximum_incremental_snapshot_archives_to_retain: usize::MAX,
+            ..SnapshotConfig::default()
+        };
+
+        // Create the account paths
+        let (account_storage_dirs, account_storage_paths) =
+            generate_account_paths(num_account_paths);
+
+        // Create the validator config
+        let validator_config = ValidatorConfig {
+            snapshot_config: Some(snapshot_config),
+            account_paths: account_storage_paths,
+            accounts_hash_interval_slots,
+            ..ValidatorConfig::default_for_test()
+        };
+
+        SnapshotValidatorConfig {
+            bank_snapshots_dir,
+            snapshot_archives_dir,
+            account_storage_dirs,
+            validator_config,
+        }
+    }
+}
+
+pub fn setup_snapshot_validator_config(
+    snapshot_interval_slots: Slot,
+    num_account_paths: usize,
+) -> SnapshotValidatorConfig {
+    SnapshotValidatorConfig::new(
+        snapshot_interval_slots,
+        Slot::MAX,
+        snapshot_interval_slots,
+        num_account_paths,
+    )
+}
+
+pub fn save_tower(tower_path: &Path, tower: &Tower, node_keypair: &Keypair) {
+    let file_tower_storage = FileTowerStorage::new(tower_path.to_path_buf());
+    let saved_tower = SavedTower::new(tower, node_keypair).unwrap();
+    file_tower_storage
+        .store(&SavedTowerVersions::from(saved_tower))
+        .unwrap();
 }
