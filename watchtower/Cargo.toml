@@ -12,7 +12,7 @@ documentation = "https://docs.rs/solana-watchtower"
 [dependencies]
 clap = "2.33.1"
 humantime = "2.0.1"
-log = "0.4.14"
+log = "0.4.17"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-cli-output = { path = "../cli-output", version = "=1.11.0" }

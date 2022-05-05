@@ -23,7 +23,7 @@ jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
 jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
-log = "0.4.14"
+log = "0.4.17"
 num_cpus = "1.13.1"
 rand = "0.7.0"
 serde = "1.0.137"
