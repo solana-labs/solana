@@ -1,0 +1,11 @@
+diff --git a/node_modules/js-sha3/package.json b/node_modules/js-sha3/package.json
+index 871d546..243075e 100644
+--- a/node_modules/js-sha3/package.json
++++ b/node_modules/js-sha3/package.json
+@@ -1,5 +1,6 @@
+ {
+   "name": "js-sha3",
++  "sideEffects": false,
+   "version": "0.8.0",
+   "description": "A simple SHA-3 / Keccak / Shake hash function for JavaScript supports UTF-8 encoding.",
+   "main": "src/sha3.js",
