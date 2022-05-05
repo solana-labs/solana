@@ -23,7 +23,7 @@ thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"] }
-im = { version = "15.0.0", features = ["rayon", "serde"] }
+im = { version = "15.1.0", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
 
 [target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
