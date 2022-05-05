@@ -16,3 +16,9 @@ lazy_static! {
 pub fn get_thread_count() -> usize {
     *MAX_RAYON_THREADS
 }
+
+// Only used in legacy code.
+// Use get_thread_count instead in all new code.
+pub fn get_max_thread_count() -> usize {
+    get_thread_count().saturating_mul(2)
+}

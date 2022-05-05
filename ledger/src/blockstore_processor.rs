@@ -15,7 +15,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -55,7 +55,6 @@ use {
     },
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
@@ -94,12 +93,15 @@ impl BlockCostCapacityMeter {
     }
 }
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .build()
+        .unwrap();
+}
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -263,29 +265,26 @@ fn execute_batches_internal(
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .map(|batch| {
-                        let mut timings = ExecuteTimings::default();
-                        let result = execute_batch(
-                            batch,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        (result, timings)
-                    })
-                    .unzip()
-            })
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .map(|batch| {
+                    let mut timings = ExecuteTimings::default();
+                    let result = execute_batch(
+                        batch,
+                        bank,
+                        transaction_status_sender,
+                        replay_vote_sender,
+                        &mut timings,
+                        cost_capacity_meter.clone(),
+                    );
+                    if let Some(entry_callback) = entry_callback {
+                        entry_callback(bank);
+                    }
+                    (result, timings)
+                })
+                .unzip()
         });
-
     timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
     timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     for timing in new_timings {
@@ -546,7 +545,6 @@ pub struct ProcessOptions {
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
-    pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -635,15 +633,6 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
-
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
     let bank = bank_forks.read().unwrap().root_bank();
@@ -2410,23 +2399,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_ledger_options_override_threads() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let opts = ProcessOptions {
-            override_num_threads: Some(1),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, &opts);
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
-    }
-
-    #[test]
     fn test_process_ledger_options_full_leader_cache() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
@@ -2493,7 +2465,6 @@ pub mod tests {
         };
 
         let opts = ProcessOptions {
-            override_num_threads: Some(1),
             entry_callback: Some(entry_callback),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()

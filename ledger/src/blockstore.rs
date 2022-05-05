@@ -28,7 +28,7 @@ use {
         datapoint_debug, datapoint_error,
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
@@ -75,17 +75,20 @@ pub use {
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_{}", ix))
-                    .build()
-                    .unwrap()));
-
-thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get())
-                    .thread_name(|ix| format!("blockstore_{}", ix))
-                    .build()
-                    .unwrap()));
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get())
+        .thread_name(|ix| format!("blockstore_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
@@ -2790,22 +2793,14 @@ impl Blockstore {
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
             .unwrap_or(0);
 
-        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                completed_ranges
-                    .par_iter()
-                    .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(
-                            slot,
-                            *start_index,
-                            *end_index,
-                            Some(&slot_meta),
-                        )
-                    })
-                    .collect()
-            })
+        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.install(|| {
+            completed_ranges
+                .par_iter()
+                .map(|(start_index, end_index)| {
+                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
+                })
+                .collect()
         });
-
         let entries: Vec<Entry> = entries?.into_iter().flatten().collect();
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
@@ -2935,23 +2930,15 @@ impl Blockstore {
         }
         let slot_meta = slot_meta.unwrap();
 
-        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL_ALL_CPUS.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                completed_ranges
-                    .par_iter()
-                    .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(
-                            slot,
-                            *start_index,
-                            *end_index,
-                            Some(&slot_meta),
-                        )
+        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL_ALL_CPUS.install(|| {
+            completed_ranges
+                .par_iter()
+                .map(|(start_index, end_index)| {
+                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
                         .unwrap_or_default()
-                    })
-                    .collect()
-            })
+                })
+                .collect()
         });
-
         entries.into_iter().flatten().collect()
     }
 
