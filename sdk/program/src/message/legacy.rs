@@ -44,6 +44,24 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    // A simple table to do a lookup based on the first byte of the static keys in question.
+    pub static ref BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
+        for i in 0..255 {
+            BUILTIN_KEY_OR_SYSVAR[i] = false;
+        }
+        BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| BUILTIN_KEY_OR_SYSVAR[key[0]] = true;);
+        sysvar::ALL_IDS.iter().for_each(|key| BUILTIN_KEY_OR_SYSVAR[key[0]] = true;);
+    };
+}
+
+pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
+    if BUILTIN_KEY_OR_SYSVAR[key[0]] {
+        return sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key);
+    }
+    false
+}
+
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
@@ -530,10 +548,7 @@ impl Message {
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
                     - self.header.num_readonly_unsigned_accounts as usize))
-            && !{
-                let key = self.account_keys[i];
-                sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
-            }
+            && !is_builtin_key_or_sysvar(&self.account_keys[i])
             && !self.demote_program_id(i)
     }
 
