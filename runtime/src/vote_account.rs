@@ -1,9 +1,6 @@
 use {
     itertools::Itertools,
-    serde::{
-        de::{Deserialize, Deserializer},
-        ser::{Serialize, Serializer},
-    },
+    serde::ser::{Serialize, Serializer},
     solana_sdk::{
         account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
@@ -23,7 +20,8 @@ use {
 const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
     Err(InstructionError::InvalidAccountData);
 
-#[derive(Clone, Debug, Default, PartialEq, AbiExample)]
+#[derive(Clone, Debug, Default, PartialEq, AbiExample, Deserialize)]
+#[serde(from = "Account")]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, AbiExample)]
@@ -35,7 +33,8 @@ struct VoteAccountInner {
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-#[derive(Debug, AbiExample)]
+#[derive(Debug, AbiExample, Deserialize)]
+#[serde(from = "Arc<VoteAccountsHashMap>")]
 pub struct VoteAccounts {
     vote_accounts: Arc<VoteAccountsHashMap>,
     // Inner Arc is meant to implement copy-on-write semantics as opposed to
@@ -188,16 +187,6 @@ impl Serialize for VoteAccount {
     }
 }
 
-impl<'de> Deserialize<'de> for VoteAccount {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let account = Account::deserialize(deserializer)?;
-        Ok(Self::from(account))
-    }
-}
-
 impl From<AccountSharedData> for VoteAccount {
     fn from(account: AccountSharedData) -> Self {
         Self::from(Account::from(account))
@@ -332,16 +321,6 @@ impl Serialize for VoteAccounts {
         S: Serializer,
     {
         self.vote_accounts.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for VoteAccounts {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let vote_accounts = VoteAccountsHashMap::deserialize(deserializer)?;
-        Ok(Self::from(Arc::new(vote_accounts)))
     }
 }
 
