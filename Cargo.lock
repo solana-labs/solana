@@ -1393,17 +1393,16 @@ dependencies = [
 
 [[package]]
 name = "etcd-client"
-version = "0.9.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4504e955d596cc27543aa77ecb075dec41c7b0c7749fe6b5536a82548f5073b1"
+checksum = "641855f8c930bac225538d031705a243d3ce6c4d22078345c16ff2036ee58297"
 dependencies = [
  "http",
- "prost",
+ "prost 0.9.0",
  "tokio",
  "tokio-stream",
- "tonic",
- "tonic-build",
- "tower",
+ "tonic 0.6.1",
+ "tonic-build 0.6.0",
  "tower-service",
 ]
 
@@ -1452,7 +1451,7 @@ checksum = "cfc110fe50727d46a428eed832df40affe9bf74d077cac1bf3f2718e823f14c5"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "windows-sys 0.28.0",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1941,13 +1940,13 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.2.6"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f4c6746584866f0feabcc69893c5b51beef3831656a968ed7ae254cdc4fd03"
+checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
 dependencies = [
  "bytes 1.1.0",
  "fnv",
- "itoa 1.0.1",
+ "itoa 0.4.8",
 ]
 
 [[package]]
@@ -2485,9 +2484,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.6"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
+checksum = "712a4d093c9976e24e7dbca41db895dabcbac38eb5f4045393d17a95bdfb1109"
 dependencies = [
  "scopeguard",
 ]
@@ -2630,20 +2629,6 @@ dependencies = [
  "log 0.4.14",
  "miow 0.3.7",
  "ntapi",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "mio"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52da4364ffb0e4fe33a9841a98a3f3014fb964045ce4f7a45a398243c8d6b0c9"
-dependencies = [
- "libc",
- "log 0.4.14",
- "miow 0.3.7",
- "ntapi",
- "wasi 0.11.0+wasi-snapshot-preview1",
  "winapi 0.3.9",
 ]
 
@@ -3009,18 +2994,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
- "lock_api 0.4.6",
+ "lock_api 0.4.5",
  "parking_lot_core 0.8.5",
-]
-
-[[package]]
-name = "parking_lot"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
-dependencies = [
- "lock_api 0.4.6",
- "parking_lot_core 0.9.2",
 ]
 
 [[package]]
@@ -3050,19 +3025,6 @@ dependencies = [
  "redox_syscall 0.2.10",
  "smallvec 1.7.0",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "parking_lot_core"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "995f667a6c822200b0433ac218e05582f0e2efa1b922a3fd2fbaadc5f87bab37"
-dependencies = [
- "cfg-if 1.0.0",
- "libc",
- "redox_syscall 0.2.10",
- "smallvec 1.7.0",
- "windows-sys 0.34.0",
 ]
 
 [[package]]
@@ -3238,9 +3200,9 @@ checksum = "bc5c99d529f0d30937f6f4b8a86d988047327bb88d04d2c4afc356de74722131"
 
 [[package]]
 name = "prettyplease"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b83ec2d0af5c5c556257ff52c9f98934e243b9fd39604bfb2a9b75ec2e97f18"
+checksum = "d9e07e3a46d0771a8a06b5f4441527802830b43e679ba12f44960f48dd4c6803"
 dependencies = [
  "proc-macro2 1.0.32",
  "syn 1.0.91",
@@ -3335,12 +3297,42 @@ dependencies = [
 
 [[package]]
 name = "prost"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
+dependencies = [
+ "bytes 1.1.0",
+ "prost-derive 0.9.0",
+]
+
+[[package]]
+name = "prost"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd5316aa8f5c82add416dfbc25116b84b748a21153f512917e8143640a71bbd"
 dependencies = [
  "bytes 1.1.0",
- "prost-derive",
+ "prost-derive 0.10.0",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
+dependencies = [
+ "bytes 1.1.0",
+ "heck 0.3.3",
+ "itertools 0.10.3",
+ "lazy_static",
+ "log 0.4.14",
+ "multimap",
+ "petgraph",
+ "prost 0.9.0",
+ "prost-types 0.9.0",
+ "regex",
+ "tempfile",
+ "which",
 ]
 
 [[package]]
@@ -3358,11 +3350,24 @@ dependencies = [
  "log 0.4.14",
  "multimap",
  "petgraph",
- "prost",
- "prost-types",
+ "prost 0.10.0",
+ "prost-types 0.10.0",
  "regex",
  "tempfile",
  "which",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
+dependencies = [
+ "anyhow",
+ "itertools 0.10.3",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -3380,12 +3385,22 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
+dependencies = [
+ "bytes 1.1.0",
+ "prost 0.9.0",
+]
+
+[[package]]
+name = "prost-types"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "926681c118ae6e512a3ccefd4abbe5521a14f4cc1e207356d4d00c0b7f2006fd"
 dependencies = [
  "bytes 1.1.0",
- "prost",
+ "prost 0.10.0",
 ]
 
 [[package]]
@@ -4415,9 +4430,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.4.4"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d72b759436ae32898a2af0a14218dbf55efde3feeb170eb623637db85ee1e0"
+checksum = "5dc90fe6c7be1a323296982db1836d1ea9e47b6839496dde9a541bc496df3516"
 dependencies = [
  "libc",
  "winapi 0.3.9",
@@ -5267,7 +5282,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
- "prost",
+ "prost 0.10.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -5710,13 +5725,13 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "log 0.4.14",
- "prost",
+ "prost 0.10.0",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk",
  "tokio",
- "tonic",
- "tonic-build",
+ "tonic 0.7.1",
+ "tonic-build 0.7.0",
 ]
 
 [[package]]
@@ -5746,7 +5761,7 @@ dependencies = [
  "solana-validator",
  "solana-version",
  "tempfile",
- "tonic-build",
+ "tonic-build 0.7.0",
 ]
 
 [[package]]
@@ -6019,8 +6034,8 @@ dependencies = [
  "goauth",
  "log 0.4.14",
  "openssl",
- "prost",
- "prost-types",
+ "prost 0.10.0",
+ "prost-types 0.10.0",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -6029,7 +6044,7 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
- "tonic",
+ "tonic 0.7.1",
  "zstd",
 ]
 
@@ -6040,12 +6055,12 @@ dependencies = [
  "bincode",
  "bs58 0.4.0",
  "enum-iterator",
- "prost",
+ "prost 0.10.0",
  "serde",
  "solana-account-decoder",
  "solana-sdk",
  "solana-transaction-status",
- "tonic-build",
+ "tonic-build 0.7.0",
 ]
 
 [[package]]
@@ -6825,20 +6840,20 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.17.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2af73ac49756f3f7c01172e34a23e5d0216f6c32333757c2c61feb2bbff5a5ee"
+checksum = "70e992e41e0d2fb9f755b37446f20900f64446ef54874f40a60c78f021ac6144"
 dependencies = [
+ "autocfg 1.0.1",
  "bytes 1.1.0",
  "libc",
  "memchr",
- "mio 0.8.2",
+ "mio 0.7.14",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.11.2",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
  "tokio-macros",
  "winapi 0.3.9",
 ]
@@ -6887,9 +6902,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.7.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b557f72f448c511a979e2564e55d74e6c4432fc96ff4f6241bc6bded342643b7"
+checksum = "c9efc1aba077437943f7515666aa2b882dfabfbfdf89c819ea75a8d6e9eaba5e"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -6938,9 +6953,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.23.3"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4151fda0cf2798550ad0b34bcfc9b9dcc2a9d2471c895c68f3a8818e54f2389e"
+checksum = "c43ee83903113e03984cb9e5cebe6c04a5116269e900e3ddba8f068a62adda59"
 dependencies = [
  "rustls 0.20.2",
  "tokio",
@@ -7050,6 +7065,38 @@ dependencies = [
 
 [[package]]
 name = "tonic"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24203b79cf2d68909da91178db3026e77054effba0c5d93deb870d3ca7b35afa"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "base64 0.13.0",
+ "bytes 1.1.0",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper 0.14.14",
+ "hyper-timeout",
+ "percent-encoding 2.1.0",
+ "pin-project",
+ "prost 0.9.0",
+ "prost-derive 0.9.0",
+ "tokio",
+ "tokio-rustls 0.22.0",
+ "tokio-stream",
+ "tokio-util 0.6.9",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30fb54bf1e446f44d870d260d99957e7d11fb9d0a0f5bd1a662ad1411cc103f9"
@@ -7068,11 +7115,11 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.10.0",
+ "prost-derive 0.10.0",
  "rustls-pemfile 0.3.0",
  "tokio",
- "tokio-rustls 0.23.3",
+ "tokio-rustls 0.23.4",
  "tokio-stream",
  "tokio-util 0.7.1",
  "tower",
@@ -7084,13 +7131,25 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88358bb1dcfeb62dcce85c63006cafb964b7be481d522b7e09589d4d1e718d2a"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "prost-build 0.9.0",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "tonic-build"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d17087af5c80e5d5fc8ba9878e60258065a0a757e35efe7a05b7904bece1943"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.32",
- "prost-build",
+ "prost-build 0.10.0",
  "quote 1.0.10",
  "syn 1.0.91",
 ]
@@ -7479,12 +7538,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
-name = "wasi"
-version = "0.11.0+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
-
-[[package]]
 name = "wasm-bindgen"
 version = "0.2.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7699,24 +7752,11 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82ca39602d5cbfa692c4b67e3bcbb2751477355141c1ed434c94da4186836ff6"
 dependencies = [
- "windows_aarch64_msvc 0.28.0",
- "windows_i686_gnu 0.28.0",
- "windows_i686_msvc 0.28.0",
- "windows_x86_64_gnu 0.28.0",
- "windows_x86_64_msvc 0.28.0",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5acdd78cb4ba54c0045ac14f62d8f94a03d10047904ae2a40afa1e99d8f70825"
-dependencies = [
- "windows_aarch64_msvc 0.34.0",
- "windows_i686_gnu 0.34.0",
- "windows_i686_msvc 0.34.0",
- "windows_x86_64_gnu 0.34.0",
- "windows_x86_64_msvc 0.34.0",
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_msvc",
 ]
 
 [[package]]
@@ -7726,22 +7766,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52695a41e536859d5308cc613b4a022261a274390b25bd29dfff4bf08505f3c2"
 
 [[package]]
-name = "windows_aarch64_msvc"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17cffbe740121affb56fad0fc0e421804adf0ae00891205213b5cecd30db881d"
-
-[[package]]
 name = "windows_i686_gnu"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f54725ac23affef038fecb177de6c9bf065787c2f432f79e3c373da92f3e1d8a"
-
-[[package]]
-name = "windows_i686_gnu"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2564fde759adb79129d9b4f54be42b32c89970c18ebf93124ca8870a498688ed"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -7750,34 +7778,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51d5158a43cc43623c0729d1ad6647e62fa384a3d135fd15108d37c683461f64"
 
 [[package]]
-name = "windows_i686_msvc"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cd9d32ba70453522332c14d38814bceeb747d80b3958676007acadd7e166956"
-
-[[package]]
 name = "windows_x86_64_gnu"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc31f409f565611535130cfe7ee8e6655d3fa99c1c61013981e491921b5ce954"
 
 [[package]]
-name = "windows_x86_64_gnu"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfce6deae227ee8d356d19effc141a509cc503dfd1f850622ec4b0f84428e1f4"
-
-[[package]]
 name = "windows_x86_64_msvc"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f2b8c7cbd3bfdddd9ab98769f9746a7fad1bca236554cd032b78d768bc0e89f"
-
-[[package]]
-name = "windows_x86_64_msvc"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d19538ccc21819d01deaf88d6a17eae6596a12e9aafdbb97916fb49896d89de9"
 
 [[package]]
 name = "winreg"
