@@ -37,10 +37,10 @@ pull_request_rules:
         - label=automerge
         - label!=no-automerge
         - author≠@dont-squash-my-commits
-        - or:
+        # - or:
           # only require docs checks if docs files changed
           # - status-success=<REPLACE WITH GITHUB ACTION>
-          - -files~=^docs/
+          # - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -63,10 +63,10 @@ pull_request_rules:
         - label=automerge
         - label!=no-automerge
         - author=@dont-squash-my-commits
-        - or:
+        # - or:
           # only require docs checks if docs files changed
           # - status-success=<REPLACE WITH GITHUB ACTION>
-          - -files~=^docs/
+          # - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
