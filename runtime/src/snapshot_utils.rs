@@ -1466,6 +1466,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
+    untar_snapshot_file(
+        snapshot_tar.as_ref(),
+        unpack_dir,
+        account_paths,
+        archive_format,
+        parallel_divisions,
+    )
+}
+
+fn untar_snapshot_file(
+    snapshot_tar: &Path,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
     let open_file = || File::open(&snapshot_tar).unwrap();
     let account_paths_map = match archive_format {
         ArchiveFormat::TarBzip2 => unpack_snapshot_local(
@@ -1504,20 +1520,53 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
+    let ret = untar_snapshot_mmap(
+        snapshot_tar.as_ref(),
+        unpack_dir,
+        account_paths,
+        archive_format,
+        parallel_divisions,
+    );
+
+    if ret.is_ok() {
+        ret
+    } else {
+        warn!(
+            "Failed to memory map the snapshot file: {}",
+            snapshot_tar.as_ref().display(),
+        );
+
+        untar_snapshot_file(
+            snapshot_tar.as_ref(),
+            unpack_dir,
+            account_paths,
+            archive_format,
+            parallel_divisions,
+        )
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl<T> From<mmarinus::Error<T>> for SnapshotError {
+    fn from(_: mmarinus::Error<T>) -> SnapshotError {
+        SnapshotError::Io(std::io::Error::new(ErrorKind::Other, "mmap failure"))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn untar_snapshot_mmap(
+    snapshot_tar: &Path,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
     use {
         mmarinus::{perms, Map, Private},
         std::slice,
     };
 
-    let mmap = Map::load(&snapshot_tar, Private, perms::Read).unwrap_or_else(|e| {
-        error!(
-            "Failed to map the snapshot file: {} {}.\n
-                        Please increase the virtual memory on the system.",
-            snapshot_tar.as_ref().display(),
-            e,
-        );
-        std::process::exit(1);
-    });
+    let mmap = Map::load(&snapshot_tar, Private, perms::Read)?;
 
     // `unpack_snapshot_local` takes a BufReader creator, which requires a
     // static lifetime because of its background reader thread. Therefore, we
