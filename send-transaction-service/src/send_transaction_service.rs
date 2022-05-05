@@ -38,7 +38,7 @@ const DEFAULT_SERVICE_MAX_RETRIES: usize = usize::MAX;
 
 /// Default batch size for sending transaction in batch
 /// When this size is reached, send out the transactions.
-const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 1;
+const DEFAULT_TRANSACTION_BATCH_SIZE: usize = 100;
 
 // The maximum transaction batch size
 pub const MAX_TRANSACTION_BATCH_SIZE: usize = 10_000;
@@ -48,7 +48,7 @@ pub const MAX_TRANSACTION_SENDS_PER_SECOND: u64 = 1_000;
 
 /// Default maximum batch waiting time in ms. If this time is reached,
 /// whatever transactions are cached will be sent.
-const DEFAULT_BATCH_SEND_RATE_MS: u64 = 1;
+const DEFAULT_BATCH_SEND_RATE_MS: u64 = 100;
 
 // The maximum transaction batch send rate in MS
 pub const MAX_BATCH_SEND_RATE_MS: usize = 100_000;
