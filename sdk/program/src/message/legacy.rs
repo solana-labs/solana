@@ -520,6 +520,10 @@ impl Message {
         self.program_position(i).is_some()
     }
 
+    pub fn demote_program_id(&self, i: usize) -> bool {
+        self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present()
+    }
+
     pub fn is_writable(&self, i: usize) -> bool {
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
@@ -530,7 +534,7 @@ impl Message {
                 let key = self.account_keys[i];
                 sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
             }
-            && (/* !demote_program_id */!self.is_key_called_as_program(i) || self.is_upgradeable_loader_present())
+            && !self.demote_program_id(i)
     }
 
     pub fn is_signer(&self, i: usize) -> bool {

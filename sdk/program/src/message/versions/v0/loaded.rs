@@ -111,8 +111,7 @@ impl<'a> LoadedMessage<'a> {
             if let Some(key) = self.account_keys().get(key_index) {
                 return !(sysvar::is_sysvar_id(key)
                     || BUILTIN_PROGRAMS_KEYS.contains(key)
-                    || (self.is_key_called_as_program(key_index)
-                        && !self.is_upgradeable_loader_present()));
+                    || self.demote_program_id(key_index));
             }
         }
         false
@@ -120,6 +119,10 @@ impl<'a> LoadedMessage<'a> {
 
     pub fn is_signer(&self, i: usize) -> bool {
         i < self.message.header.num_required_signatures as usize
+    }
+
+    pub fn demote_program_id(&self, i: usize) -> bool {
+        self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present()
     }
 
     /// Returns true if the account at the specified index is called as a program by an instruction
