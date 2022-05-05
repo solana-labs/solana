@@ -12,9 +12,9 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
-            is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            is_within_range,
+            is_keypair, is_keypair_or_ask_keyword, is_larger_or_equal,
+            is_niceness_adjustment_valid, is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair,
+            is_slot, is_valid_percentage, is_within_range,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -1194,7 +1194,7 @@ pub fn main() {
                 .long("tpu-max-queued-batches")
                 .value_name("BATCHES")
                 .takes_value(true)
-                .validator(is_parsable::<usize>)
+                .validator(|s| is_larger_or_equal::<usize>(s, 2000))
                 .help("Maximum number of batches that the fetch stage will queue up for processing."),
         )
         .arg(
