@@ -40,7 +40,7 @@ impl VoteStakeTracker {
                 is_new: true,
             }
         } else {
-            Default::default()
+            VoteThresholdCheckResult::default()
         }
     }
 
