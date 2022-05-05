@@ -1052,7 +1052,7 @@ pub struct AccountsDb {
 
     pub bank_hashes: RwLock<HashMap<Slot, BankHashInfo>>,
 
-    stats: AccountsStats,
+    pub stats: AccountsStats,
 
     clean_accounts_stats: CleanAccountsStats,
 
@@ -1113,7 +1113,7 @@ pub struct AccountsDb {
 }
 
 #[derive(Debug, Default)]
-struct AccountsStats {
+pub struct AccountsStats {
     delta_hash_scan_time_total_us: AtomicU64,
     delta_hash_accumulate_time_total_us: AtomicU64,
     delta_hash_num: AtomicU64,
@@ -1125,6 +1125,7 @@ struct AccountsStats {
     store_update_index: AtomicU64,
     store_handle_reclaims: AtomicU64,
     store_append_accounts: AtomicU64,
+    pub stakes_cache_check_and_store_us: AtomicU64,
     store_find_store: AtomicU64,
     store_num_accounts: AtomicU64,
     store_total_data: AtomicU64,
@@ -6572,6 +6573,13 @@ impl AccountsDb {
                 (
                     "append_accounts",
                     self.stats.store_append_accounts.swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "stakes_cache_check_and_store_us",
+                    self.stats
+                        .stakes_cache_check_and_store_us
+                        .swap(0, Ordering::Relaxed),
                     i64
                 ),
                 (
