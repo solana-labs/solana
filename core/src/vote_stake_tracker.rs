@@ -26,9 +26,8 @@ impl VoteStakeTracker {
         total_stake: u64,
         thresholds_to_check: &[f64],
     ) -> VoteThresholdCheckResult {
-        if !self.voted.contains(&vote_pubkey) {
+        if self.voted.insert(vote_pubkey) {
             // A new vote that we haven't seen before.
-            self.voted.insert(vote_pubkey);
             let old_stake = self.stake;
             let new_stake = self.stake + stake;
             self.stake = new_stake;
