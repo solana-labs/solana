@@ -10,7 +10,8 @@ use {
     },
     solana_entry::entry::Entry,
     solana_ledger::shred::{
-        ProcessShredsStats, Shred, ShredFlags, Shredder, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        ProcessShredsStats, Shred, ShredFlags, ShredProtocolVersion, Shredder,
+        MAX_DATA_SHREDS_PER_FEC_BLOCK,
     },
     solana_perf::turbine_merkle::TurbineMerkleTree,
     solana_sdk::{
@@ -74,6 +75,7 @@ impl StandardBroadcastRun {
                 let fec_set_index =
                     Shredder::fec_set_index(state.next_shred_index, state.fec_set_offset);
                 let shred = Shred::new_from_data(
+                    ShredProtocolVersion::default(),
                     state.slot,
                     state.next_shred_index,
                     parent_offset as u16,
@@ -101,7 +103,7 @@ impl StandardBroadcastRun {
 
     fn entries_to_data_shreds(
         &mut self,
-        _keypair: &Keypair,
+        keypair: &Keypair,
         entries: &[Entry],
         blockstore: &Blockstore,
         reference_tick: u8,
@@ -122,6 +124,8 @@ impl StandardBroadcastRun {
         let data_shreds = Shredder::new(slot, parent_slot, reference_tick, self.shred_version)
             .unwrap()
             .entries_to_data_shreds(
+                ShredProtocolVersion::default(),
+                keypair,
                 entries,
                 is_slot_end,
                 next_shred_index,
@@ -328,16 +332,20 @@ impl StandardBroadcastRun {
                 // TODO MERKLE use par tree builder
                 //let tree = TurbineMerkleTree::new_from_bufs(); // need api for packets bufs or hash trait
                 //let tree = TurbineMerkleTree::new_from_buf_vecs();
-                let leaves: Vec<_> = batch_shreds.iter().map(|s| s.payload_hash()).collect();
-                let tree = TurbineMerkleTree::new_from_leaves(&leaves);
-                let merkle_root = tree.root();
-                let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
+                if batch_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V2 {
+                    let leaves: Vec<_> = batch_shreds
+                        .iter()
+                        .map(|s| s.merkle_hash().unwrap())
+                        .collect();
+                    let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+                    let merkle_root = tree.root();
+                    let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
 
-                batch_shreds.iter_mut().enumerate().for_each(|(i, s)| {
-                    s.set_merkle(&merkle_root, &tree.prove_fec64(i));
-                    s.set_signature(&merkle_root_sig);
-                    //s.serialize_merkle_into_payload();
-                });
+                    batch_shreds.iter_mut().enumerate().for_each(|(i, s)| {
+                        s.set_merkle(&merkle_root, &tree.prove_fec64(i));
+                        s.set_signature(&merkle_root_sig);
+                    });
+                }
 
                 let batch_shreds = Arc::new(batch_shreds);
                 debug_assert!(batch_shreds.iter().all(|shred| shred.slot() == bank.slot()));
@@ -465,7 +473,7 @@ impl StandardBroadcastRun {
 
 // Consumes data_shreds_buffer returning corresponding coding shreds.
 fn make_coding_shreds(
-    _keypair: &Keypair,
+    keypair: &Keypair,
     unfinished_slot: &mut Option<UnfinishedSlotInfo>,
     is_slot_end: bool,
     stats: &mut ProcessShredsStats,
@@ -488,6 +496,7 @@ fn make_coding_shreds(
             .collect()
     };
     let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+        keypair,
         &data_shreds,
         is_slot_end,
         unfinished_slot.next_code_index,
@@ -830,6 +839,7 @@ mod test {
     }
 
     #[test]
+    #[ignore] // TODO merkle
     fn test_buffer_data_shreds_batch() {
         let num_shreds_per_slot = 2;
         let (blockstore, genesis_config, _cluster_info, bank, leader_keypair, _socket, _bank_forks) =

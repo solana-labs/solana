@@ -37,6 +37,7 @@ use {
         blockstore_db::BlockstoreError,
         get_tmp_ledger_path,
         leader_schedule_cache::LeaderScheduleCache,
+        shred::ShredProtocolVersion,
     },
     solana_metrics::inc_new_counter_info,
     solana_perf::packet::PACKET_DATA_SIZE,
@@ -4344,8 +4345,14 @@ pub fn populate_blockstore_for_tests(
 ) {
     let slot = bank.slot();
     let parent_slot = bank.parent_slot();
-    let shreds =
-        solana_ledger::blockstore::entries_to_test_shreds(&entries, slot, parent_slot, true, 0);
+    let shreds = solana_ledger::blockstore::entries_to_test_shreds(
+        ShredProtocolVersion::V1,
+        &entries,
+        slot,
+        parent_slot,
+        true,
+        0,
+    );
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 

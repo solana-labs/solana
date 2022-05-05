@@ -15,7 +15,7 @@ use {
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::Shredder,
+        shred::{ShredProtocolVersion, Shredder},
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -101,7 +101,10 @@ fn bench_retransmitter(bencher: &mut Bencher) {
     let parent = 0;
     let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
     let (mut data_shreds, _) = shredder.entries_to_shreds(
-        &keypair, &entries, true, // is_last_in_slot
+        ShredProtocolVersion::default(),
+        &keypair,
+        &entries,
+        true, // is_last_in_slot
         0,    // next_shred_index
         0,    // next_code_index
     );

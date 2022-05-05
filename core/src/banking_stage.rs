@@ -2150,6 +2150,7 @@ mod tests {
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
+            shred::ShredProtocolVersion,
         },
         solana_perf::packet::{limited_deserialize, to_packet_batches, PacketFlags},
         solana_poh::{
@@ -3539,7 +3540,14 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_bank(&bank);
 
-            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                bank.slot(),
+                0,
+                true,
+                0,
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 
@@ -3699,7 +3707,14 @@ mod tests {
 
             poh_recorder.lock().unwrap().set_bank(&bank);
 
-            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                bank.slot(),
+                0,
+                true,
+                0,
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 

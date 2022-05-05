@@ -53,7 +53,7 @@ mod test {
     use {
         super::*,
         solana_ledger::{
-            shred::{Shred, ShredFlags},
+            shred::{Shred, ShredFlags, ShredProtocolVersion},
             sigverify_shreds::verify_shred_cpu,
         },
         solana_sdk::{
@@ -69,6 +69,7 @@ mod test {
     fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
         solana_logger::setup();
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::default(),
             slot,
             0xc0de,
             0xdead,

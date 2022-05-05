@@ -809,6 +809,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn test_generate_repairs() {
         let blockstore_path = get_tmp_ledger_path!();
         {

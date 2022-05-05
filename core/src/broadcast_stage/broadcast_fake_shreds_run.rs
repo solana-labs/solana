@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ShredProtocolVersion, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -55,6 +55,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height(),
@@ -73,6 +74,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             .collect();
 
         let (fake_data_shreds, fake_coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             keypair,
             &fake_entries,
             last_tick_height == bank.max_tick_height(),

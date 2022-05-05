@@ -85,9 +85,8 @@ const SIZE_OF_MERKLE_PAYLOAD: usize = TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
-//const SIZE_OF_COMMON_SHRED_HEADER_V1: usize = 83;
+const SIZE_OF_COMMON_SHRED_HEADER_V1: usize = 83;
 const SIZE_OF_COMMON_SHRED_HEADER_V2: usize = 83 + SIZE_OF_MERKLE_PAYLOAD;
-const SIZE_OF_COMMON_SHRED_HEADER_V1: usize = SIZE_OF_COMMON_SHRED_HEADER_V2;
 
 const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
 const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
@@ -95,7 +94,15 @@ const SIZE_OF_SIGNATURE: usize = 64;
 const SIZE_OF_SHRED_TYPE: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
+const SIZE_OF_SHRED_VERSION: usize = 2;
+const SIZE_OF_FEC_SET_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
+
+const SIZE_OF_BASE_COMMON_HEADER: usize = SIZE_OF_SHRED_TYPE
+    + SIZE_OF_SHRED_SLOT
+    + SIZE_OF_SHRED_INDEX
+    + SIZE_OF_SHRED_VERSION
+    + SIZE_OF_FEC_SET_INDEX;
 
 const SIZE_OF_CODING_SHRED_HEADERS_V1: usize =
     SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_CODING_SHRED_HEADER;
@@ -110,13 +117,19 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD_V1: usize = PACKET_DATA_SIZE
     - SIZE_OF_NONCE;
 
 pub const SIZE_OF_DATA_SHRED_PAYLOAD_V2: usize = PACKET_DATA_SIZE
-    - SIZE_OF_COMMON_SHRED_HEADER_V2
+    - SIZE_OF_SIGNATURE
+    - SIZE_OF_BASE_COMMON_HEADER
+    - SIZE_OF_MERKLE_PAYLOAD
+    - SIZE_OF_CODING_SHRED_HEADER
+    - SIZE_OF_BASE_COMMON_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
-    - SIZE_OF_CODING_SHRED_HEADERS_V2
     - SIZE_OF_NONCE;
 
 const SHRED_DATA_OFFSET_V1: usize = SIZE_OF_COMMON_SHRED_HEADER_V1 + SIZE_OF_DATA_SHRED_HEADER;
-const SHRED_DATA_OFFSET_V2: usize = SIZE_OF_COMMON_SHRED_HEADER_V2 + SIZE_OF_DATA_SHRED_HEADER;
+const SHRED_DATA_OFFSET_V2: usize = SIZE_OF_SIGNATURE
+    + SIZE_OF_BASE_COMMON_HEADER
+    + SIZE_OF_MERKLE_PAYLOAD
+    + SIZE_OF_DATA_SHRED_HEADER;
 
 // DataShredHeader.size is sum of common-shred-header, data-shred-header and
 // data.len(). Broadcast stage may create zero length data shreds when the
@@ -178,9 +191,39 @@ pub enum Error {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ShredCommonHeaderVersion {
+pub enum ShredProtocolVersion {
     V1,
     V2,
+}
+
+impl Default for ShredProtocolVersion {
+    fn default() -> Self {
+        ShredProtocolVersion::V2 // TODO note: keep in sync with ShredType::default
+    }
+}
+
+impl ShredProtocolVersion {
+    pub fn data_type(&self) -> ShredType {
+        match self {
+            ShredProtocolVersion::V1 => ShredType::DataV1,
+            ShredProtocolVersion::V2 => ShredType::DataV2,
+        }
+    }
+
+    pub fn code_type(&self) -> ShredType {
+        match self {
+            ShredProtocolVersion::V1 => ShredType::CodeV1,
+            ShredProtocolVersion::V2 => ShredType::CodeV2,
+        }
+    }
+
+    // TODO MERKLE remove
+    pub fn test_size_of_data_shred_payload(&self) -> usize {
+        match self {
+            ShredProtocolVersion::V1 => SIZE_OF_DATA_SHRED_PAYLOAD_V1,
+            ShredProtocolVersion::V2 => SIZE_OF_DATA_SHRED_PAYLOAD_V2,
+        }
+    }
 }
 
 #[repr(u8)]
@@ -208,7 +251,7 @@ pub enum ShredType {
 
 impl Default for ShredType {
     fn default() -> Self {
-        ShredType::DataV2
+        ShredType::DataV2 // TODO note: keep in sync with ShredProtocolVersion::default
     }
 }
 
@@ -221,10 +264,10 @@ impl ShredType {
         matches!(self, ShredType::CodeV1 | ShredType::CodeV2)
     }
 
-    pub fn version(&self) -> ShredCommonHeaderVersion {
+    pub fn version(&self) -> ShredProtocolVersion {
         match self {
-            ShredType::DataV1 | ShredType::CodeV1 => ShredCommonHeaderVersion::V1,
-            ShredType::DataV2 | ShredType::CodeV2 => ShredCommonHeaderVersion::V2,
+            ShredType::DataV1 | ShredType::CodeV1 => ShredProtocolVersion::V1,
+            ShredType::DataV2 | ShredType::CodeV2 => ShredProtocolVersion::V2,
         }
     }
 }
@@ -303,16 +346,54 @@ impl ErasureSetId {
 }
 
 impl Shred {
-    // TODO MERKLE
-    pub fn merkle_index(&self) -> usize {
+    pub fn protocol_version(&self) -> ShredProtocolVersion {
+        self.shred_type().version()
+    }
+
+    pub fn merkle_index(&self) -> Result<usize, Error> {
         match self.shred_type() {
-            ShredType::DataV1 | ShredType::DataV2 => {
-                (self.index() % MAX_DATA_SHREDS_PER_FEC_BLOCK) as usize
+            ShredType::DataV2 => Ok((self.index() % MAX_DATA_SHREDS_PER_FEC_BLOCK) as usize),
+            ShredType::CodeV2 => {
+                Ok(self.coding_header.num_data_shreds as usize
+                    + self.coding_header.position as usize)
             }
-            ShredType::CodeV1 | ShredType::CodeV2 => {
-                self.coding_header.num_data_shreds as usize + self.coding_header.position as usize
-            }
+            _ => Err(Error::InvalidShredType),
         }
+    }
+
+    pub fn merkle_root(&self) -> Result<Option<TurbineMerkleHash>, Error> {
+        match self.shred_type() {
+            ShredType::DataV2 | ShredType::CodeV2 => {
+                Ok(self.common_header.merkle.map(|m| m.root))
+            }
+            _ => Err(Error::InvalidShredType),
+        }
+    }
+
+    /*
+    pub fn merkle_proof(&self) -> Result<Option<&TurbineMerkleProofFec64>, Error> {
+        match self.shred_type() {
+            ShredType::DataV2 | ShredType::CodeV2 => {
+                Ok(self.common_header.merkle.map(|m| &m.proof))
+            }
+            _ => Err(Error::InvalidShredType),
+        }
+    }
+    */
+
+    pub fn merkle_hashing_buf_vec(&self) -> Result<Vec<&[u8]>, Error> {
+        match self.shred_type() {
+            ShredType::DataV2 | ShredType::CodeV2 => Ok(vec![
+                &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER],
+                &self.payload
+                    [SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER + SIZE_OF_MERKLE_PAYLOAD..],
+            ]),
+            _ => Err(Error::InvalidShredType),
+        }
+    }
+
+    pub fn merkle_hash(&self) -> Result<TurbineMerkleHash, Error> {
+        Ok(TurbineMerkleHash::hash(&self.merkle_hashing_buf_vec()?))
     }
 
     pub fn copy_to_packet(&self, packet: &mut Packet) {
@@ -324,6 +405,7 @@ impl Shred {
     // TODO: Should this sanitize output?
     #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_data(
+        protocol_version: ShredProtocolVersion,
         slot: Slot,
         index: u32,
         parent_offset: u16,
@@ -336,7 +418,7 @@ impl Shred {
         let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let mut common_header = ShredCommonHeader {
             signature: Signature::default(),
-            shred_type: ShredType::DataV2, // TODO MERKLE
+            shred_type: protocol_version.data_type(),
             slot,
             index,
             version,
@@ -344,7 +426,13 @@ impl Shred {
             merkle: None,
         };
 
-        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + SIZE_OF_COMMON_SHRED_HEADER_V1) as u16;
+        // TODO MERKLE
+        let common_header_size = match protocol_version {
+            ShredProtocolVersion::V1 => SIZE_OF_COMMON_SHRED_HEADER_V1,
+            ShredProtocolVersion::V2 => SIZE_OF_COMMON_SHRED_HEADER_V2,
+        };
+
+        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADER + common_header_size) as u16;
         let flags = flags
             | unsafe {
                 ShredFlags::from_bits_unchecked(
@@ -386,7 +474,11 @@ impl Shred {
         bincode::serialize_into(&mut cursor, &data_header).unwrap();
         // TODO: Need to check if data is too large!
         let offset = cursor.position() as usize;
-        debug_assert_eq!(offset, SHRED_DATA_OFFSET_V1);
+        match common_header.shred_type {
+            ShredType::DataV1 => debug_assert_eq!(offset, SHRED_DATA_OFFSET_V1),
+            ShredType::DataV2 => debug_assert_eq!(offset, SHRED_DATA_OFFSET_V2),
+            _ => panic!("coding error"),
+        }
         payload[offset..offset + data.len()].copy_from_slice(data);
         Self {
             common_header,
@@ -404,9 +496,7 @@ impl Shred {
         // TODO MERKLE
         match common_header.shred_type {
             ShredType::DataV2 | ShredType::CodeV2 => {
-                //let mut start = 83;
                 let mut merkle = MerklePayload::default();
-
                 merkle.root = deserialize_from_with_limit(&mut cursor)?;
                 for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
                     merkle.proof.0[i] = deserialize_from_with_limit(&mut cursor)?;
@@ -441,6 +531,7 @@ impl Shred {
 
     #[allow(clippy::field_reassign_with_default)]
     pub fn new_from_parity_shard(
+        protocol_version: ShredProtocolVersion,
         slot: Slot,
         index: u32,
         parity_shard: &[u8],
@@ -452,7 +543,7 @@ impl Shred {
     ) -> Self {
         let mut common_header = ShredCommonHeader {
             signature: Signature::default(),
-            shred_type: ShredType::CodeV2, // TODO MERKLE
+            shred_type: protocol_version.code_type(),
             index,
             slot,
             version,
@@ -469,7 +560,7 @@ impl Shred {
         bincode::serialize_into(&mut cursor, &common_header).unwrap();
 
         // TODO MERKLE
-        {
+        if protocol_version == ShredProtocolVersion::V2 {
             //let mut start = 83;
             let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
 
@@ -490,7 +581,14 @@ impl Shred {
         // Tests may have an empty parity_shard.
         if !parity_shard.is_empty() {
             let offset = cursor.position() as usize;
-            debug_assert_eq!(offset, SIZE_OF_CODING_SHRED_HEADERS_V1);
+            match protocol_version {
+                ShredProtocolVersion::V1 => {
+                    debug_assert_eq!(offset, SIZE_OF_CODING_SHRED_HEADERS_V1)
+                }
+                ShredProtocolVersion::V2 => {
+                    debug_assert_eq!(offset, SIZE_OF_CODING_SHRED_HEADERS_V2)
+                }
+            }
             payload[offset..].copy_from_slice(parity_shard);
         }
         Shred {
@@ -590,8 +688,15 @@ impl Shred {
                 }
                 Ok(shred)
             }
-            ShredType::DataV1 | ShredType::DataV2 => {
+            ShredType::DataV1 => {
                 if !(SHRED_DATA_OFFSET_V1..SHRED_PAYLOAD_SIZE).contains(&shred.len()) {
+                    return Err(Error::InvalidPayloadSize(shred.len()));
+                }
+                shred.resize(SHRED_PAYLOAD_SIZE, 0u8);
+                Ok(shred)
+            }
+            ShredType::DataV2 => {
+                if !(SHRED_DATA_OFFSET_V2..SHRED_PAYLOAD_SIZE).contains(&shred.len()) {
                     return Err(Error::InvalidPayloadSize(shred.len()));
                 }
                 shred.resize(SHRED_PAYLOAD_SIZE, 0u8);
@@ -854,10 +959,10 @@ impl Shred {
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         match self.shred_type().version() {
-            ShredCommonHeaderVersion::V1 => self
+            ShredProtocolVersion::V1 => self
                 .signature()
                 .verify(pubkey.as_ref(), &self.payload[SIZE_OF_SIGNATURE..]),
-            ShredCommonHeaderVersion::V2 => {
+            ShredProtocolVersion::V2 => {
                 if let Some(merkle) = self.common_header.merkle {
                     let r = self
                         .signature()
@@ -877,8 +982,8 @@ impl Shred {
 
                     let r = merkle.proof.verify(
                         &merkle.root,
-                        &self.payload_hash(),
-                        self.merkle_index(),
+                        &self.merkle_hash().unwrap(),
+                        self.merkle_index().unwrap(),
                     );
                     if !r {
                         error!("failed to verify merkle proof for slot={}", self.slot());
@@ -886,25 +991,10 @@ impl Shred {
                     //assert!(r);
                     true // TODO MERKLE
                 } else {
-                    error!("V2 without merkle");
-                    panic!("should have failed sanitization");
+                    panic!("should have failed sanitize");
                 }
             }
         }
-    }
-
-    pub fn payload_hash(&self) -> TurbineMerkleHash {
-        let x = 83 + TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE_PROOF_BYTES_FEC64; // TODO MERKLE cleanup
-        TurbineMerkleHash::hash(&[&self.payload[SIZE_OF_SIGNATURE..83], &self.payload[x..]])
-    }
-
-    pub fn merkle_payload_bufs(&self) -> Vec<&[u8]> {
-        let x =
-            SIZE_OF_SIGNATURE + 83 + TURBINE_MERKLE_ROOT_BYTES + TURBINE_MERKLE_PROOF_BYTES_FEC64;
-        vec![
-            &self.payload[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + 83],
-            &self.payload[x..],
-        ]
     }
 
     pub fn set_merkle(&mut self, root: &TurbineMerkleHash, proof: &TurbineMerkleProofFec64) {
@@ -1010,7 +1100,13 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let shred_data_size = shred_data_size.unwrap_or(SIZE_OF_DATA_SHRED_PAYLOAD_V1) as u64; // TODO MERKLE
+    // TODO MERKLEFIX
+    let default_size = match ShredProtocolVersion::default() {
+        ShredProtocolVersion::V1 => SIZE_OF_DATA_SHRED_PAYLOAD_V1,
+        ShredProtocolVersion::V2 => SIZE_OF_DATA_SHRED_PAYLOAD_V2,
+    };
+
+    let shred_data_size = shred_data_size.unwrap_or(default_size) as u64; // TODO MERKLEFIX
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -1136,7 +1232,17 @@ mod tests {
 
     #[test]
     fn test_invalid_parent_offset() {
-        let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
+        let shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
+            10,
+            0,
+            1000,
+            &[1, 2, 3],
+            ShredFlags::empty(),
+            0,
+            1,
+            0,
+        );
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
         let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
@@ -1161,7 +1267,17 @@ mod tests {
     fn test_shred_offsets() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
+            1,
+            3,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0,
+        );
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
         let ret = get_shred_slot_index_type(&packet, &mut stats);
@@ -1192,6 +1308,7 @@ mod tests {
         assert_eq!(stats.index_overrun, 4);
 
         let shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::V1,
             8,   // slot
             2,   // index
             &[], // parity_shard
@@ -1208,6 +1325,7 @@ mod tests {
         );
 
         let shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             1,
             std::u32::MAX - 10,
             0,
@@ -1222,6 +1340,7 @@ mod tests {
         assert_eq!(1, stats.index_out_of_bounds);
 
         let shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::V1,
             8,   // slot
             2,   // index
             &[], // parity_shard
@@ -1271,6 +1390,7 @@ mod tests {
     fn test_sanitize_data_shred() {
         let data = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]; // TODO MERKLE
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             420, // slot
             19,  // index
             5,   // parent_offset
@@ -1338,6 +1458,7 @@ mod tests {
     #[test]
     fn test_sanitize_coding_shred() {
         let mut shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::V1,
             1,   // slot
             12,  // index
             &[], // parity_shard
@@ -1423,6 +1544,7 @@ mod tests {
         rng.fill(&mut data[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             141939602, // slot
             28685,     // index
             36390,     // parent_offset
@@ -1469,6 +1591,7 @@ mod tests {
         };
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             142076266, // slot
             21443,     // index
             51279,     // parent_offset
@@ -1514,6 +1637,7 @@ mod tests {
         rng.fill(&mut parity_shard[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::V1,
             141945197, // slot
             23418,     // index
             &parity_shard,
@@ -1555,6 +1679,7 @@ mod tests {
                 ShredFlags::empty()
             };
             Shred::new_from_data(
+                ShredProtocolVersion::V1,
                 0,   // slot
                 0,   // index
                 0,   // parent_offset

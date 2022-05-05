@@ -3,6 +3,7 @@ use {
     solana_ledger::{
         blockstore::{self, make_many_slot_entries, test_all_empty_or_min, Blockstore},
         get_tmp_ledger_path_auto_delete,
+        shred::ShredProtocolVersion,
     },
     solana_sdk::hash::Hash,
     std::{sync::Arc, thread::Builder},
@@ -21,7 +22,14 @@ fn test_multiple_threads_insert_shred() {
         let threads: Vec<_> = (0..num_threads)
             .map(|i| {
                 let entries = entry::create_ticks(1, 0, Hash::default());
-                let shreds = blockstore::entries_to_test_shreds(&entries, i + 1, 0, false, 0);
+                let shreds = blockstore::entries_to_test_shreds(
+                    ShredProtocolVersion::default(),
+                    &entries,
+                    i + 1,
+                    0,
+                    false,
+                    0,
+                );
                 let blockstore_ = blockstore.clone();
                 Builder::new()
                     .name("blockstore-writer".to_string())

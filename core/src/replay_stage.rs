@@ -3142,7 +3142,10 @@ pub(crate) mod tests {
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
             get_tmp_ledger_path,
-            shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD_V1},
+            shred::{
+                Shred, ShredFlags, ShredProtocolVersion, SIZE_OF_DATA_SHRED_PAYLOAD_V1,
+                SIZE_OF_DATA_SHRED_PAYLOAD_V2,
+            },
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -3583,7 +3586,14 @@ pub(crate) mod tests {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &[entry],
+                slot,
+                slot.saturating_sub(1),
+                false,
+                0,
+            )
         });
 
         assert_matches!(
@@ -3613,7 +3623,14 @@ pub(crate) mod tests {
                     blockhash,
                 )],
             );
-            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &[entry],
+                slot,
+                slot.saturating_sub(1),
+                false,
+                0,
+            )
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -3633,6 +3650,7 @@ pub(crate) mod tests {
 
             let too_few_hashes_tick = Entry::new(&blockhash, hashes_per_tick - 1, vec![]);
             entries_to_test_shreds(
+                ShredProtocolVersion::default(),
                 &[too_few_hashes_tick],
                 slot,
                 slot.saturating_sub(1),
@@ -3657,6 +3675,7 @@ pub(crate) mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
+                ShredProtocolVersion::default(),
                 &entry::create_ticks(bank.ticks_per_slot() + 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
@@ -3677,6 +3696,7 @@ pub(crate) mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
+                ShredProtocolVersion::default(),
                 &entry::create_ticks(bank.ticks_per_slot() - 1, hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
@@ -3699,6 +3719,7 @@ pub(crate) mod tests {
             let slot = bank.slot();
             let hashes_per_tick = bank.hashes_per_tick().unwrap_or(0);
             entries_to_test_shreds(
+                ShredProtocolVersion::default(),
                 &entry::create_ticks(bank.ticks_per_slot(), hashes_per_tick, blockhash),
                 slot,
                 slot.saturating_sub(1),
@@ -3727,7 +3748,14 @@ pub(crate) mod tests {
             let tx = system_transaction::transfer(funded_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
-            entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), true, 0)
+            entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                true,
+                0,
+            )
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -3741,18 +3769,33 @@ pub(crate) mod tests {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, bank| {
-            let gibberish = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]; // TODO MERKLE
             let parent_offset = bank.slot() - bank.parent_slot();
-            let shred = Shred::new_from_data(
-                bank.slot(),
-                0, // index,
-                parent_offset as u16,
-                &gibberish,
-                ShredFlags::DATA_COMPLETE_SHRED,
-                0, // reference_tick
-                0, // version
-                0, // fec_set_index
-            );
+
+            // TODO MERKLE cleanup
+            let shred = match ShredProtocolVersion::default() {
+                ShredProtocolVersion::V1 => Shred::new_from_data(
+                    ShredProtocolVersion::default(),
+                    bank.slot(),
+                    0, // index,
+                    parent_offset as u16,
+                    &[0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1],
+                    ShredFlags::DATA_COMPLETE_SHRED,
+                    0, // reference_tick
+                    0, // version
+                    0, // fec_set_index
+                ),
+                ShredProtocolVersion::V2 => Shred::new_from_data(
+                    ShredProtocolVersion::default(),
+                    bank.slot(),
+                    0, // index,
+                    parent_offset as u16,
+                    &[0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD_V2],
+                    ShredFlags::DATA_COMPLETE_SHRED,
+                    0, // reference_tick
+                    0, // version
+                    0, // fec_set_index
+                ),
+            };
             vec![shred]
         });
 

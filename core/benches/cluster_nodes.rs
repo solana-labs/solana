@@ -11,7 +11,7 @@ use {
     solana_gossip::contact_info::ContactInfo,
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
-        shred::{Shred, ShredFlags},
+        shred::{Shred, ShredFlags, ShredProtocolVersion},
     },
     solana_runtime::bank::Bank,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -40,6 +40,7 @@ fn get_retransmit_peers_deterministic(
     for i in 0..num_simulated_shreds {
         let index = i as u32;
         let shred = Shred::new_from_data(
+            ShredProtocolVersion::default(),
             slot,
             index,
             parent_offset,

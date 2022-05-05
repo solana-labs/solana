@@ -12,7 +12,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredCommonHeaderVersion, ShredId,
+            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredProtocolVersion,
             ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
@@ -502,6 +502,7 @@ impl Blockstore {
                     entries.pop().unwrap();
                 }
                 let shreds = entries_to_test_shreds(
+                    ShredProtocolVersion::default(),
                     &entries,
                     slot,
                     parent.unwrap_or(slot),
@@ -638,17 +639,17 @@ impl Blockstore {
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         data_cf: &'a LedgerColumn<cf::ShredData>,
     ) -> impl Iterator<Item = Shred> + 'a {
-        let data_type = match prev_inserted_shreds
+        let protocol_version = prev_inserted_shreds
             .values()
             .next()
-            .map(|s| s.shred_type().version())
-        {
-            Some(ShredCommonHeaderVersion::V1) => ShredType::DataV1,
-            Some(ShredCommonHeaderVersion::V2) => ShredType::DataV2,
-            None => ShredType::DataV1, // TODO MERKLE
-        };
+            .map(|s| s.protocol_version())
+            .unwrap_or_default();
         erasure_meta.data_shreds_indices().filter_map(move |i| {
-            let key = ShredId::new(slot, u32::try_from(i).unwrap(), data_type);
+            let key = ShredId::new(
+                slot,
+                u32::try_from(i).unwrap(),
+                protocol_version.data_type(),
+            );
             if let Some(shred) = prev_inserted_shreds.get(&key) {
                 return Some(shred.clone());
             }
@@ -672,17 +673,17 @@ impl Blockstore {
         prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
-        let code_type = match prev_inserted_shreds
+        let protocol_version = prev_inserted_shreds
             .values()
             .next()
-            .map(|s| s.shred_type().version())
-        {
-            Some(ShredCommonHeaderVersion::V1) => ShredType::CodeV1,
-            Some(ShredCommonHeaderVersion::V2) => ShredType::CodeV2,
-            None => ShredType::CodeV2, // TODO MERKLE
-        };
+            .map(|s| s.protocol_version())
+            .unwrap_or_default();
         erasure_meta.coding_shreds_indices().filter_map(move |i| {
-            let key = ShredId::new(slot, u32::try_from(i).unwrap(), code_type);
+            let key = ShredId::new(
+                slot,
+                u32::try_from(i).unwrap(),
+                protocol_version.code_type(),
+            );
             if let Some(shred) = prev_inserted_shreds.get(&key) {
                 return Some(shred.clone());
             }
@@ -906,7 +907,20 @@ impl Blockstore {
         let mut index_meta_time = 0;
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
+
+        let mut merkle_root_and_sig = None;
+
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
+            // TODO MERKLE
+            if !is_repaired
+                && merkle_root_and_sig.is_none()
+                && shred.protocol_version() == ShredProtocolVersion::V2
+            {
+                if let Some(merkle_root) = shred.merkle_root().unwrap() {
+                    merkle_root_and_sig = Some((merkle_root, shred.signature()));
+                }
+            }
+
             let shred_source = if is_repaired {
                 ShredSource::Repaired
             } else {
@@ -971,7 +985,7 @@ impl Blockstore {
             );
 
             metrics.num_recovered += recovered_data_shreds.len();
-            let recovered_data_shreds: Vec<_> = recovered_data_shreds
+            let mut recovered_data_shreds: Vec<_> = recovered_data_shreds
                 .into_iter()
                 .filter_map(|shred| {
                     let _leader =
@@ -1019,7 +1033,16 @@ impl Blockstore {
                 // Always collect recovered-shreds so that above insert code is
                 // executed even if retransmit-sender is None.
                 .collect();
+
+            recovered_data_shreds.iter_mut().for_each(|shred| {
+                // TODO MERKLE
+                if let Some((_merkle_root, merkle_sig)) = merkle_root_and_sig {
+                    shred.set_signature(&merkle_sig);
+                }
+            });
+
             if !recovered_data_shreds.is_empty() {
+                // TODO MERKLE must handle entire batch to reconstruct merkle data
                 if let Some(retransmit_sender) = retransmit_sender {
                     let _ = retransmit_sender.send(recovered_data_shreds);
                 }
@@ -1270,10 +1293,7 @@ impl Blockstore {
                     return Some(potential_shred.into_payload());
                 }
             } else if let Some(potential_shred) = {
-                let code_type = match shred.shred_type().version() {
-                    ShredCommonHeaderVersion::V1 => ShredType::CodeV1,
-                    ShredCommonHeaderVersion::V2 => ShredType::CodeV2,
-                };
+                let code_type = shred.protocol_version().code_type();
                 let key = ShredId::new(slot, u32::try_from(coding_index).unwrap(), code_type);
                 just_received_shreds.get(&key)
             } {
@@ -1450,18 +1470,17 @@ impl Blockstore {
         if just_inserted_shreds.is_empty() {
             return Cow::Owned(self.get_data_shred(slot, index).unwrap().unwrap());
         }
-        let data_type = match just_inserted_shreds
+        let protocol_version = just_inserted_shreds
             .values()
             .next()
             .unwrap()
-            .shred_type()
-            .version()
-        {
-            ShredCommonHeaderVersion::V1 => ShredType::DataV1,
-            ShredCommonHeaderVersion::V2 => ShredType::DataV2,
-        };
+            .protocol_version();
         // END TODO MERKLE
-        let key = ShredId::new(slot, u32::try_from(index).unwrap(), data_type);
+        let key = ShredId::new(
+            slot,
+            u32::try_from(index).unwrap(),
+            protocol_version.data_type(),
+        );
         if let Some(shred) = just_inserted_shreds.get(&key) {
             Cow::Borrowed(shred.payload())
         } else {
@@ -1795,6 +1814,7 @@ impl Blockstore {
                     }
                 };
                 let (mut data_shreds, mut coding_shreds) = shredder.entries_to_shreds(
+                    ShredProtocolVersion::default(),
                     keypair,
                     &current_entries,
                     true,        // is_last_in_slot
@@ -1820,6 +1840,7 @@ impl Blockstore {
 
         if !slot_entries.is_empty() {
             let (mut data_shreds, mut coding_shreds) = shredder.entries_to_shreds(
+                ShredProtocolVersion::default(),
                 keypair,
                 &slot_entries,
                 is_full_slot,
@@ -3842,6 +3863,7 @@ pub fn create_new_ledger(
     let shredder = Shredder::new(0, 0, 0, version).unwrap();
     let shreds = shredder
         .entries_to_shreds(
+            ShredProtocolVersion::default(),
             &Keypair::new(),
             &entries,
             true, // is_last_in_slot
@@ -4084,6 +4106,7 @@ pub fn create_new_ledger_from_name_auto_delete(
 }
 
 pub fn entries_to_test_shreds(
+    protocol_version: ShredProtocolVersion,
     entries: &[Entry],
     slot: Slot,
     parent_slot: Slot,
@@ -4093,6 +4116,7 @@ pub fn entries_to_test_shreds(
     Shredder::new(slot, parent_slot, 0, version)
         .unwrap()
         .entries_to_shreds(
+            protocol_version,
             &Keypair::new(),
             entries,
             is_full_slot,
@@ -4109,7 +4133,14 @@ pub fn make_slot_entries(
     num_entries: u64,
 ) -> (Vec<Shred>, Vec<Entry>) {
     let entries = create_ticks(num_entries, 0, Hash::default());
-    let shreds = entries_to_test_shreds(&entries, slot, parent_slot, true, 0);
+    let shreds = entries_to_test_shreds(
+        ShredProtocolVersion::default(),
+        &entries,
+        slot,
+        parent_slot,
+        true,
+        0,
+    );
     (shreds, entries)
 }
 
@@ -4799,12 +4830,26 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let entries = create_ticks(8, 0, Hash::default());
-        let shreds = entries_to_test_shreds(&entries[0..4], 1, 0, false, 0);
+        let shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries[0..4],
+            1,
+            0,
+            false,
+            0,
+        );
         blockstore
             .insert_shreds(shreds, None, false)
             .expect("Expected successful write of shreds");
 
-        let mut shreds1 = entries_to_test_shreds(&entries[4..], 1, 0, false, 0);
+        let mut shreds1 = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries[4..],
+            1,
+            0,
+            false,
+            0,
+        );
         for (i, b) in shreds1.iter_mut().enumerate() {
             b.set_index(8 + i as u32);
         }
@@ -4832,8 +4877,14 @@ pub mod tests {
         for slot in 0..num_slots {
             let entries = create_ticks(slot + 1, 0, Hash::default());
             let last_entry = entries.last().unwrap().clone();
-            let mut shreds =
-                entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), false, 0);
+            let mut shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                false,
+                0,
+            );
             for b in shreds.iter_mut() {
                 b.set_index(index);
                 b.set_slot(slot as u64);
@@ -4866,7 +4917,14 @@ pub mod tests {
         // Write entries
         for slot in 0..num_slots {
             let entries = create_ticks(entries_per_slot, 0, Hash::default());
-            let shreds = entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), false, 0);
+            let shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                slot,
+                slot.saturating_sub(1),
+                false,
+                0,
+            );
             assert!(shreds.len() as u64 >= shreds_per_slot);
             blockstore
                 .insert_shreds(shreds, None, false)
@@ -4944,7 +5002,8 @@ pub mod tests {
         let slot = 0;
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, slot, Hash::default());
-        let shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
+        let shreds =
+            entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         assert!(blockstore
@@ -5659,7 +5718,8 @@ pub mod tests {
         // Create enough entries to ensure there are at least two shreds created
         let num_entries = max_ticks_per_n_shreds(1, None) + 1;
         let entries = create_ticks(num_entries, 0, Hash::default());
-        let mut shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
+        let mut shreds =
+            entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
         assert!(num_shreds > 1);
         for (i, s) in shreds.iter_mut().enumerate() {
@@ -5745,6 +5805,7 @@ pub mod tests {
         let shreds: Vec<_> = (0..64)
             .map(|i| {
                 Shred::new_from_data(
+                    ShredProtocolVersion::default(),
                     slot,
                     (i * gap) as u32,
                     0,
@@ -5797,7 +5858,8 @@ pub mod tests {
         );
 
         let entries = create_ticks(100, 0, Hash::default());
-        let mut shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
+        let mut shreds =
+            entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 0, true, 0);
         assert!(shreds.len() > 2);
         shreds.drain(2..);
 
@@ -5836,7 +5898,8 @@ pub mod tests {
         // Write entries
         let num_entries = 10;
         let entries = create_ticks(num_entries, 0, Hash::default());
-        let shreds = entries_to_test_shreds(&entries, slot, 0, true, 0);
+        let shreds =
+            entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 0, true, 0);
         let num_shreds = shreds.len();
 
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -5873,6 +5936,7 @@ pub mod tests {
         // may be used as signals (broadcast does so to indicate a slot was interrupted)
         // Reuse shred5's header values to avoid a false negative result
         let empty_shred = Shred::new_from_data(
+            ShredProtocolVersion::default(),
             shred5.slot(),
             shred5.index(),
             {
@@ -5980,6 +6044,7 @@ pub mod tests {
 
         let slot = 1;
         let coding_shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::default(),
             slot,
             11,  // index
             &[], // parity_shard
@@ -6038,6 +6103,7 @@ pub mod tests {
 
         let slot = 1;
         let mut coding_shred = Shred::new_from_parity_shard(
+            ShredProtocolVersion::default(),
             slot,
             11,  // index
             &[], // parity_shard
@@ -6268,7 +6334,8 @@ pub mod tests {
         let num_ticks = 8;
         let entries = create_ticks(num_ticks, 0, Hash::default());
         let slot = 1;
-        let shreds = entries_to_test_shreds(&entries, slot, 0, false, 0);
+        let shreds =
+            entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 0, false, 0);
         let next_shred_index = shreds.len();
         blockstore
             .insert_shreds(shreds, None, false)
@@ -6280,6 +6347,7 @@ pub mod tests {
 
         // Insert an empty shred that won't deshred into entries
         let shreds = vec![Shred::new_from_data(
+            ShredProtocolVersion::default(),
             slot,
             next_shred_index as u32,
             1,
@@ -6361,7 +6429,14 @@ pub mod tests {
         assert_eq!(blockstore.lowest_slot(), 0);
         for slot in 1..4 {
             let entries = make_slot_entries_with_transactions(100);
-            let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+            let shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                slot,
+                slot - 1,
+                true,
+                0,
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(vec![slot].iter()).unwrap();
         }
@@ -6380,9 +6455,30 @@ pub mod tests {
         let slot = 10;
         let entries = make_slot_entries_with_transactions(100);
         let blockhash = get_last_hash(entries.iter()).unwrap();
-        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
-        let more_shreds = entries_to_test_shreds(&entries, slot + 1, slot, true, 0);
-        let unrooted_shreds = entries_to_test_shreds(&entries, slot + 2, slot + 1, true, 0);
+        let shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries,
+            slot,
+            slot - 1,
+            true,
+            0,
+        );
+        let more_shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries,
+            slot + 1,
+            slot,
+            true,
+            0,
+        );
+        let unrooted_shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries,
+            slot + 2,
+            slot + 1,
+            true,
+            0,
+        );
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -7277,7 +7373,14 @@ pub mod tests {
     fn test_get_rooted_transaction() {
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
-        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries,
+            slot,
+            slot - 1,
+            true,
+            0,
+        );
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -7388,7 +7491,14 @@ pub mod tests {
 
         let slot = 2;
         let entries = make_slot_entries_with_transactions(5);
-        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &entries,
+            slot,
+            slot - 1,
+            true,
+            0,
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let expected_transactions: Vec<VersionedTransactionWithStatusMeta> = entries
@@ -7749,7 +7859,14 @@ pub mod tests {
             let entries = make_slot_entries_with_transaction_addresses(&[
                 address0, address1, address0, address1,
             ]);
-            let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+            let shreds = entries_to_test_shreds(
+                ShredProtocolVersion::default(),
+                &entries,
+                slot,
+                slot - 1,
+                true,
+                0,
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
             for entry in entries.into_iter() {
@@ -7773,7 +7890,8 @@ pub mod tests {
             let entries = make_slot_entries_with_transaction_addresses(&[
                 address0, address1, address0, address1,
             ]);
-            let shreds = entries_to_test_shreds(&entries, slot, 8, true, 0);
+            let shreds =
+                entries_to_test_shreds(ShredProtocolVersion::default(), &entries, slot, 8, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
 
             for entry in entries.into_iter() {
@@ -8464,6 +8582,7 @@ pub mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, parent_slot, 0, 0).unwrap();
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::V1,
             &leader_keypair,
             &entries,
             true, // is_last_in_slot
@@ -8524,6 +8643,7 @@ pub mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, 0, 0, 0).unwrap();
         let (shreds, _) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             &leader_keypair,
             &entries1,
             true, // is_last_in_slot
@@ -8531,6 +8651,7 @@ pub mod tests {
             0,    // next_code_index,
         );
         let (duplicate_shreds, _) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             &leader_keypair,
             &entries2,
             true, // is_last_in_slot
@@ -8827,7 +8948,14 @@ pub mod tests {
         let parent = 0;
         let num_txs = 20;
         let entry = make_large_tx_entry(num_txs);
-        let shreds = entries_to_test_shreds(&[entry], slot, parent, true, 0);
+        let shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &[entry],
+            slot,
+            parent,
+            true,
+            0,
+        );
         assert!(shreds.len() > 1);
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -8889,7 +9017,14 @@ pub mod tests {
             assert!(!blockstore.is_full(0));
         }
 
-        let duplicate_shreds = entries_to_test_shreds(&original_entries, 0, 0, true, 0);
+        let duplicate_shreds = entries_to_test_shreds(
+            ShredProtocolVersion::default(),
+            &original_entries,
+            0,
+            0,
+            true,
+            0,
+        );
         let num_shreds = duplicate_shreds.len() as u64;
         blockstore
             .insert_shreds(duplicate_shreds, None, false)

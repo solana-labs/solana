@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_gossip::cluster_info::DATA_PLANE_FANOUT,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ShredProtocolVersion, Shredder},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signature, Signer},
@@ -158,6 +158,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         .expect("Expected to create a new shredder");
 
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             keypair,
             &receive_results.entries,
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
@@ -171,12 +172,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         }
         let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
             let (original_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
+                shredder.entries_to_shreds(ShredProtocolVersion::default(), keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
 
             let (partition_last_data_shred, _) =
                 // Don't mark the last shred as last so that validators won't know that
                 // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
+                shredder.entries_to_shreds(ShredProtocolVersion::default(), keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
 
                 let sigs: Vec<_> = partition_last_data_shred.iter().map(|s| (s.signature(), s.index())).collect();
                 info!(

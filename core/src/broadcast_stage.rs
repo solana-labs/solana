@@ -486,7 +486,9 @@ pub mod test {
     ) {
         let num_entries = max_ticks_per_n_shreds(num, None);
         let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
+        let keypair = Keypair::new();
         let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+            &keypair,
             &data_shreds[0..],
             true, // is_last_in_slot
             0,    // next_code_index

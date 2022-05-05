@@ -284,7 +284,7 @@ pub(crate) mod tests {
         super::*,
         rand::Rng,
         solana_entry::entry::Entry,
-        solana_ledger::shred::Shredder,
+        solana_ledger::shred::{ShredProtocolVersion, Shredder},
         solana_sdk::{
             hash,
             signature::{Keypair, Signer},
@@ -337,6 +337,7 @@ pub(crate) mod tests {
         .take(5)
         .collect();
         let (mut data_shreds, _coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::default(),
             keypair,
             &entries,
             true, // is_last_in_slot

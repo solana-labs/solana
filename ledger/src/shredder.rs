@@ -1,7 +1,8 @@
 use {
     crate::{
         shred::{
-            Error, Shred, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_DATA_SHRED_PAYLOAD_V1,
+            Error, Shred, ShredFlags, ShredProtocolVersion, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+            SIZE_OF_DATA_SHRED_PAYLOAD_V1, SIZE_OF_DATA_SHRED_PAYLOAD_V2,
         },
         shred_stats::ProcessShredsStats,
     },
@@ -58,6 +59,7 @@ impl Shredder {
 
     pub fn entries_to_shreds(
         &self,
+        protocol_version: ShredProtocolVersion,
         keypair: &Keypair,
         entries: &[Entry],
         is_last_in_slot: bool,
@@ -69,6 +71,8 @@ impl Shredder {
     ) {
         let mut stats = ProcessShredsStats::default();
         let mut data_shreds = self.entries_to_data_shreds(
+            protocol_version,
+            keypair,
             entries,
             is_last_in_slot,
             next_shred_index,
@@ -76,6 +80,7 @@ impl Shredder {
             &mut stats,
         );
         let mut coding_shreds = Self::data_shreds_to_coding_shreds(
+            keypair,
             &data_shreds,
             is_last_in_slot,
             next_code_index,
@@ -86,7 +91,7 @@ impl Shredder {
         assert!(!is_last_in_slot || (data_shreds.len() + coding_shreds.len()) % 64 == 0);
 
         // TODO MERKLE cleanup, use parallel tree construction
-        if is_last_in_slot {
+        if is_last_in_slot && protocol_version == ShredProtocolVersion::V2 {
             let data_elems = data_shreds.len();
             let mut data_base = 0;
             let mut code_base = 0;
@@ -96,22 +101,23 @@ impl Shredder {
                 let code_batch_count = 64 - data_batch_count; // TODO MERKLE fix const 64
 
                 let mut leaves: Vec<_> = (0..data_batch_count)
-                    .map(|i| data_shreds[data_base + i].payload_hash())
+                    .map(|i| data_shreds[data_base + i].merkle_hash().unwrap())
                     .collect();
                 leaves.extend(
-                    (0..code_batch_count).map(|i| coding_shreds[code_base + i].payload_hash()),
+                    (0..code_batch_count)
+                        .map(|i| coding_shreds[code_base + i].merkle_hash().unwrap()),
                 );
                 let tree = TurbineMerkleTree::new_from_leaves(&leaves);
                 let merkle_root = tree.root();
                 let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
 
                 (0..data_batch_count).for_each(|i| {
-                    let idx = data_shreds[data_base + i].merkle_index();
+                    let idx = data_shreds[data_base + i].merkle_index().unwrap();
                     data_shreds[data_base + i].set_merkle(&merkle_root, &tree.prove_fec64(idx));
                     data_shreds[data_base + i].set_signature(&merkle_root_sig);
                 });
                 (0..code_batch_count).for_each(|i| {
-                    let idx = coding_shreds[code_base + i].merkle_index();
+                    let idx = coding_shreds[code_base + i].merkle_index().unwrap();
                     coding_shreds[code_base + i].set_merkle(&merkle_root, &tree.prove_fec64(idx));
                     coding_shreds[code_base + i].set_signature(&merkle_root_sig);
                 });
@@ -140,6 +146,8 @@ impl Shredder {
 
     pub fn entries_to_data_shreds(
         &self,
+        protocol_version: ShredProtocolVersion,
+        keypair: &Keypair,
         entries: &[Entry],
         is_last_in_slot: bool,
         next_shred_index: u32,
@@ -153,8 +161,13 @@ impl Shredder {
         serialize_time.stop();
 
         let mut gen_data_time = Measure::start("shred_gen_data_time");
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD_V1; // TODO MERKLE
-                                                              // Integer division to ensure we have enough shreds to fit all the data
+
+        let payload_capacity = match protocol_version {
+            ShredProtocolVersion::V1 => SIZE_OF_DATA_SHRED_PAYLOAD_V1,
+            ShredProtocolVersion::V2 => SIZE_OF_DATA_SHRED_PAYLOAD_V2,
+        };
+
+        // Integer division to ensure we have enough shreds to fit all the data
         let num_shreds = (serialized_shreds.len() + payload_capacity - 1) / payload_capacity;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
         // 1) Generate data shreds
@@ -169,7 +182,8 @@ impl Shredder {
             };
             let parent_offset = self.slot - self.parent_slot;
             let fec_set_index = Self::fec_set_index(shred_index, fec_set_offset);
-            Shred::new_from_data(
+            let mut shred = Shred::new_from_data(
+                protocol_version,
                 self.slot,
                 shred_index,
                 parent_offset as u16,
@@ -178,9 +192,14 @@ impl Shredder {
                 self.reference_tick,
                 self.version,
                 fec_set_index.unwrap(),
-            )
-            // shred.sign(keypair); TODO MERKLE
-            // shred
+            );
+
+            // TODO MERKLE maybe move signing up to a higher level
+            if shred.protocol_version() == ShredProtocolVersion::V1 {
+                shred.sign_v1(keypair);
+            }
+
+            shred
         };
         let data_shreds: Vec<Shred> = PAR_THREAD_POOL.install(|| {
             serialized_shreds
@@ -201,6 +220,7 @@ impl Shredder {
     }
 
     pub fn data_shreds_to_coding_shreds(
+        keypair: &Keypair,
         data_shreds: &[Shred],
         is_last_in_slot: bool,
         next_code_index: u32,
@@ -239,15 +259,16 @@ impl Shredder {
         });
         gen_coding_time.stop();
 
+        // TODO MERKLE maybe clean this up?
         let mut sign_coding_time = Measure::start("sign_coding_shreds");
         // 2) Sign coding shreds
-        /* TODO MERKLE
-        PAR_THREAD_POOL.install(|| {
-            coding_shreds.par_iter_mut().for_each(|coding_shred| {
-                coding_shred.sign(keypair);
-            })
-        });
-        */
+        if data_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V1 {
+            PAR_THREAD_POOL.install(|| {
+                coding_shreds.par_iter_mut().for_each(|coding_shred| {
+                    coding_shred.sign_v1(keypair);
+                })
+            });
+        }
         sign_coding_time.stop();
 
         process_stats.gen_coding_elapsed += gen_coding_time.as_us();
@@ -261,13 +282,14 @@ impl Shredder {
         is_last_in_slot: bool,
         next_code_index: u32,
     ) -> Vec<Shred> {
-        let (slot, index, version, fec_set_index) = {
+        let (slot, index, version, fec_set_index, protocol_version) = {
             let shred = data.first().unwrap();
             (
                 shred.slot(),
                 shred.index(),
                 shred.version(),
                 shred.fec_set_index(),
+                shred.shred_type().version(),
             )
         };
         assert_eq!(fec_set_index, index);
@@ -297,6 +319,7 @@ impl Shredder {
             .map(|(i, parity)| {
                 let index = next_code_index + u32::try_from(i).unwrap();
                 Shred::new_from_parity_shard(
+                    protocol_version,
                     slot,
                     index,
                     parity,
@@ -385,7 +408,10 @@ impl Shredder {
             // For backward compatibility. This is needed when the data shred
             // payload is None, so that deserializing to Vec<Entry> results in
             // an empty vector.
-            Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]) // TODO MERKLE
+            match shreds.last().unwrap().protocol_version() {
+                ShredProtocolVersion::V1 => Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD_V1]),
+                ShredProtocolVersion::V2 => Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD_V2]),
+            }
         } else {
             Ok(data)
         }
@@ -452,6 +478,7 @@ mod tests {
             .max(num_expected_data_shreds as usize);
         let start_index = 0;
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::V1,
             &keypair,
             &entries,
             true,        // is_last_in_slot
@@ -528,7 +555,10 @@ mod tests {
             .collect();
 
         let (data_shreds, _) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
@@ -555,7 +585,10 @@ mod tests {
             .collect();
 
         let (data_shreds, _) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
@@ -587,7 +620,10 @@ mod tests {
             .collect();
 
         let (data_shreds, _) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
@@ -628,7 +664,10 @@ mod tests {
             .collect();
 
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
@@ -679,6 +718,7 @@ mod tests {
 
         let serialized_entries = bincode::serialize(&entries).unwrap();
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::V1,
             &keypair,
             &entries,
             is_last_in_slot,
@@ -811,7 +851,10 @@ mod tests {
         // and 2 missing coding shreds. Hint: should work
         let serialized_entries = bincode::serialize(&entries).unwrap();
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             25,   // next_shred_index,
             25,   // next_code_index
         );
@@ -900,6 +943,7 @@ mod tests {
         .unwrap();
         let next_shred_index: u32 = 0; //rng.gen_range(1, 1024);
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::V1,
             &keypair,
             &[entry],
             is_last_in_slot,
@@ -960,7 +1004,10 @@ mod tests {
             .collect();
 
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
-            &keypair, &entries, true, // is_last_in_slot
+            ShredProtocolVersion::V1,
+            &keypair,
+            &entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
         );
@@ -989,6 +1036,7 @@ mod tests {
 
         let start_index = 0x12;
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            ShredProtocolVersion::V1,
             &keypair,
             &entries,
             true,        // is_last_in_slot
@@ -1012,7 +1060,7 @@ mod tests {
 
     #[test]
     fn test_max_coding_shreds() {
-        //let keypair = Arc::new(Keypair::new());
+        let keypair = Arc::new(Keypair::new());
         let hash = hash(Hash::default().as_ref());
         let version = shred_version::version_from_hash(&hash);
         assert_ne!(version, 0);
@@ -1030,6 +1078,8 @@ mod tests {
         let mut stats = ProcessShredsStats::default();
         let start_index = 0x12;
         let data_shreds = shredder.entries_to_data_shreds(
+            ShredProtocolVersion::V1,
+            &keypair,
             &entries,
             true, // is_last_in_slot
             start_index,
@@ -1042,6 +1092,7 @@ mod tests {
 
         (1..=MAX_DATA_SHREDS_PER_FEC_BLOCK as usize).for_each(|count| {
             let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+                &keypair,
                 &data_shreds[..count],
                 false, // is_last_in_slot
                 next_code_index,
@@ -1050,6 +1101,7 @@ mod tests {
             .unwrap();
             assert_eq!(coding_shreds.len(), count);
             let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+                &keypair,
                 &data_shreds[..count],
                 true, // is_last_in_slot
                 next_code_index,
@@ -1063,6 +1115,7 @@ mod tests {
         });
 
         let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+            &keypair,
             &data_shreds[..MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 1],
             false, // is_last_in_slot
             next_code_index,
@@ -1074,6 +1127,7 @@ mod tests {
             MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 1
         );
         let coding_shreds = Shredder::data_shreds_to_coding_shreds(
+            &keypair,
             &data_shreds[..MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 1],
             true, // is_last_in_slot
             next_code_index,

@@ -2033,7 +2033,10 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
-        solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
+        solana_ledger::{
+            create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader,
+            shred::ShredProtocolVersion,
+        },
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
     };
@@ -2108,7 +2111,14 @@ mod tests {
             info!("creating shreds");
             let mut last_print = Instant::now();
             for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(&entries, i, i - 1, true, 1);
+                let shreds = blockstore::entries_to_test_shreds(
+                    ShredProtocolVersion::default(),
+                    &entries,
+                    i,
+                    i - 1,
+                    true,
+                    1,
+                );
                 blockstore.insert_shreds(shreds, None, true).unwrap();
                 if last_print.elapsed().as_millis() > 5000 {
                     info!("inserted {}", i);

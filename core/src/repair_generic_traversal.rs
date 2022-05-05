@@ -198,6 +198,7 @@ pub mod test {
         solana_ledger::{
             blockstore::{Blockstore, MAX_TURBINE_PROPAGATION_IN_MS},
             get_tmp_ledger_path,
+            shred::ShredProtocolVersion,
         },
         solana_sdk::hash::Hash,
         std::{thread::sleep, time::Duration},
@@ -303,6 +304,7 @@ pub mod test {
                 blockhashes.insert(slot, entries.last().unwrap().hash);
 
                 let mut shreds = solana_ledger::blockstore::entries_to_test_shreds(
+                    ShredProtocolVersion::default(),
                     &entries,
                     slot,
                     parent.unwrap_or(slot),

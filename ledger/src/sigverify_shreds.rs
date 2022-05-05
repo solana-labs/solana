@@ -459,7 +459,7 @@ pub fn sign_shreds_gpu(
 pub mod tests {
     use {
         super::*,
-        crate::shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD_V1},
+        crate::shred::{Shred, ShredFlags, ShredProtocolVersion, SIZE_OF_DATA_SHRED_PAYLOAD_V1},
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -467,6 +467,7 @@ pub mod tests {
         solana_logger::setup();
         let mut packet = Packet::default();
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             slot,
             0xc0de,
             0xdead,
@@ -512,6 +513,7 @@ pub mod tests {
         solana_logger::setup();
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             slot,
             0xc0de,
             0xdead,
@@ -566,6 +568,7 @@ pub mod tests {
 
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             slot,
             0xc0de,
             0xdead,
@@ -633,6 +636,7 @@ pub mod tests {
         packet_batch.packets.resize(num_packets, Packet::default());
         for (i, p) in packet_batch.packets.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
+                ShredProtocolVersion::V1,
                 slot,
                 0xc0de,
                 i as u16,
@@ -678,6 +682,7 @@ pub mod tests {
         let mut batches = [PacketBatch::default()];
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
+            ShredProtocolVersion::V1,
             slot,
             0xc0de,
             0xdead,
