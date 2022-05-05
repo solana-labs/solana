@@ -207,11 +207,8 @@ mod tests {
         )
         .unwrap();
 
-        let bank = old_bank_forks
-            .get(deserialized_bank.slot())
-            .unwrap()
-            .clone();
-        assert_eq!(*bank, deserialized_bank);
+        let bank = old_bank_forks.get(deserialized_bank.slot()).unwrap();
+        assert_eq!(bank.as_ref(), &deserialized_bank);
 
         let bank_snapshots = snapshot_utils::get_bank_snapshots(&snapshot_path);
 
@@ -278,7 +275,7 @@ mod tests {
             snapshot_utils::get_highest_bank_snapshot_info(bank_snapshots_dir)
                 .expect("no bank snapshots found in path");
         let accounts_package = AccountsPackage::new(
-            last_bank,
+            &last_bank,
             &last_bank_snapshot_info,
             bank_snapshots_dir,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
@@ -363,7 +360,7 @@ mod tests {
         // Take snapshot of zeroth bank
         let bank0 = bank_forks.get(0).unwrap();
         let storages = bank0.get_snapshot_storages(None);
-        snapshot_utils::add_bank_snapshot(bank_snapshots_dir, bank0, &storages, snapshot_version)
+        snapshot_utils::add_bank_snapshot(bank_snapshots_dir, &bank0, &storages, snapshot_version)
             .unwrap();
 
         // Set up snapshotting channels
@@ -959,7 +956,7 @@ mod tests {
             // Make a new bank and perform some transactions
             let bank = {
                 let bank = Bank::new_from_parent(
-                    bank_forks.read().unwrap().get(slot - 1).unwrap(),
+                    &bank_forks.read().unwrap().get(slot - 1).unwrap(),
                     &Pubkey::default(),
                     slot,
                 );
@@ -1022,14 +1019,15 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(deserialized_bank.slot(), LAST_SLOT,);
+        assert_eq!(deserialized_bank.slot(), LAST_SLOT);
         assert_eq!(
-            deserialized_bank,
-            **bank_forks
+            &deserialized_bank,
+            bank_forks
                 .read()
                 .unwrap()
                 .get(deserialized_bank.slot())
                 .unwrap()
+                .as_ref()
         );
 
         // Stop the background services
