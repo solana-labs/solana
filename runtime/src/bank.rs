@@ -6024,6 +6024,7 @@ impl Bank {
                     &mut account,
                     &SlotInfoInEpoch::new_small(storage_slot),
                     &SlotInfoInEpoch::new_small(self.slot()),
+                    self.epoch_schedule(),
                     self.rent_collector(),
                     pubkey,
                     &self.rewrites_skipped_this_slot,
