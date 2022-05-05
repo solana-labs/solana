@@ -25,7 +25,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -35,7 +35,7 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq)]
 #[repr(C)]
 pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],

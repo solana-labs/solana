@@ -76,18 +76,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let recorder = poh_recorder.lock().unwrap().recorder();
 
         let tx = test_tx();
-        let len = 4096;
-        let chunk_size = 1024;
-        let batches = to_packet_batches(&vec![tx; len], chunk_size);
-        let mut packet_batches = UnprocessedPacketBatches::new();
-        for batch in batches {
-            let batch_len = batch.packets.len();
-            packet_batches.push_back(DeserializedPacketBatch::new(
-                batch,
-                vec![0usize; batch_len],
-                false,
-            ));
-        }
+        let transactions = vec![tx; 4194304];
+        let batches = transactions_to_deserialized_packets(&transactions).unwrap();
+        let batches_len = batches.len();
+        let mut transaction_buffer =
+            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len);
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
@@ -96,7 +89,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
-                &mut packet_batches,
+                &mut transaction_buffer,
                 None,
                 &s,
                 None::<Box<dyn Fn()>>,
@@ -104,6 +97,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &recorder,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
+                10,
             );
         });
 
