@@ -3,7 +3,6 @@ use {
         bpf_loader_upgradeable,
         message::{legacy::is_builtin_key_or_sysvar, v0, AccountKeys},
         pubkey::Pubkey,
-        sysvar,
     },
     std::{borrow::Cow, collections::HashSet},
 };

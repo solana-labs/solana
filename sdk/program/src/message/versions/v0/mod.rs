@@ -20,7 +20,7 @@ use crate::{
     },
     pubkey::Pubkey,
     sanitize::{Sanitize, SanitizeError},
-    short_vec, sysvar,
+    short_vec,
 };
 pub use loaded::*;
 
