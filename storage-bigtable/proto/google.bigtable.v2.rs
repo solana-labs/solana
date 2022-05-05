@@ -241,6 +241,7 @@ pub struct RowFilter {
     pub filter: ::core::option::Option<row_filter::Filter>,
 }
 /// Nested message and enum types in `RowFilter`.
+#[allow(clippy::enum_variant_names)]
 pub mod row_filter {
     /// A RowFilter which sends rows through several RowFilters in sequence.
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -260,7 +261,7 @@ pub mod row_filter {
         /// If multiple cells are produced with the same column and timestamp,
         /// they will all appear in the output row in an unspecified mutual order.
         /// Consider the following example, with three filters:
-        ///
+        ///```ignore
         ///                                  input row
         ///                                      |
         ///            -----------------------------------------------------
@@ -326,7 +327,7 @@ pub mod row_filter {
         /// Hook for introspection into the RowFilter. Outputs all cells directly to
         /// the output of the read rather than to any parent filter. Consider the
         /// following example:
-        ///
+        ///```ignore
         ///     Chain(
         ///       FamilyRegex("A"),
         ///       Interleave(
