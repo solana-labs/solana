@@ -1366,12 +1366,19 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
-        Self::new_for_tests(genesis_config)
+        Self::new_with_paths_for_benches(
+            genesis_config,
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        )
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
