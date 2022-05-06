@@ -36,6 +36,13 @@ pub enum VersionedMessage {
 }
 
 impl VersionedMessage {
+    pub fn sanitize(&self, require_static_program_ids: bool) -> Result<(), SanitizeError> {
+        match self {
+            Self::Legacy(message) => message.sanitize(),
+            Self::V0(message) => message.sanitize(require_static_program_ids),
+        }
+    }
+
     pub fn header(&self) -> &MessageHeader {
         match self {
             Self::Legacy(message) => &message.header,
@@ -145,15 +152,6 @@ impl VersionedMessage {
 impl Default for VersionedMessage {
     fn default() -> Self {
         Self::Legacy(LegacyMessage::default())
-    }
-}
-
-impl Sanitize for VersionedMessage {
-    fn sanitize(&self) -> Result<(), SanitizeError> {
-        match self {
-            Self::Legacy(message) => message.sanitize(),
-            Self::V0(message) => message.sanitize(),
-        }
     }
 }
 

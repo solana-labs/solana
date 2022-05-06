@@ -1762,6 +1762,7 @@ impl BankingStage {
             *deserialized_packet.message_hash(),
             Some(deserialized_packet.is_simple_vote()),
             address_loader,
+            feature_set.is_active(&feature_set::require_static_program_ids_in_transaction::ID),
         )
         .ok()?;
         tx.verify_precompiles(feature_set).ok()?;
@@ -3657,6 +3658,7 @@ mod tests {
             MessageHash::Compute,
             Some(false),
             bank.as_ref(),
+            true, // require_static_program_ids
         )
         .unwrap();
 
