@@ -210,15 +210,15 @@ impl QuicClient {
     async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let new_conn = match connecting.into_0rtt() {
-            Ok((new_conn, zero_rtt)) => {
+        let connection = match connecting.into_0rtt() {
+            Ok((connection, zero_rtt)) => {
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
                 }
                 else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
                 }
-                new_conn
+                connection
             }
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
@@ -227,7 +227,6 @@ impl QuicClient {
             }
         };
 
-        let connection = connecting_result?;
         Ok(Arc::new(connection))
     }
 
