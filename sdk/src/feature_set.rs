@@ -393,6 +393,7 @@ pub mod require_static_program_ids_in_transaction {
 }
 
 pub mod stake_raise_minimum_delegation_to_1_sol {
+    // This is a feature-proposal *feature id*.  The feature keypair address is `3YHAo6wWw5rDbQxb59BmJkQ3XwVhX3m8tdBVbtxnJmma`.
     solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
 }
 
