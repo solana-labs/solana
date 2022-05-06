@@ -78,13 +78,20 @@ impl StakesCache {
         debug_assert_ne!(account.lamports(), 0u64);
         if solana_vote_program::check_id(owner) {
             if VoteState::is_correct_size_and_initialized(account.data()) {
-                let vote_account = VoteAccount::from(account.clone());
-                {
-                    // Called to eagerly deserialize vote state
-                    let _res = vote_account.vote_state();
+                match VoteAccount::try_from(account.clone()) {
+                    Ok(vote_account) => {
+                        {
+                            // Called to eagerly deserialize vote state
+                            let _res = vote_account.vote_state();
+                        }
+                        let mut stakes = self.0.write().unwrap();
+                        stakes.upsert_vote_account(pubkey, vote_account);
+                    }
+                    Err(_) => {
+                        let mut stakes = self.0.write().unwrap();
+                        stakes.remove_vote_account(pubkey)
+                    }
                 }
-                let mut stakes = self.0.write().unwrap();
-                stakes.upsert_vote_account(pubkey, vote_account);
             } else {
                 let mut stakes = self.0.write().unwrap();
                 stakes.remove_vote_account(pubkey)
