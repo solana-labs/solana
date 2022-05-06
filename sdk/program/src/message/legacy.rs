@@ -45,8 +45,11 @@ lazy_static! {
 }
 
 lazy_static! {
-    // A simple table to do a lookup based on the first byte of the static keys in question.
-    // Used as a very quick culling test before searching through vectors of keys for a match.
+    // Each element of a key is a u8. We use key[0] as an index into this table of 256 boolean
+    // elements, to store whether or not the first element of any key is present in the static
+    // lists of built-in-program keys or system ids. By using this lookup table, we can very
+    // quickly determine that a key under consideration cannot be in either of these lists (if
+    // the value is "false"), or might be in one of these lists (if the value is "true")
     pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
         let mut temp_table: [bool; 256] = [false; 256];
         BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
