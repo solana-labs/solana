@@ -575,7 +575,7 @@ fn test_incremental_snapshot_download() {
            incremental_snapshot_interval,
            accounts_hash_interval);
     debug!(
-        "leader config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
+        "leader config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         leader_snapshot_test_config
             .bank_snapshots_dir
             .path()
