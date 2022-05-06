@@ -1028,11 +1028,8 @@ fn validate_delegated_amount(
         .get_lamports()
         .saturating_sub(meta.rent_exempt_reserve); // can't stake the rent
 
-    // Previously, `initialize` checked that the stake account balance met
-    // the minimum delegation amount.
-    // With the `stake_allow_zero_undelegated_amount` feature, stake accounts
-    // may be initialized with a lower balance, so check the minimum in this
-    // function, on delegation.
+    // Stake accounts may be initialized with a stake amount below the minimum delegation so check
+    // that the minimum is met before delegation.
     if (feature_set.is_active(&stake_allow_zero_undelegated_amount::id())
         || feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()))
         && stake_amount < crate::get_minimum_delegation(feature_set)
