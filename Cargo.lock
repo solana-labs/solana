@@ -3267,6 +3267,22 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quinn"
+version = "0.8.0"
+source = "git+https://github.com/quinn-rs/quinn.git?rev=29d3932953985656bc587caf7e8f813c4760f974#29d3932953985656bc587caf7e8f813c4760f974"
+dependencies = [
+ "bytes",
+ "quinn-proto 0.8.0",
+ "quinn-udp 0.1.0",
+ "rustc-hash",
+ "rustls 0.20.4",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "webpki 0.22.0",
+]
+
+[[package]]
+name = "quinn"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d147472bc9a09f13b06c044787b6683cdffa02e2865b7f0fb53d67c49ed2988e"
@@ -3275,11 +3291,29 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "fxhash",
- "quinn-proto",
- "quinn-udp",
+ "quinn-proto 0.8.2",
+ "quinn-udp 0.1.1",
  "rustls 0.20.4",
  "thiserror",
  "tokio",
+ "tracing",
+ "webpki 0.22.0",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.8.0"
+source = "git+https://github.com/quinn-rs/quinn.git?rev=29d3932953985656bc587caf7e8f813c4760f974#29d3932953985656bc587caf7e8f813c4760f974"
+dependencies = [
+ "bytes",
+ "rand 0.8.5",
+ "ring",
+ "rustc-hash",
+ "rustls 0.20.4",
+ "rustls-native-certs",
+ "slab",
+ "thiserror",
+ "tinyvec",
  "tracing",
  "webpki 0.22.0",
 ]
@@ -3306,6 +3340,18 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
+version = "0.1.0"
+source = "git+https://github.com/quinn-rs/quinn.git?rev=29d3932953985656bc587caf7e8f813c4760f974#29d3932953985656bc587caf7e8f813c4760f974"
+dependencies = [
+ "libc",
+ "quinn-proto 0.8.0",
+ "socket2",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-udp"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df185e5e5f7611fa6e628ed8f9633df10114b03bbaecab186ec55822c44ac727"
@@ -3313,7 +3359,7 @@ dependencies = [
  "futures-util",
  "libc",
  "mio",
- "quinn-proto",
+ "quinn-proto 0.8.2",
  "socket2",
  "tokio",
  "tracing",
@@ -4602,8 +4648,8 @@ dependencies = [
  "lazy_static",
  "log",
  "lru",
- "quinn",
- "quinn-proto",
+ "quinn 0.8.2",
+ "quinn-proto 0.8.2",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -5903,7 +5949,7 @@ dependencies = [
  "nix",
  "pem",
  "pkcs8",
- "quinn",
+ "quinn 0.8.0",
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.4",

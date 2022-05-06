@@ -19,7 +19,7 @@ log = "0.4.17"
 nix = "0.24.0"
 pem = "1.0.2"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
-quinn = "0.8.2"
+quinn = { git = "https://github.com/quinn-rs/quinn.git", rev = "29d3932953985656bc587caf7e8f813c4760f974" }
 rand = "0.7.0"
 rcgen = "0.9.2"
 rustls = { version = "0.20.4", features = ["dangerous_configuration"] }

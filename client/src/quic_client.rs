@@ -17,7 +17,7 @@ use {
     quinn_proto::ConnectionStats,
     solana_sdk::{
         quic::{
-            QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
+            QUIC_KEEP_ALIVE_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
         },
         transport::Result as TransportResult,
     },
@@ -293,7 +293,7 @@ impl QuicClient {
 
         let chunks = buffers[1..buffers.len()]
             .iter()
-            .chunks(QUIC_MAX_CONCURRENT_STREAMS);
+            .chunks(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
 
         let futures: Vec<_> = chunks
             .into_iter()
