@@ -778,7 +778,7 @@ mod without_incremental_snapshots {
     fn get_highest_local_snapshot_hash(
         full_snapshot_archives_dir: impl AsRef<Path>,
     ) -> Option<(Slot, Hash)> {
-        snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
+        snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
             .map(|full_snapshot_info| (full_snapshot_info.slot(), *full_snapshot_info.hash()))
     }
 }
@@ -1083,11 +1083,11 @@ mod with_incremental_snapshots {
         incremental_snapshot_archives_dir: impl AsRef<Path>,
     ) -> Option<(Slot, Hash)> {
         if let Some(full_snapshot_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
+            snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
         {
             if let Some(incremental_snapshot_info) =
                 snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                    &incremental_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
                     full_snapshot_info.slot(),
                 )
             {
