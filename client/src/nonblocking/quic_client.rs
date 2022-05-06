@@ -15,7 +15,9 @@ use {
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_sdk::quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
+    solana_sdk::quic::{
+        QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+    },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
@@ -395,7 +397,7 @@ impl QuicClient {
 
         let chunks = buffers[1..buffers.len()]
             .iter()
-            .chunks(QUIC_MAX_CONCURRENT_STREAMS);
+            .chunks(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
 
         let futures: Vec<_> = chunks
             .into_iter()
