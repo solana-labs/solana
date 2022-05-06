@@ -3361,15 +3361,6 @@ mod tests {
             Ok(()),
         );
 
-        // should fail, withdrawing account down to only rent-exempt reserve
-        process_instruction(
-            &feature_set,
-            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
         // should fail, withdrawal that would leave less than rent-exempt reserve
         process_instruction(
             &feature_set,
