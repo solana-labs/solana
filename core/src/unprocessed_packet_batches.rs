@@ -103,7 +103,7 @@ impl DeserializedPacket {
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         let fee_per_cu = fee_per_cu
-            .or(compute_fee_per_cu(&versioned_transaction.message))
+            .or_else(|| compute_fee_per_cu(&versioned_transaction.message))
             .ok_or(DeserializedPacketError::AdditionalFeeInvalid)?;
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
