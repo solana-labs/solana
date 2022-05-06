@@ -13,6 +13,8 @@ pub struct ClientStats {
     pub total_connections: AtomicU64,
     pub connection_reuse: AtomicU64,
     pub connection_errors: AtomicU64,
+    pub zero_rtt_accepts: AtomicU64,
+    pub zero_rtt_rejects: AtomicU64,
 
     // these will be the last values of these stats
     pub congestion_events: MovingStat,

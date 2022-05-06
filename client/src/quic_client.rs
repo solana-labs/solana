@@ -159,10 +159,11 @@ impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
         let _guard = RUNTIME.enter();
 
-        let crypto = rustls::ClientConfig::builder()
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
+        crypto.enable_early_data = true;
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
@@ -209,10 +210,23 @@ impl QuicClient {
     async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting_result = connecting.await;
-        if connecting_result.is_err() {
-            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-        }
+        let new_conn = match connecting.into_0rtt() {
+            Ok((new_conn, zero_rtt)) => {
+                if zero_rtt.await {
+                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                }
+                else {
+                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                }
+                new_conn
+            }
+            Err(connecting) => {
+                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+                let connecting = connecting.await;
+                connecting?
+            }
+        };
+
         let connection = connecting_result?;
         Ok(Arc::new(connection))
     }

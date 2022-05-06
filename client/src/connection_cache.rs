@@ -63,6 +63,18 @@ impl ConnectionCacheStats {
             client_stats.connection_reuse.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
+        self.total_client_stats.connection_errors.fetch_add(
+            client_stats.connection_errors.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.zero_rtt_accepts.fetch_add(
+            client_stats.zero_rtt_accepts.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.zero_rtt_rejects.fetch_add(
+            client_stats.zero_rtt_rejects.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         self.sent_packets
             .fetch_add(num_packets as u64, Ordering::Relaxed);
         self.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -127,6 +139,27 @@ impl ConnectionCacheStats {
                 "connection_reuse",
                 self.total_client_stats
                     .connection_reuse
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_errors",
+                self.total_client_stats
+                    .connection_errors
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_accepts",
+                self.total_client_stats
+                    .zero_rtt_accepts
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_rejects",
+                self.total_client_stats
+                    .zero_rtt_rejects
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
