@@ -166,7 +166,7 @@ mod tests {
             60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
         ];
 
-        assert!(!validate_edwards(&PodEdwardsPoint(invalid_bytes)).unwrap());
+        assert!(!validate_edwards(&PodEdwardsPoint(invalid_bytes)));
     }
 
     #[test]
