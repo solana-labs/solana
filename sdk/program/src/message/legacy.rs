@@ -161,19 +161,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-<<<<<<< HEAD
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::Keypair,
-    ///      transaction::Transaction,
-=======
     ///     instruction::Instruction,
     ///     message::Message,
     ///     pubkey::Pubkey,
-    ///     signature::{Keypair, Signer},
+    ///     signature::Keypair,
     ///     transaction::Transaction,
->>>>>>> c785f1ffc (Fix indentation of Message API examples (#25051))
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -240,19 +232,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-<<<<<<< HEAD
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::Keypair,
-    ///      transaction::Transaction,
-=======
     ///     instruction::Instruction,
     ///     message::Message,
     ///     pubkey::Pubkey,
-    ///     signature::{Keypair, Signer},
+    ///     signature::Keypair,
     ///     transaction::Transaction,
->>>>>>> c785f1ffc (Fix indentation of Message API examples (#25051))
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -344,25 +328,14 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-<<<<<<< HEAD
-    ///      hash::Hash,
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      nonce,
-    ///      pubkey::Pubkey,
-    ///      signature::Keypair,
-    ///      system_instruction,
-    ///      transaction::Transaction,
-=======
     ///     hash::Hash,
     ///     instruction::Instruction,
     ///     message::Message,
     ///     nonce,
     ///     pubkey::Pubkey,
-    ///     signature::{Keypair, Signer},
+    ///     signature::Keypair,
     ///     system_instruction,
     ///     transaction::Transaction,
->>>>>>> c785f1ffc (Fix indentation of Message API examples (#25051))
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
