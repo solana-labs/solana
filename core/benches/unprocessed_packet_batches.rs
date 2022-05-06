@@ -74,7 +74,7 @@ fn insert_packet_batches(
         } else {
             build_packet_batch(packet_per_batch_count)
         };
-        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes, None);
+        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
         unprocessed_packet_batches.insert_batch(deserialized_packets);
     });
     timer.stop();
