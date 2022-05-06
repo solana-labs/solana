@@ -35,7 +35,6 @@ use {
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
         hash::Hash,
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::VersionedTransaction,
@@ -1979,7 +1978,12 @@ impl Blockstore {
                     .into_iter()
                     .flat_map(|entry| entry.transactions)
                     .map(|transaction| {
-                        if let Err(err) = transaction.sanitize() {
+                        if let Err(err) = transaction.sanitize(
+                            // Don't enable additional sanitization checks until
+                            // all clusters have activated the static program id
+                            // feature gate so that bigtable upload isn't affected
+                            false, // require_static_program_ids
+                        ) {
                             warn!(
                                 "Blockstore::get_block sanitize failed: {:?}, \
                                 slot: {:?}, \
@@ -2358,7 +2362,9 @@ impl Blockstore {
             .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
-                if let Err(err) = transaction.sanitize() {
+                if let Err(err) = transaction.sanitize(
+                    true, // require_static_program_ids
+                ) {
                     warn!(
                         "Blockstore::find_transaction_in_slot sanitize failed: {:?}, \
                         slot: {:?}, \
