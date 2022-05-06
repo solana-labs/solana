@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+start=$(date +%s)
 
 cd "$(dirname "$0")"
 cargo=../cargo
@@ -40,6 +41,13 @@ in_subcommands=0
 while read -r subcommand rest; do
   [[ $subcommand == "SUBCOMMANDS:" ]] && in_subcommands=1 && continue
   if ((in_subcommands)); then
-      section "$("$cargo" stable -q run -p solana-cli -- help "$subcommand" | sed -e 's|'"$HOME"'|~|g' -e 's/[[:space:]]\+$//')" "####" >> "$out"
+      section "$("$cargo" stable -q run -p solana-cli -- help "$subcommand" | sed -e 's|'"$HOME"'|~|g' -e 's/[[:space:]]\+$//')" "####" >> "$subcommand"._txt &
   fi
-done <<<"$usage">>"$out"
+done <<<"$usage"
+wait
+# Combine all separately created txt generated docs into one & remove all the previously created ones
+cat ./*._txt >> "$out"
+rm -rf ./*._txt
+
+end=$(date +%s)
+echo "Total Cli Usage Generation Time Took $((end - start)) seconds."
