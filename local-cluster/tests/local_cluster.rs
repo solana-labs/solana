@@ -70,8 +70,12 @@ mod common;
 fn test_local_cluster_start_and_exit() {
     solana_logger::setup();
     let num_nodes = 1;
-    let cluster =
-        LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+    let cluster = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     assert_eq!(cluster.validators.len(), num_nodes);
 }
 
@@ -84,8 +88,8 @@ fn test_local_cluster_start_and_exit_with_config() {
             &ValidatorConfig::default_for_test(),
             NUM_NODES,
         ),
-        node_stakes: vec![3; NUM_NODES],
-        cluster_lamports: 100,
+        node_stakes: vec![DEFAULT_NODE_STAKE; NUM_NODES],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         ticks_per_slot: 8,
         slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
         stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
@@ -101,8 +105,12 @@ fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_1");
     let num_nodes = 1;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -118,8 +126,12 @@ fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -135,8 +147,12 @@ fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_3");
     let num_nodes = 3;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -151,8 +167,12 @@ fn test_spend_and_verify_all_nodes_3() {
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
-    let cluster =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let cluster = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     let nodes = cluster.get_node_pubkeys();
 
     // Get non leader
@@ -228,8 +248,12 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         .expect("please set environment variable NUM_NODES")
         .parse()
         .expect("could not parse NUM_NODES as a number");
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -251,8 +275,8 @@ fn test_two_unbalanced_stakes() {
 
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
-            node_stakes: vec![999_990, 3],
-            cluster_lamports: 1_000_000,
+            node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+            cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
             validator_configs: make_identical_validator_configs(&validator_config, 2),
             ticks_per_slot: num_ticks_per_slot,
             slots_per_epoch: num_slots_per_epoch,
@@ -278,11 +302,12 @@ fn test_two_unbalanced_stakes() {
 #[test]
 #[serial]
 fn test_forwarding() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
     let mut config = ClusterConfig {
-        node_stakes: vec![999_990, 3],
-        cluster_lamports: 2_000_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
             2,
@@ -320,8 +345,8 @@ fn test_restart_node() {
     let validator_config = ValidatorConfig::default_for_test();
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
-            node_stakes: vec![100; 1],
-            cluster_lamports: 100,
+            node_stakes: vec![DEFAULT_NODE_STAKE],
+            cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
             validator_configs: vec![safe_clone_config(&validator_config)],
             ticks_per_slot,
             slots_per_epoch,
@@ -359,8 +384,8 @@ fn test_mainnet_beta_cluster_type() {
 
     let mut config = ClusterConfig {
         cluster_type: ClusterType::MainnetBeta,
-        node_stakes: vec![100; 1],
-        cluster_lamports: 1_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
             1,
@@ -429,10 +454,10 @@ fn test_snapshot_download() {
     let validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -511,10 +536,10 @@ fn test_incremental_snapshot_download() {
         num_account_paths,
     );
 
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -665,10 +690,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         accounts_hash_interval,
         num_account_paths,
     );
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -1082,8 +1107,8 @@ fn test_snapshot_restart_tower() {
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000, 10],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: vec![
             safe_clone_config(&leader_snapshot_test_config.validator_config),
             safe_clone_config(&validator_snapshot_test_config.validator_config),
@@ -1161,8 +1186,8 @@ fn test_snapshots_blockstore_floor() {
         .snapshot_archives_dir;
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -1197,8 +1222,6 @@ fn test_snapshots_blockstore_floor() {
     let slot_floor = archive_info.slot();
 
     // Start up a new node from a snapshot
-    let validator_stake = 5;
-
     let cluster_nodes = discover_cluster(
         &cluster.entry_point_info.gossip,
         1,
@@ -1213,7 +1236,7 @@ fn test_snapshots_blockstore_floor() {
 
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
-        validator_stake,
+        DEFAULT_NODE_STAKE,
         Arc::new(Keypair::new()),
         None,
         SocketAddrSpace::Unspecified,
@@ -1273,8 +1296,8 @@ fn test_snapshots_restart_validity() {
     );
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &snapshot_test_config.validator_config,
             1,
@@ -1372,8 +1395,8 @@ fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default_for_test();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; 4],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE; 4],
         validator_configs: make_identical_validator_configs(&validator_config, 4),
         ..ClusterConfig::default()
     };
@@ -1396,8 +1419,8 @@ fn test_no_voting() {
         ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
         validator_configs: vec![validator_config],
         ..ClusterConfig::default()
     };
@@ -1433,7 +1456,7 @@ fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
+    let node_stakes = vec![51 * DEFAULT_NODE_STAKE, 50 * DEFAULT_NODE_STAKE];
     let validator_keys: Vec<_> = vec![
         "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
         "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
@@ -1443,7 +1466,7 @@ fn test_optimistic_confirmation_violation_detection() {
     .take(node_stakes.len())
     .collect();
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1572,8 +1595,8 @@ fn test_validator_saves_tower() {
     let validator_identity_keypair = Arc::new(Keypair::new());
     let validator_id = validator_identity_keypair.pubkey();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
         validator_configs: vec![validator_config],
         validator_keys: Some(vec![(validator_identity_keypair.clone(), true)]),
         ..ClusterConfig::default()
@@ -1712,8 +1735,8 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
     let node_stakes = match cluster_mode {
-        ClusterMode::MasterOnly => vec![100],
-        ClusterMode::MasterSlave => vec![100, 1],
+        ClusterMode::MasterOnly => vec![DEFAULT_NODE_STAKE],
+        ClusterMode::MasterSlave => vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
     };
 
     let validator_keys = vec![
@@ -1734,7 +1757,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     };
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1826,7 +1849,7 @@ fn test_hard_fork_invalidates_tower() {
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![60, 40];
+    let node_stakes = vec![60 * DEFAULT_NODE_STAKE, 40 * DEFAULT_NODE_STAKE];
 
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
@@ -1845,7 +1868,7 @@ fn test_hard_fork_invalidates_tower() {
     let validator_b_pubkey = validators[1];
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1971,7 +1994,7 @@ fn test_restart_tower_rollback() {
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![10000, 1];
+    let node_stakes = vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE];
 
     let validator_strings = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
@@ -1987,7 +2010,7 @@ fn test_restart_tower_rollback() {
     let b_pubkey = validator_keys[1].0.pubkey();
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -2122,7 +2145,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 #[test]
 #[serial]
 fn test_votes_land_in_fork_during_long_partition() {
-    let total_stake = 100;
+    let total_stake = 3 * DEFAULT_NODE_STAKE;
     // Make `lighter_stake` insufficient for switching threshold
     let lighter_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
     let heavier_stake = lighter_stake + 1;
@@ -2335,7 +2358,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
+    let node_stakes = vec![51 * DEFAULT_NODE_STAKE, 50 * DEFAULT_NODE_STAKE];
     let validator_keys: Vec<_> = vec![
         "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
         "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
@@ -2360,7 +2383,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     );
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
