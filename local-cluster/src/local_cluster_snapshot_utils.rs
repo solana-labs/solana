@@ -13,13 +13,16 @@ use {
 
 impl LocalCluster {
     /// Return the next full snapshot archive info after the cluster's last processed slot
-    pub fn wait_for_next_full_snapshot(
+    pub fn wait_for_next_full_snapshot<T>(
         &self,
-        full_snapshot_archives_dir: impl AsRef<Path>,
-    ) -> FullSnapshotArchiveInfo {
+        full_snapshot_archives_dir: T,
+    ) -> FullSnapshotArchiveInfo
+    where
+        T: AsRef<Path>,
+    {
         match self.wait_for_next_snapshot(
             full_snapshot_archives_dir,
-            None as Option<&Path>,
+            None::<T>,
             NextSnapshotType::FullSnapshot,
         ) {
             NextSnapshotResult::FullSnapshot(full_snapshot_archive_info) => {
