@@ -138,7 +138,7 @@ impl Ord for DeserializedPacket {
             .immutable_section()
             .fee_per_cu()
             .partial_cmp(&other.immutable_section().fee_per_cu())
-            .unwrap_or(Ordering::Equal)
+            .unwrap()
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -159,13 +159,13 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.fee_per_cu().partial_cmp(&other.fee_per_cu()).unwrap_or(Ordering::Equal) {
+        // f64 partial_cmp seems never return None, can unwrap
+        match self.fee_per_cu().partial_cmp(&other.fee_per_cu()).unwrap() {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
     }
 }
-
 
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
 /// PacketBatch's received from sigverify. Banking thread continuously scans the buffer
@@ -380,7 +380,6 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
 }
 
 /// Computes `(addition_fee / requested_cu)` if feature tx_wide_compute_cap is enabled,
-/// otherwise return default 0u64
 fn compute_fee_per_cu(message: &VersionedMessage, bank: &Bank) -> f64 {
     if bank.feature_set.is_active(&tx_wide_compute_cap::id()) {
         if let Some(sanitized_message) = sanitize_message(message, bank) {
@@ -388,10 +387,10 @@ fn compute_fee_per_cu(message: &VersionedMessage, bank: &Bank) -> f64 {
             match compute_budget.process_message(&sanitized_message, false, true) {
                 Ok(requested_additional_fee) => {
                     if let Some(requested_units) = f64::from_u64(compute_budget.max_units) {
-                        let requested_additional_fee = f64::from_u64(requested_additional_fee).unwrap_or(0f64);
+                        let requested_additional_fee =
+                            f64::from_u64(requested_additional_fee).unwrap_or(0f64);
                         requested_additional_fee / requested_units
-                    }
-                    else {
+                    } else {
                         0f64
                     }
                 }
