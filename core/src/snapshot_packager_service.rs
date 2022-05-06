@@ -261,9 +261,10 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let full_snapshot_archives_dir = temp_dir.join("snapshots_output");
-        let incremental_snapshot_archives_dir = temp_dir.join("snapshots_output");
+        let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");
+        let incremental_snapshot_archives_dir = temp_dir.join("incremental_snapshot_archives");
         fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
+        fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
