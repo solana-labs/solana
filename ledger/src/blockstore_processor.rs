@@ -74,7 +74,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new((MAX_BLOCK_UNITS * 1.10) as u64)
+        BlockCostCapacityMeter::new((MAX_BLOCK_UNITS as f64 * 1.10) as u64)
     }
 }
 
@@ -217,6 +217,7 @@ fn execute_batch(
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
+            additional_cost_units,
             remaining_block_cost_cap,
         );
 
