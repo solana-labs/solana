@@ -65,7 +65,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit
+// by max block cost limit, plus a 10% buffer by default
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -74,7 +74,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
+        BlockCostCapacityMeter::new((MAX_BLOCK_UNITS * 1.10) as u64)
     }
 }
 
@@ -156,6 +156,20 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
     execute_cost_units
 }
 
+fn sum_additional_costs(batch: &TransactionBatch, cost_model: &CostModel) -> u64 {
+    let mut costs: u64 = 0;
+    let transactions = batch.sanitized_transactions();
+
+    for transaction in transactions {
+        let transaction_cost = cost_model.calculate_cost(transaction);
+        costs = costs.saturating_add(transaction_cost.signature_cost);
+        costs = costs.saturating_add(transaction_cost.write_lock_cost);
+        costs = costs.saturating_add(transaction_cost.data_bytes_cost);
+        costs = costs.saturating_add(transaction_cost.builtins_execution_cost);
+    }
+    costs
+}
+
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
@@ -163,6 +177,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -191,13 +206,14 @@ fn execute_batch(
         .is_active(&feature_set::gate_large_block::id())
     {
         let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
+        let additional_cost_units = sum_additional_costs(batch, cost_model);
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units);
+            .accumulate(execution_cost_units + additional_cost_units);
 
         debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
@@ -262,6 +278,7 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
@@ -277,6 +294,7 @@ fn execute_batches_internal(
                         replay_vote_sender,
                         &mut timings,
                         cost_capacity_meter.clone(),
+                        cost_model,
                     );
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
@@ -302,6 +320,7 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
 ) -> Result<()> {
     let lock_results = batches
         .iter()
@@ -312,7 +331,6 @@ fn execute_batches(
         .flat_map(|batch| batch.sanitized_transactions().to_vec())
         .collect::<Vec<_>>();
 
-    let cost_model = CostModel::new();
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
@@ -360,6 +378,7 @@ fn execute_batches(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        cost_model,
     )
 }
 
@@ -416,6 +435,7 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
+    let cost_model = CostModel::new();
 
     for entry in entries {
         match entry {
@@ -433,6 +453,7 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         timings,
                         cost_capacity_meter.clone(),
+                        &cost_model,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -490,6 +511,7 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             timings,
                             cost_capacity_meter.clone(),
+                            &cost_model,
                         )?;
                         batches.clear();
                     }
@@ -505,6 +527,7 @@ fn process_entries_with_callback(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        &cost_model,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
