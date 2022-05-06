@@ -134,6 +134,8 @@ impl Message {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
+        // `expect` is safe because of earlier check that
+        // `num_static_account_keys` is non-zero
         let max_account_ix = total_account_keys
             .checked_sub(1)
             .expect("message doesn't contain any account keys");
@@ -142,6 +144,8 @@ impl Message {
         // static analysis on program instructions can be performed without
         // loading on-chain data from a bank
         let max_program_id_ix = if reject_dynamic_program_ids {
+            // `expect` is safe because of earlier check that
+            // `num_static_account_keys` is non-zero
             num_static_account_keys
                 .checked_sub(1)
                 .expect("message doesn't contain any static account keys")
