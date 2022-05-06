@@ -180,7 +180,11 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget.process_message(&tx.message(), true, true);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                true,
+            );
             assert_eq!($expected_error, result);
             assert_eq!(compute_budget, $expected_budget);
         };
