@@ -1389,6 +1389,11 @@ pub fn purge_old_snapshot_archives(
     }
     remove_archives(full_snapshot_archives_to_remove);
 
+    info!(
+        "Purging old incremental snapshot archives in {}, retaining up to {} incremental snapshots",
+        incremental_snapshot_archives_dir.as_ref().display(),
+        maximum_incremental_snapshot_archives_to_retain
+    );
     let mut incremental_snapshot_archives_by_base_slot = HashMap::<Slot, Vec<_>>::new();
     for incremental_snapshot_archive in
         get_incremental_snapshot_archives(&incremental_snapshot_archives_dir)
