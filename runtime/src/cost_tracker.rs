@@ -356,6 +356,7 @@ mod tests {
             MessageHash::Compute,
             Some(true),
             SimpleAddressLoader::Disabled,
+            true, // require_static_program_ids
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);

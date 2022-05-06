@@ -16,7 +16,7 @@ on:
 
 jobs:
   osx-build:
-    runs-on: macos-12
+    runs-on: macos-10.15
     steps:
       - name: Checkout
         uses: actions/checkout@v3

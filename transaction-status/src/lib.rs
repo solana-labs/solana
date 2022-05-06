@@ -16,7 +16,6 @@ use {
             AccountKeys, Message, MessageHeader, VersionedMessage,
         },
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::Signature,
         transaction::{
             Result as TransactionResult, Transaction, TransactionError, TransactionVersion,
@@ -867,7 +866,13 @@ impl EncodedTransaction {
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
         };
 
-        transaction.filter(|transaction| transaction.sanitize().is_ok())
+        transaction.filter(|transaction| {
+            transaction
+                .sanitize(
+                    true, // require_static_program_ids
+                )
+                .is_ok()
+        })
     }
 }
 
