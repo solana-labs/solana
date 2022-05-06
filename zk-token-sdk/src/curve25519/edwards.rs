@@ -21,8 +21,8 @@ mod target_arch {
         },
     };
 
-    pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
-        Some(point.validate_point())
+    pub fn validate_edwards(point: &PodEdwardsPoint) -> bool {
+        point.validate_point()
     }
 
     pub fn add_edwards(
@@ -129,24 +129,20 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CurveId},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_EDWARDS},
     };
 
-    pub fn validate_edwards(point: &PodEdwardsPoint) -> Option<bool> {
+    pub fn validate_edwards(point: &PodEdwardsPoint) -> bool {
         let mut validate_result = 0u8;
         let result = unsafe {
             sol_curve_validate_point(
-                CurveId::Curve25519Edwards as u64,
+                CURVE25519_EDWARDS,
                 &point.0 as *const u8,
                 &mut validate_result,
             )
         };
 
-        if result == 0 {
-            Some(validate_result == 0)
-        } else {
-            None
-        }
+        result == 0
     }
 }
 
@@ -163,7 +159,7 @@ mod tests {
     #[test]
     fn test_validate_edwards() {
         let pod = PodEdwardsPoint(G.compress().to_bytes());
-        assert!(validate_edwards(&pod).unwrap());
+        assert!(validate_edwards(&pod));
 
         let invalid_bytes = [
             120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,

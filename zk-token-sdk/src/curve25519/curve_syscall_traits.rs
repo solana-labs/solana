@@ -9,8 +9,6 @@
 //! zk-token-sdk or curve25519. It should be moved to a more general location in the future.
 //!
 
-use num_derive::{FromPrimitive, ToPrimitive};
-
 pub trait PointValidation {
     type Point;
 
@@ -73,23 +71,12 @@ pub trait Pairing {
     ) -> Option<Self::GTPoint>;
 }
 
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
-#[repr(u64)]
-pub enum CurveId {
-    Curve25519Edwards,
-    Curve25519Ristretto,
-    /* Bn254G1, TODO: support curve BN254 in the future
-    Bn254G2,
-    Bn254GT, */
-}
+pub const CURVE25519_EDWARDS: u64 = 0;
+pub const CURVE25519_RISTRETTO: u64 = 1;
 
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
-#[repr(u64)]
-pub enum GroupOp {
-    Add,
-    Sub,
-    Mul,
-}
+pub const ADD: u64 = 0;
+pub const SUB: u64 = 1;
+pub const MUL: u64 = 2;
 
 // Functions are organized by the curve traits, which can be instantiated by multiple curve
 // representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run

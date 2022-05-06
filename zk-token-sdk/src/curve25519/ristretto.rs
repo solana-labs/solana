@@ -21,8 +21,8 @@ mod target_arch {
         },
     };
 
-    pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
-        Some(point.validate_point())
+    pub fn validate_ristretto(point: &PodRistrettoPoint) -> bool {
+        point.validate_point()
     }
 
     pub fn add_ristretto(
@@ -130,24 +130,20 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CurveId},
+        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_RISTRETTO},
     };
 
-    pub fn validate_ristretto(point: &PodRistrettoPoint) -> Option<bool> {
+    pub fn validate_ristretto(point: &PodRistrettoPoint) -> bool {
         let mut validate_result = 0u8;
         let result = unsafe {
             sol_curve_validate_point(
-                CurveId::Curve25519Ristretto as u64,
+                CURVE25519_RISTRETTO,
                 &point.0 as *const u8,
                 &mut validate_result,
             )
         };
 
-        if result == 0 {
-            Some(validate_result == 0)
-        } else {
-            None
-        }
+        result == 0
     }
 }
 
@@ -164,14 +160,14 @@ mod tests {
     #[test]
     fn test_validate_ristretto() {
         let pod = PodRistrettoPoint(G.compress().to_bytes());
-        assert!(validate_ristretto(&pod).unwrap());
+        assert!(validate_ristretto(&pod));
 
         let invalid_bytes = [
             120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,
             60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
         ];
 
-        assert!(!validate_ristretto(&PodRistrettoPoint(invalid_bytes)).unwrap());
+        assert!(!validate_ristretto(&PodRistrettoPoint(invalid_bytes)));
     }
 
     #[test]

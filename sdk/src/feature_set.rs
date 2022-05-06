@@ -150,15 +150,7 @@ pub mod zk_token_sdk_enabled {
 }
 
 // TODO: temporary address for now
-pub mod curve25519_validate_point_enabled {
-    solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
-}
-
-pub mod curve25519_curve_op_enabled {
-    solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
-}
-
-pub mod curve25519_multiscalar_multiplication_enabled {
+pub mod curve25519_syscall_enabled {
     solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
 }
 
