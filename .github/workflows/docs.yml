@@ -1,0 +1,51 @@
+name: docs
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    tags:
+      - "*"
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+
+
+jobs:
+  main:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        run: |
+          source ci/env.sh
+          ci/channel_restriction.sh edge beta
+
+      - name: Get specific changed files
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v19
+        with:
+          files: |
+            docs/**
+
+      - name: Exit if no file changes in docs/
+        if: steps.changed-files-specific.outputs.any_changed != 'true'
+        run: |
+          exit 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14
+
+      - name: Build
+        working-directory: docs
+        run: |
+          npm install
+          ./build.sh
