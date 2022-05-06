@@ -2,7 +2,10 @@ use {
     crate::serve_repair::ServeRepair,
     solana_ledger::blockstore::Blockstore,
     solana_perf::recycler::Recycler,
-    solana_streamer::{socket::SocketAddrSpace, streamer},
+    solana_streamer::{
+        socket::SocketAddrSpace,
+        streamer::{self, StreamerReceiveStats},
+    },
     std::{
         net::UdpSocket,
         sync::{atomic::AtomicBool, mpsc::channel, Arc, RwLock},
@@ -31,10 +34,10 @@ impl ServeRepairService {
         );
         let t_receiver = streamer::receiver(
             serve_repair_socket.clone(),
-            exit,
+            exit.clone(),
             request_sender,
             Recycler::default(),
-            "serve_repair_receiver",
+            Arc::new(StreamerReceiveStats::new("serve_repair_receiver")),
             1,
             false,
         );
