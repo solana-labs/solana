@@ -2743,7 +2743,6 @@ pub fn main() {
             "rocksdb_perf_sample_interval",
             usize
         ),
-        ..LedgerColumnOptions::default()
     };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
