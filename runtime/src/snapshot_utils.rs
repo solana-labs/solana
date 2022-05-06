@@ -1261,10 +1261,9 @@ where
 }
 
 /// Get a list of the full snapshot archives from a directory
-pub fn get_full_snapshot_archives<P>(full_snapshot_archives_dir: P) -> Vec<FullSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
+pub fn get_full_snapshot_archives(
+    full_snapshot_archives_dir: impl AsRef<Path>,
+) -> Vec<FullSnapshotArchiveInfo> {
     get_snapshot_archives(
         full_snapshot_archives_dir.as_ref(),
         FullSnapshotArchiveInfo::new_from_path,
@@ -1272,12 +1271,9 @@ where
 }
 
 /// Get a list of the incremental snapshot archives from a directory
-pub fn get_incremental_snapshot_archives<P>(
-    incremental_snapshot_archives_dir: P,
-) -> Vec<IncrementalSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
+pub fn get_incremental_snapshot_archives(
+    incremental_snapshot_archives_dir: impl AsRef<Path>,
+) -> Vec<IncrementalSnapshotArchiveInfo> {
     get_snapshot_archives(
         incremental_snapshot_archives_dir.as_ref(),
         IncrementalSnapshotArchiveInfo::new_from_path,
@@ -1285,18 +1281,17 @@ where
 }
 
 /// Get the highest slot of the full snapshot archives in a directory
-pub fn get_highest_full_snapshot_archive_slot<P>(full_snapshot_archives_dir: P) -> Option<Slot>
-where
-    P: AsRef<Path>,
-{
+pub fn get_highest_full_snapshot_archive_slot(
+    full_snapshot_archives_dir: impl AsRef<Path>,
+) -> Option<Slot> {
     get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
         .map(|full_snapshot_archive_info| full_snapshot_archive_info.slot())
 }
 
 /// Get the highest slot of the incremental snapshot archives in a directory, for a given full
 /// snapshot slot
-pub fn get_highest_incremental_snapshot_archive_slot<P: AsRef<Path>>(
-    incremental_snapshot_archives_dir: P,
+pub fn get_highest_incremental_snapshot_archive_slot(
+    incremental_snapshot_archives_dir: impl AsRef<Path>,
     full_snapshot_slot: Slot,
 ) -> Option<Slot> {
     get_highest_incremental_snapshot_archive_info(
@@ -1307,12 +1302,9 @@ pub fn get_highest_incremental_snapshot_archive_slot<P: AsRef<Path>>(
 }
 
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
-pub fn get_highest_full_snapshot_archive_info<P>(
-    full_snapshot_archives_dir: P,
-) -> Option<FullSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
+pub fn get_highest_full_snapshot_archive_info(
+    full_snapshot_archives_dir: impl AsRef<Path>,
+) -> Option<FullSnapshotArchiveInfo> {
     let mut full_snapshot_archives = get_full_snapshot_archives(full_snapshot_archives_dir);
     full_snapshot_archives.sort_unstable();
     full_snapshot_archives.into_iter().rev().next()
@@ -1320,13 +1312,10 @@ where
 
 /// Get the path for the incremental snapshot archive with the highest slot, for a given full
 /// snapshot slot, in a directory
-pub fn get_highest_incremental_snapshot_archive_info<P>(
-    incremental_snapshot_archives_dir: P,
+pub fn get_highest_incremental_snapshot_archive_info(
+    incremental_snapshot_archives_dir: impl AsRef<Path>,
     full_snapshot_slot: Slot,
-) -> Option<IncrementalSnapshotArchiveInfo>
-where
-    P: AsRef<Path>,
-{
+) -> Option<IncrementalSnapshotArchiveInfo> {
     // Since we want to filter down to only the incremental snapshot archives that have the same
     // full snapshot slot as the value passed in, perform the filtering before sorting to avoid
     // doing unnecessary work.
