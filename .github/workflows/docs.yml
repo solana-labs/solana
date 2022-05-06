@@ -47,5 +47,8 @@ jobs:
       - name: Build
         working-directory: docs
         run: |
+          echo "CI $CI"
+          echo "CI_PULL_REQUEST $CI_PULL_REQUEST"
+          echo "CI_TAG $CI_TAG"
           npm install
           ./build.sh
