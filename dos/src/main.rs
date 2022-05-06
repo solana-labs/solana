@@ -240,16 +240,16 @@ fn run_dos(
             data.resize(params.data_size, 0);
         }
         DataType::Transaction => {
-            let tp = params.transaction_params;
+            let tp = params.transaction_params.clone();
             info!("{:?}", tp);
 
-            transaction_generator = Some(TransactionGenerator::new(tp));
-            let tx = transaction_generator
-                .as_mut()
-                .unwrap()
-                .generate(payer, &rpc_client);
+            let mut tg = TransactionGenerator::new(tp);
+            let tx = tg.generate(payer, &rpc_client);
             info!("{:?}", tx);
             data = bincode::serialize(&tx).unwrap();
+            if params.transaction_params.unique_transactions {
+                transaction_generator = Some(tg);
+            }
         }
         DataType::GetAccountInfo => {}
         DataType::GetProgramAccounts => {}
@@ -287,7 +287,7 @@ fn run_dos(
             }
             if let Some(tg) = transaction_generator.as_mut() {
                 let tx = tg.generate(payer, &rpc_client);
-                info!("{:?}", tx);
+                debug!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
             }
             let res = socket.send_to(&data, target);
@@ -350,7 +350,7 @@ struct DosClientParameters {
     transaction_params: TransactionParams,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default)]
+#[derive(Clone, Args, Serialize, Deserialize, Debug, Default)]
 #[clap(rename_all = "kebab-case")]
 struct TransactionParams {
     #[clap(
