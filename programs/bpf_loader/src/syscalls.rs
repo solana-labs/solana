@@ -22,13 +22,13 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            check_physical_overlapping, check_slice_translation_size, disable_fees_sysvar,
-            do_support_realloc, executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            syscall_saturated_math, update_syscall_base_costs, zk_token_sdk_enabled,
-            curve25519_syscall_enabled,
+            check_physical_overlapping, check_slice_translation_size, curve25519_syscall_enabled,
+            disable_fees_sysvar, do_support_realloc, executables_incur_cpi_data_cost,
+            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
+            zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1931,7 +1931,9 @@ declare_syscall!(
 
         match curve_id {
             CURVE25519_EDWARDS => {
-                let cost = invoke_context.get_compute_budget().curve25519_edwards_validate_point_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_validate_point_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
@@ -1950,7 +1952,9 @@ declare_syscall!(
                 }
             }
             CURVE25519_RISTRETTO => {
-                let cost = invoke_context.get_compute_budget().curve25519_ristretto_validate_point_cost;
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_validate_point_cost;
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
                 let point = question_mark!(
@@ -1974,7 +1978,6 @@ declare_syscall!(
         };
     }
 );
-
 
 declare_syscall!(
     // Blake3
