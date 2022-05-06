@@ -3,9 +3,7 @@ use {
     num_traits::cast::FromPrimitive,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
-    solana_runtime::bank::Bank,
     solana_sdk::{
-        feature_set::tx_wide_compute_cap,
         hash::Hash,
         message::{Message, SanitizedVersionedMessage},
         sanitize::SanitizeError,
@@ -18,7 +16,6 @@ use {
         collections::{hash_map::Entry, HashMap},
         mem::size_of,
         rc::Rc,
-        sync::Arc,
     },
     thiserror::Error,
 };
@@ -34,6 +31,8 @@ pub enum DeserializedPacketError {
     SignatureOverflowed(usize),
     #[error("packet failed sanitization {0}")]
     SanitizeError(#[from] SanitizeError),
+    #[error("compute budget additional fee is invalid")]
+    AdditionalFeeInvalid,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -80,8 +79,8 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
-    pub fn new(packet: Packet, bank: Option<&Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, bank, None)
+    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, None)
     }
 
     #[cfg(test)]
@@ -89,12 +88,11 @@ impl DeserializedPacket {
         packet: Packet,
         fee_per_cu: f64,
     ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None, Some(fee_per_cu))
+        Self::new_internal(packet, Some(fee_per_cu))
     }
 
     pub fn new_internal(
         packet: Packet,
-        bank: Option<&Arc<Bank>>,
         fee_per_cu: Option<f64>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
@@ -104,11 +102,9 @@ impl DeserializedPacket {
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
-            bank.as_ref()
-                .map(|bank| compute_fee_per_cu(sanitized_transaction.get_message(), bank))
-                .unwrap_or(0f64)
-        });
+        let fee_per_cu = fee_per_cu
+            .or(compute_fee_per_cu(&versioned_transaction.message))
+            .ok_or(DeserializedPacketError::AdditionalFeeInvalid)?;
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
                 original_packet: packet,
@@ -358,10 +354,9 @@ impl UnprocessedPacketBatches {
 pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
-    bank: Option<&'a Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
+        DeserializedPacket::new(packet_batch.packets[*packet_index].clone()).ok()
     })
 }
 
@@ -379,47 +374,20 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-/// Computes `(addition_fee / requested_cu)` if feature tx_wide_compute_cap is enabled,
-fn compute_fee_per_cu(message: &VersionedMessage, bank: &Bank) -> f64 {
-    if bank.feature_set.is_active(&tx_wide_compute_cap::id()) {
-        if let Some(sanitized_message) = sanitize_message(message, bank) {
-            let mut compute_budget = ComputeBudget::default();
-            match compute_budget.process_message(&sanitized_message, false, true) {
-                Ok(requested_additional_fee) => {
-                    if let Some(requested_units) = f64::from_u64(compute_budget.max_units) {
-                        let requested_additional_fee =
-                            f64::from_u64(requested_additional_fee).unwrap_or(0f64);
-                        requested_additional_fee / requested_units
-                    } else {
-                        0f64
-                    }
-                }
-                _ => 0f64,
-            };
-        }
-    }
-
-    0f64
-}
-
-fn sanitize_message(
-    versioned_message: &VersionedMessage,
-    address_loader: impl AddressLoader,
-) -> Option<SanitizedMessage> {
-    versioned_message.sanitize().ok()?;
-
-    match versioned_message {
-        VersionedMessage::Legacy(message) => Some(SanitizedMessage::Legacy(message.clone())),
-        VersionedMessage::V0(message) => {
-            let loaded_addresses = address_loader
-                .load_addresses(&message.address_table_lookups)
-                .ok()?;
-            Some(SanitizedMessage::V0(v0::LoadedMessage::new(
-                message.clone(),
-                loaded_addresses,
-            )))
-        }
-    }
+/// Computes fee_per_cu as `(addition_fee / requested_cu)`
+fn compute_fee_per_cu(message: &VersionedMessage) -> Option<f64> {
+    let sanitized_versioned_message = SanitizedVersionedMessage::try_from(message).ok()?;
+    let mut compute_budget = ComputeBudget::default();
+    let additional_fee = compute_budget
+        .process_instructions(
+            sanitized_versioned_message.program_instructions_iter(),
+            false, // not request heap size
+            true,  // use default units per instruction
+        )
+        .ok()?;
+    let additional_fee = f64::from_u64(additional_fee)?;
+    let request_units = f64::from_u64(compute_budget.max_units)?;
+    Some(additional_fee / request_units)
 }
 
 pub fn transactions_to_deserialized_packets(
@@ -429,7 +397,7 @@ pub fn transactions_to_deserialized_packets(
         .iter()
         .map(|transaction| {
             let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet, None)
+            DeserializedPacket::new(packet)
         })
         .collect()
 }
@@ -454,7 +422,7 @@ mod tests {
         if let Some(ip) = ip {
             packet.meta.addr = ip;
         }
-        DeserializedPacket::new(packet, None).unwrap()
+        DeserializedPacket::new(packet).unwrap()
     }
 
     fn packet_with_fee_per_cu(fee_per_cu: f64) -> DeserializedPacket {
