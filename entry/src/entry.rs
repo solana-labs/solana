@@ -1014,6 +1014,7 @@ mod tests {
                         message_hash,
                         None,
                         SimpleAddressLoader::Disabled,
+                        true, // require_static_program_ids
                     )
                 }?;
 
