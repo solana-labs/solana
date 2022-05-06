@@ -214,8 +214,7 @@ impl QuicClient {
             Ok((connection, zero_rtt)) => {
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                }
-                else {
+                } else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
                 }
                 connection
