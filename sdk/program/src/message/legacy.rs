@@ -46,7 +46,8 @@ lazy_static! {
 
 lazy_static! {
     // A simple table to do a lookup based on the first byte of the static keys in question.
-    pub static ref BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
+    // Used as a very quick culling test before searching through vectors of keys for a match.
+    pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
         let mut temp_table: [bool; 256] = [false; 256];
         BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
         sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
@@ -55,7 +56,7 @@ lazy_static! {
 }
 
 pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
-    if BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
+    if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
         return sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key);
     }
     false
