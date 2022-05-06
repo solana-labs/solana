@@ -21,7 +21,7 @@ bs58 = "0.4.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
-etcd-client = { version = "0.9.1", features = ["tls"] }
+etcd-client = { version = "0.8.1", features = ["tls"] }
 fs_extra = "1.2.0"
 histogram = "0.6.9"
 itertools = "0.10.3"
@@ -61,7 +61,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
 sys-info = "0.9.1"
 tempfile = "3.3.0"
 thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "~1.14.1", features = ["full"] }
 trees = "0.4.2"
 
 [dev-dependencies]
