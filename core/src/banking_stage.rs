@@ -1989,7 +1989,11 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
+        let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
+        while let Ok(packet_batch) = verified_receiver.try_recv() {
+            trace!("got more packets");
+            packet_batches.extend(packet_batch);
+        }
         recv_time.stop();
 
         let packet_batches_len = packet_batches.len();
