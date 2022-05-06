@@ -11,12 +11,8 @@ use {
     std::{
         net::UdpSocket,
         sync::{
-<<<<<<< HEAD
-            atomic::{AtomicBool, Ordering},
-            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
-=======
             atomic::{AtomicBool, AtomicUsize, Ordering},
->>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
+            mpsc::{Receiver, RecvTimeoutError, SendError, Sender},
             Arc,
         },
         thread::{Builder, JoinHandle},
@@ -118,13 +114,11 @@ fn recv_loop(
                         packets_count,
                         packet_batches_count,
                         full_packet_batches_count,
-                        max_channel_len,
                         ..
                     } = stats;
 
                     packets_count.fetch_add(len, Ordering::Relaxed);
                     packet_batches_count.fetch_add(1, Ordering::Relaxed);
-                    max_channel_len.fetch_max(packet_batch_sender.len(), Ordering::Relaxed);
                     if len == PACKETS_PER_BATCH {
                         full_packet_batches_count.fetch_add(1, Ordering::Relaxed);
                     }
@@ -146,14 +140,8 @@ pub fn receiver(
     coalesce_ms: u64,
     use_pinned_memory: bool,
 ) -> JoinHandle<()> {
-<<<<<<< HEAD
-    let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
-    assert!(!res.is_err(), "streamer::receiver set_read_timeout error");
-    let exit = exit.clone();
-=======
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
->>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
@@ -295,12 +283,8 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-<<<<<<< HEAD
         let (s_reader, r_reader) = channel();
-=======
-        let (s_reader, r_reader) = unbounded();
         let stats = Arc::new(StreamerReceiveStats::new("test"));
->>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
         let t_receiver = receiver(
             Arc::new(read),
             exit.clone(),

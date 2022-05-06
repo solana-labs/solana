@@ -18,19 +18,12 @@ use {
     std::{
         net::UdpSocket,
         sync::{
-<<<<<<< HEAD
-            atomic::AtomicBool,
-            mpsc::{channel, RecvTimeoutError},
-            Arc, Mutex,
-        },
-        thread::{self, Builder, JoinHandle},
-=======
             atomic::{AtomicBool, Ordering},
+            mpsc::{channel, RecvTimeoutError},
             Arc, Mutex,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
->>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
     },
 };
 
@@ -161,23 +154,9 @@ impl FetchStage {
             })
             .collect();
 
-<<<<<<< HEAD
-        let (forward_sender, forward_receiver) = channel();
-        let tpu_forwards_threads = tpu_forwards_sockets.into_iter().map(|socket| {
-            streamer::receiver(
-                socket,
-                exit,
-                forward_sender.clone(),
-                recycler.clone(),
-                "fetch_forward_stage",
-                coalesce_ms,
-                true,
-            )
-        });
-=======
         let tpu_forward_stats = Arc::new(StreamerReceiveStats::new("tpu_forwards_receiver"));
-        let (forward_sender, forward_receiver) = unbounded();
-        let tpu_forwards_threads: Vec<_> = tpu_forwards_sockets
+        let (forward_sender, forward_receiver) = channel();
+        let tpu_forwards_threads = tpu_forwards_sockets
             .into_iter()
             .map(|socket| {
                 streamer::receiver(
@@ -191,7 +170,6 @@ impl FetchStage {
                 )
             })
             .collect();
->>>>>>> 7100f1c94 (Collect stats in streamer receiver and report fetch stage metrics (#25010))
 
         let tpu_vote_stats = Arc::new(StreamerReceiveStats::new("tpu_vote_receiver"));
         let tpu_vote_threads: Vec<_> = tpu_vote_sockets
