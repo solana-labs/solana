@@ -5654,7 +5654,7 @@ impl AccountsDb {
             let result = self.calculate_accounts_hash_without_index(config, &storages, timings);
 
             // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
-            self.remove_old_historical_roots(slot, &config.rent_collector.epoch_schedule);
+            self.remove_old_historical_roots(slot, config.epoch_schedule);
 
             result
         } else {
