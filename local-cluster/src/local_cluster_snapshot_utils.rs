@@ -16,11 +16,10 @@ impl LocalCluster {
     pub fn wait_for_next_full_snapshot(
         &self,
         full_snapshot_archives_dir: impl AsRef<Path>,
-        incremental_snapshot_archives_dir: impl AsRef<Path>,
     ) -> FullSnapshotArchiveInfo {
         match self.wait_for_next_snapshot(
             full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
+            None as Option<&Path>,
             NextSnapshotType::FullSnapshot,
         ) {
             NextSnapshotResult::FullSnapshot(full_snapshot_archive_info) => {
@@ -39,7 +38,7 @@ impl LocalCluster {
     ) -> (IncrementalSnapshotArchiveInfo, FullSnapshotArchiveInfo) {
         match self.wait_for_next_snapshot(
             full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
+            Some(incremental_snapshot_archives_dir),
             NextSnapshotType::IncrementalAndFullSnapshot,
         ) {
             NextSnapshotResult::IncrementalAndFullSnapshot(
@@ -54,10 +53,10 @@ impl LocalCluster {
     }
 
     /// Return the next snapshot archive infos after the cluster's last processed slot
-    pub fn wait_for_next_snapshot(
+    fn wait_for_next_snapshot(
         &self,
         full_snapshot_archives_dir: impl AsRef<Path>,
-        incremental_snapshot_archives_dir: impl AsRef<Path>,
+        incremental_snapshot_archives_dir: Option<impl AsRef<Path>>,
         next_snapshot_type: NextSnapshotType,
     ) -> NextSnapshotResult {
         // Get slot after which this was generated
@@ -88,7 +87,7 @@ impl LocalCluster {
                     NextSnapshotType::IncrementalAndFullSnapshot => {
                         if let Some(incremental_snapshot_archive_info) =
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &incremental_snapshot_archives_dir,
+                                incremental_snapshot_archives_dir.as_ref().unwrap(),
                                 full_snapshot_archive_info.slot(),
                             )
                         {

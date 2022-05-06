@@ -481,10 +481,8 @@ fn test_snapshot_download() {
         .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-    );
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
     trace!("found: {}", full_snapshot_archive_info.path().display());
 
     // Download the snapshot, then boot a validator from it.
@@ -1252,17 +1250,9 @@ fn test_snapshot_restart_tower() {
         .as_ref()
         .unwrap()
         .full_snapshot_archives_dir;
-    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .as_ref()
-        .unwrap()
-        .incremental_snapshot_archives_dir;
 
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-    );
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -1413,12 +1403,6 @@ fn test_snapshots_restart_validity() {
         .as_ref()
         .unwrap()
         .full_snapshot_archives_dir;
-    let incremental_snapshot_archives_dir = &snapshot_test_config
-        .validator_config
-        .snapshot_config
-        .as_ref()
-        .unwrap()
-        .incremental_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
     let mut all_account_storage_dirs = vec![vec![]];
@@ -1456,10 +1440,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        cluster.wait_for_next_full_snapshot(
-            full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
-        );
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
