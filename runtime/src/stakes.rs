@@ -62,28 +62,44 @@ impl StakesCache {
         // but the owner changes, then this needs to evict the account from
         // the cache. see:
         // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
-        if solana_vote_program::check_id(account.owner()) {
-            let new_vote_account = if account.lamports() != 0
-                && VoteState::is_correct_size_and_initialized(account.data())
-            {
+        let owner = account.owner();
+        // Zero lamport accounts are not stored in accounts-db
+        // and so should be removed from cache as well.
+        if account.lamports() == 0 {
+            if solana_vote_program::check_id(owner) {
+                let mut stakes = self.0.write().unwrap();
+                stakes.remove_vote_account(pubkey);
+            } else if solana_stake_program::check_id(owner) {
+                let mut stakes = self.0.write().unwrap();
+                stakes.remove_stake_delegation(pubkey);
+            }
+            return;
+        }
+        debug_assert_ne!(account.lamports(), 0u64);
+        if solana_vote_program::check_id(owner) {
+            if VoteState::is_correct_size_and_initialized(account.data()) {
                 let vote_account = VoteAccount::from(account.clone());
                 {
                     // Called to eagerly deserialize vote state
                     let _res = vote_account.vote_state();
                 }
-                Some(vote_account)
+                let mut stakes = self.0.write().unwrap();
+                stakes.upsert_vote_account(pubkey, vote_account);
             } else {
-                None
+                let mut stakes = self.0.write().unwrap();
+                stakes.remove_vote_account(pubkey)
             };
-
-            self.0
-                .write()
-                .unwrap()
-                .update_vote_account(pubkey, new_vote_account);
-        } else if solana_stake_program::check_id(account.owner()) {
-            let stake_account = StakeAccount::try_from(account.clone()).ok();
-            let mut stakes = self.0.write().unwrap();
-            stakes.update_stake_delegation(pubkey, stake_account);
+        } else if solana_stake_program::check_id(owner) {
+            match StakeAccount::try_from(account.clone()) {
+                Ok(stake_account) => {
+                    let mut stakes = self.0.write().unwrap();
+                    stakes.upsert_stake_delegation(*pubkey, stake_account);
+                }
+                Err(_) => {
+                    let mut stakes = self.0.write().unwrap();
+                    stakes.remove_stake_delegation(pubkey);
+                }
+            }
         }
     }
 
@@ -297,11 +313,11 @@ impl Stakes<StakeAccount> {
             + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
     }
 
-    pub fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
+    fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
         self.vote_accounts.remove(vote_pubkey);
     }
 
-    pub fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
+    fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
         if let Some(stake_account) = self.stake_delegations.remove(stake_pubkey) {
             let removed_delegation = stake_account.delegation();
             let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
@@ -310,74 +326,36 @@ impl Stakes<StakeAccount> {
         }
     }
 
-    pub fn update_vote_account(
-        &mut self,
-        vote_pubkey: &Pubkey,
-        new_vote_account: Option<VoteAccount>,
-    ) {
+    fn upsert_vote_account(&mut self, vote_pubkey: &Pubkey, vote_account: VoteAccount) {
+        debug_assert_ne!(vote_account.lamports(), 0u64);
+        debug_assert!(vote_account.is_deserialized());
         // unconditionally remove existing at first; there is no dependent calculated state for
         // votes, not like stakes (stake codepath maintains calculated stake value grouped by
         // delegated vote pubkey)
-        let old_entry = self.vote_accounts.remove(vote_pubkey);
-        if let Some(new_vote_account) = new_vote_account {
-            debug_assert!(new_vote_account.is_deserialized());
-            let new_stake = old_entry.as_ref().map_or_else(
-                || self.calculate_stake(vote_pubkey, self.epoch, &self.stake_history),
-                |(old_stake, _old_vote_account)| *old_stake,
-            );
-
-            self.vote_accounts
-                .insert(*vote_pubkey, (new_stake, new_vote_account));
-        }
+        let stake = match self.vote_accounts.remove(vote_pubkey) {
+            None => self.calculate_stake(vote_pubkey, self.epoch, &self.stake_history),
+            Some((stake, _)) => stake,
+        };
+        let entry = (stake, vote_account);
+        self.vote_accounts.insert(*vote_pubkey, entry);
     }
 
-    pub fn update_stake_delegation(
-        &mut self,
-        stake_pubkey: &Pubkey,
-        new_stake_account: Option<StakeAccount>,
-    ) {
-        //  old_stake is stake lamports and voter_pubkey from the pre-store() version
-        let old_stake = self
-            .stake_delegations
-            .get(stake_pubkey)
-            .map(|stake_account| {
-                let delegation = stake_account.delegation();
-                (
-                    delegation.voter_pubkey,
-                    delegation.stake(self.epoch, Some(&self.stake_history)),
-                )
-            });
-        let new_delegation = new_stake_account.as_ref().map(StakeAccount::delegation);
-        let new_stake = new_stake_account.as_ref().and_then(|new_stake_account| {
-            let new_delegation = new_delegation?;
-            // When account is removed (lamports == 0), this check ensures
-            // resetting cached stake value below, even if the account happens
-            // to be still staked for some (odd) reason.
-            let stake = if new_stake_account.lamports() == 0 {
-                0
-            } else {
-                new_delegation.stake(self.epoch, Some(&self.stake_history))
-            };
-            Some((new_delegation.voter_pubkey, stake))
-        });
-        // check if adjustments need to be made...
-        if new_stake != old_stake {
-            if let Some((voter_pubkey, stake)) = old_stake {
-                self.vote_accounts.sub_stake(&voter_pubkey, stake);
+    fn upsert_stake_delegation(&mut self, stake_pubkey: Pubkey, stake_account: StakeAccount) {
+        debug_assert_ne!(stake_account.lamports(), 0u64);
+        let delegation = stake_account.delegation();
+        let voter_pubkey = delegation.voter_pubkey;
+        let stake = delegation.stake(self.epoch, Some(&self.stake_history));
+        match self.stake_delegations.insert(stake_pubkey, stake_account) {
+            None => self.vote_accounts.add_stake(&voter_pubkey, stake),
+            Some(old_stake_account) => {
+                let old_delegation = old_stake_account.delegation();
+                let old_voter_pubkey = old_delegation.voter_pubkey;
+                let old_stake = old_delegation.stake(self.epoch, Some(&self.stake_history));
+                if voter_pubkey != old_voter_pubkey || stake != old_stake {
+                    self.vote_accounts.sub_stake(&old_voter_pubkey, old_stake);
+                    self.vote_accounts.add_stake(&voter_pubkey, stake);
+                }
             }
-            if let Some((voter_pubkey, stake)) = new_stake {
-                self.vote_accounts.add_stake(&voter_pubkey, stake);
-            }
-        }
-        // TODO: should this remove stake account if lamports == 0?
-        if new_delegation.is_some() {
-            self.stake_delegations
-                .insert(*stake_pubkey, new_stake_account.unwrap());
-        } else {
-            // when stake is no longer delegated, remove it from Stakes so that
-            // given `pubkey` can be used for any owner in the future, while not
-            // affecting Stakes.
-            self.stake_delegations.remove(stake_pubkey);
         }
     }
 
