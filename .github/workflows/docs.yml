@@ -36,17 +36,14 @@ jobs:
           files: |
             docs/**
 
-      - name: Exit if no file changes in docs/
-        if: steps.changed-files-specific.outputs.any_changed != 'true'
-        run: |
-          exit 1
-
       - name: Setup Node
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
         uses: actions/setup-node@v3
         with:
           node-version: 14
 
       - name: Build
+        if: steps.changed-files-specific.outputs.any_changed == 'true'
         working-directory: docs
         run: |
           npm install
