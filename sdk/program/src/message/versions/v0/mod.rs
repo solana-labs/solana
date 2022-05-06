@@ -309,7 +309,7 @@ impl Message {
                 // demote reserved ids
                 self.account_keys
                     .get(key_index)
-                    .map(|key| is_builtin_key_or_sysvar(key))
+                    .map(is_builtin_key_or_sysvar)
                     .unwrap_or_default()
             }
             && !{
