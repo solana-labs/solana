@@ -22,12 +22,13 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            check_physical_overlapping, check_slice_translation_size, disable_fees_sysvar,
-            do_support_realloc, executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            syscall_saturated_math, update_syscall_base_costs, zk_token_sdk_enabled,
+            check_physical_overlapping, check_slice_translation_size, curve25519_syscall_enabled,
+            disable_fees_sysvar, do_support_realloc, executables_incur_cpi_data_cost,
+            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
+            zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -137,6 +138,9 @@ pub fn register_syscalls(
     let zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&zk_token_sdk_enabled::id());
+    let curve25519_syscall_enabled = invoke_context
+        .feature_set
+        .is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = invoke_context
         .feature_set
         .is_active(&disable_fees_sysvar::id());
@@ -245,6 +249,17 @@ pub fn register_syscalls(
         b"sol_zk_token_elgamal_op_with_scalar",
         SyscallZkTokenElgamalOpWithScalar::init,
         SyscallZkTokenElgamalOpWithScalar::call,
+    )?;
+
+    // Elliptic Curve Point Validation
+    //
+    // TODO: add group operations and multiscalar multiplications
+    register_feature_gated_syscall!(
+        syscall_registry,
+        curve25519_syscall_enabled,
+        b"sol_curve25519_point_validation",
+        SyscallCurvePointValidation::init,
+        SyscallCurvePointValidation::call,
     )?;
 
     // Sysvars
@@ -1887,6 +1902,80 @@ declare_syscall!(
         } else {
             *result = Ok(1);
         }
+    }
+);
+
+declare_syscall!(
+    // Elliptic Curve Point Validation
+    //
+    // Currently, only curve25519 Edwards and Ristretto representations are supported
+    SyscallCurvePointValidation,
+    fn call(
+        &mut self,
+        curve_id: u64,
+        point_addr: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+
+        match curve_id {
+            CURVE25519_EDWARDS => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_validate_point_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<edwards::PodEdwardsPoint>(
+                        memory_mapping,
+                        point_addr,
+                        invoke_context.get_check_aligned()
+                    ),
+                    result
+                );
+
+                if edwards::validate_edwards(point) {
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            }
+            CURVE25519_RISTRETTO => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_validate_point_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<ristretto::PodRistrettoPoint>(
+                        memory_mapping,
+                        point_addr,
+                        invoke_context.get_check_aligned()
+                    ),
+                    result
+                );
+
+                if ristretto::validate_ristretto(point) {
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            }
+            _ => {
+                *result = Ok(1);
+            }
+        };
     }
 );
 
