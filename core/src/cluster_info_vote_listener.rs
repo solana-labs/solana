@@ -417,7 +417,7 @@ impl ClusterInfoVoteListener {
 
         // Send entire batch at a time so that there is no partial processing of
         // a single validator's votes by two different banks. This might happen
-        // if we sent each vote individually, for instance if we creaed two different
+        // if we sent each vote individually, for instance if we created two different
         // leader banks from the same common parent, one leader bank may process
         // only the later votes and ignore the earlier votes.
         for single_validator_votes in gossip_votes_iterator {
