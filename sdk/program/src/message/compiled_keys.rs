@@ -31,6 +31,7 @@ pub enum CompileError {
 struct CompiledKeyMeta {
     is_signer: bool,
     is_writable: bool,
+    is_invoked: bool,
 }
 
 impl CompiledKeys {
@@ -39,7 +40,8 @@ impl CompiledKeys {
     pub(crate) fn compile(instructions: &[Instruction], payer: Option<Pubkey>) -> Self {
         let mut key_meta_map = BTreeMap::<Pubkey, CompiledKeyMeta>::new();
         for ix in instructions {
-            key_meta_map.entry(ix.program_id).or_default();
+            let mut meta = key_meta_map.entry(ix.program_id).or_default();
+            meta.is_invoked = true;
             for account_meta in &ix.accounts {
                 let meta = key_meta_map.entry(account_meta.pubkey).or_default();
                 meta.is_signer |= account_meta.is_signer;
@@ -121,11 +123,11 @@ impl CompiledKeys {
     ) -> Result<Option<(MessageAddressTableLookup, LoadedAddresses)>, CompileError> {
         let (writable_indexes, drained_writable_keys) = self
             .try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
-                !meta.is_signer && meta.is_writable
+                !meta.is_signer && !meta.is_invoked && meta.is_writable
             })?;
         let (readonly_indexes, drained_readonly_keys) = self
             .try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
-                !meta.is_signer && !meta.is_writable
+                !meta.is_signer && !meta.is_invoked && !meta.is_writable
             })?;
 
         // Don't extract lookup if no keys were found
@@ -188,6 +190,7 @@ mod tests {
         pub struct KeyFlags: u8 {
             const SIGNER   = 0b00000001;
             const WRITABLE = 0b00000010;
+            const INVOKED  = 0b00000100;
         }
     }
 
@@ -196,6 +199,7 @@ mod tests {
             Self {
                 is_signer: flags.contains(KeyFlags::SIGNER),
                 is_writable: flags.contains(KeyFlags::WRITABLE),
+                is_invoked: flags.contains(KeyFlags::INVOKED),
             }
         }
     }
@@ -248,10 +252,10 @@ mod tests {
                     (id1, KeyFlags::SIGNER.into()),
                     (id2, KeyFlags::WRITABLE.into()),
                     (id3, (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
-                    (program_id0, KeyFlags::empty().into()),
-                    (program_id1, KeyFlags::SIGNER.into()),
-                    (program_id2, KeyFlags::WRITABLE.into()),
-                    (program_id3, (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
+                    (program_id0, KeyFlags::INVOKED.into()),
+                    (program_id1, (KeyFlags::INVOKED | KeyFlags::SIGNER).into()),
+                    (program_id2, (KeyFlags::INVOKED | KeyFlags::WRITABLE).into()),
+                    (program_id3, KeyFlags::all().into()),
                 ]),
             }
         );
@@ -275,7 +279,7 @@ mod tests {
                 payer: Some(payer),
                 key_meta_map: BTreeMap::from([
                     (payer, (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
-                    (program_id, KeyFlags::empty().into()),
+                    (program_id, KeyFlags::INVOKED.into()),
                 ]),
             }
         );
@@ -301,7 +305,7 @@ mod tests {
                 payer: None,
                 key_meta_map: BTreeMap::from([
                     (id0, (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
-                    (program_id, KeyFlags::empty().into()),
+                    (program_id, KeyFlags::INVOKED.into()),
                 ]),
             }
         );
@@ -330,7 +334,7 @@ mod tests {
                 payer: None,
                 key_meta_map: BTreeMap::from([
                     (id0, (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
-                    (program_id, KeyFlags::empty().into()),
+                    (program_id, KeyFlags::INVOKED.into()),
                 ]),
             }
         );
@@ -362,7 +366,7 @@ mod tests {
                 payer: None,
                 key_meta_map: BTreeMap::from([
                     (id0, KeyFlags::WRITABLE.into()),
-                    (program_id, KeyFlags::empty().into()),
+                    (program_id, KeyFlags::INVOKED.into()),
                 ]),
             }
         );
@@ -428,33 +432,32 @@ mod tests {
 
     #[test]
     fn test_try_extract_table_lookup() {
-        let writable_keys = vec![Pubkey::new_unique(), Pubkey::new_unique()];
-        let readonly_keys = vec![Pubkey::new_unique(), Pubkey::new_unique()];
+        let keys = vec![
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        ];
 
         let mut compiled_keys = CompiledKeys {
             payer: None,
             key_meta_map: BTreeMap::from([
-                (
-                    writable_keys[0],
-                    (KeyFlags::SIGNER | KeyFlags::WRITABLE).into(),
-                ),
-                (readonly_keys[0], KeyFlags::SIGNER.into()),
-                (writable_keys[1], KeyFlags::WRITABLE.into()),
-                (readonly_keys[1], KeyFlags::empty().into()),
+                (keys[0], (KeyFlags::SIGNER | KeyFlags::WRITABLE).into()),
+                (keys[1], KeyFlags::SIGNER.into()),
+                (keys[2], KeyFlags::WRITABLE.into()),
+                (keys[3], KeyFlags::empty().into()),
+                (keys[4], (KeyFlags::INVOKED | KeyFlags::WRITABLE).into()),
+                (keys[5], (KeyFlags::INVOKED).into()),
             ]),
         };
 
+        // add some duplicates to ensure lowest index is selected
+        let addresses = [keys.clone(), keys.clone()].concat();
         let lookup_table_account = AddressLookupTableAccount {
             key: Pubkey::new_unique(),
-            addresses: vec![
-                writable_keys[0],
-                readonly_keys[0],
-                writable_keys[1],
-                readonly_keys[1],
-                // add some duplicates to ensure lowest index is selected
-                writable_keys[1],
-                readonly_keys[1],
-            ],
+            addresses,
         };
 
         assert_eq!(
@@ -466,15 +469,15 @@ mod tests {
                     readonly_indexes: vec![3],
                 },
                 LoadedAddresses {
-                    writable: vec![writable_keys[1]],
-                    readonly: vec![readonly_keys[1]],
+                    writable: vec![keys[2]],
+                    readonly: vec![keys[3]],
                 },
             )))
         );
 
-        assert_eq!(compiled_keys.key_meta_map.len(), 2);
-        assert!(!compiled_keys.key_meta_map.contains_key(&writable_keys[1]));
-        assert!(!compiled_keys.key_meta_map.contains_key(&readonly_keys[1]));
+        assert_eq!(compiled_keys.key_meta_map.len(), 4);
+        assert!(!compiled_keys.key_meta_map.contains_key(&keys[2]));
+        assert!(!compiled_keys.key_meta_map.contains_key(&keys[3]));
     }
 
     #[test]
