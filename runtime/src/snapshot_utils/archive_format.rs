@@ -26,6 +26,12 @@ impl ArchiveFormat {
     }
 }
 
+impl Default for ArchiveFormat {
+    fn default() -> Self {
+        Self::TarZstd
+    }
+}
+
 // Change this to `impl<S: AsRef<str>> TryFrom<S> for ArchiveFormat [...]`
 // once this Rust bug is fixed: https://github.com/rust-lang/rust/issues/50133
 impl TryFrom<&str> for ArchiveFormat {

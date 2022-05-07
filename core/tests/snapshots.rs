@@ -187,7 +187,7 @@ mod tests {
             snapshot_archives_dir,
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
-            ArchiveFormat::TarBzip2,
+            ArchiveFormat::default(),
         );
         let full_snapshot_archive_info =
             FullSnapshotArchiveInfo::new_from_path(full_snapshot_archive_path).unwrap();
@@ -282,7 +282,7 @@ mod tests {
             last_bank.src.slot_deltas(&last_bank.src.roots()),
             &snapshot_config.snapshot_archives_dir,
             last_bank.get_snapshot_storages(None),
-            ArchiveFormat::TarBzip2,
+            ArchiveFormat::default(),
             snapshot_version,
             None,
             Some(SnapshotType::FullSnapshot),
@@ -469,7 +469,7 @@ mod tests {
                     // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                     // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
                     &Hash::default(),
-                    ArchiveFormat::TarBzip2,
+                    ArchiveFormat::default(),
                 ));
             }
         }
@@ -570,7 +570,7 @@ mod tests {
             saved_archive_path.unwrap(),
             saved_snapshots_dir.path(),
             saved_accounts_dir.path(),
-            ArchiveFormat::TarBzip2,
+            ArchiveFormat::default(),
             snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
         );
     }

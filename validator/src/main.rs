@@ -2616,16 +2616,16 @@ pub fn main() {
         exit(1);
     });
 
-    let archive_format = {
-        let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
-        match archive_format_str.as_str() {
+    let archive_format = matches.value_of("snapshot_archive_format").map_or(
+        ArchiveFormat::default(),
+        |archive_format_str| match archive_format_str {
             "bz2" => ArchiveFormat::TarBzip2,
             "gzip" => ArchiveFormat::TarGzip,
             "zstd" => ArchiveFormat::TarZstd,
             "tar" | "none" => ArchiveFormat::Tar,
             _ => panic!("Archive format not recognized: {}", archive_format_str),
-        }
-    };
+        },
+    );
 
     let snapshot_version =
         matches
