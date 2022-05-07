@@ -6,7 +6,7 @@ use {
     crate::{
         hash::Hash,
         message::VersionedMessage,
-        sanitize::{Sanitize, SanitizeError},
+        sanitize::SanitizeError,
         short_vec,
         signature::Signature,
         signer::SignerError,
@@ -44,27 +44,6 @@ pub struct VersionedTransaction {
     pub signatures: Vec<Signature>,
     /// Message to sign.
     pub message: VersionedMessage,
-}
-
-impl Sanitize for VersionedTransaction {
-    fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
-        self.message.sanitize()?;
-
-        let num_required_signatures = usize::from(self.message.header().num_required_signatures);
-        match num_required_signatures.cmp(&self.signatures.len()) {
-            Ordering::Greater => Err(SanitizeError::IndexOutOfBounds),
-            Ordering::Less => Err(SanitizeError::InvalidValue),
-            Ordering::Equal => Ok(()),
-        }?;
-
-        // Signatures are verified before message keys are loaded so all signers
-        // must correspond to static account keys.
-        if self.signatures.len() > self.message.static_account_keys().len() {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
-
-        Ok(())
-    }
 }
 
 impl From<Transaction> for VersionedTransaction {
@@ -109,6 +88,28 @@ impl VersionedTransaction {
             signatures,
             message,
         })
+    }
+
+    pub fn sanitize(
+        &self,
+        require_static_program_ids: bool,
+    ) -> std::result::Result<(), SanitizeError> {
+        self.message.sanitize(require_static_program_ids)?;
+
+        let num_required_signatures = usize::from(self.message.header().num_required_signatures);
+        match num_required_signatures.cmp(&self.signatures.len()) {
+            Ordering::Greater => Err(SanitizeError::IndexOutOfBounds),
+            Ordering::Less => Err(SanitizeError::InvalidValue),
+            Ordering::Equal => Ok(()),
+        }?;
+
+        // Signatures are verified before message keys are loaded so all signers
+        // must correspond to static account keys.
+        if self.signatures.len() > self.message.static_account_keys().len() {
+            return Err(SanitizeError::IndexOutOfBounds);
+        }
+
+        Ok(())
     }
 
     /// Returns the version of the transaction

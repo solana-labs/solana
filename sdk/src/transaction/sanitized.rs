@@ -80,8 +80,9 @@ impl SanitizedTransaction {
         message_hash: impl Into<MessageHash>,
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
+        require_static_program_ids: bool,
     ) -> Result<Self> {
-        tx.sanitize()?;
+        tx.sanitize(require_static_program_ids)?;
 
         let message_hash = match message_hash.into() {
             MessageHash::Compute => tx.message.hash(),
