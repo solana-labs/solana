@@ -57,10 +57,22 @@ pub struct ComputeBudget {
     pub syscall_base_cost: u64,
     /// Number of compute units consumed to call zktoken_crypto_op
     pub zk_token_elgamal_op_cost: u64, // to be replaced by curve25519 operations
-    /// Number of compute units consumed to add/sub two edwards points
+    /// Number of compute units consumed to validate a curve25519 edwards point
     pub curve25519_edwards_validate_point_cost: u64,
-    /// Number of compute units consumed to add/sub two ristretto points
+    /// Number of compute units consumed to add two curve25519 edwards points
+    pub curve25519_edwards_add_cost: u64,
+    /// Number of compute units consumed to subtract two curve25519 edwards points
+    pub curve25519_edwards_subtract_cost: u64,
+    /// Number of compute units consumed to multiply a curve25519 edwards point
+    pub curve25519_edwards_multiply_cost: u64,
+    /// Number of compute units consumed to validate a curve25519 ristretto point
     pub curve25519_ristretto_validate_point_cost: u64,
+    /// Number of compute units consumed to add two curve25519 ristretto points
+    pub curve25519_ristretto_add_cost: u64,
+    /// Number of compute units consumed to subtract two curve25519 ristretto points
+    pub curve25519_ristretto_subtract_cost: u64,
+    /// Number of compute units consumed to multiply a curve25519 ristretto point
+    pub curve25519_ristretto_multiply_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -96,8 +108,14 @@ impl ComputeBudget {
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
             zk_token_elgamal_op_cost: 25_000,
-            curve25519_edwards_validate_point_cost: 25_000, // TODO: precisely determine cost
+            curve25519_edwards_validate_point_cost: 25_000, // TODO: precisely determine curve25519 costs
+            curve25519_edwards_add_cost: 25_000,
+            curve25519_edwards_subtract_cost: 25_000,
+            curve25519_edwards_multiply_cost: 25_000,
             curve25519_ristretto_validate_point_cost: 25_000,
+            curve25519_ristretto_add_cost: 25_000,
+            curve25519_ristretto_subtract_cost: 25_000,
+            curve25519_ristretto_multiply_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
