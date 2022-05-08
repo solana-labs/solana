@@ -2469,29 +2469,7 @@ mod tests {
         } = create_slow_genesis_config(2);
         let (verified_sender, verified_receiver) = unbounded();
 
-        // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
-        let tx =
-            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_config.hash());
-
-        let packet_batches = to_packet_batches(&[tx], 1);
-        let packet_batches = packet_batches
-            .into_iter()
-            .map(|batch| (batch, vec![1u8]))
-            .collect();
-        let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
-
-        // Process a second batch that uses the same from account, so conflicts with above TX
-        let tx =
-            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
-        let packet_batches = to_packet_batches(&[tx], 1);
-        let packet_batches = packet_batches
-            .into_iter()
-            .map(|batch| (batch, vec![1u8]))
-            .collect();
-        let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
@@ -2527,6 +2505,38 @@ mod tests {
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
                 );
+
+                // Process a batch that includes a transaction that receives two lamports.
+                let tx = system_transaction::transfer(
+                    &mint_keypair,
+                    &alice.pubkey(),
+                    2,
+                    genesis_config.hash(),
+                );
+
+                let packet_batches = to_packet_batches(&[tx], 1);
+                let packet_batches = packet_batches
+                    .into_iter()
+                    .map(|batch| (batch, vec![1u8]))
+                    .collect();
+                let packet_batches = convert_from_old_verified(packet_batches);
+                verified_sender.send(packet_batches).unwrap();
+
+                sleep(Duration::from_millis(200));
+                // Process a second batch that uses the same from account, so conflicts with above TX
+                let tx = system_transaction::transfer(
+                    &mint_keypair,
+                    &alice.pubkey(),
+                    1,
+                    genesis_config.hash(),
+                );
+                let packet_batches = to_packet_batches(&[tx], 1);
+                let packet_batches = packet_batches
+                    .into_iter()
+                    .map(|batch| (batch, vec![1u8]))
+                    .collect();
+                let packet_batches = convert_from_old_verified(packet_batches);
+                verified_sender.send(packet_batches).unwrap();
 
                 // wait for banking_stage to eat the packets
                 while bank.get_balance(&alice.pubkey()) < 2 {
