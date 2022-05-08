@@ -130,7 +130,9 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{sol_curve_validate_point, CURVE25519_RISTRETTO},
+        crate::curve25519::curve_syscall_traits::{
+            sol_curve_op, sol_curve_validate_point, ADD, CURVE25519_RISTRETTO, MUL, SUB,
+        },
     };
 
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> bool {
@@ -144,6 +146,72 @@ mod target_arch {
         };
 
         result == 0
+    }
+
+    pub fn add_ristretto(
+        left_point: &PodRistrettoPoint,
+        right_point: &PodRistrettoPoint,
+    ) -> Option<PodRistrettoPoint> {
+        let mut result_point = PodRistrettoPoint::zeroed();
+        let result = unsafe {
+            sol_curve_op(
+                CURVE25519_RISTRETTO,
+                ADD,
+                &left_point.0 as *const u8,
+                &right_point.0 as *const u8,
+                &mut result_point.0 as *mut u8,
+            )
+        };
+
+        if result == 0 {
+            Some(result_point)
+        } else {
+            None
+        }
+    }
+
+    pub fn subtract_ristretto(
+        left_point: &PodRistrettoPoint,
+        right_point: &PodRistrettoPoint,
+    ) -> Option<PodRistrettoPoint> {
+        let mut result_point = PodRistrettoPoint::zeroed();
+        let result = unsafe {
+            sol_curve_op(
+                CURVE25519_RISTRETTO,
+                SUB,
+                &left_point.0 as *const u8,
+                &right_point.0 as *const u8,
+                &mut result_point.0 as *mut u8,
+            )
+        };
+
+        if result == 0 {
+            Some(result_point)
+        } else {
+            None
+        }
+    }
+
+    pub fn multiply_ristretto(
+        left_point: &PodRistrettoPoint,
+        right_point: &PodRistrettoPoint,
+    ) -> Option<PodRistrettoPoint> {
+        let mut result_point = PodRistrettoPoint::zeroed();
+        let result = unsafe {
+            sol_curve_op(
+                CURVE25519_RISTRETTO,
+                MUL,
+                &left_point.0 as *const u8,
+                &right_point.0 as *const u8,
+                &mut result_point.0 as *mut u8,
+            )
+        };
+
+        if result == 0 {
+            Some(result_point)
+        } else {
+            None
+        }
     }
 }
 

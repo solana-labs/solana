@@ -86,9 +86,20 @@ pub const MUL: u64 = 2;
 extern "C" {
     pub fn sol_curve_validate_point(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 
-    pub fn sol_curve_op(curve_id: u64, op_id: u64, point: *const u8, result: *mut u8) -> u64;
+    pub fn sol_curve_op(
+        curve_id: u64,
+        op_id: u64,
+        left_point: *const u8,
+        right_point: *const u8,
+        result: *mut u8,
+    ) -> u64;
 
-    pub fn sol_curve_multiscalar_mul(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
+    pub fn sol_curve_multiscalar_mul(
+        curve_id: u64,
+        scalars: *const u8,
+        points: *const u8,
+        result: *mut u8,
+    ) -> u64;
 
     pub fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 }
