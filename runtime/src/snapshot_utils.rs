@@ -370,6 +370,12 @@ pub fn archive_snapshot_package(
                 do_archive_files(&mut encoder)?;
                 encoder.finish()?;
             }
+            ArchiveFormat::TarLz4 => {
+                let mut encoder = lz4::EncoderBuilder::new().level(4).build(archive_file)?;
+                do_archive_files(&mut encoder)?;
+                let (_output, result) = encoder.finish();
+                result?
+            }
             ArchiveFormat::Tar => {
                 do_archive_files(&mut archive_file)?;
             }
@@ -1485,6 +1491,12 @@ fn untar_snapshot_file(
         )?,
         ArchiveFormat::TarZstd => unpack_snapshot_local(
             || zstd::stream::read::Decoder::new(BufReader::new(open_file())).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarLz4 => unpack_snapshot_local(
+            || lz4::Decoder::new(BufReader::new(open_file())).unwrap(),
             unpack_dir,
             account_paths,
             parallel_divisions,

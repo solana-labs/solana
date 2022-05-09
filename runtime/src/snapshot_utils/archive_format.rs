@@ -1,8 +1,9 @@
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 pub const TAR_BZIP2_EXTENSION: &str = "tar.bz2";
 pub const TAR_GZIP_EXTENSION: &str = "tar.gz";
 pub const TAR_ZSTD_EXTENSION: &str = "tar.zst";
+pub const TAR_LZ4_EXTENSION: &str = "tar.lz4";
 pub const TAR_EXTENSION: &str = "tar";
 
 /// The different archive formats used for snapshots
@@ -11,6 +12,7 @@ pub enum ArchiveFormat {
     TarBzip2,
     TarGzip,
     TarZstd,
+    TarLz4,
     Tar,
 }
 
@@ -21,6 +23,7 @@ impl ArchiveFormat {
             ArchiveFormat::TarBzip2 => TAR_BZIP2_EXTENSION,
             ArchiveFormat::TarGzip => TAR_GZIP_EXTENSION,
             ArchiveFormat::TarZstd => TAR_ZSTD_EXTENSION,
+            ArchiveFormat::TarLz4 => TAR_LZ4_EXTENSION,
             ArchiveFormat::Tar => TAR_EXTENSION,
         }
     }
@@ -36,8 +39,9 @@ impl TryFrom<&str> for ArchiveFormat {
             TAR_BZIP2_EXTENSION => Ok(ArchiveFormat::TarBzip2),
             TAR_GZIP_EXTENSION => Ok(ArchiveFormat::TarGzip),
             TAR_ZSTD_EXTENSION => Ok(ArchiveFormat::TarZstd),
+            TAR_LZ4_EXTENSION => Ok(ArchiveFormat::TarLz4),
             TAR_EXTENSION => Ok(ArchiveFormat::Tar),
-            _ => Err(ParseError::InvalidExtension),
+            _ => Err(ParseError(extension.to_string())),
         }
     }
 }
@@ -50,9 +54,13 @@ impl FromStr for ArchiveFormat {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum ParseError {
-    InvalidExtension,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ParseError(String);
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Invalid archive extension: {}", self.0)
+    }
 }
 
 #[cfg(test)]
@@ -65,6 +73,7 @@ mod tests {
         assert_eq!(ArchiveFormat::TarBzip2.extension(), TAR_BZIP2_EXTENSION);
         assert_eq!(ArchiveFormat::TarGzip.extension(), TAR_GZIP_EXTENSION);
         assert_eq!(ArchiveFormat::TarZstd.extension(), TAR_ZSTD_EXTENSION);
+        assert_eq!(ArchiveFormat::TarLz4.extension(), TAR_LZ4_EXTENSION);
         assert_eq!(ArchiveFormat::Tar.extension(), TAR_EXTENSION);
     }
 
@@ -81,6 +90,10 @@ mod tests {
         assert_eq!(
             ArchiveFormat::try_from(TAR_ZSTD_EXTENSION),
             Ok(ArchiveFormat::TarZstd)
+        );
+        assert_eq!(
+            ArchiveFormat::try_from(TAR_LZ4_EXTENSION),
+            Ok(ArchiveFormat::TarLz4)
         );
         assert_eq!(
             ArchiveFormat::try_from(TAR_EXTENSION),
@@ -105,6 +118,10 @@ mod tests {
         assert_eq!(
             ArchiveFormat::from_str(TAR_ZSTD_EXTENSION),
             Ok(ArchiveFormat::TarZstd)
+        );
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_LZ4_EXTENSION),
+            Ok(ArchiveFormat::TarLz4)
         );
         assert_eq!(
             ArchiveFormat::from_str(TAR_EXTENSION),

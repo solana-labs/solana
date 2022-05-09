@@ -1524,7 +1524,17 @@ fn main() {
                           base for the incremental snapshot.")
                     .conflicts_with("no_snapshot")
             )
-        ).subcommand(
+            .arg(
+                Arg::with_name("snapshot_archive_format")
+                    .long("snapshot-archive-format")
+                    .possible_values(&["bz2", "gzip", "zstd", "lz4", "tar", "none"])
+                    .default_value("zstd")
+                    .value_name("ARCHIVE_TYPE")
+                    .takes_value(true)
+                    .help("Snapshot archive format to use.")
+                    .conflicts_with("no_snapshot")
+            )
+    ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -2292,6 +2302,15 @@ fn main() {
                     },
                 );
 
+                let snapshot_archive_format = arg_matches
+                    .value_of("snapshot_archive_format")
+                    .map_or(ArchiveFormat::TarZstd, |s| {
+                        s.parse::<ArchiveFormat>().unwrap_or_else(|e| {
+                            eprintln!("Error: {}", e);
+                            exit(1)
+                        })
+                    });
+
                 let maximum_full_snapshot_archives_to_retain =
                     value_t_or_exit!(arg_matches, "maximum_full_snapshots_to_retain", usize);
                 let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
@@ -2568,7 +2587,7 @@ fn main() {
                                     Some(snapshot_version),
                                     output_directory.clone(),
                                     output_directory,
-                                    ArchiveFormat::TarZstd,
+                                    snapshot_archive_format,
                                     maximum_full_snapshot_archives_to_retain,
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
@@ -2592,7 +2611,7 @@ fn main() {
                                     Some(snapshot_version),
                                     output_directory.clone(),
                                     output_directory,
-                                    ArchiveFormat::TarZstd,
+                                    snapshot_archive_format,
                                     maximum_full_snapshot_archives_to_retain,
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
