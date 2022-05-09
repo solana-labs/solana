@@ -2,8 +2,11 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
+    extension::default_account_state::*,
     serde_json::{json, Map, Value},
-    solana_account_decoder::parse_token::{pubkey_from_spl_token, token_amount_to_ui_amount},
+    solana_account_decoder::parse_token::{
+        pubkey_from_spl_token, token_amount_to_ui_amount, UiAccountState,
+    },
     solana_sdk::{
         instruction::{AccountMeta, CompiledInstruction, Instruction},
         message::AccountKeys,
@@ -17,6 +20,8 @@ use {
         },
     },
 };
+
+mod extension;
 
 pub fn parse_token(
     instruction: &CompiledInstruction,
@@ -496,9 +501,18 @@ pub fn parse_token(
         TokenInstruction::ConfidentialTransferExtension => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
-        TokenInstruction::DefaultAccountStateExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::DefaultAccountStateExtension => {
+            if instruction.data.len() <= 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_default_account_state_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
         TokenInstruction::Reallocate { .. } => Err(ParseInstructionError::InstructionNotParsable(
             ParsableProgram::SplToken,
         )),
@@ -637,11 +651,11 @@ mod test {
         std::str::FromStr,
     };
 
-    fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
+    pub(super) fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
         SplTokenPubkey::from_str(&pubkey.to_string()).unwrap()
     }
 
-    fn convert_compiled_instruction(
+    pub(super) fn convert_compiled_instruction(
         instruction: &SplTokenCompiledInstruction,
     ) -> CompiledInstruction {
         CompiledInstruction {
@@ -651,7 +665,7 @@ mod test {
         }
     }
 
-    fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
+    pub(super) fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
         message
             .account_keys
             .iter()
