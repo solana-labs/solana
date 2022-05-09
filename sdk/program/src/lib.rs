@@ -469,7 +469,7 @@
 //!
 //! # Sysvars
 //!
-//! Sysvars are special accounts that contain dynamically-updating data about
+//! Sysvars are special accounts that contain dynamically-updated data about
 //! the network cluster, the blockchain history, and the executing transaction.
 //!
 //! The program IDs for sysvars are defined in the [`sysvar`] module, and simple
