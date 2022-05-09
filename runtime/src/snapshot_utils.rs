@@ -371,7 +371,7 @@ pub fn archive_snapshot_package(
                 encoder.finish()?;
             }
             ArchiveFormat::TarLz4 => {
-                let mut encoder = lz4::EncoderBuilder::new().level(4).build(archive_file)?;
+                let mut encoder = lz4::EncoderBuilder::new().level(1).build(archive_file)?;
                 do_archive_files(&mut encoder)?;
                 let (_output, result) = encoder.finish();
                 result?
