@@ -15,7 +15,7 @@ use {
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc,
         },
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -251,25 +251,27 @@ const PERF_SAMPLING_MIN_DURATION: Duration = Duration::from_secs(1);
 pub(crate) fn maybe_enable_rocksdb_perf(
     sample_interval: usize,
     perf_status: &PerfSamplingStatus,
-) -> bool {
+) -> Option<Instant> {
     if perf_status.should_sample(sample_interval) {
         set_perf_stats(PerfStatsLevel::EnableTime);
         PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
             perf_context.borrow_mut().reset();
         });
-        return true;
+        return Some(Instant::now());
     }
-    false
+    None
 }
 
 /// Reports the collected PerfContext and disables the PerfContext after
 /// reporting.
-pub(crate) fn report_rocksdb_read_perf(metric_header: &'static str) {
+pub(crate) fn report_rocksdb_read_perf(total_op_duration: &Duration, metric_header: &'static str) {
     PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
         set_perf_stats(PerfStatsLevel::Disable);
         let perf_context = perf_context_cell.borrow();
         datapoint_info!(
             metric_header,
+            // total nanos spent on the entire operation.
+            ("total_op_nanos", total_op_duration.as_nanos() as i64, i64),
             (
                 "user_key_comparison_count",
                 perf_context.metric(PerfMetric::UserKeyComparisonCount) as i64,
@@ -414,29 +416,13 @@ pub(crate) fn report_rocksdb_read_perf(metric_header: &'static str) {
                 perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
                 i64
             ),
+            // nanos spent on file/directory operations.
             (
-                "env_file_exists_nanos",
-                perf_context.metric(PerfMetric::EnvFileExistsNanos) as i64,
-                i64
-            ),
-            (
-                "env_get_children_nanos",
-                perf_context.metric(PerfMetric::EnvGetChildrenNanos) as i64,
-                i64
-            ),
-            (
-                "env_lock_file_nanos",
-                perf_context.metric(PerfMetric::EnvLockFileNanos) as i64,
-                i64
-            ),
-            (
-                "env_unlock_file_nanos",
-                perf_context.metric(PerfMetric::EnvUnlockFileNanos) as i64,
-                i64
-            ),
-            (
-                "total_metric_count",
-                perf_context.metric(PerfMetric::TotalMetricCount) as i64,
+                "env_file_ops_nanos",
+                (perf_context.metric(PerfMetric::EnvFileExistsNanos)
+                    + perf_context.metric(PerfMetric::EnvGetChildrenNanos)
+                    + perf_context.metric(PerfMetric::EnvLockFileNanos)
+                    + perf_context.metric(PerfMetric::EnvUnlockFileNanos)) as i64,
                 i64
             ),
         );
@@ -444,12 +430,14 @@ pub(crate) fn report_rocksdb_read_perf(metric_header: &'static str) {
 }
 /// Reports the collected PerfContext and disables the PerfContext after
 /// reporting.
-pub(crate) fn report_rocksdb_write_perf(metric_header: &'static str) {
+pub(crate) fn report_rocksdb_write_perf(total_op_duration: &Duration, metric_header: &'static str) {
     PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
         set_perf_stats(PerfStatsLevel::Disable);
         let perf_context = perf_context_cell.borrow();
         datapoint_info!(
             metric_header,
+            // total nanos spent on the entire operation.
+            ("total_op_nanos", total_op_duration.as_nanos() as i64, i64),
             // total nanos spent on writing to WAL
             (
                 "write_wal_nanos",
