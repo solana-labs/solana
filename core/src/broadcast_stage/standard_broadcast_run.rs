@@ -107,11 +107,18 @@ impl StandardBroadcastRun {
                 // TODO MERKLE
                 if coding_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V2 {
                     assert_eq!(coding_shreds.len(), 64);
+                    /*
                     let leaves: Vec<_> = coding_shreds
                         .iter()
                         .map(|s| s.merkle_hash().unwrap())
                         .collect();
                     let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+                    */
+                    let shred_bufs: Vec<_> = coding_shreds
+                        .iter()
+                        .map(|s| s.merkle_hashing_buf_vec().unwrap())
+                        .collect();
+                    let tree = TurbineMerkleTree::new_from_bufs_vec_par(&shred_bufs, 16);
                     let merkle_root = tree.root();
                     let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
                     coding_shreds.iter_mut().enumerate().for_each(|(i, s)| {
@@ -150,15 +157,20 @@ impl StandardBroadcastRun {
 
             assert_eq!(batch_shreds.len(), NUM_FEC_SET_SHREDS);
 
-            // TODO MERKLE use par tree builder
-            //let tree = TurbineMerkleTree::new_from_bufs(); // need api for packets bufs or hash trait
-            //let tree = TurbineMerkleTree::new_from_buf_vecs();
+            // TODO MERKLE
             if batch_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V2 {
+                /*
                 let leaves: Vec<_> = batch_shreds
                     .iter()
                     .map(|s| s.merkle_hash().unwrap())
                     .collect();
                 let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+                */
+                let shred_bufs: Vec<_> = batch_shreds
+                    .iter()
+                    .map(|s| s.merkle_hashing_buf_vec().unwrap())
+                    .collect();
+                let tree = TurbineMerkleTree::new_from_bufs_vec_par(&shred_bufs, 16);
                 let merkle_root = tree.root();
                 let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
 
