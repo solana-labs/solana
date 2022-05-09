@@ -536,7 +536,7 @@ impl Rocks {
     fn write(&self, batch: RWriteBatch) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_batch_perf_status.op_count,
+            &self.write_batch_perf_status,
         );
         let result = self.db.write(batch);
         if is_perf_enabled {
@@ -1302,7 +1302,7 @@ where
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1380,7 +1380,7 @@ where
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), value);
         if is_perf_enabled {
@@ -1407,7 +1407,7 @@ where
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
@@ -1424,7 +1424,7 @@ where
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let serialized_value = serialize(value)?;
 
@@ -1441,7 +1441,7 @@ where
     pub fn delete(&self, key: C::Index) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.delete_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1461,7 +1461,7 @@ where
     ) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1482,7 +1482,7 @@ where
     pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1502,7 +1502,7 @@ where
 
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
         if is_perf_enabled {
