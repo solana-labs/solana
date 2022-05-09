@@ -153,7 +153,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{Deref, Div, RangeInclusive},
+        ops::{Div, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -2932,13 +2932,14 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let vote_state = match vote_account.vote_state().deref() {
-                Ok(vote_state) => vote_state.clone(),
-                Err(_) => {
+            let vote_state = vote_account
+                .vote_state()
+                .as_ref()
+                .map_err(|_| {
                     invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
-                    return None;
-                }
-            };
+                })
+                .ok()?
+                .clone();
             let vote_with_stake_delegations = VoteWithStakeDelegations {
                 vote_state: Arc::new(vote_state),
                 vote_account: AccountSharedData::from(vote_account),
