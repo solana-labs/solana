@@ -768,6 +768,18 @@ fn load_bank_forks(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
         );
+
+        if non_primary_accounts_path.exists() {
+            info!("Clearing {:?}", non_primary_accounts_path);
+            if let Err(err) = std::fs::remove_dir_all(&non_primary_accounts_path) {
+                eprintln!(
+                    "error deleting accounts path {:?}: {}",
+                    non_primary_accounts_path, err
+                );
+                exit(1);
+            }
+        }
+
         vec![non_primary_accounts_path]
     };
 
