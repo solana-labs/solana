@@ -539,9 +539,17 @@ pub fn parse_token(
                 account_keys,
             )
         }
-        TokenInstruction::CreateNativeMint => Err(ParseInstructionError::InstructionNotParsable(
-            ParsableProgram::SplToken,
-        )),
+        TokenInstruction::CreateNativeMint => {
+            check_num_token_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "createNativeMint".to_string(),
+                info: json!({
+                    "payer": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "nativeMint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "systemProgram": account_keys[instruction.accounts[2] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 
@@ -1659,6 +1667,30 @@ mod test {
     #[allow(clippy::same_item_push)]
     fn test_parse_token_2022() {
         test_parse_token(&spl_token_2022::id());
+    }
+
+    #[test]
+    fn test_create_native_mint() {
+        let payer = Pubkey::new_unique();
+        let create_native_mint_ix =
+            create_native_mint(&spl_token_2022::id(), &convert_pubkey(payer)).unwrap();
+        let message = Message::new(&[create_native_mint_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "createNativeMint".to_string(),
+                info: json!({
+                   "payer": payer.to_string(),
+                   "nativeMint": spl_token_2022::native_mint::id().to_string(),
+                   "systemProgram": solana_sdk::system_program::id().to_string(),
+                })
+            }
+        );
     }
 
     fn test_token_ix_not_enough_keys(program_id: &SplTokenPubkey) {
