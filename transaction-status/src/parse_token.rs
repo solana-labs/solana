@@ -2,7 +2,9 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
-    extension::{default_account_state::*, memo_transfer::*, reallocate::*},
+    extension::{
+        default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
+    },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
         pubkey_from_spl_token, token_amount_to_ui_amount, UiAccountState,
@@ -492,9 +494,13 @@ pub fn parse_token(
                 }),
             })
         }
-        TokenInstruction::InitializeMintCloseAuthority { .. } => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::InitializeMintCloseAuthority { close_authority } => {
+            parse_initialize_mint_close_authority_instruction(
+                close_authority,
+                &instruction.accounts,
+                account_keys,
+            )
+        }
         TokenInstruction::TransferFeeExtension(_) => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
