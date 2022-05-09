@@ -1475,8 +1475,7 @@ pub fn main() {
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
-                .possible_values(&["bz2", "gzip", "zstd", "tar", "none"])
-                .default_value("zstd")
+                .possible_values(ArchiveFormat::all_options())
                 .value_name("ARCHIVE_TYPE")
                 .takes_value(true)
                 .help("Snapshot archive format to use."),
@@ -2618,12 +2617,10 @@ pub fn main() {
 
     let archive_format = matches.value_of("snapshot_archive_format").map_or(
         ArchiveFormat::default(),
-        |archive_format_str| match archive_format_str {
-            "bz2" => ArchiveFormat::TarBzip2,
-            "gzip" => ArchiveFormat::TarGzip,
-            "zstd" => ArchiveFormat::TarZstd,
-            "tar" | "none" => ArchiveFormat::Tar,
-            _ => panic!("Archive format not recognized: {}", archive_format_str),
+        |archive_format_str| {
+            ArchiveFormat::try_from_short(archive_format_str).unwrap_or_else(|_| {
+                panic!("Archive format not recognized: {}", archive_format_str);
+            })
         },
     );
 

@@ -11,6 +11,14 @@ pub const TAR_ZSTD_SHORT: &str = "zstd";
 pub const TAR_SHORT: &str = "tar";
 pub const NONE_SHORT: &str = "none";
 
+const ARCHIVE_FORMAT_SHORT_OPTIONS: &[&str] = &[
+    TAR_BZIP2_SHORT,
+    TAR_GZIP_SHORT,
+    TAR_ZSTD_SHORT,
+    TAR_SHORT,
+    NONE_SHORT,
+];
+
 /// The different archive formats used for snapshots
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ArchiveFormat {
@@ -39,6 +47,11 @@ impl ArchiveFormat {
             ArchiveFormat::TarZstd => TAR_ZSTD_SHORT,
             ArchiveFormat::Tar => TAR_SHORT,
         }
+    }
+
+    /// Options for compression short strings
+    pub fn all_options() -> &'static [&'static str] {
+        ARCHIVE_FORMAT_SHORT_OPTIONS
     }
 
     /// Try to get the archive format from the short string.
