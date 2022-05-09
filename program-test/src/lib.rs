@@ -14,7 +14,7 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
-        bank::Bank,
+        bank::{Bank, CommitTransactionCounts},
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
@@ -428,13 +428,18 @@ fn setup_fees(bank: Bank) -> Bank {
     // `bank.commit_transactions()` so that the fee in the child bank will be
     // initialized with a non-zero fee.
     assert_eq!(bank.signature_count(), 0);
+    let (last_blockhash, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
     bank.commit_transactions(
         &[],     // transactions
         &mut [], // loaded accounts
         vec![],  // transaction execution results
-        0,       // executed tx count
-        0,       // executed with failure output tx count
-        1,       // signature count
+        last_blockhash,
+        lamports_per_signature,
+        CommitTransactionCounts {
+            committed_transactions_count: 0,
+            committed_with_failure_result_count: 0,
+            signature_count: 1,
+        },
         &mut ExecuteTimings::default(),
     );
     assert_eq!(bank.signature_count(), 1);
