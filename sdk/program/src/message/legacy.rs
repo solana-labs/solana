@@ -161,11 +161,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      transaction::Transaction,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -232,11 +232,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      transaction::Transaction,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -328,14 +328,14 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      hash::Hash,
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      nonce,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      system_instruction,
-    ///      transaction::Transaction,
+    ///     hash::Hash,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     nonce,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     system_instruction,
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -397,12 +397,12 @@ impl Message {
     ///         nonce_rent,
     ///     );
     ///
-    ///    let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
-    ///    let blockhash = client.get_latest_blockhash()?;
-    ///    nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
-    ///    client.send_and_confirm_transaction(&nonce_tx)?;
+    ///     let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
+    ///     let blockhash = client.get_latest_blockhash()?;
+    ///     nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
+    ///     client.send_and_confirm_transaction(&nonce_tx)?;
     ///
-    ///    Ok(nonce_account_address.pubkey())
+    ///     Ok(nonce_account_address.pubkey())
     /// }
     /// #
     /// # let client = RpcClient::new(String::new());

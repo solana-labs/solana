@@ -209,7 +209,7 @@ fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
     shred_receiver: &Receiver<Shred>,
-    duplicate_slot_sender: &DuplicateSlotSender,
+    duplicate_slots_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
         let shred_slot = shred.slot();
@@ -224,7 +224,7 @@ fn run_check_duplicate(
                     shred.into_payload(),
                 )?;
 
-                duplicate_slot_sender.send(shred_slot)?;
+                duplicate_slots_sender.send(shred_slot)?;
             }
         }
 
@@ -530,7 +530,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         duplicate_receiver: Receiver<Shred>,
-        duplicate_slot_sender: DuplicateSlotSender,
+        duplicate_slots_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
@@ -547,7 +547,7 @@ impl WindowService {
                     &cluster_info,
                     &blockstore,
                     &duplicate_receiver,
-                    &duplicate_slot_sender,
+                    &duplicate_slots_sender,
                 ) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;

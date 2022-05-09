@@ -533,7 +533,7 @@ impl ReplayStage {
                     // and switching proofs because these may be votes that haven't yet been
                     // included in a block, so we may not have yet observed these votes just
                     // by replaying blocks.
-                    let mut process_unfrozen_gossip_verified_vote_hashes_time = Measure::start("process_gossip_duplicate_confirmed_slots");
+                    let mut process_unfrozen_gossip_verified_vote_hashes_time = Measure::start("process_gossip_verified_vote_hashes");
                     Self::process_gossip_verified_vote_hashes(
                         &gossip_verified_vote_hash_receiver,
                         &mut unfrozen_gossip_verified_vote_hashes,

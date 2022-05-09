@@ -1366,12 +1366,19 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
-        Self::new_for_tests(genesis_config)
+        Self::new_with_paths_for_benches(
+            genesis_config,
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        )
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
@@ -2910,7 +2917,7 @@ impl Bank {
             {
                 vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
             }
-            Some(VoteAccount::from(account))
+            VoteAccount::try_from(account).ok()
         };
         let invalid_vote_keys = DashMap::<Pubkey, InvalidCacheEntryReason>::new();
         let make_vote_delegations_entry = |vote_pubkey| {
@@ -3793,7 +3800,16 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    self,
+                    self.feature_set
+                        .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self
             .rc
@@ -5815,8 +5831,15 @@ impl Bank {
         self.rc
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
-
+        let mut m = Measure::start("stakes_cache.check_and_store");
         self.stakes_cache.check_and_store(pubkey, account);
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -6313,7 +6336,14 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, self)
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                None,
+                self,
+                self.feature_set
+                    .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+            )
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
@@ -6543,6 +6573,8 @@ impl Bank {
                 load_result,
                 execution_results[i].was_executed_successfully(),
             ) {
+                // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
+                //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
                     (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter())
