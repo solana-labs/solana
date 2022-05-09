@@ -967,16 +967,9 @@ impl Shred {
                         .verify(pubkey.as_ref(), merkle.root.as_bytes());
 
                     if !r {
-                        error!(
-                            "--- failed to verify signature for slot={} type={:?} index={}",
-                            self.slot(),
-                            self.shred_type(),
-                            self.index(),
-                        );
-                        error!("--- failed sig buf: {:?}", &self.signature());
-                        error!("--- failed signed data buf: {:?}", &merkle.root);
+                        error!("--- failed to verify signature for shred: {:?}", &self);
                     }
-                    //assert!(r);
+                    assert!(r);
 
                     let r = merkle.proof.verify(
                         &merkle.root,
@@ -984,10 +977,10 @@ impl Shred {
                         self.merkle_index().unwrap(),
                     );
                     if !r {
-                        error!("failed to verify merkle proof for slot={}", self.slot());
+                        error!("--- failed to verify proof for shred: {:?}", &self);
                     }
-                    //assert!(r);
-                    true // TODO MERKLE
+                    assert!(r);
+                    r
                 } else {
                     panic!("should have failed sanitize");
                 }
