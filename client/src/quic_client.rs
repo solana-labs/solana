@@ -220,7 +220,10 @@ impl QuicClient {
 
     // Attempts to make a faster connection by taking advantage of pre-existing key material.
     // Only works if connection to this endpoint was previously established.
-    async fn make_connection_0rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection_0rtt(
+        &self,
+        stats: &ClientStats
+    ) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
