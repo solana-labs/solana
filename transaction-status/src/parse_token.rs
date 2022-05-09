@@ -13,6 +13,7 @@ use {
         instruction::{AuthorityType, TokenInstruction},
         solana_program::{
             instruction::Instruction as SplTokenInstruction, program_option::COption,
+            pubkey::Pubkey,
         },
     },
 };
@@ -224,10 +225,7 @@ pub fn parse_token(
             let mut value = json!({
                 owned: account_keys[instruction.accounts[0] as usize].to_string(),
                 "authorityType": Into::<UiAuthorityType>::into(authority_type),
-                "newAuthority": match new_authority {
-                    COption::Some(authority) => Some(authority.to_string()),
-                    COption::None => None,
-                },
+                "newAuthority": map_coption_pubkey(new_authority),
             });
             let map = value.as_object_mut().unwrap();
             parse_signers(
@@ -614,6 +612,13 @@ pub fn spl_token_instruction(instruction: SplTokenInstruction) -> Instruction {
             })
             .collect(),
         data: instruction.data,
+    }
+}
+
+fn map_coption_pubkey(pubkey: COption<Pubkey>) -> Option<String> {
+    match pubkey {
+        COption::Some(pubkey) => Some(pubkey.to_string()),
+        COption::None => None,
     }
 }
 
