@@ -2,7 +2,7 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
-    extension::default_account_state::*,
+    extension::{default_account_state::*, memo_transfer::*},
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
         pubkey_from_spl_token, token_amount_to_ui_amount, UiAccountState,
@@ -516,9 +516,18 @@ pub fn parse_token(
         TokenInstruction::Reallocate { .. } => Err(ParseInstructionError::InstructionNotParsable(
             ParsableProgram::SplToken,
         )),
-        TokenInstruction::MemoTransferExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::MemoTransferExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_memo_transfer_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
         TokenInstruction::CreateNativeMint => Err(ParseInstructionError::InstructionNotParsable(
             ParsableProgram::SplToken,
         )),
