@@ -453,7 +453,7 @@ impl Shred {
             ShredType::DataV2 => {
                 //let mut start = 83;
                 // pad with known values to verify overwrite by valid data prior to sending
-                let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
+                let hash13s = TurbineMerkleHash::from(&[13u8; TURBINE_MERKLE_HASH_BYTES][..]);
                 let mut merkle = MerklePayload::default();
                 merkle.root = hash13s;
                 for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
@@ -559,16 +559,13 @@ impl Shred {
 
         // TODO MERKLE
         if protocol_version == ShredProtocolVersion::V2 {
-            //let mut start = 83;
-            let hash13s = TurbineMerkleHash([13u8; TURBINE_MERKLE_HASH_BYTES]);
-
+            let hash13s = TurbineMerkleHash::from(&[13u8; TURBINE_MERKLE_HASH_BYTES][..]);
             let mut merkle = MerklePayload::default();
             merkle.root = hash13s;
             for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
                 merkle.proof.0[i] = hash13s;
             }
             common_header.merkle = Some(merkle);
-
             bincode::serialize_into(&mut cursor, &hash13s).unwrap();
             for _i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
                 bincode::serialize_into(&mut cursor, &hash13s).unwrap();
@@ -964,7 +961,7 @@ impl Shred {
                 if let Some(merkle) = self.common_header.merkle {
                     let r = self
                         .signature()
-                        .verify(pubkey.as_ref(), merkle.root.as_bytes());
+                        .verify(pubkey.as_ref(), merkle.root.as_ref());
 
                     if !r {
                         error!("--- failed to verify signature for shred: {:?}", &self);

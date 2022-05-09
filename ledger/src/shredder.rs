@@ -112,7 +112,7 @@ impl Shredder {
                 );
                 let tree = TurbineMerkleTree::new_from_leaves(&leaves);
                 let merkle_root = tree.root();
-                let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
+                let merkle_root_sig = keypair.sign_message(merkle_root.as_ref());
 
                 (0..data_batch_count).for_each(|i| {
                     let idx = data_shreds[data_base + i].merkle_index().unwrap();

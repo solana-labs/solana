@@ -107,20 +107,13 @@ impl StandardBroadcastRun {
                 // TODO MERKLE
                 if coding_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V2 {
                     assert_eq!(coding_shreds.len(), 64);
-                    /*
-                    let leaves: Vec<_> = coding_shreds
-                        .iter()
-                        .map(|s| s.merkle_hash().unwrap())
-                        .collect();
-                    let tree = TurbineMerkleTree::new_from_leaves(&leaves);
-                    */
                     let shred_bufs: Vec<_> = coding_shreds
                         .iter()
                         .map(|s| s.merkle_hashing_buf_vec().unwrap())
                         .collect();
                     let tree = TurbineMerkleTree::new_from_bufs_vec_par(&shred_bufs, 16);
                     let merkle_root = tree.root();
-                    let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
+                    let merkle_root_sig = keypair.sign_message(merkle_root.as_ref());
                     coding_shreds.iter_mut().enumerate().for_each(|(i, s)| {
                         s.set_merkle(&merkle_root, &tree.prove_fec64(i));
                         s.set_signature(&merkle_root_sig);
@@ -159,20 +152,13 @@ impl StandardBroadcastRun {
 
             // TODO MERKLE
             if batch_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V2 {
-                /*
-                let leaves: Vec<_> = batch_shreds
-                    .iter()
-                    .map(|s| s.merkle_hash().unwrap())
-                    .collect();
-                let tree = TurbineMerkleTree::new_from_leaves(&leaves);
-                */
                 let shred_bufs: Vec<_> = batch_shreds
                     .iter()
                     .map(|s| s.merkle_hashing_buf_vec().unwrap())
                     .collect();
                 let tree = TurbineMerkleTree::new_from_bufs_vec_par(&shred_bufs, 16);
                 let merkle_root = tree.root();
-                let merkle_root_sig = keypair.sign_message(merkle_root.as_bytes());
+                let merkle_root_sig = keypair.sign_message(merkle_root.as_ref());
 
                 batch_shreds.iter_mut().enumerate().for_each(|(i, s)| {
                     s.set_merkle(&merkle_root, &tree.prove_fec64(i));
