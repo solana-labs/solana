@@ -341,7 +341,8 @@ fn execute_batches(
             if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
                 let txs = &sanitized_txs[slice_start..=index];
                 let results = &lock_results[slice_start..=index];
-                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+                let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+                tx_batch.needs_unlock(false);
                 slice_start = next_index;
                 tx_batches.push(tx_batch);
                 batch_cost = 0;

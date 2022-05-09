@@ -38,6 +38,10 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn bank(&self) -> &Bank {
         self.bank
     }
+
+    pub fn needs_unlock(&mut self, value: bool) {
+        self.needs_unlock = value;
+    }
 }
 
 // Unlock all locked accounts in destructor.
