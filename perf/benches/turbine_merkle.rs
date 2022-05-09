@@ -117,15 +117,16 @@ fn bench_merkle_create_tree_from_bufs(b: &mut Bencher, pkt_count: usize) {
     });
 }
 
-fn bench_merkle_create_tree_from_bufs_par(b: &mut Bencher, pkt_count: usize, chunk: usize) {
+fn bench_merkle_create_tree_from_bufs_vec_par(b: &mut Bencher, pkt_count: usize, chunk: usize) {
     let packets = create_random_packets(pkt_count);
+    let packets_buf_vec: Vec<_> = packets.iter().map(|p| vec![&p[..100], &p[100..]]).collect();
     b.iter(|| {
-        let _tree = TurbineMerkleTree::new_from_bufs_par(&packets, chunk);
+        let _tree = TurbineMerkleTree::new_from_bufs_vec_par(&packets_buf_vec, chunk);
     });
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_64(b: &mut Bencher) {
+fn bench_merkle_create_tree_from_bufs_vec_64(b: &mut Bencher) {
     bench_merkle_create_tree_from_bufs(b, 64);
 }
 
@@ -135,36 +136,36 @@ fn bench_merkle_create_tree_from_bufs_128(b: &mut Bencher) {
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_128_64(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 128, 64);
+fn bench_merkle_create_tree_from_bufs_vec_par_128_64(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 128, 64);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_128_32(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 128, 32);
+fn bench_merkle_create_tree_from_bufs_vec_par_128_32(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 128, 32);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_128_16(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 128, 16);
+fn bench_merkle_create_tree_from_bufs_vec_par_128_16(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 128, 16);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_128_8(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 128, 8);
+fn bench_merkle_create_tree_from_bufs_vec_par_128_8(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 128, 8);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_64_32(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 64, 32);
+fn bench_merkle_create_tree_from_bufs_vec_par_64_32(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 64, 32);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_64_16(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 64, 16);
+fn bench_merkle_create_tree_from_bufs_vec_par_64_16(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 64, 16);
 }
 
 #[bench]
-fn bench_merkle_create_tree_from_bufs_par_64_8(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs_par(b, 64, 8);
+fn bench_merkle_create_tree_from_bufs_vec_par_64_8(b: &mut Bencher) {
+    bench_merkle_create_tree_from_bufs_vec_par(b, 64, 8);
 }
