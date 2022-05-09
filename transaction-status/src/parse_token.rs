@@ -4,6 +4,7 @@ use {
     },
     extension::{
         default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
+        transfer_fee::*,
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
@@ -501,9 +502,13 @@ pub fn parse_token(
                 account_keys,
             )
         }
-        TokenInstruction::TransferFeeExtension(_) => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::TransferFeeExtension(transfer_fee_instruction) => {
+            parse_transfer_fee_instruction(
+                transfer_fee_instruction,
+                &instruction.accounts,
+                account_keys,
+            )
+        }
         TokenInstruction::ConfidentialTransferExtension => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
