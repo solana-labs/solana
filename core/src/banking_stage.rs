@@ -29,7 +29,8 @@ use {
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::{
-            Bank, LoadAndExecuteTransactionsOutput, TransactionBalancesSet, TransactionCheckResult,
+            Bank, CommitTransactionCounts, LoadAndExecuteTransactionsOutput,
+            TransactionBalancesSet, TransactionCheckResult,
         },
         bank_utils,
         cost_model::{CostModel, TransactionCost},
@@ -1229,6 +1230,8 @@ impl BankingStage {
                 "execution_results_to_transactions",
             );
 
+        let (last_blockhash, lamports_per_signature) =
+            bank.last_blockhash_and_lamports_per_signature();
         let (freeze_lock, freeze_lock_time) =
             Measure::this(|_| bank.freeze_lock(), (), "freeze_lock");
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
@@ -1283,11 +1286,15 @@ impl BankingStage {
                         sanitized_txs,
                         &mut loaded_transactions,
                         execution_results,
-                        executed_transactions_count as u64,
-                        executed_transactions_count
-                            .saturating_sub(executed_with_successful_result_count)
-                            as u64,
-                        signature_count,
+                        last_blockhash,
+                        lamports_per_signature,
+                        CommitTransactionCounts {
+                            committed_transactions_count: executed_transactions_count as u64,
+                            committed_with_failure_result_count: executed_transactions_count
+                                .saturating_sub(executed_with_successful_result_count)
+                                as u64,
+                            signature_count,
+                        },
                         &mut execute_and_commit_timings.execute_timings,
                     )
                 },
