@@ -3354,6 +3354,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-pemfile"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7522c9de787ff061458fe9a829dc790a3f5b22dc571694fc5883f448b94d9a9"
+dependencies = [
+ "base64 0.13.0",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5205,7 +5214,7 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
- "tonic 0.7.1",
+ "tonic 0.7.2",
  "zstd",
 ]
 
@@ -5220,7 +5229,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-sdk 1.11.0",
  "solana-transaction-status",
- "tonic-build 0.7.1",
+ "tonic-build 0.7.2",
 ]
 
 [[package]]
@@ -6056,9 +6065,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30fb54bf1e446f44d870d260d99957e7d11fb9d0a0f5bd1a662ad1411cc103f9"
+checksum = "5be9d60db39854b30b835107500cf0aca0b0d14d6e1c3de124217c23a29c2ddb"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -6076,7 +6085,7 @@ dependencies = [
  "pin-project",
  "prost 0.10.3",
  "prost-derive 0.10.1",
- "rustls-pemfile 0.3.0",
+ "rustls-pemfile 1.0.0",
  "tokio",
  "tokio-rustls 0.23.2",
  "tokio-stream",
@@ -6102,9 +6111,9 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c03447cdc9eaf8feffb6412dcb27baf2db11669a6c4789f29da799aabfb99547"
+checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.36",
