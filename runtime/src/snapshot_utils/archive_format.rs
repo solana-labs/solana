@@ -101,7 +101,7 @@ mod tests {
         );
         assert_eq!(
             ArchiveFormat::try_from(INVALID_EXTENSION),
-            Err(ParseError::InvalidExtension)
+            Err(ParseError(INVALID_EXTENSION.to_string()))
         );
     }
 
@@ -129,7 +129,7 @@ mod tests {
         );
         assert_eq!(
             ArchiveFormat::from_str(INVALID_EXTENSION),
-            Err(ParseError::InvalidExtension)
+            Err(ParseError(INVALID_EXTENSION.to_string()))
         );
     }
 }
