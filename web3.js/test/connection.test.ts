@@ -3103,6 +3103,11 @@ describe('Connection', function () {
 
   if (process.env.TEST_LIVE) {
     it('stake activation should return activating for new accounts', async () => {
+      // todo: use `Connection.getMinimumStakeDelegation` when implemented
+      const MIN_STAKE_DELEGATION = LAMPORTS_PER_SOL;
+      const STAKE_ACCOUNT_MIN_BALANCE =
+        await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
+
       const voteAccounts = await connection.getVoteAccounts();
       const voteAccount = voteAccounts.current.concat(
         voteAccounts.delinquent,
@@ -3116,17 +3121,13 @@ describe('Connection', function () {
       );
       await connection.confirmTransaction(signature, 'confirmed');
 
-      const minimumAmount = await connection.getMinimumBalanceForRentExemption(
-        StakeProgram.space,
-      );
-
       const newStakeAccount = Keypair.generate();
       let createAndInitialize = StakeProgram.createAccount({
         fromPubkey: authorized.publicKey,
         stakePubkey: newStakeAccount.publicKey,
         authorized: new Authorized(authorized.publicKey, authorized.publicKey),
         lockup: new Lockup(0, 0, new PublicKey(0)),
-        lamports: minimumAmount + 42,
+        lamports: STAKE_ACCOUNT_MIN_BALANCE + MIN_STAKE_DELEGATION,
       });
 
       await sendAndConfirmTransaction(
@@ -3164,7 +3165,7 @@ describe('Connection', function () {
         'confirmed',
       );
       expect(activationState.state).to.eq('activating');
-      expect(activationState.inactive).to.eq(42);
+      expect(activationState.inactive).to.eq(MIN_STAKE_DELEGATION);
       expect(activationState.active).to.eq(0);
     });
   }
