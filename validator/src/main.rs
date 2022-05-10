@@ -105,6 +105,8 @@ const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 const MILLIS_PER_SECOND: u64 = 1000;
+// The default minimum time that the validator should not be leader before restarting (in minutes)
+const DEFAULT_MIN_IDLE_TIME: usize = 60;
 
 fn monitor_validator(ledger_path: &Path) {
     let dashboard = Dashboard::new(ledger_path, None, None).unwrap_or_else(|err| {
@@ -467,6 +469,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_min_idle_time = &DEFAULT_MIN_IDLE_TIME.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1749,7 +1752,7 @@ pub fn main() {
                     .takes_value(true)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
-                    .default_value("10")
+                    .default_value(default_min_idle_time)
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
@@ -1857,7 +1860,7 @@ pub fn main() {
                     .takes_value(true)
                     .validator(is_parsable::<usize>)
                     .value_name("MINUTES")
-                    .default_value("10")
+                    .default_value(default_min_idle_time)
                     .help("Minimum time that the validator should not be leader before restarting")
             )
             .arg(
