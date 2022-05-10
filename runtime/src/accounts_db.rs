@@ -3181,7 +3181,8 @@ failed:
     }
 
     fn is_ancient(storage: &AppendVec) -> bool {
-        storage.capacity() == Self::get_ancient_append_vec_capacity()
+        // one code path adds 1024 to the size
+        storage.capacity() >= Self::get_ancient_append_vec_capacity()
     }
 
     /// combine all these slots into ancient append vecs
@@ -3222,7 +3223,9 @@ failed:
                         continue; // we're done with this slot - this slot IS the ancient append vec
                     } else if capacity > size * 8 / 10 {
                         // if the existing append vec is 80% of the size we desire for ancient, then don't recopy it all
-                        error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}, cap of expected% {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id(), capacity * 100 / size);
+                        error!("ancient_append_vec: skipping existing LARGE NON-ancient append vec: {}, capacity: {}, free% {}, accounts: {}, id: {}, cap of expected% {},
+                        more cap to be ancient: {}", slot, capacity, first_storage.accounts.remaining_bytes() * 100 / capacity, first_storage.count(), first_storage.append_vec_id(), capacity * 100 / size,
+                    size.saturating_sub(capacity));
                         continue;
                     } else {
                         error!("ancient_append_vec: NOT reusing existing ancient append vec: {}, capacity: {}, size: {}, short: {}, id: {}", slot, capacity, size, size.saturating_sub(capacity), first_storage.append_vec_id());
