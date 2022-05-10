@@ -16,7 +16,7 @@ on:
 
 jobs:
   osx-build:
-    runs-on: macos-10.15
+    runs-on: macos-12
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -43,10 +43,11 @@ jobs:
         shell: bash
         run: |
           brew install coreutils
-          PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+          PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin:$PATH"
           brew install gnu-tar
-          PATH="/usr/local/opt/gnu-tar/libexec/gnubin:$PATH"
+          PATH="$(brew --prefix)/opt/gnu-tar/libexec/gnubin:$PATH"
           source /tmp/env.sh
+          tar --version
           ci/publish-tarball.sh
           mkdir -p "github-action-s3-upload/${{ inputs.tag }}"
           cp -v "solana-release-x86_64-apple-darwin.tar.bz2" "github-action-s3-upload/${{ inputs.tag }}/"
