@@ -138,7 +138,7 @@ fn validate_input(params: &DosClientParameters) {
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
         if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions {
-            eprintln!("Arguments valid-blockhash, valid-sign, unique-trans are ignored if data-type != transaction");
+            eprintln!("Arguments valid-blockhash, valid-sign, unique-transactions are ignored if data-type != transaction");
             exit(1);
         }
     }
@@ -167,13 +167,17 @@ mod tests {
             //--data-input is required for `--mode rpc` but it is not specified
         ]);
         assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
     }
 
     #[test]
     fn test_cli_parse_rpc_data_input() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
         let pubkey_str: String = Pubkey::default().to_string();
-        let result = DosClientParameters::try_parse_from(vec![
+        let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
             "rpc",
@@ -181,9 +185,7 @@ mod tests {
             "get-account-info",
             "--data-input",
             &pubkey_str,
-        ]);
-        assert!(result.is_ok());
-        let params = result.unwrap();
+        ]).unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -202,7 +204,7 @@ mod tests {
     #[test]
     fn test_cli_parse_dos_valid_signatures() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
-        let result = DosClientParameters::try_parse_from(vec![
+        let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
             "tpu",
@@ -212,9 +214,7 @@ mod tests {
             "--valid-signatures",
             "--num-signatures",
             "8",
-        ]);
-        assert!(result.is_ok());
-        let params = result.unwrap();
+        ]).unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_cli_parse_dos_transfer() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
-        let result = DosClientParameters::try_parse_from(vec![
+        let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
             "tpu",
@@ -252,9 +252,7 @@ mod tests {
             "transfer",
             "--num-instructions",
             "1",
-        ]);
-        assert!(result.is_ok());
-        let params = result.unwrap();
+        ]).unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -295,7 +293,7 @@ mod tests {
         );
 
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
-        let result = DosClientParameters::try_parse_from(vec![
+        let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
             "tpu",
@@ -307,9 +305,7 @@ mod tests {
             "transfer",
             "--num-instructions",
             "8",
-        ]);
-        assert!(result.is_ok());
-        let params = result.unwrap();
+        ]).unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -335,7 +331,7 @@ mod tests {
     #[test]
     fn test_cli_parse_dos_create_account() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
-        let result = DosClientParameters::try_parse_from(vec![
+        let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
             "tpu",
@@ -345,9 +341,7 @@ mod tests {
             "--valid-blockhash",
             "--transaction-type",
             "account-creation",
-        ]);
-        assert!(result.is_ok());
-        let params = result.unwrap();
+        ]).unwrap();
         assert_eq!(
             params,
             DosClientParameters {

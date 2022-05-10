@@ -15,7 +15,7 @@
 //! To limit the number of possible options and simplify the usage of the tool,
 //! The following configurations are suggested:
 //! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
-//! 1. Without blockhash and payer:
+//! 1. Without blockhash or payer:
 //! 1.1 With invalid signatures
 //! ```bash
 //! solana-dos $COMMON --num-signatures 8
@@ -25,15 +25,15 @@
 //! solana-dos $COMMON --valid-signatures --num-signatures 8
 //! ```
 //! 2. With blockhash and payer:
-//! 2.1 Single instruction transaction
+//! 2.1 Single-instruction transaction
 //! ```bash
 //! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 1
 //! ```
-//! 2.2 Multi instruction transaction
+//! 2.2 Multi-instruction transaction
 //! ```bash
 //! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 8
 //! ```
-//! 2.3 Account creation transaction
+//! 2.3 Account-creation transaction
 //! ```bash
 //! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
@@ -72,9 +72,9 @@ use {
     },
 };
 
-static REPORT_EACH_MILLIS: u128 = 10_000;
-fn compute_tps(count: usize) -> usize {
-    (count * 1000) / (REPORT_EACH_MILLIS as usize)
+const SAMPLE_PERIOD_MS: usize = 10_000;
+fn compute_rate_per_second(count: usize) -> usize {
+    (count * 1000) / SAMPLE_PERIOD_MS
 }
 
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
@@ -84,16 +84,15 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
-/// Provides functionality to generate several types of transactions:
+/// Provide functionality to generate several types of transactions:
 ///
 /// 1. Without blockhash
 /// 1.1 With valid signatures (number of signatures is configurable)
 /// 1.2 With invalid signatures (number of signatures is configurable)
 ///
 /// 2. With blockhash (but still deliberately invalid):
-/// 2.1 Transfer payer -> destination (1 instruction per transaction)
-/// 2.2 Transfer payer -> multiple destinations (many instructions per transaction)
-/// 2.3 Create account transaction
+/// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
+/// 2.2 Create an account
 ///
 struct TransactionGenerator {
     blockhash: Hash,
@@ -110,23 +109,27 @@ impl TransactionGenerator {
         }
     }
 
+    /// Generate transaction
+    ///
+    /// `payer` the account responsible for paying the cost of executing transaction, used as
+    /// a source for transfer instruction and as funding account for create account instruction.
+    /// `destinations` depending on the transaction type, might be destination accounts receiving transfers,
+    /// new accounts, signing accounts. It is `None` only if `valid_signatures==false`
+    /// `client` structure responsible for providing blockhash
+    ///
     fn generate<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
         payer: &Option<Keypair>,
-        kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
+        destinations: Option<Vec<&Keypair>>,
         client: &Option<Arc<T>>,
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
-            // kpvals must be Some and contain at least one element
-            if kpvals.is_none() || kpvals.as_ref().unwrap().is_empty() {
-                panic!("Expected at least one destination keypair to create transaction");
-            }
             let client = client.as_ref().unwrap();
-            let kpvals = kpvals.unwrap();
+            let destinations = destinations.unwrap();
             let payer = payer.as_ref().unwrap();
-            self.generate_with_blockhash(payer, kpvals, client)
+            self.generate_with_blockhash(payer, destinations, client)
         } else {
-            self.generate_without_blockhash(kpvals)
+            self.generate_without_blockhash(destinations)
         }
     }
 
@@ -310,12 +313,12 @@ fn run_dos_rpc_mode(
         }
         count += 1;
         total_count += 1;
-        if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
+        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
             info!(
-                "count: {}, errors: {}, tps: {}",
+                "count: {}, errors: {}, rps: {}",
                 count,
                 error_count,
-                compute_tps(count)
+                compute_rate_per_second(count)
             );
             last_log = Instant::now();
             count = 0;
@@ -362,11 +365,11 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
-fn get_permutation_size(num_signatures: Option<usize>, num_instructions: Option<usize>) -> usize {
+fn get_permutation_size(num_signatures: &Option<usize>, num_instructions: &Option<usize>) -> usize {
     if let Some(num_signatures) = num_signatures {
-        num_signatures
+        *num_signatures
     } else if let Some(num_instructions) = num_instructions {
-        num_instructions
+        *num_instructions
     } else {
         1 // for the case AccountCreation
     }
@@ -380,39 +383,37 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
 ) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-    let num_signatures = transaction_params.num_signatures;
-    let num_instructions = transaction_params.num_instructions;
-    let valid_signatures = transaction_params.valid_signatures;
-    let valid_blockhash = transaction_params.valid_blockhash;
-
     // Number of payers is the number of generating threads, for now it is 1
     // Later, we will create a new payer for each thread since Keypair is not clonable
-    let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
+    let payers: Vec<Option<Keypair>> = create_payers(transaction_params.valid_blockhash, 1, &client);
     let payer = &payers[0];
 
-    let mut transaction_generator = TransactionGenerator::new(transaction_params);
-
-    // Generate n=1000 unique keypairs, which are used to create
-    // chunks of keypairs in case of valid_signatures option
+    // Generate n=1000 unique keypairs
     // The number of chunks is described by binomial coefficient
     // and hence this choice of n provides large enough number of permutations
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
     // 1000 is arbitrary number. In case of permutation_size > 1,
     // this guaranties large enough set of unique permutations
-    let permutation_size = get_permutation_size(num_signatures, num_instructions);
+    let permutation_size = get_permutation_size(&transaction_params.num_signatures,
+        &transaction_params.num_instructions);
     let num_keypairs = 1000 * permutation_size;
-    if valid_signatures || valid_blockhash {
+
+    let generate_keypairs = transaction_params.valid_signatures || transaction_params.valid_blockhash;
+    if generate_keypairs {
         keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
     }
 
     let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
     let mut it = indexes.iter().permutations(permutation_size);
+
+    let mut transaction_generator = TransactionGenerator::new(transaction_params);
+
     let mut count = 0;
     let mut total_count = 0;
     let mut error_count = 0;
     let mut last_log = Instant::now();
     loop {
-        let chunk_keypairs = if valid_signatures || valid_blockhash {
+        let chunk_keypairs = if generate_keypairs {
             let permutation = it.next();
             if permutation.is_none() {
                 // if ran out of permutations, regenerate keys
@@ -435,12 +436,12 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         }
         count += 1;
         total_count += 1;
-        if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
+        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
             info!(
-                "count: {}, errors: {}, tps: {}",
+                "count: {}, errors: {}, rps: {}",
                 count,
                 error_count,
-                compute_tps(count)
+                compute_rate_per_second(count)
             );
             last_log = Instant::now();
             count = 0;
@@ -501,7 +502,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                 let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
                 let payer = &payers[0];
 
-                let permutation_size = get_permutation_size(tp.num_signatures, tp.num_instructions);
+                let permutation_size = get_permutation_size(&tp.num_signatures, &tp.num_instructions);
                 let keypairs: Vec<Keypair> =
                     (0..permutation_size).map(|_| Keypair::new()).collect();
                 let keypairs_chunk: Option<Vec<&Keypair>> =
@@ -535,12 +536,12 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
 
             count += 1;
             total_count += 1;
-            if last_log.elapsed().as_millis() > REPORT_EACH_MILLIS {
+            if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
                 info!(
-                    "count: {}, errors: {}, tps: {}",
+                    "count: {}, errors: {}, rps: {}",
                     count,
                     error_count,
-                    compute_tps(count)
+                    compute_rate_per_second(count)
                 );
                 last_log = Instant::now();
                 count = 0;
@@ -583,7 +584,7 @@ fn main() {
 
     info!("done found {} nodes", nodes.len());
 
-    // create client which is used for airdrop and get blockhash
+    // create client which is used to request blockhash
     let client = if cmd_params.transaction_params.valid_blockhash {
         let num_nodes = 1;
         info!("Connecting to the cluster");
@@ -764,7 +765,7 @@ pub mod test {
             },
         );
 
-        // creates and sends unique transactions which has invalid signatures
+        // creates and sends unique transactions which have invalid signatures
         run_dos(
             &nodes_slice,
             10,
@@ -788,7 +789,7 @@ pub mod test {
             },
         );
 
-        // creates and sends unique transactions which has valid signatures
+        // creates and sends unique transactions which have valid signatures
         run_dos(
             &nodes_slice,
             10,
