@@ -5106,6 +5106,7 @@ impl Bank {
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 rewrites_skipped.push((pubkey, hash));
+                assert_eq!(collected, CollectedInfo::default());
             } else if !just_rewrites {
                 total_collected += collected;
                 self.store_account(&pubkey, &account);
