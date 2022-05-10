@@ -9,6 +9,7 @@ use {
     solana_metrics::datapoint_info,
     std::{
         cell::RefCell,
+        fmt::Debug,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc,
@@ -509,6 +510,13 @@ pub(crate) fn report_rocksdb_write_perf(metric_header: &'static str) {
             ),
         );
     });
+}
+
+#[derive(Debug, Default, Clone)]
+/// A struct that holds the current status of RocksDB perf sampling.
+pub struct BlockstoreRocksDbPerfSamplingStatus {
+    // The number of RocksDB operations since the last perf sample.
+    pub(crate) op_count: Arc<AtomicUsize>,
 }
 
 pub trait ColumnMetrics {
