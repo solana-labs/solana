@@ -4385,8 +4385,8 @@ impl Bank {
                         if tx_wide_compute_cap {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_message(
-                                tx.message(),
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
                                 feature_set.is_active(&requestable_heap_size::id()),
                                 feature_set.is_active(&default_units_per_instruction::id()),
                             );
@@ -4617,7 +4617,7 @@ impl Bank {
 
             let mut compute_budget = ComputeBudget::default();
             let additional_fee = compute_budget
-                .process_message(message, false, false)
+                .process_instructions(message.program_instructions_iter(), false, false)
                 .unwrap_or_default();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);

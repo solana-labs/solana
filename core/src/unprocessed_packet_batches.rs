@@ -35,7 +35,7 @@ pub enum DeserializedPacketError {
     AdditionalFeeInvalid,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
@@ -103,7 +103,7 @@ impl DeserializedPacket {
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         let fee_per_cu = fee_per_cu
-            .or_else(|| compute_fee_per_cu(&versioned_transaction.message))
+            .or_else(|| compute_fee_per_cu(sanitized_transaction.get_message()))
             .ok_or(DeserializedPacketError::AdditionalFeeInvalid)?;
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
@@ -375,12 +375,11 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
 }
 
 /// Computes fee_per_cu as `(addition_fee / requested_cu)`
-fn compute_fee_per_cu(message: &VersionedMessage) -> Option<f64> {
-    let sanitized_versioned_message = SanitizedVersionedMessage::try_from(message).ok()?;
+fn compute_fee_per_cu(message: &SanitizedVersionedMessage) -> Option<f64> {
     let mut compute_budget = ComputeBudget::default();
     let additional_fee = compute_budget
         .process_instructions(
-            sanitized_versioned_message.program_instructions_iter(),
+            message.program_instructions_iter(),
             false, // not request heap size
             true,  // use default units per instruction
         )

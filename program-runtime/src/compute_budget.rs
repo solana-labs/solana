@@ -2,8 +2,8 @@ use solana_sdk::{
     borsh::try_from_slice_unchecked,
     compute_budget::{self, ComputeBudgetInstruction},
     entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-    instruction::InstructionError,
-    message::SanitizedMessage,
+    instruction::{CompiledInstruction, InstructionError},
+    pubkey::Pubkey,
     transaction::TransactionError,
 };
 
@@ -122,25 +122,24 @@ impl ComputeBudget {
         }
     }
 
-    pub fn process_message(
+    pub fn process_instructions<'a>(
         &mut self,
-        message: &SanitizedMessage,
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         requestable_heap_size: bool,
         default_units_per_instruction: bool,
     ) -> Result<u64, TransactionError> {
-        let mut num_instructions = message.instructions().len();
         let mut requested_additional_fee = 0;
         let mut requested_units = None;
-
-        let error = TransactionError::InstructionError(0, InstructionError::InvalidInstructionData);
-        for (i, (program_id, instruction)) in message.program_instructions_iter().enumerate() {
+        let mut num_instructions: usize = 0;
+        for (i, (program_id, instruction)) in instructions.enumerate() {
             if compute_budget::check_id(program_id) {
-                // don't include request instructions in default max calc
-                num_instructions = num_instructions.saturating_sub(1);
-
-                // Compute budget instruction must be in the 1st 3 instructions (avoid
-                // nonce marker), otherwise ignored
+                // Compute budget instruction must be in the 1st 3 instructions
+                // (need to account for nonce marker), otherwise ignored
                 if i < 3 {
+                    let error = TransactionError::InstructionError(
+                        i as u8,
+                        InstructionError::InvalidInstructionData,
+                    );
                     match try_from_slice_unchecked(&instruction.data) {
                         Ok(ComputeBudgetInstruction::RequestUnits {
                             units,
@@ -162,6 +161,9 @@ impl ComputeBudget {
                         _ => return Err(error),
                     }
                 }
+            } else {
+                // only include non-request instructions in default max calc
+                num_instructions = num_instructions.saturating_add(1);
             }
         }
 
@@ -202,7 +204,11 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget.process_message(&tx.message(), true, true);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                true,
+            );
             assert_eq!($expected_error, result);
             assert_eq!(compute_budget, $expected_budget);
         };
