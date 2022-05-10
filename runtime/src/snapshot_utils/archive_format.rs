@@ -29,6 +29,19 @@ impl ArchiveFormat {
     }
 }
 
+/// Converts to a String
+impl ToString for ArchiveFormat {
+    fn to_string(&self) -> String {
+        match self {
+            ArchiveFormat::TarBzip2 => "BZIP2".to_string(),
+            ArchiveFormat::TarGzip => "GZIP".to_string(),
+            ArchiveFormat::TarZstd => "ZSTD".to_string(),
+            ArchiveFormat::TarLz4 => "LZ4".to_string(),
+            ArchiveFormat::Tar => "TAR".to_string(),
+        }
+    }
+}
+
 // Change this to `impl<S: AsRef<str>> TryFrom<S> for ArchiveFormat [...]`
 // once this Rust bug is fixed: https://github.com/rust-lang/rust/issues/50133
 impl TryFrom<&str> for ArchiveFormat {
