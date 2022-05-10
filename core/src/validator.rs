@@ -1810,9 +1810,10 @@ pub fn is_snapshot_config_valid(
 mod tests {
     use {
         super::*,
+        crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        std::fs::remove_dir_all,
+        std::{fs::remove_dir_all, thread},
     };
 
     #[test]
@@ -1851,7 +1852,20 @@ mod tests {
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-        validator.close();
+
+        // spawn a new thread to wait for validator close
+        let (sender, receiver) = bounded(0);
+        let _ = thread::spawn(move || {
+            validator.close();
+            sender.send(()).unwrap();
+        });
+
+        // exit can deadlock. put an upper-bound on how long we wait for it
+        let timeout = Duration::from_secs(30);
+        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
+            panic!("timeout for closing validator");
+        }
+
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
