@@ -9,7 +9,7 @@ pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
     sanitized_txs: Cow<'b, [SanitizedTransaction]>,
-    pub(crate) needs_unlock: bool,
+    needs_unlock: bool,
 }
 
 impl<'a, 'b> TransactionBatch<'a, 'b> {
@@ -39,8 +39,12 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         self.bank
     }
 
-    pub fn needs_unlock(&mut self, value: bool) {
-        self.needs_unlock = value;
+    pub fn set_needs_unlock(&mut self, needs_unlock: bool) {
+        self.needs_unlock = needs_unlock;
+    }
+
+    pub fn needs_unlock(&self) -> bool {
+        self.needs_unlock
     }
 }
 
