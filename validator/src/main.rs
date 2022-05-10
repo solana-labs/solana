@@ -728,6 +728,14 @@ pub fn main() {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
+                .conflicts_with("no-incremental-snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
+        )
+        .arg(
             Arg::with_name("tower")
                 .long("tower")
                 .value_name("DIR")
@@ -2602,16 +2610,36 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let snapshot_archives_dir = if matches.is_present("snapshots") {
+    let full_snapshot_archives_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
-    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let incremental_snapshot_archives_dir =
+        if matches.is_present("incremental_snapshot_archive_path") {
+            let incremental_snapshot_archives_dir = PathBuf::from(
+                matches
+                    .value_of("incremental_snapshot_archive_path")
+                    .unwrap(),
+            );
+            fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to create incremental snapshot archives directory {:?}: {}",
+                    incremental_snapshot_archives_dir.display(),
+                    err
+                );
+                exit(1);
+            });
+            incremental_snapshot_archives_dir
+        } else {
+            full_snapshot_archives_dir.clone()
+        };
+    let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            bank_snapshots_dir, err
+            bank_snapshots_dir.display(),
+            err
         );
         exit(1);
     });
@@ -2657,7 +2685,8 @@ pub fn main() {
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
-        snapshot_archives_dir: snapshot_archives_dir.clone(),
+        full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
@@ -2887,7 +2916,8 @@ pub fn main() {
         Some(version)
     });
     solana_entry::entry::init_poh();
-    snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -2897,7 +2927,8 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_archives_dir,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,

@@ -13,11 +13,18 @@ use {
 
 impl LocalCluster {
     /// Return the next full snapshot archive info after the cluster's last processed slot
-    pub fn wait_for_next_full_snapshot(
+    pub fn wait_for_next_full_snapshot<T>(
         &self,
-        snapshot_archives_dir: impl AsRef<Path>,
-    ) -> FullSnapshotArchiveInfo {
-        match self.wait_for_next_snapshot(snapshot_archives_dir, NextSnapshotType::FullSnapshot) {
+        full_snapshot_archives_dir: T,
+    ) -> FullSnapshotArchiveInfo
+    where
+        T: AsRef<Path>,
+    {
+        match self.wait_for_next_snapshot(
+            full_snapshot_archives_dir,
+            None::<T>,
+            NextSnapshotType::FullSnapshot,
+        ) {
             NextSnapshotResult::FullSnapshot(full_snapshot_archive_info) => {
                 full_snapshot_archive_info
             }
@@ -29,10 +36,12 @@ impl LocalCluster {
     /// after the cluster's last processed slot
     pub fn wait_for_next_incremental_snapshot(
         &self,
-        snapshot_archives_dir: impl AsRef<Path>,
+        full_snapshot_archives_dir: impl AsRef<Path>,
+        incremental_snapshot_archives_dir: impl AsRef<Path>,
     ) -> (IncrementalSnapshotArchiveInfo, FullSnapshotArchiveInfo) {
         match self.wait_for_next_snapshot(
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            Some(incremental_snapshot_archives_dir),
             NextSnapshotType::IncrementalAndFullSnapshot,
         ) {
             NextSnapshotResult::IncrementalAndFullSnapshot(
@@ -47,9 +56,10 @@ impl LocalCluster {
     }
 
     /// Return the next snapshot archive infos after the cluster's last processed slot
-    pub fn wait_for_next_snapshot(
+    fn wait_for_next_snapshot(
         &self,
-        snapshot_archives_dir: impl AsRef<Path>,
+        full_snapshot_archives_dir: impl AsRef<Path>,
+        incremental_snapshot_archives_dir: Option<impl AsRef<Path>>,
         next_snapshot_type: NextSnapshotType,
     ) -> NextSnapshotResult {
         // Get slot after which this was generated
@@ -69,7 +79,7 @@ impl LocalCluster {
         );
         loop {
             if let Some(full_snapshot_archive_info) =
-                snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
             {
                 match next_snapshot_type {
                     NextSnapshotType::FullSnapshot => {
@@ -80,7 +90,7 @@ impl LocalCluster {
                     NextSnapshotType::IncrementalAndFullSnapshot => {
                         if let Some(incremental_snapshot_archive_info) =
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &snapshot_archives_dir,
+                                incremental_snapshot_archives_dir.as_ref().unwrap(),
                                 full_snapshot_archive_info.slot(),
                             )
                         {

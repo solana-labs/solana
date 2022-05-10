@@ -467,21 +467,29 @@ fn test_snapshot_download() {
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
+    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
     trace!("found: {}", full_snapshot_archive_info.path().display());
 
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -549,43 +557,60 @@ fn test_incremental_snapshot_download() {
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
+    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .incremental_snapshot_archives_dir;
 
     debug!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
            full_snapshot_interval,
            incremental_snapshot_interval,
            accounts_hash_interval);
     debug!(
-        "leader config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "leader config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         leader_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         leader_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        leader_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
     debug!(
-        "validator config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "validator config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         validator_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
 
     trace!("Waiting for snapshots");
-    let (incremental_snapshot_archive_info, full_snapshot_archive_info) =
-        cluster.wait_for_next_incremental_snapshot(snapshot_archives_dir);
+    let (incremental_snapshot_archive_info, full_snapshot_archive_info) = cluster
+        .wait_for_next_incremental_snapshot(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+        );
     trace!(
         "found: {} and {}",
         full_snapshot_archive_info.path().display(),
@@ -595,7 +620,8 @@ fn test_incremental_snapshot_download() {
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -620,7 +646,8 @@ fn test_incremental_snapshot_download() {
 
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
@@ -708,24 +735,32 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
            incremental_snapshot_interval,
            accounts_hash_interval);
     debug!(
-        "leader config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "leader config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         leader_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         leader_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        leader_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
     debug!(
-        "validator config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "validator config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         validator_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
@@ -734,7 +769,12 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     let (incremental_snapshot_archive, full_snapshot_archive) =
         LocalCluster::wait_for_next_incremental_snapshot(
             &cluster,
-            leader_snapshot_test_config.snapshot_archives_dir.path(),
+            leader_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
+            leader_snapshot_test_config
+                .incremental_snapshot_archives_dir
+                .path(),
         );
     info!(
         "Found snapshots:\n\tfull snapshot: {}\n\tincremental snapshot: {}",
@@ -751,7 +791,12 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Downloading full snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
         (full_snapshot_archive.slot(), *full_snapshot_archive.hash()),
         SnapshotType::FullSnapshot,
         validator_snapshot_test_config
@@ -771,7 +816,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     )
     .unwrap();
     let downloaded_full_snapshot_archive = snapshot_utils::get_highest_full_snapshot_archive_info(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
     )
     .unwrap();
     info!(
@@ -782,7 +829,12 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("Downloading incremental snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
         (
             incremental_snapshot_archive.slot(),
             *incremental_snapshot_archive.hash(),
@@ -806,7 +858,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     .unwrap();
     let downloaded_incremental_snapshot_archive =
         snapshot_utils::get_highest_incremental_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .incremental_snapshot_archives_dir
+                .path(),
             full_snapshot_archive.slot(),
         )
         .unwrap();
@@ -876,14 +930,30 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // restart the node and guarantee that the only snapshots present are these initial ones.  So,
     // the easiest way to do that is create a backup now, delete the ones on the node before
     // restart, then copy the backup ones over again.
-    let backup_validator_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let backup_validator_full_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     trace!(
-        "Backing up validator snapshots to dir: {}...",
-        backup_validator_snapshot_archives_dir.path().display()
+        "Backing up validator full snapshots to dir: {}...",
+        backup_validator_full_snapshot_archives_dir.path().display()
     );
     copy_files_with_remote(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
-        backup_validator_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        backup_validator_full_snapshot_archives_dir.path(),
+    );
+    let backup_validator_incremental_snapshot_archives_dir =
+        tempfile::tempdir_in(farf_dir()).unwrap();
+    trace!(
+        "Backing up validator incremental snapshots to dir: {}...",
+        backup_validator_incremental_snapshot_archives_dir
+            .path()
+            .display()
+    );
+    copy_files_with_remote(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+        backup_validator_incremental_snapshot_archives_dir.path(),
     );
 
     info!("Starting the validator...");
@@ -931,13 +1001,17 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Putting this all in its own block so its clear we're only intended to keep the leader's info
     let leader_full_snapshot_archive_for_comparison = {
         let validator_full_snapshot = snapshot_utils::get_highest_full_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         )
         .unwrap();
 
         // Now get the same full snapshot on the LEADER that we just got from the validator
         let mut leader_full_snapshots = snapshot_utils::get_full_snapshot_archives(
-            leader_snapshot_test_config.snapshot_archives_dir.path(),
+            leader_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         );
         leader_full_snapshots.retain(|full_snapshot| {
             full_snapshot.slot() == validator_full_snapshot.slot()
@@ -959,10 +1033,27 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     info!("leader full snapshot archive for comparison: {leader_full_snapshot_archive_for_comparison:#?}");
 
     info!("Delete all the snapshots on the validator and restore the originals from the backup...");
-    delete_files_with_remote(validator_snapshot_test_config.snapshot_archives_dir.path());
+    delete_files_with_remote(
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    delete_files_with_remote(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+    );
     copy_files_with_remote(
-        backup_validator_snapshot_archives_dir.path(),
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        backup_validator_full_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    copy_files_with_remote(
+        backup_validator_incremental_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
     );
     info!(
         "Delete all the snapshots on the validator and restore the originals from the backup... DONE"
@@ -971,7 +1062,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Get the highest full snapshot slot *before* restarting, as a comparison
     let validator_full_snapshot_slot_at_startup =
         snapshot_utils::get_highest_full_snapshot_archive_slot(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         )
         .unwrap();
 
@@ -998,12 +1091,16 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     let timer = Instant::now();
     loop {
         if let Some(full_snapshot_slot) = snapshot_utils::get_highest_full_snapshot_archive_slot(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         ) {
             if full_snapshot_slot >= validator_next_full_snapshot_slot {
                 if let Some(incremental_snapshot_slot) =
                     snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                        validator_snapshot_test_config.snapshot_archives_dir.path(),
+                        validator_snapshot_test_config
+                            .incremental_snapshot_archives_dir
+                            .path(),
                         full_snapshot_slot,
                     )
                 {
@@ -1034,7 +1131,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Check to make sure that the full snapshot the validator created during startup is the same
     // or one greater than the snapshot the leader created.
     let validator_full_snapshot_archives = snapshot_utils::get_full_snapshot_archives(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
     );
     info!("validator full snapshot archives: {validator_full_snapshot_archives:#?}");
     let validator_full_snapshot_archive_for_comparison = validator_full_snapshot_archives
@@ -1071,12 +1170,29 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Copy over the snapshots to the new node, but need to remove the tmp snapshot dir so it
     // doesn't break the simple copy_files closure.
     snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    snapshot_utils::remove_tmp_snapshot_archives(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
     );
     copy_files(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
         final_validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    copy_files(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+        final_validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path(),
     );
 
@@ -1128,19 +1244,20 @@ fn test_snapshot_restart_tower() {
     let validator_info = cluster.exit_node(&validator_id);
 
     // Get slot after which this was generated
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
             .into_path(),
         full_snapshot_archive_info.slot(),
         full_snapshot_archive_info.hash(),
@@ -1178,12 +1295,12 @@ fn test_snapshots_blockstore_floor() {
     let mut validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE],
@@ -1201,7 +1318,7 @@ fn test_snapshots_blockstore_floor() {
 
     let archive_info = loop {
         let archive =
-            snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir);
+            snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir);
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
@@ -1212,7 +1329,7 @@ fn test_snapshots_blockstore_floor() {
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
             .into_path(),
         archive_info.slot(),
         archive_info.hash(),
@@ -1280,12 +1397,12 @@ fn test_snapshots_restart_validity() {
     let num_account_paths = 1;
     let mut snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-    let snapshot_archives_dir = &snapshot_test_config
+    let full_snapshot_archives_dir = &snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
     let mut all_account_storage_dirs = vec![vec![]];
@@ -1323,7 +1440,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
