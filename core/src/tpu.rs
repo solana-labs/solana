@@ -13,11 +13,7 @@ use {
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
     },
-<<<<<<< HEAD
-    crossbeam_channel::unbounded,
-=======
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
->>>>>>> e105547c1 (tvu and tpu timeout on joining its microservices (#24111))
+    crossbeam_channel::{self, bounded, unbounded, RecvTimeoutError},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -45,23 +41,9 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
-<<<<<<< HEAD
-=======
 /// Timeout interval when joining threads during TPU close
 const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
-// allow multiple connections for NAT and any open/close overlap
-pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
-
-pub struct TpuSockets {
-    pub transactions: Vec<UdpSocket>,
-    pub transaction_forwards: Vec<UdpSocket>,
-    pub vote: Vec<UdpSocket>,
-    pub broadcast: Vec<UdpSocket>,
-    pub transactions_quic: UdpSocket,
-}
-
->>>>>>> e105547c1 (tvu and tpu timeout on joining its microservices (#24111))
 pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,

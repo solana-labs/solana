@@ -25,11 +25,7 @@ use {
         tower_storage::TowerStorage,
         voting_service::VotingService,
     },
-<<<<<<< HEAD
-    crossbeam_channel::unbounded,
-=======
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
->>>>>>> e105547c1 (tvu and tpu timeout on joining its microservices (#24111))
+    crossbeam_channel::{self, bounded, unbounded, RecvTimeoutError},
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
