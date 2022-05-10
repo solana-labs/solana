@@ -145,4 +145,36 @@ mod tests {
             Err(ParseError(INVALID_EXTENSION.to_string()))
         );
     }
+
+    #[test]
+    fn test_to_string() {
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_BZIP2_EXTENSION)
+                .unwrap()
+                .to_string(),
+            "BZIP2"
+        );
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_GZIP_EXTENSION)
+                .unwrap()
+                .to_string(),
+            "GZIP"
+        );
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_ZSTD_EXTENSION)
+                .unwrap()
+                .to_string(),
+            "ZSTD"
+        );
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_LZ4_EXTENSION)
+                .unwrap()
+                .to_string(),
+            "LZ4"
+        );
+        assert_eq!(
+            ArchiveFormat::from_str(TAR_EXTENSION).unwrap().to_string(),
+            "TAR"
+        );
+    }
 }
