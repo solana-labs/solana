@@ -39,8 +39,7 @@ mod tests {
     use {
         super::*,
         solana_program::{
-            hash::Hash,
-            message::{v0, VersionedMessage},
+            message::{Message, VersionedMessage},
             pubkey::Pubkey,
         },
     };
@@ -49,9 +48,7 @@ mod tests {
     fn test_try_new_with_invalid_signatures() {
         let tx = VersionedTransaction {
             signatures: vec![],
-            message: VersionedMessage::V0(
-                v0::Message::try_compile(&Pubkey::new_unique(), &[], &[], Hash::default()).unwrap(),
-            ),
+            message: VersionedMessage::Legacy(Message::new(&[], Some(&Pubkey::new_unique()))),
         };
 
         assert_eq!(
@@ -61,19 +58,18 @@ mod tests {
     }
 
     #[test]
-    fn test_try_new() {
-        let mut message =
-            v0::Message::try_compile(&Pubkey::new_unique(), &[], &[], Hash::default()).unwrap();
+    fn test_try_new_with_invalid_header() {
+        let mut message = Message::new(&[], Some(&Pubkey::new_unique()));
         message.header.num_readonly_signed_accounts += 1;
 
         let tx = VersionedTransaction {
             signatures: vec![Signature::default()],
-            message: VersionedMessage::V0(message),
+            message: VersionedMessage::Legacy(message),
         };
 
         assert_eq!(
             SanitizedVersionedTransaction::try_new(tx),
-            Err(SanitizeError::InvalidValue)
+            Err(SanitizeError::IndexOutOfBounds)
         );
     }
 }
