@@ -501,7 +501,7 @@ impl Validator {
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service =
-            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
+            PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
         let (
             genesis_config,
