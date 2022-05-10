@@ -2228,10 +2228,20 @@ fn main() {
                 }
             }
             ("create-snapshot", Some(arg_matches)) => {
+                let is_incremental = arg_matches.is_present("incremental");
                 let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
-                    .unwrap_or_else(|_| match &snapshot_archive_path {
-                        Some(snapshot_archive_path) => snapshot_archive_path.clone(),
-                        None => ledger_path.clone(),
+                    .unwrap_or_else(|_| {
+                        match (
+                            is_incremental,
+                            &snapshot_archive_path,
+                            &incremental_snapshot_archive_path,
+                        ) {
+                            (true, _, Some(incremental_snapshot_archive_path)) => {
+                                incremental_snapshot_archive_path.clone()
+                            }
+                            (_, Some(snapshot_archive_path), _) => snapshot_archive_path.clone(),
+                            (_, _, _) => ledger_path.clone(),
+                        }
                     });
                 let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
                 let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
@@ -2286,7 +2296,6 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore =
                     open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
-                let is_incremental = arg_matches.is_present("incremental");
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
