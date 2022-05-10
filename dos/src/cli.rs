@@ -1,6 +1,8 @@
 use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     serde::{Deserialize, Serialize},
+    solana_sdk::pubkey::Pubkey,
+    std::str::FromStr,
     std::{net::SocketAddr, process::exit},
 };
 
@@ -33,8 +35,13 @@ pub struct DosClientParameters {
     )]
     pub data_size: usize,
 
-    #[clap(long, required_if_eq("mode", "rpc"), help = "Data to send [Optional]")]
-    pub data_input: Option<String>,
+    #[clap(
+        long,
+        parse(try_from_str = pubkey_parser),
+        required_if_eq("mode", "rpc"),
+        help = "Pubkey for rpc mode calls [Optional]"
+    )]
+    pub data_input: Option<Pubkey>,
 
     #[clap(long, help = "Just use entrypoint address directly")]
     pub skip_gossip: bool,
@@ -125,6 +132,13 @@ fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
     }
 }
 
+fn pubkey_parser(pubkey: &str) -> Result<Pubkey, &'static str> {
+    match Pubkey::from_str(pubkey) {
+        Ok(v) => Ok(v),
+        Err(_) => Err("failed to parse pubkey"),
+    }
+}
+
 /// input checks which are not covered by Clap
 fn validate_input(params: &DosClientParameters) {
     if params.mode == Mode::Rpc
@@ -176,7 +190,8 @@ mod tests {
     #[test]
     fn test_cli_parse_rpc_data_input() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
-        let pubkey_str: String = Pubkey::default().to_string();
+        let pubkey = Pubkey::default();
+        let pubkey_str: String = pubkey.to_string();
         let params = DosClientParameters::try_parse_from(vec![
             "solana-dos",
             "--mode",
@@ -185,7 +200,8 @@ mod tests {
             "get-account-info",
             "--data-input",
             &pubkey_str,
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -193,7 +209,7 @@ mod tests {
                 mode: Mode::Rpc,
                 data_size: 128, // default value
                 data_type: DataType::GetAccountInfo,
-                data_input: Some(pubkey_str),
+                data_input: Some(pubkey),
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default()
@@ -214,7 +230,8 @@ mod tests {
             "--valid-signatures",
             "--num-signatures",
             "8",
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -252,7 +269,8 @@ mod tests {
             "transfer",
             "--num-instructions",
             "1",
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -305,7 +323,8 @@ mod tests {
             "transfer",
             "--num-instructions",
             "8",
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(
             params,
             DosClientParameters {
@@ -341,7 +360,8 @@ mod tests {
             "--valid-blockhash",
             "--transaction-type",
             "account-creation",
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(
             params,
             DosClientParameters {

@@ -66,7 +66,6 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
-        str::FromStr,
         sync::Arc,
         time::{Duration, Instant},
     },
@@ -231,18 +230,13 @@ impl TransactionGenerator {
     }
 }
 
-//TODO(klykov): is it possible to simplify this code using BenchTpsClient?
-fn get_target_and_client(
+fn get_target(
     nodes: &[ContactInfo],
     mode: Mode,
     entrypoint_addr: SocketAddr,
-) -> (Option<SocketAddr>, Option<RpcClient>) {
+) -> Option<SocketAddr> {
     let mut target = None;
-    let mut rpc_client = None;
     if nodes.is_empty() {
-        if mode == Mode::Rpc {
-            rpc_client = Some(RpcClient::new_socket(entrypoint_addr));
-        }
         target = Some(entrypoint_addr);
     } else {
         info!("************ NODE ***********");
@@ -258,30 +252,42 @@ fn get_target_and_client(
                     Mode::Gossip => Some(node.gossip),
                     Mode::Tvu => Some(node.tvu),
                     Mode::TvuForwards => Some(node.tvu_forwards),
-                    Mode::Tpu => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        Some(node.tpu)
-                    }
+                    Mode::Tpu => Some(node.tpu),
                     Mode::TpuForwards => Some(node.tpu_forwards),
                     Mode::Repair => Some(node.repair),
                     Mode::ServeRepair => Some(node.serve_repair),
-                    Mode::Rpc => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        None
-                    }
+                    Mode::Rpc => None,
                 };
                 break;
             }
         }
     }
-    (target, rpc_client)
+    target
+}
+
+fn get_rpc_client(
+    nodes: &[ContactInfo],
+    entrypoint_addr: SocketAddr,
+) -> Result<RpcClient, &'static str> {
+    if nodes.is_empty() {
+        return Ok(RpcClient::new_socket(entrypoint_addr));
+    }
+
+    // find target node
+    for node in nodes {
+        if node.gossip == entrypoint_addr {
+            info!("{}", node.gossip);
+            return Ok(RpcClient::new_socket(node.rpc));
+        }
+    }
+    Err("Node with entrypoint_addr was not found")
 }
 
 fn run_dos_rpc_mode(
-    rpc_client: Option<RpcClient>,
+    rpc_client: RpcClient,
     iterations: usize,
     data_type: DataType,
-    data_input: Option<String>,
+    data_input: &Pubkey,
 ) {
     let mut last_log = Instant::now();
     let mut total_count: usize = 0;
@@ -290,19 +296,13 @@ fn run_dos_rpc_mode(
     loop {
         match data_type {
             DataType::GetAccountInfo => {
-                let res = rpc_client
-                    .as_ref()
-                    .unwrap()
-                    .get_account(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
+                let res = rpc_client.get_account(data_input);
                 if res.is_err() {
                     error_count += 1;
                 }
             }
             DataType::GetProgramAccounts => {
-                let res = rpc_client
-                    .as_ref()
-                    .unwrap()
-                    .get_program_accounts(&Pubkey::from_str(data_input.as_ref().unwrap()).unwrap());
+                let res = rpc_client.get_program_accounts(data_input);
                 if res.is_err() {
                     error_count += 1;
                 }
@@ -385,7 +385,8 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
 
     // Number of payers is the number of generating threads, for now it is 1
     // Later, we will create a new payer for each thread since Keypair is not clonable
-    let payers: Vec<Option<Keypair>> = create_payers(transaction_params.valid_blockhash, 1, &client);
+    let payers: Vec<Option<Keypair>> =
+        create_payers(transaction_params.valid_blockhash, 1, &client);
     let payer = &payers[0];
 
     // Generate n=1000 unique keypairs
@@ -458,17 +459,27 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     params: DosClientParameters,
 ) {
-    let (target, rpc_client) = get_target_and_client(nodes, params.mode, params.entrypoint_addr);
-    let target = target.expect("should have target");
-    info!("Targeting {}", target);
+    let target = get_target(nodes, params.mode, params.entrypoint_addr);
 
     if params.mode == Mode::Rpc {
-        run_dos_rpc_mode(rpc_client, iterations, params.data_type, params.data_input);
+        let rpc_client =
+            get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
+        // existence of data_input is checked at cli level
+        run_dos_rpc_mode(
+            rpc_client,
+            iterations,
+            params.data_type,
+            &params.data_input.unwrap(),
+        );
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
+        let target = target.expect("should have target");
+        info!("Targeting {}", target);
         run_dos_transactions(target, iterations, client, params.transaction_params);
     } else {
+        let target = target.expect("should have target");
+        info!("Targeting {}", target);
         let mut data = match params.data_type {
             DataType::RepairHighest => {
                 let slot = 100;
@@ -502,7 +513,8 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                 let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
                 let payer = &payers[0];
 
-                let permutation_size = get_permutation_size(&tp.num_signatures, &tp.num_instructions);
+                let permutation_size =
+                    get_permutation_size(&tp.num_signatures, &tp.num_instructions);
                 let keypairs: Vec<Keypair> =
                     (0..permutation_size).map(|_| Keypair::new()).collect();
                 let keypairs_chunk: Option<Vec<&Keypair>> =
@@ -688,13 +700,26 @@ pub mod test {
                 transaction_params: TransactionParams::default(),
             },
         );
+
+        run_dos_no_client(
+            &nodes,
+            1,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Rpc,
+                data_size: 0,
+                data_type: DataType::GetAccountInfo,
+                data_input: Some(Pubkey::default()),
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams::default(),
+            },
+        );
     }
 
     // Ignore tests which are using LocalCluster due to known
     // problem with several such tests running in parallel
-    // TODO(klykov): remove ignore and serial after fix of the issue
     #[test]
-    #[serial]
     fn test_dos_random() {
         solana_logger::setup();
         let num_nodes = 1;
