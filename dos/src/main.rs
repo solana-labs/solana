@@ -283,33 +283,14 @@ fn get_rpc_client(
     Err("Node with entrypoint_addr was not found")
 }
 
-fn run_dos_rpc_mode(
-    rpc_client: RpcClient,
-    iterations: usize,
-    data_type: DataType,
-    data_input: &Pubkey,
-) {
+fn run_dos_rpc_mode_helper<F: Fn() -> bool>(iterations: usize, rpc_client_call: F) {
     let mut last_log = Instant::now();
     let mut total_count: usize = 0;
     let mut count = 0;
     let mut error_count = 0;
     loop {
-        match data_type {
-            DataType::GetAccountInfo => {
-                let res = rpc_client.get_account(data_input);
-                if res.is_err() {
-                    error_count += 1;
-                }
-            }
-            DataType::GetProgramAccounts => {
-                let res = rpc_client.get_program_accounts(data_input);
-                if res.is_err() {
-                    error_count += 1;
-                }
-            }
-            _ => {
-                panic!("unsupported data type");
-            }
+        if !rpc_client_call() {
+            error_count += 1;
         }
         count += 1;
         total_count += 1;
@@ -325,6 +306,29 @@ fn run_dos_rpc_mode(
         }
         if iterations != 0 && total_count >= iterations {
             break;
+        }
+    }
+}
+
+fn run_dos_rpc_mode(
+    rpc_client: RpcClient,
+    iterations: usize,
+    data_type: DataType,
+    data_input: &Pubkey,
+) {
+    match data_type {
+        DataType::GetAccountInfo => {
+            run_dos_rpc_mode_helper(iterations, || -> bool {
+                rpc_client.get_account(data_input).is_ok()
+            });
+        }
+        DataType::GetProgramAccounts => {
+            run_dos_rpc_mode_helper(iterations, || -> bool {
+                rpc_client.get_program_accounts(data_input).is_ok()
+            });
+        }
+        _ => {
+            panic!("unsupported data type");
         }
     }
 }
@@ -632,7 +636,6 @@ fn main() {
 pub mod test {
     use {
         super::*,
-        serial_test::serial,
         solana_client::thin_client::{create_client, ThinClient},
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
