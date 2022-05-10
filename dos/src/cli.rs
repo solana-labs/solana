@@ -152,8 +152,52 @@ pub fn build_cli_parameters() -> DosClientParameters {
 
 #[cfg(test)]
 mod tests {
+    use solana_sdk::pubkey::Pubkey;
 
     use {super::*, clap::Parser};
+
+    #[test]
+    fn test_cli_parse_rpc_no_data_input() {
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "rpc",
+            "--data-type",
+            "get-account-info",
+            //--data-input is required for `--mode rpc` but it is not specified
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cli_parse_rpc_data_input() {
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let pubkey_str: String = Pubkey::default().to_string();
+        let result = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "rpc",
+            "--data-type",
+            "get-account-info",
+            "--data-input",
+            &pubkey_str,
+        ]);
+        assert!(result.is_ok());
+        let params = result.unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Rpc,
+                data_size: 128, // default value
+                data_type: DataType::GetAccountInfo,
+                data_input: Some(pubkey_str),
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams::default()
+            },
+        );
+    }
 
     #[test]
     fn test_cli_parse_dos_valid_signatures() {
