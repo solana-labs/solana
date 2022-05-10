@@ -3415,7 +3415,8 @@ failed:
                                 );
                             }
                             //error!("reset append_vec: {}", store.append_vec_id());
-                            store.accounts.reset();
+                            // can't reset because hash calc may still have a ref
+                            // store.accounts.reset();
                             false
                         } else {
                             if created_this_slot {
