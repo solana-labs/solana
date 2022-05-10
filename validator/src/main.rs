@@ -728,12 +728,12 @@ pub fn main() {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("full_snapshots_path")
-                .long("full-snapshots-path")
+            Arg::with_name("incremental_snapshots_path")
+                .long("incremental-snapshots-path")
                 .conflicts_with("no-incremental-snapshots")
                 .value_name("DIR")
                 .takes_value(true)
-                .help("Use DIR as separate location for full snapshot archives [default: --snapshots value]"),
+                .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
         )
         .arg(
             Arg::with_name("tower")
@@ -2610,11 +2610,26 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let incremental_snapshot_archives_dir = if matches.is_present("snapshots") {
+    let full_snapshot_archives_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
+    let incremental_snapshot_archives_dir = if matches.is_present("incremental_snapshots_path") {
+        let incremental_snapshot_archives_dir =
+            PathBuf::from(matches.value_of("incremental_snapshots_path").unwrap());
+        fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+            eprintln!(
+                "Failed to create incremental snapshots directory {:?}: {}",
+                incremental_snapshot_archives_dir, err
+            );
+            exit(1);
+        });
+        incremental_snapshot_archives_dir
+    } else {
+        full_snapshot_archives_dir.clone()
+    };
+
     let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
@@ -2623,20 +2638,6 @@ pub fn main() {
         );
         exit(1);
     });
-    let full_snapshot_archives_dir = if matches.is_present("full_snapshots_path") {
-        let full_snapshot_archives_dir =
-            PathBuf::from(matches.value_of("full_snapshots_path").unwrap());
-        fs::create_dir_all(&full_snapshot_archives_dir).unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to create full snapshots directory {:?}: {}",
-                full_snapshot_archives_dir, err
-            );
-            exit(1);
-        });
-        full_snapshot_archives_dir
-    } else {
-        incremental_snapshot_archives_dir.clone()
-    };
 
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
