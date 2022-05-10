@@ -183,7 +183,7 @@ pub struct AccountsDbConfig {
     pub skip_rewrites: bool,
 }
 
-struct FoundStoredAccount<'a> {
+pub struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
     pub store_id: AppendVecId,
     pub account_size: usize,
