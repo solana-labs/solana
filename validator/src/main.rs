@@ -728,8 +728,8 @@ pub fn main() {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
-            Arg::with_name("incremental_snapshots_path")
-                .long("incremental-snapshots-path")
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
                 .conflicts_with("no-incremental-snapshots")
                 .value_name("DIR")
                 .takes_value(true)
@@ -2615,26 +2615,31 @@ pub fn main() {
     } else {
         ledger_path.clone()
     };
-    let incremental_snapshot_archives_dir = if matches.is_present("incremental_snapshots_path") {
-        let incremental_snapshot_archives_dir =
-            PathBuf::from(matches.value_of("incremental_snapshots_path").unwrap());
-        fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to create incremental snapshots directory {:?}: {}",
-                incremental_snapshot_archives_dir, err
+    let incremental_snapshot_archives_dir =
+        if matches.is_present("incremental_snapshot_archive_path") {
+            let incremental_snapshot_archives_dir = PathBuf::from(
+                matches
+                    .value_of("incremental_snapshot_archive_path")
+                    .unwrap(),
             );
-            exit(1);
-        });
-        incremental_snapshot_archives_dir
-    } else {
-        full_snapshot_archives_dir.clone()
-    };
-
+            fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to create incremental snapshot archives directory {:?}: {}",
+                    incremental_snapshot_archives_dir.display(),
+                    err
+                );
+                exit(1);
+            });
+            incremental_snapshot_archives_dir
+        } else {
+            full_snapshot_archives_dir.clone()
+        };
     let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            bank_snapshots_dir, err
+            bank_snapshots_dir.display(),
+            err
         );
         exit(1);
     });
