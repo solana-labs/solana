@@ -1740,12 +1740,11 @@ impl BankingStage {
             return None;
         }
 
-        let tx = SanitizedTransaction::try_create(
-            deserialized_packet.versioned_transaction().clone(),
+        let tx = SanitizedTransaction::try_new(
+            deserialized_packet.transaction().clone(),
             *deserialized_packet.message_hash(),
-            Some(deserialized_packet.is_simple_vote()),
+            deserialized_packet.is_simple_vote(),
             address_loader,
-            feature_set.is_active(&feature_set::require_static_program_ids_in_transaction::ID),
         )
         .ok()?;
         tx.verify_precompiles(feature_set).ok()?;
