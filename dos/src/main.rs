@@ -395,11 +395,14 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let mut keypairs_flat: Vec<Keypair> = Vec::new();
     // 1000 is arbitrary number. In case of permutation_size > 1,
     // this guaranties large enough set of unique permutations
-    let permutation_size = get_permutation_size(&transaction_params.num_signatures,
-        &transaction_params.num_instructions);
+    let permutation_size = get_permutation_size(
+        &transaction_params.num_signatures,
+        &transaction_params.num_instructions,
+    );
     let num_keypairs = 1000 * permutation_size;
 
-    let generate_keypairs = transaction_params.valid_signatures || transaction_params.valid_blockhash;
+    let generate_keypairs =
+        transaction_params.valid_signatures || transaction_params.valid_blockhash;
     if generate_keypairs {
         keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
     }
