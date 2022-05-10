@@ -159,10 +159,11 @@ impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
         let _guard = RUNTIME.enter();
 
-        let crypto = rustls::ClientConfig::builder()
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
+        crypto.enable_early_data = true;
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
@@ -217,6 +218,33 @@ impl QuicClient {
         Ok(Arc::new(connection))
     }
 
+    // Attempts to make a faster connection by taking advantage of pre-existing key material.
+    // Only works if connection to this endpoint was previously established.
+    async fn make_connection_0rtt(
+        &self,
+        stats: &ClientStats,
+    ) -> Result<Arc<NewConnection>, WriteError> {
+        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connection = match connecting.into_0rtt() {
+            Ok((connection, zero_rtt)) => {
+                if zero_rtt.await {
+                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                }
+                connection
+            }
+            Err(connecting) => {
+                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+                let connecting = connecting.await;
+                connecting?
+            }
+        };
+
+        Ok(Arc::new(connection))
+    }
+
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
     async fn _send_buffer(
@@ -244,7 +272,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connection = self.make_connection(stats).await?;
+                    let connection = self.make_connection_0rtt(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
