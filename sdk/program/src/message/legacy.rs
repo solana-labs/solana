@@ -44,6 +44,27 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    // Each element of a key is a u8. We use key[0] as an index into this table of 256 boolean
+    // elements, to store whether or not the first element of any key is present in the static
+    // lists of built-in-program keys or system ids. By using this lookup table, we can very
+    // quickly determine that a key under consideration cannot be in either of these lists (if
+    // the value is "false"), or might be in one of these lists (if the value is "true")
+    pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
+        let mut temp_table: [bool; 256] = [false; 256];
+        BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+        sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+        temp_table
+    };
+}
+
+pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
+    if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
+        return sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key);
+    }
+    false
+}
+
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
@@ -530,10 +551,7 @@ impl Message {
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
                     - self.header.num_readonly_unsigned_accounts as usize))
-            && !{
-                let key = self.account_keys[i];
-                sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
-            }
+            && !is_builtin_key_or_sysvar(&self.account_keys[i])
             && !self.demote_program_id(i)
     }
 
