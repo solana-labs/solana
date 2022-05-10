@@ -373,7 +373,6 @@ pub(crate) type SlotStores = Arc<RwLock<HashMap<AppendVecId, Arc<AccountStorageE
 type AccountSlots = HashMap<Pubkey, HashSet<Slot>>;
 type AppendVecOffsets = HashMap<AppendVecId, HashSet<usize>>;
 type ReclaimResult = (AccountSlots, AppendVecOffsets);
-type StorageFinder<'a> = Box<dyn Fn(Slot, usize) -> Arc<AccountStorageEntry> + 'a>;
 type ShrinkCandidates = HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>;
 
 trait Versioned {
@@ -2823,7 +2822,7 @@ impl AccountsDb {
             store_accounts_timing = self.store_accounts_frozen(
                 (slot, &accounts[..]),
                 Some(&hashes),
-                Some(Box::new(move |_, _| shrunken_store.clone())),
+                Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
             );
 
@@ -4848,7 +4847,7 @@ impl AccountsDb {
             self.store_accounts_frozen(
                 (slot, &accounts[..]),
                 Some(&hashes),
-                Some(Box::new(move |_, _| flushed_store.clone())),
+                Some(&flushed_store),
                 None,
             );
             // If the above sizing function is correct, just one AppendVec is enough to hold
@@ -6667,7 +6666,7 @@ impl AccountsDb {
         self.store_accounts_custom(
             accounts,
             hashes,
-            None::<StorageFinder>,
+            None,
             None::<Box<dyn Iterator<Item = u64>>>,
             is_cached_store,
             reset_accounts,
@@ -6678,7 +6677,7 @@ impl AccountsDb {
         &'a self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
-        storage_finder: Option<StorageFinder<'a>>,
+        storage: Option<&'a Arc<AccountStorageEntry>>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
@@ -6689,7 +6688,7 @@ impl AccountsDb {
         self.store_accounts_custom(
             accounts,
             hashes,
-            storage_finder,
+            storage,
             write_version_producer,
             is_cached_store,
             reset_accounts,
@@ -6700,13 +6699,16 @@ impl AccountsDb {
         &'a self,
         accounts: impl StorableAccounts<'b, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
-        storage_finder: Option<StorageFinder<'a>>,
+        storage: Option<&'a Arc<AccountStorageEntry>>,
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
         reset_accounts: bool,
     ) -> StoreAccountsTiming {
-        let storage_finder = storage_finder
-            .unwrap_or_else(|| Box::new(move |slot, size| self.find_storage_candidate(slot, size)));
+        let storage_finder = Box::new(move |slot, size| {
+            storage
+                .cloned()
+                .unwrap_or_else(|| self.find_storage_candidate(slot, size))
+        });
 
         let write_version_producer: Box<dyn Iterator<Item = u64>> = write_version_producer
             .unwrap_or_else(|| {
