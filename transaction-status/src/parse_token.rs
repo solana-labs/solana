@@ -2,8 +2,14 @@ use {
     crate::parse_instruction::{
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
+    extension::{
+        default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
+        transfer_fee::*,
+    },
     serde_json::{json, Map, Value},
-    solana_account_decoder::parse_token::{pubkey_from_spl_token, token_amount_to_ui_amount},
+    solana_account_decoder::parse_token::{
+        pubkey_from_spl_token, token_amount_to_ui_amount, UiAccountState,
+    },
     solana_sdk::{
         instruction::{AccountMeta, CompiledInstruction, Instruction},
         message::AccountKeys,
@@ -13,9 +19,12 @@ use {
         instruction::{AuthorityType, TokenInstruction},
         solana_program::{
             instruction::Instruction as SplTokenInstruction, program_option::COption,
+            pubkey::Pubkey,
         },
     },
 };
+
+mod extension;
 
 pub fn parse_token(
     instruction: &CompiledInstruction,
@@ -224,10 +233,7 @@ pub fn parse_token(
             let mut value = json!({
                 owned: account_keys[instruction.accounts[0] as usize].to_string(),
                 "authorityType": Into::<UiAuthorityType>::into(authority_type),
-                "newAuthority": match new_authority {
-                    COption::Some(authority) => Some(authority.to_string()),
-                    COption::None => None,
-                },
+                "newAuthority": map_coption_pubkey(new_authority),
             });
             let map = value.as_object_mut().unwrap();
             parse_signers(
@@ -489,27 +495,61 @@ pub fn parse_token(
                 }),
             })
         }
-        TokenInstruction::InitializeMintCloseAuthority { .. } => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
-        TokenInstruction::TransferFeeExtension(_) => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::InitializeMintCloseAuthority { close_authority } => {
+            parse_initialize_mint_close_authority_instruction(
+                close_authority,
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::TransferFeeExtension(transfer_fee_instruction) => {
+            parse_transfer_fee_instruction(
+                transfer_fee_instruction,
+                &instruction.accounts,
+                account_keys,
+            )
+        }
         TokenInstruction::ConfidentialTransferExtension => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
-        TokenInstruction::DefaultAccountStateExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
-        TokenInstruction::Reallocate { .. } => Err(ParseInstructionError::InstructionNotParsable(
-            ParsableProgram::SplToken,
-        )),
-        TokenInstruction::MemoTransferExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
-        TokenInstruction::CreateNativeMint => Err(ParseInstructionError::InstructionNotParsable(
-            ParsableProgram::SplToken,
-        )),
+        TokenInstruction::DefaultAccountStateExtension => {
+            if instruction.data.len() <= 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_default_account_state_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::Reallocate { extension_types } => {
+            parse_reallocate_instruction(extension_types, &instruction.accounts, account_keys)
+        }
+        TokenInstruction::MemoTransferExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_memo_transfer_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
+        TokenInstruction::CreateNativeMint => {
+            check_num_token_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "createNativeMint".to_string(),
+                info: json!({
+                    "payer": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "nativeMint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "systemProgram": account_keys[instruction.accounts[2] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 
@@ -617,6 +657,13 @@ pub fn spl_token_instruction(instruction: SplTokenInstruction) -> Instruction {
     }
 }
 
+fn map_coption_pubkey(pubkey: COption<Pubkey>) -> Option<String> {
+    match pubkey {
+        COption::Some(pubkey) => Some(pubkey.to_string()),
+        COption::None => None,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {
@@ -632,11 +679,11 @@ mod test {
         std::str::FromStr,
     };
 
-    fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
+    pub(super) fn convert_pubkey(pubkey: Pubkey) -> SplTokenPubkey {
         SplTokenPubkey::from_str(&pubkey.to_string()).unwrap()
     }
 
-    fn convert_compiled_instruction(
+    pub(super) fn convert_compiled_instruction(
         instruction: &SplTokenCompiledInstruction,
     ) -> CompiledInstruction {
         CompiledInstruction {
@@ -646,7 +693,7 @@ mod test {
         }
     }
 
-    fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
+    pub(super) fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
         message
             .account_keys
             .iter()
@@ -1620,6 +1667,30 @@ mod test {
     #[allow(clippy::same_item_push)]
     fn test_parse_token_2022() {
         test_parse_token(&spl_token_2022::id());
+    }
+
+    #[test]
+    fn test_create_native_mint() {
+        let payer = Pubkey::new_unique();
+        let create_native_mint_ix =
+            create_native_mint(&spl_token_2022::id(), &convert_pubkey(payer)).unwrap();
+        let message = Message::new(&[create_native_mint_ix], None);
+        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        assert_eq!(
+            parse_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "createNativeMint".to_string(),
+                info: json!({
+                   "payer": payer.to_string(),
+                   "nativeMint": spl_token_2022::native_mint::id().to_string(),
+                   "systemProgram": solana_sdk::system_program::id().to_string(),
+                })
+            }
+        );
     }
 
     fn test_token_ix_not_enough_keys(program_id: &SplTokenPubkey) {
