@@ -588,7 +588,9 @@ describe('StakeProgram', () => {
         stakePubkey: newAccountPubkey,
         authorizedPubkey: authorized.publicKey,
         splitStakePubkey: newStake.publicKey,
-        lamports: minimumAmount + 20,
+        // use a different amount than the first split so that this
+        // transaction is different and won't require a fresh blockhash
+        lamports: minimumAmount + 10,
       });
       await sendAndConfirmTransaction(
         connection,
