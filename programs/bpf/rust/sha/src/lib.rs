@@ -1,7 +1,7 @@
 //! SHA Syscall test
 
 extern crate solana_program;
-use solana_program::{custom_panic_default, msg};
+use solana_program::{custom_heap_default, custom_panic_default, msg};
 
 fn test_sha256_hasher() {
     use solana_program::hash::{hashv, Hasher};
@@ -39,6 +39,7 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     0
 }
 
+custom_heap_default!();
 custom_panic_default!();
 
 #[cfg(test)]
