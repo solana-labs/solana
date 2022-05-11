@@ -2522,7 +2522,11 @@ mod tests {
                 let packet_batches = convert_from_old_verified(packet_batches);
                 verified_sender.send(packet_batches).unwrap();
 
-                sleep(Duration::from_millis(200));
+                // wait for banking_stage to eat the packets
+                while bank.get_balance(&alice.pubkey()) < 1 {
+                    sleep(Duration::from_millis(100));
+                }
+
                 // Process a second batch that uses the same from account, so conflicts with above TX
                 let tx = system_transaction::transfer(
                     &mint_keypair,
