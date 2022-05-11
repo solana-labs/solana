@@ -4,6 +4,7 @@ use {
 };
 
 pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["bz2", "gzip", "zstd", "lz4", "tar", "none"];
+pub const DEFAULT_ARCHIVE_COMPRESSION: &str = "zstd";
 
 pub const TAR_BZIP2_EXTENSION: &str = "tar.bz2";
 pub const TAR_GZIP_EXTENSION: &str = "tar.gz";
@@ -30,6 +31,17 @@ impl ArchiveFormat {
             ArchiveFormat::TarZstd => TAR_ZSTD_EXTENSION,
             ArchiveFormat::TarLz4 => TAR_LZ4_EXTENSION,
             ArchiveFormat::Tar => TAR_EXTENSION,
+        }
+    }
+
+    pub fn from_cli_arg(archive_format_str: &str) -> Option<ArchiveFormat> {
+        match archive_format_str {
+            "bz2" => Some(ArchiveFormat::TarBzip2),
+            "gzip" => Some(ArchiveFormat::TarGzip),
+            "zstd" => Some(ArchiveFormat::TarZstd),
+            "lz4" => Some(ArchiveFormat::TarLz4),
+            "tar" | "none" => Some(ArchiveFormat::Tar),
+            _ => None,
         }
     }
 }

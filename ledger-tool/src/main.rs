@@ -44,7 +44,8 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -1528,7 +1529,7 @@ fn main() {
                 Arg::with_name("snapshot_archive_format")
                     .long("snapshot-archive-format")
                     .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
-                    .default_value("zstd")
+                    .default_value(DEFAULT_ARCHIVE_COMPRESSION)
                     .value_name("ARCHIVE_TYPE")
                     .takes_value(true)
                     .help("Snapshot archive format to use.")
@@ -2305,14 +2306,9 @@ fn main() {
                 let snapshot_archive_format = {
                     let archive_format_str =
                         value_t_or_exit!(matches, "snapshot_archive_format", String);
-                    match archive_format_str.as_str() {
-                        "bz2" => ArchiveFormat::TarBzip2,
-                        "gzip" => ArchiveFormat::TarGzip,
-                        "zstd" => ArchiveFormat::TarZstd,
-                        "lz4" => ArchiveFormat::TarLz4,
-                        "tar" | "none" => ArchiveFormat::Tar,
-                        _ => panic!("Archive format not recognized: {}", archive_format_str),
-                    }
+                    ArchiveFormat::from_cli_arg(&archive_format_str).expect(
+                        format!("Archive format not recognized: {}", archive_format_str).as_str(),
+                    )
                 };
 
                 let maximum_full_snapshot_archives_to_retain =
