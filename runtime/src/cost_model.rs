@@ -62,11 +62,15 @@ impl TransactionCost {
     }
 
     pub fn sum(&self) -> u64 {
+        self.sum_without_bpf()
+            .saturating_add(self.bpf_execution_cost)
+    }
+
+    pub fn sum_without_bpf(&self) -> u64 {
         self.signature_cost
             .saturating_add(self.write_lock_cost)
             .saturating_add(self.data_bytes_cost)
             .saturating_add(self.builtins_execution_cost)
-            .saturating_add(self.bpf_execution_cost)
     }
 }
 

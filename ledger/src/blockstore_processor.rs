@@ -345,7 +345,7 @@ fn execute_batches(
         .map(|tx| {
             let tx_cost = cost_model.calculate_cost(tx);
             let cost = tx_cost.sum();
-            let cost_without_bpf = cost.saturating_sub(tx_cost.bpf_execution_cost);
+            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
             total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
