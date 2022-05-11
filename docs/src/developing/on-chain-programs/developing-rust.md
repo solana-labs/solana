@@ -218,7 +218,6 @@ single-threaded environment, and must be deterministic:
   - `rand`
   - `std::fs`
   - `std::net`
-  - `std::os`
   - `std::future`
   - `std::process`
   - `std::sync`
