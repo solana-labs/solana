@@ -7,7 +7,7 @@ use {
         verified_vote_packets::{
             ValidatorGossipVotesIterator, VerifiedVoteMetadata, VerifiedVotePackets,
         },
-        vote_stake_tracker::{VoteStakeTracker, VoteThresholdCheckResult},
+        vote_stake_tracker::{ThresholdCheck, VoteStakeTracker, VoteThresholdCheckResult},
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
@@ -66,7 +66,24 @@ pub type GossipVerifiedVoteHashReceiver = Receiver<(Pubkey, Slot, Hash)>;
 pub type GossipDuplicateConfirmedSlotsSender = Sender<ThresholdConfirmedSlots>;
 pub type GossipDuplicateConfirmedSlotsReceiver = Receiver<ThresholdConfirmedSlots>;
 
-const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
+/// TwoVoteThreshold implements default vote threshold checking, which compares with
+/// `DUPLICATE_THRESHOLD` and `VOTE_THRESHOLD_SIZE` to check the vote status. In future,
+/// we might want to extend it to more complicated threshold checking algorithm, which can
+/// be customized by the user.
+pub struct TwoVoteThresholds;
+
+impl ThresholdCheck for TwoVoteThresholds {
+    fn is_duplicate(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool {
+        let threshold_stake = (total_stake as f64 * DUPLICATE_THRESHOLD) as u64;
+        old_stake <= threshold_stake && threshold_stake < new_stake
+    }
+
+    fn is_vote(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool {
+        let threshold_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+        old_stake <= threshold_stake && threshold_stake < new_stake
+    }
+}
+
 const BANK_SEND_VOTES_LOOP_SLEEP_MS: u128 = 10;
 
 #[derive(Default)]
@@ -791,7 +808,7 @@ impl ClusterInfoVoteListener {
 
         w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
+            .add_vote_pubkey(pubkey, stake, total_epoch_stake, TwoVoteThresholds {})
     }
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {

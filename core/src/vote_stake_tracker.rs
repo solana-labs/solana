@@ -12,32 +12,41 @@ pub struct VoteStakeTracker {
     stake: u64,
 }
 
+/// ThresholdCheck trait.
+pub trait ThresholdCheck {
+    /// Return True if passing the duplicate confirmation check
+    fn is_duplicate(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool;
+
+    /// Return True if passing the vote confirmation check
+    fn is_vote(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool;
+}
+
 impl VoteStakeTracker {
     // Returns VoteThresholdCheckResult.
     // It checks both DUPLICATE_THRESHOLD and VOTE_THRESHOLD_SIZE by adding the
     // stake of the vote from the new `vote_pubkey` and comparing against the target
     // threshold.
     // `is_new` is true if the vote_pubkey has not been seen before.
-    pub fn add_vote_pubkey(
+    pub fn add_vote_pubkey<T: ThresholdCheck>(
         &mut self,
         vote_pubkey: Pubkey,
         stake: u64,
         total_stake: u64,
-        thresholds_to_check: &[f64],
+        thresholds_to_check: T,
     ) -> VoteThresholdCheckResult {
-        debug_assert!(thresholds_to_check.len() == 2);
         if self.voted.insert(vote_pubkey) {
             // A new vote that we haven't seen before.
             let old_stake = self.stake;
             let new_stake = self.stake + stake;
             self.stake = new_stake;
-            let check = |threshold| {
-                let threshold_stake = (total_stake as f64 * threshold) as u64;
-                old_stake <= threshold_stake && threshold_stake < new_stake
-            };
+
             VoteThresholdCheckResult {
-                check_duplicate: check(thresholds_to_check[0]),
-                check_vote: check(thresholds_to_check[1]),
+                check_duplicate: thresholds_to_check.is_duplicate(
+                    old_stake,
+                    new_stake,
+                    total_stake,
+                ),
+                check_vote: thresholds_to_check.is_vote(old_stake, new_stake, total_stake),
                 is_new: true,
             }
         } else {
@@ -58,6 +67,20 @@ impl VoteStakeTracker {
 mod test {
     use {super::*, solana_runtime::commitment::VOTE_THRESHOLD_SIZE};
 
+    pub struct TestVoteThresholds;
+
+    impl ThresholdCheck for TestVoteThresholds {
+        fn is_duplicate(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool {
+            let threshold_stake = (total_stake as f64 * VOTE_THRESHOLD_SIZE) as u64;
+            old_stake <= threshold_stake && threshold_stake < new_stake
+        }
+
+        fn is_vote(&self, old_stake: u64, new_stake: u64, total_stake: u64) -> bool {
+            let threshold_stake = (total_stake as f64 * 0.0) as u64;
+            old_stake <= threshold_stake && threshold_stake < new_stake
+        }
+    }
+
     #[test]
     fn test_add_vote_pubkey() {
         let total_epoch_stake = 10;
@@ -72,7 +95,7 @@ mod test {
                 pubkey,
                 1,
                 total_epoch_stake,
-                &[VOTE_THRESHOLD_SIZE, 0.0],
+                TestVoteThresholds {},
             );
             let stake = vote_stake_tracker.stake();
             let VoteThresholdCheckResult {
@@ -83,7 +106,7 @@ mod test {
                 pubkey,
                 1,
                 total_epoch_stake,
-                &[VOTE_THRESHOLD_SIZE, 0.0],
+                TestVoteThresholds {},
             );
             let stake2 = vote_stake_tracker.stake();
 
