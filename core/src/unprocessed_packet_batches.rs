@@ -345,12 +345,11 @@ impl UnprocessedPacketBatches {
 }
 
 pub fn deserialize_packets<'a>(
-    packet_batch: &'a PacketBatch,
-    packet_indexes: &'a [usize],
+    packet_batch: &'a [&'a Packet],
     bank: Option<&'a Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
-    packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
+    packet_batch.iter().filter_map(move |pkt| {
+        DeserializedPacket::new((*pkt).clone(), bank).ok()
     })
 }
 

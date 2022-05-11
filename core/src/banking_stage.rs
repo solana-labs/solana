@@ -12,7 +12,7 @@ use {
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     histogram::Histogram,
-    itertools::Itertools,
+    itertools::{Itertools, Chunks, Chunk},
     min_max_heap::MinMaxHeap,
     solana_client::connection_cache::send_wire_transaction_batch,
     solana_entry::entry::hash_transactions,
@@ -2030,24 +2030,28 @@ impl BankingStage {
         );
         let mut proc_start = Measure::start("receive_and_buffer_packets_transactions_process");
 
-        let packet_batch_iter = packet_batches.into_iter();
+        // Re-chunk the packets into appropriately-sized batches as with Quic,
+        // due to its connection and stream-oriented nature, it's often convenient
+        // to send over very small batches (~1 packet per batch)
+        // This should be regarded as a temporary fix until we can
+        // get the Quic streamer to batch packets more appropriately
+        // as having lots of small batches still affects cache locality
+        let packet_chunks_vec: Vec<Vec<&Packet>> = packet_batches.iter().
+        map(|batch| batch.packets.iter().filter(|pkt| !pkt.meta.discard())).flatten().chunks(128).into_iter().map(|chunk| chunk.collect::<Vec<_>>()).collect::<Vec<_>>();
+
+        let num_valid_packets = packet_chunks_vec.iter().map(|chunk| chunk.len()).sum();
+        slot_metrics_tracker.increment_total_new_valid_packets(num_valid_packets as u64);
+        slot_metrics_tracker.increment_newly_failed_sigverify_count(
+            packet_count
+                .saturating_sub(num_valid_packets) as u64,
+        );
+
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
-        for packet_batch in packet_batch_iter {
-            let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
-            // Track all the packets incoming from sigverify, both valid and invalid
-            slot_metrics_tracker.increment_total_new_valid_packets(packet_indexes.len() as u64);
-            slot_metrics_tracker.increment_newly_failed_sigverify_count(
-                packet_batch
-                    .packets
-                    .len()
-                    .saturating_sub(packet_indexes.len()) as u64,
-            );
-
+        for packet_chunk in &packet_chunks_vec {
             Self::push_unprocessed(
                 buffered_packet_batches,
-                &packet_batch,
-                &packet_indexes,
+                &packet_chunk,
                 &mut dropped_packets_count,
                 &mut newly_buffered_packets_count,
                 banking_stage_stats,
@@ -2086,27 +2090,26 @@ impl BankingStage {
         Ok(())
     }
 
-    fn push_unprocessed(
+    fn push_unprocessed<'a>(
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
+        packet_batch: &[&Packet],
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
-        if !packet_indexes.is_empty() {
+        if !packet_batch.is_empty() {
             let _ = banking_stage_stats
                 .batch_packet_indexes_len
-                .increment(packet_indexes.len() as u64);
+                .increment(packet_batch.len() as u64);
 
-            *newly_buffered_packets_count += packet_indexes.len();
+            *newly_buffered_packets_count += packet_batch.len();
             slot_metrics_tracker
-                .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
+                .increment_newly_buffered_packets_count(packet_batch.len() as u64);
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
                 // Passing `None` for bank for now will make all packet weights 0
-                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes, None),
+                unprocessed_packet_batches::deserialize_packets(packet_batch, None),
             );
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);

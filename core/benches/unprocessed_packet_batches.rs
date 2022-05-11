@@ -58,6 +58,8 @@ fn build_randomized_packet_batch(packet_per_batch_count: usize) -> (PacketBatch,
     (packet_batch, packet_indexes)
 }
 
+// todo: make this work again
+/*
 fn insert_packet_batches(
     buffer_max_size: usize,
     batch_count: usize,
@@ -83,7 +85,7 @@ fn insert_packet_batches(
         buffer_max_size,
         timer.as_us()
     );
-}
+}*/
 
 #[bench]
 #[allow(clippy::unit_arg)]
