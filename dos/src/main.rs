@@ -707,8 +707,6 @@ pub mod test {
         );
     }
 
-    // Ignore tests which are using LocalCluster due to known
-    // problem with several such tests running in parallel
     #[test]
     fn test_dos_random() {
         solana_logger::setup();
@@ -725,7 +723,7 @@ pub mod test {
         // will be discarded on sigverify stage
         run_dos_no_client(
             &nodes_slice,
-            1000,
+            10,
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
