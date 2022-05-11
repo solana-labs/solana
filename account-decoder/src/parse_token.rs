@@ -18,13 +18,13 @@ use {
 
 // A helper function to convert spl_token::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-fn spl_token_id() -> Pubkey {
+pub(crate) fn spl_token_id() -> Pubkey {
     Pubkey::new_from_array(spl_token::id().to_bytes())
 }
 
 // A helper function to convert spl_token_2022::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-fn spl_token_2022_id() -> Pubkey {
+pub(crate) fn spl_token_2022_id() -> Pubkey {
     Pubkey::new_from_array(spl_token_2022::id().to_bytes())
 }
 
@@ -62,6 +62,7 @@ pub fn pubkey_from_spl_token(pubkey: &SplTokenPubkey) -> Pubkey {
 pub fn parse_token(
     data: &[u8],
     mint_decimals: Option<u8>,
+    program_id: &Pubkey,
 ) -> Result<TokenAccountType, ParseAccountError> {
     if let Ok(account) = StateWithExtensions::<Account>::unpack(data) {
         let decimals = mint_decimals.ok_or_else(|| {
@@ -101,6 +102,7 @@ pub fn parse_token(
                 COption::None => None,
             },
             extensions: ui_extensions,
+            program_id: program_id.to_string(),
         }));
     }
     if let Ok(mint) = StateWithExtensions::<Mint>::unpack(data) {
@@ -122,6 +124,7 @@ pub fn parse_token(
                 COption::None => None,
             },
             extensions: ui_extensions,
+            program_id: program_id.to_string(),
         }));
     }
     if data.len() == Multisig::get_packed_len() {
@@ -131,6 +134,7 @@ pub fn parse_token(
             num_required_signers: multisig.m,
             num_valid_signers: multisig.n,
             is_initialized: multisig.is_initialized,
+            program_id: program_id.to_string(),
             signers: multisig
                 .signers
                 .iter()
@@ -169,6 +173,7 @@ pub struct UiTokenAccount {
     pub delegate: Option<String>,
     pub state: UiAccountState,
     pub is_native: bool,
+    pub program_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rent_exempt_reserve: Option<UiTokenAmount>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -268,6 +273,7 @@ pub struct UiMint {
     pub decimals: u8,
     pub is_initialized: bool,
     pub freeze_authority: Option<String>,
+    pub program_id: String,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub extensions: Vec<UiExtension>,
 }
@@ -278,6 +284,7 @@ pub struct UiMultisig {
     pub num_required_signers: u8,
     pub num_valid_signers: u8,
     pub is_initialized: bool,
+    pub program_id: String,
     pub signers: Vec<String>,
 }
 
@@ -305,6 +312,7 @@ mod test {
 
     #[test]
     fn test_parse_token() {
+        let program_id = Pubkey::new_unique();
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
         let mut account_data = vec![0; Account::get_packed_len()];
@@ -317,9 +325,9 @@ mod test {
         account.close_authority = COption::Some(owner_pubkey);
         Account::pack(account, &mut account_data).unwrap();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token(&account_data, None, &program_id).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token(&account_data, Some(2), &program_id).unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -336,6 +344,7 @@ mod test {
                 delegated_amount: None,
                 close_authority: Some(owner_pubkey.to_string()),
                 extensions: vec![],
+                program_id: program_id.to_string(),
             }),
         );
 
@@ -349,7 +358,7 @@ mod test {
         Mint::pack(mint, &mut mint_data).unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token(&mint_data, None, &program_id).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
@@ -357,6 +366,7 @@ mod test {
                 is_initialized: true,
                 freeze_authority: Some(owner_pubkey.to_string()),
                 extensions: vec![],
+                program_id: program_id.to_string(),
             }),
         );
 
@@ -376,7 +386,7 @@ mod test {
         Multisig::pack(multisig, &mut multisig_data).unwrap();
 
         assert_eq!(
-            parse_token(&multisig_data, None).unwrap(),
+            parse_token(&multisig_data, None, &program_id).unwrap(),
             TokenAccountType::Multisig(UiMultisig {
                 num_required_signers: 2,
                 num_valid_signers: 3,
@@ -386,11 +396,12 @@ mod test {
                     signer2.to_string(),
                     signer3.to_string()
                 ],
+                program_id: program_id.to_string(),
             }),
         );
 
         let bad_data = vec![0; 4];
-        assert!(parse_token(&bad_data, None).is_err());
+        assert!(parse_token(&bad_data, None, &program_id).is_err());
     }
 
     #[test]
@@ -497,6 +508,7 @@ mod test {
 
     #[test]
     fn test_parse_token_account_with_extensions() {
+        let program_id = Pubkey::new_unique();
         let mint_pubkey = SplTokenPubkey::new(&[2; 32]);
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
 
@@ -510,7 +522,7 @@ mod test {
             delegate: COption::None,
             delegated_amount: 0,
         };
-        let account_size = ExtensionType::get_account_len::<Mint>(&[
+        let account_size = ExtensionType::get_account_len::<Account>(&[
             ExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer,
         ]);
@@ -522,9 +534,9 @@ mod test {
         account_state.pack_base();
         account_state.init_account_type().unwrap();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token(&account_data, None, &program_id).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token(&account_data, Some(2), &program_id).unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -541,6 +553,7 @@ mod test {
                 delegated_amount: None,
                 close_authority: Some(owner_pubkey.to_string()),
                 extensions: vec![],
+                program_id: program_id.to_string(),
             }),
         );
 
@@ -556,9 +569,9 @@ mod test {
         let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
-        assert!(parse_token(&account_data, None).is_err());
+        assert!(parse_token(&account_data, None, &program_id).is_err());
         assert_eq!(
-            parse_token(&account_data, Some(2)).unwrap(),
+            parse_token(&account_data, Some(2), &program_id).unwrap(),
             TokenAccountType::Account(UiTokenAccount {
                 mint: mint_pubkey.to_string(),
                 owner: owner_pubkey.to_string(),
@@ -580,12 +593,14 @@ mod test {
                         require_incoming_transfer_memos: true,
                     }),
                 ],
+                program_id: program_id.to_string(),
             }),
         );
     }
 
     #[test]
     fn test_parse_token_mint_with_extensions() {
+        let program_id = Pubkey::new_unique();
         let owner_pubkey = SplTokenPubkey::new(&[3; 32]);
         let mint_size =
             ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
@@ -605,7 +620,7 @@ mod test {
         mint_state.init_account_type().unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token(&mint_data, None, &program_id).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
@@ -613,6 +628,7 @@ mod test {
                 is_initialized: true,
                 freeze_authority: Some(owner_pubkey.to_string()),
                 extensions: vec![],
+                program_id: program_id.to_string(),
             }),
         );
 
@@ -629,7 +645,7 @@ mod test {
         mint_state.init_account_type().unwrap();
 
         assert_eq!(
-            parse_token(&mint_data, None).unwrap(),
+            parse_token(&mint_data, None, &program_id).unwrap(),
             TokenAccountType::Mint(UiMint {
                 mint_authority: Some(owner_pubkey.to_string()),
                 supply: 42.to_string(),
@@ -639,6 +655,7 @@ mod test {
                 extensions: vec![UiExtension::MintCloseAuthority(UiMintCloseAuthority {
                     close_authority: Some(owner_pubkey.to_string()),
                 })],
+                program_id: program_id.to_string(),
             }),
         );
     }
