@@ -171,6 +171,9 @@ self-contained with moderate scope, you might want to consider attaching
 
 * "javascript": this pull request updates Javascript code.
 
+* "ledger-store": this pull request is related to ledger-store.  In most cases,
+it modifies code files under `/ledger/src` directory.
+
 ### When will my PR be reviewed?
 
 PRs are typically reviewed and merged in under 7 days. If your PR has been open
