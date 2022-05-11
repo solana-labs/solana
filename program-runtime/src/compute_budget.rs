@@ -131,15 +131,12 @@ impl ComputeBudget {
         let mut requested_additional_fee = 0;
         let mut requested_units = None;
         let mut num_instructions: usize = 0;
+        let error = TransactionError::InstructionError(0, InstructionError::InvalidInstructionData);
         for (i, (program_id, instruction)) in instructions.enumerate() {
             if compute_budget::check_id(program_id) {
                 // Compute budget instruction must be in the 1st 3 instructions
                 // (need to account for nonce marker), otherwise ignored
                 if i < 3 {
-                    let error = TransactionError::InstructionError(
-                        i as u8,
-                        InstructionError::InvalidInstructionData,
-                    );
                     match try_from_slice_unchecked(&instruction.data) {
                         Ok(ComputeBudgetInstruction::RequestUnits {
                             units,
