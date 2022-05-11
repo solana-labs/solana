@@ -1,6 +1,5 @@
 use {
     min_max_heap::MinMaxHeap,
-    num_traits::cast::FromPrimitive,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -20,6 +19,13 @@ use {
     thiserror::Error,
 };
 
+// Fee per CU is calculated as additional_fee:u64 / request_units:u64, where MAX of
+// request_units is 1_400_000. So the smallest fee_per_cu = 1/1_400_000 = 0.000000714.
+// Additional_fee is scaled up by FEE_PER_CU_MULTIPLIER to perform integer arithmetic
+// with enough precision.
+const FEE_PER_CU_MULTIPLIER: u128 = 1_000_000_000;
+type FeePerCu = u128;
+
 #[derive(Debug, Error)]
 pub enum DeserializedPacketError {
     #[error("ShortVec Failed to Deserialize")]
@@ -35,13 +41,13 @@ pub enum DeserializedPacketError {
     AdditionalFeeInvalid,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    fee_per_cu: f64,
+    fee_per_cu: FeePerCu,
 }
 
 impl ImmutableDeserializedPacket {
@@ -65,7 +71,7 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn fee_per_cu(&self) -> f64 {
+    pub fn fee_per_cu(&self) -> FeePerCu {
         self.fee_per_cu
     }
 }
@@ -86,14 +92,14 @@ impl DeserializedPacket {
     #[cfg(test)]
     fn new_with_fee_per_cu(
         packet: Packet,
-        fee_per_cu: f64,
+        fee_per_cu: FeePerCu,
     ) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, Some(fee_per_cu))
     }
 
     pub fn new_internal(
         packet: Packet,
-        fee_per_cu: Option<f64>,
+        fee_per_cu: Option<FeePerCu>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
             limited_deserialize(&packet.data[0..packet.meta.size])?;
@@ -133,8 +139,7 @@ impl Ord for DeserializedPacket {
         match self
             .immutable_section()
             .fee_per_cu()
-            .partial_cmp(&other.immutable_section().fee_per_cu())
-            .unwrap()
+            .cmp(&other.immutable_section().fee_per_cu())
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -145,8 +150,6 @@ impl Ord for DeserializedPacket {
     }
 }
 
-impl Eq for ImmutableDeserializedPacket {}
-
 impl PartialOrd for ImmutableDeserializedPacket {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -155,8 +158,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        // f64 partial_cmp seems never return None, can unwrap
-        match self.fee_per_cu().partial_cmp(&other.fee_per_cu()).unwrap() {
+        match self.fee_per_cu().cmp(&other.fee_per_cu()) {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
@@ -374,8 +376,7 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-/// Computes fee_per_cu as `(addition_fee / requested_cu)`
-fn compute_fee_per_cu(message: &SanitizedVersionedMessage) -> Option<f64> {
+fn compute_fee_per_cu(message: &SanitizedVersionedMessage) -> Option<FeePerCu> {
     let mut compute_budget = ComputeBudget::default();
     let additional_fee = compute_budget
         .process_instructions(
@@ -384,9 +385,11 @@ fn compute_fee_per_cu(message: &SanitizedVersionedMessage) -> Option<f64> {
             true,  // use default units per instruction
         )
         .ok()?;
-    let additional_fee = f64::from_u64(additional_fee)?;
-    let request_units = f64::from_u64(compute_budget.max_units)?;
-    Some(additional_fee / request_units)
+    Some(
+        FEE_PER_CU_MULTIPLIER
+            .saturating_mul(u128::from(additional_fee))
+            .saturating_div(u128::from(compute_budget.max_units)),
+    )
 }
 
 pub fn transactions_to_deserialized_packets(
@@ -424,7 +427,7 @@ mod tests {
         DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_fee_per_cu(fee_per_cu: f64) -> DeserializedPacket {
+    fn packet_with_fee_per_cu(fee_per_cu: FeePerCu) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -452,10 +455,10 @@ mod tests {
 
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
-        let heavier_packet_weight = 2f64;
+        let heavier_packet_weight = 2u128;
         let heavier_packet = packet_with_fee_per_cu(heavier_packet_weight);
 
-        let lesser_packet_weight = heavier_packet_weight - 1f64;
+        let lesser_packet_weight = heavier_packet_weight - 1u128;
         let lesser_packet = packet_with_fee_per_cu(lesser_packet_weight);
 
         // Test that the heavier packet is actually heavier
