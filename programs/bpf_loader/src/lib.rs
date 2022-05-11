@@ -366,7 +366,7 @@ fn process_instruction_common(
                     ic_logger_msg!(log_collector, "Program has been closed");
                     return Err(InstructionError::InvalidAccountData);
                 }
-                UpgradeableLoaderState::programdata_data_offset()?
+                UpgradeableLoaderState::size_of_programdata_metadata()
             } else {
                 ic_logger_msg!(log_collector, "Invalid Program account");
                 return Err(InstructionError::InvalidAccountData);
@@ -492,7 +492,7 @@ fn process_loader_upgradeable_instruction(
             drop(buffer);
             write_program_data(
                 first_instruction_account,
-                UpgradeableLoaderState::buffer_data_offset()?.saturating_add(offset as usize),
+                UpgradeableLoaderState::size_of_buffer_metadata().saturating_add(offset as usize),
                 &bytes,
                 invoke_context,
             )?;
@@ -525,7 +525,7 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "Program account already initialized");
                 return Err(InstructionError::AccountAlreadyInitialized);
             }
-            if program.get_data().len() < UpgradeableLoaderState::program_len()? {
+            if program.get_data().len() < UpgradeableLoaderState::size_of_program() {
                 ic_logger_msg!(log_collector, "Program account too small");
                 return Err(InstructionError::AccountDataTooSmall);
             }
@@ -555,11 +555,11 @@ fn process_loader_upgradeable_instruction(
             }
             let buffer_key = *buffer.get_key();
             let buffer_lamports = buffer.get_lamports();
-            let buffer_data_offset = UpgradeableLoaderState::buffer_data_offset()?;
+            let buffer_data_offset = UpgradeableLoaderState::size_of_buffer_metadata();
             let buffer_data_len = buffer.get_data().len().saturating_sub(buffer_data_offset);
-            let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
-            let programdata_len = UpgradeableLoaderState::programdata_len(max_data_len)?;
-            if buffer.get_data().len() < UpgradeableLoaderState::buffer_data_offset()?
+            let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+            let programdata_len = UpgradeableLoaderState::size_of_programdata(max_data_len);
+            if buffer.get_data().len() < UpgradeableLoaderState::size_of_buffer_metadata()
                 || buffer_data_len == 0
             {
                 ic_logger_msg!(log_collector, "Buffer account too small");
@@ -750,9 +750,9 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
             let buffer_lamports = buffer.get_lamports();
-            let buffer_data_offset = UpgradeableLoaderState::buffer_data_offset()?;
+            let buffer_data_offset = UpgradeableLoaderState::size_of_buffer_metadata();
             let buffer_data_len = buffer.get_data().len().saturating_sub(buffer_data_offset);
-            if buffer.get_data().len() < UpgradeableLoaderState::buffer_data_offset()?
+            if buffer.get_data().len() < UpgradeableLoaderState::size_of_buffer_metadata()
                 || buffer_data_len == 0
             {
                 ic_logger_msg!(log_collector, "Buffer account too small");
@@ -764,11 +764,11 @@ fn process_loader_upgradeable_instruction(
 
             let programdata =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            let programdata_data_offset = UpgradeableLoaderState::programdata_data_offset()?;
+            let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
             let programdata_balance_required =
                 1.max(rent.minimum_balance(programdata.get_data().len()));
             if programdata.get_data().len()
-                < UpgradeableLoaderState::programdata_len(buffer_data_len)?
+                < UpgradeableLoaderState::size_of_programdata(buffer_data_len)
             {
                 ic_logger_msg!(log_collector, "ProgramData account not large enough");
                 return Err(InstructionError::AccountDataTooSmall);
@@ -1726,17 +1726,11 @@ mod tests {
     fn test_bpf_loader_upgradeable_initialize_buffer() {
         let loader_id = bpf_loader_upgradeable::id();
         let buffer_address = Pubkey::new_unique();
-        let buffer_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(9).unwrap(),
-            &loader_id,
-        );
+        let buffer_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(9), &loader_id);
         let authority_address = Pubkey::new_unique();
-        let authority_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(9).unwrap(),
-            &loader_id,
-        );
+        let authority_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(9), &loader_id);
         let instruction_data =
             bincode::serialize(&UpgradeableLoaderInstruction::InitializeBuffer).unwrap();
         let instruction_accounts = vec![
@@ -1797,11 +1791,8 @@ mod tests {
     fn test_bpf_loader_upgradeable_write() {
         let loader_id = bpf_loader_upgradeable::id();
         let buffer_address = Pubkey::new_unique();
-        let mut buffer_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(9).unwrap(),
-            &loader_id,
-        );
+        let mut buffer_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(9), &loader_id);
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: buffer_address,
@@ -1861,7 +1852,7 @@ mod tests {
                 .first()
                 .unwrap()
                 .data()
-                .get(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .get(UpgradeableLoaderState::size_of_buffer_metadata()..)
                 .unwrap(),
             &[42; 9]
         );
@@ -1872,11 +1863,8 @@ mod tests {
             bytes: vec![42; 6],
         })
         .unwrap();
-        let mut buffer_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(9).unwrap(),
-            &loader_id,
-        );
+        let mut buffer_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(9), &loader_id);
         buffer_account
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(buffer_address),
@@ -1902,7 +1890,7 @@ mod tests {
                 .first()
                 .unwrap()
                 .data()
-                .get(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .get(UpgradeableLoaderState::size_of_buffer_metadata()..)
                 .unwrap(),
             &[0, 0, 0, 42, 42, 42, 42, 42, 42]
         );
@@ -2070,20 +2058,20 @@ mod tests {
 
         // Compute rent exempt balances
         let program_len = elf.len();
-        let min_program_balance = bank
-            .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap());
+        let min_program_balance =
+            bank.get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program());
         let min_buffer_balance = bank.get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::buffer_len(program_len).unwrap(),
+            UpgradeableLoaderState::size_of_buffer(program_len),
         );
         let min_programdata_balance = bank.get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(program_len).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(program_len),
         );
 
         // Setup accounts
         let buffer_account = {
             let mut account = AccountSharedData::new(
                 min_buffer_balance,
-                UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+                UpgradeableLoaderState::size_of_buffer(elf.len()),
                 &bpf_loader_upgradeable::id(),
             );
             account
@@ -2093,19 +2081,19 @@ mod tests {
                 .unwrap();
             account
                 .data_as_mut_slice()
-                .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
                 .unwrap()
                 .copy_from_slice(&elf);
             account
         };
         let program_account = AccountSharedData::new(
             min_programdata_balance,
-            UpgradeableLoaderState::program_len().unwrap(),
+            UpgradeableLoaderState::size_of_program(),
             &bpf_loader_upgradeable::id(),
         );
         let programdata_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::programdata_len(elf.len()).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(elf.len()),
             &bpf_loader_upgradeable::id(),
         );
 
@@ -2158,7 +2146,7 @@ mod tests {
         assert_eq!(post_program_account.owner(), &bpf_loader_upgradeable::id());
         assert_eq!(
             post_program_account.data().len(),
-            UpgradeableLoaderState::program_len().unwrap()
+            UpgradeableLoaderState::size_of_program()
         );
         let state: UpgradeableLoaderState = post_program_account.state().unwrap();
         assert_eq!(
@@ -2183,7 +2171,7 @@ mod tests {
         );
         for (i, byte) in post_programdata_account
             .data()
-            .get(UpgradeableLoaderState::programdata_data_offset().unwrap()..)
+            .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
             .unwrap()
             .iter()
             .enumerate()
@@ -2398,7 +2386,7 @@ mod tests {
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             min_program_balance,
-            (UpgradeableLoaderState::program_len().unwrap() as u64).saturating_add(1),
+            (UpgradeableLoaderState::size_of_program() as u64).saturating_add(1),
             &id(),
         );
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -2431,7 +2419,7 @@ mod tests {
             &mint_keypair.pubkey(),
             &program_keypair.pubkey(),
             min_program_balance,
-            (UpgradeableLoaderState::program_len().unwrap() as u64).saturating_sub(1),
+            (UpgradeableLoaderState::size_of_program() as u64).saturating_sub(1),
             &id(),
         );
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
@@ -2586,7 +2574,7 @@ mod tests {
         let mut modified_buffer_account = buffer_account;
         truncate_data(
             &mut modified_buffer_account,
-            UpgradeableLoaderState::buffer_len(1).unwrap(),
+            UpgradeableLoaderState::size_of_buffer(1),
         );
         bank.store_account(&buffer_address, &modified_buffer_account);
         bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
@@ -2618,7 +2606,7 @@ mod tests {
         bank.clear_signatures();
         let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
-            UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
             &bpf_loader_upgradeable::id(),
         );
         modified_buffer_account
@@ -2628,7 +2616,7 @@ mod tests {
             .unwrap();
         modified_buffer_account
             .data_as_mut_slice()
-            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
             .unwrap()
             .copy_from_slice(&elf);
         truncate_data(&mut modified_buffer_account, 5);
@@ -2662,7 +2650,7 @@ mod tests {
         bank.clear_signatures();
         let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
-            UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
             &bpf_loader_upgradeable::id(),
         );
         modified_buffer_account
@@ -2672,7 +2660,7 @@ mod tests {
             .unwrap();
         modified_buffer_account
             .data_as_mut_slice()
-            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
             .unwrap()
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
@@ -2705,7 +2693,7 @@ mod tests {
         bank.clear_signatures();
         let mut modified_buffer_account = AccountSharedData::new(
             min_programdata_balance,
-            UpgradeableLoaderState::buffer_len(elf.len()).unwrap(),
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
             &bpf_loader_upgradeable::id(),
         );
         modified_buffer_account
@@ -2715,7 +2703,7 @@ mod tests {
             .unwrap();
         modified_buffer_account
             .data_as_mut_slice()
-            .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
             .unwrap()
             .copy_from_slice(&elf);
         bank.store_account(&buffer_address, &modified_buffer_account);
@@ -2770,15 +2758,15 @@ mod tests {
             let spill_address = Pubkey::new_unique();
             let rent = Rent::default();
             let min_program_balance =
-                1.max(rent.minimum_balance(UpgradeableLoaderState::program_len().unwrap()));
+                1.max(rent.minimum_balance(UpgradeableLoaderState::size_of_program()));
             let min_programdata_balance = 1.max(rent.minimum_balance(
-                UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),
+                UpgradeableLoaderState::size_of_programdata(elf_orig.len().max(elf_new.len())),
             ));
             let (programdata_address, _) =
                 Pubkey::find_program_address(&[program_address.as_ref()], &loader_id);
             let mut buffer_account = AccountSharedData::new(
                 1,
-                UpgradeableLoaderState::buffer_len(elf_new.len()).unwrap(),
+                UpgradeableLoaderState::size_of_buffer(elf_new.len()),
                 &bpf_loader_upgradeable::id(),
             );
             buffer_account
@@ -2788,12 +2776,12 @@ mod tests {
                 .unwrap();
             buffer_account
                 .data_as_mut_slice()
-                .get_mut(UpgradeableLoaderState::buffer_data_offset().unwrap()..)
+                .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
                 .unwrap()
                 .copy_from_slice(elf_new);
             let mut programdata_account = AccountSharedData::new(
                 min_programdata_balance,
-                UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),
+                UpgradeableLoaderState::size_of_programdata(elf_orig.len().max(elf_new.len())),
                 &bpf_loader_upgradeable::id(),
             );
             programdata_account
@@ -2804,7 +2792,7 @@ mod tests {
                 .unwrap();
             let mut program_account = AccountSharedData::new(
                 min_program_balance,
-                UpgradeableLoaderState::program_len().unwrap(),
+                UpgradeableLoaderState::size_of_program(),
                 &bpf_loader_upgradeable::id(),
             );
             program_account.set_executable(true);
@@ -2899,7 +2887,7 @@ mod tests {
         );
         let accounts = process_instruction(transaction_accounts, instruction_accounts, Ok(()));
         let min_programdata_balance = Rent::default().minimum_balance(
-            UpgradeableLoaderState::programdata_len(elf_orig.len().max(elf_new.len())).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(elf_orig.len().max(elf_new.len())),
         );
         assert_eq!(
             min_programdata_balance,
@@ -2920,10 +2908,8 @@ mod tests {
             .unwrap()
             .data()
             .get(
-                UpgradeableLoaderState::programdata_data_offset().unwrap()
-                    ..UpgradeableLoaderState::programdata_data_offset()
-                        .unwrap()
-                        .saturating_add(elf_new.len()),
+                UpgradeableLoaderState::size_of_programdata_metadata()
+                    ..UpgradeableLoaderState::size_of_programdata(elf_new.len()),
             )
             .unwrap()
             .iter()
@@ -3107,8 +3093,9 @@ mod tests {
         );
         transaction_accounts.get_mut(2).unwrap().1 = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::buffer_len(elf_orig.len().max(elf_new.len()).saturating_add(1))
-                .unwrap(),
+            UpgradeableLoaderState::size_of_buffer(
+                elf_orig.len().max(elf_new.len()).saturating_add(1),
+            ),
             &bpf_loader_upgradeable::id(),
         );
         transaction_accounts
@@ -3232,7 +3219,7 @@ mod tests {
         );
         let mut programdata_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::programdata_len(0).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(0),
             &bpf_loader_upgradeable::id(),
         );
         programdata_account
@@ -3401,11 +3388,8 @@ mod tests {
         let new_authority_address = Pubkey::new_unique();
         let new_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
-        let mut buffer_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(0).unwrap(),
-            &loader_id,
-        );
+        let mut buffer_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(0), &loader_id);
         buffer_account
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(authority_address),
@@ -3576,11 +3560,8 @@ mod tests {
         let recipient_address = Pubkey::new_unique();
         let recipient_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
-        let mut buffer_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::buffer_len(0).unwrap(),
-            &loader_id,
-        );
+        let mut buffer_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(0), &loader_id);
         buffer_account
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(authority_address),
@@ -3589,7 +3570,7 @@ mod tests {
         let uninitialized_address = Pubkey::new_unique();
         let mut uninitialized_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::programdata_len(0).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(0),
             &loader_id,
         );
         uninitialized_account
@@ -3598,7 +3579,7 @@ mod tests {
         let programdata_address = Pubkey::new_unique();
         let mut programdata_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::programdata_len(0).unwrap(),
+            UpgradeableLoaderState::size_of_programdata(0),
             &loader_id,
         );
         programdata_account
@@ -3608,11 +3589,8 @@ mod tests {
             })
             .unwrap();
         let program_address = Pubkey::new_unique();
-        let mut program_account = AccountSharedData::new(
-            1,
-            UpgradeableLoaderState::program_len().unwrap(),
-            &loader_id,
-        );
+        let mut program_account =
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_program(), &loader_id);
         program_account.set_executable(true);
         program_account
             .set_state(&UpgradeableLoaderState::Program {
