@@ -370,8 +370,13 @@ fn execute_batches(
                 batch_cost = batch_cost.saturating_add(cost_pair.0);
                 batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
                 if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let tx_batch =
-                        rebatch_transactions(&lock_results, bank, &sanitized_txs, slice_start, index);
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                    );
                     slice_start = next_index;
                     tx_batches.push(tx_batch);
                     tx_batch_costs.push(batch_cost_without_bpf);
