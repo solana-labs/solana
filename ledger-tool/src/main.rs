@@ -2306,9 +2306,9 @@ fn main() {
                 let snapshot_archive_format = {
                     let archive_format_str =
                         value_t_or_exit!(matches, "snapshot_archive_format", String);
-                    ArchiveFormat::from_cli_arg(&archive_format_str).expect(
-                        format!("Archive format not recognized: {}", archive_format_str).as_str(),
-                    )
+                    ArchiveFormat::from_cli_arg(&archive_format_str).unwrap_or_else(|| {
+                        panic!("Archive format not recognized: {}", archive_format_str)
+                    })
                 };
 
                 let maximum_full_snapshot_archives_to_retain =
