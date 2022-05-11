@@ -66,6 +66,7 @@ pub struct TransactionParams {
     #[clap(
         long,
         requires("transaction-type"),
+        conflicts_with("skip-gossip"),
         help = "Generate a valid blockhash for transaction"
     )]
     pub valid_blockhash: bool,

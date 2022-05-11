@@ -49,7 +49,7 @@ use {
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::ContactInfo,
-        gossip_service::{discover, discover_cluster, get_multi_client},
+        gossip_service::{discover, get_multi_client},
     },
     solana_sdk::{
         hash::Hash,
@@ -158,7 +158,7 @@ impl TransactionGenerator {
         }
     }
 
-    /// Creates a transaction which transfers some lamports from payer to several destinations
+    /// Create a transaction which transfers some lamports from payer to several destinations
     fn create_multi_transfer_transaction(&self, payer: &Keypair, to: &[&Keypair]) -> Transaction {
         let to_transfer: u64 = 500_000_000; // specify amount which will cause error
         let to: Vec<(Pubkey, u64)> = to.iter().map(|to| (to.pubkey(), to_transfer)).collect();
@@ -169,7 +169,7 @@ impl TransactionGenerator {
         tx
     }
 
-    /// Creates a transaction which opens account
+    /// Create a transaction which opens account
     fn create_account_transaction(&self, payer: &Keypair, to: &Keypair) -> Transaction {
         let program_id = system_program::id(); // some valid program id
         let balance = 500_000_000;
@@ -236,7 +236,7 @@ fn get_target(
     entrypoint_addr: SocketAddr,
 ) -> Option<SocketAddr> {
     let mut target = None;
-    if nodes.is_empty() {
+    if nodes.is_empty() { // skip-gossip case
         target = Some(entrypoint_addr);
     } else {
         info!("************ NODE ***********");
@@ -269,7 +269,7 @@ fn get_rpc_client(
     nodes: &[ContactInfo],
     entrypoint_addr: SocketAddr,
 ) -> Result<RpcClient, &'static str> {
-    if nodes.is_empty() {
+    if nodes.is_empty() { // skip-gossip case
         return Ok(RpcClient::new_socket(entrypoint_addr));
     }
 
@@ -469,6 +469,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     let target = get_target(nodes, params.mode, params.entrypoint_addr);
 
     if params.mode == Mode::Rpc {
+        // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
         let rpc_client =
             get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
         // existence of data_input is checked at cli level
@@ -576,11 +577,11 @@ fn main() {
     solana_logger::setup_with_default("solana=info");
     let cmd_params = build_cli_parameters();
 
-    let mut nodes = vec![];
-    if !cmd_params.skip_gossip {
+
+    let (nodes, client) = if !cmd_params.skip_gossip {
         info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
         let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
-        let (gossip_nodes, _validators) = discover(
+        let (gossip_nodes, validators) = discover(
             None, // keypair
             Some(&cmd_params.entrypoint_addr),
             None,                              // num_nodes
@@ -598,37 +599,22 @@ fn main() {
             );
             exit(1);
         });
-        nodes = gossip_nodes;
-    }
-
-    info!("done found {} nodes", nodes.len());
-
-    // create client which is used to request blockhash
-    let client = if cmd_params.transaction_params.valid_blockhash {
-        let num_nodes = 1;
-        info!("Connecting to the cluster");
-        let nodes = discover_cluster(
-            &cmd_params.entrypoint_addr,
-            num_nodes,
-            SocketAddrSpace::Unspecified,
-        )
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
-            exit(1);
-        });
-
-        let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
-        if nodes.len() < num_clients {
+        
+        let (client, num_clients) = get_multi_client(&validators, &SocketAddrSpace::Unspecified);
+        if validators.len() < num_clients {
             eprintln!(
                 "Error: Insufficient nodes discovered.  Expecting {} or more",
-                nodes.len()
+                validators.len()
             );
             exit(1);
         }
-        Some(Arc::new(client))
+        (gossip_nodes, Some(Arc::new(client)))
     } else {
-        None
+        (vec![], None)
     };
+
+    info!("done found {} nodes", nodes.len());
+
     run_dos(&nodes, 0, client, cmd_params);
 }
 
