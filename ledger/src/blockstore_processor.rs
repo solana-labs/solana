@@ -65,7 +65,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit, plus a 10% buffer by default
+// by max block cost limit.
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -74,7 +74,7 @@ pub struct BlockCostCapacityMeter {
 
 impl Default for BlockCostCapacityMeter {
     fn default() -> Self {
-        BlockCostCapacityMeter::new((MAX_BLOCK_UNITS as f64 * 1.10) as u64)
+        BlockCostCapacityMeter::new(MAX_BLOCK_UNITS)
     }
 }
 
@@ -156,20 +156,6 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
     execute_cost_units
 }
 
-fn sum_additional_costs(batch: &TransactionBatch, cost_model: &CostModel) -> u64 {
-    let mut costs: u64 = 0;
-    let transactions = batch.sanitized_transactions();
-
-    for transaction in transactions {
-        let transaction_cost = cost_model.calculate_cost(transaction);
-        costs = costs.saturating_add(transaction_cost.signature_cost);
-        costs = costs.saturating_add(transaction_cost.write_lock_cost);
-        costs = costs.saturating_add(transaction_cost.data_bytes_cost);
-        costs = costs.saturating_add(transaction_cost.builtins_execution_cost);
-    }
-    costs
-}
-
 fn execute_batch(
     batch: &TransactionBatch,
     bank: &Arc<Bank>,
@@ -177,7 +163,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
+    tx_cost: u64,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -206,18 +192,17 @@ fn execute_batch(
         .is_active(&feature_set::gate_large_block::id())
     {
         let execution_cost_units = aggregate_total_execution_units(timings) - pre_process_units;
-        let additional_cost_units = sum_additional_costs(batch, cost_model);
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units + additional_cost_units);
+            .accumulate(execution_cost_units + tx_cost);
 
         debug!(
             "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
-            additional_cost_units,
+            tx_cost,
             remaining_block_cost_cap,
         );
 
@@ -279,14 +264,15 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
+    tx_costs: &Vec<u64>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
         PAR_THREAD_POOL.install(|| {
             batches
                 .into_par_iter()
-                .map(|batch| {
+                .enumerate()
+                .map(|(index, batch)| {
                     let mut timings = ExecuteTimings::default();
                     let result = execute_batch(
                         batch,
@@ -295,7 +281,7 @@ fn execute_batches_internal(
                         replay_vote_sender,
                         &mut timings,
                         cost_capacity_meter.clone(),
-                        cost_model,
+                        tx_costs[index],
                     );
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
@@ -334,40 +320,58 @@ fn execute_batches(
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
+    let mut total_cost_without_bpf: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
     // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
     #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let cost = cost_model.calculate_cost(tx).sum();
+            let tx_cost = cost_model.calculate_cost(tx);
+            let cost = tx_cost.sum();
+            let cost_without_bpf = cost.saturating_sub(tx_cost.bpf_execution_cost);
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
+            (cost, cost_without_bpf)
         })
         .collect::<Vec<_>>();
 
     let target_batch_count = get_thread_count() as u64;
 
     let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
+        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let txs = &sanitized_txs[slice_start..=index];
-                let results = &lock_results[slice_start..=index];
-                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let txs = &sanitized_txs[slice_start..=index];
+                    let results = &lock_results[slice_start..=index];
+                    let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    tx_batch_costs.push(batch_cost_without_bpf);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
         &tx_batches[..]
     } else {
+        match batches.len() {
+            // Ensure that the total cost attributed to this batch is essentially correct
+            0 => tx_batch_costs = Vec::new(),
+            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
+        }
         batches
     };
 
@@ -379,7 +383,7 @@ fn execute_batches(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
-        cost_model,
+        &tx_batch_costs,
     )
 }
 
