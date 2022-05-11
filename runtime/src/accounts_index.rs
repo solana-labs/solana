@@ -430,6 +430,9 @@ pub struct RootsTracker {
     pub(crate) historical_roots: RollingBitField,
     uncleaned_roots: HashSet<Slot>,
     previous_uncleaned_roots: HashSet<Slot>,
+    /// The slot that is one epoch old from the most recently added root.
+    /// This is a function of the most recently added root and the epoch schedule at that slot.
+    pub(crate) slot_one_epoch_old: Slot,
 }
 
 impl Default for RootsTracker {
@@ -448,6 +451,7 @@ impl RootsTracker {
             historical_roots: RollingBitField::new(max_width),
             uncleaned_roots: HashSet::new(),
             previous_uncleaned_roots: HashSet::new(),
+            slot_one_epoch_old: Slot::default(),
         }
     }
 
@@ -1731,10 +1735,18 @@ impl<T: IndexValue> AccountsIndex<T> {
             .contains(&slot)
     }
 
-    pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
+    pub fn add_root_with_slot_one_epoch_old(
+        &self,
+        slot: Slot,
+        slot_one_epoch_old: Option<Slot>,
+        caching_enabled: bool,
+    ) {
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.alive_roots.max_inclusive());
+        if let Some(slot_one_epoch_old) = slot_one_epoch_old {
+            w_roots_tracker.slot_one_epoch_old = slot_one_epoch_old;
+        }
         // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.alive_roots.insert(slot);
         w_roots_tracker.historical_roots.insert(slot);
@@ -1742,6 +1754,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         if !caching_enabled {
             w_roots_tracker.uncleaned_roots.insert(slot);
         }
+    }
+
+    pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
+        self.add_root_with_slot_one_epoch_old(slot, None, caching_enabled)
     }
 
     pub fn add_uncleaned_roots<I>(&self, roots: I)
@@ -1758,6 +1774,11 @@ impl<T: IndexValue> AccountsIndex<T> {
             .unwrap()
             .alive_roots
             .max_inclusive()
+    }
+
+    /// the slot that is one epoch old relative to the most recently added root and that slot's EpochSchedule
+    pub fn get_slot_one_epoch_old(&self) -> Slot {
+        self.roots_tracker.read().unwrap().slot_one_epoch_old
     }
 
     /// return the lowest original root >= slot, including historical_roots and ancestors

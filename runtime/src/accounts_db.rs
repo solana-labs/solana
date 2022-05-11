@@ -6821,9 +6821,26 @@ impl AccountsDb {
         }
     }
 
-    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
+    /// calculate 'slot_one_epoch_old' and add root to the index
+    fn add_root_internal(&self, slot: Slot, epoch_schedule: Option<&EpochSchedule>) {
+        self.accounts_index.add_root_with_slot_one_epoch_old(
+            slot,
+            epoch_schedule.map(|epoch_schedule| {
+                slot.saturating_sub(
+                    epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)),
+                )
+            }),
+            self.caching_enabled,
+        );
+    }
+
+    pub fn add_root_with_epoch_schedule(
+        &self,
+        slot: Slot,
+        epoch_schedule: Option<&EpochSchedule>,
+    ) -> AccountsAddRootTiming {
         let mut index_time = Measure::start("index_add_root");
-        self.accounts_index.add_root(slot, self.caching_enabled);
+        self.add_root_internal(slot, epoch_schedule);
         index_time.stop();
         let mut cache_time = Measure::start("cache_add_root");
         if self.caching_enabled {
@@ -6843,6 +6860,10 @@ impl AccountsDb {
             cache_us: cache_time.as_us(),
             store_us: store_time.as_us(),
         }
+    }
+
+    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
+        self.add_root_with_epoch_schedule(slot, None)
     }
 
     pub fn get_snapshot_storages(

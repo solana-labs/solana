@@ -102,7 +102,7 @@ fn main() {
     ancestors.push(0);
     for i in 1..num_slots {
         ancestors.push(i as u64);
-        accounts.add_root(i as u64);
+        accounts.add_root(i as u64, None);
     }
     let ancestors = Ancestors::from(ancestors);
     let mut elapsed = vec![0; iterations];
@@ -115,7 +115,7 @@ fn main() {
             println!("{}", time);
             for slot in 0..num_slots {
                 update_accounts_bench(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
-                accounts.add_root((x * num_slots + slot) as u64);
+                accounts.add_root((x * num_slots + slot) as u64, None);
             }
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];

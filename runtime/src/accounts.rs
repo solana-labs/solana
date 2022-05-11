@@ -1186,8 +1186,13 @@ impl Accounts {
     }
 
     /// Add a slot to root.  Root slots cannot be purged
-    pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
-        self.accounts_db.add_root(slot)
+    pub fn add_root(
+        &self,
+        slot: Slot,
+        epoch_schedule: Option<&EpochSchedule>,
+    ) -> AccountsAddRootTiming {
+        self.accounts_db
+            .add_root_with_epoch_schedule(slot, epoch_schedule)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3040,7 +3045,7 @@ mod tests {
             accounts.store_slow_uncached(i, &pubkey, &account);
             accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
             old_pubkey = pubkey;
-            accounts.add_root(i);
+            accounts.add_root(i, None);
             if i % 1_000 == 0 {
                 info!("  store {}", i);
             }

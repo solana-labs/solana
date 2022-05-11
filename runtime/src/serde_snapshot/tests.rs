@@ -144,7 +144,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 100, 0);
     check_accounts(&accounts, &pubkeys, 100);
-    accounts.add_root(0);
+    accounts.add_root(0, None);
 
     let mut writer = Cursor::new(vec![]);
     accountsdb_to_stream(

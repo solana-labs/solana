@@ -188,7 +188,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         accounts.store_slow_uncached(i, &pubkey, &account);
         accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
         old_pubkey = pubkey;
-        accounts.add_root(i);
+        accounts.add_root(i, None);
     }
     bencher.iter(|| {
         accounts.accounts_db.clean_accounts(None, false, None);
@@ -215,7 +215,7 @@ fn store_accounts_with_possible_contention<F: 'static>(
     ));
     let num_keys = 1000;
     let slot = 0;
-    accounts.add_root(slot);
+    accounts.add_root(slot, None);
     let pubkeys: Arc<Vec<_>> = Arc::new(
         (0..num_keys)
             .map(|_| {

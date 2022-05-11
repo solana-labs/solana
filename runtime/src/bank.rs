@@ -3374,7 +3374,10 @@ impl Bank {
         let mut squash_accounts_time = Measure::start("squash_accounts_time");
         for slot in roots.iter().rev() {
             // root forks cannot be purged
-            let add_root_timing = self.rc.accounts.add_root(*slot);
+            let add_root_timing = self
+                .rc
+                .accounts
+                .add_root(*slot, Some(self.epoch_schedule()));
             total_index_us += add_root_timing.index_us;
             total_cache_us += add_root_timing.cache_us;
             total_store_us += add_root_timing.store_us;
