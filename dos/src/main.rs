@@ -118,9 +118,9 @@ impl TransactionGenerator {
     ///
     fn generate<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
-        payer: &Option<Keypair>,
+        payer: Option<&Keypair>,
         destinations: Option<Vec<&Keypair>>,
-        client: &Option<Arc<T>>,
+        client: Option<&Arc<T>>,
     ) -> Transaction {
         if self.transaction_params.valid_blockhash {
             let client = client.as_ref().unwrap();
@@ -345,7 +345,7 @@ fn apply_permutation<'a, T>(permutation: Vec<&usize>, items: &'a [T]) -> Vec<&'a
 fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
     valid_blockhash: bool,
     size: usize,
-    client: &Option<Arc<T>>,
+    client: Option<&Arc<T>>,
 ) -> Vec<Option<Keypair>> {
     // Assume that if we use valid blockhash, we also have a payer
     if valid_blockhash {
@@ -354,7 +354,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
         let res = generate_and_fund_keypairs(
-            client.as_ref().unwrap().clone(),
+            client.unwrap().clone(),
             &funding_key,
             size,
             1_000_000,
@@ -369,7 +369,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
-fn get_permutation_size(num_signatures: &Option<usize>, num_instructions: &Option<usize>) -> usize {
+fn get_permutation_size(num_signatures: Option<&usize>, num_instructions: Option<&usize>) -> usize {
     if let Some(num_signatures) = num_signatures {
         *num_signatures
     } else if let Some(num_instructions) = num_instructions {
@@ -390,8 +390,8 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     // Number of payers is the number of generating threads, for now it is 1
     // Later, we will create a new payer for each thread since Keypair is not clonable
     let payers: Vec<Option<Keypair>> =
-        create_payers(transaction_params.valid_blockhash, 1, &client);
-    let payer = &payers[0];
+        create_payers(transaction_params.valid_blockhash, 1, client.as_ref());
+    let payer = payers[0].as_ref();
 
     // Generate n=1000 unique keypairs
     // The number of chunks is described by binomial coefficient
@@ -400,8 +400,8 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     // 1000 is arbitrary number. In case of permutation_size > 1,
     // this guaranties large enough set of unique permutations
     let permutation_size = get_permutation_size(
-        &transaction_params.num_signatures,
-        &transaction_params.num_instructions,
+        transaction_params.num_signatures.as_ref(),
+        transaction_params.num_instructions.as_ref(),
     );
     let num_keypairs = 1000 * permutation_size;
 
@@ -435,7 +435,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             None
         };
 
-        let tx = transaction_generator.generate(payer, chunk_keypairs, &client);
+        let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
 
         let data = bincode::serialize(&tx).unwrap();
         let res = socket.send_to(&data, target);
@@ -517,11 +517,11 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                 info!("{:?}", tp);
 
                 let valid_blockhash = tp.valid_blockhash;
-                let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, &client);
-                let payer = &payers[0];
+                let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, client.as_ref());
+                let payer = payers[0].as_ref();
 
                 let permutation_size =
-                    get_permutation_size(&tp.num_signatures, &tp.num_instructions);
+                    get_permutation_size(tp.num_signatures.as_ref(), tp.num_instructions.as_ref());
                 let keypairs: Vec<Keypair> =
                     (0..permutation_size).map(|_| Keypair::new()).collect();
                 let keypairs_chunk: Option<Vec<&Keypair>> =
@@ -532,7 +532,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                     };
 
                 let mut transaction_generator = TransactionGenerator::new(tp);
-                let tx = transaction_generator.generate(payer, keypairs_chunk, &client);
+                let tx = transaction_generator.generate(payer, keypairs_chunk, client.as_ref());
                 info!("{:?}", tx);
                 bincode::serialize(&tx).unwrap()
             }
