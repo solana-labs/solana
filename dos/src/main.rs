@@ -236,7 +236,8 @@ fn get_target(
     entrypoint_addr: SocketAddr,
 ) -> Option<SocketAddr> {
     let mut target = None;
-    if nodes.is_empty() { // skip-gossip case
+    if nodes.is_empty() {
+        // skip-gossip case
         target = Some(entrypoint_addr);
     } else {
         info!("************ NODE ***********");
@@ -269,7 +270,8 @@ fn get_rpc_client(
     nodes: &[ContactInfo],
     entrypoint_addr: SocketAddr,
 ) -> Result<RpcClient, &'static str> {
-    if nodes.is_empty() { // skip-gossip case
+    if nodes.is_empty() {
+        // skip-gossip case
         return Ok(RpcClient::new_socket(entrypoint_addr));
     }
 
@@ -353,16 +355,12 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         // transactions are built to be invalid so the the amount here is arbitrary
         let funding_key = Keypair::new();
         let funding_key = Arc::new(funding_key);
-        let res = generate_and_fund_keypairs(
-            client.unwrap().clone(),
-            &funding_key,
-            size,
-            1_000_000,
-        )
-        .unwrap_or_else(|e| {
-            eprintln!("Error could not fund keys: {:?}", e);
-            exit(1);
-        });
+        let res =
+            generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
+                .unwrap_or_else(|e| {
+                    eprintln!("Error could not fund keys: {:?}", e);
+                    exit(1);
+                });
         res.into_iter().map(Some).collect()
     } else {
         std::iter::repeat_with(|| None).take(size).collect()
@@ -518,7 +516,8 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                 info!("{:?}", tp);
 
                 let valid_blockhash = tp.valid_blockhash;
-                let payers: Vec<Option<Keypair>> = create_payers(valid_blockhash, 1, client.as_ref());
+                let payers: Vec<Option<Keypair>> =
+                    create_payers(valid_blockhash, 1, client.as_ref());
                 let payer = payers[0].as_ref();
 
                 let permutation_size =
@@ -577,7 +576,6 @@ fn main() {
     solana_logger::setup_with_default("solana=info");
     let cmd_params = build_cli_parameters();
 
-
     let (nodes, client) = if !cmd_params.skip_gossip {
         info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
         let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
@@ -599,7 +597,7 @@ fn main() {
             );
             exit(1);
         });
-        
+
         let (client, num_clients) = get_multi_client(&validators, &SocketAddrSpace::Unspecified);
         if validators.len() < num_clients {
             eprintln!(
