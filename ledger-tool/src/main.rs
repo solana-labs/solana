@@ -2302,7 +2302,7 @@ fn main() {
                     },
                 );
 
-                let archive_format = {
+                let snapshot_archive_format = {
                     let archive_format_str =
                         value_t_or_exit!(matches, "snapshot_archive_format", String);
                     match archive_format_str.as_str() {
