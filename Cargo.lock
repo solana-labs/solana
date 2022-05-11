@@ -4505,7 +4505,6 @@ dependencies = [
  "crossbeam-channel",
  "ctrlc",
  "humantime",
- "itertools",
  "log",
  "num-traits",
  "pretty-hex",
