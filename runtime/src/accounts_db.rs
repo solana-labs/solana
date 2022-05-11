@@ -999,6 +999,9 @@ pub struct AccountsDb {
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
+    /// slot that is one epoch older than the highest slot where accounts hash calculation has completed
+    pub accounts_hash_complete_one_epoch_old: RwLock<Slot>,
+
     /// true iff rent exempt accounts are not rewritten in their normal rent collection slot
     pub skip_rewrites: bool,
 
@@ -1611,6 +1614,7 @@ impl AccountsDb {
 
         AccountsDb {
             active_stats: ActiveStats::default(),
+            accounts_hash_complete_one_epoch_old: RwLock::default(),
             skip_rewrites: false,
             ancient_append_vecs: false,
             accounts_index,
@@ -1998,6 +2002,22 @@ impl AccountsDb {
                 Some(std::cmp::min(min_scan_root, proposed_clean_root))
             }
         }
+    }
+
+    /// hash calc is completed as of 'slot'
+    /// so, any process that wants to take action on really old slots can now proceed up to 'slot'-slots per epoch
+    pub fn notify_accounts_hash_calculated_complete(
+        &self,
+        completed_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+    ) {
+        let one_epoch_old_slot = completed_slot.saturating_sub(
+            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(completed_slot)),
+        );
+        let mut accounts_hash_complete_one_epoch_old =
+            self.accounts_hash_complete_one_epoch_old.write().unwrap();
+        *accounts_hash_complete_one_epoch_old =
+            std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
     }
 
     /// Collect all the uncleaned slots, up to a max slot
