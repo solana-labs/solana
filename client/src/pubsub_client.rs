@@ -6,7 +6,7 @@ use {
             RpcTransactionLogsFilter,
         },
         rpc_response::{
-            Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
+            RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse, RpcNotificationResponse,
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
         },
     },
@@ -158,38 +158,42 @@ where
     }
 }
 
-pub type PubsubLogsClientSubscription = PubsubClientSubscription<RpcResponse<RpcLogsResponse>>;
+pub type PubsubLogsClientSubscription =
+    PubsubClientSubscription<RpcNotificationResponse<RpcLogsResponse>>;
 pub type LogsSubscription = (
     PubsubLogsClientSubscription,
-    Receiver<RpcResponse<RpcLogsResponse>>,
+    Receiver<RpcNotificationResponse<RpcLogsResponse>>,
 );
 
 pub type PubsubSlotClientSubscription = PubsubClientSubscription<SlotInfo>;
 pub type SlotsSubscription = (PubsubSlotClientSubscription, Receiver<SlotInfo>);
 
 pub type PubsubSignatureClientSubscription =
-    PubsubClientSubscription<RpcResponse<RpcSignatureResult>>;
+    PubsubClientSubscription<RpcNotificationResponse<RpcSignatureResult>>;
 pub type SignatureSubscription = (
     PubsubSignatureClientSubscription,
-    Receiver<RpcResponse<RpcSignatureResult>>,
+    Receiver<RpcNotificationResponse<RpcSignatureResult>>,
 );
 
-pub type PubsubBlockClientSubscription = PubsubClientSubscription<RpcResponse<RpcBlockUpdate>>;
+pub type PubsubBlockClientSubscription =
+    PubsubClientSubscription<RpcNotificationResponse<RpcBlockUpdate>>;
 pub type BlockSubscription = (
     PubsubBlockClientSubscription,
-    Receiver<RpcResponse<RpcBlockUpdate>>,
+    Receiver<RpcNotificationResponse<RpcBlockUpdate>>,
 );
 
-pub type PubsubProgramClientSubscription = PubsubClientSubscription<RpcResponse<RpcKeyedAccount>>;
+pub type PubsubProgramClientSubscription =
+    PubsubClientSubscription<RpcNotificationResponse<RpcKeyedAccount>>;
 pub type ProgramSubscription = (
     PubsubProgramClientSubscription,
-    Receiver<RpcResponse<RpcKeyedAccount>>,
+    Receiver<RpcNotificationResponse<RpcKeyedAccount>>,
 );
 
-pub type PubsubAccountClientSubscription = PubsubClientSubscription<RpcResponse<UiAccount>>;
+pub type PubsubAccountClientSubscription =
+    PubsubClientSubscription<RpcNotificationResponse<UiAccount>>;
 pub type AccountSubscription = (
     PubsubAccountClientSubscription,
-    Receiver<RpcResponse<UiAccount>>,
+    Receiver<RpcNotificationResponse<UiAccount>>,
 );
 
 pub type PubsubVoteClientSubscription = PubsubClientSubscription<RpcVote>;

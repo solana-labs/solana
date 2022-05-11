@@ -419,7 +419,7 @@ impl RpcClient {
     /// // Create a mock with a custom repsonse to the `GetBalance` request
     /// let account_balance = 50;
     /// let account_balance_response = json!(Response {
-    ///     context: RpcResponseContext { slot: 1 },
+    ///     context: RpcResponseContext { slot: 1, api_version: None },
     ///     value: json!(account_balance),
     /// });
     ///
@@ -5394,7 +5394,10 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
 
     let get_account_request = RpcRequest::GetAccountInfo;
     let get_account_response = serde_json::to_value(Response {
-        context: RpcResponseContext { slot: 1 },
+        context: RpcResponseContext {
+            slot: 1,
+            api_version: None,
+        },
         value: {
             let pubkey = Pubkey::from_str("BgvYtJEfmZYdVKiptmMjxGzv8iQoo4MWjsP3QsTkhhxa").unwrap();
             let account = Account {

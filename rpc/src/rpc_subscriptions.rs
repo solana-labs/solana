@@ -16,8 +16,8 @@ use {
     serde::Serialize,
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
     solana_client::rpc_response::{
-        ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcBlockUpdate,
-        RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
+        ProcessedSignatureResult, ReceivedSignatureResult, RpcBlockUpdate, RpcBlockUpdateError,
+        RpcKeyedAccount, RpcLogsResponse, RpcNotificationContext, RpcNotificationResponse,
         RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
@@ -153,8 +153,8 @@ where
             filter_results(results, params, *w_last_notified_slot, bank);
         for result in filter_results {
             notifier.notify(
-                Response {
-                    context: RpcResponseContext { slot },
+                RpcNotificationResponse {
+                    context: RpcNotificationContext { slot },
                     value: result,
                 },
                 subscription,
@@ -839,8 +839,8 @@ impl RpcSubscriptions {
                                         {
                                             if params.enable_received_notification {
                                                 notifier.notify(
-                                                    Response {
-                                                        context: RpcResponseContext { slot },
+                                                    RpcNotificationResponse {
+                                                        context: RpcNotificationContext { slot },
                                                         value: RpcSignatureResult::ReceivedSignature(
                                                             ReceivedSignatureResult::ReceivedSignature,
                                                         ),
@@ -987,8 +987,8 @@ impl RpcSubscriptions {
                                     Ok(block_update) => {
                                         if let Some(block_update) = block_update {
                                             notifier.notify(
-                                                Response {
-                                                    context: RpcResponseContext { slot: s },
+                                                RpcNotificationResponse {
+                                                    context: RpcNotificationContext { slot: s },
                                                     value: block_update,
                                                 },
                                                 subscription,
@@ -1004,8 +1004,8 @@ impl RpcSubscriptions {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
                                         notifier.notify(
-                                            Response {
-                                                context: RpcResponseContext { slot: s },
+                                            RpcNotificationResponse {
+                                                context: RpcNotificationContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
