@@ -1598,6 +1598,12 @@ pub fn main() {
                       .hidden(true),
         )
         .arg(
+            Arg::with_name("accounts_db_ancient_append_vecs")
+                .long("accounts-db-ancient-append-vecs")
+                .help("AppendVecs that are older than an epoch are squashed together.")
+                      .hidden(true),
+        )
+        .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
                 .long("accounts-db-cache-limit-mb")
                 .value_name("MEGABYTES")
@@ -2334,6 +2340,7 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
+        ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
         ..AccountsDbConfig::default()
     };
 

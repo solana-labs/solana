@@ -135,6 +135,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
+    ancient_append_vecs: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -143,6 +144,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
+    ancient_append_vecs: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -181,6 +183,7 @@ pub struct AccountsDbConfig {
     pub hash_calc_num_passes: Option<usize>,
     pub write_cache_limit_bytes: Option<u64>,
     pub skip_rewrites: bool,
+    pub ancient_append_vecs: bool,
 }
 
 pub struct FoundStoredAccount<'a> {
@@ -999,6 +1002,9 @@ pub struct AccountsDb {
     /// true iff rent exempt accounts are not rewritten in their normal rent collection slot
     pub skip_rewrites: bool,
 
+    /// true iff we want to squash old append vecs together into 'ancient append vecs'
+    pub ancient_append_vecs: bool,
+
     pub storage: AccountStorage,
 
     pub accounts_cache: AccountsCache,
@@ -1606,6 +1612,7 @@ impl AccountsDb {
         AccountsDb {
             active_stats: ActiveStats::default(),
             skip_rewrites: false,
+            ancient_append_vecs: false,
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -1702,6 +1709,10 @@ impl AccountsDb {
             .as_ref()
             .map(|config| config.skip_rewrites)
             .unwrap_or_default();
+        let ancient_append_vecs = accounts_db_config
+            .as_ref()
+            .map(|config| config.ancient_append_vecs)
+            .unwrap_or_default();
 
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
@@ -1712,6 +1723,7 @@ impl AccountsDb {
         let mut new = Self {
             paths,
             skip_rewrites,
+            ancient_append_vecs,
             cluster_type: Some(*cluster_type),
             account_indexes,
             caching_enabled,
