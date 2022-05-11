@@ -954,7 +954,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(buffer_data_len)?,
+        UpgradeableLoaderState::size_of_programdata(buffer_data_len),
     )?;
 
     let result = if do_deploy {
@@ -1066,7 +1066,7 @@ fn process_write_buffer(
         program_data.len()
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(buffer_data_len)?,
+        UpgradeableLoaderState::size_of_programdata(buffer_data_len),
     )?;
 
     let result = do_process_program_write_and_deploy(
@@ -1281,7 +1281,7 @@ fn get_programs(
                     .unwrap_or_else(|| "none".to_string()),
                 last_deploy_slot: slot,
                 data_len: programdata_account.data.len()
-                    - UpgradeableLoaderState::programdata_data_offset()?,
+                    - UpgradeableLoaderState::size_of_programdata_metadata(),
                 lamports: programdata_account.lamports,
                 use_lamports_unit,
             });
@@ -1363,7 +1363,7 @@ fn process_show(
                                         .unwrap_or_else(|| "none".to_string()),
                                     last_deploy_slot: slot,
                                     data_len: programdata_account.data.len()
-                                        - UpgradeableLoaderState::programdata_data_offset()?,
+                                        - UpgradeableLoaderState::size_of_programdata_metadata(),
                                     lamports: programdata_account.lamports,
                                     use_lamports_unit,
                                 }))
@@ -1384,7 +1384,7 @@ fn process_show(
                                 .map(|pubkey| pubkey.to_string())
                                 .unwrap_or_else(|| "none".to_string()),
                             data_len: account.data.len()
-                                - UpgradeableLoaderState::buffer_data_offset()?,
+                                - UpgradeableLoaderState::size_of_buffer_metadata(),
                             lamports: account.lamports,
                             use_lamports_unit,
                         }))
@@ -1441,8 +1441,7 @@ fn process_dump(
                         if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
                             programdata_account.state()
                         {
-                            let offset =
-                                UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                            let offset = UpgradeableLoaderState::size_of_programdata_metadata();
                             let program_data = &programdata_account.data[offset..];
                             let mut f = File::create(output_location)?;
                             f.write_all(program_data)?;
@@ -1454,7 +1453,7 @@ fn process_dump(
                         Err(format!("Program {} has been closed", account_pubkey).into())
                     }
                 } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-                    let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                    let offset = UpgradeableLoaderState::size_of_buffer_metadata();
                     let program_data = &account.data[offset..];
                     let mut f = File::create(output_location)?;
                     f.write_all(program_data)?;
@@ -1758,7 +1757,7 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &account,
                     if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::buffer_len(buffer_data_len)?
+                        UpgradeableLoaderState::size_of_buffer(buffer_data_len)
                     } else {
                         buffer_data_len
                     },
@@ -1848,7 +1847,7 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &program_signers[1].pubkey(),
                     rpc_client.get_minimum_balance_for_rent_exemption(
-                        UpgradeableLoaderState::program_len()?,
+                        UpgradeableLoaderState::size_of_program(),
                     )?,
                     programdata_len,
                 )?,
@@ -1911,7 +1910,7 @@ fn do_process_program_upgrade(
     let loader_id = bpf_loader_upgradeable::id();
     let data_len = program_data.len();
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(data_len)?,
+        UpgradeableLoaderState::size_of_programdata(data_len),
     )?;
 
     // Build messages to calculate fees
@@ -1930,7 +1929,7 @@ fn do_process_program_upgrade(
                     &config.signers[0].pubkey(),
                     &buffer_signer.pubkey(),
                     &account,
-                    UpgradeableLoaderState::buffer_len(data_len)?,
+                    UpgradeableLoaderState::size_of_buffer(data_len),
                     minimum_balance,
                     true,
                 )?
