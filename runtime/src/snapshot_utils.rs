@@ -408,7 +408,7 @@ pub fn archive_snapshot_package(
         "archive-snapshot-package",
         ("slot", snapshot_package.slot(), i64),
         (
-            "format",
+            "archive_format",
             snapshot_package.archive_format().to_string(),
             String
         ),

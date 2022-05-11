@@ -57,7 +57,7 @@ use {
             self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1483,7 +1483,7 @@ pub fn main() {
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
-                .possible_values(&["bz2", "gzip", "zstd", "lz4", "tar", "none"])
+                .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
                 .default_value("zstd")
                 .value_name("ARCHIVE_TYPE")
                 .takes_value(true)

@@ -1,4 +1,9 @@
-use std::{fmt, str::FromStr};
+use {
+    std::{fmt, str::FromStr},
+    strum::Display,
+};
+
+pub const SUPPORTED_ARCHIVE_COMPRESSION: &[&str] = &["bz2", "gzip", "zstd", "lz4", "tar", "none"];
 
 pub const TAR_BZIP2_EXTENSION: &str = "tar.bz2";
 pub const TAR_GZIP_EXTENSION: &str = "tar.gz";
@@ -7,7 +12,7 @@ pub const TAR_LZ4_EXTENSION: &str = "tar.lz4";
 pub const TAR_EXTENSION: &str = "tar";
 
 /// The different archive formats used for snapshots
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Display)]
 pub enum ArchiveFormat {
     TarBzip2,
     TarGzip,
@@ -29,19 +34,6 @@ impl ArchiveFormat {
     }
 }
 
-/// Converts to a String
-impl ToString for ArchiveFormat {
-    fn to_string(&self) -> String {
-        match self {
-            ArchiveFormat::TarBzip2 => "BZIP2".to_string(),
-            ArchiveFormat::TarGzip => "GZIP".to_string(),
-            ArchiveFormat::TarZstd => "ZSTD".to_string(),
-            ArchiveFormat::TarLz4 => "LZ4".to_string(),
-            ArchiveFormat::Tar => "TAR".to_string(),
-        }
-    }
-}
-
 // Change this to `impl<S: AsRef<str>> TryFrom<S> for ArchiveFormat [...]`
 // once this Rust bug is fixed: https://github.com/rust-lang/rust/issues/50133
 impl TryFrom<&str> for ArchiveFormat {
@@ -54,7 +46,7 @@ impl TryFrom<&str> for ArchiveFormat {
             TAR_ZSTD_EXTENSION => Ok(ArchiveFormat::TarZstd),
             TAR_LZ4_EXTENSION => Ok(ArchiveFormat::TarLz4),
             TAR_EXTENSION => Ok(ArchiveFormat::Tar),
-            _ => Err(ParseError(extension.to_string())),
+            _ => Err(ParseError::InvalidExtension(extension.to_string())),
         }
     }
 }
@@ -68,11 +60,17 @@ impl FromStr for ArchiveFormat {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ParseError(String);
+pub enum ParseError {
+    InvalidExtension(String),
+}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid archive extension: {}", self.0)
+        match self {
+            ParseError::InvalidExtension(extension) => {
+                write!(f, "Invalid archive extension: {}", extension)
+            }
+        }
     }
 }
 
@@ -114,7 +112,7 @@ mod tests {
         );
         assert_eq!(
             ArchiveFormat::try_from(INVALID_EXTENSION),
-            Err(ParseError(INVALID_EXTENSION.to_string()))
+            Err(ParseError::InvalidExtension(INVALID_EXTENSION.to_string()))
         );
     }
 
@@ -142,7 +140,7 @@ mod tests {
         );
         assert_eq!(
             ArchiveFormat::from_str(INVALID_EXTENSION),
-            Err(ParseError(INVALID_EXTENSION.to_string()))
+            Err(ParseError::InvalidExtension(INVALID_EXTENSION.to_string()))
         );
     }
 
@@ -152,29 +150,29 @@ mod tests {
             ArchiveFormat::from_str(TAR_BZIP2_EXTENSION)
                 .unwrap()
                 .to_string(),
-            "BZIP2"
+            "TarBzip2"
         );
         assert_eq!(
             ArchiveFormat::from_str(TAR_GZIP_EXTENSION)
                 .unwrap()
                 .to_string(),
-            "GZIP"
+            "TarGzip",
         );
         assert_eq!(
             ArchiveFormat::from_str(TAR_ZSTD_EXTENSION)
                 .unwrap()
                 .to_string(),
-            "ZSTD"
+            "TarZstd"
         );
         assert_eq!(
             ArchiveFormat::from_str(TAR_LZ4_EXTENSION)
                 .unwrap()
                 .to_string(),
-            "LZ4"
+            "TarLz4",
         );
         assert_eq!(
             ArchiveFormat::from_str(TAR_EXTENSION).unwrap().to_string(),
-            "TAR"
+            "Tar"
         );
     }
 }
