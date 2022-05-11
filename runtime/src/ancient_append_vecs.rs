@@ -5,9 +5,12 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 #![allow(dead_code)]
 use {
-    crate::{accounts_db::FoundStoredAccount, append_vec::StoredAccountMeta},
+    crate::{
+        accounts_db::{AccountStorageEntry, FoundStoredAccount, SnapshotStorage},
+        append_vec::{AppendVec, StoredAccountMeta},
+    },
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::collections::HashMap,
+    std::{collections::HashMap, sync::Arc},
 };
 
 /// a set of accounts need to be stored.
@@ -81,12 +84,55 @@ impl<'a> AccountsToStore<'a> {
     }
 }
 
+/// capacity of an ancient append vec
+pub fn get_ancient_append_vec_capacity() -> u64 {
+    use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
+    // smaller than max by a bit just in case
+    // some functions add slop on allocation
+    MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+}
+
+/// true iff storage is ancient size and is almost completely full
+pub fn is_full_ancient(storage: &AppendVec) -> bool {
+    // not sure of slop amount here. Maybe max account size with 10MB data?
+    // append vecs can't usually be made entirely full
+    let threshold_bytes = 10_000;
+    is_ancient(storage) && storage.remaining_bytes() < threshold_bytes
+}
+
+/// is this a max-size append vec designed to be used as an ancient append vec?
+pub fn is_ancient(storage: &AppendVec) -> bool {
+    storage.capacity() >= get_ancient_append_vec_capacity()
+}
+
+/// return true if the accounts in this slot should be moved to an ancient append vec
+/// otherwise, return false and the caller can skip this slot
+/// side effect could be updating 'current_ancient'
+pub fn should_move_to_ancient_append_vec(
+    all_storages: &SnapshotStorage,
+    current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
+    slot: Slot,
+) -> bool {
+    if current_ancient.is_none() && all_storages.len() == 1 {
+        let first_storage = all_storages.first().unwrap();
+        if is_ancient(&first_storage.accounts) {
+            if is_full_ancient(&first_storage.accounts) {
+                return false; // skip this full ancient append vec completely
+            }
+            // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
+            *current_ancient = Some((slot, Arc::clone(first_storage)));
+            return false; // we're done with this slot - this slot IS the ancient append vec
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
         crate::{
-            accounts_db::AppendVecId,
+            accounts_db::{get_temp_accounts_paths, AppendVecId},
             append_vec::{AccountMeta, StoredMeta},
         },
         solana_sdk::account::{AccountSharedData, ReadableAccount},
@@ -169,5 +215,52 @@ pub mod tests {
             StorageSelector::Overflow => StorageSelector::Primary,
             StorageSelector::Primary => StorageSelector::Overflow,
         }
+    }
+
+    #[test]
+    fn test_get_ancient_append_vec_capacity() {
+        assert_eq!(
+            get_ancient_append_vec_capacity(),
+            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+        );
+    }
+
+    #[test]
+    fn test_is_ancient() {
+        for (size, expected_ancient) in [
+            (get_ancient_append_vec_capacity() + 1, true),
+            (get_ancient_append_vec_capacity(), true),
+            (get_ancient_append_vec_capacity() - 1, false),
+        ] {
+            let tf = crate::append_vec::test_utils::get_append_vec_path("test_is_ancient");
+            let (_temp_dirs, _paths) = get_temp_accounts_paths(1).unwrap();
+            let av = AppendVec::new(&tf.path, true, size as usize);
+
+            assert_eq!(expected_ancient, is_ancient(&av));
+            assert!(!is_full_ancient(&av));
+        }
+    }
+
+    #[test]
+    fn test_is_full_ancient() {
+        let size = get_ancient_append_vec_capacity();
+        let tf = crate::append_vec::test_utils::get_append_vec_path("test_is_ancient");
+        let (_temp_dirs, _paths) = get_temp_accounts_paths(1).unwrap();
+        let av = AppendVec::new(&tf.path, true, size as usize);
+        assert!(is_ancient(&av));
+        assert!(!is_full_ancient(&av));
+        let overhead = 400;
+        let data_len = size - overhead;
+        let mut account = AccountSharedData::default();
+        account.set_data(vec![0; data_len as usize]);
+
+        let sm = StoredMeta {
+            write_version: 0,
+            pubkey: Pubkey::new(&[0; 32]),
+            data_len: data_len as u64,
+        };
+        av.append_accounts(&[(sm, Some(&account))], &[Hash::default()]);
+        assert!(is_ancient(&av));
+        assert!(is_full_ancient(&av), "Remaining: {}", av.remaining_bytes());
     }
 }
