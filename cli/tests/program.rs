@@ -166,12 +166,12 @@ fn test_cli_program_deploy_no_authority() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_programdata = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
     let minimum_balance_for_program = rpc_client
-        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap())
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
         .unwrap();
     let upgrade_authority = Keypair::new();
 
@@ -252,12 +252,12 @@ fn test_cli_program_deploy_with_authority() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_programdata = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
     let minimum_balance_for_program = rpc_client
-        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap())
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
         .unwrap();
     let upgrade_authority = Keypair::new();
 
@@ -316,7 +316,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
     assert!(!programdata_account.executable);
     assert_eq!(
-        programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
+        programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
     );
 
@@ -358,7 +358,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
     assert!(!programdata_account.executable);
     assert_eq!(
-        programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
+        programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
     );
 
@@ -391,7 +391,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
     assert!(!programdata_account.executable);
     assert_eq!(
-        programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
+        programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
     );
 
@@ -446,7 +446,7 @@ fn test_cli_program_deploy_with_authority() {
     assert_eq!(programdata_account.owner, bpf_loader_upgradeable::id());
     assert!(!programdata_account.executable);
     assert_eq!(
-        programdata_account.data[UpgradeableLoaderState::programdata_data_offset().unwrap()..],
+        programdata_account.data[UpgradeableLoaderState::size_of_programdata_metadata()..],
         program_data[..]
     );
 
@@ -591,12 +591,12 @@ fn test_cli_program_close_program() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_programdata = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
     let minimum_balance_for_program = rpc_client
-        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::program_len().unwrap())
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program())
         .unwrap();
     let upgrade_authority = Keypair::new();
 
@@ -680,14 +680,14 @@ fn test_cli_program_write_buffer() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_buffer = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
     let minimum_balance_for_buffer_default = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
 
     let mut config = CliConfig::recent_for_tests();
@@ -730,7 +730,7 @@ fn test_cli_program_write_buffer() {
         panic!("not a buffer account");
     }
     assert_eq!(
-        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..],
         program_data[..]
     );
 
@@ -767,7 +767,7 @@ fn test_cli_program_write_buffer() {
         panic!("not a buffer account");
     }
     assert_eq!(
-        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..],
         program_data[..]
     );
 
@@ -829,7 +829,7 @@ fn test_cli_program_write_buffer() {
         panic!("not a buffer account");
     }
     assert_eq!(
-        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..],
         program_data[..]
     );
 
@@ -864,7 +864,7 @@ fn test_cli_program_write_buffer() {
         panic!("not a buffer account");
     }
     assert_eq!(
-        buffer_account.data[UpgradeableLoaderState::buffer_data_offset().unwrap()..],
+        buffer_account.data[UpgradeableLoaderState::size_of_buffer_metadata()..],
         program_data[..]
     );
 
@@ -1004,9 +1004,9 @@ fn test_cli_program_set_buffer_authority() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_buffer = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
 
     let mut config = CliConfig::recent_for_tests();
@@ -1119,9 +1119,9 @@ fn test_cli_program_mismatch_buffer_authority() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_buffer = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
 
     let mut config = CliConfig::recent_for_tests();
@@ -1212,9 +1212,9 @@ fn test_cli_program_show() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_buffer = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
 
     let mut config = CliConfig::recent_for_tests();
@@ -1399,9 +1399,9 @@ fn test_cli_program_dump() {
     file.read_to_end(&mut program_data).unwrap();
     let max_len = program_data.len();
     let minimum_balance_for_buffer = rpc_client
-        .get_minimum_balance_for_rent_exemption(
-            UpgradeableLoaderState::programdata_len(max_len).unwrap(),
-        )
+        .get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_programdata(
+            max_len,
+        ))
         .unwrap();
 
     let mut config = CliConfig::recent_for_tests();

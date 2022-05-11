@@ -4,10 +4,11 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         hash::Hash,
-        message::{Message, VersionedMessage},
+        message::{Message, SanitizedVersionedMessage},
+        sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{Transaction, VersionedTransaction},
+        transaction::{SanitizedVersionedTransaction, Transaction, VersionedTransaction},
     },
     std::{
         cmp::Ordering,
@@ -28,12 +29,14 @@ pub enum DeserializedPacketError {
     DeserializationError(#[from] bincode::Error),
     #[error("overflowed on signature size {0}")]
     SignatureOverflowed(usize),
+    #[error("packet failed sanitization {0}")]
+    SanitizeError(#[from] SanitizeError),
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
-    versioned_transaction: VersionedTransaction,
+    transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
     fee_per_cu: u64,
@@ -44,8 +47,8 @@ impl ImmutableDeserializedPacket {
         &self.original_packet
     }
 
-    pub fn versioned_transaction(&self) -> &VersionedTransaction {
-        &self.versioned_transaction
+    pub fn transaction(&self) -> &SanitizedVersionedTransaction {
+        &self.transaction
     }
 
     pub fn sender_stake(&self) -> u64 {
@@ -67,7 +70,7 @@ impl ImmutableDeserializedPacket {
 
 /// Holds deserialized messages, as well as computed message_hash and other things needed to create
 /// SanitizedTransaction
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeserializedPacket {
     immutable_section: Rc<ImmutableDeserializedPacket>,
     pub forwarded: bool,
@@ -93,19 +96,20 @@ impl DeserializedPacket {
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
             limited_deserialize(&packet.data[0..packet.meta.size])?;
+        let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
         let message_bytes = packet_message(&packet)?;
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
             bank.as_ref()
-                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, bank))
+                .map(|bank| compute_fee_per_cu(sanitized_transaction.get_message(), bank))
                 .unwrap_or(0)
         });
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
                 original_packet: packet,
-                versioned_transaction,
+                transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
                 fee_per_cu,
@@ -369,7 +373,7 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
 }
 
 /// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
-fn compute_fee_per_cu(_message: &VersionedMessage, _bank: &Bank) -> u64 {
+fn compute_fee_per_cu(_message: &SanitizedVersionedMessage, _bank: &Bank) -> u64 {
     1
 }
 

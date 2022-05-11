@@ -56,7 +56,8 @@ pub fn rpc_bootstrap(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     ledger_path: &Path,
-    snapshot_archives_dir: &Path,
+    full_snapshot_archives_dir: &Path,
+    incremental_snapshot_archives_dir: &Path,
     vote_account: &Pubkey,
     authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     cluster_entrypoints: &[ContactInfo],
@@ -96,7 +97,8 @@ pub fn rpc_bootstrap(
             node,
             identity_keypair,
             ledger_path,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             vote_account,
             authorized_voter_keypairs,
             cluster_entrypoints,
@@ -116,7 +118,7 @@ pub fn rpc_bootstrap(
             node,
             identity_keypair,
             ledger_path,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
             vote_account,
             authorized_voter_keypairs,
             cluster_entrypoints,
@@ -384,32 +386,6 @@ fn check_vote_account(
     Ok(())
 }
 
-/// Get the Slot and Hash of the local snapshot with the highest slot.  Can be either a full
-/// snapshot or an incremental snapshot.
-fn get_highest_local_snapshot_hash(
-    snapshot_archives_dir: impl AsRef<Path>,
-) -> Option<(Slot, Hash)> {
-    if let Some(full_snapshot_info) =
-        snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir)
-    {
-        if let Some(incremental_snapshot_info) =
-            snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                &snapshot_archives_dir,
-                full_snapshot_info.slot(),
-            )
-        {
-            Some((
-                incremental_snapshot_info.slot(),
-                *incremental_snapshot_info.hash(),
-            ))
-        } else {
-            Some((full_snapshot_info.slot(), *full_snapshot_info.hash()))
-        }
-    } else {
-        None
-    }
-}
-
 mod without_incremental_snapshots {
     use super::*;
 
@@ -418,7 +394,7 @@ mod without_incremental_snapshots {
         node: &Node,
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         cluster_entrypoints: &[ContactInfo],
@@ -458,7 +434,7 @@ mod without_incremental_snapshots {
                 validator_config,
                 &mut blacklisted_rpc_nodes,
                 &bootstrap_config,
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
             );
             if rpc_node_details.is_none() {
                 return;
@@ -512,7 +488,7 @@ mod without_incremental_snapshots {
             }
 
             if let Some(snapshot_hash) = snapshot_hash {
-                let use_local_snapshot = match get_highest_local_snapshot_hash(snapshot_archives_dir) {
+                let use_local_snapshot = match get_highest_local_snapshot_hash(full_snapshot_archives_dir) {
                     None => {
                         info!("Downloading snapshot for slot {} since there is not a local snapshot", snapshot_hash.0);
                         false
@@ -555,16 +531,17 @@ mod without_incremental_snapshots {
                                 gossip.take().unwrap();
                             cluster_info.save_contact_info();
                             gossip_exit_flag.store(true, Ordering::Relaxed);
-                            let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) = if let Some(snapshot_config) =
+                            let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain, incremental_snapshot_archives_dir) = if let Some(snapshot_config) =
                                 validator_config.snapshot_config.as_ref()
                             {
-                                (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain)
+                                (snapshot_config.maximum_full_snapshot_archives_to_retain, snapshot_config.maximum_incremental_snapshot_archives_to_retain, snapshot_config.incremental_snapshot_archives_dir.as_path())
                             } else {
-                                (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN)
+                                (DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN, DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, full_snapshot_archives_dir)
                             };
                             let ret = download_snapshot_archive(
                                 &rpc_contact_info.rpc,
-                                snapshot_archives_dir,
+                                full_snapshot_archives_dir,
+                                incremental_snapshot_archives_dir,
                                 snapshot_hash,
                                 SnapshotType::FullSnapshot,
                                 maximum_full_snapshot_archives_to_retain,
@@ -668,7 +645,7 @@ mod without_incremental_snapshots {
         validator_config: &ValidatorConfig,
         blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
         bootstrap_config: &RpcBootstrapConfig,
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
     ) -> Option<(ContactInfo, Option<(Slot, Hash)>)> {
         let mut blacklist_timeout = Instant::now();
         let mut newer_cluster_snapshot_timeout = None;
@@ -692,7 +669,8 @@ mod without_incremental_snapshots {
             let rpc_peers = rpc_peers.unwrap();
             blacklist_timeout = Instant::now();
 
-            let mut highest_snapshot_hash = get_highest_local_snapshot_hash(snapshot_archives_dir);
+            let mut highest_snapshot_hash =
+                get_highest_local_snapshot_hash(full_snapshot_archives_dir);
             let eligible_rpc_peers = if bootstrap_config.no_snapshot_fetch {
                 rpc_peers
             } else {
@@ -795,6 +773,14 @@ mod without_incremental_snapshots {
             None
         }
     }
+
+    /// Get the Slot and Hash of the local snapshot with the highest slot.
+    fn get_highest_local_snapshot_hash(
+        full_snapshot_archives_dir: impl AsRef<Path>,
+    ) -> Option<(Slot, Hash)> {
+        snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
+            .map(|full_snapshot_info| (full_snapshot_info.slot(), *full_snapshot_info.hash()))
+    }
 }
 
 mod with_incremental_snapshots {
@@ -829,7 +815,8 @@ mod with_incremental_snapshots {
         node: &Node,
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
+        incremental_snapshot_archives_dir: &Path,
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         cluster_entrypoints: &[ContactInfo],
@@ -935,7 +922,8 @@ mod with_incremental_snapshots {
                 info!("RPC node root slot: {}", rpc_client_slot);
 
                 download_snapshots(
-                    snapshot_archives_dir,
+                    full_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
                     validator_config,
                     &bootstrap_config,
                     use_progress_bar,
@@ -1085,6 +1073,33 @@ mod with_incremental_snapshots {
                     snapshot_hash: Some(final_snapshot_hash),
                 });
             }
+        }
+    }
+
+    /// Get the Slot and Hash of the local snapshot with the highest slot.  Can be either a full
+    /// snapshot or an incremental snapshot.
+    fn get_highest_local_snapshot_hash(
+        full_snapshot_archives_dir: impl AsRef<Path>,
+        incremental_snapshot_archives_dir: impl AsRef<Path>,
+    ) -> Option<(Slot, Hash)> {
+        if let Some(full_snapshot_info) =
+            snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
+        {
+            if let Some(incremental_snapshot_info) =
+                snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                    incremental_snapshot_archives_dir,
+                    full_snapshot_info.slot(),
+                )
+            {
+                Some((
+                    incremental_snapshot_info.slot(),
+                    *incremental_snapshot_info.hash(),
+                ))
+            } else {
+                Some((full_snapshot_info.slot(), *full_snapshot_info.hash()))
+            }
+        } else {
+            None
         }
     }
 
@@ -1420,7 +1435,8 @@ mod with_incremental_snapshots {
     /// Check to see if we can use our local snapshots, otherwise download newer ones.
     #[allow(clippy::too_many_arguments)]
     fn download_snapshots(
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
+        incremental_snapshot_archives_dir: &Path,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
         use_progress_bar: bool,
@@ -1442,7 +1458,8 @@ mod with_incremental_snapshots {
 
         // If the local snapshots are new enough, then use 'em; no need to download new snapshots
         if should_use_local_snapshot(
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             maximum_local_snapshot_age,
             full_snapshot_hash,
             incremental_snapshot_hash,
@@ -1451,7 +1468,7 @@ mod with_incremental_snapshots {
         }
 
         // Check and see if we've already got the full snapshot; if not, download it
-        if snapshot_utils::get_full_snapshot_archives(snapshot_archives_dir)
+        if snapshot_utils::get_full_snapshot_archives(full_snapshot_archives_dir)
             .into_iter()
             .any(|snapshot_archive| {
                 snapshot_archive.slot() == full_snapshot_hash.0
@@ -1464,7 +1481,8 @@ mod with_incremental_snapshots {
         );
         } else {
             download_snapshot(
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
                 validator_config,
                 bootstrap_config,
                 use_progress_bar,
@@ -1480,7 +1498,7 @@ mod with_incremental_snapshots {
 
         // Check and see if we've already got the incremental snapshot; if not, download it
         if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
-            if snapshot_utils::get_incremental_snapshot_archives(snapshot_archives_dir)
+            if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
                 .into_iter()
                 .any(|snapshot_archive| {
                     snapshot_archive.slot() == incremental_snapshot_hash.0
@@ -1494,7 +1512,8 @@ mod with_incremental_snapshots {
         );
             } else {
                 download_snapshot(
-                    snapshot_archives_dir,
+                    full_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
                     validator_config,
                     bootstrap_config,
                     use_progress_bar,
@@ -1515,7 +1534,8 @@ mod with_incremental_snapshots {
     /// Download a snapshot
     #[allow(clippy::too_many_arguments)]
     fn download_snapshot(
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
+        incremental_snapshot_archives_dir: &Path,
         validator_config: &ValidatorConfig,
         bootstrap_config: &RpcBootstrapConfig,
         use_progress_bar: bool,
@@ -1547,7 +1567,8 @@ mod with_incremental_snapshots {
         };
         download_snapshot_archive(
             &rpc_contact_info.rpc,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             desired_snapshot_hash,
             snapshot_type,
             maximum_full_snapshot_archives_to_retain,
@@ -1591,7 +1612,8 @@ mod with_incremental_snapshots {
     /// Check to see if bootstrap should load from its local snapshots or not.  If not, then snapshots
     /// will be downloaded.
     fn should_use_local_snapshot(
-        snapshot_archives_dir: &Path,
+        full_snapshot_archives_dir: &Path,
+        incremental_snapshot_archives_dir: &Path,
         maximum_local_snapshot_age: Slot,
         full_snapshot_hash: (Slot, Hash),
         incremental_snapshot_hash: Option<(Slot, Hash)>,
@@ -1600,7 +1622,10 @@ mod with_incremental_snapshots {
             .map(|(slot, _)| slot)
             .unwrap_or(full_snapshot_hash.0);
 
-        match get_highest_local_snapshot_hash(snapshot_archives_dir) {
+        match get_highest_local_snapshot_hash(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+        ) {
             None => {
                 info!(
                     "Downloading a snapshot for slot {} since there is not a local snapshot.",

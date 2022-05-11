@@ -52,7 +52,7 @@ pub enum ExecuteTimingType {
     TotalBatchesLen,
 }
 
-pub struct Metrics([u64; ExecuteTimingType::VARIANT_COUNT]);
+pub struct Metrics([u64; ExecuteTimingType::ITEM_COUNT]);
 
 impl Index<ExecuteTimingType> for Metrics {
     type Output = u64;
@@ -69,7 +69,7 @@ impl IndexMut<ExecuteTimingType> for Metrics {
 
 impl Default for Metrics {
     fn default() -> Self {
-        Metrics([0; ExecuteTimingType::VARIANT_COUNT])
+        Metrics([0; ExecuteTimingType::ITEM_COUNT])
     }
 }
 
@@ -100,10 +100,7 @@ impl ExecuteTimings {
         let idx = timing_type as usize;
         match self.metrics.0.get_mut(idx) {
             Some(elem) => *elem = elem.saturating_add(value_to_add),
-            None => debug_assert!(
-                idx < ExecuteTimingType::VARIANT_COUNT,
-                "Index out of bounds"
-            ),
+            None => debug_assert!(idx < ExecuteTimingType::ITEM_COUNT, "Index out of bounds"),
         }
     }
 }

@@ -1366,12 +1366,19 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
-        Self::new_for_tests(genesis_config)
+        Self::new_with_paths_for_benches(
+            genesis_config,
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        )
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
@@ -3793,7 +3800,16 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    self,
+                    self.feature_set
+                        .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self
             .rc
@@ -3842,7 +3858,7 @@ impl Bank {
         let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
-        batch.needs_unlock = false;
+        batch.set_needs_unlock(false);
         batch
     }
 
@@ -3951,8 +3967,8 @@ impl Bank {
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
-        if batch.needs_unlock {
-            batch.needs_unlock = false;
+        if batch.needs_unlock() {
+            batch.set_needs_unlock(false);
             self.rc
                 .accounts
                 .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
@@ -4356,34 +4372,37 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
-                    let compute_budget_max_units = if tx_wide_compute_cap {
-                        compute_budget::MAX_UNITS
+                    let compute_budget = if let Some(compute_budget) = self.compute_budget {
+                        compute_budget
                     } else {
-                        compute_budget::DEFAULT_UNITS
-                    };
-                    let mut compute_budget = self
-                        .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
-                    if tx_wide_compute_cap {
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_message(
-                            tx.message(),
-                            feature_set.is_active(&requestable_heap_size::id()),
-                            feature_set.is_active(&default_units_per_instruction::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
+                        let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
+                        let compute_budget_max_units = if tx_wide_compute_cap {
+                            compute_budget::MAX_UNITS
+                        } else {
+                            compute_budget::DEFAULT_UNITS
+                        };
+                        let mut compute_budget = ComputeBudget::new(compute_budget_max_units);
+                        if tx_wide_compute_cap {
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_message(
+                                tx.message(),
+                                feature_set.is_active(&requestable_heap_size::id()),
+                                feature_set.is_active(&default_units_per_instruction::id()),
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
                         }
-                    }
+                        compute_budget
+                    };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -5090,6 +5109,7 @@ impl Bank {
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 rewrites_skipped.push((pubkey, hash));
+                assert_eq!(collected, CollectedInfo::default());
             } else if !just_rewrites {
                 total_collected += collected;
                 self.store_account(&pubkey, &account);
@@ -6320,7 +6340,14 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, self)
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                None,
+                self,
+                self.feature_set
+                    .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+            )
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles

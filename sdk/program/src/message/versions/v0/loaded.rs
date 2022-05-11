@@ -1,9 +1,8 @@
 use {
     crate::{
         bpf_loader_upgradeable,
-        message::{legacy::BUILTIN_PROGRAMS_KEYS, v0, AccountKeys},
+        message::{legacy::is_builtin_key_or_sysvar, v0, AccountKeys},
         pubkey::Pubkey,
-        sysvar,
     },
     std::{borrow::Cow, collections::HashSet},
 };
@@ -109,9 +108,7 @@ impl<'a> LoadedMessage<'a> {
     pub fn is_writable(&self, key_index: usize) -> bool {
         if self.is_writable_index(key_index) {
             if let Some(key) = self.account_keys().get(key_index) {
-                return !(sysvar::is_sysvar_id(key)
-                    || BUILTIN_PROGRAMS_KEYS.contains(key)
-                    || self.demote_program_id(key_index));
+                return !(is_builtin_key_or_sysvar(key) || self.demote_program_id(key_index));
             }
         }
         false

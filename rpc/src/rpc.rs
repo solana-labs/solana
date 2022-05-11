@@ -2546,17 +2546,22 @@ pub mod rpc_minimal {
                 return Err(RpcCustomError::NoSnapshot.into());
             }
 
-            let snapshot_archives_dir = meta
+            let (full_snapshot_archives_dir, incremental_snapshot_archives_dir) = meta
                 .snapshot_config
-                .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
+                .map(|snapshot_config| {
+                    (
+                        snapshot_config.full_snapshot_archives_dir,
+                        snapshot_config.incremental_snapshot_archives_dir,
+                    )
+                })
                 .unwrap();
 
             let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
                     .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &snapshot_archives_dir,
+                    &incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 
@@ -3925,7 +3930,7 @@ pub mod rpc_deprecated_v1_9 {
             meta.snapshot_config
                 .and_then(|snapshot_config| {
                     snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.snapshot_archives_dir,
+                        &snapshot_config.full_snapshot_archives_dir,
                     )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
@@ -4291,8 +4296,14 @@ fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: impl AddressLoader,
 ) -> Result<SanitizedTransaction> {
-    SanitizedTransaction::try_create(transaction, MessageHash::Compute, None, address_loader)
-        .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+    SanitizedTransaction::try_create(
+        transaction,
+        MessageHash::Compute,
+        None,
+        address_loader,
+        true, // require_static_program_ids
+    )
+    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {

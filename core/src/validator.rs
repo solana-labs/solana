@@ -501,7 +501,7 @@ impl Validator {
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service =
-            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
+            PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
         let (
             genesis_config,
@@ -1676,7 +1676,8 @@ fn maybe_warp_slot(
             ledger_path,
             &bank_forks.root_bank(),
             None,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             snapshot_config.archive_format,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,

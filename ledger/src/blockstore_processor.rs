@@ -299,6 +299,21 @@ fn execute_batches_internal(
     first_err(&results)
 }
 
+fn rebatch_transactions<'a>(
+    lock_results: &'a [Result<()>],
+    bank: &'a Arc<Bank>,
+    sanitized_txs: &'a [SanitizedTransaction],
+    start: usize,
+    end: usize,
+) -> TransactionBatch<'a, 'a> {
+    let txs = &sanitized_txs[start..=end];
+    let results = &lock_results[start..=end];
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    tx_batch.set_needs_unlock(false);
+
+    tx_batch
+}
+
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatch],
@@ -355,9 +370,8 @@ fn execute_batches(
                 batch_cost = batch_cost.saturating_add(cost_pair.0);
                 batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
                 if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let txs = &sanitized_txs[slice_start..=index];
-                    let results = &lock_results[slice_start..=index];
-                    let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+                    let tx_batch =
+                        rebatch_transactions(&lock_results, bank, &sanitized_txs, slice_start, index);
                     slice_start = next_index;
                     tx_batches.push(tx_batch);
                     tx_batch_costs.push(batch_cost_without_bpf);
@@ -3948,6 +3962,49 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
         assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+    }
+
+    #[test]
+    fn test_rebatch_transactions() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let txs = vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+        ];
+
+        let batch = bank.prepare_sanitized_batch(&txs);
+        assert!(batch.needs_unlock());
+
+        let batch2 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            0,
+            1,
+        );
+        assert!(batch.needs_unlock());
+        assert!(!batch2.needs_unlock());
     }
 
     #[test]

@@ -753,10 +753,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
     slot_state_update: SlotStateUpdate,
 ) {
     info!(
-        "check_slot_agrees_with_cluster()
-        slot: {},
-        root: {},
-        slot_state_update: {:?}",
+        "check_slot_agrees_with_cluster() slot: {}, root: {}, slot_state_update: {:?}",
         slot, root, slot_state_update
     );
 

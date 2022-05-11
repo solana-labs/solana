@@ -2,7 +2,7 @@
 
 extern crate solana_program;
 use {
-    solana_program::{custom_panic_default, msg},
+    solana_program::{custom_heap_default, custom_panic_default, msg},
     solana_zk_token_sdk::zk_token_elgamal::{
         ops,
         pod::{ElGamalCiphertext, Zeroable},
@@ -50,4 +50,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     0
 }
 
+custom_heap_default!();
 custom_panic_default!();

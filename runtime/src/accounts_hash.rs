@@ -83,6 +83,8 @@ pub struct HashStats {
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
+    /// # ancient append vecs encountered
+    pub ancient_append_vecs: AtomicUsize,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -200,6 +202,11 @@ impl HashStats {
             (
                 "roots_older_than_epoch",
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "ancient_append_vecs",
+                self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (
