@@ -17,6 +17,8 @@ on:
 jobs:
   windows-build:
     runs-on: windows-2022
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -41,12 +43,14 @@ jobs:
           git checkout ${{ inputs.commit }}
 
       - name: Build
+        id: build
         shell: bash
         run: |
           choco install openssl
           export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
           choco install protoc
           source /tmp/env.sh
+          echo "::set-output name=tag::$CI_TAG"
           ci/publish-tarball.sh
           mkdir -p "github-action-s3-upload/${{ inputs.commit }}"
           cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.commit }}/"
@@ -81,6 +85,7 @@ jobs:
           SOURCE_DIR: "github-action-s3-upload"
 
   windows-gh-release:
+    if: ${{ needs.windows-build.outputs.tag != '' }}
     needs: [windows-build]
     runs-on: ubuntu-20.04
     steps:
