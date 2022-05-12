@@ -2004,20 +2004,32 @@ impl AccountsDb {
         }
     }
 
+    /// return 'slot' - slots_in_epoch
+    fn get_slot_one_epoch_prior(slot: Slot, epoch_schedule: &EpochSchedule) -> Slot {
+        // would like to use:
+        // slot.saturating_sub(epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)))
+        // but there are problems with warmup and such on tests and probably test clusters.
+        // So, just use the maximum below (epoch_schedule.slots_per_epoch)
+        slot.saturating_sub(epoch_schedule.slots_per_epoch)
+    }
+
     /// hash calc is completed as of 'slot'
-    /// so, any process that wants to take action on really old slots can now proceed up to 'slot'-slots per epoch
+    /// so, any process that wants to take action on really old slots can now proceed up to 'completed_slot'-slots per epoch
     pub fn notify_accounts_hash_calculated_complete(
         &self,
         completed_slot: Slot,
         epoch_schedule: &EpochSchedule,
     ) {
-        let one_epoch_old_slot = completed_slot.saturating_sub(
-            epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(completed_slot)),
-        );
+        let one_epoch_old_slot = Self::get_slot_one_epoch_prior(completed_slot, epoch_schedule);
         let mut accounts_hash_complete_one_epoch_old =
             self.accounts_hash_complete_one_epoch_old.write().unwrap();
         *accounts_hash_complete_one_epoch_old =
             std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
+    }
+
+    /// get the slot that is one epoch older than the highest slot that has been used for hash calculation
+    fn get_accounts_hash_complete_one_epoch_old(&self) -> Slot {
+        *self.accounts_hash_complete_one_epoch_old.read().unwrap()
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -5339,6 +5351,8 @@ impl AccountsDb {
                 i64
             ),
         );
+        self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
+
         Ok((accumulated_hash, total_lamports))
     }
 
@@ -5888,6 +5902,19 @@ impl AccountsDb {
         )
     }
 
+    /// if we ever try to calc hash where there are squashed append vecs within the last epoch, we will fail
+    fn assert_safe_squashing_accounts_hash(&self, slot: Slot, epoch_schedule: &EpochSchedule) {
+        let previous = self.get_accounts_hash_complete_one_epoch_old();
+        let current = Self::get_slot_one_epoch_prior(slot, epoch_schedule);
+        assert!(
+            previous <= current,
+            "get_accounts_hash_complete_one_epoch_old: {}, get_slot_one_epoch_prior: {}, slot: {}",
+            previous,
+            current,
+            slot
+        );
+    }
+
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -5946,11 +5973,16 @@ impl AccountsDb {
             );
             Ok(final_result)
         };
-        if use_bg_thread_pool {
+        let result = if use_bg_thread_pool {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
-        }
+        };
+        self.assert_safe_squashing_accounts_hash(
+            storages.max_slot_inclusive(),
+            config.epoch_schedule,
+        );
+        result
     }
 
     /// calculate oldest_slot_to_keep and alive_roots
