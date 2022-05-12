@@ -15,7 +15,7 @@ use {
 
 /// a set of accounts need to be stored.
 /// If there are too many to fit in 'Primary', the rest are put in 'Overflow'
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum StorageSelector {
     Primary,
     Overflow,
@@ -66,6 +66,11 @@ impl<'a> AccountsToStore<'a> {
             accounts,
             index_first_item_overflow,
         }
+    }
+
+    /// true if a request to 'get' 'Overflow' would return accounts & hashes
+    pub fn has_overflow(&self) -> bool {
+        self.index_first_item_overflow < self.accounts.len()
     }
 
     /// get the accounts and hashes to store in the given 'storage'
@@ -148,6 +153,7 @@ pub mod tests {
             assert!(accounts.is_empty());
             assert!(hash.is_empty());
         }
+        assert!(!accounts_to_store.has_overflow());
     }
 
     #[test]
@@ -206,6 +212,10 @@ pub mod tests {
             );
             assert_eq!(hashes, vec![&hash]);
             let (accounts, hash) = accounts_to_store.get(get_opposite(&selector));
+            assert_eq!(
+                selector == StorageSelector::Overflow,
+                accounts_to_store.has_overflow()
+            );
             assert!(accounts.is_empty());
             assert!(hash.is_empty());
         }
