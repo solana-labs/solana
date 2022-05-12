@@ -76,7 +76,7 @@ impl BigTableUploadService {
         config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) {
-        let mut start_slot = 0;
+        let mut start_slot: u64 = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -104,7 +104,7 @@ impl BigTableUploadService {
             ));
 
             match result {
-                Ok(()) => start_slot = end_slot,
+                Ok(last_slot_uploaded) => start_slot = last_slot_uploaded,
                 Err(err) => {
                     warn!("bigtable: upload_confirmed_blocks: {}", err);
                     std::thread::sleep(std::time::Duration::from_secs(2));

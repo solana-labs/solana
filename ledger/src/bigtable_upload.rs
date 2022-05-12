@@ -18,6 +18,7 @@ use {
 #[derive(Clone)]
 pub struct ConfirmedBlockUploadConfig {
     pub force_reupload: bool,
+    pub max_num_slots_to_check: usize,
     pub num_blocks_to_upload_in_parallel: usize,
     pub block_read_ahead_depth: usize, // should always be >= `num_blocks_to_upload_in_parallel`
 }
@@ -27,6 +28,7 @@ impl Default for ConfirmedBlockUploadConfig {
         const NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL: usize = 32;
         ConfirmedBlockUploadConfig {
             force_reupload: false,
+            max_num_slots_to_check: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 4,
             num_blocks_to_upload_in_parallel: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL,
             block_read_ahead_depth: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 2,
         }
@@ -40,7 +42,7 @@ pub async fn upload_confirmed_blocks(
     ending_slot: Option<Slot>,
     config: ConfirmedBlockUploadConfig,
     exit: Arc<AtomicBool>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Slot, Box<dyn std::error::Error>> {
     let mut measure = Measure::start("entire upload");
 
     info!("Loading ledger slots starting at {}...", starting_slot);
@@ -124,18 +126,20 @@ pub async fn upload_confirmed_blocks(
             .cloned()
             .collect::<Vec<_>>();
         blocks_to_upload.sort_unstable();
+        blocks_to_upload.truncate(config.max_num_slots_to_check);
         blocks_to_upload
     };
 
     if blocks_to_upload.is_empty() {
         info!("No blocks need to be uploaded to bigtable");
-        return Ok(());
+        return Ok(*last_blockstore_slot);
     }
+    let last_slot = *blocks_to_upload.last().unwrap();
     info!(
         "{} blocks to be uploaded to the bucket in the range ({}, {})",
         blocks_to_upload.len(),
         blocks_to_upload.first().unwrap(),
-        blocks_to_upload.last().unwrap()
+        last_slot
     );
 
     // Load the blocks out of blockstore in a separate thread to allow for concurrent block uploading
@@ -217,6 +221,6 @@ pub async fn upload_confirmed_blocks(
     if failures > 0 {
         Err(format!("Incomplete upload, {} operations failed", failures).into())
     } else {
-        Ok(())
+        Ok(last_slot)
     }
 }

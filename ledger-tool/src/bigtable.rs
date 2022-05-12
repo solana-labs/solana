@@ -58,6 +58,9 @@ async fn upload(
         Arc::new(AtomicBool::new(false)),
     )
     .await
+    .map(|last_slot_uploaded| {
+        info!("last slot uploaded: {}", last_slot_uploaded);
+    })
 }
 
 async fn delete_slots(
