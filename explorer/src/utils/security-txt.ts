@@ -52,7 +52,7 @@ export const fromProgramData = (
 
   /*
   the expected structure of content should be a list
-  of ascii encoded key value pairs seperated by null characters.
+  of ascii encoded key value pairs separated by null characters.
   e.g. key1\0value1\0key2\0value2\0
   */
   const content = decoded.subarray(headerIdx + HEADER.length, footerIdx);
