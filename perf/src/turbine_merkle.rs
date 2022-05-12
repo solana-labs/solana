@@ -55,6 +55,14 @@ impl AsRef<[u8]> for TurbineMerkleHash {
 }
 
 impl TurbineMerkleProof {
+    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
+        for i in 0..6 {
+            buf[i * 20..i * 20 + 20].copy_from_slice(self.0[i].as_ref());
+        }
+        buf
+    }
+
     #[allow(clippy::integer_arithmetic)]
     fn generic_compute_root(
         proof: &[TurbineMerkleHash],
@@ -106,7 +114,7 @@ impl TurbineMerkleProof {
 impl From<&[u8]> for TurbineMerkleProof {
     #[allow(clippy::integer_arithmetic)]
     fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() % TURBINE_MERKLE_HASH_BYTES == 0);
+        assert_eq!(buf.len() % TURBINE_MERKLE_HASH_BYTES, 0);
         let v: Vec<TurbineMerkleHash> = buf
             .chunks_exact(TURBINE_MERKLE_HASH_BYTES)
             .map(|x| x.into())
@@ -116,6 +124,14 @@ impl From<&[u8]> for TurbineMerkleProof {
 }
 
 impl TurbineMerkleProofFec64 {
+    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
+        for i in 0..6 {
+            buf[i * 20..i * 20 + 20].copy_from_slice(self.0[i].as_ref());
+        }
+        buf
+    }
+
     #[inline]
     pub fn compute_root(
         &self,
@@ -304,6 +320,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_merkle() {
         let packets = create_random_packets(16);
         let leaves: Vec<TurbineMerkleHash> = packets
@@ -320,6 +337,32 @@ mod tests {
     }
 
     #[test]
+    fn test_merkle_proof_fec64() {
+        let packets = create_random_packets(64);
+        let leaves: Vec<TurbineMerkleHash> = packets
+            .iter()
+            .map(|p| TurbineMerkleHash::hash(&[p]))
+            .collect();
+
+        let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+        let root = tree.root();
+
+        let ref_proof = tree.prove(11);
+        assert!(ref_proof.verify(&root, &tree.node(11), 11));
+
+        let proof11 = tree.prove_fec64(11);
+        assert!(proof11.verify(&root, &tree.node(11), 11));
+
+        assert_eq!(&ref_proof.0, &proof11.0);
+
+        for i in 0..64 {
+            let proof = tree.prove_fec64(i);
+            assert!(proof.verify(&root, &tree.node(i), i));
+        }
+    }
+
+    #[test]
+    #[ignore]
     fn test_merkle_from_buf_vecs_par() {
         let packets = create_random_packets(64);
         let ref_tree = TurbineMerkleTree::new_from_bufs(&packets[..]);

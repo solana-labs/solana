@@ -114,8 +114,8 @@ impl StandardBroadcastRun {
                     let tree = TurbineMerkleTree::new_from_bufs_vec_par(&shred_bufs, 16);
                     let merkle_root = tree.root();
                     let merkle_root_sig = keypair.sign_message(merkle_root.as_ref());
-                    coding_shreds.iter_mut().enumerate().for_each(|(i, s)| {
-                        s.set_merkle(&merkle_root, &tree.prove_fec64(i));
+                    coding_shreds.iter_mut().enumerate().for_each(|(_i, s)| {
+                        s.set_merkle(&merkle_root, &tree.prove_fec64(s.merkle_index().unwrap()));
                         s.set_signature(&merkle_root_sig);
                     });
                 }
@@ -142,6 +142,8 @@ impl StandardBroadcastRun {
         assert!(total_shreds % NUM_FEC_SET_SHREDS == 0);
         assert!(total_shreds / NUM_FEC_SET_SHREDS > 0);
 
+        //error!(">>> sign and send v2");
+
         while !data_shreds_aggregated.is_empty() {
             let mut batch_shreds: Vec<_> = data_shreds_aggregated
                 .drain(..(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize).min(data_shreds_aggregated.len()))
@@ -160,8 +162,16 @@ impl StandardBroadcastRun {
                 let merkle_root = tree.root();
                 let merkle_root_sig = keypair.sign_message(merkle_root.as_ref());
 
-                batch_shreds.iter_mut().enumerate().for_each(|(i, s)| {
-                    s.set_merkle(&merkle_root, &tree.prove_fec64(i));
+                batch_shreds.iter_mut().enumerate().for_each(|(_i, s)| {
+                    /*
+                    error!(
+                        ">>> setting merkle for slot={} i={} merkle_index={}",
+                        s.slot(),
+                        i,
+                        s.merkle_index().unwrap()
+                    );
+                    */
+                    s.set_merkle(&merkle_root, &tree.prove_fec64(s.merkle_index().unwrap()));
                     s.set_signature(&merkle_root_sig);
                 });
             }
@@ -387,6 +397,7 @@ impl StandardBroadcastRun {
         );
 
         if !batch_fec_set {
+            info!(">>> SENDING V1");
             assert!(coding_shreds.first().unwrap().protocol_version() == ShredProtocolVersion::V1);
 
             let coding_shreds = Arc::new(coding_shreds);
@@ -396,6 +407,7 @@ impl StandardBroadcastRun {
             socket_sender.send((coding_shreds.clone(), batch_info.clone()))?;
             blockstore_sender.send((coding_shreds, batch_info))?;
         } else if !coding_shreds.is_empty() {
+            info!(">>> SENDING V2");
             Self::sign_and_send_v2_shreds(
                 &mut data_shreds_aggregated,
                 &mut coding_shreds,

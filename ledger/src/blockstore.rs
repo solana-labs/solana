@@ -987,14 +987,26 @@ impl Blockstore {
             let mut recovered_data_shreds: Vec<_> = recovered_data_shreds
                 .into_iter()
                 .filter_map(|shred| {
-                    let _leader =
+                    let leader =
                         leader_schedule_cache.slot_leader_at(shred.slot(), /*bank=*/ None)?;
-                    /* // TODO MERKLE VERIFY
+                    // TODO MERKLE VERIFY
                     if !shred.verify(&leader) {
+                        error!(
+                            "RECOVERY FAIL VERIFY slot={} type={:?} merkle_index={:?} (bypassing failure)",
+                            shred.slot(),
+                            shred.shred_type(),
+                            shred.merkle_index(),
+                        );
                         metrics.num_recovered_failed_sig += 1;
-                        return None;
+                        //return None;
+                    } else {
+                        error!(
+                            "RECOVERY VERIFY SUCCESS in blockstore slot={} type={:?} merkle_index={:?}",
+                            shred.slot(),
+                            shred.shred_type(),
+                            shred.merkle_index(),
+                        );
                     }
-                    */
 
                     match self.check_insert_data_shred(
                         shred.clone(),
