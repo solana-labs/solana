@@ -267,12 +267,10 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
-    if (this._message) {
-      if (JSON.stringify(this.toJSON()) !== JSON.stringify(this._json)) {
-        throw new Error(
-          'Transaction message mutated after being populated from Message',
-        );
-      }
+    if (
+      this._message &&
+      JSON.stringify(this.toJSON()) === JSON.stringify(this._json)
+    ) {
       return this._message;
     }
 

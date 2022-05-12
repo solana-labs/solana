@@ -458,11 +458,11 @@ impl RootsTracker {
 
 #[derive(Debug, Default)]
 pub struct AccountsIndexRootsStats {
-    pub roots_len: usize,
-    pub uncleaned_roots_len: usize,
-    pub previous_uncleaned_roots_len: usize,
-    pub roots_range: u64,
-    pub historical_roots_len: usize,
+    pub roots_len: Option<usize>,
+    pub uncleaned_roots_len: Option<usize>,
+    pub previous_uncleaned_roots_len: Option<usize>,
+    pub roots_range: Option<u64>,
+    pub historical_roots_len: Option<usize>,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
     pub clean_unref_from_storage_us: u64,
@@ -1832,11 +1832,12 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
             false
         } else {
-            stats.roots_len = w_roots_tracker.alive_roots.len();
-            stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
-            stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
-            stats.roots_range = w_roots_tracker.alive_roots.range_width();
-            stats.historical_roots_len = w_roots_tracker.historical_roots.len();
+            stats.roots_len = Some(w_roots_tracker.alive_roots.len());
+            stats.uncleaned_roots_len = Some(w_roots_tracker.uncleaned_roots.len());
+            stats.previous_uncleaned_roots_len =
+                Some(w_roots_tracker.previous_uncleaned_roots.len());
+            stats.roots_range = Some(w_roots_tracker.alive_roots.range_width());
+            stats.historical_roots_len = Some(w_roots_tracker.historical_roots.len());
             true
         }
     }

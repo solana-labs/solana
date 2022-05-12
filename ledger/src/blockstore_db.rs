@@ -4,7 +4,8 @@ use {
         blockstore_meta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
-            BlockstoreRocksDbColumnFamilyMetrics, ColumnMetrics,
+            BlockstoreRocksDbColumnFamilyMetrics, BlockstoreRocksDbPerfSamplingStatus,
+            ColumnMetrics,
         },
         rocksdb_metric_header,
     },
@@ -36,7 +37,7 @@ use {
         marker::PhantomData,
         path::Path,
         sync::{
-            atomic::{AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicU64, Ordering},
             Arc,
         },
     },
@@ -307,6 +308,7 @@ struct Rocks {
     access_type: AccessType,
     oldest_slot: OldestSlot,
     column_options: LedgerColumnOptions,
+    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus,
 }
 
 impl Rocks {
@@ -338,6 +340,7 @@ impl Rocks {
                 access_type: access_type.clone(),
                 oldest_slot,
                 column_options,
+                write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
             },
             AccessType::Secondary => {
                 let secondary_path = path.join("solana-secondary");
@@ -358,6 +361,7 @@ impl Rocks {
                     access_type: access_type.clone(),
                     oldest_slot,
                     column_options,
+                    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
                 }
             }
         };
@@ -533,7 +537,7 @@ impl Rocks {
     fn write(&self, batch: RWriteBatch) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_batch_perf_status.op_count,
         );
         let result = self.db.write(batch);
         if is_perf_enabled {
@@ -996,6 +1000,8 @@ where
     backend: Arc<Rocks>,
     column: PhantomData<C>,
     pub column_options: Arc<LedgerColumnOptions>,
+    read_perf_status: BlockstoreRocksDbPerfSamplingStatus,
+    write_perf_status: BlockstoreRocksDbPerfSamplingStatus,
 }
 
 impl<C: Column + ColumnName + ColumnMetrics> LedgerColumn<C> {
@@ -1116,12 +1122,6 @@ pub struct LedgerColumnOptions {
     // If the value is greater than 0, then RocksDB read/write perf sample
     // will be collected once for every `rocks_perf_sample_interval` ops.
     pub rocks_perf_sample_interval: usize,
-
-    // A counter to determine whether to sample the current RocksDB read operation.
-    pub perf_read_counter: Arc<AtomicUsize>,
-
-    // A counter to determine whether to sample the current RocksDB write operation.
-    pub perf_write_counter: Arc<AtomicUsize>,
 }
 
 impl Default for LedgerColumnOptions {
@@ -1130,23 +1130,6 @@ impl Default for LedgerColumnOptions {
             shred_storage_type: ShredStorageType::RocksLevel,
             compression_type: BlockstoreCompressionType::default(),
             rocks_perf_sample_interval: 0,
-            perf_read_counter: Arc::<AtomicUsize>::default(),
-            perf_write_counter: Arc::<AtomicUsize>::default(),
-        }
-    }
-}
-
-impl LedgerColumnOptions {
-    pub fn new(
-        shred_storage_type: ShredStorageType,
-        compression_type: BlockstoreCompressionType,
-        rocks_perf_sample_interval: usize,
-    ) -> Self {
-        Self {
-            shred_storage_type,
-            compression_type,
-            rocks_perf_sample_interval,
-            ..Self::default()
         }
     }
 }
@@ -1265,6 +1248,8 @@ impl Database {
             backend: Arc::clone(&self.backend),
             column: PhantomData,
             column_options: Arc::clone(&self.column_options),
+            read_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
+            write_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
         }
     }
 
@@ -1318,7 +1303,7 @@ where
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1396,7 +1381,7 @@ where
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), value);
         if is_perf_enabled {
@@ -1423,7 +1408,7 @@ where
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
@@ -1440,7 +1425,7 @@ where
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let serialized_value = serialize(value)?;
 
@@ -1457,7 +1442,7 @@ where
     pub fn delete(&self, key: C::Index) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.delete_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1477,7 +1462,7 @@ where
     ) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1498,7 +1483,7 @@ where
     pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
@@ -1518,7 +1503,7 @@ where
 
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
         if is_perf_enabled {

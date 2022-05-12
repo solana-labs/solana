@@ -13,8 +13,11 @@ pub struct SnapshotConfig {
     /// Generate a new incremental snapshot archive every this many slots
     pub incremental_snapshot_archive_interval_slots: Slot,
 
-    /// Path to the directory where snapshot archives are stored
-    pub snapshot_archives_dir: PathBuf,
+    /// Path to the directory where full snapshot archives are stored
+    pub full_snapshot_archives_dir: PathBuf,
+
+    /// Path to the directory where incremental snapshot archives are stored
+    pub incremental_snapshot_archives_dir: PathBuf,
 
     /// Path to the directory where bank snapshots are stored
     pub bank_snapshots_dir: PathBuf,
@@ -46,7 +49,8 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             incremental_snapshot_archive_interval_slots:
                 snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            snapshot_archives_dir: PathBuf::default(),
+            full_snapshot_archives_dir: PathBuf::default(),
+            incremental_snapshot_archives_dir: PathBuf::default(),
             bank_snapshots_dir: PathBuf::default(),
             archive_format: ArchiveFormat::TarBzip2,
             snapshot_version: SnapshotVersion::default(),

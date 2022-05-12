@@ -70,7 +70,6 @@
     "js-sha3": "^0.8.0",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
-    "sinon-chai": "^3.7.0",
     "superstruct": "^0.14.2",
     "tweetnacl": "^1.0.0"
   },
@@ -128,6 +127,7 @@
     "rollup-plugin-terser": "^7.0.2",
     "semantic-release": "^18.0.0",
     "sinon": "^13.0.2",
+    "sinon-chai": "^3.7.0",
     "start-server-and-test": "^1.12.0",
     "ts-mocha": "^9.0.2",
     "ts-node": "^10.0.0",

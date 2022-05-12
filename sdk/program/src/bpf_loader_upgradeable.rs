@@ -15,14 +15,11 @@
 //!
 //! [`loader_upgradeable_instruction`]: crate::loader_upgradeable_instruction
 
-use {
-    crate::{
-        instruction::{AccountMeta, Instruction, InstructionError},
-        loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        pubkey::Pubkey,
-        system_instruction, sysvar,
-    },
-    bincode::serialized_size,
+use crate::{
+    instruction::{AccountMeta, Instruction, InstructionError},
+    loader_upgradeable_instruction::UpgradeableLoaderInstruction,
+    pubkey::Pubkey,
+    system_instruction, sysvar,
 };
 
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -55,40 +52,65 @@ pub enum UpgradeableLoaderState {
     },
 }
 impl UpgradeableLoaderState {
-    /// Length of an buffer account's data.
+    /// Size of a buffer account's serialized metadata.
+    pub const fn size_of_buffer_metadata() -> usize {
+        37 // see test_state_size_of_buffer_metadata
+    }
+
+    /// Size of a programdata account's serialized metadata.
+    pub const fn size_of_programdata_metadata() -> usize {
+        45 // see test_state_size_of_programdata_metadata
+    }
+
+    /// Size of a serialized program account.
+    pub const fn size_of_program() -> usize {
+        36 // see test_state_size_of_program
+    }
+
+    /// Size of a serialized buffer account.
+    pub const fn size_of_buffer(program_len: usize) -> usize {
+        Self::size_of_buffer_metadata().saturating_add(program_len)
+    }
+
+    /// Size of a serialized programdata account.
+    pub const fn size_of_programdata(program_len: usize) -> usize {
+        Self::size_of_programdata_metadata().saturating_add(program_len)
+    }
+
+    /// Length of a Buffer account's data.
+    #[deprecated(since = "1.11.0", note = "Please use `size_of_buffer` instead")]
     pub fn buffer_len(program_len: usize) -> Result<usize, InstructionError> {
-        Ok(serialized_size(&Self::Buffer {
-            authority_address: Some(Pubkey::default()),
-        })
-        .map(|len| len as usize)
-        .map_err(|_| InstructionError::InvalidInstructionData)?
-        .saturating_add(program_len))
+        Ok(Self::size_of_buffer(program_len))
     }
-    /// Offset into the ProgramData account's data of the program bits.
+
+    /// Offset into the Buffer account's data of the program bits.
+    #[deprecated(
+        since = "1.11.0",
+        note = "Please use `size_of_buffer_metadata` instead"
+    )]
     pub fn buffer_data_offset() -> Result<usize, InstructionError> {
-        Self::buffer_len(0)
+        Ok(Self::size_of_buffer_metadata())
     }
-    /// Length of an executable account's data.
+
+    /// Length of a Program account's data.
+    #[deprecated(since = "1.11.0", note = "Please use `size_of_program` instead")]
     pub fn program_len() -> Result<usize, InstructionError> {
-        serialized_size(&Self::Program {
-            programdata_address: Pubkey::default(),
-        })
-        .map(|len| len as usize)
-        .map_err(|_| InstructionError::InvalidInstructionData)
+        Ok(Self::size_of_program())
     }
+
     /// Length of a ProgramData account's data.
+    #[deprecated(since = "1.11.0", note = "Please use `size_of_programdata` instead")]
     pub fn programdata_len(program_len: usize) -> Result<usize, InstructionError> {
-        Ok(serialized_size(&Self::ProgramData {
-            slot: 0,
-            upgrade_authority_address: Some(Pubkey::default()),
-        })
-        .map(|len| len as usize)
-        .map_err(|_| InstructionError::InvalidInstructionData)?
-        .saturating_add(program_len))
+        Ok(Self::size_of_programdata(program_len))
     }
+
     /// Offset into the ProgramData account's data of the program bits.
+    #[deprecated(
+        since = "1.11.0",
+        note = "Please use `size_of_programdata_metadata` instead"
+    )]
     pub fn programdata_data_offset() -> Result<usize, InstructionError> {
-        Self::programdata_len(0)
+        Ok(Self::size_of_programdata_metadata())
     }
 }
 
@@ -105,7 +127,7 @@ pub fn create_buffer(
             payer_address,
             buffer_address,
             lamports,
-            UpgradeableLoaderState::buffer_len(program_len)? as u64,
+            UpgradeableLoaderState::size_of_buffer(program_len) as u64,
             &id(),
         ),
         Instruction::new_with_bincode(
@@ -154,7 +176,7 @@ pub fn deploy_with_max_program_len(
             payer_address,
             program_address,
             program_lamports,
-            UpgradeableLoaderState::program_len()? as u64,
+            UpgradeableLoaderState::size_of_program() as u64,
             &id(),
         ),
         Instruction::new_with_bincode(
@@ -280,9 +302,44 @@ pub fn close_any(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, bincode::serialized_size};
 
     #[test]
+    fn test_state_size_of_buffer_metadata() {
+        let buffer_state = UpgradeableLoaderState::Buffer {
+            authority_address: Some(Pubkey::default()),
+        };
+        let size = serialized_size(&buffer_state).unwrap();
+        assert_eq!(
+            UpgradeableLoaderState::size_of_buffer_metadata() as u64,
+            size
+        );
+    }
+
+    #[test]
+    fn test_state_size_of_programdata_metadata() {
+        let programdata_state = UpgradeableLoaderState::ProgramData {
+            upgrade_authority_address: Some(Pubkey::default()),
+            slot: 0,
+        };
+        let size = serialized_size(&programdata_state).unwrap();
+        assert_eq!(
+            UpgradeableLoaderState::size_of_programdata_metadata() as u64,
+            size
+        );
+    }
+
+    #[test]
+    fn test_state_size_of_program() {
+        let program_state = UpgradeableLoaderState::Program {
+            programdata_address: Pubkey::default(),
+        };
+        let size = serialized_size(&program_state).unwrap();
+        assert_eq!(UpgradeableLoaderState::size_of_program() as u64, size);
+    }
+
+    #[test]
+    #[allow(deprecated)]
     fn test_account_lengths() {
         assert_eq!(
             4,

@@ -1,5 +1,7 @@
 #![cfg(feature = "full")]
+
 use {
+    super::SanitizedVersionedTransaction,
     crate::{
         hash::Hash,
         message::{
@@ -13,6 +15,7 @@ use {
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
+    solana_program::message::SanitizedVersionedMessage,
     std::sync::Arc,
 };
 
@@ -72,9 +75,37 @@ impl From<Hash> for MessageHash {
 }
 
 impl SanitizedTransaction {
-    /// Create a sanitized transaction from an unsanitized transaction.
-    /// If the input transaction uses address tables, attempt to lookup
-    /// the address for each table index.
+    /// Create a sanitized transaction from a sanitized versioned transaction.
+    /// If the input transaction uses address tables, attempt to lookup the
+    /// address for each table index.
+    pub fn try_new(
+        tx: SanitizedVersionedTransaction,
+        message_hash: Hash,
+        is_simple_vote_tx: bool,
+        address_loader: impl AddressLoader,
+    ) -> Result<Self> {
+        let signatures = tx.signatures;
+        let SanitizedVersionedMessage { message } = tx.message;
+        let message = match message {
+            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::V0(message) => {
+                let loaded_addresses =
+                    address_loader.load_addresses(&message.address_table_lookups)?;
+                SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
+            }
+        };
+
+        Ok(Self {
+            message,
+            message_hash,
+            is_simple_vote_tx,
+            signatures,
+        })
+    }
+
+    /// Create a sanitized transaction from an un-sanitized versioned
+    /// transaction.  If the input transaction uses address tables, attempt to
+    /// lookup the address for each table index.
     pub fn try_create(
         tx: VersionedTransaction,
         message_hash: impl Into<MessageHash>,

@@ -84,6 +84,8 @@ impl SnapshotPackagerService {
                     // last_full_snapshot_slot that requires this archive call to succeed.
                     snapshot_utils::archive_snapshot_package(
                         &snapshot_package,
+                        &snapshot_config.full_snapshot_archives_dir,
+                        &snapshot_config.incremental_snapshot_archives_dir,
                         snapshot_config.maximum_full_snapshot_archives_to_retain,
                         snapshot_config.maximum_incremental_snapshot_archives_to_retain,
                     )
@@ -259,8 +261,10 @@ mod tests {
     fn create_and_verify_snapshot(temp_dir: &Path) {
         let accounts_dir = temp_dir.join("accounts");
         let snapshots_dir = temp_dir.join("snapshots");
-        let snapshot_archives_dir = temp_dir.join("snapshots_output");
-        fs::create_dir_all(&snapshot_archives_dir).unwrap();
+        let full_snapshot_archives_dir = temp_dir.join("full_snapshot_archives");
+        let incremental_snapshot_archives_dir = temp_dir.join("incremental_snapshot_archives");
+        fs::create_dir_all(&full_snapshot_archives_dir).unwrap();
+        fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap();
 
         fs::create_dir_all(&accounts_dir).unwrap();
         // Create some storage entries
@@ -302,7 +306,7 @@ mod tests {
         let hash = Hash::default();
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir,
+            &full_snapshot_archives_dir,
             slot,
             &hash,
             archive_format,
@@ -325,6 +329,8 @@ mod tests {
         // Make tarball from packageable snapshot
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             snapshot_utils::DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         )

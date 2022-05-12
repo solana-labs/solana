@@ -15,12 +15,12 @@ use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
     message::{
-        compiled_keys::CompileError, legacy::BUILTIN_PROGRAMS_KEYS, AccountKeys, CompiledKeys,
+        compiled_keys::CompileError, legacy::is_builtin_key_or_sysvar, AccountKeys, CompiledKeys,
         MessageHeader, MESSAGE_VERSION_PREFIX,
     },
     pubkey::Pubkey,
     sanitize::SanitizeError,
-    short_vec, sysvar,
+    short_vec,
 };
 pub use loaded::*;
 
@@ -344,7 +344,7 @@ impl Message {
                 // demote reserved ids
                 self.account_keys
                     .get(key_index)
-                    .map(|key| sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
+                    .map(is_builtin_key_or_sysvar)
                     .unwrap_or_default()
             }
             && !{
