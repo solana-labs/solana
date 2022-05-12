@@ -20,11 +20,11 @@ use {
 };
 
 // Fee per CU is calculated as additional_fee:u64 / request_units:u64, where MAX of
-// request_units is 1_400_000. So the smallest fee_per_cu = 1/1_400_000 = 0.000000714.
+// request_units is 1_400_000. So the smallest "fee per cu" = 1/1_400_000 = 0.000000714.
 // Additional_fee is scaled up by FEE_PER_CU_MULTIPLIER to perform integer arithmetic
 // with enough precision.
 const FEE_PER_CU_MULTIPLIER: u128 = 1_000_000_000;
-type FeePerCu = u128;
+type NanoLamportsPerCu = u128;
 
 #[derive(Debug, Error)]
 pub enum DeserializedPacketError {
@@ -47,7 +47,7 @@ pub struct ImmutableDeserializedPacket {
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    fee_per_cu: FeePerCu,
+    nano_lamports_per_cu: NanoLamportsPerCu,
 }
 
 impl ImmutableDeserializedPacket {
@@ -71,8 +71,8 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn fee_per_cu(&self) -> FeePerCu {
-        self.fee_per_cu
+    pub fn nano_lamports_per_cu(&self) -> NanoLamportsPerCu {
+        self.nano_lamports_per_cu
     }
 }
 
@@ -90,16 +90,16 @@ impl DeserializedPacket {
     }
 
     #[cfg(test)]
-    fn new_with_fee_per_cu(
+    fn new_with_nano_lamports_per_cu(
         packet: Packet,
-        fee_per_cu: FeePerCu,
+        nano_lamports_per_cu: NanoLamportsPerCu,
     ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, Some(fee_per_cu))
+        Self::new_internal(packet, Some(nano_lamports_per_cu))
     }
 
     pub fn new_internal(
         packet: Packet,
-        fee_per_cu: Option<FeePerCu>,
+        nano_lamports_per_cu: Option<NanoLamportsPerCu>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
             limited_deserialize(&packet.data[0..packet.meta.size])?;
@@ -108,8 +108,8 @@ impl DeserializedPacket {
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        let fee_per_cu = fee_per_cu
-            .or_else(|| compute_fee_per_cu(sanitized_transaction.get_message()))
+        let nano_lamports_per_cu = nano_lamports_per_cu
+            .or_else(|| compute_prioritization_fee_per_cu(sanitized_transaction.get_message()))
             .ok_or(DeserializedPacketError::AdditionalFeeInvalid)?;
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
@@ -117,7 +117,7 @@ impl DeserializedPacket {
                 transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
-                fee_per_cu,
+                nano_lamports_per_cu,
             }),
             forwarded: false,
         })
@@ -138,8 +138,8 @@ impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
         match self
             .immutable_section()
-            .fee_per_cu()
-            .cmp(&other.immutable_section().fee_per_cu())
+            .nano_lamports_per_cu()
+            .cmp(&other.immutable_section().nano_lamports_per_cu())
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -158,7 +158,10 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.fee_per_cu().cmp(&other.fee_per_cu()) {
+        match self
+            .nano_lamports_per_cu()
+            .cmp(&other.nano_lamports_per_cu())
+        {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
@@ -376,7 +379,9 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-fn compute_fee_per_cu(message: &SanitizedVersionedMessage) -> Option<FeePerCu> {
+fn compute_prioritization_fee_per_cu(
+    message: &SanitizedVersionedMessage,
+) -> Option<NanoLamportsPerCu> {
     let mut compute_budget = ComputeBudget::default();
     let additional_fee = compute_budget
         .process_instructions(
@@ -427,7 +432,9 @@ mod tests {
         DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_fee_per_cu(fee_per_cu: FeePerCu) -> DeserializedPacket {
+    fn packet_with_nano_lamports_per_cu(
+        nano_lamports_per_cu: NanoLamportsPerCu,
+    ) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -435,7 +442,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        DeserializedPacket::new_with_fee_per_cu(packet, fee_per_cu).unwrap()
+        DeserializedPacket::new_with_nano_lamports_per_cu(packet, nano_lamports_per_cu).unwrap()
     }
 
     #[test]
@@ -456,10 +463,10 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
         let heavier_packet_weight = 2u128;
-        let heavier_packet = packet_with_fee_per_cu(heavier_packet_weight);
+        let heavier_packet = packet_with_nano_lamports_per_cu(heavier_packet_weight);
 
         let lesser_packet_weight = heavier_packet_weight - 1u128;
-        let lesser_packet = packet_with_fee_per_cu(lesser_packet_weight);
+        let lesser_packet = packet_with_nano_lamports_per_cu(lesser_packet_weight);
 
         // Test that the heavier packet is actually heavier
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
