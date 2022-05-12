@@ -3,7 +3,7 @@ name: release-artifacts
 on:
   workflow_call:
     inputs:
-      tag:
+      commit:
         required: false
         type: string
     secrets:
@@ -36,9 +36,9 @@ jobs:
           cp -r ci/env.sh /tmp/env.sh
 
       - name: Switch Version
-        if: ${{ inputs.tag }}
+        if: ${{ inputs.commit }}
         run: |
-          git checkout ${{ inputs.tag }}
+          git checkout ${{ inputs.commit }}
 
       - name: Build
         shell: bash
@@ -48,10 +48,10 @@ jobs:
           choco install protoc
           source /tmp/env.sh
           ci/publish-tarball.sh
-          mkdir -p "github-action-s3-upload/${{ inputs.tag }}"
-          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.tag }}/"
-          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.tag }}/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.tag }}/"
+          mkdir -p "github-action-s3-upload/${{ inputs.commit }}"
+          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.commit }}/"
+          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.commit }}/"
+          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.commit }}/"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -93,7 +93,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ inputs.commit }}
           draft: true
           files: |
-            github-action-s3-upload/${{ inputs.tag }}/*
+            github-action-s3-upload/${{ inputs.commit }}/*
