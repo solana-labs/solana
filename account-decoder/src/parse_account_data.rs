@@ -99,9 +99,9 @@ pub fn parse_account_data(
         }
         ParsableAccount::Config => serde_json::to_value(parse_config(data, pubkey)?)?,
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
-        ParsableAccount::SplToken | ParsableAccount::SplToken2022 => serde_json::to_value(
-            parse_token(data, additional_data.spl_token_decimals, program_id)?,
-        )?,
+        ParsableAccount::SplToken | ParsableAccount::SplToken2022 => {
+            serde_json::to_value(parse_token(data, additional_data.spl_token_decimals)?)?
+        }
         ParsableAccount::Stake => serde_json::to_value(parse_stake(data)?)?,
         ParsableAccount::Sysvar => serde_json::to_value(parse_sysvar(data, pubkey)?)?,
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,

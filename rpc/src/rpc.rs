@@ -2267,6 +2267,7 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
     let mut memcmp_filter: Option<&[u8]> = None;
     let mut owner_key: Option<Pubkey> = None;
     let mut incorrect_owner_len: Option<usize> = None;
+    let mut token_account_state_filter = false;
     let account_packed_len = TokenAccount::get_packed_len();
     for filter in filters {
         match filter {
@@ -2289,11 +2290,13 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
                     incorrect_owner_len = Some(bytes.len());
                 }
             }
+            RpcFilterType::TokenAccountState => token_account_state_filter = true,
             _ => {}
         }
     }
     if data_size_filter == Some(account_packed_len as u64)
         || memcmp_filter == Some(&[ACCOUNTTYPE_ACCOUNT])
+        || token_account_state_filter
     {
         if let Some(incorrect_owner_len) = incorrect_owner_len {
             info!(
@@ -2320,6 +2323,7 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
     let mut memcmp_filter: Option<&[u8]> = None;
     let mut mint: Option<Pubkey> = None;
     let mut incorrect_mint_len: Option<usize> = None;
+    let mut token_account_state_filter = false;
     let account_packed_len = TokenAccount::get_packed_len();
     for filter in filters {
         match filter {
@@ -2342,11 +2346,13 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
                     incorrect_mint_len = Some(bytes.len());
                 }
             }
+            RpcFilterType::TokenAccountState => token_account_state_filter = true,
             _ => {}
         }
     }
     if data_size_filter == Some(account_packed_len as u64)
         || memcmp_filter == Some(&[ACCOUNTTYPE_ACCOUNT])
+        || token_account_state_filter
     {
         if let Some(incorrect_mint_len) = incorrect_mint_len {
             info!(
@@ -7745,7 +7751,6 @@ pub mod tests {
                             "uiAmountString": "0.3",
                         },
                         "closeAuthority": owner.to_string(),
-                        "programId": program_id.to_string(),
                     }
                 }
             });
@@ -7783,7 +7788,6 @@ pub mod tests {
                         "supply": "500".to_string(),
                         "isInitialized": true,
                         "freezeAuthority": owner.to_string(),
-                        "programId": program_id.to_string(),
                     }
                 }
             });
@@ -7836,6 +7840,23 @@ pub mod tests {
                         bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
                         encoding: None
                     })
+                ],
+            )
+            .unwrap(),
+            owner
+        );
+
+        // Filtering on token account state
+        assert_eq!(
+            get_spl_token_owner_filter(
+                &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 32,
+                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::TokenAccountState,
                 ],
             )
             .unwrap(),
@@ -7940,6 +7961,23 @@ pub mod tests {
                         bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
                         encoding: None
                     })
+                ],
+            )
+            .unwrap(),
+            mint
+        );
+
+        // Filtering on token account state
+        assert_eq!(
+            get_spl_token_mint_filter(
+                &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 0,
+                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::TokenAccountState,
                 ],
             )
             .unwrap(),
