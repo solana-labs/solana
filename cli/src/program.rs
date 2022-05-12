@@ -924,25 +924,53 @@ fn process_program_deploy(
             .get_account_with_commitment(&buffer_pubkey, config.commitment)?
             .value
         {
-            if let Ok(UpgradeableLoaderState::Buffer {
-                authority_address: _,
-            }) = account.state()
-            {
-            } else {
-                return Err(format!("Buffer account {} is not initialized", buffer_pubkey).into());
+            if !bpf_loader_upgradeable::check_id(&account.owner) {
+                return Err(format!(
+                    "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
+                )
+                .into());
             }
-            (vec![], account.data.len())
+
+            match account.state() {
+                Ok(UpgradeableLoaderState::Buffer { .. }) => {
+                    // continue if buffer is initialized
+                }
+                Ok(UpgradeableLoaderState::Program { .. }) => {
+                    return Err(
+                        format!("Cannot use program account {buffer_pubkey} as buffer").into(),
+                    );
+                }
+                Ok(UpgradeableLoaderState::ProgramData { .. }) => {
+                    return Err(format!(
+                        "Cannot use program data account {buffer_pubkey} as buffer",
+                    )
+                    .into())
+                }
+                Ok(UpgradeableLoaderState::Uninitialized) => {
+                    return Err(format!("Buffer account {buffer_pubkey} is not initialized").into());
+                }
+                Err(_) => {
+                    return Err(
+                        format!("Buffer account {buffer_pubkey} could not be deserialized").into(),
+                    )
+                }
+            };
+
+            let program_len = account
+                .data
+                .len()
+                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
+
+            (vec![], program_len)
         } else {
             return Err(format!(
-                "Buffer account {} not found, was it already consumed?",
-                buffer_pubkey
+                "Buffer account {buffer_pubkey} not found, was it already consumed?",
             )
             .into());
         }
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
-    let buffer_data_len = program_len;
     let programdata_len = if let Some(len) = max_len {
         if program_len > len {
             return Err("Max length specified not large enough".into());
@@ -954,7 +982,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::size_of_programdata(buffer_data_len),
+        UpgradeableLoaderState::size_of_programdata(program_len),
     )?;
 
     let result = if do_deploy {
@@ -967,7 +995,7 @@ fn process_program_deploy(
             rpc_client.clone(),
             config,
             &program_data,
-            buffer_data_len,
+            program_len,
             programdata_len,
             minimum_balance,
             &bpf_loader_upgradeable::id(),
@@ -1729,7 +1757,7 @@ fn do_process_program_write_and_deploy(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     program_data: &[u8],
-    buffer_data_len: usize,
+    program_len: usize,
     programdata_len: usize,
     minimum_balance: u64,
     loader_id: &Pubkey,
@@ -1757,9 +1785,9 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &account,
                     if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::size_of_buffer(buffer_data_len)
+                        UpgradeableLoaderState::size_of_buffer(program_len)
                     } else {
-                        buffer_data_len
+                        program_len
                     },
                     minimum_balance,
                     allow_excessive_balance,
@@ -1771,7 +1799,7 @@ fn do_process_program_write_and_deploy(
                         buffer_pubkey,
                         &buffer_authority_signer.pubkey(),
                         minimum_balance,
-                        buffer_data_len,
+                        program_len,
                     )?,
                     minimum_balance,
                 )
@@ -1781,7 +1809,7 @@ fn do_process_program_write_and_deploy(
                         &config.signers[0].pubkey(),
                         buffer_pubkey,
                         minimum_balance,
-                        buffer_data_len as u64,
+                        program_len as u64,
                         loader_id,
                     )],
                     minimum_balance,
