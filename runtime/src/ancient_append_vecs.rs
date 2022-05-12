@@ -6,10 +6,12 @@
 #![allow(dead_code)]
 use {
     crate::{
-        accounts_db::FoundStoredAccount,
+        accounts_db::{AccountStorageEntry, AccountsDb, FoundStoredAccount},
+        accounts_index::AccountIndexGetResult,
         append_vec::{AppendVec, StoredAccountMeta},
     },
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    std::sync::Arc,
 };
 
 /// a set of accounts need to be stored.
@@ -85,6 +87,38 @@ impl<'a> AccountsToStore<'a> {
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
         };
         (&self.accounts[range.clone()], &self.hashes[range])
+    }
+}
+
+/// debug function to make sure that the index is correct after squashing ancient append vecs
+pub fn verify_contents<'a>(
+    db: &AccountsDb,
+    writer: &Arc<AccountStorageEntry>,
+    append_vec_slot: Slot,
+    recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
+) {
+    let store_id = writer.append_vec_id();
+    for c in recent {
+        if let AccountIndexGetResult::Found(g, _) =
+            db.accounts_index.get(c.0, None, Some(append_vec_slot))
+        {
+            assert!(
+                g.slot_list().iter().any(|(slot, info)| {
+                    if slot == &append_vec_slot {
+                        assert_eq!(info.store_id(), store_id);
+                        true
+                    } else {
+                        false
+                    }
+                }),
+                "{}, {:?}, id: {}",
+                c.0,
+                g.slot_list(),
+                writer.append_vec_id()
+            )
+        } else {
+            panic!("not found: {}", c.0);
+        }
     }
 }
 
