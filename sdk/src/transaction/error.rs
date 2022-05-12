@@ -137,6 +137,10 @@ pub enum TransactionError {
     /// Transaction would exceed total account data limit
     #[error("Transaction would exceed total account data limit")]
     WouldExceedAccountDataTotalLimit,
+
+    /// Transaction contains a duplicate instruction that is not allowed
+    #[error("Transaction contains a duplicate instruction ({0}) that is not allowed")]
+    DuplicateInstruction(u8),
 }
 
 impl From<SanitizeError> for TransactionError {

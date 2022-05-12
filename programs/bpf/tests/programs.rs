@@ -1480,7 +1480,7 @@ fn test_program_bpf_compute_budget() {
     );
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::request_units(1, 0),
+            ComputeBudgetInstruction::request_units(1),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -3576,6 +3576,7 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3586,7 +3587,8 @@ fn test_program_fees() {
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::request_units(100, 42),
+            ComputeBudgetInstruction::request_units(100),
+            ComputeBudgetInstruction::set_prioritization_fee(42),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -3596,6 +3598,7 @@ fn test_program_fees() {
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
+        true,
         true,
     );
     assert!(expected_min_fee < expected_max_fee);
