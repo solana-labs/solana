@@ -149,6 +149,10 @@ pub mod zk_token_sdk_enabled {
     solana_sdk::declare_id!("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ");
 }
 
+pub mod curve25519_syscall_enabled {
+    solana_sdk::declare_id!("7rcw5UtqgDTBBv2EcynNfYckgdAaH1MAsCjKgXMkN7Ri");
+}
+
 pub mod versioned_tx_message_enabled {
     solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
 }
@@ -375,6 +379,31 @@ pub mod spl_associated_token_account_v1_1_0 {
     solana_sdk::declare_id!("FaTa17gVKoqbh38HcfiQonPsAaQViyDCCSg71AubYZw8");
 }
 
+pub mod default_units_per_instruction {
+    solana_sdk::declare_id!("J2QdYx8crLbTVK8nur1jeLsmc3krDbfjoxoea2V1Uy5Q");
+}
+
+pub mod stake_allow_zero_undelegated_amount {
+    solana_sdk::declare_id!("sTKz343FM8mqtyGvYWvbLpTThw3ixRM4Xk8QvZ985mw");
+}
+
+pub mod require_static_program_ids_in_transaction {
+    solana_sdk::declare_id!("8FdwgyHFEjhAdjWfV2vfqk7wA1g9X3fQpKH7SBpEv3kC");
+}
+
+pub mod stake_raise_minimum_delegation_to_1_sol {
+    // This is a feature-proposal *feature id*.  The feature keypair address is `3YHAo6wWw5rDbQxb59BmJkQ3XwVhX3m8tdBVbtxnJmma`.
+    solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
+}
+
+pub mod disable_deploy_of_alloc_free_syscall {
+    solana_sdk::declare_id!("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im");
+}
+
+pub mod prioritization_fee_type_change {
+    solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -463,6 +492,12 @@ lazy_static! {
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
+        (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
+        (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
+        (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
+        (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
+        (prioritization_fee_type_change::id(), "Switch compute budget to prioritization fee"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -9,7 +9,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     // Confirm large allocation fails
     void *ptr = sol_calloc(1, UINT64_MAX);
     if (ptr != NULL) {
-      sol_log("Error: Alloc of very larger buffer should fail");
+      sol_log("Error: Alloc of very large type should fail");
       sol_panic();
     }
   }
@@ -18,7 +18,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
     // Confirm large allocation fails
     void *ptr = sol_calloc(UINT64_MAX, 1);
     if (ptr != NULL) {
-      sol_log("Error: Alloc of very larger buffer should fail");
+      sol_log("Error: Alloc of very large number of items should fail");
       sol_panic();
     }
   }
@@ -42,15 +42,36 @@ extern uint64_t entrypoint(const uint8_t *input) {
       sol_log("Error: Alloc failed");
       sol_panic();
     }
-    for (int i = 0; i < iters; i++) {
+    for (uint64_t i = 0; i < iters; i++) {
       *(ptr + i) = i;
     }
-    for (int i = 0; i < iters; i++) {
+    for (uint64_t i = 0; i < iters; i++) {
       sol_assert(*(ptr + i) == i);
     }
-    sol_log_64(0x3, 0, 0, 0, *(ptr + 42));
     sol_assert(*(ptr + 42) == 42);
     sol_free(ptr);
+  }
+
+  // Alloc to exhaustion
+
+  for (uint64_t i = 0; i < 31; i++) {
+    uint8_t *ptr = sol_calloc(1024, 1);
+    if (ptr == NULL) {
+      sol_log("large alloc failed");
+      sol_panic();
+    }
+  }
+  for (uint64_t i = 0; i < 760; i++) {
+    uint8_t *ptr = sol_calloc(1, 1);
+    if (ptr == NULL) {
+      sol_log("small alloc failed");
+      sol_panic();
+    }
+  }
+  uint8_t *ptr = sol_calloc(1, 1);
+  if (ptr != NULL) {
+    sol_log("final alloc did not fail");
+    sol_panic();
   }
 
   return SUCCESS;

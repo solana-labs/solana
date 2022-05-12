@@ -27,6 +27,7 @@ export function pickClusterParams(
 
   return {
     ...location,
+    hash: "",
     search: newParams.toString(),
   };
 }

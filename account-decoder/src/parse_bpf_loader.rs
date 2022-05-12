@@ -17,11 +17,11 @@ pub fn parse_bpf_upgradeable_loader(
         UpgradeableLoaderState::Uninitialized => BpfUpgradeableLoaderAccountType::Uninitialized,
         UpgradeableLoaderState::Buffer { authority_address } => {
             let offset = if authority_address.is_some() {
-                UpgradeableLoaderState::buffer_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_buffer_metadata()
             } else {
                 // This case included for code completeness; in practice, a Buffer account will
                 // always have authority_address.is_some()
-                UpgradeableLoaderState::buffer_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_buffer_metadata()
                     - serialized_size(&Pubkey::default()).unwrap() as usize
             };
             BpfUpgradeableLoaderAccountType::Buffer(UiBuffer {
@@ -42,9 +42,9 @@ pub fn parse_bpf_upgradeable_loader(
             upgrade_authority_address,
         } => {
             let offset = if upgrade_authority_address.is_some() {
-                UpgradeableLoaderState::programdata_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_programdata_metadata()
             } else {
-                UpgradeableLoaderState::programdata_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_programdata_metadata()
                     - serialized_size(&Pubkey::default()).unwrap() as usize
             };
             BpfUpgradeableLoaderAccountType::ProgramData(UiProgramData {

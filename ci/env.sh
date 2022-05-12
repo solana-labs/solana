@@ -81,6 +81,42 @@ if [[ -n $CI ]]; then
     fi
     export CI_REPO_SLUG=$APPVEYOR_REPO_NAME
     export CI_TAG=$APPVEYOR_REPO_TAG_NAME
+
+  elif [[ $GITHUB_ACTION ]]; then
+    export CI_BUILD_ID=$GITHUB_RUN_ID
+    export CI_JOB_ID=$GITHUB_RUN_NUMBER
+    export CI_REPO_SLUG=$GITHUB_REPOSITORY
+
+    CI_COMMIT=$(git rev-parse HEAD)
+    export CI_COMMIT
+
+    CI_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ $CI_BRANCH == "HEAD" ]]; then
+      CI_BRANCH=""
+    fi
+    export CI_BRANCH
+
+    CI_TAG=$(git tag --points-at HEAD)
+    export CI_TAG
+
+    if [[ $GITHUB_BASE_REF ]]; then
+      export CI_BASE_BRANCH=$GITHUB_BASE_REF
+      export CI_PULL_REQUEST=true
+    fi
+
+    case $RUNNER_OS in
+    macOS)
+      export CI_OS_NAME=osx
+      ;;
+    Windows)
+      export CI_OS_NAME=windows
+      ;;
+    Linux)
+      export CI_OS_NAME=linux
+      ;;
+    *)
+      ;;
+    esac
   fi
 else
   export CI=

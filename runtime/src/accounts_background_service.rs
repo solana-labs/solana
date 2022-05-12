@@ -225,7 +225,7 @@ impl SnapshotRequestHandler {
                     let use_index_hash_calculation = false;
                     let check_hash = false;
 
-                    let (this_hash, _cap) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
+                    let (this_hash, capitalization) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
                         use_index_hash_calculation,
                         snapshot_root_bank.slot(),
                         &CalcAccountsHashConfig {
@@ -233,10 +233,12 @@ impl SnapshotRequestHandler {
                             check_hash,
                             ancestors: None,
                             use_write_cache: false,
+                            epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);
+                    assert_eq!(capitalization, snapshot_root_bank.capitalization());
                     Some(this_hash)
                 } else {
                     None
@@ -283,7 +285,8 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                     &self.pending_accounts_package,
                     &self.snapshot_config.bank_snapshots_dir,
-                    &self.snapshot_config.snapshot_archives_dir,
+                    &self.snapshot_config.full_snapshot_archives_dir,
+                    &self.snapshot_config.incremental_snapshot_archives_dir,
                     self.snapshot_config.snapshot_version,
                     self.snapshot_config.archive_format,
                     hash_for_testing,

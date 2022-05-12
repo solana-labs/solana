@@ -107,8 +107,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            self, default_units_per_instruction, disable_fee_calculator, nonce_must_be_writable,
+            prioritization_fee_type_change, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -239,7 +239,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "BQcJmh4VRCiNNtqjKPyphs9ULFbSUKGGfx6hz9SWBtqU")]
+#[frozen_abi(digest = "HSBFEjhoubTjeGKeBJvRDAiCBTVeFfcWNPZSbDW1w4H4")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -1352,18 +1352,33 @@ pub struct NewBankOptions {
     pub vote_only_bank: bool,
 }
 
+#[derive(Debug)]
+struct PrevEpochInflationRewards {
+    validator_rewards: u64,
+    prev_epoch_duration_in_years: f64,
+    validator_rate: f64,
+    foundation_rate: f64,
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
-        Self::new_for_tests(genesis_config)
+        Self::new_with_paths_for_benches(
+            genesis_config,
+            Vec::new(),
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
+        )
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        // this will diverge
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
@@ -2284,7 +2299,7 @@ impl Bank {
     }
 
     pub fn first_normal_epoch(&self) -> Epoch {
-        self.epoch_schedule.first_normal_epoch
+        self.epoch_schedule().first_normal_epoch
     }
 
     pub fn freeze_lock(&self) -> RwLockReadGuard<Hash> {
@@ -2375,7 +2390,7 @@ impl Bank {
             } else {
                 self.epoch()
             };
-            let first_slot_in_epoch = self.epoch_schedule.get_first_slot_in_epoch(epoch);
+            let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(epoch);
             Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
         };
         let max_allowable_drift = if self
@@ -2423,8 +2438,8 @@ impl Bank {
         let clock = sysvar::clock::Clock {
             slot: self.slot,
             epoch_start_timestamp,
-            epoch: self.epoch_schedule.get_epoch(self.slot),
-            leader_schedule_epoch: self.epoch_schedule.get_leader_schedule_epoch(self.slot),
+            epoch: self.epoch_schedule().get_epoch(self.slot),
+            leader_schedule_epoch: self.epoch_schedule().get_leader_schedule_epoch(self.slot),
             unix_timestamp,
         };
         self.update_sysvar_account(&sysvar::clock::id(), |account| {
@@ -2541,7 +2556,7 @@ impl Bank {
     fn update_epoch_schedule(&self) {
         self.update_sysvar_account(&sysvar::epoch_schedule::id(), |account| {
             create_account(
-                &self.epoch_schedule,
+                self.epoch_schedule(),
                 self.inherit_specially_retained_account_fields(account),
             )
         });
@@ -2564,7 +2579,7 @@ impl Bank {
         // period: time that has passed as a fraction of a year, basically the length of
         //  an epoch as a fraction of a year
         //  calculated as: slots_elapsed / (slots / year)
-        self.epoch_schedule.get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
+        self.epoch_schedule().get_slots_in_epoch(prev_epoch) as f64 / self.slots_per_year
     }
 
     // Calculates the starting-slot for inflation from the activation slot.
@@ -2590,12 +2605,12 @@ impl Bank {
     fn get_inflation_num_slots(&self) -> u64 {
         let inflation_activation_slot = self.get_inflation_start_slot();
         // Normalize inflation_start to align with the start of rewards accrual.
-        let inflation_start_slot = self.epoch_schedule.get_first_slot_in_epoch(
-            self.epoch_schedule
+        let inflation_start_slot = self.epoch_schedule().get_first_slot_in_epoch(
+            self.epoch_schedule()
                 .get_epoch(inflation_activation_slot)
                 .saturating_sub(1),
         );
-        self.epoch_schedule.get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
+        self.epoch_schedule().get_first_slot_in_epoch(self.epoch()) - inflation_start_slot
     }
 
     pub fn slot_in_year_for_inflation(&self) -> f64 {
@@ -2603,6 +2618,33 @@ impl Bank {
 
         // calculated as: num_slots / (slots / year)
         num_slots as f64 / self.slots_per_year
+    }
+
+    fn calculate_previous_epoch_inflation_rewards(
+        &self,
+        prev_epoch_capitalization: u64,
+        prev_epoch: Epoch,
+    ) -> PrevEpochInflationRewards {
+        let slot_in_year = self.slot_in_year_for_inflation();
+        let (validator_rate, foundation_rate) = {
+            let inflation = self.inflation.read().unwrap();
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
+
+        let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
+        let validator_rewards = (validator_rate
+            * prev_epoch_capitalization as f64
+            * prev_epoch_duration_in_years) as u64;
+
+        PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        }
     }
 
     // update rewards based on the previous epoch
@@ -2613,27 +2655,20 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
-        let slot_in_year = self.slot_in_year_for_inflation();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
-
-        let (validator_rate, foundation_rate) = {
-            let inflation = self.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
-
         let capitalization = self.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        let PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
+        self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2642,19 +2677,6 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
-
-        if !self
-            .feature_set
-            .is_active(&feature_set::deprecate_rewards_sysvar::id())
-        {
-            // this sysvar can be retired once `pico_inflation` is enabled on all clusters
-            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                create_account(
-                    &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
-        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -2701,7 +2723,7 @@ impl Bank {
             ("epoch", prev_epoch, i64),
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
-            ("epoch_duration_in_years", epoch_duration_in_years, f64),
+            ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
@@ -2895,7 +2917,7 @@ impl Bank {
             {
                 vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
             }
-            Some(VoteAccount::from(account))
+            VoteAccount::try_from(account).ok()
         };
         let invalid_vote_keys = DashMap::<Pubkey, InvalidCacheEntryReason>::new();
         let make_vote_delegations_entry = |vote_pubkey| {
@@ -3442,7 +3464,7 @@ impl Bank {
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-            &self.epoch_schedule,
+            self.epoch_schedule(),
             self.slots_per_year,
             &genesis_config.rent,
         );
@@ -3615,6 +3637,8 @@ impl Bank {
             lamports_per_signature,
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
+            self.feature_set
+                .is_active(&prioritization_fee_type_change::id()),
         ))
     }
 
@@ -3628,6 +3652,8 @@ impl Bank {
             lamports_per_signature,
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
+            self.feature_set
+                .is_active(&prioritization_fee_type_change::id()),
         )
     }
 
@@ -3778,7 +3804,16 @@ impl Bank {
     pub fn prepare_entry_batch(&self, txs: Vec<VersionedTransaction>) -> Result<TransactionBatch> {
         let sanitized_txs = txs
             .into_iter()
-            .map(|tx| SanitizedTransaction::try_create(tx, MessageHash::Compute, None, self))
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    self,
+                    self.feature_set
+                        .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                )
+            })
             .collect::<Result<Vec<_>>>()?;
         let lock_results = self
             .rc
@@ -3827,7 +3862,7 @@ impl Bank {
         let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
-        batch.needs_unlock = false;
+        batch.set_needs_unlock(false);
         batch
     }
 
@@ -3936,8 +3971,8 @@ impl Bank {
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
-        if batch.needs_unlock {
-            batch.needs_unlock = false;
+        if batch.needs_unlock() {
+            batch.set_needs_unlock(false);
             self.rc
                 .accounts
                 .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
@@ -4341,33 +4376,38 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
-                    let compute_budget_max_units = if tx_wide_compute_cap {
-                        compute_budget::MAX_UNITS
+                    let compute_budget = if let Some(compute_budget) = self.compute_budget {
+                        compute_budget
                     } else {
-                        compute_budget::DEFAULT_UNITS
-                    };
-                    let mut compute_budget = self
-                        .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
-                    if tx_wide_compute_cap {
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_message(
-                            tx.message(),
-                            feature_set.is_active(&requestable_heap_size::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
+                        let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
+                        let compute_budget_max_units = if tx_wide_compute_cap {
+                            compute_budget::MAX_UNITS
+                        } else {
+                            compute_budget::DEFAULT_UNITS
+                        };
+                        let mut compute_budget = ComputeBudget::new(compute_budget_max_units);
+                        if tx_wide_compute_cap {
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_message(
+                                tx.message(),
+                                feature_set.is_active(&requestable_heap_size::id()),
+                                feature_set.is_active(&default_units_per_instruction::id()),
+                                feature_set.is_active(&prioritization_fee_type_change::id()),
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
                         }
-                    }
+                        compute_budget
+                    };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4569,6 +4609,7 @@ impl Bank {
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         tx_wide_compute_cap: bool,
+        prioritization_fee_type_change: bool,
     ) -> u64 {
         if tx_wide_compute_cap {
             // Fee based on compute units and signatures
@@ -4581,8 +4622,8 @@ impl Bank {
             };
 
             let mut compute_budget = ComputeBudget::default();
-            let additional_fee = compute_budget
-                .process_message(message, false)
+            let prioritization_fee = compute_budget
+                .process_message(message, false, false, prioritization_fee_type_change)
                 .unwrap_or_default();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
@@ -4601,7 +4642,7 @@ impl Bank {
                         .unwrap_or_default()
                 });
 
-            ((additional_fee
+            ((prioritization_fee
                 .saturating_add(signature_fee)
                 .saturating_add(write_lock_fee)
                 .saturating_add(compute_fee) as f64)
@@ -4649,6 +4690,8 @@ impl Bank {
                     lamports_per_signature,
                     &self.fee_structure,
                     self.feature_set.is_active(&tx_wide_compute_cap::id()),
+                    self.feature_set
+                        .is_active(&prioritization_fee_type_change::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -5074,6 +5117,7 @@ impl Bank {
                 let hash =
                     crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
                 rewrites_skipped.push((pubkey, hash));
+                assert_eq!(collected, CollectedInfo::default());
             } else if !just_rewrites {
                 total_collected += collected;
                 self.store_account(&pubkey, &account);
@@ -5799,8 +5843,15 @@ impl Bank {
         self.rc
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
-
+        let mut m = Measure::start("stakes_cache.check_and_store");
         self.stakes_cache.check_and_store(pubkey, account);
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -6008,6 +6059,7 @@ impl Bank {
                     &mut account,
                     &SlotInfoInEpoch::new_small(storage_slot),
                     &SlotInfoInEpoch::new_small(self.slot()),
+                    self.epoch_schedule(),
                     self.rent_collector(),
                     pubkey,
                     &self.rewrites_skipped_this_slot,
@@ -6235,13 +6287,19 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
+    pub fn verify_bank_hash(
+        &self,
+        test_hash_calculation: bool,
+        can_cached_slot_be_unflushed: bool,
+    ) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
+            self.epoch_schedule(),
             &self.rent_collector,
+            can_cached_slot_be_unflushed,
         )
     }
 
@@ -6290,7 +6348,14 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, self)
+            SanitizedTransaction::try_create(
+                tx,
+                message_hash,
+                None,
+                self,
+                self.feature_set
+                    .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+            )
         }?;
 
         if verification_mode == TransactionVerificationMode::HashAndVerifyPrecompiles
@@ -6309,6 +6374,7 @@ impl Bank {
             self.slot(),
             can_cached_slot_be_unflushed,
             debug_verify,
+            self.epoch_schedule(),
             &self.rent_collector,
         )
     }
@@ -6362,6 +6428,7 @@ impl Bank {
                 &self.ancestors,
                 Some(self.capitalization()),
                 false,
+                self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
             );
@@ -6387,6 +6454,7 @@ impl Bank {
                         &self.ancestors,
                         Some(self.capitalization()),
                         false,
+                        self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
                     );
@@ -6430,7 +6498,7 @@ impl Bank {
 
         info!("verify_bank_hash..");
         let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation);
+        let mut verify = self.verify_bank_hash(test_hash_calculation, false);
         verify_time.stop();
 
         info!("verify_hash..");
@@ -6496,13 +6564,13 @@ impl Bank {
 
     /// Return the number of slots per epoch for the given epoch
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
-        self.epoch_schedule.get_slots_in_epoch(epoch)
+        self.epoch_schedule().get_slots_in_epoch(epoch)
     }
 
     /// returns the epoch for which this bank's leader_schedule_slot_offset and slot would
     ///  need to cache leader_schedule
     pub fn get_leader_schedule_epoch(&self, slot: Slot) -> Epoch {
-        self.epoch_schedule.get_leader_schedule_epoch(slot)
+        self.epoch_schedule().get_leader_schedule_epoch(slot)
     }
 
     /// a bank-level cache of vote accounts and stake delegation info
@@ -6517,6 +6585,8 @@ impl Bank {
                 load_result,
                 execution_results[i].was_executed_successfully(),
             ) {
+                // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,
+                //  but this code path is captured separately in ExecuteTimingType::UpdateStakesCacheUs
                 let message = tx.message();
                 for (_i, (pubkey, account)) in
                     (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter())
@@ -6608,7 +6678,7 @@ impl Bank {
     ///  ( slot/slots_per_epoch, slot % slots_per_epoch )
     ///
     pub fn get_epoch_and_slot_index(&self, slot: Slot) -> (Epoch, SlotIndex) {
-        self.epoch_schedule.get_epoch_and_slot_index(slot)
+        self.epoch_schedule().get_epoch_and_slot_index(slot)
     }
 
     pub fn get_epoch_info(&self) -> EpochInfo {
@@ -7189,7 +7259,6 @@ pub(crate) mod tests {
             },
             system_instruction::{self, SystemError},
             system_program,
-            sysvar::rewards::Rewards,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
@@ -7501,11 +7570,6 @@ pub(crate) mod tests {
     fn bank1_sysvar_delta() -> u64 {
         const SLOT_HASHES_SYSVAR_MIN_BALANCE: u64 = 143_487_360;
         SLOT_HASHES_SYSVAR_MIN_BALANCE
-    }
-
-    fn new_epoch_sysvar_delta() -> u64 {
-        const REWARDS_SYSVAR_MIN_BALANCE: u64 = 1_002_240;
-        REWARDS_SYSVAR_MIN_BALANCE
     }
 
     #[test]
@@ -9322,32 +9386,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
-            .vote_with_stake_delegations_map
-            .into_iter()
-            .map(
-                |(
-                    _vote_pubkey,
-                    VoteWithStakeDelegations {
-                        vote_state,
-                        delegations,
-                        ..
-                    },
-                )| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
-                                stake_account.stake_state(),
-                                &vote_state,
-                                None, // stake_history
-                            )
-                            .unwrap_or_default()
-                        })
-                        .sum::<u128>()
-                },
-            )
-            .sum();
+        load_vote_and_stake_accounts(&bank0);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -9358,29 +9397,25 @@ pub(crate) mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
-        // verify the inflation is represented in validator_points *
-        let paid_rewards = bank1.capitalization()
-            - bank0.capitalization()
-            - bank1_sysvar_delta()
-            - new_epoch_sysvar_delta();
+        // verify the inflation is represented in validator_points
+        let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        let rewards = bank1
-            .get_account(&sysvar::rewards::id())
-            .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();
+        // this assumes that no new builtins or precompiles were activated in bank1
+        let PrevEpochInflationRewards {
+            validator_rewards, ..
+        } = bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - rewards.validator_point_value * validator_points as f64)
+                - validator_rewards as f64)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
-        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
+        assert!((validator_rewards as f64 - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
@@ -9389,7 +9424,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
+                    lamports: validator_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
@@ -9555,17 +9590,17 @@ pub(crate) mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_bank_hash(true));
+        assert!(bank0.verify_bank_hash(true, false));
 
         // Squash and then verify hash_internal value
         bank0.freeze();
         bank0.squash();
-        assert!(bank0.verify_bank_hash(true));
+        assert!(bank0.verify_bank_hash(true, false));
 
         bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
-        assert!(bank1.verify_bank_hash(true));
+        assert!(bank1.verify_bank_hash(true, false));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -9573,7 +9608,7 @@ pub(crate) mod tests {
         bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false, false, None);
 
-        assert!(bank1.verify_bank_hash(true));
+        assert!(bank1.verify_bank_hash(true, false));
     }
 
     #[test]
@@ -9958,6 +9993,7 @@ pub(crate) mod tests {
                 .lamports_per_signature,
             &FeeStructure::default(),
             true,
+            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10140,6 +10176,7 @@ pub(crate) mod tests {
             cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
+            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10156,6 +10193,7 @@ pub(crate) mod tests {
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
             &FeeStructure::default(),
+            true,
             true,
         );
         assert_eq!(
@@ -10272,6 +10310,7 @@ pub(crate) mod tests {
                                 .create_fee_calculator()
                                 .lamports_per_signature,
                             &FeeStructure::default(),
+                            true,
                             true,
                         ) * 2
                     )
@@ -10631,7 +10670,7 @@ pub(crate) mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
     }
 
     #[test]
@@ -10655,19 +10694,19 @@ pub(crate) mod tests {
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
         bank3.update_accounts_hash();
-        assert!(bank3.verify_bank_hash(true));
+        assert!(bank3.verify_bank_hash(true, false));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
-        assert!(bank3.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
+        assert!(bank3.verify_bank_hash(true, false));
     }
 
     #[test]
@@ -13501,19 +13540,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
+                    "AxphC8xDj9gmFosor5gyiovNvPVMydJCFRUTxn2wFiQf"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
+                    "4vZCSbBuL8xjE43rCy9Cm3dCh1BMj45heMiMb6n6qgzA"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
+                    "46LUpeBdJuisnfwgYisvh4x7jnxzBaLfHF614GtcTs59"
                 );
                 break;
             }
@@ -16378,7 +16417,7 @@ pub(crate) mod tests {
 
         let message = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1, 0),
+                ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -16422,7 +16461,7 @@ pub(crate) mod tests {
 
         let message = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1, 0),
+                ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -16482,7 +16521,7 @@ pub(crate) mod tests {
         // This message will be processed successfully
         let message1 = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1, 0),
+                ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -16668,13 +16707,13 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 0, &FeeStructure::default(), false),
+            Bank::calculate_fee(&message, 0, &FeeStructure::default(), false, true),
             0
         );
 
         // One signature, a fee.
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false),
+            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             1
         );
 
@@ -16685,7 +16724,7 @@ pub(crate) mod tests {
         let ix1 = system_instruction::transfer(&key1, &key0, 1);
         let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 2, &FeeStructure::default(), false),
+            Bank::calculate_fee(&message, 2, &FeeStructure::default(), false, true),
             4
         );
     }
@@ -16701,7 +16740,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true),
             max_fee + lamports_per_signature
         );
 
@@ -16713,7 +16752,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -16734,16 +16773,20 @@ pub(crate) mod tests {
             (1_500_000, 0.0), // ComputeBudget capped
         ];
         for pair in expected_fee_structure.iter() {
-            const ADDITIONAL_FEE: u64 = 42;
-            let ix0 = ComputeBudgetInstruction::request_units(pair.0, ADDITIONAL_FEE as u32);
-            let ix1 = Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]);
-            let message =
-                SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
-                    .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true);
+            const PRIORITIZATION_FEE: u64 = 42;
+            let message = SanitizedMessage::try_from(Message::new(
+                &[
+                    ComputeBudgetInstruction::request_units(pair.0),
+                    ComputeBudgetInstruction::set_prioritization_fee(PRIORITIZATION_FEE),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ],
+                Some(&Pubkey::new_unique()),
+            ))
+            .unwrap();
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
             assert_eq!(
                 fee,
-                sol_to_lamports(pair.1) + lamports_per_signature + ADDITIONAL_FEE
+                sol_to_lamports(pair.1) + lamports_per_signature + PRIORITIZATION_FEE
             );
         }
     }
@@ -16775,7 +16818,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false),
+            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             2
         );
 
@@ -16787,7 +16830,7 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false),
+            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             11
         );
     }

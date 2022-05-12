@@ -107,7 +107,8 @@ mod tests {
     struct SnapshotTestConfig {
         accounts_dir: TempDir,
         bank_snapshots_dir: TempDir,
-        snapshot_archives_dir: TempDir,
+        full_snapshot_archives_dir: TempDir,
+        incremental_snapshot_archives_dir: TempDir,
         snapshot_config: SnapshotConfig,
         bank_forks: BankForks,
         genesis_config_info: GenesisConfigInfo,
@@ -123,7 +124,8 @@ mod tests {
         ) -> SnapshotTestConfig {
             let accounts_dir = TempDir::new().unwrap();
             let bank_snapshots_dir = TempDir::new().unwrap();
-            let snapshot_archives_dir = TempDir::new().unwrap();
+            let full_snapshot_archives_dir = TempDir::new().unwrap();
+            let incremental_snapshot_archives_dir = TempDir::new().unwrap();
             // validator_stake_lamports should be non-zero otherwise stake
             // account will not be stored in accounts-db but still cached in
             // bank stakes which results in mismatch when banks are loaded from
@@ -151,7 +153,10 @@ mod tests {
             let snapshot_config = SnapshotConfig {
                 full_snapshot_archive_interval_slots,
                 incremental_snapshot_archive_interval_slots,
-                snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+                full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+                incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                    .path()
+                    .to_path_buf(),
                 bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
                 snapshot_version,
                 ..SnapshotConfig::default()
@@ -160,7 +165,8 @@ mod tests {
             SnapshotTestConfig {
                 accounts_dir,
                 bank_snapshots_dir,
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
                 snapshot_config,
                 bank_forks,
                 genesis_config_info,
@@ -174,17 +180,17 @@ mod tests {
         old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
-        let snapshot_archives_dir = old_bank_forks
+        let full_snapshot_archives_dir = old_bank_forks
             .snapshot_config
             .as_ref()
-            .map(|c| &c.snapshot_archives_dir)
+            .map(|c| &c.full_snapshot_archives_dir)
             .unwrap();
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
             ArchiveFormat::TarBzip2,
@@ -280,7 +286,8 @@ mod tests {
             &last_bank_snapshot_info,
             bank_snapshots_dir,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             last_bank.get_snapshot_storages(None),
             ArchiveFormat::TarBzip2,
             snapshot_version,
@@ -297,6 +304,8 @@ mod tests {
             SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )
@@ -360,7 +369,8 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
-        let snapshot_archives_dir = &snapshot_config.snapshot_archives_dir;
+        let full_snapshot_archives_dir = &snapshot_config.full_snapshot_archives_dir;
+        let incremental_snapshot_archives_dir = &snapshot_config.incremental_snapshot_archives_dir;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
         let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
@@ -414,7 +424,8 @@ mod tests {
                 vec![],
                 pending_accounts_package,
                 bank_snapshots_dir,
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
                 snapshot_config.snapshot_version,
                 snapshot_config.archive_format,
                 None,
@@ -464,7 +475,7 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_archives_dir,
+                    full_snapshot_archives_dir,
                     slot,
                     // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                     // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
@@ -679,7 +690,8 @@ mod tests {
             FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         );
-        trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nsnapshot_archives_dir: {}", snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.snapshot_archives_dir.path().display());
+        trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
+            snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
@@ -783,7 +795,8 @@ mod tests {
             bank,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -820,7 +833,8 @@ mod tests {
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -839,7 +853,8 @@ mod tests {
     ) -> snapshot_utils::Result<()> {
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             &[accounts_dir],
             genesis_config,
             None,
@@ -1015,7 +1030,12 @@ mod tests {
 
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
-            &snapshot_test_config.snapshot_config.snapshot_archives_dir,
+            &snapshot_test_config
+                .snapshot_config
+                .full_snapshot_archives_dir,
+            &snapshot_test_config
+                .snapshot_config
+                .incremental_snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
             &snapshot_test_config.genesis_config_info.genesis_config,
             None,

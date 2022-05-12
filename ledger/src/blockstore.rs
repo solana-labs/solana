@@ -28,14 +28,13 @@ use {
         datapoint_debug, datapoint_error,
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
         clock::{Slot, UnixTimestamp, DEFAULT_TICKS_PER_SECOND, MS_PER_TICK},
         genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
         hash::Hash,
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::{Keypair, Signature, Signer},
         timing::timestamp,
         transaction::VersionedTransaction,
@@ -75,17 +74,20 @@ pub use {
 pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_{}", ix))
-                    .build()
-                    .unwrap()));
-
-thread_local!(static PAR_THREAD_POOL_ALL_CPUS: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get())
-                    .thread_name(|ix| format!("blockstore_{}", ix))
-                    .build()
-                    .unwrap()));
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get())
+        .thread_name(|ix| format!("blockstore_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
@@ -1976,7 +1978,12 @@ impl Blockstore {
                     .into_iter()
                     .flat_map(|entry| entry.transactions)
                     .map(|transaction| {
-                        if let Err(err) = transaction.sanitize() {
+                        if let Err(err) = transaction.sanitize(
+                            // Don't enable additional sanitization checks until
+                            // all clusters have activated the static program id
+                            // feature gate so that bigtable upload isn't affected
+                            false, // require_static_program_ids
+                        ) {
                             warn!(
                                 "Blockstore::get_block sanitize failed: {:?}, \
                                 slot: {:?}, \
@@ -2355,7 +2362,9 @@ impl Blockstore {
             .cloned()
             .flat_map(|entry| entry.transactions)
             .map(|transaction| {
-                if let Err(err) = transaction.sanitize() {
+                if let Err(err) = transaction.sanitize(
+                    true, // require_static_program_ids
+                ) {
                     warn!(
                         "Blockstore::find_transaction_in_slot sanitize failed: {:?}, \
                         slot: {:?}, \
@@ -2790,22 +2799,14 @@ impl Blockstore {
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
             .unwrap_or(0);
 
-        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                completed_ranges
-                    .par_iter()
-                    .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(
-                            slot,
-                            *start_index,
-                            *end_index,
-                            Some(&slot_meta),
-                        )
-                    })
-                    .collect()
-            })
+        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.install(|| {
+            completed_ranges
+                .par_iter()
+                .map(|(start_index, end_index)| {
+                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
+                })
+                .collect()
         });
-
         let entries: Vec<Entry> = entries?.into_iter().flatten().collect();
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
@@ -2935,23 +2936,15 @@ impl Blockstore {
         }
         let slot_meta = slot_meta.unwrap();
 
-        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL_ALL_CPUS.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                completed_ranges
-                    .par_iter()
-                    .map(|(start_index, end_index)| {
-                        self.get_entries_in_data_block(
-                            slot,
-                            *start_index,
-                            *end_index,
-                            Some(&slot_meta),
-                        )
+        let entries: Vec<Vec<Entry>> = PAR_THREAD_POOL_ALL_CPUS.install(|| {
+            completed_ranges
+                .par_iter()
+                .map(|(start_index, end_index)| {
+                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
                         .unwrap_or_default()
-                    })
-                    .collect()
-            })
+                })
+                .collect()
         });
-
         entries.into_iter().flatten().collect()
     }
 
@@ -4286,7 +4279,7 @@ pub mod tests {
             blockstore_db::BlockstoreRocksFifoOptions,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
-            shred::max_ticks_per_n_shreds,
+            shred::{max_ticks_per_n_shreds, ShredFlags},
         },
         assert_matches::assert_matches,
         bincode::serialize,
@@ -5719,8 +5712,7 @@ pub mod tests {
                     (i * gap) as u32,
                     0,
                     &[],
-                    false,
-                    false,
+                    ShredFlags::empty(),
                     i as u8,
                     0,
                     (i * gap) as u32,
@@ -5850,10 +5842,9 @@ pub mod tests {
                 let parent_offset = shred5.slot() - shred5.parent().unwrap();
                 parent_offset as u16
             },
-            &[],  // data
-            true, // is_last_data
-            true, // is_last_in_slot
-            0,    // reference_tick
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
             shred5.version(),
             shred5.fec_set_index(),
         );
@@ -6255,8 +6246,7 @@ pub mod tests {
             next_shred_index as u32,
             1,
             &[1, 1, 1],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             next_shred_index as u32,
@@ -8774,26 +8764,6 @@ pub mod tests {
                 protobuf_status
             );
         }
-    }
-
-    #[test]
-    fn test_remove_shred_data_complete_flag() {
-        let ledger_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        let (mut shreds, entries) = make_slot_entries(0, 0, 1);
-
-        // Remove the data complete flag from the last shred
-        shreds[0].unset_data_complete();
-
-        blockstore.insert_shreds(shreds, None, false).unwrap();
-
-        // Check that the `data_complete` flag was unset in the stored shred, but the
-        // `last_in_slot` flag is set.
-        let stored_shred = &blockstore.get_data_shreds_for_slot(0, 0).unwrap()[0];
-        assert!(!stored_shred.data_complete());
-        assert!(stored_shred.last_in_slot());
-        assert_eq!(entries, blockstore.get_any_valid_slot_entries(0, 0));
     }
 
     fn make_large_tx_entry(num_txs: usize) -> Entry {

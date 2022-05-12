@@ -13,6 +13,8 @@ pub mod blockstore;
 pub mod ancestor_iterator;
 pub mod blockstore_db;
 pub mod blockstore_meta;
+#[macro_use]
+pub mod blockstore_metrics;
 pub mod blockstore_processor;
 pub mod builtins;
 pub mod genesis_utils;
@@ -26,7 +28,7 @@ pub mod shred_stats;
 mod shredder;
 pub mod sigverify_shreds;
 pub mod slot_stats;
-pub mod staking_utils;
+mod staking_utils;
 
 #[macro_use]
 extern crate solana_metrics;

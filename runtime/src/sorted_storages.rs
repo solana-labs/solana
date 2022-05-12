@@ -52,6 +52,10 @@ impl<'a> SortedStorages<'a> {
         &self.range
     }
 
+    pub fn max_slot_inclusive(&self) -> Slot {
+        self.range.end.saturating_sub(1)
+    }
+
     pub fn slot_count(&self) -> usize {
         self.slot_count
     }

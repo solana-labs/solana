@@ -44,6 +44,27 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    // Each element of a key is a u8. We use key[0] as an index into this table of 256 boolean
+    // elements, to store whether or not the first element of any key is present in the static
+    // lists of built-in-program keys or system ids. By using this lookup table, we can very
+    // quickly determine that a key under consideration cannot be in either of these lists (if
+    // the value is "false"), or might be in one of these lists (if the value is "true")
+    pub static ref MAYBE_BUILTIN_KEY_OR_SYSVAR: [bool; 256] = {
+        let mut temp_table: [bool; 256] = [false; 256];
+        BUILTIN_PROGRAMS_KEYS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+        sysvar::ALL_IDS.iter().for_each(|key| temp_table[key.0[0] as usize] = true);
+        temp_table
+    };
+}
+
+pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
+    if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
+        return sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key);
+    }
+    false
+}
+
 fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
     keys.iter().position(|k| k == key).unwrap() as u8
 }
@@ -161,11 +182,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      transaction::Transaction,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -232,11 +253,11 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      transaction::Transaction,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -328,14 +349,14 @@ impl Message {
     /// use borsh::{BorshSerialize, BorshDeserialize};
     /// use solana_client::rpc_client::RpcClient;
     /// use solana_sdk::{
-    ///      hash::Hash,
-    ///      instruction::Instruction,
-    ///      message::Message,
-    ///      nonce,
-    ///      pubkey::Pubkey,
-    ///      signature::{Keypair, Signer},
-    ///      system_instruction,
-    ///      transaction::Transaction,
+    ///     hash::Hash,
+    ///     instruction::Instruction,
+    ///     message::Message,
+    ///     nonce,
+    ///     pubkey::Pubkey,
+    ///     signature::{Keypair, Signer},
+    ///     system_instruction,
+    ///     transaction::Transaction,
     /// };
     ///
     /// // A custom program instruction. This would typically be defined in
@@ -397,12 +418,12 @@ impl Message {
     ///         nonce_rent,
     ///     );
     ///
-    ///    let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
-    ///    let blockhash = client.get_latest_blockhash()?;
-    ///    nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
-    ///    client.send_and_confirm_transaction(&nonce_tx)?;
+    ///     let mut nonce_tx = Transaction::new_with_payer(&create_nonce_instr, Some(&payer.pubkey()));
+    ///     let blockhash = client.get_latest_blockhash()?;
+    ///     nonce_tx.sign(&[&payer, &nonce_account_address], blockhash);
+    ///     client.send_and_confirm_transaction(&nonce_tx)?;
     ///
-    ///    Ok(nonce_account_address.pubkey())
+    ///     Ok(nonce_account_address.pubkey())
     /// }
     /// #
     /// # let client = RpcClient::new(String::new());
@@ -520,19 +541,18 @@ impl Message {
         self.program_position(i).is_some()
     }
 
+    pub fn demote_program_id(&self, i: usize) -> bool {
+        self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present()
+    }
+
     pub fn is_writable(&self, i: usize) -> bool {
-        let demote_program_id =
-            self.is_key_called_as_program(i) && !self.is_upgradeable_loader_present();
         (i < (self.header.num_required_signatures - self.header.num_readonly_signed_accounts)
             as usize
             || (i >= self.header.num_required_signatures as usize
                 && i < self.account_keys.len()
                     - self.header.num_readonly_unsigned_accounts as usize))
-            && !{
-                let key = self.account_keys[i];
-                sysvar::is_sysvar_id(&key) || BUILTIN_PROGRAMS_KEYS.contains(&key)
-            }
-            && !demote_program_id
+            && !is_builtin_key_or_sysvar(&self.account_keys[i])
+            && !self.demote_program_id(i)
     }
 
     pub fn is_signer(&self, i: usize) -> bool {

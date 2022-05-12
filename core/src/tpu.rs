@@ -122,6 +122,7 @@ impl Tpu {
             find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
+            "tpu-find-packet-sender-stake",
         );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
@@ -132,6 +133,7 @@ impl Tpu {
             vote_find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
+            "tpu-vote-find-packet-sender-stake",
         );
 
         let (verified_sender, verified_receiver) = unbounded();

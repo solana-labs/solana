@@ -69,7 +69,10 @@ impl SigVerifier for ShredSigVerifier {
 pub mod tests {
     use {
         super::*,
-        solana_ledger::{genesis_utils::create_genesis_config_with_leader, shred::Shred},
+        solana_ledger::{
+            genesis_utils::create_genesis_config_with_leader,
+            shred::{Shred, ShredFlags},
+        },
         solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
@@ -83,8 +86,7 @@ pub mod tests {
             0xc0de,
             0xdead,
             &[1, 2, 3, 4],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
@@ -102,8 +104,7 @@ pub mod tests {
             0xc0de,
             0xdead,
             &[1, 2, 3, 4],
-            true,
-            true,
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
@@ -131,14 +132,30 @@ pub mod tests {
         let mut batches = vec![PacketBatch::default()];
         batches[0].packets.resize(2, Packet::default());
 
-        let mut shred =
-            Shred::new_from_data(0, 0xc0de, 0xdead, &[1, 2, 3, 4], true, true, 0, 0, 0xc0de);
+        let mut shred = Shred::new_from_data(
+            0,
+            0xc0de,
+            0xdead,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0xc0de,
+        );
         shred.sign(&leader_keypair);
         batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
         batches[0].packets[0].meta.size = shred.payload().len();
 
-        let mut shred =
-            Shred::new_from_data(0, 0xbeef, 0xc0de, &[1, 2, 3, 4], true, true, 0, 0, 0xc0de);
+        let mut shred = Shred::new_from_data(
+            0,
+            0xbeef,
+            0xc0de,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0xc0de,
+        );
         let wrong_keypair = Keypair::new();
         shred.sign(&wrong_keypair);
         batches[0].packets[1].data[0..shred.payload().len()].copy_from_slice(shred.payload());

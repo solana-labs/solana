@@ -1404,6 +1404,7 @@ pub mod test {
                 let mut account = AccountSharedData::from(Account {
                     data: vec![0; VoteState::size_of()],
                     lamports: *lamports,
+                    owner: solana_vote_program::id(),
                     ..Account::default()
                 });
                 let mut vote_state = VoteState::default();
@@ -1417,7 +1418,7 @@ pub mod test {
                 .expect("serialize state");
                 (
                     solana_sdk::pubkey::new_rand(),
-                    (*lamports, VoteAccount::from(account)),
+                    (*lamports, VoteAccount::try_from(account).unwrap()),
                 )
             })
             .collect()

@@ -190,10 +190,8 @@ pub(crate) mod tests {
             .iter()
             .flat_map(|(_, vote_accounts)| {
                 vote_accounts.iter().map(|v| {
-                    (
-                        v.vote_account,
-                        (stake_per_account, VoteAccount::from(v.account.clone())),
-                    )
+                    let vote_account = VoteAccount::try_from(v.account.clone()).unwrap();
+                    (v.vote_account, (stake_per_account, vote_account))
                 })
             })
             .collect();

@@ -76,9 +76,8 @@ impl StandardBroadcastRun {
                     state.slot,
                     state.next_shred_index,
                     parent_offset as u16,
-                    &[],  // data
-                    true, // is_last_in_fec_set
-                    true, // is_last_in_slot
+                    &[], // data
+                    ShredFlags::LAST_SHRED_IN_SLOT,
                     reference_tick,
                     self.shred_version,
                     fec_set_index.unwrap(),

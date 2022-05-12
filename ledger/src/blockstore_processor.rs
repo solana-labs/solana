@@ -15,7 +15,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -55,7 +55,6 @@ use {
     },
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
@@ -66,7 +65,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit
+// by max block cost limit.
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -94,12 +93,15 @@ impl BlockCostCapacityMeter {
     }
 }
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .build()
+        .unwrap();
+}
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -161,6 +163,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    tx_cost: u64,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -192,13 +195,14 @@ fn execute_batch(
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units);
+            .accumulate(execution_cost_units + tx_cost);
 
         debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
+            tx_cost,
             remaining_block_cost_cap,
         );
 
@@ -260,32 +264,32 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    tx_costs: &[u64],
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .map(|batch| {
-                        let mut timings = ExecuteTimings::default();
-                        let result = execute_batch(
-                            batch,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        (result, timings)
-                    })
-                    .unzip()
-            })
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .enumerate()
+                .map(|(index, batch)| {
+                    let mut timings = ExecuteTimings::default();
+                    let result = execute_batch(
+                        batch,
+                        bank,
+                        transaction_status_sender,
+                        replay_vote_sender,
+                        &mut timings,
+                        cost_capacity_meter.clone(),
+                        tx_costs[index],
+                    );
+                    if let Some(entry_callback) = entry_callback {
+                        entry_callback(bank);
+                    }
+                    (result, timings)
+                })
+                .unzip()
         });
-
     timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
     timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     for timing in new_timings {
@@ -293,6 +297,21 @@ fn execute_batches_internal(
     }
 
     first_err(&results)
+}
+
+fn rebatch_transactions<'a>(
+    lock_results: &'a [Result<()>],
+    bank: &'a Arc<Bank>,
+    sanitized_txs: &'a [SanitizedTransaction],
+    start: usize,
+    end: usize,
+) -> TransactionBatch<'a, 'a> {
+    let txs = &sanitized_txs[start..=end];
+    let results = &lock_results[start..=end];
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    tx_batch.set_needs_unlock(false);
+
+    tx_batch
 }
 
 fn execute_batches(
@@ -303,6 +322,7 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
 ) -> Result<()> {
     let lock_results = batches
         .iter()
@@ -313,43 +333,64 @@ fn execute_batches(
         .flat_map(|batch| batch.sanitized_transactions().to_vec())
         .collect::<Vec<_>>();
 
-    let cost_model = CostModel::new();
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
+    let mut total_cost_without_bpf: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
     // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
     #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let cost = cost_model.calculate_cost(tx).sum();
+            let tx_cost = cost_model.calculate_cost(tx);
+            let cost = tx_cost.sum();
+            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
+            (cost, cost_without_bpf)
         })
         .collect::<Vec<_>>();
 
     let target_batch_count = get_thread_count() as u64;
 
     let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
+        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let txs = &sanitized_txs[slice_start..=index];
-                let results = &lock_results[slice_start..=index];
-                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    tx_batch_costs.push(batch_cost_without_bpf);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
         &tx_batches[..]
     } else {
+        match batches.len() {
+            // Ensure that the total cost attributed to this batch is essentially correct
+            0 => tx_batch_costs = Vec::new(),
+            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
+        }
         batches
     };
 
@@ -361,6 +402,7 @@ fn execute_batches(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        &tx_batch_costs,
     )
 }
 
@@ -417,6 +459,7 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
+    let cost_model = CostModel::new();
 
     for entry in entries {
         match entry {
@@ -434,6 +477,7 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         timings,
                         cost_capacity_meter.clone(),
+                        &cost_model,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -491,6 +535,7 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             timings,
                             cost_capacity_meter.clone(),
+                            &cost_model,
                         )?;
                         batches.clear();
                     }
@@ -506,6 +551,7 @@ fn process_entries_with_callback(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        &cost_model,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -546,7 +592,6 @@ pub struct ProcessOptions {
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
-    pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -564,7 +609,7 @@ pub struct ProcessOptions {
 pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    opts: ProcessOptions,
+    opts: &ProcessOptions,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
     let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
@@ -572,7 +617,7 @@ pub fn test_process_blockstore(
         Vec::new(),
         None,
         None,
-        &opts,
+        opts,
         None,
         None,
     );
@@ -580,7 +625,7 @@ pub fn test_process_blockstore(
         blockstore,
         &bank_forks,
         &leader_schedule_cache,
-        &opts,
+        opts,
         None,
         None,
         &AbsRequestSender::default(),
@@ -635,15 +680,6 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
-
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
     let bank = bank_forks.read().unwrap().root_bank();
@@ -1309,7 +1345,8 @@ fn load_frozen_forks(
 
             if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
-                let _ = bank.verify_bank_hash(false);
+                let can_cached_slot_be_unflushed = true;
+                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed);
                 break;
             }
         }
@@ -1602,7 +1639,7 @@ pub mod tests {
     fn test_process_blockstore_with_custom_options(
         genesis_config: &GenesisConfig,
         blockstore: &Blockstore,
-        opts: ProcessOptions,
+        opts: &ProcessOptions,
         access_type: AccessType,
     ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
         match access_type {
@@ -1670,7 +1707,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore_with_custom_options(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
@@ -1725,7 +1762,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
@@ -1739,7 +1776,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
@@ -1797,7 +1834,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
     }
 
@@ -1861,7 +1898,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
 
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
@@ -1880,7 +1917,7 @@ pub mod tests {
         };
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0, 3]);
@@ -1946,7 +1983,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         // One fork, other one is ignored b/c not a descendant of the root
@@ -2025,7 +2062,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
@@ -2082,7 +2119,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
         let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 3]);
@@ -2127,7 +2164,7 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
         let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see the parent of the dead child
@@ -2175,7 +2212,7 @@ pub mod tests {
         blockstore.set_dead_slot(1).unwrap();
         blockstore.set_dead_slot(2).unwrap();
         let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see only the parent of the dead children
@@ -2226,7 +2263,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         // There is one fork, head is last_slot + 1
@@ -2370,7 +2407,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
@@ -2400,29 +2437,12 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 1);
-    }
-
-    #[test]
-    fn test_process_ledger_options_override_threads() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let opts = ProcessOptions {
-            override_num_threads: Some(1),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, opts);
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
     }
 
     #[test]
@@ -2437,7 +2457,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, leader_schedule) =
-            test_process_blockstore(&genesis_config, &blockstore, opts);
+            test_process_blockstore(&genesis_config, &blockstore, &opts);
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -2492,12 +2512,11 @@ pub mod tests {
         };
 
         let opts = ProcessOptions {
-            override_num_threads: Some(1),
             entry_callback: Some(entry_callback),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        test_process_blockstore(&genesis_config, &blockstore, opts);
+        test_process_blockstore(&genesis_config, &blockstore, &opts);
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -3151,7 +3170,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
         let bank_forks = bank_forks.read().unwrap();
 
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
@@ -3673,7 +3692,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore_with_custom_options(
             &genesis_config,
             &blockstore,
-            opts.clone(),
+            &opts,
             blockstore_access_type.clone(),
         );
         let bank_forks = bank_forks.read().unwrap();
@@ -3710,7 +3729,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore_with_custom_options(
             &genesis_config,
             &blockstore,
-            opts.clone(),
+            &opts,
             blockstore_access_type.clone(),
         );
         let bank_forks = bank_forks.read().unwrap();
@@ -3770,7 +3789,7 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore_with_custom_options(
             &genesis_config,
             &blockstore,
-            opts,
+            &opts,
             blockstore_access_type,
         );
         let bank_forks = bank_forks.read().unwrap();
@@ -3808,7 +3827,7 @@ pub mod tests {
                     VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                     (
                         solana_sdk::pubkey::new_rand(),
-                        (stake, VoteAccount::from(vote_account)),
+                        (stake, VoteAccount::try_from(vote_account).unwrap()),
                     )
                 })
                 .collect()
@@ -3948,6 +3967,49 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
         assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+    }
+
+    #[test]
+    fn test_rebatch_transactions() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let txs = vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+        ];
+
+        let batch = bank.prepare_sanitized_batch(&txs);
+        assert!(batch.needs_unlock());
+
+        let batch2 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            0,
+            1,
+        );
+        assert!(batch.needs_unlock());
+        assert!(!batch2.needs_unlock());
     }
 
     #[test]

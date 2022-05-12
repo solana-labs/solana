@@ -243,6 +243,7 @@ fn output_slot(
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
                 );
 
                 match sanitize_result {
@@ -730,6 +731,7 @@ fn load_bank_forks(
     blockstore: &Blockstore,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
+    incremental_snapshot_archive_path: Option<PathBuf>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
     let bank_snapshots_dir = blockstore
         .ledger_path()
@@ -741,12 +743,15 @@ fn load_bank_forks(
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
-        let snapshot_archives_dir =
+        let full_snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
+        let incremental_snapshot_archives_dir =
+            incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
         Some(SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             bank_snapshots_dir,
             ..SnapshotConfig::default()
         })
@@ -767,6 +772,18 @@ fn load_bank_forks(
             "Default accounts path is switched aligning with Blockstore's secondary access: {:?}",
             non_primary_accounts_path
         );
+
+        if non_primary_accounts_path.exists() {
+            info!("Clearing {:?}", non_primary_accounts_path);
+            if let Err(err) = std::fs::remove_dir_all(&non_primary_accounts_path) {
+                eprintln!(
+                    "error deleting accounts path {:?}: {}",
+                    non_primary_accounts_path, err
+                );
+                exit(1);
+            }
+        }
+
         vec![non_primary_accounts_path]
     };
 
@@ -813,6 +830,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
@@ -963,12 +981,19 @@ fn main() {
         .validator(is_slot)
         .takes_value(true)
         .help("Halt processing at the given slot");
+    let no_os_memory_stats_reporting_arg = Arg::with_name("no_os_memory_stats_reporting")
+        .long("no-os-memory-stats-reporting")
+        .help("Disable reporting of OS memory statistics.");
     let skip_rewrites_arg = Arg::with_name("accounts_db_skip_rewrites")
         .long("accounts-db-skip-rewrites")
         .help(
             "Accounts that are rent exempt and have no changes are not rewritten. \
                   This produces snapshots that older versions cannot read.",
         )
+        .hidden(true);
+    let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
+        .long("accounts-db-ancient-append-vecs")
+        .help("AppendVecs that are older than an epoch are squashed together.")
         .hidden(true);
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
@@ -1085,7 +1110,15 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .global(true)
-                .help("Use DIR for ledger location"),
+                .help("Use DIR for snapshot location"),
+        )
+        .arg(
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
+                .value_name("DIR")
+                .takes_value(true)
+                .global(true)
+                .help("Use DIR for separate incremental snapshot location"),
         )
         .arg(
             Arg::with_name("output_format")
@@ -1303,9 +1336,11 @@ fn main() {
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
             .arg(&skip_rewrites_arg)
+            .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
+            .arg(&no_os_memory_stats_reporting_arg)
             .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -1375,7 +1410,7 @@ fn main() {
                     .index(2)
                     .value_name("DIR")
                     .takes_value(true)
-                    .help("Output directory for the snapshot [default: --ledger directory]"),
+                    .help("Output directory for the snapshot [default: --snapshot-archive-path if present else --ledger directory]"),
             )
             .arg(
                 Arg::with_name("warp_slot")
@@ -1695,6 +1730,10 @@ fn main() {
     let snapshot_archive_path = value_t!(matches, "snapshot_archive_path", String)
         .ok()
         .map(PathBuf::from);
+    let incremental_snapshot_archive_path =
+        value_t!(matches, "incremental_snapshot_archive_path", String)
+            .ok()
+            .map(PathBuf::from);
 
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
@@ -1810,6 +1849,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         println!(
@@ -1891,6 +1931,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         println!("{}", &bank_forks.read().unwrap().working_bank().hash());
@@ -2045,8 +2086,14 @@ fn main() {
                 }
 
                 let exit_signal = Arc::new(AtomicBool::new(false));
-                let system_monitor_service =
-                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
+
+                let no_os_memory_stats_reporting =
+                    arg_matches.is_present("no_os_memory_stats_reporting");
+                let system_monitor_service = SystemMonitorService::new(
+                    Arc::clone(&exit_signal),
+                    !no_os_memory_stats_reporting,
+                    false,
+                );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
@@ -2084,6 +2131,7 @@ fn main() {
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
                     skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
                     ..AccountsDbConfig::default()
                 });
 
@@ -2124,6 +2172,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Ledger verification failed: {:?}", err);
@@ -2155,6 +2204,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         let dot = graph_forks(
@@ -2184,8 +2234,21 @@ fn main() {
                 }
             }
             ("create-snapshot", Some(arg_matches)) => {
+                let is_incremental = arg_matches.is_present("incremental");
                 let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
-                    .unwrap_or_else(|_| ledger_path.clone());
+                    .unwrap_or_else(|_| {
+                        match (
+                            is_incremental,
+                            &snapshot_archive_path,
+                            &incremental_snapshot_archive_path,
+                        ) {
+                            (true, _, Some(incremental_snapshot_archive_path)) => {
+                                incremental_snapshot_archive_path.clone()
+                            }
+                            (_, Some(snapshot_archive_path), _) => snapshot_archive_path.clone(),
+                            (_, _, _) => ledger_path.clone(),
+                        }
+                    });
                 let mut warp_slot = value_t!(arg_matches, "warp_slot", Slot).ok();
                 let remove_stake_accounts = arg_matches.is_present("remove_stake_accounts");
                 let new_hard_forks = hardforks_of(arg_matches, "hard_forks");
@@ -2239,7 +2302,6 @@ fn main() {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let blockstore =
                     open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
-                let is_incremental = arg_matches.is_present("incremental");
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
@@ -2269,6 +2331,7 @@ fn main() {
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, starting_snapshot_hashes)) => {
                         let mut bank = bank_forks
@@ -2503,6 +2566,7 @@ fn main() {
                                     &bank,
                                     full_snapshot_slot,
                                     Some(snapshot_version),
+                                    output_directory.clone(),
                                     output_directory,
                                     ArchiveFormat::TarZstd,
                                     maximum_full_snapshot_archives_to_retain,
@@ -2526,6 +2590,7 @@ fn main() {
                                     ledger_path,
                                     &bank,
                                     Some(snapshot_version),
+                                    output_directory.clone(),
                                     output_directory,
                                     ArchiveFormat::TarZstd,
                                     maximum_full_snapshot_archives_to_retain,
@@ -2576,6 +2641,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to load ledger: {:?}", err);
@@ -2635,6 +2701,7 @@ fn main() {
                     &blockstore,
                     process_options,
                     snapshot_archive_path,
+                    incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
                         let bank_forks = bank_forks.read().unwrap();

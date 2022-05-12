@@ -1,6 +1,14 @@
 pub use rocksdb::Direction as IteratorDirection;
 use {
-    crate::blockstore_meta,
+    crate::{
+        blockstore_meta,
+        blockstore_metrics::{
+            maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
+            BlockstoreRocksDbColumnFamilyMetrics, BlockstoreRocksDbPerfSamplingStatus,
+            ColumnMetrics,
+        },
+        rocksdb_metric_header,
+    },
     bincode::{deserialize, serialize},
     byteorder::{BigEndian, ByteOrder},
     log::*,
@@ -15,7 +23,6 @@ use {
         WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
-    solana_metrics::datapoint_info,
     solana_runtime::hardened_unpack::UnpackError,
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -30,7 +37,7 @@ use {
         marker::PhantomData,
         path::Path,
         sync::{
-            atomic::{AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicU64, Ordering},
             Arc,
         },
     },
@@ -101,222 +108,6 @@ const PROGRAM_COSTS_CF: &str = "program_costs";
 
 // 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
 const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
-
-#[derive(Default)]
-/// A metrics struct that exposes RocksDB's column family properties.
-///
-/// Here we only expose a subset of all the internal properties which are
-/// relevant to the ledger store performance.
-///
-/// The list of completed RocksDB internal properties can be found
-/// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-pub struct BlockstoreRocksDbColumnFamilyMetrics {
-    // Size related
-
-    // The storage size occupied by the column family.
-    // RocksDB's internal property key: "rocksdb.total-sst-files-size"
-    pub total_sst_files_size: i64,
-    // The memory size occupied by the column family's in-memory buffer.
-    // RocksDB's internal property key: "rocksdb.size-all-mem-tables"
-    pub size_all_mem_tables: i64,
-
-    // Snapshot related
-
-    // Number of snapshots hold for the column family.
-    // RocksDB's internal property key: "rocksdb.num-snapshots"
-    pub num_snapshots: i64,
-    // Unit timestamp of the oldest unreleased snapshot.
-    // RocksDB's internal property key: "rocksdb.oldest-snapshot-time"
-    pub oldest_snapshot_time: i64,
-
-    // Write related
-
-    // The current actual delayed write rate. 0 means no delay.
-    // RocksDB's internal property key: "rocksdb.actual-delayed-write-rate"
-    pub actual_delayed_write_rate: i64,
-    // A flag indicating whether writes are stopped on this column family.
-    // 1 indicates writes have been stopped.
-    // RocksDB's internal property key: "rocksdb.is-write-stopped"
-    pub is_write_stopped: i64,
-
-    // Memory / block cache related
-
-    // The block cache capacity of the column family.
-    // RocksDB's internal property key: "rocksdb.block-cache-capacity"
-    pub block_cache_capacity: i64,
-    // The memory size used by the column family in the block cache.
-    // RocksDB's internal property key: "rocksdb.block-cache-usage"
-    pub block_cache_usage: i64,
-    // The memory size used by the column family in the block cache where
-    // entries are pinned.
-    // RocksDB's internal property key: "rocksdb.block-cache-pinned-usage"
-    pub block_cache_pinned_usage: i64,
-
-    // The estimated memory size used for reading SST tables in this column
-    // family such as filters and index blocks. Note that this number does not
-    // include the memory used in block cache.
-    // RocksDB's internal property key: "rocksdb.estimate-table-readers-mem"
-    pub estimate_table_readers_mem: i64,
-
-    // Flush and compaction
-
-    // A 1 or 0 flag indicating whether a memtable flush is pending.
-    // If this number is 1, it means a memtable is waiting for being flushed,
-    // but there might be too many L0 files that prevents it from being flushed.
-    // RocksDB's internal property key: "rocksdb.mem-table-flush-pending"
-    pub mem_table_flush_pending: i64,
-
-    // A 1 or 0 flag indicating whether a compaction job is pending.
-    // If this number is 1, it means some part of the column family requires
-    // compaction in order to maintain shape of LSM tree, but the compaction
-    // is pending because the desired compaction job is either waiting for
-    // other dependnent compactions to be finished or waiting for an available
-    // compaction thread.
-    // RocksDB's internal property key: "rocksdb.compaction-pending"
-    pub compaction_pending: i64,
-
-    // The number of compactions that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-compactions"
-    pub num_running_compactions: i64,
-
-    // The number of flushes that are currently running for the column family.
-    // RocksDB's internal property key: "rocksdb.num-running-flushes"
-    pub num_running_flushes: i64,
-
-    // FIFO Compaction related
-
-    // returns an estimation of the oldest key timestamp in the DB. Only vailable
-    // for FIFO compaction with compaction_options_fifo.allow_compaction = false.
-    // RocksDB's internal property key: "rocksdb.estimate-oldest-key-time"
-    pub estimate_oldest_key_time: i64,
-
-    // Misc
-
-    // The accumulated number of RocksDB background errors.
-    // RocksDB's internal property key: "rocksdb.background-errors"
-    pub background_errors: i64,
-}
-
-impl BlockstoreRocksDbColumnFamilyMetrics {
-    /// Report metrics with the specified metric name and column family tag.
-    /// The metric name and the column family tag is embeded in the parameter
-    /// `metric_name_and_cf_tag` with the following format.
-    ///
-    /// For example, "blockstore_rocksdb_cfs,cf_name=shred_data".
-    pub fn report_metrics(&self, metric_name_and_cf_tag: &'static str) {
-        datapoint_info!(
-            metric_name_and_cf_tag,
-            // Size related
-            (
-                "total_sst_files_size",
-                self.total_sst_files_size as i64,
-                i64
-            ),
-            ("size_all_mem_tables", self.size_all_mem_tables as i64, i64),
-            // Snapshot related
-            ("num_snapshots", self.num_snapshots as i64, i64),
-            (
-                "oldest_snapshot_time",
-                self.oldest_snapshot_time as i64,
-                i64
-            ),
-            // Write related
-            (
-                "actual_delayed_write_rate",
-                self.actual_delayed_write_rate as i64,
-                i64
-            ),
-            ("is_write_stopped", self.is_write_stopped as i64, i64),
-            // Memory / block cache related
-            (
-                "block_cache_capacity",
-                self.block_cache_capacity as i64,
-                i64
-            ),
-            ("block_cache_usage", self.block_cache_usage as i64, i64),
-            (
-                "block_cache_pinned_usage",
-                self.block_cache_pinned_usage as i64,
-                i64
-            ),
-            (
-                "estimate_table_readers_mem",
-                self.estimate_table_readers_mem as i64,
-                i64
-            ),
-            // Flush and compaction
-            (
-                "mem_table_flush_pending",
-                self.mem_table_flush_pending as i64,
-                i64
-            ),
-            ("compaction_pending", self.compaction_pending as i64, i64),
-            (
-                "num_running_compactions",
-                self.num_running_compactions as i64,
-                i64
-            ),
-            ("num_running_flushes", self.num_running_flushes as i64, i64),
-            // FIFO Compaction related
-            (
-                "estimate_oldest_key_time",
-                self.estimate_oldest_key_time as i64,
-                i64
-            ),
-            // Misc
-            ("background_errors", self.background_errors as i64, i64),
-        );
-    }
-}
-
-macro_rules! rocksdb_metric_header {
-    ($metric_name:literal, $cf_name:literal, $column_options:expr) => {
-        match $column_options.shred_storage_type {
-            ShredStorageType::RocksLevel =>
-                rocksdb_metric_header!(@compression_type $metric_name, $cf_name, $column_options, "rocks_level"),
-            ShredStorageType::RocksFifo(_) =>
-                rocksdb_metric_header!(@compression_type $metric_name, $cf_name, $column_options, "rocks_fifo"),
-        }
-    };
-
-    (@compression_type $metric_name:literal, $cf_name:literal, $column_options:expr, $storage_type:literal) => {
-        match $column_options.compression_type {
-            BlockstoreCompressionType::None => rocksdb_metric_header!(@all_fields
-                $metric_name,
-                $cf_name,
-                $storage_type,
-                "None"
-            ),
-            BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@all_fields
-                $metric_name,
-                $cf_name,
-                $storage_type,
-                "Snappy"
-            ),
-            BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@all_fields
-                $metric_name,
-                $cf_name,
-                $storage_type,
-                "Lz4"
-            ),
-            BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@all_fields
-                $metric_name,
-                $cf_name,
-                $storage_type,
-                "Zlib"
-            ),
-        }
-    };
-
-    (@all_fields $metric_name:literal, $cf_name:literal, $storage_type:literal, $compression_type:literal) => {
-        concat!($metric_name,
-            ",cf_name=", $cf_name,
-            ",storage=", $storage_type,
-            ",compression=", $compression_type,
-        )
-    };
-}
-use rocksdb_metric_header;
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -517,6 +308,7 @@ struct Rocks {
     access_type: AccessType,
     oldest_slot: OldestSlot,
     column_options: LedgerColumnOptions,
+    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus,
 }
 
 impl Rocks {
@@ -548,6 +340,7 @@ impl Rocks {
                 access_type: access_type.clone(),
                 oldest_slot,
                 column_options,
+                write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
             },
             AccessType::Secondary => {
                 let secondary_path = path.join("solana-secondary");
@@ -568,6 +361,7 @@ impl Rocks {
                     access_type: access_type.clone(),
                     oldest_slot,
                     column_options,
+                    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
                 }
             }
         };
@@ -741,13 +535,13 @@ impl Rocks {
     }
 
     fn write(&self, batch: RWriteBatch) -> Result<()> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_batch_perf_status.op_count,
         );
         let result = self.db.write(batch);
         if is_perf_enabled {
-            report_write_perf(rocksdb_metric_header!(
+            report_rocksdb_write_perf(rocksdb_metric_header!(
                 "blockstore_rocksdb_write_perf,op=write_batch",
                 "write_batch",
                 self.column_options
@@ -794,17 +588,6 @@ pub trait Column {
     fn slot(index: Self::Index) -> Slot {
         Self::primary_index(index)
     }
-}
-
-pub trait ColumnMetrics {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    );
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str;
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str;
-    fn rocksdb_delete_perf_metric_header(column_options: &Arc<LedgerColumnOptions>)
-        -> &'static str;
 }
 
 pub trait ColumnName {
@@ -891,41 +674,6 @@ impl Column for columns::TransactionStatus {
         (index, Signature::default(), 0)
     }
 }
-impl ColumnMetrics for columns::TransactionStatus {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_status",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "transaction_status",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "transaction_status",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "transaction_status",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::TransactionStatus {
     const NAME: &'static str = TRANSACTION_STATUS_CF;
 }
@@ -966,41 +714,6 @@ impl Column for columns::AddressSignatures {
         (index, Pubkey::default(), 0, Signature::default())
     }
 }
-impl ColumnMetrics for columns::AddressSignatures {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "address_signatures",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "address_signatures",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "address_signatures",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "address_signatures",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::AddressSignatures {
     const NAME: &'static str = ADDRESS_SIGNATURES_CF;
 }
@@ -1029,41 +742,6 @@ impl Column for columns::TransactionMemos {
     #[allow(clippy::wrong_self_convention)]
     fn as_index(_index: u64) -> Self::Index {
         Signature::default()
-    }
-}
-impl ColumnMetrics for columns::TransactionMemos {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_memos",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "transaction_memos",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "transaction_memos",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "transaction_memos",
-            column_options
-        )
     }
 }
 impl ColumnName for columns::TransactionMemos {
@@ -1096,81 +774,11 @@ impl Column for columns::TransactionStatusIndex {
         slot
     }
 }
-impl ColumnMetrics for columns::TransactionStatusIndex {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "transaction_status_index",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "transaction_status_index",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "transaction_status_index",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "transaction_status_index",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::TransactionStatusIndex {
     const NAME: &'static str = TRANSACTION_STATUS_INDEX_CF;
 }
 
 impl SlotColumn for columns::Rewards {}
-impl ColumnMetrics for columns::Rewards {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "rewards",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "rewards",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "rewards",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "rewards",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::Rewards {
     const NAME: &'static str = REWARDS_CF;
 }
@@ -1179,41 +787,6 @@ impl ProtobufColumn for columns::Rewards {
 }
 
 impl SlotColumn for columns::Blocktime {}
-impl ColumnMetrics for columns::Blocktime {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "blocktime",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "blocktime",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "blocktime",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "blocktime",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::Blocktime {
     const NAME: &'static str = BLOCKTIME_CF;
 }
@@ -1222,41 +795,6 @@ impl TypedColumn for columns::Blocktime {
 }
 
 impl SlotColumn for columns::PerfSamples {}
-impl ColumnMetrics for columns::PerfSamples {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "perf_samples",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "perf_samples",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "perf_samples",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "perf_samples",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::PerfSamples {
     const NAME: &'static str = PERF_SAMPLES_CF;
 }
@@ -1265,82 +803,11 @@ impl TypedColumn for columns::PerfSamples {
 }
 
 impl SlotColumn for columns::BlockHeight {}
-impl ColumnMetrics for columns::BlockHeight {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "block_height",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "block_height",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "block_height",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "block_height",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::BlockHeight {
     const NAME: &'static str = BLOCK_HEIGHT_CF;
 }
 impl TypedColumn for columns::BlockHeight {
     type Type = u64;
-}
-
-impl ColumnMetrics for columns::ProgramCosts {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "program_costs",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "program_costs",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "program_costs",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "program_costs",
-            column_options
-        )
-    }
 }
 
 impl ColumnName for columns::ProgramCosts {
@@ -1396,41 +863,6 @@ impl Column for columns::ShredCode {
         (slot, 0)
     }
 }
-impl ColumnMetrics for columns::ShredCode {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "shred_code",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "shred_code",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "shred_code",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "shred_code",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::ShredCode {
     const NAME: &'static str = CODE_SHRED_CF;
 }
@@ -1460,81 +892,11 @@ impl Column for columns::ShredData {
         (slot, 0)
     }
 }
-impl ColumnMetrics for columns::ShredData {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "shred_data",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "shred_data",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "shred_data",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "shred_data",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::ShredData {
     const NAME: &'static str = DATA_SHRED_CF;
 }
 
 impl SlotColumn for columns::Index {}
-impl ColumnMetrics for columns::Index {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "index",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "index",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "index",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "index",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::Index {
     const NAME: &'static str = INDEX_CF;
 }
@@ -1543,41 +905,6 @@ impl TypedColumn for columns::Index {
 }
 
 impl SlotColumn for columns::DeadSlots {}
-impl ColumnMetrics for columns::DeadSlots {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "dead_slots",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "dead_slots",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "dead_slots",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "dead_slots",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::DeadSlots {
     const NAME: &'static str = DEAD_SLOTS_CF;
 }
@@ -1586,41 +913,6 @@ impl TypedColumn for columns::DeadSlots {
 }
 
 impl SlotColumn for columns::DuplicateSlots {}
-impl ColumnMetrics for columns::DuplicateSlots {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "duplicate_slots",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "duplicate_slots",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "duplicate_slots",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "duplicate_slots",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::DuplicateSlots {
     const NAME: &'static str = DUPLICATE_SLOTS_CF;
 }
@@ -1629,41 +921,6 @@ impl TypedColumn for columns::DuplicateSlots {
 }
 
 impl SlotColumn for columns::Orphans {}
-impl ColumnMetrics for columns::Orphans {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "orphans",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "orphans",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "orphans",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "orphans",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::Orphans {
     const NAME: &'static str = ORPHANS_CF;
 }
@@ -1672,41 +929,6 @@ impl TypedColumn for columns::Orphans {
 }
 
 impl SlotColumn for columns::BankHash {}
-impl ColumnMetrics for columns::BankHash {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "bank_hash",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "bank_hash",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "bank_hash",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "bank_hash",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::BankHash {
     const NAME: &'static str = BANK_HASH_CF;
 }
@@ -1715,41 +937,6 @@ impl TypedColumn for columns::BankHash {
 }
 
 impl SlotColumn for columns::Root {}
-impl ColumnMetrics for columns::Root {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "root",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "root",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "root",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "root",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::Root {
     const NAME: &'static str = ROOT_CF;
 }
@@ -1758,41 +945,6 @@ impl TypedColumn for columns::Root {
 }
 
 impl SlotColumn for columns::SlotMeta {}
-impl ColumnMetrics for columns::SlotMeta {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "slot_meta",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "slot_meta",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "slot_meta",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "slot_meta",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::SlotMeta {
     const NAME: &'static str = META_CF;
 }
@@ -1826,41 +978,6 @@ impl Column for columns::ErasureMeta {
         (slot, 0)
     }
 }
-impl ColumnMetrics for columns::ErasureMeta {
-    fn report_cf_metrics(
-        cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
-        column_options: &Arc<LedgerColumnOptions>,
-    ) {
-        cf_metrics.report_metrics(rocksdb_metric_header!(
-            "blockstore_rocksdb_cfs",
-            "erasure_meta",
-            column_options
-        ));
-    }
-    fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_read_perf,op=get",
-            "erasure_meta",
-            column_options
-        )
-    }
-    fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=put",
-            "erasure_meta",
-            column_options
-        )
-    }
-    fn rocksdb_delete_perf_metric_header(
-        column_options: &Arc<LedgerColumnOptions>,
-    ) -> &'static str {
-        rocksdb_metric_header!(
-            "blockstore_rocksdb_write_perf,op=delete",
-            "erasure_meta",
-            column_options
-        )
-    }
-}
 impl ColumnName for columns::ErasureMeta {
     const NAME: &'static str = ERASURE_META_CF;
 }
@@ -1883,6 +1000,8 @@ where
     backend: Arc<Rocks>,
     column: PhantomData<C>,
     pub column_options: Arc<LedgerColumnOptions>,
+    read_perf_status: BlockstoreRocksDbPerfSamplingStatus,
+    write_perf_status: BlockstoreRocksDbPerfSamplingStatus,
 }
 
 impl<C: Column + ColumnName + ColumnMetrics> LedgerColumn<C> {
@@ -2003,12 +1122,6 @@ pub struct LedgerColumnOptions {
     // If the value is greater than 0, then RocksDB read/write perf sample
     // will be collected once for every `rocks_perf_sample_interval` ops.
     pub rocks_perf_sample_interval: usize,
-
-    // A counter to determine whether to sample the current RocksDB read operation.
-    pub perf_read_counter: Arc<AtomicUsize>,
-
-    // A counter to determine whether to sample the current RocksDB write operation.
-    pub perf_write_counter: Arc<AtomicUsize>,
 }
 
 impl Default for LedgerColumnOptions {
@@ -2017,23 +1130,6 @@ impl Default for LedgerColumnOptions {
             shred_storage_type: ShredStorageType::RocksLevel,
             compression_type: BlockstoreCompressionType::default(),
             rocks_perf_sample_interval: 0,
-            perf_read_counter: Arc::<AtomicUsize>::default(),
-            perf_write_counter: Arc::<AtomicUsize>::default(),
-        }
-    }
-}
-
-impl LedgerColumnOptions {
-    pub fn new(
-        shred_storage_type: ShredStorageType,
-        compression_type: BlockstoreCompressionType,
-        rocks_perf_sample_interval: usize,
-    ) -> Self {
-        Self {
-            shred_storage_type,
-            compression_type,
-            rocks_perf_sample_interval,
-            ..Self::default()
         }
     }
 }
@@ -2152,6 +1248,8 @@ impl Database {
             backend: Arc::clone(&self.backend),
             column: PhantomData,
             column_options: Arc::clone(&self.column_options),
+            read_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
+            write_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
         }
     }
 
@@ -2203,13 +1301,13 @@ where
     C: Column + ColumnName + ColumnMetrics,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
-            report_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
         }
         result
     }
@@ -2281,13 +1379,13 @@ where
     }
 
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), value);
         if is_perf_enabled {
-            report_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
         }
         result
     }
@@ -2302,313 +1400,15 @@ where
     }
 }
 
-mod rocks_metrics_utils {
-    use {
-        rocksdb::{
-            perf::{set_perf_stats, PerfMetric, PerfStatsLevel},
-            PerfContext,
-        },
-        std::{
-            cell::RefCell,
-            sync::{
-                atomic::{AtomicUsize, Ordering},
-                Arc,
-            },
-        },
-    };
-
-    // Thread local instance of RocksDB's PerfContext.
-    thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefCell::new(PerfContext::default());}
-
-    /// The function enables RocksDB PerfContext once for every `sample_interval`.
-    ///
-    /// PerfContext is a thread-local struct defined in RocksDB for collecting
-    /// per-thread read / write performance metrics.
-    ///
-    /// When this function enables PerfContext, the function will return true,
-    /// and the PerfContext of the ubsequent RocksDB operation will be collected.
-    pub fn maybe_enable_perf(
-        sample_interval: usize,
-        perf_samples_counter: &Arc<AtomicUsize>,
-    ) -> bool {
-        if sample_interval == 0 {
-            return false;
-        }
-
-        if perf_samples_counter.fetch_add(1, Ordering::Relaxed) < sample_interval {
-            return false;
-        }
-        // Ideally, fetch_sub(*sample_interval) should be used to keep it
-        // super precise.  However, since we do not use Mutex to protect the
-        // above check and the below operation, we simply reset it to 0.
-        perf_samples_counter.store(0, Ordering::Relaxed);
-
-        set_perf_stats(PerfStatsLevel::EnableTime);
-        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context| {
-            perf_context.borrow_mut().reset();
-        });
-        true
-    }
-
-    /// Reports the collected PerfContext and disables the PerfContext after
-    /// reporting.
-    pub(crate) fn report_read_perf(metric_header: &'static str) {
-        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
-            set_perf_stats(PerfStatsLevel::Disable);
-            let perf_context = perf_context_cell.borrow();
-            datapoint_info!(
-                metric_header,
-                (
-                    "user_key_comparison_count",
-                    perf_context.metric(PerfMetric::UserKeyComparisonCount) as i64,
-                    i64
-                ),
-                (
-                    "block_cache_hit_count",
-                    perf_context.metric(PerfMetric::BlockCacheHitCount) as i64,
-                    i64
-                ),
-                (
-                    "block_read_count",
-                    perf_context.metric(PerfMetric::BlockReadCount) as i64,
-                    i64
-                ),
-                (
-                    "block_read_byte",
-                    perf_context.metric(PerfMetric::BlockReadByte) as i64,
-                    i64
-                ),
-                (
-                    "block_read_nanos",
-                    perf_context.metric(PerfMetric::BlockReadTime) as i64,
-                    i64
-                ),
-                (
-                    "block_checksum_nanos",
-                    perf_context.metric(PerfMetric::BlockChecksumTime) as i64,
-                    i64
-                ),
-                (
-                    "block_decompress_nanos",
-                    perf_context.metric(PerfMetric::BlockDecompressTime) as i64,
-                    i64
-                ),
-                (
-                    "get_read_bytes",
-                    perf_context.metric(PerfMetric::GetReadBytes) as i64,
-                    i64
-                ),
-                (
-                    "multiget_read_bytes",
-                    perf_context.metric(PerfMetric::MultigetReadBytes) as i64,
-                    i64
-                ),
-                (
-                    "get_snapshot_nanos",
-                    perf_context.metric(PerfMetric::GetSnapshotTime) as i64,
-                    i64
-                ),
-                (
-                    "get_from_memtable_nanos",
-                    perf_context.metric(PerfMetric::GetFromMemtableTime) as i64,
-                    i64
-                ),
-                (
-                    "get_from_memtable_count",
-                    perf_context.metric(PerfMetric::GetFromMemtableCount) as i64,
-                    i64
-                ),
-                (
-                    // total nanos spent after Get() finds a key
-                    "get_post_process_nanos",
-                    perf_context.metric(PerfMetric::GetPostProcessTime) as i64,
-                    i64
-                ),
-                (
-                    // total nanos reading from output files
-                    "get_from_output_files_nanos",
-                    perf_context.metric(PerfMetric::GetFromOutputFilesTime) as i64,
-                    i64
-                ),
-                (
-                    // time spent on acquiring DB mutex
-                    "db_mutex_lock_nanos",
-                    perf_context.metric(PerfMetric::DbMutexLockNanos) as i64,
-                    i64
-                ),
-                (
-                    // time spent on waiting with a condition variable created with DB mutex.
-                    "db_condition_wait_nanos",
-                    perf_context.metric(PerfMetric::DbConditionWaitNanos) as i64,
-                    i64
-                ),
-                (
-                    "merge_operator_nanos",
-                    perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as i64,
-                    i64
-                ),
-                (
-                    "read_index_block_nanos",
-                    perf_context.metric(PerfMetric::ReadIndexBlockNanos) as i64,
-                    i64
-                ),
-                (
-                    "read_filter_block_nanos",
-                    perf_context.metric(PerfMetric::ReadFilterBlockNanos) as i64,
-                    i64
-                ),
-                (
-                    "new_table_block_iter_nanos",
-                    perf_context.metric(PerfMetric::NewTableBlockIterNanos) as i64,
-                    i64
-                ),
-                (
-                    "block_seek_nanos",
-                    perf_context.metric(PerfMetric::BlockSeekNanos) as i64,
-                    i64
-                ),
-                (
-                    "find_table_nanos",
-                    perf_context.metric(PerfMetric::FindTableNanos) as i64,
-                    i64
-                ),
-                (
-                    "bloom_memtable_hit_count",
-                    perf_context.metric(PerfMetric::BloomMemtableHitCount) as i64,
-                    i64
-                ),
-                (
-                    "bloom_memtable_miss_count",
-                    perf_context.metric(PerfMetric::BloomMemtableMissCount) as i64,
-                    i64
-                ),
-                (
-                    "bloom_sst_hit_count",
-                    perf_context.metric(PerfMetric::BloomSstHitCount) as i64,
-                    i64
-                ),
-                (
-                    "bloom_sst_miss_count",
-                    perf_context.metric(PerfMetric::BloomSstMissCount) as i64,
-                    i64
-                ),
-                (
-                    "key_lock_wait_time",
-                    perf_context.metric(PerfMetric::KeyLockWaitTime) as i64,
-                    i64
-                ),
-                (
-                    "key_lock_wait_count",
-                    perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
-                    i64
-                ),
-                (
-                    "env_file_exists_nanos",
-                    perf_context.metric(PerfMetric::EnvFileExistsNanos) as i64,
-                    i64
-                ),
-                (
-                    "env_get_children_nanos",
-                    perf_context.metric(PerfMetric::EnvGetChildrenNanos) as i64,
-                    i64
-                ),
-                (
-                    "env_lock_file_nanos",
-                    perf_context.metric(PerfMetric::EnvLockFileNanos) as i64,
-                    i64
-                ),
-                (
-                    "env_unlock_file_nanos",
-                    perf_context.metric(PerfMetric::EnvUnlockFileNanos) as i64,
-                    i64
-                ),
-                (
-                    "total_metric_count",
-                    perf_context.metric(PerfMetric::TotalMetricCount) as i64,
-                    i64
-                ),
-            );
-        });
-    }
-    /// Reports the collected PerfContext and disables the PerfContext after
-    /// reporting.
-    pub fn report_write_perf(metric_header: &'static str) {
-        PER_THREAD_ROCKS_PERF_CONTEXT.with(|perf_context_cell| {
-            set_perf_stats(PerfStatsLevel::Disable);
-            let perf_context = perf_context_cell.borrow();
-            datapoint_info!(
-                metric_header,
-                // total nanos spent on writing to WAL
-                (
-                    "write_wal_nanos",
-                    perf_context.metric(PerfMetric::WriteWalTime) as i64,
-                    i64
-                ),
-                // total nanos spent on writing to mem tables
-                (
-                    "write_memtable_nanos",
-                    perf_context.metric(PerfMetric::WriteMemtableTime) as i64,
-                    i64
-                ),
-                // total nanos spent on delaying or throttling write
-                (
-                    "write_delay_nanos",
-                    perf_context.metric(PerfMetric::WriteDelayTime) as i64,
-                    i64
-                ),
-                // total nanos spent on writing a record, excluding the above four things
-                (
-                    "write_pre_and_post_process_nanos",
-                    perf_context.metric(PerfMetric::WritePreAndPostProcessTime) as i64,
-                    i64
-                ),
-                // time spent on acquiring DB mutex.
-                (
-                    "db_mutex_lock_nanos",
-                    perf_context.metric(PerfMetric::DbMutexLockNanos) as i64,
-                    i64
-                ),
-                // Time spent on waiting with a condition variable created with DB mutex.
-                (
-                    "db_condition_wait_nanos",
-                    perf_context.metric(PerfMetric::DbConditionWaitNanos) as i64,
-                    i64
-                ),
-                // Time spent on merge operator.
-                (
-                    "merge_operator_nanos_nanos",
-                    perf_context.metric(PerfMetric::MergeOperatorTimeNanos) as i64,
-                    i64
-                ),
-                // Time spent waiting on key locks in transaction lock manager.
-                (
-                    "key_lock_wait_nanos",
-                    perf_context.metric(PerfMetric::KeyLockWaitTime) as i64,
-                    i64
-                ),
-                // number of times acquiring a lock was blocked by another transaction.
-                (
-                    "key_lock_wait_count",
-                    perf_context.metric(PerfMetric::KeyLockWaitCount) as i64,
-                    i64
-                ),
-            );
-        });
-    }
-}
-use crate::blockstore_db::rocks_metrics_utils::{
-    maybe_enable_perf, report_read_perf, report_write_perf,
-};
-
 impl<C> LedgerColumn<C>
 where
     C: TypedColumn + ColumnName + ColumnMetrics,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
         let mut result = Ok(None);
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
@@ -2617,15 +1417,15 @@ where
         }
 
         if is_perf_enabled {
-            report_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
         }
         result
     }
 
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let serialized_value = serialize(value)?;
 
@@ -2634,19 +1434,19 @@ where
             .put_cf(self.handle(), &C::key(key), &serialized_value);
 
         if is_perf_enabled {
-            report_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
         }
         result
     }
 
     pub fn delete(&self, key: C::Index) -> Result<()> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.delete_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
-            report_write_perf(C::rocksdb_delete_perf_metric_header(&self.column_options));
+            report_rocksdb_write_perf(C::rocksdb_delete_perf_metric_header(&self.column_options));
         }
         result
     }
@@ -2660,13 +1460,13 @@ where
         &self,
         key: C::Index,
     ) -> Result<Option<C::Type>> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
-            report_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
         }
 
         if let Some(serialized_value) = result? {
@@ -2681,13 +1481,13 @@ where
     }
 
     pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_read_counter,
+            &self.read_perf_status.op_count,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if is_perf_enabled {
-            report_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
         }
 
         if let Some(serialized_value) = result? {
@@ -2701,13 +1501,13 @@ where
         let mut buf = Vec::with_capacity(value.encoded_len());
         value.encode(&mut buf)?;
 
-        let is_perf_enabled = maybe_enable_perf(
+        let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.column_options.perf_write_counter,
+            &self.write_perf_status.op_count,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
         if is_perf_enabled {
-            report_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
         }
 
         result

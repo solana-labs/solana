@@ -187,6 +187,7 @@ pub fn process_instruction(
                 &stake_history,
                 &config,
                 &signers,
+                &invoke_context.feature_set,
             )
         }
         Ok(StakeInstruction::Split(lamports)) => {
@@ -456,6 +457,7 @@ mod tests {
             authorized_from, create_stake_history_from_delegations, from, new_stake, stake_from,
             Delegation, Meta, Stake, StakeState,
         },
+        assert_matches::assert_matches,
         bincode::serialize,
         solana_program_runtime::{
             invoke_context::mock_process_instruction, sysvar_cache::SysvarCache,
@@ -510,25 +512,28 @@ mod tests {
     }
 
     fn process_instruction(
+        feature_set: &FeatureSet,
         instruction_data: &[u8],
         transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: Vec<AccountMeta>,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
-        process_instruction_with_sysvar_cache(
+        process_instruction_with_overrides(
             instruction_data,
             transaction_accounts,
             instruction_accounts,
             None,
+            Some(Arc::new(feature_set.clone())),
             expected_result,
         )
     }
 
-    fn process_instruction_with_sysvar_cache(
+    fn process_instruction_with_overrides(
         instruction_data: &[u8],
         transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: Vec<AccountMeta>,
         sysvar_cache_override: Option<&SysvarCache>,
+        feature_set_override: Option<Arc<FeatureSet>>,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
         mock_process_instruction(
@@ -538,13 +543,14 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             sysvar_cache_override,
-            None,
+            feature_set_override,
             expected_result,
             super::process_instruction,
         )
     }
 
     fn process_instruction_as_one_arg(
+        feature_set: &FeatureSet,
         instruction: &Instruction,
         expected_result: Result<(), InstructionError>,
     ) -> Vec<AccountSharedData> {
@@ -586,6 +592,7 @@ mod tests {
             })
             .collect();
         process_instruction(
+            feature_set,
             &instruction.data,
             transaction_accounts,
             instruction.accounts.clone(),
@@ -606,9 +613,9 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_stake_process_instruction() {
+    fn do_test_stake_process_instruction(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::initialize(
                 &Pubkey::new_unique(),
                 &Authorized::default(),
@@ -617,6 +624,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::authorize(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -627,6 +635,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::split(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -636,6 +645,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::merge(
                 &Pubkey::new_unique(),
                 &invalid_stake_state_pubkey(),
@@ -644,6 +654,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::split_with_seed(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -655,6 +666,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::delegate_stake(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -663,6 +675,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::withdraw(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -673,10 +686,12 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_stake(&Pubkey::new_unique(), &Pubkey::new_unique()),
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::set_lockup(
                 &Pubkey::new_unique(),
                 &LockupArgs::default(),
@@ -685,6 +700,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_delinquent_stake(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -693,6 +709,7 @@ mod tests {
             Err(InstructionError::IncorrectProgramId),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_delinquent_stake(
                 &Pubkey::new_unique(),
                 &invalid_vote_state_pubkey(),
@@ -701,6 +718,7 @@ mod tests {
             Err(InstructionError::InvalidAccountData),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_delinquent_stake(
                 &Pubkey::new_unique(),
                 &invalid_vote_state_pubkey(),
@@ -710,9 +728,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_spoofed_stake_accounts() {
+    fn do_test_spoofed_stake_accounts(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::initialize(
                 &spoofed_stake_state_pubkey(),
                 &Authorized::default(),
@@ -721,6 +739,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::authorize(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -731,6 +750,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::split(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -740,6 +760,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::split(
                 &Pubkey::new_unique(),
                 &Pubkey::new_unique(),
@@ -749,6 +770,7 @@ mod tests {
             Err(InstructionError::IncorrectProgramId),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::merge(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -757,6 +779,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::merge(
                 &Pubkey::new_unique(),
                 &spoofed_stake_state_pubkey(),
@@ -765,6 +788,7 @@ mod tests {
             Err(InstructionError::IncorrectProgramId),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::split_with_seed(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -776,6 +800,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::delegate_stake(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -784,6 +809,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::withdraw(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -794,10 +820,12 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_stake(&spoofed_stake_state_pubkey(), &Pubkey::new_unique()),
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::set_lockup(
                 &spoofed_stake_state_pubkey(),
                 &LockupArgs::default(),
@@ -806,6 +834,7 @@ mod tests {
             Err(InstructionError::InvalidAccountOwner),
         );
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction::deactivate_delinquent_stake(
                 &spoofed_stake_state_pubkey(),
                 &Pubkey::new_unique(),
@@ -815,8 +844,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_stake_process_instruction_decode_bail() {
+    fn do_test_stake_process_instruction_decode_bail(feature_set: FeatureSet) {
         // these will not call stake_state, have bogus contents
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
@@ -837,11 +865,12 @@ mod tests {
         let config_address = stake_config::id();
         let config_account = config::create_account(0, &stake_config::Config::default());
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let withdrawal_amount = rent_exempt_reserve + minimum_delegation;
 
         // gets the "is_empty()" check
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::default(),
                 Lockup::default(),
@@ -854,6 +883,7 @@ mod tests {
 
         // no account for rent
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::default(),
                 Lockup::default(),
@@ -870,6 +900,7 @@ mod tests {
 
         // fails to deserialize stake state
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::default(),
                 Lockup::default(),
@@ -896,6 +927,7 @@ mod tests {
 
         // gets the first check in delegate, wrong number of accounts
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             vec![(stake_address, stake_account.clone())],
             vec![AccountMeta {
@@ -908,6 +940,7 @@ mod tests {
 
         // gets the sub-check for number of args
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             vec![(stake_address, stake_account.clone())],
             vec![AccountMeta {
@@ -920,6 +953,7 @@ mod tests {
 
         // gets the check non-deserialize-able account in delegate_stake
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
@@ -960,6 +994,7 @@ mod tests {
 
         // Tests 3rd keyed account is of correct type (Clock instead of rewards) in withdraw
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
@@ -994,6 +1029,7 @@ mod tests {
 
         // Tests correct number of accounts are provided in withdraw
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(withdrawal_amount)).unwrap(),
             vec![(stake_address, stake_account.clone())],
             vec![AccountMeta {
@@ -1006,6 +1042,7 @@ mod tests {
 
         // Tests 2nd keyed account is of correct type (Clock instead of rewards) in deactivate
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
@@ -1028,6 +1065,7 @@ mod tests {
 
         // Tests correct number of accounts are provided in deactivate
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             Vec::new(),
             Vec::new(),
@@ -1036,12 +1074,14 @@ mod tests {
 
         // Tests correct number of accounts are provided in deactivate_delinquent
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
             Vec::new(),
             Vec::new(),
             Err(InstructionError::NotEnoughAccountKeys),
         );
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
             vec![(stake_address, stake_account.clone())],
             vec![AccountMeta {
@@ -1052,6 +1092,7 @@ mod tests {
             Err(InstructionError::NotEnoughAccountKeys),
         );
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
             vec![(stake_address, stake_account), (vote_address, vote_account)],
             vec![
@@ -1070,8 +1111,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_stake_checked_instructions() {
+    fn do_test_stake_checked_instructions(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let staker = Pubkey::new_unique();
         let staker_account = create_default_account();
@@ -1088,13 +1128,14 @@ mod tests {
         let rent_address = sysvar::rent::id();
         let rent_account = account::create_account_shared_data_for_test(&rent);
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
 
         // Test InitializeChecked with non-signing withdrawer
         let mut instruction =
             initialize_checked(&stake_address, &Authorized { staker, withdrawer });
         instruction.accounts[3] = AccountMeta::new_readonly(withdrawer, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1102,10 +1143,11 @@ mod tests {
         // Test InitializeChecked with withdrawer signer
         let stake_account = AccountSharedData::new(
             rent_exempt_reserve + minimum_delegation,
-            std::mem::size_of::<crate::stake_state::StakeState>(),
+            StakeState::size_of(),
             &id(),
         );
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::InitializeChecked).unwrap(),
             vec![
                 (stake_address, stake_account),
@@ -1148,6 +1190,7 @@ mod tests {
         );
         instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1161,6 +1204,7 @@ mod tests {
         );
         instruction.accounts[3] = AccountMeta::new_readonly(withdrawer, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1174,6 +1218,7 @@ mod tests {
         )
         .unwrap();
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::AuthorizeChecked(StakeAuthorize::Staker)).unwrap(),
             vec![
                 (stake_address, stake_account.clone()),
@@ -1207,6 +1252,7 @@ mod tests {
         );
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::AuthorizeChecked(
                 StakeAuthorize::Withdrawer,
             ))
@@ -1258,6 +1304,7 @@ mod tests {
         );
         instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1273,6 +1320,7 @@ mod tests {
         );
         instruction.accounts[3] = AccountMeta::new_readonly(staker, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1286,6 +1334,7 @@ mod tests {
         )
         .unwrap();
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
                 AuthorizeCheckedWithSeedArgs {
                     stake_authorize: StakeAuthorize::Staker,
@@ -1326,6 +1375,7 @@ mod tests {
         );
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::AuthorizeCheckedWithSeed(
                 AuthorizeCheckedWithSeedArgs {
                     stake_authorize: StakeAuthorize::Withdrawer,
@@ -1377,6 +1427,7 @@ mod tests {
         );
         instruction.accounts[2] = AccountMeta::new_readonly(custodian, false);
         process_instruction_as_one_arg(
+            &feature_set,
             &instruction,
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1391,6 +1442,7 @@ mod tests {
         .unwrap();
 
         process_instruction(
+            &feature_set,
             &instruction.data,
             vec![
                 (clock_address, clock_account),
@@ -1419,12 +1471,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_stake_initialize() {
+    fn do_test_stake_initialize(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
-        let stake_lamports = rent_exempt_reserve + minimum_delegation;
+        let stake_lamports = rent_exempt_reserve;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new(stake_lamports, StakeState::size_of(), &id());
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -1460,6 +1510,7 @@ mod tests {
 
         // should pass
         let accounts = process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1478,6 +1529,7 @@ mod tests {
         // 2nd time fails, can't move it from anything other than uninit->init
         transaction_accounts[0] = (stake_address, accounts[0].clone());
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1485,7 +1537,7 @@ mod tests {
         );
         transaction_accounts[0] = (stake_address, stake_account);
 
-        // not enough balance for rent and minimum delegation...
+        // not enough balance for rent
         transaction_accounts[1] = (
             sysvar::rent::id(),
             account::create_account_shared_data_for_test(&Rent {
@@ -1494,6 +1546,7 @@ mod tests {
             }),
         );
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1505,6 +1558,7 @@ mod tests {
             AccountSharedData::new(stake_lamports, StakeState::size_of() + 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1515,6 +1569,7 @@ mod tests {
             AccountSharedData::new(stake_lamports, StakeState::size_of() - 1, &id());
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts,
             instruction_accounts,
@@ -1522,8 +1577,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_authorize() {
+    fn do_test_authorize(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let authority_address_2 = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -1570,6 +1624,7 @@ mod tests {
 
         // should fail, uninit
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Staker,
@@ -1590,6 +1645,7 @@ mod tests {
         .unwrap();
         transaction_accounts[0] = (stake_address, stake_account);
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Staker,
@@ -1601,6 +1657,7 @@ mod tests {
         );
         transaction_accounts[0] = (stake_address, accounts[0].clone());
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Withdrawer,
@@ -1620,6 +1677,7 @@ mod tests {
 
         // A second authorization signed by the stake account should fail
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address_2,
                 StakeAuthorize::Staker,
@@ -1634,6 +1692,7 @@ mod tests {
         instruction_accounts[0].is_signer = false;
         instruction_accounts[2].is_signer = true;
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address_2,
                 StakeAuthorize::Staker,
@@ -1678,6 +1737,7 @@ mod tests {
             },
         ];
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1688,6 +1748,7 @@ mod tests {
         // Test that withdrawal to account fails without authorized withdrawer
         instruction_accounts[4].is_signer = false;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -1695,8 +1756,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_authorize_override() {
+    fn do_test_authorize_override(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let mallory_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -1736,6 +1796,7 @@ mod tests {
 
         // Authorize a staker pubkey and move the withdrawer key into cold storage.
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Staker,
@@ -1751,6 +1812,7 @@ mod tests {
         instruction_accounts[0].is_signer = false;
         instruction_accounts[2].is_signer = true;
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 mallory_address,
                 StakeAuthorize::Staker,
@@ -1764,6 +1826,7 @@ mod tests {
 
         // Verify the original staker no longer has access.
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Staker,
@@ -1778,6 +1841,7 @@ mod tests {
         instruction_accounts[0].is_signer = true;
         instruction_accounts[2].is_signer = false;
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Withdrawer,
@@ -1797,6 +1861,7 @@ mod tests {
             is_writable: false,
         };
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Withdrawer,
@@ -1808,8 +1873,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_authorize_with_seed() {
+    fn do_test_authorize_with_seed(feature_set: FeatureSet) {
         let authority_base_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
         let seed = "42";
@@ -1850,6 +1914,7 @@ mod tests {
 
         // Wrong seed
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::AuthorizeWithSeed(
                 AuthorizeWithSeedArgs {
                     new_authorized_pubkey: authority_address,
@@ -1876,6 +1941,7 @@ mod tests {
         ))
         .unwrap();
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1885,6 +1951,7 @@ mod tests {
 
         // Set stake authority
         let accounts = process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1903,6 +1970,7 @@ mod tests {
         ))
         .unwrap();
         let accounts = process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1912,6 +1980,7 @@ mod tests {
 
         // No longer withdraw authority
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts,
             instruction_accounts,
@@ -1919,11 +1988,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_authorize_delegated_stake() {
+    fn do_test_authorize_delegated_stake(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -1990,6 +2058,7 @@ mod tests {
 
         // delegate stake
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -1999,6 +2068,7 @@ mod tests {
 
         // deactivate, so we can re-delegate
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -2019,6 +2089,7 @@ mod tests {
 
         // authorize
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authority_address,
                 StakeAuthorize::Staker,
@@ -2054,6 +2125,7 @@ mod tests {
         instruction_accounts[0].is_signer = false;
         instruction_accounts[1].pubkey = vote_address_2;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2067,6 +2139,7 @@ mod tests {
             is_writable: false,
         });
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts,
@@ -2080,6 +2153,7 @@ mod tests {
 
         // Test another staking action
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts,
             vec![
@@ -2103,8 +2177,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_stake_delegate() {
+    fn do_test_stake_delegate(feature_set: FeatureSet) {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
             vote_state.process_slot_vote_unchecked(i);
@@ -2122,7 +2195,7 @@ mod tests {
         vote_account_2
             .set_state(&VoteStateVersions::new_current(vote_state))
             .unwrap();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let mut stake_account = AccountSharedData::new_data_with_space(
@@ -2190,6 +2263,7 @@ mod tests {
         // should fail, unsigned stake account
         instruction_accounts[0].is_signer = false;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2199,6 +2273,7 @@ mod tests {
 
         // should pass
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2227,6 +2302,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2235,6 +2311,7 @@ mod tests {
 
         // deactivate
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -2257,6 +2334,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
         instruction_accounts[1].pubkey = vote_address_2;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2267,6 +2345,7 @@ mod tests {
         // verify that delegate succeeds to same vote account
         // when stake is deactivating
         let accounts_2 = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2281,6 +2360,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts_2[0].clone());
         instruction_accounts[1].pubkey = vote_address_2;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2297,6 +2377,7 @@ mod tests {
         // verify that delegate can be called to new vote account, 2nd is redelegate
         transaction_accounts[0] = (stake_address, accounts[0].clone());
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2324,6 +2405,7 @@ mod tests {
             .1
             .set_owner(solana_sdk::pubkey::new_rand());
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2335,6 +2417,7 @@ mod tests {
         stake_account.set_state(&stake_state).unwrap();
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -2342,8 +2425,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_redelegate_consider_balance_changes() {
+    fn do_test_redelegate_consider_balance_changes(feature_set: FeatureSet) {
         let mut clock = Clock::default();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -2437,6 +2519,7 @@ mod tests {
         ];
 
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             delegate_instruction_accounts.clone(),
@@ -2450,6 +2533,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             deactivate_instruction_accounts.clone(),
@@ -2465,6 +2549,7 @@ mod tests {
         );
         let withdraw_lamports = initial_lamports / 2;
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(withdraw_lamports)).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -2506,6 +2591,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             delegate_instruction_accounts.clone(),
@@ -2523,6 +2609,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             deactivate_instruction_accounts,
@@ -2542,6 +2629,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             delegate_instruction_accounts,
@@ -2553,10 +2641,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_split() {
+    fn do_test_split(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation * 2;
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
@@ -2590,6 +2677,7 @@ mod tests {
             lamports_per_byte_year: 0,
             ..Rent::default()
         });
+        let feature_set = Arc::new(feature_set);
 
         for state in [
             StakeState::Initialized(Meta::auto(&stake_address)),
@@ -2605,20 +2693,22 @@ mod tests {
             transaction_accounts[0] = (stake_address, stake_account);
 
             // should fail, split more than available
-            process_instruction_with_sysvar_cache(
+            process_instruction_with_overrides(
                 &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Some(&sysvar_cache_override),
+                Some(Arc::clone(&feature_set)),
                 Err(InstructionError::InsufficientFunds),
             );
 
             // should pass
-            let accounts = process_instruction_with_sysvar_cache(
+            let accounts = process_instruction_with_overrides(
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Some(&sysvar_cache_override),
+                Some(Arc::clone(&feature_set)),
                 Ok(()),
             );
             // no lamport leakage
@@ -2649,21 +2739,22 @@ mod tests {
         )
         .unwrap();
         transaction_accounts[1] = (split_to_address, split_to_account);
-        process_instruction(
+        process_instruction_with_overrides(
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts,
             instruction_accounts,
+            Some(&sysvar_cache_override),
+            Some(Arc::clone(&feature_set)),
             Err(InstructionError::IncorrectProgramId),
         );
     }
 
-    #[test]
-    fn test_withdraw_stake() {
+    fn do_test_withdraw_stake(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -2735,6 +2826,7 @@ mod tests {
         // should fail, no signer
         instruction_accounts[4].is_signer = false;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2744,6 +2836,7 @@ mod tests {
 
         // should pass, signed keyed account and uninitialized
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2759,6 +2852,7 @@ mod tests {
             custodian: custodian_address,
         };
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::auto(&stake_address),
                 lockup,
@@ -2783,6 +2877,7 @@ mod tests {
 
         // should fail, signed keyed account and locked up, more than available
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports + 1)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2791,6 +2886,7 @@ mod tests {
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -2829,6 +2925,7 @@ mod tests {
 
         // withdrawal before deactivate works for rewards amount
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(10)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2837,6 +2934,7 @@ mod tests {
 
         // withdrawal of rewards fails if not in excess of stake
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(11)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2845,6 +2943,7 @@ mod tests {
 
         // deactivate the stake before withdrawal
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -2875,6 +2974,7 @@ mod tests {
 
         // Try to withdraw more than what's available
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports + 11)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2883,6 +2983,7 @@ mod tests {
 
         // Try to withdraw all lamports
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports + 10)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2912,6 +3013,7 @@ mod tests {
         transaction_accounts[2] = (recipient_address, stake_account);
         instruction_accounts[4].pubkey = authority_address;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(u64::MAX - 10)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -2928,6 +3030,7 @@ mod tests {
         .unwrap();
         transaction_accounts[0] = (stake_address, stake_account);
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -2935,11 +3038,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_withdraw_stake_before_warmup() {
+    fn do_test_withdraw_stake_before_warmup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let total_lamports = stake_lamports + 33;
         let stake_account = AccountSharedData::new_data_with_space(
@@ -3006,6 +3108,7 @@ mod tests {
 
         // Stake some lamports (available lamports for withdrawals will reduce to zero)
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -3055,6 +3158,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(
                 total_lamports - stake_lamports + 1,
             ))
@@ -3065,8 +3169,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_withdraw_lockup() {
+    fn do_test_withdraw_lockup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3130,6 +3233,7 @@ mod tests {
 
         // should fail, lockup is still in force
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3143,6 +3247,7 @@ mod tests {
             is_writable: false,
         });
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3162,6 +3267,7 @@ mod tests {
         .unwrap();
         transaction_accounts[0] = (stake_address, stake_account_self_as_custodian);
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3178,6 +3284,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(total_lamports)).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -3186,14 +3293,13 @@ mod tests {
         assert_eq!(from(&accounts[0]).unwrap(), StakeState::Uninitialized);
     }
 
-    #[test]
-    fn test_withdraw_rent_exempt() {
+    fn do_test_withdraw_rent_exempt(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = 7 * minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports + rent_exempt_reserve,
@@ -3246,31 +3352,19 @@ mod tests {
             },
         ];
 
-        // should pass, withdrawing account down to minimum balance
+        // should pass, withdrawing initialized account down to minimum balance
         process_instruction(
-            &serialize(&StakeInstruction::Withdraw(
-                stake_lamports - minimum_delegation,
-            ))
-            .unwrap(),
+            &feature_set,
+            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
         );
 
-        // should fail, withdrawing account down to only rent-exempt reserve
-        process_instruction(
-            &serialize(&StakeInstruction::Withdraw(stake_lamports)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Err(InstructionError::InsufficientFunds),
-        );
-
         // should fail, withdrawal that would leave less than rent-exempt reserve
         process_instruction(
-            &serialize(&StakeInstruction::Withdraw(
-                stake_lamports + minimum_delegation,
-            ))
-            .unwrap(),
+            &feature_set,
+            &serialize(&StakeInstruction::Withdraw(stake_lamports + 1)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Err(InstructionError::InsufficientFunds),
@@ -3278,6 +3372,7 @@ mod tests {
 
         // should pass, withdrawal of complete account
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(
                 stake_lamports + rent_exempt_reserve,
             ))
@@ -3288,10 +3383,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_deactivate() {
+    fn do_test_deactivate(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -3338,6 +3432,7 @@ mod tests {
         // should fail, not signed
         instruction_accounts[0].is_signer = false;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3347,6 +3442,7 @@ mod tests {
 
         // should fail, not staked yet
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3355,6 +3451,7 @@ mod tests {
 
         // Staking
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -3390,6 +3487,7 @@ mod tests {
 
         // should pass
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3399,6 +3497,7 @@ mod tests {
 
         // should fail, only works once
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -3406,12 +3505,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_set_lockup() {
+    fn do_test_set_lockup(feature_set: FeatureSet) {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = minimum_delegation;
         let stake_account = AccountSharedData::new_data_with_space(
             stake_lamports,
@@ -3474,6 +3572,7 @@ mod tests {
 
         // should fail, wrong state
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3487,6 +3586,7 @@ mod tests {
             custodian: custodian_address,
         };
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::auto(&stake_address),
                 lockup,
@@ -3512,6 +3612,7 @@ mod tests {
         // should fail, not signed
         instruction_accounts[2].is_signer = false;
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3521,6 +3622,7 @@ mod tests {
 
         // should pass
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3529,6 +3631,7 @@ mod tests {
 
         // Staking
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -3565,6 +3668,7 @@ mod tests {
         // should fail, not signed
         instruction_accounts[2].is_signer = false;
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3574,6 +3678,7 @@ mod tests {
 
         // should pass
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3592,6 +3697,7 @@ mod tests {
         instruction_accounts[0].is_signer = true;
         instruction_accounts[2].is_signer = false;
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3602,6 +3708,7 @@ mod tests {
 
         // should pass, custodian can change it
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3621,6 +3728,7 @@ mod tests {
 
         // should fail, custodian cannot change it
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3631,6 +3739,7 @@ mod tests {
         instruction_accounts[0].is_signer = true;
         instruction_accounts[2].is_signer = false;
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -3639,6 +3748,7 @@ mod tests {
 
         // Change authorized withdrawer
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Authorize(
                 authorized_address,
                 StakeAuthorize::Withdrawer,
@@ -3668,6 +3778,7 @@ mod tests {
 
         // should fail, previous authorized withdrawer cannot change the lockup anymore
         process_instruction(
+            &feature_set,
             &instruction_data,
             transaction_accounts,
             instruction_accounts,
@@ -3675,13 +3786,10 @@ mod tests {
         );
     }
 
-    /// Ensure that `initialize()` respects the minimum delegation requirements
-    /// - Assert 1: accounts with a balance equal-to the minimum initialize OK
-    /// - Assert 2: accounts with a balance less-than the minimum do not initialize
-    #[test]
-    fn test_initialize_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
-        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
+    /// Ensure that `initialize()` respects the minimum balance requirements
+    /// - Assert 1: accounts with a balance equal-to the rent exemption initialize OK
+    /// - Assert 2: accounts with a balance less-than the rent exemption do not initialize
+    fn do_test_initialize_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3702,19 +3810,16 @@ mod tests {
                 is_writable: false,
             },
         ];
-        for (stake_delegation, expected_result) in [
-            (minimum_delegation, Ok(())),
+        for (lamports, expected_result) in [
+            (rent_exempt_reserve, Ok(())),
             (
-                minimum_delegation - 1,
+                rent_exempt_reserve - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            let stake_account = AccountSharedData::new(
-                stake_delegation + rent_exempt_reserve,
-                StakeState::size_of(),
-                &id(),
-            );
+            let stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
             process_instruction(
+                &feature_set,
                 &instruction_data,
                 vec![
                     (stake_address, stake_account),
@@ -3730,19 +3835,17 @@ mod tests {
     }
 
     /// Ensure that `delegate()` respects the minimum delegation requirements
-    /// - Assert 1: delegating an amount equal-to the minimum delegates OK
-    /// - Assert 2: delegating an amount less-than the minimum delegates OK
+    /// - Assert 1: delegating an amount equal-to the minimum succeeds
+    /// - Assert 2: delegating an amount less-than the minimum fails
     /// Also test both asserts above over both StakeState::{Initialized and Stake}, since the logic
     /// is slightly different for the variants.
     ///
     /// NOTE: Even though new stake accounts must have a minimum balance that is at least
-    /// the minimum delegation (plus rent exempt reserve), the current behavior allows
+    /// the minimum delegation (plus rent exempt reserve), the old behavior allowed
     /// withdrawing below the minimum delegation, then re-delegating successfully (see
     /// `test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation()` for
     /// more information.)
-    #[test]
-    fn test_delegate_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
+    fn do_test_delegate_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3781,13 +3884,13 @@ mod tests {
                 is_writable: false,
             },
         ];
-        for (stake_delegation, expected_result) in [
+        for (stake_delegation, expected_result) in &[
             (minimum_delegation, Ok(())),
-            (minimum_delegation - 1, Ok(())),
+            (minimum_delegation - 1, Err(StakeError::InsufficientStake)),
         ] {
             for stake_state in &[
                 StakeState::Initialized(meta),
-                just_stake(meta, stake_delegation),
+                just_stake(meta, *stake_delegation),
             ] {
                 let stake_account = AccountSharedData::new_data_with_space(
                     stake_delegation + rent_exempt_reserve,
@@ -3797,6 +3900,7 @@ mod tests {
                 )
                 .unwrap();
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::DelegateStake).unwrap(),
                     vec![
                         (stake_address, stake_account),
@@ -3815,7 +3919,7 @@ mod tests {
                         ),
                     ],
                     instruction_accounts.clone(),
-                    expected_result.clone(),
+                    expected_result.clone().map_err(|e| e.into()),
                 );
             }
         }
@@ -3831,9 +3935,7 @@ mod tests {
     ///  EQ     | LT   | Err
     ///  LT     | EQ   | Err
     ///  LT     | LT   | Err
-    #[test]
-    fn test_split_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
+    fn do_test_split_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3862,32 +3964,38 @@ mod tests {
                 is_writable: false,
             },
         ];
-        for (source_stake_delegation, dest_stake_delegation, expected_result) in [
-            (minimum_delegation, minimum_delegation, Ok(())),
+        for (source_reserve, dest_reserve, expected_result) in [
+            (rent_exempt_reserve, rent_exempt_reserve, Ok(())),
             (
-                minimum_delegation,
-                minimum_delegation - 1,
+                rent_exempt_reserve,
+                rent_exempt_reserve - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
             (
-                minimum_delegation - 1,
-                minimum_delegation,
+                rent_exempt_reserve - 1,
+                rent_exempt_reserve,
                 Err(InstructionError::InsufficientFunds),
             ),
             (
-                minimum_delegation - 1,
-                minimum_delegation - 1,
+                rent_exempt_reserve - 1,
+                rent_exempt_reserve - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
             // The source account's starting balance is equal to *both* the source and dest
             // accounts' *final* balance
-            let source_starting_balance =
-                source_stake_delegation + dest_stake_delegation + rent_exempt_reserve * 2;
-            for source_stake_state in &[
-                StakeState::Initialized(source_meta),
-                just_stake(source_meta, source_starting_balance - rent_exempt_reserve),
+            let mut source_starting_balance = source_reserve + dest_reserve;
+            for (delegation, source_stake_state) in &[
+                (0, StakeState::Initialized(source_meta)),
+                (
+                    minimum_delegation,
+                    just_stake(
+                        source_meta,
+                        minimum_delegation * 2 + source_starting_balance - rent_exempt_reserve,
+                    ),
+                ),
             ] {
+                source_starting_balance += delegation * 2;
                 let source_account = AccountSharedData::new_data_with_space(
                     source_starting_balance,
                     source_stake_state,
@@ -3896,10 +4004,8 @@ mod tests {
                 )
                 .unwrap();
                 process_instruction(
-                    &serialize(&StakeInstruction::Split(
-                        dest_stake_delegation + rent_exempt_reserve,
-                    ))
-                    .unwrap(),
+                    &feature_set,
+                    &serialize(&StakeInstruction::Split(dest_reserve + delegation)).unwrap(),
                     vec![
                         (source_address, source_account),
                         (dest_address, dest_account.clone()),
@@ -3922,9 +4028,7 @@ mod tests {
     ///             delegation is OK
     /// - Assert 2: splitting the full amount from an account that has less than the minimum
     ///             delegation is not OK
-    #[test]
-    fn test_split_full_amount_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
+    fn do_test_split_full_amount_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -3953,25 +4057,29 @@ mod tests {
                 is_writable: false,
             },
         ];
-        for (stake_delegation, expected_result) in [
-            (minimum_delegation, Ok(())),
+        for (reserve, expected_result) in [
+            (rent_exempt_reserve, Ok(())),
             (
-                minimum_delegation - 1,
+                rent_exempt_reserve - 1,
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            for source_stake_state in &[
-                StakeState::Initialized(source_meta),
-                just_stake(source_meta, stake_delegation),
+            for (stake_delegation, source_stake_state) in &[
+                (0, StakeState::Initialized(source_meta)),
+                (
+                    minimum_delegation,
+                    just_stake(source_meta, minimum_delegation),
+                ),
             ] {
                 let source_account = AccountSharedData::new_data_with_space(
-                    stake_delegation + rent_exempt_reserve,
+                    stake_delegation + reserve,
                     source_stake_state,
                     StakeState::size_of(),
                     &id(),
                 )
                 .unwrap();
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Split(source_account.lamports())).unwrap(),
                     vec![
                         (source_address, source_account),
@@ -3988,20 +4096,14 @@ mod tests {
         }
     }
 
-    /// Ensure that `split()` correctly handles prefunded destination accounts.  When a destination
-    /// account already has funds, ensure the minimum split amount reduces accordingly.
-    #[test]
-    fn test_split_destination_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
-        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
+    /// Ensure that `split()` correctly handles prefunded destination accounts from
+    /// initialized stakes.  When a destination account already has funds, ensure
+    /// the minimum split amount reduces accordingly.
+    fn do_test_initialized_split_destination_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let source_address = Pubkey::new_unique();
-        let source_meta = Meta {
-            rent_exempt_reserve,
-            ..Meta::auto(&source_address)
-        };
-        let dest_address = Pubkey::new_unique();
+        let destination_address = Pubkey::new_unique();
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: source_address,
@@ -4009,7 +4111,106 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: dest_address,
+                pubkey: destination_address,
+                is_signer: false,
+                is_writable: false,
+            },
+        ];
+        for (destination_starting_balance, split_amount, expected_result) in [
+            // split amount must be non zero
+            (
+                rent_exempt_reserve,
+                0,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // any split amount is OK when destination account is already fully funded
+            (rent_exempt_reserve, 1, Ok(())),
+            // if destination is only short by 1 lamport, then split amount can be 1 lamport
+            (rent_exempt_reserve - 1, 1, Ok(())),
+            // destination short by 2 lamports, then 1 isn't enough (non-zero split amount)
+            (
+                rent_exempt_reserve - 2,
+                1,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // destination has smallest non-zero balance, so can split the minimum balance
+            // requirements minus what destination already has
+            (1, rent_exempt_reserve - 1, Ok(())),
+            // destination has smallest non-zero balance, but cannot split less than the minimum
+            // balance requirements minus what destination already has
+            (
+                1,
+                rent_exempt_reserve - 2,
+                Err(InstructionError::InsufficientFunds),
+            ),
+            // destination has zero lamports, so split must be at least rent exempt reserve
+            (0, rent_exempt_reserve, Ok(())),
+            // destination has zero lamports, but split amount is less than rent exempt reserve
+            (
+                0,
+                rent_exempt_reserve - 1,
+                Err(InstructionError::InsufficientFunds),
+            ),
+        ] {
+            // Set the source's starting balance to something large to ensure its post-split
+            // balance meets all the requirements
+            let source_balance = u64::MAX;
+            let source_meta = Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&source_address)
+            };
+            let source_account = AccountSharedData::new_data_with_space(
+                source_balance,
+                &StakeState::Initialized(source_meta),
+                StakeState::size_of(),
+                &id(),
+            )
+            .unwrap();
+            let destination_account = AccountSharedData::new_data_with_space(
+                destination_starting_balance,
+                &StakeState::Uninitialized,
+                StakeState::size_of(),
+                &id(),
+            )
+            .unwrap();
+
+            process_instruction(
+                &feature_set,
+                &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                vec![
+                    (source_address, source_account),
+                    (destination_address, destination_account),
+                    (
+                        sysvar::rent::id(),
+                        account::create_account_shared_data_for_test(&rent),
+                    ),
+                ],
+                instruction_accounts.clone(),
+                expected_result.clone(),
+            );
+        }
+    }
+
+    /// Ensure that `split()` correctly handles prefunded destination accounts from staked stakes.
+    /// When a destination account already has funds, ensure the minimum split amount reduces
+    /// accordingly.
+    fn do_test_staked_split_destination_minimum_balance(
+        feature_set: FeatureSet,
+        expected_results: &[Result<(), InstructionError>],
+    ) {
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
+        let rent = Rent::default();
+        let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
+        let source_address = Pubkey::new_unique();
+        let destination_address = Pubkey::new_unique();
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: source_address,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: destination_address,
                 is_signer: false,
                 is_writable: false,
             },
@@ -4021,10 +4222,22 @@ mod tests {
                 0,
                 Err(InstructionError::InsufficientFunds),
             ),
-            // any split amount is OK when destination account is already fully funded
-            (rent_exempt_reserve + minimum_delegation, 1, Ok(())),
-            // if destination is only short by 1 lamport, then split amount can be 1 lamport
-            (rent_exempt_reserve + minimum_delegation - 1, 1, Ok(())),
+            // destination is fully funded:
+            // - old behavior: any split amount is OK
+            // - new behavior: split amount must be at least the minimum delegation
+            (
+                rent_exempt_reserve + minimum_delegation,
+                1,
+                expected_results[0].clone(),
+            ),
+            // if destination is only short by 1 lamport, then...
+            // - old behavior: split amount can be 1 lamport
+            // - new behavior: split amount must be at least the minimum delegation
+            (
+                rent_exempt_reserve + minimum_delegation - 1,
+                1,
+                expected_results[1].clone(),
+            ),
             // destination short by 2 lamports, so 1 isn't enough (non-zero split amount)
             (
                 rent_exempt_reserve + minimum_delegation - 2,
@@ -4036,7 +4249,7 @@ mod tests {
             // destination is rent exempt, but split amount less than minimum delegation
             (
                 rent_exempt_reserve,
-                minimum_delegation - 1,
+                minimum_delegation.saturating_sub(1), // when minimum is 0, this blows up!
                 Err(InstructionError::InsufficientFunds),
             ),
             // destination is not rent exempt, so split enough for rent and minimum delegation
@@ -4068,65 +4281,62 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            // Set the source's starting balance and stake delegation amount to something large
-            // to ensure its post-split balance meets all the requirements
+            // Set the source's starting balance to something large to ensure its post-split
+            // balance meets all the requirements
             let source_balance = u64::MAX;
+            let source_meta = Meta {
+                rent_exempt_reserve,
+                ..Meta::auto(&source_address)
+            };
             let source_stake_delegation = source_balance - rent_exempt_reserve;
-            for source_stake_state in &[
-                StakeState::Initialized(source_meta),
-                just_stake(source_meta, source_stake_delegation),
-            ] {
-                let source_account = AccountSharedData::new_data_with_space(
-                    source_balance,
-                    &source_stake_state,
-                    StakeState::size_of(),
-                    &id(),
-                )
-                .unwrap();
-                let dest_account = AccountSharedData::new_data_with_space(
-                    destination_starting_balance,
-                    &StakeState::Uninitialized,
-                    StakeState::size_of(),
-                    &id(),
-                )
-                .unwrap();
-                let accounts = process_instruction(
-                    &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
-                    vec![
-                        (source_address, source_account),
-                        (dest_address, dest_account),
-                        (
-                            sysvar::rent::id(),
-                            account::create_account_shared_data_for_test(&rent),
-                        ),
-                    ],
-                    instruction_accounts.clone(),
-                    expected_result.clone(),
-                );
-                // For the expected OK cases, when the source's StakeState is Stake, then the
-                // destination's StakeState *must* also end up as Stake as well.  Additionally,
-                // check to ensure the destination's delegation amount is correct.  If the
-                // destination is already rent exempt, then the destination's stake delegation
-                // *must* equal the split amount. Otherwise, the split amount must first be used to
-                // make the destination rent exempt, and then the leftover lamports are delegated.
-                if expected_result.is_ok() {
-                    if let StakeState::Stake(_, _) = accounts[0].state().unwrap() {
-                        if let StakeState::Stake(_, destination_stake) =
-                            accounts[1].state().unwrap()
-                        {
-                            let destination_initial_rent_deficit =
-                                rent_exempt_reserve.saturating_sub(destination_starting_balance);
-                            let expected_destination_stake_delegation =
-                                split_amount - destination_initial_rent_deficit;
-                            assert_eq!(
-                                expected_destination_stake_delegation,
-                                destination_stake.delegation.stake
-                            );
-                            assert!(destination_stake.delegation.stake >= minimum_delegation,);
-                        } else {
-                            panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
-                        }
-                    }
+            let source_account = AccountSharedData::new_data_with_space(
+                source_balance,
+                &just_stake(source_meta, source_stake_delegation),
+                StakeState::size_of(),
+                &id(),
+            )
+            .unwrap();
+            let destination_account = AccountSharedData::new_data_with_space(
+                destination_starting_balance,
+                &StakeState::Uninitialized,
+                StakeState::size_of(),
+                &id(),
+            )
+            .unwrap();
+            let accounts = process_instruction(
+                &feature_set,
+                &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
+                vec![
+                    (source_address, source_account.clone()),
+                    (destination_address, destination_account),
+                    (
+                        sysvar::rent::id(),
+                        account::create_account_shared_data_for_test(&rent),
+                    ),
+                ],
+                instruction_accounts.clone(),
+                expected_result.clone(),
+            );
+            // For the expected OK cases, when the source's StakeState is Stake, then the
+            // destination's StakeState *must* also end up as Stake as well.  Additionally,
+            // check to ensure the destination's delegation amount is correct.  If the
+            // destination is already rent exempt, then the destination's stake delegation
+            // *must* equal the split amount. Otherwise, the split amount must first be used to
+            // make the destination rent exempt, and then the leftover lamports are delegated.
+            if expected_result.is_ok() {
+                assert_matches!(accounts[0].state().unwrap(), StakeState::Stake(_, _));
+                if let StakeState::Stake(_, destination_stake) = accounts[1].state().unwrap() {
+                    let destination_initial_rent_deficit =
+                        rent_exempt_reserve.saturating_sub(destination_starting_balance);
+                    let expected_destination_stake_delegation =
+                        split_amount - destination_initial_rent_deficit;
+                    assert_eq!(
+                        expected_destination_stake_delegation,
+                        destination_stake.delegation.stake
+                    );
+                    assert!(destination_stake.delegation.stake >= minimum_delegation,);
+                } else {
+                    panic!("destination state must be StakeStake::Stake after successful split when source is also StakeState::Stake!");
                 }
             }
         }
@@ -4135,9 +4345,7 @@ mod tests {
     /// Ensure that `withdraw()` respects the minimum delegation requirements
     /// - Assert 1: withdrawing so remaining stake is equal-to the minimum is OK
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
-    #[test]
-    fn test_withdraw_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
+    fn do_test_withdraw_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4182,13 +4390,13 @@ mod tests {
                 Err(InstructionError::InsufficientFunds),
             ),
         ] {
-            for stake_state in &[
-                StakeState::Initialized(meta),
-                just_stake(meta, starting_stake_delegation),
+            for (stake_delegation, stake_state) in &[
+                (0, StakeState::Initialized(meta)),
+                (minimum_delegation, just_stake(meta, minimum_delegation)),
             ] {
                 let rewards_balance = 123;
                 let stake_account = AccountSharedData::new_data_with_space(
-                    starting_stake_delegation + rent_exempt_reserve + rewards_balance,
+                    stake_delegation + rent_exempt_reserve + rewards_balance,
                     stake_state,
                     StakeState::size_of(),
                     &id(),
@@ -4197,6 +4405,7 @@ mod tests {
                 let withdraw_amount =
                     (starting_stake_delegation + rewards_balance) - ending_stake_delegation;
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Withdraw(withdraw_amount)).unwrap(),
                     vec![
                         (stake_address, stake_account),
@@ -4228,9 +4437,10 @@ mod tests {
         }
     }
 
-    /// The stake program currently allows delegations below the minimum stake delegation (see also
-    /// `test_delegate_minimum_stake_delegation()`).  This is not the ultimate desired behavior,
-    /// but this test ensures the existing behavior is not changed inadvertently.
+    /// The stake program's old behavior allowed delegations below the minimum stake delegation
+    /// (see also `test_delegate_minimum_stake_delegation()`).  This was not the desired behavior,
+    /// and has been fixed in the new behavior.  This test ensures the behavior is not changed
+    /// inadvertently.
     ///
     /// This test:
     /// 1. Initialises a stake account (with sufficient balance for both rent and minimum delegation)
@@ -4238,9 +4448,10 @@ mod tests {
     /// 3. Deactives the delegation
     /// 4. Withdraws from the account such that the ending balance is *below* rent + minimum delegation
     /// 5. Re-delegates, now with less than the minimum delegation, but it still succeeds
-    #[test]
-    fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
-        let feature_set = FeatureSet::all_enabled();
+    fn do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
+        feature_set: FeatureSet,
+        expected_result: Result<(), InstructionError>,
+    ) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4308,6 +4519,7 @@ mod tests {
         ];
 
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Initialize(
                 Authorized::auto(&stake_address),
                 Lockup::default(),
@@ -4331,6 +4543,7 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -4345,6 +4558,7 @@ mod tests {
             account::create_account_shared_data_for_test(&clock),
         );
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Deactivate).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -4370,7 +4584,8 @@ mod tests {
         );
         let withdraw_amount =
             accounts[0].lamports() - (rent_exempt_reserve + minimum_delegation - 1);
-        process_instruction(
+        let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Withdraw(withdraw_amount)).unwrap(),
             transaction_accounts.clone(),
             vec![
@@ -4405,18 +4620,18 @@ mod tests {
         transaction_accounts[0] = (stake_address, accounts[0].clone());
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::DelegateStake).unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Ok(()),
+            expected_result,
         );
     }
 
-    #[test]
-    fn test_split_source_uninitialized() {
+    fn do_test_split_source_uninitialized(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
@@ -4460,24 +4675,28 @@ mod tests {
             //
             // and splitting should fail when the split amount is greater than the balance
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Ok(()),
             );
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(0)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Ok(()),
             );
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Ok(()),
             );
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -4488,6 +4707,7 @@ mod tests {
         // this should work
         instruction_accounts[1].pubkey = split_to_address;
         let accounts = process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
@@ -4498,6 +4718,7 @@ mod tests {
         // no signers should fail
         instruction_accounts[0].is_signer = false;
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -4505,8 +4726,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_split_split_not_uninitialized() {
+    fn do_test_split_split_not_uninitialized(feature_set: FeatureSet) {
         let stake_lamports = 42;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
@@ -4543,6 +4763,7 @@ mod tests {
             )
             .unwrap();
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 vec![
                     (stake_address, stake_account.clone()),
@@ -4554,11 +4775,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_more_than_staked() {
+    fn do_test_split_more_than_staked(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let stake_account = AccountSharedData::new_data_with_space(
@@ -4604,6 +4824,7 @@ mod tests {
         ];
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -4611,13 +4832,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_split_with_rent() {
+    fn do_test_split_with_rent(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
-        let minimum_balance = rent_exempt_reserve + minimum_delegation;
-        let stake_lamports = minimum_balance * 2;
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_address = solana_sdk::pubkey::new_rand();
         let split_to_address = solana_sdk::pubkey::new_rand();
         let split_to_account = AccountSharedData::new_data_with_space(
@@ -4646,10 +4864,14 @@ mod tests {
         };
 
         // test splitting both an Initialized stake and a Staked stake
-        for state in &[
-            StakeState::Initialized(meta),
-            just_stake(meta, stake_lamports - rent_exempt_reserve),
+        for (minimum_balance, state) in &[
+            (rent_exempt_reserve, StakeState::Initialized(meta)),
+            (
+                rent_exempt_reserve + minimum_delegation,
+                just_stake(meta, minimum_delegation * 2 + rent_exempt_reserve),
+            ),
         ] {
+            let stake_lamports = minimum_balance * 2;
             let stake_account = AccountSharedData::new_data_with_space(
                 stake_lamports,
                 state,
@@ -4668,7 +4890,8 @@ mod tests {
 
             // not enough to make a non-zero stake account
             process_instruction(
-                &serialize(&StakeInstruction::Split(rent_exempt_reserve)).unwrap(),
+                &feature_set,
+                &serialize(&StakeInstruction::Split(minimum_balance - 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Err(InstructionError::InsufficientFunds),
@@ -4676,8 +4899,9 @@ mod tests {
 
             // doesn't leave enough for initial stake to be non-zero
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(
-                    stake_lamports - rent_exempt_reserve,
+                    stake_lamports - minimum_balance + 1,
                 ))
                 .unwrap(),
                 transaction_accounts.clone(),
@@ -4686,8 +4910,9 @@ mod tests {
             );
 
             // split account already has way enough lamports
-            transaction_accounts[1].1.set_lamports(minimum_balance);
+            transaction_accounts[1].1.set_lamports(*minimum_balance);
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports - minimum_balance)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -4709,17 +4934,16 @@ mod tests {
                         }
                     ))
                 );
-                assert_eq!(accounts[0].lamports(), minimum_balance,);
+                assert_eq!(accounts[0].lamports(), *minimum_balance,);
                 assert_eq!(accounts[1].lamports(), stake_lamports,);
             }
         }
     }
 
-    #[test]
-    fn test_split_to_account_with_rent_exempt_reserve() {
+    fn do_test_split_to_account_with_rent_exempt_reserve(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -4778,6 +5002,7 @@ mod tests {
 
             // split more than available fails
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -4786,6 +5011,7 @@ mod tests {
 
             // should work
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -4837,12 +5063,11 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_from_larger_sized_account() {
+    fn do_test_split_from_larger_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = (source_larger_rent_exempt_reserve + minimum_delegation) * 2;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -4901,6 +5126,7 @@ mod tests {
 
             // split more than available fails
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports + 1)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -4909,6 +5135,7 @@ mod tests {
 
             // should work
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports / 2)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -4965,8 +5192,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_from_smaller_sized_account() {
+    fn do_test_split_from_smaller_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5025,6 +5251,7 @@ mod tests {
 
             // should always return error when splitting to larger account
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(split_amount)).unwrap(),
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
@@ -5033,6 +5260,7 @@ mod tests {
 
             // Splitting 100% of source should not make a difference
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -5041,11 +5269,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_100_percent_of_source() {
+    fn do_test_split_100_percent_of_source(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -5097,6 +5324,7 @@ mod tests {
 
             // split 100% over to dest
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -5135,11 +5363,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_100_percent_of_source_to_account_with_lamports() {
+    fn do_test_split_100_percent_of_source_to_account_with_lamports(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -5198,6 +5425,7 @@ mod tests {
 
             // split 100% over to dest
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -5229,12 +5457,11 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_split_rent_exemptness() {
+    fn do_test_split_rent_exemptness(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
         let split_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
-        let minimum_delegation = crate::get_minimum_delegation(&FeatureSet::all_enabled());
+        let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let stake_lamports = source_rent_exempt_reserve + minimum_delegation;
         let stake_address = solana_sdk::pubkey::new_rand();
         let meta = Meta {
@@ -5284,6 +5511,7 @@ mod tests {
                 ),
             ];
             process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -5315,6 +5543,7 @@ mod tests {
                 ),
             ];
             let accounts = process_instruction(
+                &feature_set,
                 &serialize(&StakeInstruction::Split(stake_lamports)).unwrap(),
                 transaction_accounts,
                 instruction_accounts.clone(),
@@ -5364,8 +5593,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_merge() {
+    fn do_test_merge(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5438,6 +5666,7 @@ mod tests {
                 // Authorized staker signature required...
                 instruction_accounts[4].is_signer = false;
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts.clone(),
                     instruction_accounts.clone(),
@@ -5446,6 +5675,7 @@ mod tests {
                 instruction_accounts[4].is_signer = true;
 
                 let accounts = process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts,
                     instruction_accounts.clone(),
@@ -5491,8 +5721,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_merge_self_fails() {
+    fn do_test_merge_self_fails(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
         let rent = Rent::default();
@@ -5559,6 +5788,7 @@ mod tests {
         ];
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Merge).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -5566,8 +5796,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_merge_incorrect_authorized_staker() {
+    fn do_test_merge_incorrect_authorized_staker(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5640,6 +5869,7 @@ mod tests {
 
                 instruction_accounts[4].pubkey = wrong_authorized_address;
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts.clone(),
                     instruction_accounts.clone(),
@@ -5648,6 +5878,7 @@ mod tests {
                 instruction_accounts[4].pubkey = authorized_address;
 
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts,
                     instruction_accounts.clone(),
@@ -5657,8 +5888,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_merge_invalid_account_data() {
+    fn do_test_merge_invalid_account_data(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5727,6 +5957,7 @@ mod tests {
                 ];
 
                 process_instruction(
+                    &feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts,
                     instruction_accounts.clone(),
@@ -5736,8 +5967,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_merge_fake_stake_source() {
+    fn do_test_merge_fake_stake_source(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5798,6 +6028,7 @@ mod tests {
         ];
 
         process_instruction(
+            &feature_set,
             &serialize(&StakeInstruction::Merge).unwrap(),
             transaction_accounts,
             instruction_accounts,
@@ -5805,8 +6036,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_merge_active_stake() {
+    fn do_test_merge_active_stake(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -5907,6 +6137,7 @@ mod tests {
         ];
 
         fn try_merge(
+            feature_set: &FeatureSet,
             transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
             mut instruction_accounts: Vec<AccountMeta>,
             expected_result: Result<(), InstructionError>,
@@ -5915,11 +6146,11 @@ mod tests {
                 if iteration == 1 {
                     instruction_accounts.swap(0, 1);
                 }
-                let accounts = process_instruction_with_sysvar_cache(
+                let accounts = process_instruction(
+                    feature_set,
                     &serialize(&StakeInstruction::Merge).unwrap(),
                     transaction_accounts.clone(),
                     instruction_accounts.clone(),
-                    None,
                     expected_result.clone(),
                 );
                 if expected_result.is_ok() {
@@ -5933,6 +6164,7 @@ mod tests {
 
         // stake activation epoch, source initialized succeeds
         try_merge(
+            &feature_set,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
@@ -5970,6 +6202,7 @@ mod tests {
                 break;
             }
             try_merge(
+                &feature_set,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Err(InstructionError::from(StakeError::MergeTransientStake)),
@@ -5978,6 +6211,7 @@ mod tests {
 
         // Both fully activated works
         try_merge(
+            &feature_set,
             transaction_accounts.clone(),
             instruction_accounts.clone(),
             Ok(()),
@@ -6044,6 +6278,7 @@ mod tests {
                 break;
             }
             try_merge(
+                &feature_set,
                 transaction_accounts.clone(),
                 instruction_accounts.clone(),
                 Err(InstructionError::from(StakeError::MergeTransientStake)),
@@ -6051,11 +6286,15 @@ mod tests {
         }
 
         // Both fully deactivated works
-        try_merge(transaction_accounts, instruction_accounts, Ok(()));
+        try_merge(
+            &feature_set,
+            transaction_accounts,
+            instruction_accounts,
+            Ok(()),
+        );
     }
 
-    #[test]
-    fn test_stake_get_minimum_delegation() {
+    fn do_test_stake_get_minimum_delegation(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
         let instruction_data = serialize(&StakeInstruction::GetMinimumDelegation).unwrap();
@@ -6073,7 +6312,7 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             None,
-            None,
+            Some(Arc::new(feature_set)),
             Ok(()),
             |first_instruction_account, invoke_context| {
                 super::process_instruction(first_instruction_account, invoke_context)?;
@@ -6108,18 +6347,13 @@ mod tests {
     // disabled | bad         | some    || Err InvalidInstructionData
     // disabled | good        | none    || Err NotEnoughAccountKeys
     // disabled | bad         | none    || Err NotEnoughAccountKeys
-    #[test]
-    fn test_stake_process_instruction_error_ordering() {
+    fn do_test_stake_process_instruction_error_ordering(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_address = sysvar::rent::id();
         let rent_account = account::create_account_shared_data_for_test(&rent);
 
         let good_stake_address = Pubkey::new_unique();
-        let good_stake_account = AccountSharedData::new(
-            u64::MAX,
-            std::mem::size_of::<crate::stake_state::StakeState>(),
-            &id(),
-        );
+        let good_stake_account = AccountSharedData::new(u64::MAX, StakeState::size_of(), &id());
         let good_instruction = instruction::initialize(
             &good_stake_address,
             &Authorized::auto(&good_stake_address),
@@ -6196,7 +6430,7 @@ mod tests {
                 Err(InstructionError::NotEnoughAccountKeys),
             ),
         ] {
-            let mut feature_set = FeatureSet::all_enabled();
+            let mut feature_set = feature_set.clone();
             if !is_feature_enabled {
                 feature_set.deactivate(
                     &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
@@ -6217,8 +6451,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_deactivate_delinquent() {
+    fn do_test_deactivate_delinquent(feature_set: FeatureSet) {
+        let feature_set = Arc::new(feature_set);
         let mut sysvar_cache_override = SysvarCache::default();
 
         let reference_vote_address = Pubkey::new_unique();
@@ -6273,7 +6507,7 @@ mod tests {
              vote_account: &AccountSharedData,
              reference_vote_account: &AccountSharedData,
              expected_result| {
-                process_instruction_with_sysvar_cache(
+                process_instruction_with_overrides(
                     &serialize(&StakeInstruction::DeactivateDelinquent).unwrap(),
                     vec![
                         (*stake_address, stake_account.clone()),
@@ -6298,6 +6532,7 @@ mod tests {
                         },
                     ],
                     Some(&sysvar_cache_override),
+                    Some(Arc::clone(&feature_set)),
                     expected_result,
                 )
             };
@@ -6479,5 +6714,399 @@ mod tests {
             &reference_vote_account,
             Err(StakeError::MinimumDelinquentEpochsForDeactivationNotMet.into()),
         );
+    }
+
+    mod old_behavior {
+        use super::*;
+
+        fn new_feature_set() -> FeatureSet {
+            let mut feature_set = FeatureSet::all_enabled();
+            feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
+            feature_set
+        }
+
+        #[test]
+        fn test_stake_process_instruction() {
+            do_test_stake_process_instruction(new_feature_set());
+        }
+        #[test]
+        fn test_stake_process_instruction_decode_bail() {
+            do_test_stake_process_instruction_decode_bail(new_feature_set());
+        }
+        #[test]
+        fn test_stake_checked_instructions() {
+            do_test_stake_checked_instructions(new_feature_set());
+        }
+        #[test]
+        fn test_stake_initialize() {
+            do_test_stake_initialize(new_feature_set());
+        }
+        #[test]
+        fn test_authorize() {
+            do_test_authorize(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_override() {
+            do_test_authorize_override(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_with_seed() {
+            do_test_authorize_with_seed(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_delegated_stake() {
+            do_test_authorize_delegated_stake(new_feature_set());
+        }
+        #[test]
+        fn test_stake_delegate() {
+            do_test_stake_delegate(new_feature_set());
+        }
+        #[test]
+        fn test_redelegate_consider_balance_changes() {
+            do_test_redelegate_consider_balance_changes(new_feature_set());
+        }
+        #[test]
+        fn test_split() {
+            do_test_split(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_stake() {
+            do_test_withdraw_stake(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_stake_before_warmup() {
+            do_test_withdraw_stake_before_warmup(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_lockup() {
+            do_test_withdraw_lockup(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_rent_exempt() {
+            do_test_withdraw_rent_exempt(new_feature_set());
+        }
+        #[test]
+        fn test_deactivate() {
+            do_test_deactivate(new_feature_set());
+        }
+        #[test]
+        fn test_set_lockup() {
+            do_test_set_lockup(new_feature_set());
+        }
+        #[test]
+        fn test_initialize_minimum_balance() {
+            do_test_initialize_minimum_balance(new_feature_set());
+        }
+        #[test]
+        fn test_delegate_minimum_stake_delegation() {
+            do_test_delegate_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_split_minimum_stake_delegation() {
+            do_test_split_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_split_full_amount_minimum_stake_delegation() {
+            do_test_split_full_amount_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_initialized_split_destination_minimum_balance() {
+            do_test_initialized_split_destination_minimum_balance(new_feature_set());
+        }
+        #[test]
+        fn test_staked_split_destination_minimum_balance() {
+            do_test_staked_split_destination_minimum_balance(new_feature_set(), &[Ok(()), Ok(())]);
+        }
+        #[test]
+        fn test_withdraw_minimum_stake_delegation() {
+            do_test_withdraw_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
+            let mut feature_set = new_feature_set();
+            // The "old" behavior relies on `validate_delegated_amount()` *not* checking if the
+            // stake amount meets the minimum delegation.  Once the
+            // `stake_allow_zero_undelegated_amount` feature is activated, `the expected_result`
+            // parameter can be removed and consolidated.
+            feature_set.deactivate(&feature_set::stake_allow_zero_undelegated_amount::id());
+            do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
+                feature_set,
+                Ok(()),
+            );
+        }
+        #[test]
+        fn test_split_source_uninitialized() {
+            do_test_split_source_uninitialized(new_feature_set());
+        }
+        #[test]
+        fn test_split_split_not_uninitialized() {
+            do_test_split_split_not_uninitialized(new_feature_set());
+        }
+        #[test]
+        fn test_split_more_than_staked() {
+            do_test_split_more_than_staked(new_feature_set());
+        }
+        #[test]
+        fn test_split_with_rent() {
+            do_test_split_with_rent(new_feature_set());
+        }
+        #[test]
+        fn test_split_to_account_with_rent_exempt_reserve() {
+            do_test_split_to_account_with_rent_exempt_reserve(new_feature_set());
+        }
+        #[test]
+        fn test_split_from_larger_sized_account() {
+            do_test_split_from_larger_sized_account(new_feature_set());
+        }
+        #[test]
+        fn test_split_from_smaller_sized_account() {
+            do_test_split_from_smaller_sized_account(new_feature_set());
+        }
+        #[test]
+        fn test_split_100_percent_of_source() {
+            do_test_split_100_percent_of_source(new_feature_set());
+        }
+        #[test]
+        fn test_split_100_percent_of_source_to_account_with_lamports() {
+            do_test_split_100_percent_of_source_to_account_with_lamports(new_feature_set());
+        }
+        #[test]
+        fn test_split_rent_exemptness() {
+            do_test_split_rent_exemptness(new_feature_set());
+        }
+        #[test]
+        fn test_merge() {
+            do_test_merge(new_feature_set());
+        }
+        #[test]
+        fn test_merge_self_fails() {
+            do_test_merge_self_fails(new_feature_set());
+        }
+        #[test]
+        fn test_merge_incorrect_authorized_staker() {
+            do_test_merge_incorrect_authorized_staker(new_feature_set());
+        }
+        #[test]
+        fn test_merge_invalid_account_data() {
+            do_test_merge_invalid_account_data(new_feature_set());
+        }
+        #[test]
+        fn test_merge_fake_stake_source() {
+            do_test_merge_fake_stake_source(new_feature_set());
+        }
+        #[test]
+        fn test_merge_active_stake() {
+            do_test_merge_active_stake(new_feature_set());
+        }
+        #[test]
+        fn test_stake_get_minimum_delegation() {
+            do_test_stake_get_minimum_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_stake_process_instruction_error_ordering() {
+            do_test_stake_process_instruction_error_ordering(new_feature_set());
+        }
+        #[test]
+        fn test_deactivate_delinquent() {
+            do_test_deactivate_delinquent(new_feature_set());
+        }
+    }
+
+    mod new_behavior {
+        use super::*;
+
+        fn new_feature_set() -> FeatureSet {
+            FeatureSet::all_enabled()
+        }
+
+        #[test]
+        fn test_stake_process_instruction() {
+            do_test_stake_process_instruction(new_feature_set());
+        }
+        #[test]
+        fn test_spoofed_stake_accounts() {
+            do_test_spoofed_stake_accounts(new_feature_set());
+        }
+        #[test]
+        fn test_stake_process_instruction_decode_bail() {
+            do_test_stake_process_instruction_decode_bail(new_feature_set());
+        }
+        #[test]
+        fn test_stake_checked_instructions() {
+            do_test_stake_checked_instructions(new_feature_set());
+        }
+        #[test]
+        fn test_stake_initialize() {
+            do_test_stake_initialize(new_feature_set());
+        }
+        #[test]
+        fn test_authorize() {
+            do_test_authorize(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_override() {
+            do_test_authorize_override(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_with_seed() {
+            do_test_authorize_with_seed(new_feature_set());
+        }
+        #[test]
+        fn test_authorize_delegated_stake() {
+            do_test_authorize_delegated_stake(new_feature_set());
+        }
+        #[test]
+        fn test_stake_delegate() {
+            do_test_stake_delegate(new_feature_set());
+        }
+        #[test]
+        fn test_redelegate_consider_balance_changes() {
+            do_test_redelegate_consider_balance_changes(new_feature_set());
+        }
+        #[test]
+        fn test_split() {
+            do_test_split(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_stake() {
+            do_test_withdraw_stake(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_stake_before_warmup() {
+            do_test_withdraw_stake_before_warmup(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_lockup() {
+            do_test_withdraw_lockup(new_feature_set());
+        }
+        #[test]
+        fn test_withdraw_rent_exempt() {
+            do_test_withdraw_rent_exempt(new_feature_set());
+        }
+        #[test]
+        fn test_deactivate() {
+            do_test_deactivate(new_feature_set());
+        }
+        #[test]
+        fn test_set_lockup() {
+            do_test_set_lockup(new_feature_set());
+        }
+        #[test]
+        fn test_initialize_minimum_balance() {
+            do_test_initialize_minimum_balance(new_feature_set());
+        }
+        #[test]
+        fn test_delegate_minimum_stake_delegation() {
+            do_test_delegate_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_split_minimum_stake_delegation() {
+            do_test_split_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_split_full_amount_minimum_stake_delegation() {
+            do_test_split_full_amount_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_initialized_split_destination_minimum_balance() {
+            do_test_initialized_split_destination_minimum_balance(new_feature_set());
+        }
+        #[test]
+        fn test_staked_split_destination_minimum_balance() {
+            do_test_staked_split_destination_minimum_balance(
+                new_feature_set(),
+                &[
+                    Err(InstructionError::InsufficientFunds),
+                    Err(InstructionError::InsufficientFunds),
+                ],
+            );
+        }
+        #[test]
+        fn test_withdraw_minimum_stake_delegation() {
+            do_test_withdraw_minimum_stake_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
+            do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
+                new_feature_set(),
+                Err(StakeError::InsufficientStake.into()),
+            );
+        }
+        #[test]
+        fn test_split_source_uninitialized() {
+            do_test_split_source_uninitialized(new_feature_set());
+        }
+        #[test]
+        fn test_split_split_not_uninitialized() {
+            do_test_split_split_not_uninitialized(new_feature_set());
+        }
+        #[test]
+        fn test_split_more_than_staked() {
+            do_test_split_more_than_staked(new_feature_set());
+        }
+        #[test]
+        fn test_split_with_rent() {
+            do_test_split_with_rent(new_feature_set());
+        }
+        #[test]
+        fn test_split_to_account_with_rent_exempt_reserve() {
+            do_test_split_to_account_with_rent_exempt_reserve(new_feature_set());
+        }
+        #[test]
+        fn test_split_from_larger_sized_account() {
+            do_test_split_from_larger_sized_account(new_feature_set());
+        }
+        #[test]
+        fn test_split_from_smaller_sized_account() {
+            do_test_split_from_smaller_sized_account(new_feature_set());
+        }
+        #[test]
+        fn test_split_100_percent_of_source() {
+            do_test_split_100_percent_of_source(new_feature_set());
+        }
+        #[test]
+        fn test_split_100_percent_of_source_to_account_with_lamports() {
+            do_test_split_100_percent_of_source_to_account_with_lamports(new_feature_set());
+        }
+        #[test]
+        fn test_split_rent_exemptness() {
+            do_test_split_rent_exemptness(new_feature_set());
+        }
+        #[test]
+        fn test_merge() {
+            do_test_merge(new_feature_set());
+        }
+        #[test]
+        fn test_merge_self_fails() {
+            do_test_merge_self_fails(new_feature_set());
+        }
+        #[test]
+        fn test_merge_incorrect_authorized_staker() {
+            do_test_merge_incorrect_authorized_staker(new_feature_set());
+        }
+        #[test]
+        fn test_merge_invalid_account_data() {
+            do_test_merge_invalid_account_data(new_feature_set());
+        }
+        #[test]
+        fn test_merge_fake_stake_source() {
+            do_test_merge_fake_stake_source(new_feature_set());
+        }
+        #[test]
+        fn test_merge_active_stake() {
+            do_test_merge_active_stake(new_feature_set());
+        }
+        #[test]
+        fn test_stake_get_minimum_delegation() {
+            do_test_stake_get_minimum_delegation(new_feature_set());
+        }
+        #[test]
+        fn test_stake_process_instruction_error_ordering() {
+            do_test_stake_process_instruction_error_ordering(new_feature_set());
+        }
+        #[test]
+        fn test_deactivate_delinquent() {
+            do_test_deactivate_delinquent(new_feature_set());
+        }
     }
 }

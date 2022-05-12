@@ -116,8 +116,10 @@ pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 const MAX_RPC_EPOCH_CREDITS_HISTORY: usize = 5;
 
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
-    let context = RpcResponseContext { slot: bank.slot() };
-    RpcResponse { context, value }
+    RpcResponse {
+        context: RpcResponseContext::new(bank.slot()),
+        value,
+    }
 }
 
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
@@ -774,7 +776,7 @@ impl JsonRpcRequestProcessor {
 
         if let Some((slot, accounts)) = self.get_cached_largest_accounts(&config.filter) {
             Ok(RpcResponse {
-                context: RpcResponseContext { slot },
+                context: RpcResponseContext::new(slot),
                 value: accounts,
             })
         } else {
@@ -2546,17 +2548,22 @@ pub mod rpc_minimal {
                 return Err(RpcCustomError::NoSnapshot.into());
             }
 
-            let snapshot_archives_dir = meta
+            let (full_snapshot_archives_dir, incremental_snapshot_archives_dir) = meta
                 .snapshot_config
-                .map(|snapshot_config| snapshot_config.snapshot_archives_dir)
+                .map(|snapshot_config| {
+                    (
+                        snapshot_config.full_snapshot_archives_dir,
+                        snapshot_config.incremental_snapshot_archives_dir,
+                    )
+                })
                 .unwrap();
 
             let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
                     .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &snapshot_archives_dir,
+                    &incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 
@@ -3925,7 +3932,7 @@ pub mod rpc_deprecated_v1_9 {
             meta.snapshot_config
                 .and_then(|snapshot_config| {
                     snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.snapshot_archives_dir,
+                        &snapshot_config.full_snapshot_archives_dir,
                     )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
@@ -4291,8 +4298,14 @@ fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: impl AddressLoader,
 ) -> Result<SanitizedTransaction> {
-    SanitizedTransaction::try_create(transaction, MessageHash::Compute, None, address_loader)
-        .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+    SanitizedTransaction::try_create(
+        transaction,
+        MessageHash::Compute,
+        None,
+        address_loader,
+        true, // require_static_program_ids
+    )
+    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
@@ -4803,7 +4816,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":20,
                 },
             "id": 1,
@@ -5200,7 +5213,7 @@ pub mod tests {
         );
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!({
-            "context": {"slot": 0},
+            "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
             "value":{
                 "owner": "11111111111111111111111111111111",
                 "lamports": 1_000_000,
@@ -5385,7 +5398,7 @@ pub mod tests {
         let result: RpcResponse<Vec<RpcKeyedAccount>> =
             parse_success_result(rpc.handle_request_sync(request));
         let expected = RpcResponse {
-            context: RpcResponseContext { slot: 0 },
+            context: RpcResponseContext::new(0),
             value: expected_value,
         };
         assert_eq!(result, expected);
@@ -5551,7 +5564,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
                     "accounts": [
                         null,
@@ -5647,7 +5660,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
                     "accounts":null,
                     "err":null,
@@ -5676,7 +5689,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
                     "accounts":null,
                     "err":null,
@@ -5729,7 +5742,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc":"2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
                     "err":"BlockhashNotFound",
                     "accounts":null,
@@ -5756,7 +5769,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":{
                     "accounts":null,
                     "err":null,
@@ -5895,13 +5908,14 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-            "context":{"slot":0},
-            "value":{
-                "blockhash": recent_blockhash.to_string(),
-                "feeCalculator": {
-                    "lamportsPerSignature": 0,
-                }
-            }},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "blockhash": recent_blockhash.to_string(),
+                    "feeCalculator": {
+                        "lamportsPerSignature": 0,
+                    }
+                },
+            },
             "id": 1
         });
         let expected: Response =
@@ -5923,7 +5937,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context": {"slot": 0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value": {
                     "blockhash": recent_blockhash.to_string(),
                     "feeCalculator": {
@@ -5962,7 +5976,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":fee_calculator,
             },
             "id": 1
@@ -5982,7 +5996,7 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-                "context":{"slot":0},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
                 "value":Value::Null,
             },
             "id": 1
@@ -6003,16 +6017,17 @@ pub mod tests {
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
-            "context":{"slot":0},
-            "value":{
-                "feeRateGovernor": {
-                    "burnPercent": DEFAULT_BURN_PERCENT,
-                    "maxLamportsPerSignature": 0,
-                    "minLamportsPerSignature": 0,
-                    "targetLamportsPerSignature": 0,
-                    "targetSignaturesPerSlot": 0
-                }
-            }},
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":{
+                    "feeRateGovernor": {
+                        "burnPercent": DEFAULT_BURN_PERCENT,
+                        "maxLamportsPerSignature": 0,
+                        "minLamportsPerSignature": 0,
+                        "targetLamportsPerSignature": 0,
+                        "targetSignaturesPerSlot": 0
+                    }
+                },
+            },
             "id": 1
         });
         let expected: Response =

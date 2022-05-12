@@ -13,10 +13,11 @@ type RpcResponse = {
   context: {
     slot: number;
   };
-  value: any;
+  value: any | Promise<any>;
 };
 
-const mockRpcSocket: Array<[RpcRequest, RpcResponse]> = [];
+const mockRpcSocket: Array<[RpcRequest, RpcResponse | Promise<RpcResponse>]> =
+  [];
 const sandbox = createSandbox();
 
 export const mockRpcMessage = ({
@@ -26,7 +27,7 @@ export const mockRpcMessage = ({
 }: {
   method: string;
   params: Array<any>;
-  result: any;
+  result: any | Promise<any>;
 }) => {
   mockRpcSocket.push([
     {method, params},
@@ -62,6 +63,14 @@ export const restoreRpcWebSocket = (connection: Connection) => {
   sandbox.restore();
 };
 
+function isPromise<T>(obj: PromiseLike<T> | T): obj is PromiseLike<T> {
+  return (
+    !!obj &&
+    (typeof obj === 'object' || typeof obj === 'function') &&
+    typeof (obj as any).then === 'function'
+  );
+}
+
 class MockClient {
   client: LiveClient;
   mockOpen = false;
@@ -85,7 +94,7 @@ class MockClient {
     }
   }
 
-  call(method: string, params: Array<any>): Promise<Object> {
+  async call(method: string, params: Array<any>): Promise<Object> {
     expect(mockRpcSocket.length).to.be.at.least(1);
     const [mockRequest, mockResponse] = mockRpcSocket.shift() as [
       RpcRequest,
@@ -103,7 +112,12 @@ class MockClient {
     let id = ++this.subscriptionCounter;
     const response = {
       subscription: id,
-      result: mockResponse,
+      result: {
+        ...mockResponse,
+        value: isPromise(mockResponse.value)
+          ? await mockResponse.value
+          : mockResponse.value,
+      },
     };
 
     setImmediate(() => {

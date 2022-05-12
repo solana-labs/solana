@@ -18,10 +18,10 @@ dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 fnv = "1.0.7"
 lazy_static = "1.4.0"
-log = "0.4.14"
+log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.2"
-serde = "1.0.136"
+serde = "1.0.137"
 sha2 = "0.10.2"
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
@@ -30,7 +30,7 @@ solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = "0.5.3"
-libc = "0.2.124"
+libc = "0.2.125"
 nix = "0.24.0"
 
 [lib]

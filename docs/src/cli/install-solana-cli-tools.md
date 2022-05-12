@@ -8,6 +8,7 @@ depending on your preferred workflow:
 - [Use Solana's Install Tool (Simplest option)](#use-solanas-install-tool)
 - [Download Prebuilt Binaries](#download-prebuilt-binaries)
 - [Build from Source](#build-from-source)
+- [Use Homebrew](#use-homebrew)
 
 ## Use Solana's Install Tool
 
@@ -161,4 +162,22 @@ prebuilt binaries:
 
 ```bash
 solana-install init
+```
+
+## Use Homebrew
+
+This option requires you to have [Homebrew](https://brew.sh/) package manager on your MacOS or Linux machine.
+
+### MacOS & Linux
+
+- Follow instructions at: https://formulae.brew.sh/formula/solana
+
+[Homebrew formulae](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/solana.rb)
+is updated after each `solana` release, however it is possible that
+the Homebrew version is outdated.
+
+- Confirm you have the desired version of `solana` installed by entering:
+
+```bash
+solana --version
 ```

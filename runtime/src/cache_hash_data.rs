@@ -182,6 +182,10 @@ impl CacheHashData {
         let mmap = CacheHashDataFile::load_map(&path)?;
         m1.stop();
         stats.read_us = m1.as_us();
+        let header_size = std::mem::size_of::<Header>() as u64;
+        if file_len < header_size {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
 
         let cell_size = std::mem::size_of::<EntryType>() as u64;
         let mut cache_file = CacheHashDataFile {
@@ -192,7 +196,10 @@ impl CacheHashData {
         let header = cache_file.get_header_mut();
         let entries = header.count;
 
-        let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
+        let capacity = cell_size * (entries as u64) + header_size;
+        if file_len < capacity {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
         cache_file.capacity = capacity;
         assert_eq!(
             capacity, file_len,

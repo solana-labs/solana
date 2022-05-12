@@ -533,7 +533,7 @@ impl ReplayStage {
                     // and switching proofs because these may be votes that haven't yet been
                     // included in a block, so we may not have yet observed these votes just
                     // by replaying blocks.
-                    let mut process_unfrozen_gossip_verified_vote_hashes_time = Measure::start("process_gossip_duplicate_confirmed_slots");
+                    let mut process_unfrozen_gossip_verified_vote_hashes_time = Measure::start("process_gossip_verified_vote_hashes");
                     Self::process_gossip_verified_vote_hashes(
                         &gossip_verified_vote_hash_receiver,
                         &mut unfrozen_gossip_verified_vote_hashes,
@@ -3123,7 +3123,7 @@ impl ReplayStage {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use {
         super::*,
         crate::{
@@ -3142,7 +3142,7 @@ pub mod tests {
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
             get_tmp_ledger_path,
-            shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
+            shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -3748,11 +3748,10 @@ pub mod tests {
                 0, // index,
                 parent_offset as u16,
                 &gibberish,
-                true,  // is_last_data
-                false, // is_last_in_slot
-                0,     // reference_tick
-                0,     // version
-                0,     // fec_set_index
+                ShredFlags::DATA_COMPLETE_SHRED,
+                0, // reference_tick
+                0, // version
+                0, // fec_set_index
             );
             vec![shred]
         });
