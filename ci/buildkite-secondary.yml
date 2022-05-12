@@ -24,3 +24,8 @@ steps:
       - "queue=release-build-aarch64-apple-darwin"
     timeout_in_minutes: 60
     name: "publish tarball (aarch64-apple-darwin)"
+  - command: "ci/publish-tarball.sh"
+    agents:
+      - "queue=release-build-x86_64-apple-darwin"
+    timeout_in_minutes: 60
+    name: "publish tarball (x86_64-apple-darwin)"
