@@ -2462,6 +2462,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mmarinus"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b8098e6e7a3823fa237ef9569010d3af3894a1ae54c92f0c220b9e6357f9473"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "modular-bitfield"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5625,6 +5634,7 @@ dependencies = [
  "libsecp256k1",
  "log",
  "memmap2",
+ "mmarinus",
  "num-derive",
  "num-traits",
  "num_cpus",
