@@ -21,6 +21,7 @@ message Memo {
 message TransactionError {
     TransactionErrorType transaction_error = 1;
     InstructionError instruction_error = 2;
+    DuplicateInstructionError duplicate_instruction_error = 3;
 }
 
 enum TransactionErrorType {
@@ -54,12 +55,17 @@ enum TransactionErrorType {
     INVALID_RENT_PAYING_ACCOUNT = 27;
     WOULD_EXCEED_MAX_VOTE_COST_LIMIT = 28;
     WOULD_EXCEED_ACCOUNT_DATA_TOTAL_LIMIT = 29;
+    DUPLICATE_INSTRUCTION = 30;
 }
 
 message InstructionError {
     uint32 index = 1;
     InstructionErrorType error = 2;
     CustomError custom = 3;
+}
+
+message DuplicateInstructionError {
+    uint32 index = 1;
 }
 
 enum InstructionErrorType {
