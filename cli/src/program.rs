@@ -959,7 +959,7 @@ fn process_program_deploy(
             let program_len = account
                 .data
                 .len()
-                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
+                .saturating_sub(UpgradeableLoaderState::buffer_data_offset().unwrap_or_default());
 
             (vec![], program_len)
         } else {
@@ -982,11 +982,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-<<<<<<< HEAD
-        UpgradeableLoaderState::programdata_len(buffer_data_len)?,
-=======
-        UpgradeableLoaderState::size_of_programdata(program_len),
->>>>>>> 05de0e315 (cli: Fix deploy program length calculation when using buffers (#25132))
+        UpgradeableLoaderState::programdata_len(program_len)?,
     )?;
 
     let result = if do_deploy {
@@ -1790,11 +1786,7 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &account,
                     if loader_id == &bpf_loader_upgradeable::id() {
-<<<<<<< HEAD
-                        UpgradeableLoaderState::buffer_len(buffer_data_len)?
-=======
-                        UpgradeableLoaderState::size_of_buffer(program_len)
->>>>>>> 05de0e315 (cli: Fix deploy program length calculation when using buffers (#25132))
+                        UpgradeableLoaderState::buffer_len(program_len)?
                     } else {
                         program_len
                     },
