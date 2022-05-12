@@ -3614,7 +3614,7 @@ describe('Connection', function () {
             await connection._rpcWebSocket.notify('ping');
             break;
             // eslint-disable-next-line no-empty
-          } catch(_err) {}
+          } catch (_err) {}
           await sleep(100);
         }
       });

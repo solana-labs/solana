@@ -4847,7 +4847,7 @@ export class Connection {
             try {
               this.removeSignatureListener(clientSubscriptionId);
               // eslint-disable-next-line no-empty
-            } catch(_err) {
+            } catch (_err) {
               // Already removed.
             }
           }
@@ -4895,7 +4895,7 @@ export class Connection {
           try {
             this.removeSignatureListener(clientSubscriptionId);
             // eslint-disable-next-line no-empty
-          } catch(_err) {
+          } catch (_err) {
             // Already removed.
           }
         },
