@@ -1479,7 +1479,7 @@ fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
         .map(|metas| {
             let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
             if slots.is_empty() {
-                println!("Ledger is empty");
+                info!("Ledger is empty");
                 None
             } else {
                 let first = slots.first().unwrap();
