@@ -4612,6 +4612,8 @@ impl Bank {
         prioritization_fee_type_change: bool,
     ) -> u64 {
         if tx_wide_compute_cap {
+            // Prioritization fee rate is 1 lamports per 10K CUs
+            const PRIORITIZATION_FEE_RATE_UNITS: u64 = 10_000;
             // Fee based on compute units and signatures
             const BASE_CONGESTION: f64 = 5_000.0;
             let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
@@ -4622,7 +4624,7 @@ impl Bank {
             };
 
             let mut compute_budget = ComputeBudget::default();
-            let prioritization_fee = compute_budget
+            let prioritization_fee_rate = compute_budget
                 .process_instructions(
                     message.program_instructions_iter(),
                     false,
@@ -4647,7 +4649,8 @@ impl Bank {
                         .unwrap_or_default()
                 });
 
-            ((prioritization_fee
+            ((prioritization_fee_rate
+                .saturating_mul(PRIORITIZATION_FEE_RATE_UNITS)
                 .saturating_add(signature_fee)
                 .saturating_add(write_lock_fee)
                 .saturating_add(compute_fee) as f64)
