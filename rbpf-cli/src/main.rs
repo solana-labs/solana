@@ -270,7 +270,7 @@ native machine code before execting it in the virtual machine.",
     file.seek(SeekFrom::Start(0)).unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let syscall_registry = register_syscalls(&mut invoke_context, true).unwrap();
+    let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
     let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
         Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &contents,

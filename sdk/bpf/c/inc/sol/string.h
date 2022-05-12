@@ -56,63 +56,30 @@ static size_t sol_strlen(const char *s) {
 }
 
 /**
- * Start address of the memory region used for program heap.
+ * Internal memory alloc/free function
  */
-#define HEAP_START_ADDRESS (0x300000000)
-/**
- * Length of the heap memory region used for program heap.
- */
-#define HEAP_LENGTH (32 * 1024)
+#ifndef SOL_SBFV2
+void* sol_alloc_free_(uint64_t, void *);
+#else
+typedef void*(*sol_alloc_free__pointer_type)(uint64_t, void *);
+static void* sol_alloc_free_(uint64_t arg1, void * arg2) {
+  sol_alloc_free__pointer_type sol_alloc_free__pointer = (sol_alloc_free__pointer_type) 2213547663;
+  return sol_alloc_free__pointer(arg1, arg2);
+}
+#endif
 
 /**
  * Alloc zero-initialized memory
  */
 static void *sol_calloc(size_t nitems, size_t size) {
-  // Bump allocator
-  uint64_t* pos_ptr = (uint64_t*)HEAP_START_ADDRESS;
-
-  uint64_t pos = *pos_ptr;
-  if (pos == 0) {
-      /** First time, set starting position */
-      pos = HEAP_START_ADDRESS + HEAP_LENGTH;
-  }
-
-  uint64_t bytes = (uint64_t)(nitems * size);
-  if (size == 0 ||
-      !(nitems == 0 || size == 0) &&
-      !(nitems == bytes / size)) {
-    /** Overflow */
-    return NULL;
-  }
-  if (pos < bytes) {
-    /** Saturated */
-    pos = 0;
-  } else {
-    pos -= bytes;
-  }
-
-  uint64_t align = size;
-  align--;
-  align |= align >> 1;
-  align |= align >> 2;
-  align |= align >> 4;
-  align |= align >> 8;
-  align |= align >> 16;
-  align |= align >> 32;
-  align++;
-  pos &= ~(align - 1);
-  if (pos < HEAP_START_ADDRESS + sizeof(uint8_t*)) {
-      return NULL;
-  }
-  *pos_ptr = pos;
-  return (void*)pos;
+  return sol_alloc_free_(nitems * size, 0);
 }
 
 /**
  * Deallocates the memory previously allocated by sol_calloc
  */
 static void sol_free(void *ptr) {
-  // I'm a bump allocator, I don't free
+  (void) sol_alloc_free_(0, ptr);
 }
 
 #ifdef __cplusplus
