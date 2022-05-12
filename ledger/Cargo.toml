@@ -54,6 +54,7 @@ thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 tokio-stream = "0.1"
 trees = "0.4.2"
+pretty-hex = "*"
 
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts

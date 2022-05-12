@@ -1,6 +1,7 @@
 #![allow(clippy::implicit_hasher)]
 use {
     crate::shred::{ShredType, SIZE_OF_NONCE},
+    pretty_hex::pretty_hex,
     rayon::{
         iter::{
             IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator,
@@ -16,6 +17,7 @@ use {
         perf_libs,
         recycler_cache::RecyclerCache,
         sigverify::{self, count_packets_in_batches, TxOffset},
+        turbine_merkle::{TurbineMerkleHash, TurbineMerkleProofFec64},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -68,12 +70,108 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
     if packet.meta.size < sig_end {
         return Some(0);
     }
+
     let signature = Signature::new(&packet.data[sig_start..sig_end]);
     trace!("signature {}", signature);
-    if !signature.verify(pubkey, &packet.data[msg_start..msg_end]) {
-        return Some(0);
+
+    let shred_type: ShredType = limited_deserialize(&packet.data[64..65]).ok()?;
+    match shred_type {
+        ShredType::DataV2 | ShredType::CodeV2 => {
+            let root = TurbineMerkleHash::from(&packet.data[83..83 + 20]);
+            let proof = TurbineMerkleProofFec64::from(&packet.data[83 + 20..83 + 20 + 120]);
+
+            const SIZE_OF_BASE_COMMON_HEADER: usize = 19;
+            const SIZE_OF_SIGNATURE: usize = 64;
+            const SIZE_OF_MERKLE_PAYLOAD: usize = 140;
+
+            /*
+            let hash_buf_vec = vec![
+                &packet.data[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER],
+                &packet.data
+                    [SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER + SIZE_OF_MERKLE_PAYLOAD..],
+            ];
+            let mut hash = TurbineMerkleHash::hash(&hash_buf_vec);
+            */
+            let off = SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER + SIZE_OF_MERKLE_PAYLOAD;
+            let buf = &packet.data[off..];
+            let buf_len = buf.len();
+            let hash_buf_vec = vec![
+                &packet.data[SIZE_OF_SIGNATURE..SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER],
+                &packet.data[off..off + buf_len - 4],
+            ];
+            let hash = TurbineMerkleHash::hash(&hash_buf_vec);
+
+            let idx = if shred_type == ShredType::DataV2 {
+                /*
+                let off = 64 + 19 + 140 + 3;
+                let data_size: u16 = limited_deserialize(&packet.data[off..off + 2]).ok()?;
+                //error!("> DATA idx={} data_size={}", x, data_size);
+                */
+                let off = 64 + 1 + 8;
+                let index: u32 = limited_deserialize(&packet.data[off..off + 4]).ok()?;
+                (index % 32) as usize
+            } else {
+                // CodeV2
+                // coding_header.num_data_shreds + coding_header.position
+                let off = SIZE_OF_SIGNATURE + SIZE_OF_BASE_COMMON_HEADER + SIZE_OF_MERKLE_PAYLOAD;
+                let num_data_shreds: u16 = limited_deserialize(&packet.data[off..off + 2]).ok()?;
+                let position: u16 = limited_deserialize(&packet.data[off + 4..off + 4 + 2]).ok()?;
+                (num_data_shreds + position) as usize
+                //error!("> CODE idx={} num_data_shreds={} position={}", x, num_data_shreds, position);
+            };
+
+            if !signature.verify(pubkey, root.as_ref()) {
+                let hash13s = TurbineMerkleHash::from(&[13u8; 20][..]);
+                if hash13s == root {
+                    error!(
+                        "<SIG> UNINIT slot={} type={:?} merkle_index={} (bypass failure)",
+                        slot, shred_type, idx,
+                    );
+                } else {
+                    error!(
+                        "<SIG> failed slot={} type={:?} merkle_index={}\n---root---\n{}\n---proof---\n{}",
+                        slot,
+                        shred_type,
+                        idx,
+                        pretty_hex(&root.as_ref()),
+                        pretty_hex(&proof.to_bytes()),
+                    );
+                    return Some(0);
+                }
+            } else if !proof.verify(&root, &hash, idx) {
+                error!(
+                    "<PROOF> failed type={:?} slot={} merkle_index={}\n---hash---{}\n---root---\n{}\n---proof---\n{}\n---hashbuf0---\n{}\n---hashbuf1---\n{}\nhashbuf1_len={}",
+                    &shred_type,
+                    slot,
+                    idx,
+                    pretty_hex(&hash.as_ref()),
+                    pretty_hex(&root.as_ref()),
+                    pretty_hex(&proof.to_bytes()),
+                    pretty_hex(&hash_buf_vec[0]),
+                    pretty_hex(&hash_buf_vec[1]),
+                    hash_buf_vec[1].len(),
+                );
+                return Some(0);
+            }
+
+            /*
+            error!(
+                "VERIFY SUCCESS type={:?} slot={} merkle_index={}",
+                shred_type, slot, idx
+            );
+            */
+
+            Some(1)
+        }
+        _ => {
+            if !signature.verify(pubkey, &packet.data[msg_start..msg_end]) {
+                error!("#V1# verify FAILED");
+                return Some(0);
+            }
+            error!("#V1# verify SUCCESS");
+            Some(1)
+        }
     }
-    Some(1)
 }
 
 fn verify_shreds_cpu(

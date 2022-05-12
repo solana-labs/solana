@@ -69,7 +69,7 @@ mod test {
     fn run_test_sigverify_shred_cpu_repair(slot: Slot) {
         solana_logger::setup();
         let mut shred = Shred::new_from_data(
-            ShredProtocolVersion::default(),
+            ShredProtocolVersion::V1, // TODO MERKLE
             slot,
             0xc0de,
             0xdead,

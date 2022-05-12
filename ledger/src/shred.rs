@@ -57,6 +57,7 @@ use {
     crate::blockstore::MAX_DATA_SHREDS_PER_SLOT,
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    pretty_hex::pretty_hex,
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_perf::{
@@ -953,6 +954,7 @@ impl Shred {
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
+        //info!("SHRED VERIFY {:?}", &self.protocol_version());
         match self.shred_type().version() {
             ShredProtocolVersion::V1 => self
                 .signature()
@@ -964,9 +966,13 @@ impl Shred {
                         .verify(pubkey.as_ref(), merkle.root.as_ref());
 
                     if !r {
-                        error!("--- failed to verify signature for shred: {:?}", &self);
+                        error!(
+                            "SIG VERIFY FAILED signature for shred: {:?}\n---payload---{}",
+                            &self,
+                            pretty_hex(&self.payload()),
+                        );
                     }
-                    assert!(r);
+                    //assert!(r);
 
                     let r = merkle.proof.verify(
                         &merkle.root,
@@ -974,9 +980,20 @@ impl Shred {
                         self.merkle_index().unwrap(),
                     );
                     if !r {
-                        error!("--- failed to verify proof for shred: {:?}", &self);
+                        error!(
+                            "PROOF VERIFY FAILED {:?}\n{}",
+                            &self,
+                            pretty_hex(&self.payload())
+                        );
                     }
-                    assert!(r);
+                    //assert!(r);
+                    /*
+                    error!(
+                        "VERIFY MERKLE SUCCESS slot={} merkle_index={}",
+                        self.slot(),
+                        self.merkle_index().unwrap(),
+                    );
+                    */
                     r
                 } else {
                     panic!("should have failed sanitize");
@@ -991,10 +1008,30 @@ impl Shred {
             proof: *proof,
         });
         let mut cursor = Cursor::new(&mut self.payload[83..]); // TODO MERKLE
-        bincode::serialize_into(&mut cursor, root).unwrap();
+        bincode::serialize_into(&mut cursor, &self.common_header.merkle.unwrap().root).unwrap();
         for i in 0..TURBINE_MERKLE_PROOF_LENGTH_FEC64 {
-            bincode::serialize_into(&mut cursor, &proof.0[i]).unwrap();
+            bincode::serialize_into(&mut cursor, &self.common_header.merkle.unwrap().proof.0[i])
+                .unwrap();
         }
+        /*
+        let abc = self.merkle_hashing_buf_vec().unwrap();
+        error!(
+            "SERIALIZE PROOF slot={} merkle_index={}\n---hash---\n{}\n---root---\n{}\n---proof---\n{}\n---hashbuf0---\n{}\n---hashbuf1---\n{}\nhashbuf1_len={}",
+            self.slot(),
+            self.merkle_index().unwrap(),
+            pretty_hex(&self.merkle_hash().unwrap().as_ref()),
+            pretty_hex(&self.common_header.merkle.unwrap().root.as_ref()),
+            pretty_hex(&self.common_header.merkle.unwrap().proof.to_bytes()),
+            pretty_hex(&abc[0]),
+            pretty_hex(&abc[1]),
+            abc[1].len(),
+        );
+        assert!(self.common_header.merkle.unwrap().proof.verify(
+            &self.common_header.merkle.unwrap().root,
+            &self.merkle_hash().unwrap(),
+            self.merkle_index().unwrap(),
+        ));
+        */
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
