@@ -132,63 +132,70 @@ impl ComputeBudget {
         let mut num_instructions = message.instructions().len();
         let mut requested_units = None;
         let mut requested_heap_size = None;
-        let mut requested_prioritization_fee = None;
+        let mut prioritization_fee = None;
 
         for (i, (program_id, instruction)) in message.program_instructions_iter().enumerate() {
             if compute_budget::check_id(program_id) {
                 // don't include request instructions in default max calc
                 num_instructions = num_instructions.saturating_sub(1);
 
-                if !prioritization_fee_type_change && i >= 3 {
-                    // Compute budget instruction must be in the 1st 3 instructions (avoid
-                    // nonce marker), otherwise ignored
-                    continue;
-                }
-                let index = if prioritization_fee_type_change {
-                    i as u8
+                if prioritization_fee_type_change {
+                    let invalid_instruction_data_error = TransactionError::InstructionError(
+                        i as u8,
+                        InstructionError::InvalidInstructionData,
+                    );
+                    let duplicate_instruction_error =
+                        TransactionError::DuplicateInstruction(i as u8);
+
+                    match try_from_slice_unchecked(&instruction.data) {
+                        Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
+                            units,
+                            additional_fee,
+                        }) => {
+                            requested_units = Some(units as u64);
+                            prioritization_fee = Some(additional_fee as u64);
+                        }
+                        Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                            if requested_heap_size.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
+                            requested_heap_size = Some((bytes, i as u8));
+                        }
+                        Ok(ComputeBudgetInstruction::RequestUnits(units)) => {
+                            if requested_units.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
+                            requested_units = Some(units as u64);
+                        }
+                        Ok(ComputeBudgetInstruction::SetPrioritizationFee(fee)) => {
+                            if prioritization_fee.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
+                            prioritization_fee = Some(fee);
+                        }
+                        _ => return Err(invalid_instruction_data_error),
+                    }
                 } else {
-                    0
-                };
-
-                let invalid_instruction_data_error = TransactionError::InstructionError(
-                    index,
-                    InstructionError::InvalidInstructionData,
-                );
-                let duplicate_instruction_error = TransactionError::DuplicateInstruction(index);
-
-                match try_from_slice_unchecked(&instruction.data) {
-                    Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                        units,
-                        additional_fee,
-                    }) => {
-                        requested_units = Some(units as u64);
-                        requested_prioritization_fee = Some(additional_fee as u64);
+                    if i < 3 {
+                        match try_from_slice_unchecked(&instruction.data) {
+                            Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
+                                units,
+                                additional_fee,
+                            }) => {
+                                requested_units = Some(units as u64);
+                                prioritization_fee = Some(additional_fee as u64);
+                            }
+                            Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                                requested_heap_size = Some((bytes, 0));
+                            }
+                            _ => {
+                                return Err(TransactionError::InstructionError(
+                                    0,
+                                    InstructionError::InvalidInstructionData,
+                                ))
+                            }
+                        }
                     }
-                    Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                        if prioritization_fee_type_change && requested_heap_size.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        requested_heap_size = Some((bytes, index));
-                    }
-                    Ok(ComputeBudgetInstruction::RequestUnits(units)) => {
-                        if !prioritization_fee_type_change {
-                            return Err(invalid_instruction_data_error);
-                        }
-                        if requested_units.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        requested_units = Some(units as u64);
-                    }
-                    Ok(ComputeBudgetInstruction::PrioritizationFee(fee)) => {
-                        if !prioritization_fee_type_change {
-                            return Err(invalid_instruction_data_error);
-                        }
-                        if requested_prioritization_fee.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        requested_prioritization_fee = Some(fee);
-                    }
-                    _ => return Err(invalid_instruction_data_error),
                 }
             }
         }
@@ -216,7 +223,7 @@ impl ComputeBudget {
         .unwrap_or(MAX_UNITS as u64)
         .min(MAX_UNITS as u64);
 
-        Ok(requested_prioritization_fee.unwrap_or(0))
+        Ok(prioritization_fee.unwrap_or(0))
     }
 }
 
@@ -351,7 +358,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_units(1),
-                ComputeBudgetInstruction::request_prioritization_fee(42)
+                ComputeBudgetInstruction::set_prioritization_fee(42)
             ],
             Ok(42),
             ComputeBudget {
@@ -474,7 +481,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::request_units(MAX_UNITS),
-                ComputeBudgetInstruction::request_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Ok(u64::MAX),
             ComputeBudget {
@@ -489,7 +496,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::request_units(MAX_UNITS),
-                ComputeBudgetInstruction::request_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -504,7 +511,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::request_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Ok(u64::MAX),
             ComputeBudget {
@@ -553,8 +560,8 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::request_prioritization_fee(0),
-                ComputeBudgetInstruction::request_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(0),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
             ComputeBudget::default()

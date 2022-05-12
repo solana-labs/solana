@@ -276,7 +276,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .alias("additional-fee")
                         .value_name("NUMBER")
                         .takes_value(true)
-                        .help("Request prioritization-fee for transaction"),
+                        .help("Set prioritization-fee for transaction"),
                 )
                 .arg(blockhash_arg()),
         )
@@ -1410,7 +1410,7 @@ pub fn process_ping(
                 lamports,
             )];
             if let Some(prioritization_fee) = prioritization_fee {
-                ixs.push(ComputeBudgetInstruction::request_prioritization_fee(
+                ixs.push(ComputeBudgetInstruction::set_prioritization_fee(
                     *prioritization_fee,
                 ));
             }

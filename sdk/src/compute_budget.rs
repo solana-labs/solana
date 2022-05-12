@@ -37,7 +37,7 @@ pub enum ComputeBudgetInstruction {
     RequestUnits(u32),
     /// Additional fee in lamports to charge the payer, used for transaction
     /// prioritization
-    PrioritizationFee(u64),
+    SetPrioritizationFee(u64),
 }
 
 impl ComputeBudgetInstruction {
@@ -51,8 +51,8 @@ impl ComputeBudgetInstruction {
         Instruction::new_with_borsh(id(), &Self::RequestUnits(units), vec![])
     }
 
-    /// Create a `ComputeBudgetInstruction::PrioritizationFee` `Instruction`
-    pub fn request_prioritization_fee(fee: u64) -> Instruction {
-        Instruction::new_with_borsh(id(), &Self::PrioritizationFee(fee), vec![])
+    /// Create a `ComputeBudgetInstruction::SetPrioritizationFee` `Instruction`
+    pub fn set_prioritization_fee(fee: u64) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetPrioritizationFee(fee), vec![])
     }
 }

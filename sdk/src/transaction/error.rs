@@ -139,7 +139,7 @@ pub enum TransactionError {
     WouldExceedAccountDataTotalLimit,
 
     /// Transaction contains a duplicate instruction that is not allowed
-    #[error("Transaction contains a duplicate instruction that is not allowed")]
+    #[error("Transaction contains a duplicate instruction ({0}) that is not allowed")]
     DuplicateInstruction(u8),
 }
 

@@ -239,7 +239,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "BQcJmh4VRCiNNtqjKPyphs9ULFbSUKGGfx6hz9SWBtqU")]
+#[frozen_abi(digest = "HSBFEjhoubTjeGKeBJvRDAiCBTVeFfcWNPZSbDW1w4H4")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -16777,7 +16777,7 @@ pub(crate) mod tests {
             let message = SanitizedMessage::try_from(Message::new(
                 &[
                     ComputeBudgetInstruction::request_units(pair.0),
-                    ComputeBudgetInstruction::request_prioritization_fee(PRIORITIZATION_FEE),
+                    ComputeBudgetInstruction::set_prioritization_fee(PRIORITIZATION_FEE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),
