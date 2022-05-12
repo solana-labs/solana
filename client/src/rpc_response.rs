@@ -23,13 +23,8 @@ pub type RpcResult<T> = client_error::Result<Response<T>>;
 #[serde(rename_all = "camelCase")]
 pub struct RpcResponseContext {
     pub slot: Slot,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub api_version: Option<RpcApiVersion>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcNotificationContext {
-    pub slot: Slot,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,13 +76,6 @@ impl RpcResponseContext {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Response<T> {
     pub context: RpcResponseContext,
-    pub value: T,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcNotificationResponse<T> {
-    pub context: RpcNotificationContext,
     pub value: T,
 }
 
