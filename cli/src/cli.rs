@@ -1986,7 +1986,10 @@ mod tests {
         assert!(result.is_ok());
 
         let vote_account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!({
                 "data": ["KLUv/QBYNQIAtAIBAAAAbnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/EFAAEAAB8ACQD6gx92zAiAAecDP4B2XeEBSIx7MQeung==", "base64+zstd"],
                 "lamports": 42,
@@ -2272,7 +2275,10 @@ mod tests {
         // Success case
         let mut config = CliConfig::default();
         let account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: Value::Null,
         });
         let mut mocks = HashMap::new();
