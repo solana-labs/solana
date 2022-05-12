@@ -3588,7 +3588,7 @@ fn test_program_fees() {
     let message = Message::new(
         &[
             ComputeBudgetInstruction::request_units(100),
-            ComputeBudgetInstruction::request_additional_fee(42),
+            ComputeBudgetInstruction::set_prioritization_fee(42),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),

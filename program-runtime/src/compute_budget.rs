@@ -152,6 +152,12 @@ impl ComputeBudget {
                             units,
                             additional_fee,
                         }) => {
+                            if requested_units.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
+                            if prioritization_fee.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
                             requested_units = Some(units as u64);
                             prioritization_fee = Some(additional_fee as u64);
                         }
@@ -175,25 +181,23 @@ impl ComputeBudget {
                         }
                         _ => return Err(invalid_instruction_data_error),
                     }
-                } else {
-                    if i < 3 {
-                        match try_from_slice_unchecked(&instruction.data) {
-                            Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                                units,
-                                additional_fee,
-                            }) => {
-                                requested_units = Some(units as u64);
-                                prioritization_fee = Some(additional_fee as u64);
-                            }
-                            Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
-                                requested_heap_size = Some((bytes, 0));
-                            }
-                            _ => {
-                                return Err(TransactionError::InstructionError(
-                                    0,
-                                    InstructionError::InvalidInstructionData,
-                                ))
-                            }
+                } else if i < 3 {
+                    match try_from_slice_unchecked(&instruction.data) {
+                        Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
+                            units,
+                            additional_fee,
+                        }) => {
+                            requested_units = Some(units as u64);
+                            prioritization_fee = Some(additional_fee as u64);
+                        }
+                        Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
+                            requested_heap_size = Some((bytes, 0));
+                        }
+                        _ => {
+                            return Err(TransactionError::InstructionError(
+                                0,
+                                InstructionError::InvalidInstructionData,
+                            ))
                         }
                     }
                 }
