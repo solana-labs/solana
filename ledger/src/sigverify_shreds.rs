@@ -168,7 +168,6 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
                 error!("#V1# verify FAILED");
                 return Some(0);
             }
-            error!("#V1# verify SUCCESS");
             Some(1)
         }
     }
