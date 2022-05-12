@@ -13,10 +13,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
-    solana_streamer::{
-        socket::SocketAddrSpace,
-        streamer::{self, StreamerReceiveStats},
-    },
+    solana_streamer::{socket::SocketAddrSpace, streamer},
     std::{
         collections::HashSet,
         net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
@@ -53,10 +50,10 @@ impl GossipService {
         let socket_addr_space = *cluster_info.socket_addr_space();
         let t_receiver = streamer::receiver(
             gossip_socket.clone(),
-            exit.clone(),
+            exit,
             request_sender,
             Recycler::default(),
-            Arc::new(StreamerReceiveStats::new("gossip_receiver")),
+            "gossip_receiver",
             1,
             false,
         );

@@ -23,7 +23,7 @@ use {
         pubkey::Pubkey,
         timing::timestamp,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_streamer::streamer::{self, PacketBatchReceiver},
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -150,12 +150,10 @@ impl AncestorHashesService {
         let (response_sender, response_receiver) = channel();
         let t_receiver = streamer::receiver(
             ancestor_hashes_request_socket.clone(),
-            exit.clone(),
+            &exit,
             response_sender,
             Recycler::default(),
-            Arc::new(StreamerReceiveStats::new(
-                "ancestor_hashes_response_receiver",
-            )),
+            "ancestor_hashes_response_receiver",
             1,
             false,
         );
@@ -921,12 +919,10 @@ mod test {
             // Set up response threads
             let t_request_receiver = streamer::receiver(
                 Arc::new(responder_node.sockets.serve_repair),
-                exit.clone(),
+                &exit,
                 requests_sender,
                 Recycler::default(),
-                Arc::new(StreamerReceiveStats::new(
-                    "ancestor_hashes_response_receiver",
-                )),
+                "serve_repair_receiver",
                 1,
                 false,
             );

@@ -11,9 +11,7 @@ use {
     },
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
-    solana_streamer::streamer::{
-        self, PacketBatchReceiver, PacketBatchSender, StreamerReceiveStats,
-    },
+    solana_streamer::streamer::{self, PacketBatchReceiver, PacketBatchSender},
     std::{
         net::UdpSocket,
         sync::{atomic::AtomicBool, mpsc::channel, Arc, RwLock},
@@ -150,10 +148,10 @@ impl ShredFetchStage {
             .map(|s| {
                 streamer::receiver(
                     s,
-                    exit.clone(),
+                    exit,
                     packet_sender.clone(),
                     recycler.clone(),
-                    Arc::new(StreamerReceiveStats::new("packet_modifier")),
+                    "packet_modifier",
                     1,
                     true,
                 )
