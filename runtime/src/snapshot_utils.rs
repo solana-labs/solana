@@ -22,6 +22,7 @@ use {
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
+    memmap2::Mmap,
     rayon::prelude::*,
     regex::Regex,
     solana_measure::measure::Measure,
@@ -34,6 +35,7 @@ use {
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
         process::ExitStatus,
+        slice,
         str::FromStr,
         sync::Arc,
     },
@@ -1460,23 +1462,6 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     Ok(unpacked_append_vec_map)
 }
 
-#[cfg(not(target_os = "linux"))]
-fn untar_snapshot_in<P: AsRef<Path>>(
-    snapshot_tar: P,
-    unpack_dir: &Path,
-    account_paths: &[PathBuf],
-    archive_format: ArchiveFormat,
-    parallel_divisions: usize,
-) -> Result<UnpackedAppendVecMap> {
-    untar_snapshot_file(
-        snapshot_tar.as_ref(),
-        unpack_dir,
-        account_paths,
-        archive_format,
-        parallel_divisions,
-    )
-}
-
 fn untar_snapshot_file(
     snapshot_tar: &Path,
     unpack_dir: &Path,
@@ -1514,7 +1499,6 @@ fn untar_snapshot_file(
     Ok(account_paths_map)
 }
 
-#[cfg(target_os = "linux")]
 fn untar_snapshot_in<P: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: &Path,
@@ -1548,14 +1532,6 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     }
 }
 
-#[cfg(target_os = "linux")]
-impl<T> From<mmarinus::Error<T>> for SnapshotError {
-    fn from(_: mmarinus::Error<T>) -> SnapshotError {
-        SnapshotError::Io(std::io::Error::new(ErrorKind::Other, "mmap failure"))
-    }
-}
-
-#[cfg(target_os = "linux")]
 fn untar_snapshot_mmap(
     snapshot_tar: &Path,
     unpack_dir: &Path,
@@ -1563,12 +1539,16 @@ fn untar_snapshot_mmap(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
-    use {
-        mmarinus::{perms, Map, Private},
-        std::slice,
-    };
+    let file = File::open(snapshot_tar).unwrap();
+    let mmap = unsafe { Mmap::map(&file) };
+    if mmap.is_err() {
+        return Err(SnapshotError::Io(std::io::Error::new(
+            ErrorKind::Other,
+            "mmap failure",
+        )));
+    }
 
-    let mmap = Map::load(&snapshot_tar, Private, perms::Read)?;
+    let mmap = mmap.unwrap();
 
     // `unpack_snapshot_local` takes a BufReader creator, which requires a
     // static lifetime because of its background reader thread. Therefore, we
