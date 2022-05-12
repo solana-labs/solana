@@ -14,7 +14,7 @@ source configure-metrics.sh
 while true; do
   count=$(lsof -u $UID | wc -l)
   ./metrics-write-datapoint.sh "open-files,hostname=$HOSTNAME count=$count"
-  sleep 10
+  sleep 100000
 done
 
 exit 1

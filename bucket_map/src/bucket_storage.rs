@@ -32,7 +32,7 @@ use {
 23  8,388,608
 24  16,777,216
 */
-pub const DEFAULT_CAPACITY_POW2: u8 = 5;
+pub const DEFAULT_CAPACITY_POW2: u8 = 6;
 
 /// A Header UID of 0 indicates that the header is unlocked
 const UID_UNLOCKED: Uid = 0;
