@@ -18,7 +18,7 @@ use {
         fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
-        progress_map::{ForkProgress, ProgressMap, PropagatedStats},
+        progress_map::{ForkProgress, ProgressMap, PropagatedStats, ReplaySlotStats},
         repair_service::DuplicateSlotsResetReceiver,
         rewards_recorder_service::RewardsRecorderSender,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
@@ -34,7 +34,9 @@ use {
     solana_ledger::{
         block_error::BlockError,
         blockstore::Blockstore,
-        blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
+        blockstore_processor::{
+            self, BlockstoreProcessorError, ConfirmationProgress, TransactionStatusSender,
+        },
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
     },
@@ -1621,21 +1623,25 @@ impl ReplayStage {
     fn replay_blockstore_into_bank(
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
-        bank_progress: &mut ForkProgress,
+        replay_stats: &RwLock<ReplaySlotStats>,
+        replay_progress: &RwLock<ConfirmationProgress>,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
     ) -> result::Result<usize, BlockstoreProcessorError> {
-        let tx_count_before = bank_progress.replay_progress.num_txs;
+        let mut w_replay_stats = replay_stats.write().unwrap();
+        let mut w_replay_progress = replay_progress.write().unwrap();
+        let tx_count_before = w_replay_progress.num_txs;
         // All errors must lead to marking the slot as dead, otherwise,
         // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
         // will break!
+
         blockstore_processor::confirm_slot(
             blockstore,
             bank,
-            &mut bank_progress.replay_stats,
-            &mut bank_progress.replay_progress,
+            &mut w_replay_stats,
+            &mut w_replay_progress,
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
@@ -1644,7 +1650,7 @@ impl ReplayStage {
             verify_recyclers,
             false,
         )?;
-        let tx_count_after = bank_progress.replay_progress.num_txs;
+        let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
         Ok(tx_count)
     }
@@ -2170,22 +2176,30 @@ impl ReplayStage {
             // Insert a progress entry even for slots this node is the leader for, so that
             // 1) confirm_forks can report confirmation, 2) we can cache computations about
             // this bank in `select_forks()`
-            let bank_progress = &mut progress.entry(bank.slot()).or_insert_with(|| {
-                ForkProgress::new_from_bank(
-                    &bank,
-                    my_pubkey,
-                    vote_account,
-                    prev_leader_slot,
-                    num_blocks_on_fork,
-                    num_dropped_blocks_on_fork,
+            let (replay_stats, replay_progress) = {
+                let bank_progress = progress.entry(bank.slot()).or_insert_with(|| {
+                    ForkProgress::new_from_bank(
+                        &bank,
+                        my_pubkey,
+                        vote_account,
+                        prev_leader_slot,
+                        num_blocks_on_fork,
+                        num_dropped_blocks_on_fork,
+                    )
+                });
+                (
+                    bank_progress.replay_stats.clone(),
+                    bank_progress.replay_progress.clone(),
                 )
-            });
+            };
+
             if bank.collector_id() != my_pubkey {
                 let root_slot = bank_forks.read().unwrap().root();
                 let replay_result = Self::replay_blockstore_into_bank(
                     &bank,
                     blockstore,
-                    bank_progress,
+                    &replay_stats,
+                    &replay_progress,
                     transaction_status_sender,
                     replay_vote_sender,
                     transaction_cost_metrics_sender,
@@ -2217,16 +2231,17 @@ impl ReplayStage {
             }
             assert_eq!(*bank_slot, bank.slot());
             if bank.is_complete() {
-                execute_timings.accumulate(&bank_progress.replay_stats.execute_timings);
+                let r_replay_stats = replay_stats.read().unwrap();
+                let r_replay_progress = replay_progress.read().unwrap();
+                execute_timings.accumulate(&r_replay_stats.execute_timings);
                 debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
-                       bank.slot(),
-                       bank_progress.replay_stats.execute_timings
-                       );
-
-                bank_progress.replay_stats.report_stats(
                     bank.slot(),
-                    bank_progress.replay_progress.num_entries,
-                    bank_progress.replay_progress.num_shreds,
+                    r_replay_stats.execute_timings
+                );
+                r_replay_stats.report_stats(
+                    bank.slot(),
+                    r_replay_progress.num_entries,
+                    r_replay_progress.num_shreds,
                 );
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
@@ -2906,7 +2921,13 @@ impl ReplayStage {
                     .get(*slot)
                     .expect("bank in progress must exist in BankForks")
                     .clone();
-                let duration = prog.replay_stats.started.elapsed().as_millis();
+                let duration = prog
+                    .replay_stats
+                    .read()
+                    .unwrap()
+                    .started
+                    .elapsed()
+                    .as_millis();
                 if bank.is_frozen() && tower.is_slot_confirmed(*slot, voted_stakes, total_stake) {
                     info!("validator fork confirmed {} {}ms", *slot, duration);
                     datapoint_info!("validator-confirmation", ("duration_ms", duration, i64));
@@ -3805,7 +3826,8 @@ pub(crate) mod tests {
             let res = ReplayStage::replay_blockstore_into_bank(
                 &bank1,
                 &blockstore,
-                bank1_progress,
+                &bank1_progress.replay_stats,
+                &bank1_progress.replay_progress,
                 None,
                 &replay_vote_sender,
                 None,
