@@ -4633,6 +4633,7 @@ dependencies = [
  "lru",
  "num_cpus",
  "num_enum",
+ "pretty-hex",
  "prost 0.10.3",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
