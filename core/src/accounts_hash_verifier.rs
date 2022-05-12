@@ -147,6 +147,14 @@ impl AccountsHashVerifier {
             )
             .unwrap();
 
+        accounts_package
+            .accounts
+            .accounts_db
+            .notify_accounts_hash_calculated_complete(
+                sorted_storages.max_slot_inclusive(),
+                &accounts_package.epoch_schedule,
+            );
+
         assert_eq!(accounts_package.expected_capitalization, lamports);
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             assert_eq!(expected_hash, accounts_hash);
