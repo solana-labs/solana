@@ -14,19 +14,6 @@ pub const TURBINE_MERKLE_PROOF_BYTES_FEC64: usize =
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleHash([u8; TURBINE_MERKLE_HASH_BYTES]);
 
-#[repr(transparent)]
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleProof(Vec<TurbineMerkleHash>);
-
-#[repr(transparent)]
-#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_LENGTH_FEC64]);
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleTree {
-    tree: Vec<TurbineMerkleHash>,
-}
-
 impl TurbineMerkleHash {
     pub fn hash<T>(bufs: &[T]) -> TurbineMerkleHash
     where
@@ -39,12 +26,17 @@ impl TurbineMerkleHash {
         ret.0[..].copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
         ret
     }
-}
 
-impl From<&[u8]> for TurbineMerkleHash {
-    fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() == TURBINE_MERKLE_HASH_BYTES);
-        TurbineMerkleHash(buf.try_into().unwrap())
+    fn _hash_raw<T>(bufs: &[T]) -> [u8; TURBINE_MERKLE_HASH_BYTES]
+    where
+        T: AsRef<[u8]> + Sync,
+    {
+        let mut hasher = Sha256::new();
+        bufs.iter().for_each(|b| hasher.update(b));
+        let h = hasher.finalize();
+        let mut buf = [0u8; TURBINE_MERKLE_HASH_BYTES];
+        buf.copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
+        buf
     }
 }
 
@@ -54,12 +46,23 @@ impl AsRef<[u8]> for TurbineMerkleHash {
     }
 }
 
+impl From<&[u8]> for TurbineMerkleHash {
+    fn from(buf: &[u8]) -> Self {
+        assert!(buf.len() == TURBINE_MERKLE_HASH_BYTES);
+        TurbineMerkleHash(buf.try_into().unwrap())
+    }
+}
+
+#[repr(transparent)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProof(Vec<TurbineMerkleHash>);
+
 impl TurbineMerkleProof {
     pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
         let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
-        for i in 0..6 {
-            buf[i * 20..i * 20 + 20].copy_from_slice(self.0[i].as_ref());
-        }
+        buf.chunks_exact_mut(TURBINE_MERKLE_HASH_BYTES)
+            .enumerate()
+            .for_each(|(i, b)| b.copy_from_slice(self.0[i].as_ref()));
         buf
     }
 
@@ -79,6 +82,26 @@ impl TurbineMerkleProof {
             };
             idx >>= 1;
         }
+        hash
+    }
+
+    fn _generic_compute_root_raw(
+        proof: &[u8],
+        leaf_hash: &[u8],
+        leaf_index: usize,
+    ) -> [u8; TURBINE_MERKLE_HASH_BYTES] {
+        assert_eq!(proof.len() % TURBINE_MERKLE_HASH_BYTES, 0);
+        assert_eq!(leaf_hash.len(), TURBINE_MERKLE_HASH_BYTES);
+        let mut hash: [u8; TURBINE_MERKLE_HASH_BYTES] = leaf_hash.try_into().unwrap();
+        let mut idx = leaf_index;
+        proof.chunks_exact(TURBINE_MERKLE_HASH_BYTES).for_each(|b| {
+            hash = if idx & 1 == 0 {
+                TurbineMerkleHash::_hash_raw(&[&hash[..], b])
+            } else {
+                TurbineMerkleHash::_hash_raw(&[b, &hash[..]])
+            };
+            idx >>= 1;
+        });
         hash
     }
 
@@ -123,6 +146,10 @@ impl From<&[u8]> for TurbineMerkleProof {
     }
 }
 
+#[repr(transparent)]
+#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_LENGTH_FEC64]);
+
 impl TurbineMerkleProofFec64 {
     pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
         let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
@@ -163,6 +190,11 @@ impl From<&[u8]> for TurbineMerkleProofFec64 {
                 .expect("expect 6 elements"),
         )
     }
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct TurbineMerkleTree {
+    tree: Vec<TurbineMerkleHash>,
 }
 
 impl TurbineMerkleTree {
@@ -309,6 +341,21 @@ impl TurbineMerkleTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::iter::repeat;
+
+    fn _create_packet_buf(byte_count: usize) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(byte_count);
+        for i in 0..byte_count {
+            buf.push((i % 256) as u8);
+        }
+        buf
+    }
+
+    fn _create_counted_packets(npackets: usize) -> Vec<Vec<u8>> {
+        repeat(_create_packet_buf(1024))
+            .take(npackets)
+            .collect::<Vec<_>>()
+    }
 
     fn create_random_packets(npackets: usize) -> Vec<Vec<u8>> {
         let mut packets = Vec::default();
