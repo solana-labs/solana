@@ -5404,7 +5404,12 @@ name = "solana-version"
 version = "1.10.15"
 dependencies = [
  "log",
+<<<<<<< HEAD
  "rustc_version 0.4.0",
+=======
+ "rustc_version",
+ "semver",
+>>>>>>> a118af069 (RPC: Add API version to context response (#25134))
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.10.15",

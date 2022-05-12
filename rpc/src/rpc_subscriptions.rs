@@ -1,4 +1,5 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
+
 use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -15,6 +16,7 @@ use {
     rayon::prelude::*,
     serde::Serialize,
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
+<<<<<<< HEAD
     solana_client::{
         rpc_filter::RpcFilterType,
         rpc_response::{
@@ -22,6 +24,12 @@ use {
             RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
         },
+=======
+    solana_client::rpc_response::{
+        ProcessedSignatureResult, ReceivedSignatureResult, Response as RpcResponse, RpcBlockUpdate,
+        RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
+        RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
+>>>>>>> a118af069 (RPC: Add API version to context response (#25134))
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
@@ -156,10 +164,10 @@ where
             filter_results(results, params, *w_last_notified_slot, bank);
         for result in filter_results {
             notifier.notify(
-                Response {
-                    context: RpcResponseContext { slot },
+                RpcResponse::from(RpcNotificationResponse {
+                    context: RpcNotificationContext { slot },
                     value: result,
-                },
+                }),
                 subscription,
                 is_final,
             );
@@ -177,6 +185,33 @@ pub struct RpcNotification {
     pub is_final: bool,
     pub json: Weak<String>,
     pub created_at: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct RpcNotificationResponse<T> {
+    context: RpcNotificationContext,
+    value: T,
+}
+
+impl<T> From<RpcNotificationResponse<T>> for RpcResponse<T> {
+    fn from(notification: RpcNotificationResponse<T>) -> Self {
+        let RpcNotificationResponse {
+            context: RpcNotificationContext { slot },
+            value,
+        } = notification;
+        Self {
+            context: RpcResponseContext {
+                slot,
+                api_version: None,
+            },
+            value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct RpcNotificationContext {
+    slot: Slot,
 }
 
 const RPC_NOTIFICATIONS_METRICS_SUBMISSION_INTERVAL_MS: Duration = Duration::from_millis(2_000);
@@ -843,12 +878,12 @@ impl RpcSubscriptions {
                                         {
                                             if params.enable_received_notification {
                                                 notifier.notify(
-                                                    Response {
-                                                        context: RpcResponseContext { slot },
+                                                    RpcResponse::from(RpcNotificationResponse {
+                                                        context: RpcNotificationContext { slot },
                                                         value: RpcSignatureResult::ReceivedSignature(
                                                             ReceivedSignatureResult::ReceivedSignature,
                                                         ),
-                                                    },
+                                                    }),
                                                     subscription,
                                                     false,
                                                 );
@@ -991,10 +1026,10 @@ impl RpcSubscriptions {
                                     Ok(block_update) => {
                                         if let Some(block_update) = block_update {
                                             notifier.notify(
-                                                Response {
-                                                    context: RpcResponseContext { slot: s },
+                                                RpcResponse::from(RpcNotificationResponse {
+                                                    context: RpcNotificationContext { slot: s },
                                                     value: block_update,
-                                                },
+                                                }),
                                                 subscription,
                                                 false,
                                             );
@@ -1008,14 +1043,14 @@ impl RpcSubscriptions {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
                                         notifier.notify(
-                                            Response {
-                                                context: RpcResponseContext { slot: s },
+                                            RpcResponse::from(RpcNotificationResponse {
+                                                context: RpcNotificationContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
                                                     err: Some(err),
                                                 },
-                                            },
+                                            }),
                                             subscription,
                                             false,
                                         );
