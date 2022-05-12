@@ -409,11 +409,54 @@ describe('Transaction', () => {
     expect(transaction.instructions).to.have.length(1);
     expect(transaction.signatures).to.have.length(2);
     expect(transaction.recentBlockhash).to.eq(recentBlockhash);
+  });
 
-    transaction.feePayer = new PublicKey(6);
-    expect(() => transaction.compileMessage()).to.throw(
-      'Transaction message mutated after being populated from Message',
-    );
+  it('populate then compile transaction', () => {
+    const recentBlockhash = new PublicKey(1).toString();
+    const message = new Message({
+      accountKeys: [
+        new PublicKey(1).toString(),
+        new PublicKey(2).toString(),
+        new PublicKey(3).toString(),
+        new PublicKey(4).toString(),
+        new PublicKey(5).toString(),
+      ],
+      header: {
+        numReadonlySignedAccounts: 0,
+        numReadonlyUnsignedAccounts: 3,
+        numRequiredSignatures: 2,
+      },
+      instructions: [
+        {
+          accounts: [1, 2, 3],
+          data: bs58.encode(Buffer.alloc(5).fill(9)),
+          programIdIndex: 2,
+        },
+      ],
+      recentBlockhash,
+    });
+
+    const signatures = [
+      bs58.encode(Buffer.alloc(64).fill(1)),
+      bs58.encode(Buffer.alloc(64).fill(2)),
+    ];
+
+    const transaction = Transaction.populate(message, signatures);
+    const compiledMessage = transaction.compileMessage();
+    expect(compiledMessage).to.eql(message);
+
+    // show that without caching the message, the populated message
+    // might not be the same when re-compiled
+    transaction._message = undefined;
+    const compiledMessage2 = transaction.compileMessage();
+    expect(compiledMessage2).not.to.eql(message);
+
+    // show that even if message is cached, transaction may still
+    // be modified
+    transaction._message = message;
+    transaction.recentBlockhash = new PublicKey(100).toString();
+    const compiledMessage3 = transaction.compileMessage();
+    expect(compiledMessage3).not.to.eql(message);
   });
 
   it('serialize unsigned transaction', () => {
