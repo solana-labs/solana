@@ -88,7 +88,7 @@ impl fmt::Display for ParseError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, std::iter::zip};
     const INVALID_EXTENSION: &str = "zip";
 
     #[test]
@@ -157,34 +157,23 @@ mod tests {
     }
 
     #[test]
-    fn test_to_string() {
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_BZIP2_EXTENSION)
-                .unwrap()
-                .to_string(),
-            "TarBzip2"
-        );
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_GZIP_EXTENSION)
-                .unwrap()
-                .to_string(),
-            "TarGzip",
-        );
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_ZSTD_EXTENSION)
-                .unwrap()
-                .to_string(),
-            "TarZstd"
-        );
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_LZ4_EXTENSION)
-                .unwrap()
-                .to_string(),
-            "TarLz4",
-        );
-        assert_eq!(
-            ArchiveFormat::from_str(TAR_EXTENSION).unwrap().to_string(),
-            "Tar"
-        );
+    fn test_from_cli_arg() {
+        let golden = [
+            Some(ArchiveFormat::TarBzip2),
+            Some(ArchiveFormat::TarGzip),
+            Some(ArchiveFormat::TarZstd),
+            Some(ArchiveFormat::TarLz4),
+            Some(ArchiveFormat::Tar),
+            Some(ArchiveFormat::Tar),
+        ];
+
+        for (arg, expected) in zip(
+            SUPPORTED_ARCHIVE_COMPRESSION.into_iter(),
+            golden.into_iter(),
+        ) {
+            assert_eq!(ArchiveFormat::from_cli_arg(arg), expected);
+        }
+
+        assert_eq!(ArchiveFormat::from_cli_arg("bad"), None);
     }
 }
