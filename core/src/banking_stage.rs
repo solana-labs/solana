@@ -2110,7 +2110,7 @@ impl BankingStage {
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
                 // Passing `None` for bank for now will make all packet weights 0
-                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes, None),
+                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
             );
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
@@ -3236,7 +3236,7 @@ mod tests {
                 let transaction = system_transaction::transfer(&keypair, &pubkey, 1, blockhash);
                 let mut p = Packet::from_data(None, &transaction).unwrap();
                 p.meta.port = packets_id;
-                DeserializedPacket::new(p, None).unwrap()
+                DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
 
@@ -4022,7 +4022,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        let deserialized_packet = DeserializedPacket::new(packet, None).unwrap();
+        let deserialized_packet = DeserializedPacket::new(packet).unwrap();
 
         let genesis_config_info = create_slow_genesis_config(10_000);
         let GenesisConfigInfo {
@@ -4101,14 +4101,14 @@ mod tests {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, fwd_block_hash);
             let mut packet = Packet::from_data(None, &transaction).unwrap();
             packet.meta.flags |= PacketFlags::FORWARDED;
-            DeserializedPacket::new(packet, None).unwrap()
+            DeserializedPacket::new(packet).unwrap()
         };
 
         let normal_block_hash = Hash::new_unique();
         let normal_packet = {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, normal_block_hash);
             let packet = Packet::from_data(None, &transaction).unwrap();
-            DeserializedPacket::new(packet, None).unwrap()
+            DeserializedPacket::new(packet).unwrap()
         };
 
         let mut unprocessed_packet_batches: UnprocessedPacketBatches =
@@ -4229,7 +4229,7 @@ mod tests {
 
         packet_vector
             .into_iter()
-            .map(|p| DeserializedPacket::new(p, None).unwrap())
+            .map(|p| DeserializedPacket::new(p).unwrap())
             .collect()
     }
 

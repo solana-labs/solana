@@ -35,8 +35,8 @@ pub enum ComputeBudgetInstruction {
     /// Request a specific maximum number of compute units the transaction is
     /// allowed to consume and an additional fee to pay.
     RequestUnits(u32),
-    /// Additional fee in lamports to charge the payer, used for transaction
-    /// prioritization
+    /// Additional fee in "lamports per 10K CUs" to charge the payer, used for
+    /// transaction prioritization
     SetPrioritizationFee(u64),
 }
 

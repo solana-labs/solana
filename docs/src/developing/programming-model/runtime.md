@@ -104,8 +104,9 @@ for more information.
 A transaction may request a specific level of `max_units` it is allowed to
 consume by including a
 [``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
-Transaction prioritization depends on the fee/compute-unit ratio so transaction
-should request the minimum amount of compute units required for them to process.
+Transaction overall cost include prioritization-fee for every 10K compute-units, 
+so transaction should request the minimum amount of compute units required
+for them to process.
 
 Compute Budget instructions don't require any accounts and don't consume any
 compute units to process.  Transactions can only contain one of each type of
@@ -137,8 +138,11 @@ instruction in the transaction must not exceed that value. This default value
 attempts to retain existing behavior to avoid breaking clients. Transactions can
 request a specific number of `max_units` via [Compute Budget](#compute-budget)
 instructions.  Clients should request only what they need; requesting the
-minimum amount of units required to process the transaction will improve their
-fee/compute-unit ratio, which transaction prioritization is based on.
+minimum amount of units required to process the transaction will reduce overall
+transaction cost, which includes prioritization-fee for every 10K compute-units.
+
+Prioritization_fee is what transaction prioritization based on, it can be set by
+`ComputeBudgetInstruction::set_prioritization_fee` function.
 
 ## New Features
 

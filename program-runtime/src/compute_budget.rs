@@ -2,8 +2,8 @@ use solana_sdk::{
     borsh::try_from_slice_unchecked,
     compute_budget::{self, ComputeBudgetInstruction},
     entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-    instruction::InstructionError,
-    message::SanitizedMessage,
+    instruction::{CompiledInstruction, InstructionError},
+    pubkey::Pubkey,
     transaction::TransactionError,
 };
 
@@ -122,23 +122,20 @@ impl ComputeBudget {
         }
     }
 
-    pub fn process_message(
+    pub fn process_instructions<'a>(
         &mut self,
-        message: &SanitizedMessage,
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         requestable_heap_size: bool,
         default_units_per_instruction: bool,
         prioritization_fee_type_change: bool,
     ) -> Result<u64, TransactionError> {
-        let mut num_instructions = message.instructions().len();
+        let mut num_instructions: usize = 0;
         let mut requested_units = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
 
-        for (i, (program_id, instruction)) in message.program_instructions_iter().enumerate() {
+        for (i, (program_id, instruction)) in instructions.enumerate() {
             if compute_budget::check_id(program_id) {
-                // don't include request instructions in default max calc
-                num_instructions = num_instructions.saturating_sub(1);
-
                 if prioritization_fee_type_change {
                     let invalid_instruction_data_error = TransactionError::InstructionError(
                         i as u8,
@@ -201,6 +198,9 @@ impl ComputeBudget {
                         }
                     }
                 }
+            } else {
+                // only include non-request instructions in default max calc
+                num_instructions = num_instructions.saturating_add(1);
             }
         }
 
@@ -266,7 +266,12 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget.process_message(&tx.message(), true, true, $type_change);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                true,
+                $type_change,
+            );
             assert_eq!($expected_error, result);
             assert_eq!(compute_budget, $expected_budget);
         };
