@@ -58,12 +58,16 @@ impl From<&[u8]> for TurbineMerkleHash {
 pub struct TurbineMerkleProof(Vec<TurbineMerkleHash>);
 
 impl TurbineMerkleProof {
-    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+    fn generic_to_bytes(proof: &[TurbineMerkleHash]) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
         let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
         buf.chunks_exact_mut(TURBINE_MERKLE_HASH_BYTES)
             .enumerate()
-            .for_each(|(i, b)| b.copy_from_slice(self.0[i].as_ref()));
+            .for_each(|(i, b)| b.copy_from_slice(proof[i].as_ref()));
         buf
+    }
+
+    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        Self::generic_to_bytes(&self.0[..])
     }
 
     #[allow(clippy::integer_arithmetic)]
@@ -85,6 +89,7 @@ impl TurbineMerkleProof {
         hash
     }
 
+    #[allow(clippy::integer_arithmetic)]
     fn _generic_compute_root_raw(
         proof: &[u8],
         leaf_hash: &[u8],
@@ -152,11 +157,7 @@ pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_
 
 impl TurbineMerkleProofFec64 {
     pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
-        let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
-        for i in 0..6 {
-            buf[i * 20..i * 20 + 20].copy_from_slice(self.0[i].as_ref());
-        }
-        buf
+        TurbineMerkleProof::generic_to_bytes(&self.0[..])
     }
 
     #[inline]
