@@ -128,7 +128,6 @@ macro_rules! register_feature_gated_syscall {
 
 pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
-    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
     let secp256k1_recover_syscall_enabled = invoke_context
         .feature_set
@@ -329,9 +328,7 @@ pub fn register_syscalls(
     )?;
 
     // Memory allocator
-    register_feature_gated_syscall!(
-        syscall_registry,
-        !disable_deploy_of_alloc_free_syscall,
+    syscall_registry.register_syscall_by_name(
         b"sol_alloc_free_",
         SyscallAllocFree::init,
         SyscallAllocFree::call,
