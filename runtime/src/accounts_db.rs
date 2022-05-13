@@ -37,6 +37,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
+        ancient_append_vecs::is_ancient,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         bank::Rewrites,
         cache_hash_data::CacheHashData,
@@ -6319,13 +6320,26 @@ impl AccountsDb {
         true
     }
 
-    fn is_candidate_for_shrink(&self, store: &Arc<AccountStorageEntry>) -> bool {
+    fn is_candidate_for_shrink(
+        &self,
+        store: &Arc<AccountStorageEntry>,
+        allow_shrink_ancient: bool,
+    ) -> bool {
+        let total_bytes = if is_ancient(&store.accounts) {
+            if !allow_shrink_ancient {
+                return false;
+            }
+
+            store.written_bytes()
+        } else {
+            store.total_bytes()
+        };
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
-                Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
+                Self::page_align(store.alive_bytes() as u64) < total_bytes
             }
             AccountShrinkThreshold::IndividualStore { shrink_ratio } => {
-                (Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64)
+                (Self::page_align(store.alive_bytes() as u64) as f64 / total_bytes as f64)
                     < shrink_ratio
             }
         }
@@ -6370,7 +6384,7 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && self.is_candidate_for_shrink(&store)
+                    && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -13708,14 +13722,14 @@ pub mod tests {
             }
         }
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry));
+        assert!(accounts.is_candidate_for_shrink(&entry, false));
         entry.alive_bytes.store(5000, Ordering::Release);
-        assert!(!accounts.is_candidate_for_shrink(&entry));
+        assert!(!accounts.is_candidate_for_shrink(&entry, false));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry));
+        assert!(accounts.is_candidate_for_shrink(&entry, false));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio: 0.3 };
-        assert!(!accounts.is_candidate_for_shrink(&entry));
+        assert!(!accounts.is_candidate_for_shrink(&entry, false));
     }
 
     #[test]
