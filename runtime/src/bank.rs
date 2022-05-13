@@ -16792,11 +16792,14 @@ pub(crate) mod tests {
             (1_500_000, 0.0), // ComputeBudget capped
         ];
         for pair in expected_fee_structure.iter() {
-            const PRIORITIZATION_FEE: u64 = 42;
+            const PRIORITIZATION_FEE_RATE: u64 = 42;
+            const PRIORITIZATION_TICK_SIZE: u64 = 10_000;
+            let prioritization_fee =
+                PRIORITIZATION_FEE_RATE.saturating_mul(PRIORITIZATION_TICK_SIZE);
             let message = SanitizedMessage::try_from(Message::new(
                 &[
                     ComputeBudgetInstruction::request_units(pair.0),
-                    ComputeBudgetInstruction::set_prioritization_fee_rate(PRIORITIZATION_FEE),
+                    ComputeBudgetInstruction::set_prioritization_fee_rate(PRIORITIZATION_FEE_RATE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),
@@ -16805,7 +16808,7 @@ pub(crate) mod tests {
             let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
             assert_eq!(
                 fee,
-                sol_to_lamports(pair.1) + lamports_per_signature + PRIORITIZATION_FEE
+                sol_to_lamports(pair.1) + lamports_per_signature + prioritization_fee
             );
         }
     }
