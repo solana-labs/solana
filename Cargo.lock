@@ -4011,6 +4011,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sealevel-ffi"
+version = "1.11.0"
+dependencies = [
+ "solana-bpf-loader-program",
+ "solana_rbpf",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

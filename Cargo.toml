@@ -70,6 +70,7 @@ members = [
     "sdk/cargo-test-bpf",
     "sdk/cargo-test-sbf",
     "sdk/gen-headers",
+    "sealevel-ffi",
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",

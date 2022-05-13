@@ -1,0 +1,14 @@
+[package]
+name = "sealevel-ffi"
+version = "1.11.0"
+description = "FFI bindings for Sealevel virtual machine"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/rbpf-ffi"
+license = "Apache-2.0"
+edition = "2021"
+
+[dependencies]
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.0" }
+solana_rbpf = "=0.2.28"
