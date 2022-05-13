@@ -239,7 +239,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HSBFEjhoubTjeGKeBJvRDAiCBTVeFfcWNPZSbDW1w4H4")]
+#[frozen_abi(digest = "2YZk2K45HmmAafmxPJnYVXyQ7uA7WuBrRkpwrCawdK31")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -4244,7 +4244,8 @@ impl Bank {
             })
             .map_err(|err| {
                 match err {
-                    TransactionError::InvalidRentPayingAccount => {
+                    TransactionError::InvalidRentPayingAccount
+                    | TransactionError::InsufficientFundsForRent { .. } => {
                         error_counters.invalid_rent_paying_account += 1;
                     }
                     _ => {
@@ -17410,9 +17411,9 @@ pub(crate) mod tests {
             recent_blockhash,
         );
         let result = bank.process_transaction(&tx);
-        assert_ne!(
+        assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InstructionError(0, InstructionError::Custom(1))
         );
         assert_ne!(
             fee_payer_balance,
@@ -17455,7 +17456,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17477,7 +17478,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17504,7 +17505,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert_eq!(
             fee_payer_balance - fee,
@@ -17557,7 +17558,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17924,10 +17925,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_small - 1,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -17960,10 +17967,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_large,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -17996,10 +18009,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_small,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -18033,10 +18052,16 @@ pub(crate) mod tests {
             account_data_size_small as u64,
             &system_program::id(),
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &created_keypair.pubkey())
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
 
         // create account, rent exempt
         let tx = system_transaction::create_account(
@@ -18082,10 +18107,16 @@ pub(crate) mod tests {
             recent_blockhash,
             (account_data_size_small + 1) as u64,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &created_keypair.pubkey())
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
 
         // bring balance of account up to rent exemption
         let tx = system_transaction::transfer(

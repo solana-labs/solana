@@ -400,6 +400,10 @@ pub mod prioritization_fee_type_change {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
 
+pub mod include_account_index_in_rent_error {
+    solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -493,6 +497,7 @@ lazy_static! {
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
         (prioritization_fee_type_change::id(), "Switch compute budget to prioritization fee"),
+        (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
