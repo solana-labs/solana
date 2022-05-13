@@ -5469,6 +5469,13 @@ impl AccountsDb {
             stats
                 .accounts_in_roots_older_than_epoch
                 .fetch_add(num_accounts, Ordering::Relaxed);
+            let ancients = sub_storages
+                .iter()
+                .map(|storage| if is_ancient(&storage.accounts) { 1 } else { 0 })
+                .sum();
+            stats
+                .ancient_append_vecs
+                .fetch_add(ancients, Ordering::Relaxed);
         }
     }
 
