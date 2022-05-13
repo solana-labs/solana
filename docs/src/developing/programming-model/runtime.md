@@ -104,7 +104,7 @@ for more information.
 A transaction may request a specific level of `max_units` it is allowed to
 consume by including a
 [``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
-Transaction overall cost include prioritization-fee for every 10K compute-units, 
+Transaction overall cost include prioritization-fee for every 10K compute-units,
 so transaction should request the minimum amount of compute units required
 for them to process.
 

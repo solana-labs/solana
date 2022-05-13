@@ -4632,6 +4632,11 @@ impl Bank {
                     prioritization_fee_type_change,
                 )
                 .unwrap_or_default();
+            let prioritization_fee = if prioritization_fee_type_change {
+                prioritization_fee_rate.saturating_mul(PRIORITIZATION_FEE_RATE_UNITS)
+            } else {
+                prioritization_fee_rate
+            };
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
             let write_lock_fee = Self::get_num_write_locks_in_message(message)
@@ -4649,8 +4654,7 @@ impl Bank {
                         .unwrap_or_default()
                 });
 
-            ((prioritization_fee_rate
-                .saturating_mul(PRIORITIZATION_FEE_RATE_UNITS)
+            ((prioritization_fee
                 .saturating_add(signature_fee)
                 .saturating_add(write_lock_fee)
                 .saturating_add(compute_fee) as f64)
@@ -16792,7 +16796,7 @@ pub(crate) mod tests {
             let message = SanitizedMessage::try_from(Message::new(
                 &[
                     ComputeBudgetInstruction::request_units(pair.0),
-                    ComputeBudgetInstruction::set_prioritization_fee(PRIORITIZATION_FEE),
+                    ComputeBudgetInstruction::set_prioritization_fee_rate(PRIORITIZATION_FEE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),

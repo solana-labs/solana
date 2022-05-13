@@ -1410,7 +1410,7 @@ pub fn process_ping(
                 lamports,
             )];
             if let Some(prioritization_fee) = prioritization_fee {
-                ixs.push(ComputeBudgetInstruction::set_prioritization_fee(
+                ixs.push(ComputeBudgetInstruction::set_prioritization_fee_rate(
                     *prioritization_fee,
                 ));
             }

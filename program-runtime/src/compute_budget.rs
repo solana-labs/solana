@@ -170,7 +170,7 @@ impl ComputeBudget {
                             }
                             requested_units = Some(units as u64);
                         }
-                        Ok(ComputeBudgetInstruction::SetPrioritizationFee(fee)) => {
+                        Ok(ComputeBudgetInstruction::SetPrioritizationFeeRate(fee)) => {
                             if prioritization_fee.is_some() {
                                 return Err(duplicate_instruction_error);
                             }
@@ -367,7 +367,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_units(1),
-                ComputeBudgetInstruction::set_prioritization_fee(42)
+                ComputeBudgetInstruction::set_prioritization_fee_rate(42)
             ],
             Ok(42),
             ComputeBudget {
@@ -490,7 +490,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::request_units(MAX_UNITS),
-                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee_rate(u64::MAX),
             ],
             Ok(u64::MAX),
             ComputeBudget {
@@ -505,7 +505,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::request_units(MAX_UNITS),
-                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee_rate(u64::MAX),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -520,7 +520,7 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee_rate(u64::MAX),
             ],
             Ok(u64::MAX),
             ComputeBudget {
@@ -569,8 +569,8 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_prioritization_fee(0),
-                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee_rate(0),
+                ComputeBudgetInstruction::set_prioritization_fee_rate(u64::MAX),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
             ComputeBudget::default()
