@@ -1104,7 +1104,7 @@ impl<'a> InvokeContext<'a> {
 
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.check_aligned
+        false // self.check_aligned
     }
 
     // Set should type size be checked during user pointer translation
