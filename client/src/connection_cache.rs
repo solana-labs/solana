@@ -14,10 +14,11 @@ use {
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
+        collections::{hash_map::Entry, HashMap},
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc, RwLock,
+            Arc, Mutex, RwLock,
         },
     },
 };
@@ -228,6 +229,7 @@ impl ConnectionMap {
 
 lazy_static! {
     static ref CONNECTION_MAP: RwLock<ConnectionMap> = RwLock::new(ConnectionMap::new());
+    static ref CONNECTION_LOCK_MANAGER: LockManager<SocketAddr> = LockManager::<SocketAddr>::new();
 }
 
 pub fn set_use_quic(use_quic: bool) {
@@ -247,8 +249,48 @@ struct GetConnectionResult {
     eviction_timing_ms: u64,
 }
 
+/// A lock manager supporting locking by dictionary keys
+#[derive(Default)]
+pub struct LockManager<T>
+where
+    T: std::cmp::Eq + std::hash::Hash,
+{
+    locks: Mutex<HashMap<T, Arc<RwLock<()>>>>,
+}
+
+impl<T> LockManager<T>
+where
+    T: std::cmp::Eq + std::hash::Hash,
+{
+    /// Construct the lock manager.
+    pub fn new() -> Self {
+        Self {
+            locks: Mutex::new(HashMap::default()),
+        }
+    }
+
+    /// Get or create a lock for the key
+    pub fn get_lock(&self, key: T) -> Arc<RwLock<()>> {
+        let mut locks = self.locks.lock().unwrap();
+        match locks.entry(key) {
+            Entry::Occupied(entry) => entry.into_mut().clone(),
+            Entry::Vacant(entry) => entry.insert(Arc::new(RwLock::default())).clone(),
+        }
+    }
+
+    /// Remove the lock by the key
+    pub fn remove_lock(&self, key: &T) {
+        let mut locks = self.locks.lock().unwrap();
+        locks.remove(key);
+    }
+}
+
 fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
+    let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
+
     let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
+    let addr_lock = CONNECTION_LOCK_MANAGER.get_lock(*addr);
+    let addr_read_lock = addr_lock.read().unwrap();
     let map = (*CONNECTION_MAP).read().unwrap();
     get_connection_map_lock_measure.stop();
 
@@ -258,7 +300,6 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         .last_stats
         .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
 
-    let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
     let (
         connection,
         cache_hit,
@@ -276,48 +317,79 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             (connection.clone(), true, map.stats.clone(), stats, 0, 0)
         }
         None => {
-            let (_, send_socket) = solana_net_utils::bind_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                VALIDATOR_PORT_RANGE,
-            )
-            .unwrap();
+            // Upgrade to write access by dropping read lock and acquire write lock on the connection
+            // the lock on the connection map is still readonly -- as we only need to read it until we
+            // add a connection entry to it
 
-            let connection = if map.use_quic {
-                Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
-            } else {
-                Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
-            };
-
-            // Upgrade to write access by dropping read lock and acquire write lock
-            drop(map);
             let mut get_connection_map_lock_measure =
                 Measure::start("get_connection_map_lock_measure");
-            let mut map = (*CONNECTION_MAP).write().unwrap();
+            drop(addr_read_lock);
+            drop(map);
+            let _addr_write_lock = addr_lock.write().unwrap();
+            let map = (*CONNECTION_MAP).read().unwrap();
             get_connection_map_lock_measure.stop();
 
             lock_timing_ms = lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
 
-            // evict a connection if the cache is reaching upper bounds
-            let mut num_evictions = 0;
-            let mut get_connection_cache_eviction_measure =
-                Measure::start("get_connection_cache_eviction_measure");
-            while map.map.len() >= MAX_CONNECTIONS {
-                let mut rng = thread_rng();
-                let n = rng.gen_range(0, MAX_CONNECTIONS);
-                map.map.swap_remove_index(n);
-                num_evictions += 1;
-            }
-            get_connection_cache_eviction_measure.stop();
+            // Read again, as it is possible that between read lock dropped and the write lock acquired
+            // another thread could have setup the connection.
+            match map.map.get(addr) {
+                Some(connection) => {
+                    let mut stats = None;
+                    // update connection stats
+                    if let Connection::Quic(conn) = connection {
+                        stats = conn.stats().map(|s| (conn.base_stats(), s));
+                    }
+                    (connection.clone(), true, map.stats.clone(), stats, 0, 0)
+                }
+                None => {
+                    let (_, send_socket) = solana_net_utils::bind_in_range(
+                        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                        VALIDATOR_PORT_RANGE,
+                    )
+                    .unwrap();
 
-            map.map.insert(*addr, connection.clone());
-            (
-                connection,
-                false,
-                map.stats.clone(),
-                None,
-                num_evictions,
-                get_connection_cache_eviction_measure.as_ms(),
-            )
+                    let connection = if map.use_quic {
+                        Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
+                    } else {
+                        Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
+                    };
+
+                    let mut get_connection_map_lock_measure =
+                        Measure::start("get_connection_map_lock_measure");
+                    drop(map);
+                    let mut map = (*CONNECTION_MAP).write().unwrap();
+                    get_connection_map_lock_measure.stop();
+
+                    lock_timing_ms =
+                        lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
+
+                    // evict a connection if the cache is reaching upper bounds
+                    let mut num_evictions = 0;
+                    let mut get_connection_cache_eviction_measure =
+                        Measure::start("get_connection_cache_eviction_measure");
+                    while map.map.len() >= MAX_CONNECTIONS {
+                        let mut rng = thread_rng();
+                        let n = rng.gen_range(0, MAX_CONNECTIONS);
+                        let evicted = map.map.swap_remove_index(n);
+                        if let Some((removed_addr, _)) = evicted {
+                            CONNECTION_LOCK_MANAGER.remove_lock(&removed_addr);
+                        }
+                        num_evictions += 1;
+                    }
+                    get_connection_cache_eviction_measure.stop();
+
+                    map.map.insert(*addr, connection.clone());
+                    (
+                        connection,
+                        false,
+                        map.stats.clone(),
+                        None,
+                        num_evictions,
+                        get_connection_cache_eviction_measure.as_ms(),
+                    )
+                }
+            }
         }
     };
     get_connection_map_measure.stop();
