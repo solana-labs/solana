@@ -14,7 +14,10 @@ use {
         display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
         OutputFormat,
     },
-    solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
+    solana_ledger::{
+        bigtable_upload::ConfirmedBlockUploadConfig, blockstore::Blockstore,
+        blockstore_db::AccessType,
+    },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
@@ -41,15 +44,23 @@ async fn upload(
         .await
         .map_err(|err| format!("Failed to connect to storage: {:?}", err))?;
 
+    let config = ConfirmedBlockUploadConfig {
+        force_reupload,
+        ..ConfirmedBlockUploadConfig::default()
+    };
+
     solana_ledger::bigtable_upload::upload_confirmed_blocks(
         Arc::new(blockstore),
         bigtable,
         starting_slot,
         ending_slot,
-        force_reupload,
+        config,
         Arc::new(AtomicBool::new(false)),
     )
     .await
+    .map(|last_slot_uploaded| {
+        info!("last slot uploaded: {}", last_slot_uploaded);
+    })
 }
 
 async fn delete_slots(

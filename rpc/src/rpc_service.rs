@@ -21,6 +21,7 @@ use {
     solana_client::rpc_cache::LargestAccountsCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
+        bigtable_upload::ConfirmedBlockUploadConfig,
         bigtable_upload_service::BigTableUploadService, blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -410,12 +411,13 @@ impl JsonRpcService {
                         info!("BigTable ledger storage initialized");
 
                         let bigtable_ledger_upload_service = if enable_bigtable_ledger_upload {
-                            Some(Arc::new(BigTableUploadService::new(
+                            Some(Arc::new(BigTableUploadService::new_with_config(
                                 runtime.clone(),
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
                                 current_transaction_status_slot.clone(),
+                                ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
                         } else {
