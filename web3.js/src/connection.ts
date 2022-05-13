@@ -4174,6 +4174,7 @@ export class Connection {
    * @internal
    */
   _wsOnError(err: Error) {
+    this._rpcWebSocketConnected = false;
     console.error('ws error:', err.message);
   }
 
@@ -4181,6 +4182,7 @@ export class Connection {
    * @internal
    */
   _wsOnClose(code: number) {
+    this._rpcWebSocketConnected = false;
     this._rpcWebSocketGeneration++;
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
