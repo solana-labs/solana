@@ -30,6 +30,7 @@ import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 import { InstructionsSection } from "components/transaction/InstructionsSection";
 import { ProgramLogSection } from "components/transaction/ProgramLogSection";
 import { clusterPath } from "utils/url";
+import { getTransactionInstructionError } from "utils/program-err";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -171,20 +172,26 @@ function StatusCard({
 
   const { info } = status.data;
 
-  const renderResult = () => {
-    let statusClass = "success";
-    let statusText = "Success";
-    if (info.result.err) {
-      statusClass = "warning";
-      statusText = "Error";
-    }
+  let statusClass = "success";
+  let statusText = "Success";
+  let errorReason = undefined;
 
-    return (
-      <h3 className="mb-0">
-        <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
-      </h3>
-    );
-  };
+  if (info.result.err) {
+    statusClass = "warning";
+    statusText = "Error";
+    if (typeof info.result.err === "string") {
+      errorReason = `Runtime Error: "${info.result.err}"`;
+    } else {
+      const programError = getTransactionInstructionError(info.result.err);
+      if (programError !== undefined) {
+        errorReason = `Program Error: "Instruction #${
+          programError.index + 1
+        } Failed"`;
+      } else {
+        errorReason = `Unknown Error: "${JSON.stringify(info.result.err)}"`;
+      }
+    }
+  }
 
   const fee = details?.data?.transaction?.meta?.fee;
   const transaction = details?.data?.transaction?.transaction;
@@ -239,8 +246,27 @@ function StatusCard({
 
         <tr>
           <td>Result</td>
-          <td className="text-lg-end">{renderResult()}</td>
+          <td className="text-lg-end">
+            <h3 className="mb-0">
+              <span className={`badge bg-${statusClass}-soft`}>
+                {statusText}
+              </span>
+            </h3>
+          </td>
         </tr>
+
+        {errorReason !== undefined && (
+          <tr>
+            <td>Error</td>
+            <td className="text-lg-end">
+              <h3 className="mb-0">
+                <span className={`badge bg-${statusClass}-soft`}>
+                  {errorReason}
+                </span>
+              </h3>
+            </td>
+          </tr>
+        )}
 
         <tr>
           <td>Timestamp</td>
