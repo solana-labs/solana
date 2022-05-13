@@ -19,6 +19,7 @@ jobs:
     runs-on: windows-2022
     outputs:
       tag: ${{ steps.build.outputs.tag }}
+      channel: ${{ steps.build.outputs.channel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -51,19 +52,28 @@ jobs:
           choco install protoc
           source /tmp/env.sh
           echo "::set-output name=tag::$CI_TAG"
+          eval "$(ci/channel-info.sh)"
+          echo "::set-output name=channel::$CHANNEL"
           ci/publish-tarball.sh
+
+      - name: Prepare Upload Files
+        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
+        shell: bash
+        run: |
           mkdir -p "github-action-s3-upload/${{ inputs.commit }}"
           cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.commit }}/"
           cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.commit }}/"
           cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.commit }}/"
 
       - name: Upload Artifacts
+        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-artifact
           path: github-action-s3-upload/
 
   windows-s3-upload:
+    if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
     needs: [windows-build]
     runs-on: ubuntu-20.04
     steps:
