@@ -5458,7 +5458,16 @@ impl AccountsDb {
     ) {
         if let Some(sub_storages) = sub_storages {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
-            let num_accounts = sub_storages.iter().map(|storage| storage.count()).sum();
+            let mut ancients = 0;
+            let num_accounts = sub_storages
+                .iter()
+                .map(|storage| {
+                    if is_ancient(&storage.accounts) {
+                        ancients += 1;
+                    }
+                    storage.count()
+                })
+                .sum();
             let sizes = sub_storages
                 .iter()
                 .map(|storage| storage.total_bytes())
@@ -5469,6 +5478,9 @@ impl AccountsDb {
             stats
                 .accounts_in_roots_older_than_epoch
                 .fetch_add(num_accounts, Ordering::Relaxed);
+            stats
+                .ancient_append_vecs
+                .fetch_add(ancients, Ordering::Relaxed);
         }
     }
 
