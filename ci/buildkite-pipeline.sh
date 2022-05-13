@@ -111,7 +111,7 @@ EOF
 trigger_secondary_step() {
   cat  >> "$output_file" <<"EOF"
   - trigger: "solana-secondary"
-    branches: "!pull/*"
+    branches: "*"
     async: true
     build:
       message: "${BUILDKITE_MESSAGE}"
