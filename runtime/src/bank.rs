@@ -4070,13 +4070,9 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
-                    let compute_budget_max_units = if tx_wide_compute_cap {
-                        compute_budget::MAX_UNITS
+                    let compute_budget = if let Some(compute_budget) = self.compute_budget {
+                        compute_budget
                     } else {
-<<<<<<< HEAD
-                        compute_budget::DEFAULT_UNITS
-=======
                         let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
                         let compute_budget_max_units = if tx_wide_compute_cap {
                             compute_budget::MAX_UNITS
@@ -4105,30 +4101,7 @@ impl Bank {
                             }
                         }
                         compute_budget
->>>>>>> cde15ff68 (support 64-bit prioritization fee (#25027))
                     };
-                    let mut compute_budget = self
-                        .compute_budget
-                        .unwrap_or_else(|| ComputeBudget::new(compute_budget_max_units));
-                    if tx_wide_compute_cap {
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_message(
-                            tx.message(),
-                            feature_set.is_active(&requestable_heap_size::id()),
-                            feature_set.is_active(&default_units_per_instruction::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
-                        }
-                    }
 
                     self.execute_loaded_transaction(
                         tx,
