@@ -5,6 +5,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
+        cmp::min,
         collections::HashSet,
         result::Result,
         sync::{
@@ -92,7 +93,11 @@ pub async fn upload_confirmed_blocks(
         let mut start_slot = *first_blockstore_slot;
         while start_slot <= *last_blockstore_slot {
             let mut next_bigtable_slots = loop {
-                match bigtable.get_confirmed_blocks(start_slot, 1000).await {
+                let num_bigtable_blocks = min(1000, config.max_num_slots_to_check * 2);
+                match bigtable
+                    .get_confirmed_blocks(start_slot, num_bigtable_blocks)
+                    .await
+                {
                     Ok(slots) => break slots,
                     Err(err) => {
                         error!("get_confirmed_blocks for {} failed: {:?}", start_slot, err);
