@@ -347,6 +347,10 @@ pub mod require_static_program_ids_in_transaction {
     solana_sdk::declare_id!("8FdwgyHFEjhAdjWfV2vfqk7wA1g9X3fQpKH7SBpEv3kC");
 }
 
+pub mod prioritization_fee_type_change {
+    solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -428,6 +432,7 @@ lazy_static! {
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
+        (prioritization_fee_type_change::id(), "Switch compute budget to prioritization fee"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
