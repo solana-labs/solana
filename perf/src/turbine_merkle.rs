@@ -341,8 +341,7 @@ impl TurbineMerkleTree {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::iter::repeat;
+    use {super::*, std::iter::repeat};
 
     fn _create_packet_buf(byte_count: usize) -> Vec<u8> {
         let mut buf = Vec::with_capacity(byte_count);
