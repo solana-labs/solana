@@ -324,6 +324,24 @@ pull_or_push_steps() {
     wait_step
   fi
 
+    # osx build
+  cat >> "$output_file" <<"EOF"
+  - command: scripts/cargo-install-all.sh stable solana-release
+    name: "build aarch64-apple-darwin"
+    agents:
+      - "queue=release-build-aarch64-apple-darwin"
+    timeout_in_minutes: 60
+EOF
+
+  cat >> "$output_file" <<"EOF"
+  - command: scripts/cargo-install-all.sh stable solana-release
+    name: "build x86_64-apple-darwin"
+    agents:
+      - "queue=release-build-x86_64-apple-darwin"
+    timeout_in_minutes: 60
+EOF
+  wait_step
+
   # Run the full test suite by default, skipping only if modifications are local
   # to some particular areas of the tree
   if affects_other_than ^.buildkite ^.mergify .md$ ^docs/ ^web3.js/ ^explorer/ ^.gitbook; then
