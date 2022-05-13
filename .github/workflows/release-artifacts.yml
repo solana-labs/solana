@@ -3,7 +3,7 @@ name: release-artifacts
 on:
   workflow_call:
     inputs:
-      tag:
+      commit:
         required: false
         type: string
     secrets:
@@ -17,10 +17,14 @@ on:
 jobs:
   windows-build:
     runs-on: windows-2022
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
+      channel: ${{ steps.build.outputs.channel }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          ref: master
           fetch-depth: 0
 
       - name: Setup Rust
@@ -35,30 +39,41 @@ jobs:
           cp -r ci/env.sh /tmp/env.sh
 
       - name: Switch Version
-        if: ${{ inputs.tag }}
+        if: ${{ inputs.commit }}
         run: |
-          git checkout ${{ inputs.tag }}
+          git checkout ${{ inputs.commit }}
 
       - name: Build
+        id: build
         shell: bash
         run: |
           choco install openssl
           export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
           choco install protoc
           source /tmp/env.sh
+          echo "::set-output name=tag::$CI_TAG"
+          eval "$(ci/channel-info.sh)"
+          echo "::set-output name=channel::$CHANNEL"
           ci/publish-tarball.sh
-          mkdir -p "github-action-s3-upload/${{ inputs.tag }}"
-          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.tag }}/"
-          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.tag }}/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.tag }}/"
+
+      - name: Prepare Upload Files
+        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
+        shell: bash
+        run: |
+          mkdir -p "github-action-s3-upload/${{ inputs.commit }}"
+          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.commit }}/"
+          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.commit }}/"
+          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.commit }}/"
 
       - name: Upload Artifacts
+        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: windows-artifact
           path: github-action-s3-upload/
 
   windows-s3-upload:
+    if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
     needs: [windows-build]
     runs-on: ubuntu-20.04
     steps:
@@ -80,6 +95,7 @@ jobs:
           SOURCE_DIR: "github-action-s3-upload"
 
   windows-gh-release:
+    if: ${{ needs.windows-build.outputs.tag != '' }}
     needs: [windows-build]
     runs-on: ubuntu-20.04
     steps:
@@ -92,7 +108,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ inputs.commit }}
           draft: true
           files: |
-            github-action-s3-upload/${{ inputs.tag }}/*
+            github-action-s3-upload/${{ inputs.commit }}/*

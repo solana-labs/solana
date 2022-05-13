@@ -86,15 +86,10 @@ if [[ -n $CI ]]; then
     export CI_BUILD_ID=$GITHUB_RUN_ID
     export CI_JOB_ID=$GITHUB_RUN_NUMBER
     export CI_REPO_SLUG=$GITHUB_REPOSITORY
+    export CI_BRANCH=$GITHUB_REF_NAME
 
     CI_COMMIT=$(git rev-parse HEAD)
     export CI_COMMIT
-
-    CI_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    if [[ $CI_BRANCH == "HEAD" ]]; then
-      CI_BRANCH=""
-    fi
-    export CI_BRANCH
 
     CI_TAG=$(git tag --points-at HEAD)
     export CI_TAG
