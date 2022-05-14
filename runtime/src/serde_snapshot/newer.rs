@@ -60,6 +60,8 @@ struct DeserializableVersionedBank {
     unused_accounts: UnusedAccounts,
     epoch_stakes: HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    #[serde(deserialize_with = "default_on_eof")]
+    lamports_per_signature: u64,
 }
 
 impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
@@ -88,7 +90,9 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             collector_id: dvb.collector_id,
             collector_fees: dvb.collector_fees,
             fee_calculator: dvb.fee_calculator,
-            fee_rate_governor: dvb.fee_rate_governor,
+            fee_rate_governor: dvb
+                .fee_rate_governor
+                .clone_with_lamports_per_signature(dvb.lamports_per_signature),
             collected_rent: dvb.collected_rent,
             rent_collector: dvb.rent_collector,
             epoch_schedule: dvb.epoch_schedule,
@@ -137,10 +141,12 @@ struct SerializableVersionedBank<'a> {
     unused_accounts: UnusedAccounts,
     epoch_stakes: &'a HashMap<Epoch, EpochStakes>,
     is_delta: bool,
+    lamports_per_signature: u64,
 }
 
 impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedBank<'a> {
     fn from(rhs: crate::bank::BankFieldsToSerialize<'a>) -> Self {
+        let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         Self {
             blockhash_queue: rhs.blockhash_queue,
             ancestors: rhs.ancestors,
@@ -174,6 +180,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            lamports_per_signature,
         }
     }
 }
@@ -311,6 +318,7 @@ impl<'a> TypeContext<'a> for Context {
         let rhs = bank_fields;
         let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
         let hard_forks = RwLock::new(rhs.hard_forks.clone());
+        let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
             ancestors: &rhs.ancestors,
@@ -344,6 +352,7 @@ impl<'a> TypeContext<'a> for Context {
             unused_accounts: UnusedAccounts::default(),
             epoch_stakes: &rhs.epoch_stakes,
             is_delta: rhs.is_delta,
+            lamports_per_signature,
         };
 
         bincode::serialize_into(stream_writer, &(bank, accounts_db_fields))
