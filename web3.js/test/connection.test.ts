@@ -32,6 +32,7 @@ import {
   EpochInfo,
   InflationGovernor,
   Logs,
+  RpcResponseAndContext,
   SignatureResult,
   SlotInfo,
 } from '../src/connection';
@@ -49,7 +50,7 @@ import {
   restoreRpcWebSocket,
   mockRpcMessage,
 } from './mocks/rpc-websockets';
-import type {TransactionSignature} from '../src/transaction';
+import {TransactionInstruction, TransactionSignature} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
@@ -893,26 +894,79 @@ describe('Connection', function () {
     });
   }
 
-  it('confirm transaction - error', async () => {
-    const badTransactionSignature = 'bad transaction signature';
+  if (process.env.TEST_LIVE) {
+    describe('transaction confirmation (live)', () => {
+      let connection: Connection;
+      beforeEach(() => {
+        connection = new Connection(url, 'confirmed');
+      });
 
-    await expect(
-      connection.confirmTransaction(badTransactionSignature),
-    ).to.be.rejectedWith('signature must be base58 encoded');
+      describe('blockheight based transaction confirmation', () => {
+        let latestBlockhash: {blockhash: string; lastValidBlockHeight: number};
+        let signature: string;
 
-    await mockRpcResponse({
-      method: 'getSignatureStatuses',
-      params: [[badTransactionSignature]],
-      error: mockErrorResponse,
+        beforeEach(async function () {
+          this.timeout(60 * 1000);
+          const keypair = Keypair.generate();
+          const [_, blockhash] = await Promise.all([
+            connection.confirmTransaction(
+              await connection.requestAirdrop(
+                keypair.publicKey,
+                LAMPORTS_PER_SOL,
+              ),
+            ),
+            helpers.latestBlockhash({connection}),
+          ]);
+          latestBlockhash = blockhash;
+          const ix = new TransactionInstruction({
+            keys: [
+              {
+                pubkey: keypair.publicKey,
+                isSigner: true,
+                isWritable: true,
+              },
+            ],
+            programId: new PublicKey(
+              'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+            ),
+            data: Buffer.from('Hello world', 'utf8'),
+          });
+
+          const transaction = new Transaction({
+            ...latestBlockhash,
+          });
+          transaction.add(ix);
+          transaction.sign(keypair);
+          signature = await connection.sendTransaction(transaction, [keypair]);
+        });
+
+        it('confirms transactions using the last valid blockheight strategy', async () => {
+          let result = await connection.confirmTransaction(
+            {
+              signature,
+              ...latestBlockhash,
+            },
+            'processed',
+          );
+          expect(result.value).to.have.property('err', null);
+        }).timeout(60 * 1000);
+
+        it('throws when confirming using a blockhash whose last valid blockheight has passed', async () => {
+          const confirmationPromise = connection.confirmTransaction({
+            signature,
+            ...latestBlockhash,
+            lastValidBlockHeight: (await connection.getBlockHeight()) - 1, // Simulate the blockheight having passed.
+          });
+          expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredBlockheightExceededError,
+          );
+        }).timeout(60 * 1000);
+      });
     });
-
-    await expect(
-      connection.getSignatureStatus(badTransactionSignature),
-    ).to.be.rejectedWith(mockErrorMessage);
-  });
+  }
 
   if (!process.env.TEST_LIVE) {
-    describe('confirm transaction with mock timer', () => {
+    describe('transaction confirmation (mock)', () => {
       let clock: SinonFakeTimers;
       beforeEach(() => {
         clock = useFakeTimers();
@@ -1003,11 +1057,11 @@ describe('Connection', function () {
 
         const lastValidBlockHeight = 3;
 
-        // Start the block height at `lastValidBlockHeight - 1`.
+        // Advance the block height to the `lastValidBlockHeight`.
         await mockRpcResponse({
           method: 'getBlockHeight',
           params: [],
-          value: lastValidBlockHeight - 1,
+          value: lastValidBlockHeight,
         });
 
         const confirmationPromise = connection.confirmTransaction({
@@ -1017,21 +1071,9 @@ describe('Connection', function () {
         });
         clock.runAllAsync();
 
-        // Advance the block height to the `lastValidBlockHeight`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight,
-        });
-        clock.runAllAsync();
-
         // Return a signature result in the nick of time.
         resolveResultPromise({err: null});
 
-        await expect(confirmationPromise).to.eventually.have.property(
-          'context',
-        );
-        await expect(confirmationPromise).to.eventually.have.property('value');
         await expect(confirmationPromise).to.eventually.deep.equal({
           context: {slot: 11},
           value: {err: null},
@@ -1039,6 +1081,26 @@ describe('Connection', function () {
       });
     });
   }
+
+  describe('transaction confirmation', () => {
+    it('confirm transaction - error', async () => {
+      const badTransactionSignature = 'bad transaction signature';
+
+      await expect(
+        connection.confirmTransaction(badTransactionSignature),
+      ).to.be.rejectedWith('signature must be base58 encoded');
+
+      await mockRpcResponse({
+        method: 'getSignatureStatuses',
+        params: [[badTransactionSignature]],
+        error: mockErrorResponse,
+      });
+
+      await expect(
+        connection.getSignatureStatus(badTransactionSignature),
+      ).to.be.rejectedWith(mockErrorMessage);
+    });
+  });
 
   it('get transaction count', async () => {
     await mockRpcResponse({
