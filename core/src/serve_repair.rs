@@ -25,7 +25,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
+    solana_perf::packet::{PacketBatch, PacketBatchRecycler},
     solana_sdk::{
         clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
     },
@@ -438,19 +438,15 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
     ) {
-        // iter over the packets
         packet_batch.packets.iter().for_each(|packet| {
-            let from_addr = packet.meta.addr();
-            limited_deserialize(&packet.data[..packet.meta.size])
-                .into_iter()
-                .for_each(|request| {
-                    stats.processed += 1;
-                    let rsp =
-                        Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                    if let Some(rsp) = rsp {
-                        let _ignore_disconnect = response_sender.send(rsp);
-                    }
-                });
+            if let Ok(request) = packet.deserialize_slice(..) {
+                stats.processed += 1;
+                let from_addr = packet.meta.addr();
+                let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                if let Some(rsp) = rsp {
+                    let _ignore_disconnect = response_sender.send(rsp);
+                }
+            }
         });
     }
 
@@ -817,9 +813,9 @@ mod tests {
             let rv: Vec<Shred> = rv
                 .packets
                 .into_iter()
-                .filter_map(|b| {
-                    assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                .filter_map(|p| {
+                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
                 })
                 .collect();
             assert!(!rv.is_empty());
@@ -902,9 +898,9 @@ mod tests {
             let rv: Vec<Shred> = rv
                 .packets
                 .into_iter()
-                .filter_map(|b| {
-                    assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                .filter_map(|p| {
+                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
                 })
                 .collect();
             assert_eq!(rv[0].index(), 1);
@@ -1180,8 +1176,9 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
+                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
+                .unwrap();
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
@@ -1197,8 +1194,9 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
+                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
+                .unwrap();
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // Set duplicate confirmed
@@ -1221,8 +1219,9 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
+                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
+                .unwrap();
             assert_eq!(
                 ancestor_hashes_response.into_slot_hashes(),
                 expected_ancestors

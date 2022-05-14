@@ -21,7 +21,7 @@ use {
     solana_perf::{
         cuda_runtime::PinnedVec,
         data_budget::DataBudget,
-        packet::{limited_deserialize, Packet, PacketBatch, PACKETS_PER_BATCH},
+        packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
         perf_libs,
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
@@ -1686,7 +1686,7 @@ impl BankingStage {
                     return None;
                 }
 
-                let tx: VersionedTransaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
+                let tx: VersionedTransaction = p.deserialize_slice(..).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
                 let tx = SanitizedTransaction::try_create(
