@@ -4612,8 +4612,6 @@ impl Bank {
         prioritization_fee_type_change: bool,
     ) -> u64 {
         if tx_wide_compute_cap {
-            // Prioritization fee rate is 1 lamports per 10K CUs
-            const PRIORITIZATION_FEE_RATE_UNITS: u64 = 10_000;
             // Fee based on compute units and signatures
             const BASE_CONGESTION: f64 = 5_000.0;
             let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
@@ -4624,7 +4622,7 @@ impl Bank {
             };
 
             let mut compute_budget = ComputeBudget::default();
-            let prioritization_fee_rate = compute_budget
+            let prioritization_fee_details = compute_budget
                 .process_instructions(
                     message.program_instructions_iter(),
                     false,
@@ -4632,11 +4630,7 @@ impl Bank {
                     prioritization_fee_type_change,
                 )
                 .unwrap_or_default();
-            let prioritization_fee = if prioritization_fee_type_change {
-                prioritization_fee_rate.saturating_mul(PRIORITIZATION_FEE_RATE_UNITS)
-            } else {
-                prioritization_fee_rate
-            };
+            let prioritization_fee = prioritization_fee_details.get_fee();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
             let write_lock_fee = Self::get_num_write_locks_in_message(message)
@@ -7254,7 +7248,11 @@ pub(crate) mod tests {
             status_cache::MAX_CACHE_ENTRIES,
         },
         crossbeam_channel::{bounded, unbounded},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{
+            compute_budget::MAX_UNITS,
+            invoke_context::InvokeContext,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        },
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -16777,28 +16775,18 @@ pub(crate) mod tests {
 
         // Explicit fee schedule
 
-        let expected_fee_structure = &[
-            // (units requested, fee in SOL),
-            (0, 0.0),
-            (5_000, 0.0),
-            (10_000, 0.0),
-            (100_000, 0.0),
-            (300_000, 0.0),
-            (500_000, 0.0),
-            (700_000, 0.0),
-            (900_000, 0.0),
-            (1_100_000, 0.0),
-            (1_300_000, 0.0),
-            (1_500_000, 0.0), // ComputeBudget capped
-        ];
-        for pair in expected_fee_structure.iter() {
+        for requested_compute_units in [
+            0, 5_000, 10_000, 100_000, 300_000, 500_000, 700_000, 900_000, 1_100_000, 1_300_000,
+            MAX_UNITS,
+        ] {
             const PRIORITIZATION_FEE_RATE: u64 = 42;
-            const PRIORITIZATION_TICK_SIZE: u64 = 10_000;
-            let prioritization_fee =
-                PRIORITIZATION_FEE_RATE.saturating_mul(PRIORITIZATION_TICK_SIZE);
+            let prioritization_fee_details = PrioritizationFeeDetails::new(
+                PrioritizationFeeType::Rate(PRIORITIZATION_FEE_RATE),
+                requested_compute_units as u64,
+            );
             let message = SanitizedMessage::try_from(Message::new(
                 &[
-                    ComputeBudgetInstruction::request_units(pair.0),
+                    ComputeBudgetInstruction::request_units(requested_compute_units),
                     ComputeBudgetInstruction::set_prioritization_fee_rate(PRIORITIZATION_FEE_RATE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
@@ -16808,7 +16796,7 @@ pub(crate) mod tests {
             let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
             assert_eq!(
                 fee,
-                sol_to_lamports(pair.1) + lamports_per_signature + prioritization_fee
+                lamports_per_signature + prioritization_fee_details.get_fee()
             );
         }
     }

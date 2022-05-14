@@ -376,7 +376,7 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
 
 fn get_prioritization_fee_rate(message: &SanitizedVersionedMessage) -> Option<u64> {
     let mut compute_budget = ComputeBudget::default();
-    let prioritization_fee_rate = compute_budget
+    let prioritization_fee_details = compute_budget
         .process_instructions(
             message.program_instructions_iter(),
             false, // not request heap size
@@ -384,7 +384,7 @@ fn get_prioritization_fee_rate(message: &SanitizedVersionedMessage) -> Option<u6
             true,  // use changed prioritization fee
         )
         .ok()?;
-    Some(prioritization_fee_rate)
+    Some(prioritization_fee_details.get_priority())
 }
 
 pub fn transactions_to_deserialized_packets(
