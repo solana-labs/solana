@@ -6,7 +6,7 @@ use {
         cell::{Ref, RefCell},
         ffi::CString,
         os::raw::{c_char, c_int},
-        ptr::null_mut,
+        ptr::null,
     },
 };
 
@@ -55,7 +55,7 @@ pub extern "C" fn sealevel_errno() -> c_int {
 ///
 /// Must be released using `sealevel_strerror_free` after use.
 #[no_mangle]
-pub extern "C" fn sealevel_strerror() -> *mut c_char {
+pub extern "C" fn sealevel_strerror() -> *const c_char {
     let c_string = ERROR.with(|err_cell| {
         err_cell
             .borrow()
@@ -63,17 +63,17 @@ pub extern "C" fn sealevel_strerror() -> *mut c_char {
             .map(|err| CString::new(format!("{:?}", err)).expect(""))
     });
     match c_string {
-        None => null_mut(),
-        Some(str) => str.into_raw(),
+        None => null(),
+        Some(str) => str.into_raw() as *const c_char,
     }
 }
 
 /// Frees an unused error string gained from `sealevel_strerror`.
 /// Calling this with a NULL pointer is a no-op.
 #[no_mangle]
-pub unsafe extern "C" fn sealevel_strerror_free(str: *mut c_char) {
+pub unsafe extern "C" fn sealevel_strerror_free(str: *const c_char) {
     if str.is_null() {
         return;
     }
-    drop(CString::from_raw(str))
+    drop(CString::from_raw(str as *mut c_char))
 }

@@ -77,13 +77,13 @@ int sealevel_errno(void);
  *
  * Must be released using `sealevel_strerror_free` after use.
  */
-char *sealevel_strerror(void);
+const char *sealevel_strerror(void);
 
 /**
  * Frees an unused error string gained from `sealevel_strerror`.
  * Calling this with a NULL pointer is a no-op.
  */
-void sealevel_strerror_free(char *str);
+void sealevel_strerror_free(const char *str);
 
 /**
  * Creates a new Sealevel machine environment.
