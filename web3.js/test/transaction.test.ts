@@ -459,6 +459,26 @@ describe('Transaction', () => {
     expect(compiledMessage3).not.to.eql(message);
   });
 
+  it('constructs a transaction with last valid block height', () => {
+    const blockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
+    const lastValidBlockHeight = 1234;
+    const transaction = new Transaction({
+      blockhash,
+      lastValidBlockHeight,
+    });
+    expect(transaction.recentBlockhash).to.eq(blockhash);
+    expect(transaction.lastValidBlockHeight).to.eq(lastValidBlockHeight);
+  });
+
+  it('constructs a transaction with only a recent blockhash', () => {
+    const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
+    const transaction = new Transaction({
+      recentBlockhash,
+    });
+    expect(transaction.recentBlockhash).to.eq(recentBlockhash);
+    expect(transaction.lastValidBlockHeight).to.be.undefined;
+  });
+
   it('serialize unsigned transaction', () => {
     const sender = Keypair.fromSeed(Uint8Array.from(Array(32).fill(8))); // Arbitrary known account
     const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k'; // Arbitrary known recentBlockhash
