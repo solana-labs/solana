@@ -17,6 +17,7 @@ documentation = true
 documentation_style = "doxy"
 
 usize_is_size_t = true
+style = "type"
 
 [export]
 item_types = ["enums", "structs", "opaque", "functions", "constants", "typedefs"]

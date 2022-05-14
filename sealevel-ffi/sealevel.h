@@ -50,7 +50,7 @@ typedef struct sealevel_program sealevel_program;
 /**
  * Access parameters of an account usage in an instruction.
  */
-typedef struct sealevel_instruction_account {
+typedef struct {
   size_t index_in_transaction;
   size_t index_in_caller;
   bool is_signer;
@@ -88,27 +88,27 @@ void sealevel_strerror_free(const char *str);
 /**
  * Creates a new Sealevel machine environment.
  */
-struct sealevel_machine *sealevel_machine_new(void);
+sealevel_machine *sealevel_machine_new(void);
 
 /**
  * Releases resources associated with a Sealevel machine.
  */
-void sealevel_machine_free(struct sealevel_machine *machine);
+void sealevel_machine_free(sealevel_machine *machine);
 
 /**
  * Drops an invoke context and all programs created with it.
  */
-void sealevel_invoke_context_free(struct sealevel_invoke_context *this_);
+void sealevel_invoke_context_free(sealevel_invoke_context *this_);
 
 /**
  * Processes a transaction instruction.
  *
  * Sets `sealevel_errno`.
  */
-void sealevel_process_instruction(struct sealevel_invoke_context *invoke_context,
+void sealevel_process_instruction(sealevel_invoke_context *invoke_context,
                                   const char *data,
                                   size_t data_len,
-                                  const struct sealevel_instruction_account *accounts,
+                                  const sealevel_instruction_account *accounts,
                                   size_t accounts_len,
                                   uint64_t *compute_units_consumed);
 
@@ -117,28 +117,28 @@ void sealevel_process_instruction(struct sealevel_invoke_context *invoke_context
  *
  * Consumes the given syscall registry.
  */
-struct sealevel_program *sealevel_program_create(const struct sealevel_machine *machine,
-                                                 sealevel_syscall_registry syscalls,
-                                                 const char *data,
-                                                 size_t data_len);
+sealevel_program *sealevel_program_create(const sealevel_machine *machine,
+                                          sealevel_syscall_registry syscalls,
+                                          const char *data,
+                                          size_t data_len);
 
 /**
  * Compiles a program to native executable code.
  *
  * Sets `sealevel_errno`.
  */
-void sealevel_program_jit_compile(struct sealevel_program *program);
+void sealevel_program_jit_compile(sealevel_program *program);
 
 /**
  * Executes a Sealevel program with the given instruction data and accounts.
  *
  * Unlike `sealevel_process_instruction`, does not progress the transaction context state machine.
  */
-uint64_t sealevel_program_execute(const struct sealevel_program *program,
-                                  const struct sealevel_invoke_context *invoke_context,
+uint64_t sealevel_program_execute(const sealevel_program *program,
+                                  const sealevel_invoke_context *invoke_context,
                                   const char *data,
                                   size_t data_len,
-                                  const struct sealevel_instruction_account *accounts,
+                                  const sealevel_instruction_account *accounts,
                                   size_t accounts_len);
 
 #ifdef __cplusplus
