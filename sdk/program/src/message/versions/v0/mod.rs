@@ -88,6 +88,7 @@ pub struct Message {
 
 impl Message {
     /// Sanitize message fields and compiled instruction indexes
+    #[must_use = "any sanitization failure must be propagated"]
     pub fn sanitize(&self, reject_dynamic_program_ids: bool) -> Result<(), SanitizeError> {
         let num_static_account_keys = self.account_keys.len();
         if usize::from(self.header.num_required_signatures)

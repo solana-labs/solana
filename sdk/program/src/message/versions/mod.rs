@@ -39,6 +39,7 @@ pub enum VersionedMessage {
 }
 
 impl VersionedMessage {
+    #[must_use = "any sanitization failure must be propagated"]
     pub fn sanitize(&self, require_static_program_ids: bool) -> Result<(), SanitizeError> {
         match self {
             Self::Legacy(message) => message.sanitize(),
