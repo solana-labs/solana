@@ -23,7 +23,7 @@ impl PrioritizationFeeDetails {
                 priority: fee.saturating_div(compute_ticks),
             },
             PrioritizationFeeType::Rate(fee_rate) => {
-                if compute_ticks * COMPUTE_UNIT_TICK_SIZE < max_compute_units {
+                if compute_ticks.saturating_mul(COMPUTE_UNIT_TICK_SIZE) < max_compute_units {
                     compute_ticks = compute_ticks.saturating_add(1);
                 }
 
