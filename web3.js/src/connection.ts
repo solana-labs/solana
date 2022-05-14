@@ -284,15 +284,18 @@ export type RpcResponseAndContext<T> = {
   value: T;
 };
 
+export type BlockhashWithExpiryBlockHeight = Readonly<{
+  blockhash: Blockhash;
+  lastValidBlockHeight: number;
+}>;
+
 /**
  * A strategy for confirming transactions that uses the last valid
  * block height for a given blockhash to check for transaction expiration.
  */
 export type BlockheightBasedTransactionConfimationStrategy = {
   signature: TransactionSignature;
-  blockhash: Blockhash;
-  lastValidBlockHeight: number;
-};
+} & BlockhashWithExpiryBlockHeight;
 
 /**
  * @internal
@@ -3322,11 +3325,11 @@ export class Connection {
 
   /**
    * Fetch the latest blockhash from the cluster
-   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhash(
     commitment?: Commitment,
-  ): Promise<{blockhash: Blockhash; lastValidBlockHeight: number}> {
+  ): Promise<BlockhashWithExpiryBlockHeight> {
     try {
       const res = await this.getLatestBlockhashAndContext(commitment);
       return res.value;
@@ -3337,13 +3340,11 @@ export class Connection {
 
   /**
    * Fetch the latest blockhash from the cluster
-   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhashAndContext(
     commitment?: Commitment,
-  ): Promise<
-    RpcResponseAndContext<{blockhash: Blockhash; lastValidBlockHeight: number}>
-  > {
+  ): Promise<RpcResponseAndContext<BlockhashWithExpiryBlockHeight>> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
