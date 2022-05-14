@@ -1,3 +1,12 @@
+/*
+ * libsealevel is a C interface for the Sealevel virtual machine.
+ * This version of the library bundles the interpreter and JIT implementations part of the Rust implementation of the Solana blockchain.
+ *
+ * Source code: https://github.com/solana-labs/solana
+ *
+ * ABI stability is planned, though this version makes no promises yet.
+*/
+
 #pragma once
 
 /* Generated with cbindgen:0.23.0 */
@@ -9,6 +18,16 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#define SEALEVEL_OK 0
+
+#define SEALEVEL_ERR_INVALID_ELF 1
+
+#define SEALEVEL_ERR_SYSCALL_REGISTRATION 2
+
+#define SEALEVEL_ERR_CALL_DEPTH_EXCEEDED 3
+
+#define SEALEVEL_ERR_UNKNOWN -1
 
 /**
  * The invoke context holds the state of a single transaction execution.
@@ -38,9 +57,33 @@ typedef struct sealevel_instruction_account {
   bool is_writable;
 } sealevel_instruction_account;
 
+/**
+ * The map of syscalls provided by the virtual machine.
+ */
+typedef SyscallRegistry *sealevel_syscall_registry;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * Returns the error code of this thread's last seen error.
+ */
+int sealevel_errno(void);
+
+/**
+ * Returns a UTF-8 string of this thread's last seen error,
+ * or NULL if `sealevel_errno() == SEALEVEL_OK`.
+ *
+ * Must be released using `sealevel_strerror_free` after use.
+ */
+char *sealevel_strerror(void);
+
+/**
+ * Frees an unused error string gained from `sealevel_strerror`.
+ * Calling this with a NULL pointer is a no-op.
+ */
+void sealevel_strerror_free(char *str);
 
 /**
  * Creates a new Sealevel machine environment.
@@ -59,6 +102,8 @@ void sealevel_invoke_context_free(struct sealevel_invoke_context *this_);
 
 /**
  * Processes a transaction instruction.
+ *
+ * Sets `sealevel_errno`.
  */
 void sealevel_process_instruction(struct sealevel_invoke_context *invoke_context,
                                   const char *data,
@@ -69,16 +114,20 @@ void sealevel_process_instruction(struct sealevel_invoke_context *invoke_context
 
 /**
  * Loads a Sealevel program from an ELF buffer and verifies its SBF bytecode.
+ *
+ * Consumes the given syscall registry.
  */
 struct sealevel_program *sealevel_program_create(const struct sealevel_machine *machine,
-                                                 const struct sealevel_invoke_context *invoke_context,
+                                                 sealevel_syscall_registry syscalls,
                                                  const char *data,
                                                  size_t data_len);
 
 /**
  * Compiles a program to native executable code.
+ *
+ * Sets `sealevel_errno`.
  */
-int sealevel_program_jit_compile(struct sealevel_program *program);
+void sealevel_program_jit_compile(struct sealevel_program *program);
 
 /**
  * Executes a Sealevel program with the given instruction data and accounts.
