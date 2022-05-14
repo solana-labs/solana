@@ -22,7 +22,6 @@ pub enum SanitizeError {
 /// - All index values are in range.
 /// - All values are within their static max/min bounds.
 pub trait Sanitize {
-    #[must_use = "any sanitization failure must be propagated"]
     fn sanitize(&self) -> Result<(), SanitizeError> {
         Ok(())
     }
