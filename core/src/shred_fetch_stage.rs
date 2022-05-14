@@ -156,6 +156,7 @@ impl ShredFetchStage {
                     Arc::new(StreamerReceiveStats::new("packet_modifier")),
                     1,
                     true,
+                    None,
                 )
             })
             .collect();

@@ -95,6 +95,7 @@ impl Tpu {
             &vote_packet_sender,
             poh_recorder,
             tpu_coalesce_ms,
+            Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
         let (verified_sender, verified_receiver) = unbounded();
 
