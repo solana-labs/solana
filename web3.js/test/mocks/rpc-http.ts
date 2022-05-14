@@ -58,6 +58,14 @@ export const mockRpcBatchResponse = async ({
     .thenReply(200, JSON.stringify(response));
 };
 
+function isPromise<T>(obj: PromiseLike<T> | T): obj is PromiseLike<T> {
+  return (
+    !!obj &&
+    (typeof obj === 'object' || typeof obj === 'function') &&
+    typeof (obj as any).then === 'function'
+  );
+}
+
 export const mockRpcResponse = async ({
   method,
   params,
@@ -68,22 +76,12 @@ export const mockRpcResponse = async ({
 }: {
   method: string;
   params: Array<any>;
-  value?: any;
+  value?: Promise<any> | any;
   error?: any;
   withContext?: boolean;
   withHeaders?: HttpHeaders;
 }) => {
   if (!mockServer) return;
-
-  let result = value;
-  if (withContext) {
-    result = {
-      context: {
-        slot: 11,
-      },
-      value,
-    };
-  }
 
   await mockServer
     .post('/')
@@ -93,15 +91,31 @@ export const mockRpcResponse = async ({
       params,
     })
     .withHeaders(withHeaders || {})
-    .thenReply(
-      200,
-      JSON.stringify({
-        jsonrpc: '2.0',
-        id: '',
-        error,
-        result,
-      }),
-    );
+    .thenCallback(async () => {
+      try {
+        const unwrappedValue = isPromise(value) ? await value : value;
+        let result = unwrappedValue;
+        if (withContext) {
+          result = {
+            context: {
+              slot: 11,
+            },
+            value: unwrappedValue,
+          };
+        }
+        return {
+          statusCode: 200,
+          json: {
+            jsonrpc: '2.0',
+            id: '',
+            error,
+            result,
+          },
+        };
+      } catch (_e) {
+        return {statusCode: 500};
+      }
+    });
 };
 
 const latestBlockhash = async ({

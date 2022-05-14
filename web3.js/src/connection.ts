@@ -2906,13 +2906,17 @@ export class Connection {
     });
 
     const checkBlockHeight = async () => {
-      const blockHeight = await this.getBlockHeight(commitment);
-      return blockHeight;
+      try {
+        const blockHeight = await this.getBlockHeight(commitment);
+        return blockHeight;
+      } catch (_e) {
+        return -1;
+      }
     };
 
     const expiryPromise = new Promise<{
       __type: TransactionStatus.EXPIRED | TransactionStatus.TIMED_OUT;
-    }>((resolve, reject) => {
+    }>(resolve => {
       if (typeof strategy === 'string') {
         let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
         switch (subscriptionCommitment) {
@@ -2940,21 +2944,17 @@ export class Connection {
       } else {
         let config = strategy as BlockheightBasedTransactionConfimationStrategy;
         (async () => {
-          try {
-            let currentBlockHeight = await checkBlockHeight();
+          let currentBlockHeight = await checkBlockHeight();
+          if (done) return;
+          while (currentBlockHeight <= config.lastValidBlockHeight) {
+            await sleep(1000);
             if (done) return;
-            while (currentBlockHeight <= config.lastValidBlockHeight) {
-              await sleep(1000);
-              if (done) return;
-              currentBlockHeight = await checkBlockHeight();
-              if (done) return;
-            }
-            resolve({
-              __type: TransactionStatus.EXPIRED,
-            });
-          } catch (error) {
-            reject(error);
+            currentBlockHeight = await checkBlockHeight();
+            if (done) return;
           }
+          resolve({
+            __type: TransactionStatus.EXPIRED,
+          });
         })();
       }
     });

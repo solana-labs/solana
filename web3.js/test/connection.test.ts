@@ -1042,6 +1042,47 @@ describe('Connection', function () {
         );
       });
 
+      it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+        const mockSignature =
+          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+        let resolveResultPromise: (result: SignatureResult) => void;
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise<SignatureResult>(resolve => {
+            resolveResultPromise = resolve;
+          }),
+        });
+
+        // Simulate a failure to fetch the block height.
+        let rejectBlockheightPromise: () => void;
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: (() => {
+            const p = new Promise((_, reject) => {
+              rejectBlockheightPromise = reject;
+            });
+            p.catch(() => {});
+            return p;
+          })(),
+        });
+
+        const confirmationPromise = connection.confirmTransaction({
+          signature: mockSignature,
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight: 3,
+        });
+
+        rejectBlockheightPromise();
+        clock.runToLastAsync();
+        resolveResultPromise({err: null});
+        clock.runToLastAsync();
+
+        expect(confirmationPromise).not.to.eventually.be.rejected;
+      });
+
       it('confirm transaction - block height confirmed', async () => {
         const mockSignature =
           'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
