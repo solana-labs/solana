@@ -22,7 +22,7 @@ import type {CompiledInstruction} from './message';
 export type TransactionSignature = string;
 
 export const enum TransactionStatus {
-  BLOCKHASH_EXPIRED,
+  BLOCKHEIGHT_EXCEEDED,
   PROCESSED,
   TIMED_OUT,
 }

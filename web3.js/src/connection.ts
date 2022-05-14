@@ -2914,7 +2914,7 @@ export class Connection {
     };
 
     const expiryPromise = new Promise<
-      | {__type: TransactionStatus.BLOCKHASH_EXPIRED}
+      | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
       | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
     >(resolve => {
       if (typeof strategy === 'string') {
@@ -2949,7 +2949,7 @@ export class Connection {
             currentBlockHeight = await checkBlockHeight();
             if (done) return;
           }
-          resolve({__type: TransactionStatus.BLOCKHASH_EXPIRED});
+          resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
         })();
       }
     });
@@ -2958,11 +2958,11 @@ export class Connection {
     try {
       const outcome = await Promise.race([confirmationPromise, expiryPromise]);
       switch (outcome.__type) {
+        case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
+          throw new TransactionExpiredBlockheightExceededError(rawSignature);
         case TransactionStatus.PROCESSED:
           result = outcome.response;
           break;
-        case TransactionStatus.BLOCKHASH_EXPIRED:
-          throw new TransactionExpiredBlockheightExceededError(rawSignature);
         case TransactionStatus.TIMED_OUT:
           throw new TransactionExpiredTimeoutError(
             rawSignature,
