@@ -60,7 +60,7 @@ lazy_static! {
 
 #[derive(Clone)]
 struct QuicConnection {
-    endpoint: Arc<Endpoint>,
+    endpoint: Endpoint,
     connection: Arc<NewConnection>,
 }
 
@@ -98,7 +98,7 @@ impl QuicConnection {
         let connection = connecting_result?;
 
         Ok(Self {
-            endpoint: Arc::new(endpoint),
+            endpoint,
             connection: Arc::new(connection),
         })
     }
