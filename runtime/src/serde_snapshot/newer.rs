@@ -90,10 +90,9 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             collector_id: dvb.collector_id,
             collector_fees: dvb.collector_fees,
             fee_calculator: dvb.fee_calculator,
-            fee_rate_governor: FeeRateGovernor::copy_with_new_lamports_per_signature(
-                dvb.fee_rate_governor,
-                dvb.lamports_per_signature,
-            ),
+            fee_rate_governor: dvb
+                .fee_rate_governor
+                .clone_with_lamports_per_signature(dvb.lamports_per_signature),
             collected_rent: dvb.collected_rent,
             rent_collector: dvb.rent_collector,
             epoch_schedule: dvb.epoch_schedule,
