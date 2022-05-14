@@ -6,15 +6,13 @@ use {
     },
     indexmap::map::IndexMap,
     lazy_static::lazy_static,
-    quinn_proto::ConnectionStats,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::SocketAddr,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
@@ -242,7 +240,6 @@ struct GetConnectionResult {
     map_timing_ms: u64,
     lock_timing_ms: u64,
     connection_cache_stats: Arc<ConnectionCacheStats>,
-    other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
     num_evictions: u64,
     eviction_timing_ms: u64,
 }
@@ -263,17 +260,11 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         connection,
         cache_hit,
         connection_cache_stats,
-        maybe_stats,
         num_evictions,
         eviction_timing_ms,
     ) = match map.map.get(addr) {
         Some(connection) => {
-            let mut stats = None;
-            // update connection stats
-            if let Connection::Quic(conn) = connection {
-                stats = conn.stats().map(|s| (conn.base_stats(), s));
-            }
-            (connection.clone(), true, map.stats.clone(), stats, 0, 0)
+            (connection.clone(), true, map.stats.clone(), 0, 0)
         }
         None => {
             // Upgrade to write access by dropping read lock and acquire write lock
@@ -289,24 +280,13 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             // another thread could have setup the connection.
             match map.map.get(addr) {
                 Some(connection) => {
-                    let mut stats = None;
-                    // update connection stats
-                    if let Connection::Quic(conn) = connection {
-                        stats = conn.stats().map(|s| (conn.base_stats(), s));
-                    }
-                    (connection.clone(), true, map.stats.clone(), stats, 0, 0)
+                    (connection.clone(), true, map.stats.clone(), 0, 0)
                 }
                 None => {
-                    let (_, send_socket) = solana_net_utils::bind_in_range(
-                        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                        VALIDATOR_PORT_RANGE,
-                    )
-                    .unwrap();
-
                     let connection = if map.use_quic {
-                        Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
+                        Connection::Quic(Arc::new(QuicTpuConnection::new(*addr)))
                     } else {
-                        Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
+                        Connection::Udp(Arc::new(UdpTpuConnection::new(*addr)))
                     };
 
                     // evict a connection if the cache is reaching upper bounds
@@ -326,7 +306,6 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
                         connection,
                         false,
                         map.stats.clone(),
-                        None,
                         num_evictions,
                         get_connection_cache_eviction_measure.as_ms(),
                     )
@@ -343,7 +322,6 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         map_timing_ms: get_connection_map_measure.as_ms(),
         lock_timing_ms,
         connection_cache_stats,
-        other_stats: maybe_stats,
         num_evictions,
         eviction_timing_ms,
     }
@@ -360,11 +338,16 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
         map_timing_ms,
         lock_timing_ms,
         connection_cache_stats,
-        other_stats,
         num_evictions,
         eviction_timing_ms,
     } = get_or_add_connection(addr);
 
+    let other_stats = if let Connection::Quic(conn) = &connection {
+        conn.stats().map(|s| (conn.base_stats(), s))
+    } else {
+        None
+    };
+    
     if report_stats {
         connection_cache_stats.report();
     }
