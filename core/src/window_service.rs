@@ -376,7 +376,7 @@ where
             let repair_info = RepairMeta {
                 _from_addr: packet.meta.addr(),
                 // If can't parse the nonce, dump the packet.
-                nonce: repair_response::nonce(&packet.data)?,
+                nonce: repair_response::nonce(packet)?,
             };
             Some((shred, Some(repair_info)))
         } else {

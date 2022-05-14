@@ -54,8 +54,8 @@ use {
     solana_perf::{
         data_budget::DataBudget,
         packet::{
-            limited_deserialize, to_packet_batch_with_destination, Packet, PacketBatch,
-            PacketBatchRecycler, PACKET_DATA_SIZE,
+            to_packet_batch_with_destination, Packet, PacketBatch, PacketBatchRecycler,
+            PACKET_DATA_SIZE,
         },
     },
     solana_rayon_threadlimit::get_thread_count,
@@ -2466,8 +2466,7 @@ impl ClusterInfo {
             .packets_received_count
             .add_relaxed(packets.len() as u64);
         let verify_packet = |packet: Packet| {
-            let data = &packet.data[..packet.meta.size];
-            let protocol: Protocol = limited_deserialize(data).ok()?;
+            let protocol: Protocol = packet.deserialize_slice(..).ok()?;
             protocol.sanitize().ok()?;
             let protocol = protocol.par_verify(&self.stats)?;
             Some((packet.meta.addr(), protocol))
@@ -3232,7 +3231,7 @@ mod tests {
         ) {
             assert_eq!(packet.meta.addr(), socket);
             let bytes = serialize(&pong).unwrap();
-            match limited_deserialize(&packet.data[..packet.meta.size]).unwrap() {
+            match packet.deserialize_slice(..).unwrap() {
                 Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
                 _ => panic!("invalid packet!"),
             }
