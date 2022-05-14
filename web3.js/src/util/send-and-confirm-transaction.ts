@@ -54,7 +54,9 @@ export async function sendAndConfirmTransaction(
         ).value;
 
   if (status.err) {
-    `Transaction ${signature} failed (${JSON.stringify(status)})`;
+    throw new Error(
+      `Transaction ${signature} failed (${JSON.stringify(status)})`,
+    );
   }
 
   return signature;

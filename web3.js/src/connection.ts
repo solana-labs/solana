@@ -2880,7 +2880,6 @@ export class Connection {
     let timeoutId;
     let subscriptionId;
     let done = false;
-    let result: RpcResponseAndContext<SignatureResult>;
 
     const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
@@ -2914,9 +2913,10 @@ export class Connection {
       }
     };
 
-    const expiryPromise = new Promise<{
-      __type: TransactionStatus.EXPIRED | TransactionStatus.TIMED_OUT;
-    }>(resolve => {
+    const expiryPromise = new Promise<
+      | {__type: TransactionStatus.BLOCKHASH_EXPIRED}
+      | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
+    >(resolve => {
       if (typeof strategy === 'string') {
         let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
         switch (subscriptionCommitment) {
@@ -2935,10 +2935,7 @@ export class Connection {
         }
 
         timeoutId = setTimeout(
-          () =>
-            resolve({
-              __type: TransactionStatus.TIMED_OUT,
-            }),
+          () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
           timeoutMs,
         );
       } else {
@@ -2952,23 +2949,25 @@ export class Connection {
             currentBlockHeight = await checkBlockHeight();
             if (done) return;
           }
-          resolve({
-            __type: TransactionStatus.EXPIRED,
-          });
+          resolve({__type: TransactionStatus.BLOCKHASH_EXPIRED});
         })();
       }
     });
 
+    let result: RpcResponseAndContext<SignatureResult>;
     try {
       const outcome = await Promise.race([confirmationPromise, expiryPromise]);
       switch (outcome.__type) {
         case TransactionStatus.PROCESSED:
           result = outcome.response;
           break;
-        case TransactionStatus.EXPIRED:
+        case TransactionStatus.BLOCKHASH_EXPIRED:
           throw new TransactionExpiredBlockheightExceededError(rawSignature);
         case TransactionStatus.TIMED_OUT:
-          throw new TransactionExpiredTimeoutError(rawSignature);
+          throw new TransactionExpiredTimeoutError(
+            rawSignature,
+            outcome.timeoutMs / 1000,
+          );
       }
     } finally {
       clearTimeout(timeoutId);

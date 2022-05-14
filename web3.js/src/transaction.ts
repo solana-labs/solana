@@ -22,8 +22,8 @@ import type {CompiledInstruction} from './message';
 export type TransactionSignature = string;
 
 export const enum TransactionStatus {
+  BLOCKHASH_EXPIRED,
   PROCESSED,
-  EXPIRED,
   TIMED_OUT,
 }
 
@@ -241,7 +241,7 @@ export class Transaction {
 
   /**
    * @deprecated `TransactionCtorFields` has been deprecated and will be removed in a future version.
-   * Please use `TransactionBlockhashCtro` or `TransactionNonceCtor` instead.
+   * Please supply a `TransactionBlockhashCtor` instead.
    */
   constructor(opts?: TransactionCtorFields_DEPRECATED);
 
