@@ -13,6 +13,7 @@ import {Message} from '../src/message';
 import invariant from '../src/util/assert';
 import {toBuffer} from '../src/util/to-buffer';
 import {helpers} from './mocks/rpc-http';
+import {url} from './url';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -114,27 +115,29 @@ describe('Transaction', () => {
     });
   });
 
-  it('getEstimatedFee', async () => {
-    const connection = new Connection('https://api.testnet.solana.com');
-    const accountFrom = Keypair.generate();
-    const accountTo = Keypair.generate();
+  if (process.env.TEST_LIVE) {
+    it('getEstimatedFee', async () => {
+      const connection = new Connection(url);
+      const accountFrom = Keypair.generate();
+      const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.latestBlockhash({connection});
+      const {blockhash} = await helpers.latestBlockhash({connection});
 
-    const transaction = new Transaction({
-      feePayer: accountFrom.publicKey,
-      recentBlockhash: blockhash,
-    }).add(
-      SystemProgram.transfer({
-        fromPubkey: accountFrom.publicKey,
-        toPubkey: accountTo.publicKey,
-        lamports: 10,
-      }),
-    );
+      const transaction = new Transaction({
+        feePayer: accountFrom.publicKey,
+        recentBlockhash: blockhash,
+      }).add(
+        SystemProgram.transfer({
+          fromPubkey: accountFrom.publicKey,
+          toPubkey: accountTo.publicKey,
+          lamports: 10,
+        }),
+      );
 
-    const fee = await transaction.getEstimatedFee(connection);
-    expect(fee).to.eq(5000);
-  }).timeout(60 * 1000);
+      const fee = await transaction.getEstimatedFee(connection);
+      expect(fee).to.eq(5000);
+    });
+  }
 
   it('partialSign', () => {
     const account1 = Keypair.generate();
