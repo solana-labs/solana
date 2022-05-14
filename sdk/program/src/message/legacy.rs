@@ -157,7 +157,7 @@ impl Sanitize for Message {
                 }
             }
         }
-        self.account_keys.sanitize()?;
+        self.account_keys.sanitize();
         self.recent_blockhash.sanitize()?;
         self.instructions.sanitize()?;
         Ok(())
