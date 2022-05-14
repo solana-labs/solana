@@ -32,7 +32,6 @@ import {
   EpochInfo,
   InflationGovernor,
   Logs,
-  RpcResponseAndContext,
   SignatureResult,
   SlotInfo,
 } from '../src/connection';
@@ -908,7 +907,11 @@ describe('Connection', function () {
         beforeEach(async function () {
           this.timeout(60 * 1000);
           const keypair = Keypair.generate();
-          const [_, blockhash] = await Promise.all([
+          const [
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            _,
+            blockhash,
+          ] = await Promise.all([
             connection.confirmTransaction(
               await connection.requestAirdrop(
                 keypair.publicKey,
