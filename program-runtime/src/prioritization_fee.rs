@@ -1,5 +1,8 @@
-// Prioritization fee rate is 1 lamports per 10K CUs
+// Prioritization fee rate is measured in lamports per compute unit "ticks"
 const COMPUTE_UNIT_TICK_SIZE: u64 = 10_000;
+
+// `COMPUTE_UNIT_TICK_SIZE` tick lamports = 1 lamport
+type TickLamports = u128;
 
 pub enum PrioritizationFeeType {
     Rate(u64),
@@ -14,21 +17,32 @@ pub struct PrioritizationFeeDetails {
 
 impl PrioritizationFeeDetails {
     pub fn new(fee_type: PrioritizationFeeType, max_compute_units: u64) -> Self {
-        let mut compute_ticks = max_compute_units
-            .saturating_div(COMPUTE_UNIT_TICK_SIZE)
-            .max(1);
         match fee_type {
-            PrioritizationFeeType::Deprecated(fee) => Self {
-                fee,
-                priority: fee.saturating_div(compute_ticks),
-            },
+            PrioritizationFeeType::Deprecated(fee) => {
+                let priority = if max_compute_units == 0 {
+                    0
+                } else {
+                    let tick_lamport_fee: TickLamports =
+                        (fee as u128).saturating_mul(COMPUTE_UNIT_TICK_SIZE as u128);
+                    let priority = tick_lamport_fee.saturating_div(max_compute_units as u128);
+                    u64::try_from(priority).unwrap_or(u64::MAX)
+                };
+
+                Self { fee, priority }
+            }
             PrioritizationFeeType::Rate(fee_rate) => {
-                if compute_ticks.saturating_mul(COMPUTE_UNIT_TICK_SIZE) < max_compute_units {
-                    compute_ticks = compute_ticks.saturating_add(1);
-                }
+                let fee = {
+                    let tick_lamport_fee: TickLamports =
+                        (fee_rate as u128).saturating_mul(max_compute_units as u128);
+                    let mut fee = tick_lamport_fee.saturating_div(COMPUTE_UNIT_TICK_SIZE as u128);
+                    if fee.saturating_mul(COMPUTE_UNIT_TICK_SIZE as u128) < tick_lamport_fee {
+                        fee = fee.saturating_add(1);
+                    }
+                    u64::try_from(fee).unwrap_or(u64::MAX)
+                };
 
                 Self {
-                    fee: fee_rate.saturating_mul(compute_ticks),
+                    fee,
                     priority: fee_rate,
                 }
             }
@@ -63,50 +77,52 @@ mod test {
     }
 
     #[test]
-    fn test_new_with_one_compute_tick() {
-        for compute_units in [
-            0, // zero compute units should be rounded up to 1 tick
-            1, // compute units are rounded up to the nearest tick
-            COMPUTE_UNIT_TICK_SIZE,
-        ] {
-            for fee_type_value in [0, 1, 100, u64::MAX] {
-                let expected_details = FeeDetails {
-                    fee: fee_type_value,
-                    priority: fee_type_value,
-                };
-                assert_eq!(
-                    FeeDetails::new(FeeType::Rate(fee_type_value), compute_units),
-                    expected_details,
-                );
-
-                assert_eq!(
-                    FeeDetails::new(FeeType::Deprecated(fee_type_value), compute_units),
-                    expected_details,
-                );
-            }
-        }
-    }
-
-    #[test]
     fn test_new_with_fee_rate() {
+        assert!(COMPUTE_UNIT_TICK_SIZE % 2 == 0);
+        assert_eq!(
+            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2 - 1),
+            FeeDetails {
+                fee: 1,
+                priority: 2,
+            },
+            "should round up 2 * (<0.5) lamport fee to 1 lamport"
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2),
+            FeeDetails {
+                fee: 1,
+                priority: 2,
+            },
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2 + 1),
+            FeeDetails {
+                fee: 2,
+                priority: 2,
+            },
+            "should round up 2 * (>0.5) lamport fee to 2 lamports"
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails {
+                fee: 2,
+                priority: 2,
+            },
+        );
+
         assert_eq!(
             FeeDetails::new(FeeType::Rate(2), 42 * COMPUTE_UNIT_TICK_SIZE),
             FeeDetails {
-                fee: 2 * 42,
+                fee: 42 * 2,
                 priority: 2,
             },
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), 42 * COMPUTE_UNIT_TICK_SIZE - 1),
-            FeeDetails {
-                fee: 2 * 42,
-                priority: 2,
-            },
-        );
-
-        assert_eq!(
-            FeeDetails::new(FeeType::Rate(u64::MAX), 42 * COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::Rate(u64::MAX), COMPUTE_UNIT_TICK_SIZE),
             FeeDetails {
                 fee: u64::MAX,
                 priority: u64::MAX,
@@ -125,31 +141,41 @@ mod test {
     #[test]
     fn test_new_with_deprecated_fee() {
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(2), 42 * COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2 - 1),
             FeeDetails {
-                fee: 2,
-                priority: 0,
+                fee: 1,
+                priority: 2,
+            },
+            "should round down fee rate of (1 / (<0.5 compute ticks)) to priority value 2"
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2),
+            FeeDetails {
+                fee: 1,
+                priority: 2,
+            },
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2 + 1),
+            FeeDetails {
+                fee: 1,
+                priority: 1,
+            },
+            "should round down fee rate of (1 / (>0.5 compute ticks)) to priority value 1"
+        );
+
+        assert_eq!(
+            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails {
+                fee: 1,
+                priority: 1,
             },
         );
 
         assert_eq!(
             FeeDetails::new(FeeType::Deprecated(42), 42 * COMPUTE_UNIT_TICK_SIZE),
-            FeeDetails {
-                fee: 42,
-                priority: 1,
-            },
-        );
-
-        assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(42), 42 * COMPUTE_UNIT_TICK_SIZE - 1),
-            FeeDetails {
-                fee: 42,
-                priority: 1,
-            },
-        );
-
-        assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(42), 42 * COMPUTE_UNIT_TICK_SIZE + 1),
             FeeDetails {
                 fee: 42,
                 priority: 1,

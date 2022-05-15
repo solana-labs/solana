@@ -132,7 +132,7 @@ impl ComputeBudget {
         default_units_per_instruction: bool,
         prioritization_fee_type_change: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_instructions: usize = 0;
+        let mut num_non_compute_budget_instructions: usize = 0;
         let mut requested_units = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
@@ -205,7 +205,8 @@ impl ComputeBudget {
                 }
             } else {
                 // only include non-request instructions in default max calc
-                num_instructions = num_instructions.saturating_add(1);
+                num_non_compute_budget_instructions =
+                    num_non_compute_budget_instructions.saturating_add(1);
             }
         }
 
@@ -224,8 +225,12 @@ impl ComputeBudget {
         }
 
         self.max_units = if default_units_per_instruction {
-            requested_units
-                .or_else(|| Some(num_instructions.saturating_mul(DEFAULT_UNITS as usize) as u64))
+            requested_units.or_else(|| {
+                Some(
+                    num_non_compute_budget_instructions.saturating_mul(DEFAULT_UNITS as usize)
+                        as u64,
+                )
+            })
         } else {
             requested_units
         }
