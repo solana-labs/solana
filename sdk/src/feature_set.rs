@@ -400,6 +400,10 @@ pub mod prioritization_fee_type_change {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
 
+pub mod enable_bpf_loader_upgrade_and_resize_ix {
+    solana_sdk::declare_id!("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -493,6 +497,7 @@ lazy_static! {
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
         (prioritization_fee_type_change::id(), "Switch compute budget to prioritization fee"),
+        (enable_bpf_loader_upgrade_and_resize_ix::id(), "enable bpf upgradeable loader UpgradeAndResize instruction #25234"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

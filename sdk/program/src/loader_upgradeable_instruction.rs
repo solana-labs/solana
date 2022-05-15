@@ -127,4 +127,26 @@ pub enum UpgradeableLoaderInstruction {
     ///   3. `[writable]` The associated Program account if the account to close
     ///      is a ProgramData account.
     Close,
+
+    /// Upgrade a program and resize its ProgramData account to match the size
+    /// of the new program data.
+    ///
+    /// A program can be updated as long as the program's authority has not been
+    /// set to `None`.
+    ///
+    /// The Buffer account must contain sufficient lamports to fund the
+    /// ProgramData account to be rent-exempt, any additional lamports left over
+    /// will be transferred to the spill account, leaving the Buffer account
+    /// balance at zero and the ProgramData account at the minimum rent-exempt
+    /// balance.
+    ///
+    /// # Account references
+    ///   0. `[writable]` The ProgramData account.
+    ///   1. `[writable]` The Program account.
+    ///   2. `[writable]` The Buffer account where the program data has been
+    ///      written.  The buffer account's authority must match the program's
+    ///      authority
+    ///   3. `[writable]` The spill account.
+    ///   4. `[signer]` The program's authority.
+    UpgradeAndResize,
 }
