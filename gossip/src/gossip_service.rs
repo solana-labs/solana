@@ -57,6 +57,7 @@ impl GossipService {
             Arc::new(StreamerReceiveStats::new("gossip_receiver")),
             1,
             false,
+            None,
         );
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
