@@ -625,9 +625,9 @@ impl JsonRpcRequestProcessor {
 
     fn get_recent_blockhash(
         &self,
-        config: RpcContextConfig,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
-        let bank = self.get_bank_with_config(config)?;
+        let bank = self.bank(commitment);
         let blockhash = bank.confirmed_last_blockhash();
         let lamports_per_signature = bank
             .get_lamports_per_signature_for_blockhash(&blockhash)
@@ -641,8 +641,8 @@ impl JsonRpcRequestProcessor {
         ))
     }
 
-    fn get_fees(&self, config: RpcContextConfig) -> Result<RpcResponse<RpcFees>> {
-        let bank = self.get_bank_with_config(config)?;
+    fn get_fees(&self, commitment: Option<CommitmentConfig>) -> Result<RpcResponse<RpcFees>> {
+        let bank = self.bank(commitment);
         let blockhash = bank.confirmed_last_blockhash();
         let lamports_per_signature = bank
             .get_lamports_per_signature_for_blockhash(&blockhash)
@@ -668,9 +668,9 @@ impl JsonRpcRequestProcessor {
     fn get_fee_calculator_for_blockhash(
         &self,
         blockhash: &Hash,
-        config: RpcContextConfig,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
-        let bank = self.get_bank_with_config(config)?;
+        let bank = self.bank(commitment);
         let lamports_per_signature = bank.get_lamports_per_signature_for_blockhash(blockhash);
         Ok(new_response(
             &bank,
@@ -695,9 +695,9 @@ impl JsonRpcRequestProcessor {
     pub fn confirm_transaction(
         &self,
         signature: &Signature,
-        config: RpcContextConfig,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<RpcResponse<bool>> {
-        let bank = self.get_bank_with_config(config)?;
+        let bank = self.bank(commitment);
         let status = bank.get_signature_status(signature);
         match status {
             Some(status) => Ok(new_response(&bank, status.is_ok())),
@@ -793,8 +793,8 @@ impl JsonRpcRequestProcessor {
         Ok(bank.transaction_count() as u64)
     }
 
-    fn get_total_supply(&self, config: RpcContextConfig) -> Result<u64> {
-        let bank = self.get_bank_with_config(config)?;
+    fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
+        let bank = self.bank(commitment);
         Ok(bank.capitalization())
     }
 
@@ -1328,9 +1328,9 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_confirmation_status(
         &self,
         signature: Signature,
-        config: RpcContextConfig,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Option<RpcSignatureConfirmation>> {
-        let bank = self.get_bank_with_config(config)?;
+        let bank = self.bank(commitment);
         Ok(self
             .get_transaction_status(signature, &bank)
             .map(|transaction_status| {
@@ -1347,9 +1347,9 @@ impl JsonRpcRequestProcessor {
     pub fn get_signature_status(
         &self,
         signature: Signature,
-        config: RpcContextConfig,
+        commitment: Option<CommitmentConfig>,
     ) -> Result<Option<transaction::Result<()>>> {
-        let bank = self.get_bank_with_config(config)?;
+        let bank = self.bank(commitment);
         Ok(bank
             .get_signature_status_slot(&signature)
             .map(|(_, status)| status))
@@ -3951,14 +3951,14 @@ pub mod rpc_deprecated_v1_9 {
         fn get_recent_blockhash(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>>;
 
         #[rpc(meta, name = "getFees")]
         fn get_fees(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcFees>>;
 
         #[rpc(meta, name = "getFeeCalculatorForBlockhash")]
@@ -3966,7 +3966,7 @@ pub mod rpc_deprecated_v1_9 {
             &self,
             meta: Self::Metadata,
             blockhash: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<RpcFeeCalculator>>>;
 
         #[rpc(meta, name = "getFeeRateGovernor")]
@@ -3986,31 +3986,31 @@ pub mod rpc_deprecated_v1_9 {
         fn get_recent_blockhash(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcBlockhashFeeCalculator>> {
             debug!("get_recent_blockhash rpc request received");
-            meta.get_recent_blockhash(config.unwrap_or_default())
+            meta.get_recent_blockhash(commitment)
         }
 
         fn get_fees(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<RpcFees>> {
             debug!("get_fees rpc request received");
-            meta.get_fees(config.unwrap_or_default())
+            meta.get_fees(commitment)
         }
 
         fn get_fee_calculator_for_blockhash(
             &self,
             meta: Self::Metadata,
             blockhash: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<Option<RpcFeeCalculator>>> {
             debug!("get_fee_calculator_for_blockhash rpc request received");
             let blockhash = Hash::from_str(&blockhash)
                 .map_err(|e| Error::invalid_params(format!("{:?}", e)))?;
-            meta.get_fee_calculator_for_blockhash(&blockhash, config.unwrap_or_default())
+            meta.get_fee_calculator_for_blockhash(&blockhash, commitment)
         }
 
         fn get_fee_rate_governor(
@@ -4212,7 +4212,7 @@ pub mod rpc_obsolete_v1_7 {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<bool>>;
 
         // DEPRECATED
@@ -4221,7 +4221,7 @@ pub mod rpc_obsolete_v1_7 {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Option<transaction::Result<()>>>;
 
         // DEPRECATED (used by Trust Wallet)
@@ -4230,7 +4230,7 @@ pub mod rpc_obsolete_v1_7 {
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Option<RpcSignatureConfirmation>>;
 
         // DEPRECATED
@@ -4238,7 +4238,7 @@ pub mod rpc_obsolete_v1_7 {
         fn get_total_supply(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<u64>;
 
         // DEPRECATED
@@ -4260,48 +4260,48 @@ pub mod rpc_obsolete_v1_7 {
             &self,
             meta: Self::Metadata,
             id: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<bool>> {
             debug!("confirm_transaction rpc request received: {:?}", id);
             let signature = verify_signature(&id)?;
-            meta.confirm_transaction(&signature, config.unwrap_or_default())
+            meta.confirm_transaction(&signature, commitment)
         }
 
         fn get_signature_status(
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Option<transaction::Result<()>>> {
             debug!(
                 "get_signature_status rpc request received: {:?}",
                 signature_str
             );
             let signature = verify_signature(&signature_str)?;
-            meta.get_signature_status(signature, config.unwrap_or_default())
+            meta.get_signature_status(signature, commitment)
         }
 
         fn get_signature_confirmation(
             &self,
             meta: Self::Metadata,
             signature_str: String,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<Option<RpcSignatureConfirmation>> {
             debug!(
                 "get_signature_confirmation rpc request received: {:?}",
                 signature_str
             );
             let signature = verify_signature(&signature_str)?;
-            meta.get_signature_confirmation_status(signature, config.unwrap_or_default())
+            meta.get_signature_confirmation_status(signature, commitment)
         }
 
         fn get_total_supply(
             &self,
             meta: Self::Metadata,
-            config: Option<RpcContextConfig>,
+            commitment: Option<CommitmentConfig>,
         ) -> Result<u64> {
             debug!("get_total_supply rpc request received");
-            meta.get_total_supply(config.unwrap_or_default())
+            meta.get_total_supply(commitment)
         }
 
         fn get_confirmed_signatures_for_address(
