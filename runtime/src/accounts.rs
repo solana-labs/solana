@@ -12,7 +12,7 @@ use {
         ancestors::Ancestors,
         bank::{
             Bank, NonceFull, NonceInfo, RentDebits, Rewrites, TransactionCheckResult,
-            TransactionExecutionResult,
+            TransactionExecutionResult, TransactionFee,
         },
         blockhash_queue::BlockhashQueue,
         rent_collector::RentCollector,
@@ -125,6 +125,7 @@ pub struct LoadedTransaction {
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub fee: TransactionFee,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
@@ -238,16 +239,17 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
-        fee: u64,
+        fee: TransactionFee,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
+        let total_fee = fee.total();
         // Copy all the accounts
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
-        if tx.signatures().is_empty() && fee != 0 {
+        if tx.signatures().is_empty() && total_fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
             // There is no way to predict what program will execute without an error
@@ -367,14 +369,14 @@ impl Accounts {
                     }
                 };
 
-                if payer_account.lamports() < fee + min_balance {
+                if payer_account.lamports() < total_fee + min_balance {
                     error_counters.insufficient_funds += 1;
                     return Err(TransactionError::InsufficientFundsForFee);
                 }
                 let payer_pre_rent_state =
                     RentState::from_account(payer_account, &rent_collector.rent);
                 payer_account
-                    .checked_sub_lamports(fee)
+                    .checked_sub_lamports(total_fee)
                     .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
                 let payer_post_rent_state =
@@ -410,6 +412,7 @@ impl Accounts {
                     program_indices,
                     rent: tx_rent,
                     rent_debits,
+                    fee,
                 })
             } else {
                 error_counters.account_not_found += 1;
@@ -1209,12 +1212,13 @@ impl Accounts {
                 continue;
             }
 
-            let execution_status = match &execution_results[i] {
-                TransactionExecutionResult::Executed { details, .. } => &details.status,
+            let execution_details = match &execution_results[i] {
+                TransactionExecutionResult::Executed { details, .. } => details,
                 // Don't store any accounts if tx wasn't executed
                 TransactionExecutionResult::NotExecuted(_) => continue,
             };
 
+            let execution_status = &execution_details.status;
             let maybe_nonce = match (execution_status, &*nonce) {
                 (Ok(()), Some(nonce)) => {
                     if leave_nonce_on_success {
@@ -1255,6 +1259,19 @@ impl Accounts {
                         blockhash,
                         lamports_per_signature,
                     );
+
+                    if is_fee_payer {
+                        let prioritization_fee_credit =
+                            execution_details.prioritization_fee_credit();
+                        if prioritization_fee_credit > 0 && account.lamports() > 0 {
+                            // If the account has a non-zero lamport balance,
+                            // then it is either rent-exempt or already
+                            // rent-paying so adding lamports to its balance
+                            // here should not cause the account to become newly
+                            // rent-paying.
+                            account.saturating_add_lamports(prioritization_fee_credit);
+                        }
+                    }
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
@@ -1373,7 +1390,7 @@ mod tests {
             rent_collector::RentCollector,
         },
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::invoke_context::Executors,
+        solana_program_runtime::{compute_budget::MAX_UNITS, invoke_context::Executors},
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1420,7 +1437,9 @@ mod tests {
                 inner_instructions: None,
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
                 return_data: None,
-                executed_units: 0u64,
+                consumed_compute_units: 0u64,
+                compute_unit_limit: MAX_UNITS as u64,
+                fee: TransactionFee::default(),
             },
             executors: Rc::new(RefCell::new(Executors::default())),
         }
@@ -1632,7 +1651,7 @@ mod tests {
             false,
             true,
         );
-        assert_eq!(fee, 10);
+        assert_eq!(fee.total(), 10);
 
         let loaded_accounts = load_accounts_with_fee(tx, &accounts, 10, &mut error_counters);
 
@@ -2960,6 +2979,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                fee: TransactionFee::default(),
             }),
             None,
         );
@@ -2970,6 +2990,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                fee: TransactionFee::default(),
             }),
             None,
         );
@@ -3440,6 +3461,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                fee: TransactionFee::default(),
             }),
             nonce.clone(),
         );
@@ -3549,6 +3571,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                fee: TransactionFee::default(),
             }),
             nonce.clone(),
         );

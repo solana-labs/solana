@@ -3495,7 +3495,8 @@ fn test_program_fees() {
         &fee_structure,
         true,
         true,
-    );
+    )
+    .total();
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
@@ -3518,7 +3519,8 @@ fn test_program_fees() {
         &fee_structure,
         true,
         true,
-    );
+    )
+    .total();
     assert!(expected_min_fee < expected_max_fee);
 
     bank_client

@@ -1302,7 +1302,7 @@ impl BankingStage {
                 .iter()
                 .map(|execution_result| match execution_result.details() {
                     Some(details) => CommitTransactionDetails::Committed {
-                        compute_units: details.executed_units,
+                        compute_units: details.consumed_compute_units,
                     },
                     None => CommitTransactionDetails::NotCommitted,
                 })
