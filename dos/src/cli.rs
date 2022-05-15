@@ -38,7 +38,7 @@ pub struct DosClientParameters {
         long,
         parse(try_from_str = pubkey_parser),
         required_if_eq("mode", "rpc"),
-        help = "Pubkey for rpc mode calls [Optional]"
+        help = "Pubkey for rpc-mode calls"
     )]
     pub data_input: Option<Pubkey>,
 
@@ -84,7 +84,7 @@ pub struct TransactionParams {
         long,
         arg_enum,
         requires("valid-blockhash"),
-        help = "Type of transaction to be sent [Optional]"
+        help = "Type of transaction to be sent"
     )]
     pub transaction_type: Option<TransactionType>,
 

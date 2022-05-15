@@ -110,11 +110,11 @@ impl TransactionGenerator {
 
     /// Generate transaction
     ///
-    /// `payer` the account responsible for paying the cost of executing transaction, used as
-    /// a source for transfer instruction and as funding account for create account instruction.
-    /// `destinations` depending on the transaction type, might be destination accounts receiving transfers,
-    /// new accounts, signing accounts. It is `None` only if `valid_signatures==false`
-    /// `client` structure responsible for providing blockhash
+    /// `payer` - the account responsible for paying the cost of executing transaction, used as
+    /// a source for transfer instructions and as funding account for create-account instructions.
+    /// `destinations` - depending on the transaction type, might be destination accounts receiving transfers,
+    /// new accounts, signing accounts. It is `None` only if `valid_signatures==false`.
+    /// `client` - structure responsible for providing blockhash.
     ///
     fn generate<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
@@ -189,7 +189,7 @@ impl TransactionGenerator {
 
     fn generate_without_blockhash(
         &mut self,
-        kpvals: Option<Vec<&Keypair>>, // provided for valid signatures
+        destinations: Option<Vec<&Keypair>>, // provided for valid signatures
     ) -> Transaction {
         // create an arbitrary valid instruction
         let lamports = 5;
@@ -204,9 +204,9 @@ impl TransactionGenerator {
         if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will end up
             // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
-            let keypairs = kpvals.unwrap();
+            let destinations = destinations.unwrap();
             Transaction::new_with_compiled_instructions(
-                &keypairs,
+                &destinations,
                 &[],
                 self.blockhash,
                 program_ids,
