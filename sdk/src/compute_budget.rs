@@ -35,9 +35,9 @@ pub enum ComputeBudgetInstruction {
     /// Request a specific maximum number of compute units the transaction is
     /// allowed to consume and an additional fee to pay.
     RequestUnits(u32),
-    /// Set a prioritization fee rate measured in "lamports per 10K CUs" to
-    /// pay a higher transaction fee for higher transaction prioritization.
-    SetPrioritizationFeeRate(u64),
+    /// Set a compute unit price in "micro-lamports" to pay a higher transaction
+    /// fee for higher transaction prioritization.
+    SetComputeUnitPrice(u64),
 }
 
 impl ComputeBudgetInstruction {
@@ -51,8 +51,8 @@ impl ComputeBudgetInstruction {
         Instruction::new_with_borsh(id(), &Self::RequestUnits(units), vec![])
     }
 
-    /// Create a `ComputeBudgetInstruction::SetPrioritizationFeeRate` `Instruction`
-    pub fn set_prioritization_fee_rate(fee_rate: u64) -> Instruction {
-        Instruction::new_with_borsh(id(), &Self::SetPrioritizationFeeRate(fee_rate), vec![])
+    /// Create a `ComputeBudgetInstruction::SetComputeUnitPrice` `Instruction`
+    pub fn set_compute_unit_price(micro_lamports: u64) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
     }
 }

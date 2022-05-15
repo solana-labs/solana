@@ -3505,7 +3505,7 @@ fn test_program_fees() {
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_prioritization_fee_rate(1),
+            ComputeBudgetInstruction::set_compute_unit_price(1),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),

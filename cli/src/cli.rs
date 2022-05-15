@@ -89,7 +89,7 @@ pub enum CliCommand {
         timeout: Duration,
         blockhash: Option<Hash>,
         print_timestamp: bool,
-        prioritization_fee: Option<u64>,
+        compute_unit_price: Option<u64>,
     },
     Rent {
         data_length: usize,
@@ -877,7 +877,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             print_timestamp,
-            prioritization_fee,
+            compute_unit_price,
         } => process_ping(
             &rpc_client,
             config,
@@ -886,7 +886,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             *print_timestamp,
-            prioritization_fee,
+            compute_unit_price,
         ),
         CliCommand::Rent {
             data_length,

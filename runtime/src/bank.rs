@@ -107,8 +107,9 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, default_units_per_instruction, disable_fee_calculator, nonce_must_be_writable,
-            prioritization_fee_type_change, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
+            self, add_set_compute_unit_price_ix, default_units_per_instruction,
+            disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
+            tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3638,7 +3639,7 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
-                .is_active(&prioritization_fee_type_change::id()),
+                .is_active(&add_set_compute_unit_price_ix::id()),
         ))
     }
 
@@ -3653,7 +3654,7 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
-                .is_active(&prioritization_fee_type_change::id()),
+                .is_active(&add_set_compute_unit_price_ix::id()),
         )
     }
 
@@ -4393,7 +4394,7 @@ impl Bank {
                                 tx.message().program_instructions_iter(),
                                 feature_set.is_active(&requestable_heap_size::id()),
                                 feature_set.is_active(&default_units_per_instruction::id()),
-                                feature_set.is_active(&prioritization_fee_type_change::id()),
+                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -4609,7 +4610,7 @@ impl Bank {
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         tx_wide_compute_cap: bool,
-        prioritization_fee_type_change: bool,
+        support_set_compute_unit_price_ix: bool,
     ) -> u64 {
         if tx_wide_compute_cap {
             // Fee based on compute units and signatures
@@ -4627,7 +4628,7 @@ impl Bank {
                     message.program_instructions_iter(),
                     false,
                     false,
-                    prioritization_fee_type_change,
+                    support_set_compute_unit_price_ix,
                 )
                 .unwrap_or_default();
             let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4697,7 +4698,7 @@ impl Bank {
                     &self.fee_structure,
                     self.feature_set.is_active(&tx_wide_compute_cap::id()),
                     self.feature_set
-                        .is_active(&prioritization_fee_type_change::id()),
+                        .is_active(&add_set_compute_unit_price_ix::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -16781,13 +16782,13 @@ pub(crate) mod tests {
         ] {
             const PRIORITIZATION_FEE_RATE: u64 = 42;
             let prioritization_fee_details = PrioritizationFeeDetails::new(
-                PrioritizationFeeType::Rate(PRIORITIZATION_FEE_RATE),
+                PrioritizationFeeType::ComputeUnitPrice(PRIORITIZATION_FEE_RATE),
                 requested_compute_units as u64,
             );
             let message = SanitizedMessage::try_from(Message::new(
                 &[
                     ComputeBudgetInstruction::request_units(requested_compute_units),
-                    ComputeBudgetInstruction::set_prioritization_fee_rate(PRIORITIZATION_FEE_RATE),
+                    ComputeBudgetInstruction::set_compute_unit_price(PRIORITIZATION_FEE_RATE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),

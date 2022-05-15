@@ -30,8 +30,8 @@ pub enum DeserializedPacketError {
     SignatureOverflowed(usize),
     #[error("packet failed sanitization {0}")]
     SanitizeError(#[from] SanitizeError),
-    #[error("transaction prioritization fee rate is invalid")]
-    PrioritizationFeeRateInvalid,
+    #[error("transaction failed prioritization")]
+    PrioritizationFailure,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub struct ImmutableDeserializedPacket {
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    prioritization_fee_rate: u64,
+    priority: u64,
 }
 
 impl ImmutableDeserializedPacket {
@@ -64,8 +64,8 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn prioritization_fee_rate(&self) -> u64 {
-        self.prioritization_fee_rate
+    pub fn priority(&self) -> u64 {
+        self.priority
     }
 }
 
@@ -83,16 +83,13 @@ impl DeserializedPacket {
     }
 
     #[cfg(test)]
-    fn new_with_prioritization_fee_rate(
-        packet: Packet,
-        prioritization_fee_rate: u64,
-    ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, Some(prioritization_fee_rate))
+    fn new_with_priority(packet: Packet, priority: u64) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, Some(priority))
     }
 
     pub fn new_internal(
         packet: Packet,
-        prioritization_fee_rate: Option<u64>,
+        priority: Option<u64>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
             limited_deserialize(&packet.data[0..packet.meta.size])?;
@@ -101,10 +98,10 @@ impl DeserializedPacket {
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        // drop transaction if its prioritization_fee_rate is invalid.
-        let prioritization_fee_rate = prioritization_fee_rate
-            .or_else(|| get_prioritization_fee_rate(sanitized_transaction.get_message()))
-            .ok_or(DeserializedPacketError::PrioritizationFeeRateInvalid)?;
+        // drop transaction if prioritization fails.
+        let priority = priority
+            .or_else(|| get_priority(sanitized_transaction.get_message()))
+            .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
@@ -112,7 +109,7 @@ impl DeserializedPacket {
                 transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
-                prioritization_fee_rate,
+                priority,
             }),
             forwarded: false,
         })
@@ -133,8 +130,8 @@ impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
         match self
             .immutable_section()
-            .prioritization_fee_rate()
-            .cmp(&other.immutable_section().prioritization_fee_rate())
+            .priority()
+            .cmp(&other.immutable_section().priority())
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -153,10 +150,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self
-            .prioritization_fee_rate()
-            .cmp(&other.prioritization_fee_rate())
-        {
+        match self.priority().cmp(&other.priority()) {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
@@ -196,8 +190,8 @@ impl UnprocessedPacketBatches {
         self.message_hash_to_transaction.clear();
     }
 
-    /// Insert new `deserizlized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
-    /// weighted first by the prioritization-fee-rate, then the stake of the sender.
+    /// Insert new `deserialized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
+    /// weighted first by the tx priority, then the stake of the sender.
     /// If buffer is at the max limit, the lowest weighted packet is dropped
     ///
     /// Returns tuple of number of packets dropped
@@ -374,7 +368,7 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-fn get_prioritization_fee_rate(message: &SanitizedVersionedMessage) -> Option<u64> {
+fn get_priority(message: &SanitizedVersionedMessage) -> Option<u64> {
     let mut compute_budget = ComputeBudget::default();
     let prioritization_fee_details = compute_budget
         .process_instructions(
@@ -422,7 +416,7 @@ mod tests {
         DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_prioritization_fee_rate(prioritization_fee_rate: u64) -> DeserializedPacket {
+    fn packet_with_priority(priority: u64) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -430,8 +424,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        DeserializedPacket::new_with_prioritization_fee_rate(packet, prioritization_fee_rate)
-            .unwrap()
+        DeserializedPacket::new_with_priority(packet, priority).unwrap()
     }
 
     #[test]
@@ -452,10 +445,10 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
         let heavier_packet_weight = 2;
-        let heavier_packet = packet_with_prioritization_fee_rate(heavier_packet_weight);
+        let heavier_packet = packet_with_priority(heavier_packet_weight);
 
         let lesser_packet_weight = heavier_packet_weight - 1;
-        let lesser_packet = packet_with_prioritization_fee_rate(lesser_packet_weight);
+        let lesser_packet = packet_with_priority(lesser_packet_weight);
 
         // Test that the heavier packet is actually heavier
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);

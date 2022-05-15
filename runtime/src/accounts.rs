@@ -31,7 +31,7 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-        feature_set::{self, prioritization_fee_type_change, tx_wide_compute_cap, FeatureSet},
+        feature_set::{self, add_set_compute_unit_price_ix, tx_wide_compute_cap, FeatureSet},
         fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,
@@ -525,7 +525,7 @@ impl Accounts {
                             lamports_per_signature,
                             fee_structure,
                             feature_set.is_active(&tx_wide_compute_cap::id()),
-                            feature_set.is_active(&prioritization_fee_type_change::id()),
+                            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);

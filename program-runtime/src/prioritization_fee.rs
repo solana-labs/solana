@@ -1,11 +1,10 @@
-// Prioritization fee rate is measured in lamports per compute unit "ticks"
-const COMPUTE_UNIT_TICK_SIZE: u64 = 10_000;
+/// There are 10^6 micro-lamports in one lamport
+const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
 
-// `COMPUTE_UNIT_TICK_SIZE` tick lamports = 1 lamport
-type TickLamports = u128;
+type MicroLamports = u128;
 
 pub enum PrioritizationFeeType {
-    Rate(u64),
+    ComputeUnitPrice(u64),
     Deprecated(u64),
 }
 
@@ -22,20 +21,21 @@ impl PrioritizationFeeDetails {
                 let priority = if max_compute_units == 0 {
                     0
                 } else {
-                    let tick_lamport_fee: TickLamports =
-                        (fee as u128).saturating_mul(COMPUTE_UNIT_TICK_SIZE as u128);
-                    let priority = tick_lamport_fee.saturating_div(max_compute_units as u128);
+                    let micro_lamport_fee: MicroLamports =
+                        (fee as u128).saturating_mul(MICRO_LAMPORTS_PER_LAMPORT as u128);
+                    let priority = micro_lamport_fee.saturating_div(max_compute_units as u128);
                     u64::try_from(priority).unwrap_or(u64::MAX)
                 };
 
                 Self { fee, priority }
             }
-            PrioritizationFeeType::Rate(fee_rate) => {
+            PrioritizationFeeType::ComputeUnitPrice(cu_price) => {
                 let fee = {
-                    let tick_lamport_fee: TickLamports =
-                        (fee_rate as u128).saturating_mul(max_compute_units as u128);
-                    let mut fee = tick_lamport_fee.saturating_div(COMPUTE_UNIT_TICK_SIZE as u128);
-                    if fee.saturating_mul(COMPUTE_UNIT_TICK_SIZE as u128) < tick_lamport_fee {
+                    let micro_lamport_fee: MicroLamports =
+                        (cu_price as u128).saturating_mul(max_compute_units as u128);
+                    let mut fee =
+                        micro_lamport_fee.saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
+                    if fee.saturating_mul(MICRO_LAMPORTS_PER_LAMPORT as u128) < micro_lamport_fee {
                         fee = fee.saturating_add(1);
                     }
                     u64::try_from(fee).unwrap_or(u64::MAX)
@@ -43,7 +43,7 @@ impl PrioritizationFeeDetails {
 
                 Self {
                     fee,
-                    priority: fee_rate,
+                    priority: cu_price,
                 }
             }
         }
@@ -64,9 +64,9 @@ mod test {
 
     #[test]
     fn test_new_with_no_fee() {
-        for compute_units in [0, 1, COMPUTE_UNIT_TICK_SIZE, u64::MAX] {
+        for compute_units in [0, 1, MICRO_LAMPORTS_PER_LAMPORT, u64::MAX] {
             assert_eq!(
-                FeeDetails::new(FeeType::Rate(0), compute_units),
+                FeeDetails::new(FeeType::ComputeUnitPrice(0), compute_units),
                 FeeDetails::default(),
             );
             assert_eq!(
@@ -77,60 +77,54 @@ mod test {
     }
 
     #[test]
-    fn test_new_with_fee_rate() {
-        assert!(COMPUTE_UNIT_TICK_SIZE % 2 == 0);
+    fn test_new_with_compute_unit_price() {
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2 - 1),
+            FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT - 1), 1),
             FeeDetails {
                 fee: 1,
-                priority: 2,
+                priority: MICRO_LAMPORTS_PER_LAMPORT - 1,
             },
-            "should round up 2 * (<0.5) lamport fee to 1 lamport"
+            "should round up (<1.0) lamport fee to 1 lamport"
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2),
+            FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT), 1),
             FeeDetails {
                 fee: 1,
-                priority: 2,
+                priority: MICRO_LAMPORTS_PER_LAMPORT,
             },
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE / 2 + 1),
+            FeeDetails::new(FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT + 1), 1),
             FeeDetails {
                 fee: 2,
-                priority: 2,
+                priority: MICRO_LAMPORTS_PER_LAMPORT + 1,
             },
-            "should round up 2 * (>0.5) lamport fee to 2 lamports"
+            "should round up (>1.0) lamport fee to 2 lamports"
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::ComputeUnitPrice(200), 100_000),
             FeeDetails {
-                fee: 2,
-                priority: 2,
+                fee: 20,
+                priority: 200,
             },
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(2), 42 * COMPUTE_UNIT_TICK_SIZE),
-            FeeDetails {
-                fee: 42 * 2,
-                priority: 2,
-            },
-        );
-
-        assert_eq!(
-            FeeDetails::new(FeeType::Rate(u64::MAX), COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(
+                FeeType::ComputeUnitPrice(MICRO_LAMPORTS_PER_LAMPORT),
+                u64::MAX
+            ),
             FeeDetails {
                 fee: u64::MAX,
-                priority: u64::MAX,
+                priority: MICRO_LAMPORTS_PER_LAMPORT,
             },
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Rate(u64::MAX), u64::MAX),
+            FeeDetails::new(FeeType::ComputeUnitPrice(u64::MAX), u64::MAX),
             FeeDetails {
                 fee: u64::MAX,
                 priority: u64::MAX,
@@ -141,16 +135,16 @@ mod test {
     #[test]
     fn test_new_with_deprecated_fee() {
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2 - 1),
+            FeeDetails::new(FeeType::Deprecated(1), MICRO_LAMPORTS_PER_LAMPORT / 2 - 1),
             FeeDetails {
                 fee: 1,
                 priority: 2,
             },
-            "should round down fee rate of (1 / (<0.5 compute ticks)) to priority value 2"
+            "should round down fee rate of (>2.0) to priority value 1"
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2),
+            FeeDetails::new(FeeType::Deprecated(1), MICRO_LAMPORTS_PER_LAMPORT / 2),
             FeeDetails {
                 fee: 1,
                 priority: 2,
@@ -158,16 +152,16 @@ mod test {
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE / 2 + 1),
+            FeeDetails::new(FeeType::Deprecated(1), MICRO_LAMPORTS_PER_LAMPORT / 2 + 1),
             FeeDetails {
                 fee: 1,
                 priority: 1,
             },
-            "should round down fee rate of (1 / (>0.5 compute ticks)) to priority value 1"
+            "should round down fee rate of (<2.0) to priority value 1"
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(1), COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::Deprecated(1), MICRO_LAMPORTS_PER_LAMPORT),
             FeeDetails {
                 fee: 1,
                 priority: 1,
@@ -175,7 +169,7 @@ mod test {
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(42), 42 * COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::Deprecated(42), 42 * MICRO_LAMPORTS_PER_LAMPORT),
             FeeDetails {
                 fee: 42,
                 priority: 1,
@@ -183,7 +177,7 @@ mod test {
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(420), 42 * COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(FeeType::Deprecated(420), 42 * MICRO_LAMPORTS_PER_LAMPORT),
             FeeDetails {
                 fee: 420,
                 priority: 10,
@@ -191,7 +185,10 @@ mod test {
         );
 
         assert_eq!(
-            FeeDetails::new(FeeType::Deprecated(u64::MAX), 2 * COMPUTE_UNIT_TICK_SIZE),
+            FeeDetails::new(
+                FeeType::Deprecated(u64::MAX),
+                2 * MICRO_LAMPORTS_PER_LAMPORT
+            ),
             FeeDetails {
                 fee: u64::MAX,
                 priority: u64::MAX / 2,
@@ -202,7 +199,7 @@ mod test {
             FeeDetails::new(FeeType::Deprecated(u64::MAX), u64::MAX),
             FeeDetails {
                 fee: u64::MAX,
-                priority: COMPUTE_UNIT_TICK_SIZE,
+                priority: MICRO_LAMPORTS_PER_LAMPORT,
             },
         );
     }
