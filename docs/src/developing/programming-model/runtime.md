@@ -115,11 +115,11 @@ Compute Budget instructions don't require any accounts and don't consume any
 compute units to process.  Transactions can only contain one of each type of
 compute budget instruction, duplicate types will result in an error.
 
-The `ComputeBudgetInstruction::request_units` function can be used to create
+The `ComputeBudgetInstruction::set_compute_unit_limit` function can be used to create
 these instructions:
 
 ```rust
-let instruction = ComputeBudgetInstruction::request_units(300_000);
+let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
 ```
 
 ## Transaction-wide Compute Budget
