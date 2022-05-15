@@ -1,11 +1,15 @@
 /*
  * libsealevel is a C interface for the Sealevel virtual machine.
- * This version of the library bundles the interpreter and JIT implementations part of the Rust implementation of the Solana blockchain.
+ * This version of the library bundles the interpreter and JIT executors part of the Rust implementation of the Solana blockchain.
  *
  * Source code: https://github.com/solana-labs/solana
  *
  * ABI stability is planned, though this version makes no promises yet.
- * Passing resources between two different versions of this library is undefined behavior.
+ * Avoid passing objects between two different versions of this library because no internal compatibility guarantees are made.
+ *
+ * Note that, despite the Rust code under the hood, this interface allows unsafe behavior.
+ * The usual C rules apply library-wide: Check for null pointers, avoid aliasing, don't mix types, respect thread safety, no double frees.
+ * You may find additional safety remarks on each exported function.
 */
 
 #pragma once
@@ -35,6 +39,11 @@
  */
 typedef struct sealevel_config sealevel_config;
 
+/**
+ * A loaded and relocated program.
+ *
+ * To execute this program, create a VM with `sealevel_vm_create`.
+ */
 typedef struct sealevel_executable sealevel_executable;
 
 /**
@@ -44,6 +53,8 @@ typedef struct sealevel_executable sealevel_executable;
  * and specifies the on-chain execution rules (precompiles, syscalls, sysvars).
  */
 typedef struct sealevel_invoke_context sealevel_invoke_context;
+
+typedef struct sealevel_vm sealevel_vm;
 
 /**
  * The map of syscalls provided by the virtual machine.
@@ -55,6 +66,35 @@ extern "C" {
 #endif // __cplusplus
 
 /**
+ * Creates a new Sealevel machine config.
+ *
+ * # Safety
+ * Call `sealevel_config_free` on the return value after you are done using it.
+ * Failure to do so results in a memory leak.
+ */
+sealevel_config *sealevel_config_new(void);
+
+/**
+ * Releases resources associated with a Sealevel machine config.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Calling this function given a string that's _not_ the return value of `sealevel_config_new`.
+ * - Calling this function more than once on the same object (double free).
+ * - Using the config object after calling this function (use-after-free).
+ */
+void sealevel_config_free(sealevel_config *config);
+
+/**
+ * Drops an invoke context and all programs created with it. Noop given a null pointer.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Calling this function twice on the same object.
+ */
+void sealevel_invoke_context_free(sealevel_invoke_context *this_);
+
+/**
  * Returns the error code of this thread's last seen error.
  */
 int sealevel_errno(void);
@@ -63,35 +103,35 @@ int sealevel_errno(void);
  * Returns a UTF-8 string of this thread's last seen error,
  * or NULL if `sealevel_errno() == SEALEVEL_OK`.
  *
- * Must be released using `sealevel_strerror_free` after use.
+ * # Safety
+ * Call `sealevel_strerror_free` on the return value after you are done using it.
+ * Failure to do so results in a memory leak.
  */
 const char *sealevel_strerror(void);
 
 /**
  * Frees an unused error string gained from `sealevel_strerror`.
  * Calling this with a NULL pointer is a no-op.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Calling this function given a string that's _not_ the return value of `sealevel_strerror`.
+ * - Calling this function more than once on the same string (double free).
+ * - Using a string after calling this function (use-after-free).
  */
 void sealevel_strerror_free(const char *str);
 
 /**
- * Creates a new Sealevel machine config.
- */
-sealevel_config *sealevel_config_new(void);
-
-/**
- * Releases resources associated with a Sealevel machine config.
- */
-void sealevel_config_free(sealevel_config *config);
-
-/**
- * Drops an invoke context and all programs created with it.
- */
-void sealevel_invoke_context_free(sealevel_invoke_context *this_);
-
-/**
  * Loads a Sealevel program from an ELF buffer and verifies its SBF bytecode.
  *
+ * Sets `sealevel_errno` and returns a null pointer if loading failed.
+ *
  * Consumes the given syscall registry.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Using the syscalls object parameter after calling this function (including a second call of this function).
+ * - Providing a config object that has been freed with `sealevel_config_free` before.
  */
 sealevel_executable *sealevel_load_program(const sealevel_config *config,
                                            sealevel_syscall_registry syscalls,
@@ -102,10 +142,22 @@ sealevel_executable *sealevel_load_program(const sealevel_config *config,
  * Compiles a program to native executable code.
  *
  * Sets `sealevel_errno`.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Calling this function twice on the same program.
+ * - Calling this function given a null pointer or an invalid pointer.
  */
 void sealevel_program_jit_compile(sealevel_executable *program);
 
-void sealevel_vm_create(void);
+/**
+ * Creates a Sealevel virtual machine and loads the given program into it.
+ *
+ * Sets `sealevel_errno` and returns a null pointer if loading failed.
+ */
+sealevel_vm *sealevel_vm_create(sealevel_executable *program, void *heap, size_t heap_len);
+
+uint64_t sealevel_vm_execute(sealevel_vm *vm);
 
 #ifdef __cplusplus
 } // extern "C"
