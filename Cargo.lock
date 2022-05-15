@@ -4015,6 +4015,7 @@ name = "sealevel-ffi"
 version = "1.11.0"
 dependencies = [
  "solana-bpf-loader-program",
+ "solana-program-runtime",
  "solana_rbpf",
 ]
 
