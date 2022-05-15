@@ -1166,7 +1166,7 @@ pub struct ThisInstructionMeter {
     pub compute_meter: Rc<RefCell<ComputeMeter>>,
 }
 impl ThisInstructionMeter {
-    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
+    pub fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
         Self { compute_meter }
     }
 }
