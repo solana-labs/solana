@@ -1131,7 +1131,11 @@ describe('Connection', function () {
       const badTransactionSignature = 'bad transaction signature';
 
       await expect(
-        connection.confirmTransaction(badTransactionSignature),
+        connection.confirmTransaction({
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight: 9999,
+          signature: badTransactionSignature,
+        }),
       ).to.be.rejectedWith('signature must be base58 encoded');
 
       await mockRpcResponse({
@@ -2899,11 +2903,11 @@ describe('Connection', function () {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.latestBlockhash({connection});
+    const latestBlockhash = await helpers.latestBlockhash({connection});
 
     const transaction = new Transaction({
       feePayer: accountFrom.publicKey,
-      recentBlockhash: blockhash,
+      ...latestBlockhash,
     }).add(
       SystemProgram.transfer({
         fromPubkey: accountFrom.publicKey,
@@ -3825,7 +3829,11 @@ describe('Connection', function () {
         {skipPreflight: true},
       );
 
-      await connection.confirmTransaction(signature);
+      await connection.confirmTransaction({
+        blockhash: transaction.recentBlockhash,
+        lastValidBlockHeight: transaction.lastValidBlockHeight,
+        signature,
+      });
 
       const response = (await connection.getSignatureStatus(signature)).value;
       if (response !== null) {

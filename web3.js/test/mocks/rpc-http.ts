@@ -185,7 +185,8 @@ const processTransaction = async ({
   commitment: Commitment;
   err?: any;
 }) => {
-  const blockhash = (await latestBlockhash({connection})).blockhash;
+  const {blockhash, lastValidBlockHeight} = await latestBlockhash({connection});
+  transaction.lastValidBlockHeight = lastValidBlockHeight;
   transaction.recentBlockhash = blockhash;
   transaction.sign(...signers);
 
@@ -222,7 +223,10 @@ const processTransaction = async ({
     result: true,
   });
 
-  return await connection.confirmTransaction(signature, commitment);
+  return await connection.confirmTransaction(
+    {blockhash, lastValidBlockHeight, signature},
+    commitment,
+  );
 };
 
 const airdrop = async ({
