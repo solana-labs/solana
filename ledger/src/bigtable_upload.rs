@@ -37,8 +37,7 @@ impl Default for ConfirmedBlockUploadConfig {
 }
 
 struct BlockstoreLoadStats {
-    pub thread_id: usize,
-    pub num_blocks_uploaded: usize,
+    pub num_blocks_read: usize,
     pub elapsed: Duration,
 }
 
@@ -167,7 +166,7 @@ pub async fn upload_confirmed_blocks(
 
         (
             (0..config.num_blocks_to_upload_in_parallel)
-                .map(|i| {
+                .map(|_| {
                     let blockstore = blockstore.clone();
                     let sender = sender.clone();
                     let slot_receiver = slot_receiver.clone();
@@ -175,7 +174,7 @@ pub async fn upload_confirmed_blocks(
 
                     std::thread::spawn(move || {
                         let start = Instant::now();
-                        let mut num_blocks_uploaded = 0;
+                        let mut num_blocks_read = 0;
 
                         loop {
                             if exit.load(Ordering::Relaxed) {
@@ -191,7 +190,7 @@ pub async fn upload_confirmed_blocks(
 
                             let _ = match blockstore.get_rooted_block(slot, true) {
                                 Ok(confirmed_block) => {
-                                    num_blocks_uploaded += 1;
+                                    num_blocks_read += 1;
                                     sender.send((slot, Some(confirmed_block)))
                                 }
                                 Err(err) => {
@@ -204,8 +203,7 @@ pub async fn upload_confirmed_blocks(
                             };
                         }
                         BlockstoreLoadStats {
-                            thread_id: i,
-                            num_blocks_uploaded,
+                            num_blocks_read,
                             elapsed: start.elapsed(),
                         }
                     })
@@ -262,19 +260,31 @@ pub async fn upload_confirmed_blocks(
 
     let blockstore_results: Vec<std::thread::Result<BlockstoreLoadStats>> =
         loader_threads.into_iter().map(|t| t.join()).collect();
+
+    let mut blockstore_num_blocks_read = 0;
+    let mut blockstore_elapsed = Duration::default();
+    let mut blockstore_errors = 0;
+
     for r in blockstore_results {
         match r {
             Ok(stats) => {
-                info!(
-                    "blockstore thread {} took {:?} uploading {} blocks",
-                    stats.thread_id, stats.elapsed, stats.num_blocks_uploaded
-                );
+                blockstore_num_blocks_read += stats.num_blocks_read;
+                blockstore_elapsed += stats.elapsed;
             }
             Err(e) => {
                 error!("error joining blockstore thread: {:?}", e);
+                blockstore_errors += 1;
             }
         }
     }
+
+    info!(
+        "blockstore upload took {:?} for {} blocks ({:.2} blocks/s) errors: {}",
+        blockstore_elapsed,
+        blockstore_num_blocks_read,
+        blockstore_num_blocks_read as f64 / blockstore_elapsed.as_secs_f64(),
+        blockstore_errors
+    );
 
     if failures > 0 {
         Err(format!("Incomplete upload, {} operations failed", failures).into())
