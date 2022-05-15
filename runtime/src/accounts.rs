@@ -64,33 +64,33 @@ pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
 #[derive(Debug, Default, AbiExample)]
 pub struct AccountLocks {
-    write_locks: HashSet<Pubkey>,
+    pub write_locks: HashSet<Pubkey>,
     readonly_locks: HashMap<Pubkey, u64>,
 }
 
 impl AccountLocks {
-    fn is_locked_readonly(&self, key: &Pubkey) -> bool {
+    pub fn is_locked_readonly(&self, key: &Pubkey) -> bool {
         self.readonly_locks
             .get(key)
             .map_or(false, |count| *count > 0)
     }
 
-    fn is_locked_write(&self, key: &Pubkey) -> bool {
+    pub fn is_locked_write(&self, key: &Pubkey) -> bool {
         self.write_locks.contains(key)
     }
 
-    fn insert_new_readonly(&mut self, key: &Pubkey) {
+    pub fn insert_new_readonly(&mut self, key: &Pubkey) {
         assert!(self.readonly_locks.insert(*key, 1).is_none());
     }
 
-    fn lock_readonly(&mut self, key: &Pubkey) -> bool {
+    pub fn lock_readonly(&mut self, key: &Pubkey) -> bool {
         self.readonly_locks.get_mut(key).map_or(false, |count| {
             *count += 1;
             true
         })
     }
 
-    fn unlock_readonly(&mut self, key: &Pubkey) {
+    pub fn unlock_readonly(&mut self, key: &Pubkey) {
         if let hash_map::Entry::Occupied(mut occupied_entry) = self.readonly_locks.entry(*key) {
             let count = occupied_entry.get_mut();
             *count -= 1;
@@ -100,7 +100,7 @@ impl AccountLocks {
         }
     }
 
-    fn unlock_write(&mut self, key: &Pubkey) {
+    pub fn unlock_write(&mut self, key: &Pubkey) {
         self.write_locks.remove(key);
     }
 }
