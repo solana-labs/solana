@@ -58,13 +58,16 @@ lazy_static! {
         .unwrap();
 }
 
+/// A wrapper over NewConnection with additional capability to create the endpoint as part
+/// of creating a new connection.
 #[derive(Clone)]
-struct QuicConnection {
+struct QuicNewConnection {
     endpoint: Endpoint,
     connection: Arc<NewConnection>,
 }
 
-impl QuicConnection {
+impl QuicNewConnection {
+    /// Create a QuicNewConnection given the remote address 'addr'.
     async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -79,7 +82,7 @@ impl QuicConnection {
         crypto.enable_early_data = true;
 
         let mut endpoint =
-            QuicConnection::create_endpoint(EndpointConfig::default(), client_socket).await;
+            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket).await;
 
         let mut config = ClientConfig::new(Arc::new(crypto));
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
@@ -139,7 +142,7 @@ impl QuicConnection {
 }
 
 struct QuicClient {
-    connection: Arc<Mutex<Option<QuicConnection>>>,
+    connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
 }
@@ -277,7 +280,7 @@ impl QuicClient {
                     conn.connection.clone()
                 }
                 None => {
-                    let conn = QuicConnection::make_connection(self.addr, stats).await?;
+                    let conn = QuicNewConnection::make_connection(self.addr, stats).await?;
                     *conn_guard = Some(conn.clone());
                     conn.connection.clone()
                 }
