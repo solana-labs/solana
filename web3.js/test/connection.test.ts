@@ -2903,11 +2903,11 @@ describe('Connection', function () {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.latestBlockhash({connection});
+    const latestBlockhash = await helpers.latestBlockhash({connection});
 
     const transaction = new Transaction({
       feePayer: accountFrom.publicKey,
-      recentBlockhash: blockhash,
+      ...latestBlockhash,
     }).add(
       SystemProgram.transfer({
         fromPubkey: accountFrom.publicKey,

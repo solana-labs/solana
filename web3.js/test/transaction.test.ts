@@ -23,7 +23,10 @@ describe('Transaction', () => {
       const account3 = Keypair.generate();
       const recentBlockhash = Keypair.generate().publicKey.toBase58();
       const programId = Keypair.generate().publicKey;
-      const transaction = new Transaction({recentBlockhash}).add({
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
         keys: [
           {pubkey: account3.publicKey, isSigner: true, isWritable: false},
           {pubkey: payer.publicKey, isSigner: true, isWritable: true},
@@ -49,7 +52,10 @@ describe('Transaction', () => {
       const other = Keypair.generate();
       const recentBlockhash = Keypair.generate().publicKey.toBase58();
       const programId = Keypair.generate().publicKey;
-      const transaction = new Transaction({recentBlockhash}).add({
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
         keys: [
           {pubkey: other.publicKey, isSigner: true, isWritable: true},
           {pubkey: payer.publicKey, isSigner: true, isWritable: true},
@@ -101,7 +107,10 @@ describe('Transaction', () => {
       const payer = Keypair.generate();
       const recentBlockhash = Keypair.generate().publicKey.toBase58();
       const programId = Keypair.generate().publicKey;
-      const transaction = new Transaction({recentBlockhash}).add({
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
         keys: [{pubkey: payer.publicKey, isSigner: true, isWritable: false}],
         programId,
       });
@@ -121,11 +130,11 @@ describe('Transaction', () => {
       const accountFrom = Keypair.generate();
       const accountTo = Keypair.generate();
 
-      const {blockhash} = await helpers.latestBlockhash({connection});
+      const latestBlockhash = await helpers.latestBlockhash({connection});
 
       const transaction = new Transaction({
         feePayer: accountFrom.publicKey,
-        recentBlockhash: blockhash,
+        ...latestBlockhash,
       }).add(
         SystemProgram.transfer({
           fromPubkey: accountFrom.publicKey,
@@ -149,10 +158,16 @@ describe('Transaction', () => {
       lamports: 123,
     });
 
-    const transaction = new Transaction({recentBlockhash}).add(transfer);
+    const transaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(transfer);
     transaction.sign(account1, account2);
 
-    const partialTransaction = new Transaction({recentBlockhash}).add(transfer);
+    const partialTransaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(transfer);
     partialTransaction.setSigners(account1.publicKey, account2.publicKey);
     expect(partialTransaction.signatures[0].signature).to.be.null;
     expect(partialTransaction.signatures[1].signature).to.be.null;
@@ -196,7 +211,10 @@ describe('Transaction', () => {
     const programId = Keypair.generate().publicKey;
 
     it('setSigners', () => {
-      const transaction = new Transaction({recentBlockhash}).add({
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
         keys: [
           {pubkey: duplicate1.publicKey, isSigner: true, isWritable: true},
           {pubkey: payer.publicKey, isSigner: false, isWritable: true},
@@ -224,7 +242,10 @@ describe('Transaction', () => {
     });
 
     it('sign', () => {
-      const transaction = new Transaction({recentBlockhash}).add({
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
         keys: [
           {pubkey: duplicate1.publicKey, isSigner: true, isWritable: true},
           {pubkey: payer.publicKey, isSigner: false, isWritable: true},
@@ -263,14 +284,18 @@ describe('Transaction', () => {
       lamports: 123,
     });
 
-    const orgTransaction = new Transaction({recentBlockhash}).add(
-      transfer1,
-      transfer2,
-    );
+    const latestBlockhash = {
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    };
+
+    const orgTransaction = new Transaction({
+      ...latestBlockhash,
+    }).add(transfer1, transfer2);
     orgTransaction.sign(account1, account2);
 
     const newTransaction = new Transaction({
-      recentBlockhash: orgTransaction.recentBlockhash,
+      ...latestBlockhash,
       signatures: orgTransaction.signatures,
     }).add(transfer1, transfer2);
 
@@ -292,10 +317,10 @@ describe('Transaction', () => {
       lamports: 123,
     });
 
-    const orgTransaction = new Transaction({recentBlockhash}).add(
-      transfer1,
-      transfer2,
-    );
+    const orgTransaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(transfer1, transfer2);
     orgTransaction.sign(account1);
   });
 
@@ -363,8 +388,9 @@ describe('Transaction', () => {
       lamports: 49,
     });
     const expectedTransaction = new Transaction({
-      recentBlockhash,
+      blockhash: recentBlockhash,
       feePayer: sender.publicKey,
+      lastValidBlockHeight: 9999,
     }).add(transfer);
     expectedTransaction.sign(sender);
 
@@ -493,9 +519,10 @@ describe('Transaction', () => {
       toPubkey: recipient,
       lamports: 49,
     });
-    const expectedTransaction = new Transaction({recentBlockhash}).add(
-      transfer,
-    );
+    const expectedTransaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(transfer);
 
     // Empty signature array fails.
     expect(expectedTransaction.signatures).to.have.length(0);
@@ -607,8 +634,9 @@ describe('Transaction', () => {
     const acc1Writable = Keypair.generate();
     const acc2Writable = Keypair.generate();
     const t0 = new Transaction({
-      recentBlockhash: 'HZaTsZuhN1aaz9WuuimCFMyH7wJ5xiyMUHFCnZSMyguH',
+      blockhash: 'HZaTsZuhN1aaz9WuuimCFMyH7wJ5xiyMUHFCnZSMyguH',
       feePayer: signer.publicKey,
+      lastValidBlockHeight: 9999,
     });
     t0.add(
       new TransactionInstruction({

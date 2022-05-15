@@ -176,9 +176,9 @@ if (process.env.TEST_LIVE) {
       });
 
       it('simulate transaction without signature verification', async () => {
-        const simulatedTransaction = new Transaction({
-          feePayer: payerAccount.publicKey,
-        }).add({
+        const simulatedTransaction = new Transaction();
+        simulatedTransaction.feePayer = payerAccount.publicKey;
+        simulatedTransaction.add({
           keys: [
             {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
           ],
