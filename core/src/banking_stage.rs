@@ -771,7 +771,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         qos_service: &Arc<QosService>,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) -> BufferedPacketsDecision {
+    ) {
         let (decision, make_decision_time) = Measure::this(
             |_| {
                 let bank_start;
@@ -871,8 +871,6 @@ impl BankingStage {
             }
             _ => (),
         }
-
-        decision
     }
 
     fn handle_forwarding(
@@ -955,39 +953,29 @@ impl BankingStage {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         loop {
             let my_pubkey = cluster_info.id();
-            while !buffered_packet_batches.is_empty() {
-                let (decision, process_buffered_packets_time) = Measure::this(
-                    |_| {
-                        Self::process_buffered_packets(
-                            &my_pubkey,
-                            &socket,
-                            poh_recorder,
-                            cluster_info,
-                            &mut buffered_packet_batches,
-                            &forward_option,
-                            transaction_status_sender.clone(),
-                            &gossip_vote_sender,
-                            &banking_stage_stats,
-                            &recorder,
-                            data_budget,
-                            &qos_service,
-                            &mut slot_metrics_tracker,
-                        )
-                    },
-                    (),
-                    "process_buffered_packets",
-                );
-                slot_metrics_tracker
-                    .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
-
-                if matches!(decision, BufferedPacketsDecision::Hold)
-                    || matches!(decision, BufferedPacketsDecision::ForwardAndHold)
-                {
-                    // If we are waiting on a new bank,
-                    // check the receiver for more transactions/for exiting
-                    break;
-                }
-            }
+            let (_, process_buffered_packets_time) = Measure::this(
+                |_| {
+                    Self::process_buffered_packets(
+                        &my_pubkey,
+                        &socket,
+                        poh_recorder,
+                        cluster_info,
+                        &mut buffered_packet_batches,
+                        &forward_option,
+                        transaction_status_sender.clone(),
+                        &gossip_vote_sender,
+                        &banking_stage_stats,
+                        &recorder,
+                        data_budget,
+                        &qos_service,
+                        &mut slot_metrics_tracker,
+                    )
+                },
+                (),
+                "process_buffered_packets",
+            );
+            slot_metrics_tracker
+                .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
 
             let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
                 |_| {
@@ -1005,10 +993,11 @@ impl BankingStage {
             );
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
-                // If packets are buffered, let's wait for less time on recv from the channel.
-                // This helps detect the next leader faster, and processing the buffered
-                // packets quickly
-                Duration::from_millis(10)
+                // If there are buffered packets, run the equivalent of try_recv to try reading more
+                // packets. This prevents starving BankingStage::consume_buffered_packets due to
+                // buffered_packet_batches containing transactions that exceed the cost model for
+                // the current bank.
+                Duration::from_millis(0)
             } else {
                 // Default wait time
                 Duration::from_millis(100)
