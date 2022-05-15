@@ -70,6 +70,7 @@ struct QuicNewConnection {
 impl QuicNewConnection {
     /// Create a QuicNewConnection given the remote address 'addr'.
     async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
+        let mut make_connection_measure = Measure::start("make_connection_measure");
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
@@ -101,6 +102,10 @@ impl QuicNewConnection {
         }
         let connection = connecting_result?;
 
+        make_connection_measure.stop();
+        stats
+            .make_connection_ms
+            .fetch_add(make_connection_measure.as_ms(), Ordering::Relaxed);
         Ok(Self {
             endpoint,
             connection: Arc::new(connection),
