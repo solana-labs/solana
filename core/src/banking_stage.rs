@@ -93,6 +93,8 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
+const SLOT_BOUNDARY_CHECK_MS: u64 = 10;
+
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
     cost_model_throttled_transactions_count: usize,
@@ -951,47 +953,58 @@ impl BankingStage {
         let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
+
+        let mut last_slot_metrics_track = Instant::now();
+
         loop {
             let my_pubkey = cluster_info.id();
-            let (_, process_buffered_packets_time) = Measure::this(
-                |_| {
-                    Self::process_buffered_packets(
-                        &my_pubkey,
-                        &socket,
-                        poh_recorder,
-                        cluster_info,
-                        &mut buffered_packet_batches,
-                        &forward_option,
-                        transaction_status_sender.clone(),
-                        &gossip_vote_sender,
-                        &banking_stage_stats,
-                        &recorder,
-                        data_budget,
-                        &qos_service,
-                        &mut slot_metrics_tracker,
-                    )
-                },
-                (),
-                "process_buffered_packets",
-            );
-            slot_metrics_tracker
-                .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
+            if !buffered_packet_batches.is_empty() {
+                let (_, process_buffered_packets_time) = Measure::this(
+                    |_| {
+                        Self::process_buffered_packets(
+                            &my_pubkey,
+                            &socket,
+                            poh_recorder,
+                            cluster_info,
+                            &mut buffered_packet_batches,
+                            &forward_option,
+                            transaction_status_sender.clone(),
+                            &gossip_vote_sender,
+                            &banking_stage_stats,
+                            &recorder,
+                            data_budget,
+                            &qos_service,
+                            &mut slot_metrics_tracker,
+                        )
+                    },
+                    (),
+                    "process_buffered_packets",
+                );
+                slot_metrics_tracker
+                    .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
+            }
 
-            let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
-                |_| {
-                    let current_poh_bank = {
-                        // TODO (B): constant spinning here may have an impact on poh, discuss in PR
-                        let poh = poh_recorder.lock().unwrap();
-                        poh.bank_start()
-                    };
-                    slot_metrics_tracker.update_on_leader_slot_boundary(&current_poh_bank);
-                },
-                (),
-                "slot_metrics_checker_check_slot_boundary",
-            );
-            slot_metrics_tracker.increment_slot_metrics_check_slot_boundary_us(
-                slot_metrics_checker_check_slot_boundary_time.as_us(),
-            );
+            // avoid excessively locking poh_recorder
+            if Instant::now().duration_since(last_slot_metrics_track)
+                >= Duration::from_millis(SLOT_BOUNDARY_CHECK_MS)
+            {
+                let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
+                    |_| {
+                        let current_poh_bank = {
+                            let poh = poh_recorder.lock().unwrap();
+                            poh.bank_start()
+                        };
+                        slot_metrics_tracker.update_on_leader_slot_boundary(&current_poh_bank);
+                    },
+                    (),
+                    "slot_metrics_checker_check_slot_boundary",
+                );
+                slot_metrics_tracker.increment_slot_metrics_check_slot_boundary_us(
+                    slot_metrics_checker_check_slot_boundary_time.as_us(),
+                );
+
+                last_slot_metrics_track = Instant::now();
+            }
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
