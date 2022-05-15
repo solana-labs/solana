@@ -4055,13 +4055,11 @@ export class Connection {
     let transaction;
     if (transactionOrMessage instanceof Transaction) {
       let originalTx: Transaction = transactionOrMessage;
-      transaction = new Transaction({
-        recentBlockhash: originalTx.recentBlockhash,
-        nonceInfo: originalTx.nonceInfo,
-        feePayer: originalTx.feePayer,
-        signatures: [...originalTx.signatures],
-      });
+      transaction = new Transaction();
+      transaction.feePayer = originalTx.feePayer;
       transaction.instructions = transactionOrMessage.instructions;
+      transaction.nonceInfo = originalTx.nonceInfo;
+      transaction.signatures = originalTx.signatures;
     } else {
       transaction = Transaction.populate(transactionOrMessage);
       // HACK: this function relies on mutating the populated transaction
