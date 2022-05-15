@@ -1,21 +1,16 @@
 use {
-    crate::{
-        context::{sealevel_invoke_context, sealevel_syscall_registry},
-        error::set_result,
-        machine::sealevel_machine,
-    },
+    crate::{config::sealevel_config, context::sealevel_syscall_registry, error::set_result},
     solana_bpf_loader_program::{BpfError, ThisInstructionMeter},
     solana_rbpf::elf::Executable,
-    std::{
-        os::raw::{c_char, c_int},
-        pin::Pin,
-        ptr::null_mut,
-    },
+    std::{os::raw::c_char, pin::Pin, ptr::null_mut},
 };
 
-/// A virtual machine program ready to be executed.
-pub struct sealevel_program {
-    program: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+/// A loaded and relocated program.
+///
+/// To execute this program, create a VM with `sealevel_vm_create`.
+pub struct sealevel_executable {
+    pub(crate) program: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    pub(crate) is_jit_compiled: bool,
 }
 
 /// Access parameters of an account usage in an instruction.
@@ -29,27 +24,36 @@ pub struct sealevel_instruction_account {
 
 /// Loads a Sealevel program from an ELF buffer and verifies its SBF bytecode.
 ///
+/// Sets `sealevel_errno` and returns a null pointer if loading failed.
+///
 /// Consumes the given syscall registry.
+///
+/// # Safety
+/// Avoid the following undefined behavior:
+/// - Using the syscalls object parameter after calling this function (including a second call of this function).
+/// - Providing a config object that has been freed with `sealevel_config_free` before.
 #[no_mangle]
-pub unsafe extern "C" fn sealevel_program_create(
-    machine: *const sealevel_machine,
+pub unsafe extern "C" fn sealevel_load_program(
+    config: *const sealevel_config,
     syscalls: sealevel_syscall_registry,
     data: *const c_char,
     data_len: usize,
-) -> *mut sealevel_program {
+) -> *mut sealevel_executable {
     let data_slice = std::slice::from_raw_parts(data as *const u8, data_len);
-    // TODO syscall registry
     let load_result = Executable::<BpfError, ThisInstructionMeter>::from_elf(
         data_slice,
         None,
-        (*machine).config,
+        (*config).config,
         *syscalls,
     );
     match set_result(load_result) {
         None => null_mut(),
         Some(program) => {
-            let wrapped_program = sealevel_program { program };
-            Box::into_raw(Box::new(wrapped_program))
+            let wrapper = sealevel_executable {
+                program,
+                is_jit_compiled: false,
+            };
+            Box::into_raw(Box::new(wrapper))
         }
     }
 }
@@ -57,23 +61,15 @@ pub unsafe extern "C" fn sealevel_program_create(
 /// Compiles a program to native executable code.
 ///
 /// Sets `sealevel_errno`.
-#[no_mangle]
-pub unsafe extern "C" fn sealevel_program_jit_compile(program: *mut sealevel_program) {
-    let result = Executable::jit_compile(&mut (*program).program);
-    set_result(result);
-}
-
-/// Executes a Sealevel program with the given instruction data and accounts.
 ///
-/// Unlike `sealevel_process_instruction`, does not progress the transaction context state machine.
+/// # Safety
+/// Avoid the following undefined behavior:
+/// - Calling this function twice on the same program.
+/// - Calling this function given a null pointer or an invalid pointer.
 #[no_mangle]
-pub unsafe extern "C" fn sealevel_program_execute(
-    program: *const sealevel_program,
-    invoke_context: *const sealevel_invoke_context,
-    data: *const c_char,
-    data_len: usize,
-    accounts: *const sealevel_instruction_account,
-    accounts_len: usize,
-) -> u64 {
-    unimplemented!()
+pub unsafe extern "C" fn sealevel_program_jit_compile(program: *mut sealevel_executable) {
+    let result = Executable::jit_compile(&mut (*program).program);
+    if set_result(result).is_some() {
+        (*program).is_jit_compiled = true;
+    }
 }

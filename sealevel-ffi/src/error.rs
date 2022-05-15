@@ -2,8 +2,7 @@ use {
     solana_bpf_loader_program::BpfError,
     solana_rbpf::error::EbpfError,
     std::{
-        borrow::{Borrow, BorrowMut},
-        cell::{Ref, RefCell},
+        cell::RefCell,
         ffi::CString,
         os::raw::{c_char, c_int},
         ptr::null,
@@ -53,7 +52,9 @@ pub extern "C" fn sealevel_errno() -> c_int {
 /// Returns a UTF-8 string of this thread's last seen error,
 /// or NULL if `sealevel_errno() == SEALEVEL_OK`.
 ///
-/// Must be released using `sealevel_strerror_free` after use.
+/// # Safety
+/// Call `sealevel_strerror_free` on the return value after you are done using it.
+/// Failure to do so results in a memory leak.
 #[no_mangle]
 pub extern "C" fn sealevel_strerror() -> *const c_char {
     let c_string = ERROR.with(|err_cell| {
@@ -70,6 +71,12 @@ pub extern "C" fn sealevel_strerror() -> *const c_char {
 
 /// Frees an unused error string gained from `sealevel_strerror`.
 /// Calling this with a NULL pointer is a no-op.
+///
+/// # Safety
+/// Avoid the following undefined behavior:
+/// - Calling this function given a string that's _not_ the return value of `sealevel_strerror`.
+/// - Calling this function more than once on the same string (double free).
+/// - Using a string after calling this function (use-after-free).
 #[no_mangle]
 pub unsafe extern "C" fn sealevel_strerror_free(str: *const c_char) {
     if str.is_null() {

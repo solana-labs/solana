@@ -5,6 +5,7 @@
  * Source code: https://github.com/solana-labs/solana
  *
  * ABI stability is planned, though this version makes no promises yet.
+ * Passing resources between two different versions of this library is undefined behavior.
 */
 
 #pragma once
@@ -30,32 +31,19 @@
 #define SEALEVEL_ERR_UNKNOWN -1
 
 /**
+ * Sealevel virtual machine config.
+ */
+typedef struct sealevel_config sealevel_config;
+
+typedef struct sealevel_executable sealevel_executable;
+
+/**
  * The invoke context holds the state of a single transaction execution.
  * It tracks the execution progress (instruction being executed),
  * interfaces with account data,
  * and specifies the on-chain execution rules (precompiles, syscalls, sysvars).
  */
 typedef struct sealevel_invoke_context sealevel_invoke_context;
-
-/**
- * A virtual machine capable of executing Solana Sealevel programs.
- */
-typedef struct sealevel_machine sealevel_machine;
-
-/**
- * A virtual machine program ready to be executed.
- */
-typedef struct sealevel_program sealevel_program;
-
-/**
- * Access parameters of an account usage in an instruction.
- */
-typedef struct {
-  size_t index_in_transaction;
-  size_t index_in_caller;
-  bool is_signer;
-  bool is_writable;
-} sealevel_instruction_account;
 
 /**
  * The map of syscalls provided by the virtual machine.
@@ -86,14 +74,14 @@ const char *sealevel_strerror(void);
 void sealevel_strerror_free(const char *str);
 
 /**
- * Creates a new Sealevel machine environment.
+ * Creates a new Sealevel machine config.
  */
-sealevel_machine *sealevel_machine_new(void);
+sealevel_config *sealevel_config_new(void);
 
 /**
- * Releases resources associated with a Sealevel machine.
+ * Releases resources associated with a Sealevel machine config.
  */
-void sealevel_machine_free(sealevel_machine *machine);
+void sealevel_config_free(sealevel_config *config);
 
 /**
  * Drops an invoke context and all programs created with it.
@@ -101,45 +89,23 @@ void sealevel_machine_free(sealevel_machine *machine);
 void sealevel_invoke_context_free(sealevel_invoke_context *this_);
 
 /**
- * Processes a transaction instruction.
- *
- * Sets `sealevel_errno`.
- */
-void sealevel_process_instruction(sealevel_invoke_context *invoke_context,
-                                  const char *data,
-                                  size_t data_len,
-                                  const sealevel_instruction_account *accounts,
-                                  size_t accounts_len,
-                                  uint64_t *compute_units_consumed);
-
-/**
  * Loads a Sealevel program from an ELF buffer and verifies its SBF bytecode.
  *
  * Consumes the given syscall registry.
  */
-sealevel_program *sealevel_program_create(const sealevel_machine *machine,
-                                          sealevel_syscall_registry syscalls,
-                                          const char *data,
-                                          size_t data_len);
+sealevel_executable *sealevel_load_program(const sealevel_config *config,
+                                           sealevel_syscall_registry syscalls,
+                                           const char *data,
+                                           size_t data_len);
 
 /**
  * Compiles a program to native executable code.
  *
  * Sets `sealevel_errno`.
  */
-void sealevel_program_jit_compile(sealevel_program *program);
+void sealevel_program_jit_compile(sealevel_executable *program);
 
-/**
- * Executes a Sealevel program with the given instruction data and accounts.
- *
- * Unlike `sealevel_process_instruction`, does not progress the transaction context state machine.
- */
-uint64_t sealevel_program_execute(const sealevel_program *program,
-                                  const sealevel_invoke_context *invoke_context,
-                                  const char *data,
-                                  size_t data_len,
-                                  const sealevel_instruction_account *accounts,
-                                  size_t accounts_len);
+void sealevel_vm_create(void);
 
 #ifdef __cplusplus
 } // extern "C"

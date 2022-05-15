@@ -1,6 +1,8 @@
+#![feature(c_variadic)]
 #![allow(non_camel_case_types)]
 
-pub mod error;
-pub mod machine;
+pub mod config;
 pub mod context;
+pub mod error;
 pub mod program;
+pub mod vm;
