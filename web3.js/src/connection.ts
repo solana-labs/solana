@@ -2221,12 +2221,12 @@ export class Connection {
   /** @internal */ _disableBlockhashCaching: boolean = false;
   /** @internal */ _pollingBlockhash: boolean = false;
   /** @internal */ _blockhashInfo: {
-    recentBlockhash: Blockhash | null;
+    latestBlockhash: BlockhashWithExpiryBlockHeight | null;
     lastFetch: number;
     simulatedSignatures: Array<string>;
     transactionSignatures: Array<string>;
   } = {
-    recentBlockhash: null,
+    latestBlockhash: null,
     lastFetch: 0,
     transactionSignatures: [],
     simulatedSignatures: [],
@@ -3990,7 +3990,9 @@ export class Connection {
   /**
    * @internal
    */
-  async _recentBlockhash(disableCache: boolean): Promise<Blockhash> {
+  async _blockhashWithExpiryBlockHeight(
+    disableCache: boolean,
+  ): Promise<BlockhashWithExpiryBlockHeight> {
     if (!disableCache) {
       // Wait for polling to finish
       while (this._pollingBlockhash) {
@@ -3998,8 +4000,8 @@ export class Connection {
       }
       const timeSinceFetch = Date.now() - this._blockhashInfo.lastFetch;
       const expired = timeSinceFetch >= BLOCKHASH_CACHE_TIMEOUT_MS;
-      if (this._blockhashInfo.recentBlockhash !== null && !expired) {
-        return this._blockhashInfo.recentBlockhash;
+      if (this._blockhashInfo.latestBlockhash !== null && !expired) {
+        return this._blockhashInfo.latestBlockhash;
       }
     }
 
@@ -4009,21 +4011,25 @@ export class Connection {
   /**
    * @internal
    */
-  async _pollNewBlockhash(): Promise<Blockhash> {
+  async _pollNewBlockhash(): Promise<BlockhashWithExpiryBlockHeight> {
     this._pollingBlockhash = true;
     try {
       const startTime = Date.now();
+      const cachedLatestBlockhash = this._blockhashInfo.latestBlockhash;
+      const cachedBlockhash = cachedLatestBlockhash
+        ? cachedLatestBlockhash.blockhash
+        : null;
       for (let i = 0; i < 50; i++) {
-        const {blockhash} = await this.getRecentBlockhash('finalized');
+        const latestBlockhash = await this.getLatestBlockhash('finalized');
 
-        if (this._blockhashInfo.recentBlockhash != blockhash) {
+        if (cachedBlockhash !== latestBlockhash.blockhash) {
           this._blockhashInfo = {
-            recentBlockhash: blockhash,
+            latestBlockhash,
             lastFetch: Date.now(),
             transactionSignatures: [],
             simulatedSignatures: [],
           };
-          return blockhash;
+          return latestBlockhash;
         }
 
         // Sleep for approximately half a slot
@@ -4067,7 +4073,11 @@ export class Connection {
     } else {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(
+          disableCache,
+        );
+        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+        transaction.recentBlockhash = latestBlockhash.blockhash;
 
         if (!signers) break;
 
@@ -4155,7 +4165,11 @@ export class Connection {
     } else {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(
+          disableCache,
+        );
+        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+        transaction.recentBlockhash = latestBlockhash.blockhash;
         transaction.sign(...signers);
         if (!transaction.signature) {
           throw new Error('!signature'); // should never happen
