@@ -15,6 +15,7 @@ clap = {version = "3.1.5", features = ["derive", "cargo"]}
 log = "0.4.17"
 rand = "0.7.0"
 serde = "1.0.137"
+itertools = "0.10.3"
 solana-client = { path = "../client", version = "=1.11.0" }
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-gossip = { path = "../gossip", version = "=1.11.0" }
@@ -24,9 +25,13 @@ solana-perf = { path = "../perf", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-streamer = { path = "../streamer", version = "=1.11.0" }
 solana-version = { path = "../version", version = "=1.11.0" }
+solana-bench-tps = { path = "../bench-tps", version = "=1.11.0" }
+solana-faucet = { path = "../faucet", version = "=1.11.0" }
+solana-rpc = { path = "../rpc", version = "=1.11.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
+serial_test = "0.6.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.11.0" }

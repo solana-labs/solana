@@ -42,10 +42,9 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
-            disable_deprecated_loader, do_support_realloc,
-            error_on_syscall_bpf_function_hash_collisions, reduce_required_deploy_balance,
-            reject_callx_r10, requestable_heap_size,
+            disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
+            do_support_realloc, error_on_syscall_bpf_function_hash_collisions,
+            reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -110,11 +109,9 @@ pub fn create_executor(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
-    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let register_syscall_result =
-        syscalls::register_syscalls(invoke_context, disable_deploy_of_alloc_free_syscall);
+    let register_syscall_result = syscalls::register_syscalls(invoke_context);
     register_syscalls_time.stop();
     invoke_context.timings.create_executor_register_syscalls_us = invoke_context
         .timings
@@ -386,7 +383,6 @@ fn process_instruction_common(
                     invoke_context,
                     use_jit,
                     false,
-                    true, // allow _sol_alloc_free syscall for execution
                 )?;
                 let transaction_context = &invoke_context.transaction_context;
                 let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -630,9 +626,6 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -812,9 +805,6 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -1110,16 +1100,8 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let executor = create_executor(
-                first_instruction_account,
-                0,
-                invoke_context,
-                use_jit,
-                true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
-            )?;
+            let executor =
+                create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =

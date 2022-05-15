@@ -3,9 +3,7 @@
 #[macro_use]
 extern crate alloc;
 use {
-    solana_program::{
-        custom_heap_default, custom_panic_default, entrypoint::SUCCESS, log::sol_log_64, msg,
-    },
+    solana_program::{custom_panic_default, entrypoint::SUCCESS, log::sol_log_64, msg},
     std::{alloc::Layout, mem},
 };
 
@@ -85,7 +83,6 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     SUCCESS
 }
 
-custom_heap_default!();
 custom_panic_default!();
 
 #[cfg(test)]

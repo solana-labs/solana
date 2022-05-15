@@ -6,16 +6,15 @@
 #![allow(dead_code)]
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, FoundStoredAccount, SnapshotStorage},
+        accounts_db::FoundStoredAccount,
         append_vec::{AppendVec, StoredAccountMeta},
     },
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::{collections::HashMap, sync::Arc},
 };
 
 /// a set of accounts need to be stored.
 /// If there are too many to fit in 'Primary', the rest are put in 'Overflow'
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum StorageSelector {
     Primary,
     Overflow,
@@ -39,7 +38,7 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        stored_accounts: &'a HashMap<Pubkey, FoundStoredAccount>,
+        stored_accounts: &'a [(&'a Pubkey, &'a FoundStoredAccount<'a>)],
         slot: Slot,
     ) -> Self {
         let num_accounts = stored_accounts.len();
@@ -66,6 +65,11 @@ impl<'a> AccountsToStore<'a> {
             accounts,
             index_first_item_overflow,
         }
+    }
+
+    /// true if a request to 'get' 'Overflow' would return accounts & hashes
+    pub fn has_overflow(&self) -> bool {
+        self.index_first_item_overflow < self.accounts.len()
     }
 
     /// get the accounts and hashes to store in the given 'storage'
@@ -105,28 +109,6 @@ pub fn is_ancient(storage: &AppendVec) -> bool {
     storage.capacity() >= get_ancient_append_vec_capacity()
 }
 
-/// return true if the accounts in this slot should be moved to an ancient append vec
-/// otherwise, return false and the caller can skip this slot
-/// side effect could be updating 'current_ancient'
-pub fn should_move_to_ancient_append_vec(
-    all_storages: &SnapshotStorage,
-    current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
-    slot: Slot,
-) -> bool {
-    if current_ancient.is_none() && all_storages.len() == 1 {
-        let first_storage = all_storages.first().unwrap();
-        if is_ancient(&first_storage.accounts) {
-            if is_full_ancient(&first_storage.accounts) {
-                return false; // skip this full ancient append vec completely
-            }
-            // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
-            *current_ancient = Some((slot, Arc::clone(first_storage)));
-            return false; // we're done with this slot - this slot IS the ancient append vec
-        }
-    }
-    true
-}
-
 #[cfg(test)]
 pub mod tests {
     use {
@@ -140,7 +122,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_simple() {
-        let map = vec![].into_iter().collect();
+        let map = vec![].into_iter().collect::<Vec<_>>();
         let slot = 1;
         let accounts_to_store = AccountsToStore::new(0, &map, slot);
         for selector in [StorageSelector::Primary, StorageSelector::Overflow] {
@@ -148,6 +130,7 @@ pub mod tests {
             assert!(accounts.is_empty());
             assert!(hash.is_empty());
         }
+        assert!(!accounts_to_store.has_overflow());
     }
 
     #[test]
@@ -189,7 +172,8 @@ pub mod tests {
             store_id,
             account_size,
         };
-        let map = vec![(pubkey, found)].into_iter().collect();
+        let src = vec![(pubkey, found)];
+        let map = src.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
@@ -200,12 +184,16 @@ pub mod tests {
             assert_eq!(
                 accounts,
                 map.iter()
-                    .map(|(a, b)| (a, &b.account, slot))
+                    .map(|(a, b)| (*a, &b.account, slot))
                     .collect::<Vec<_>>(),
                 "mismatch"
             );
             assert_eq!(hashes, vec![&hash]);
             let (accounts, hash) = accounts_to_store.get(get_opposite(&selector));
+            assert_eq!(
+                selector == StorageSelector::Overflow,
+                accounts_to_store.has_overflow()
+            );
             assert!(accounts.is_empty());
             assert!(hash.is_empty());
         }

@@ -108,15 +108,15 @@ impl RpcSender for MockSender {
 
         let val = match method.as_str().unwrap() {
             "getAccountInfo" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: Value::Null,
             })?,
             "getBalance" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: Value::Number(Number::from(50)),
             })?,
             "getRecentBlockhash" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: (
                     Value::String(PUBKEY.to_string()),
                     serde_json::to_value(FeeCalculator::default()).unwrap(),
@@ -137,16 +137,16 @@ impl RpcSender for MockSender {
                     serde_json::to_value(Some(FeeCalculator::default())).unwrap()
                 };
                 serde_json::to_value(Response {
-                    context: RpcResponseContext { slot: 1 },
+                    context: RpcResponseContext { slot: 1, api_version: None },
                     value,
                 })?
             }
             "getFeeRateGovernor" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: serde_json::to_value(FeeRateGovernor::default()).unwrap(),
             })?,
             "getFees" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: serde_json::to_value(RpcFees {
                     blockhash: PUBKEY.to_string(),
                     fee_calculator: FeeCalculator::default(),
@@ -185,7 +185,7 @@ impl RpcSender for MockSender {
                     .map(|_| status.clone())
                     .collect();
                 serde_json::to_value(Response {
-                    context: RpcResponseContext { slot: 1 },
+                    context: RpcResponseContext { slot: 1, api_version: None },
                     value: statuses,
                 })?
             }
@@ -248,7 +248,7 @@ impl RpcSender for MockSender {
             "getBlockProduction" => {
                 if params.is_null() {
                     json!(Response {
-                        context: RpcResponseContext { slot: 1 },
+                        context: RpcResponseContext { slot: 1, api_version: None },
                         value: RpcBlockProduction {
                             by_identity: HashMap::new(),
                             range: RpcBlockProductionRange {
@@ -266,7 +266,7 @@ impl RpcSender for MockSender {
                     let config_range = config.range.unwrap_or_default();
 
                     json!(Response {
-                        context: RpcResponseContext { slot: 1 },
+                        context: RpcResponseContext { slot: 1, api_version: None },
                         value: RpcBlockProduction {
                             by_identity,
                             range: RpcBlockProductionRange {
@@ -289,7 +289,7 @@ impl RpcSender for MockSender {
                 inactive: 12,
             }),
             "getSupply" => json!(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: RpcSupply {
                     total: 100000000,
                     circulating: 50000,
@@ -304,7 +304,7 @@ impl RpcSender for MockSender {
                 };
 
                 json!(Response {
-                    context: RpcResponseContext { slot: 1 },
+                    context: RpcResponseContext { slot: 1, api_version: None },
                     value: vec![rpc_account_balance],
                 })
             }
@@ -335,7 +335,7 @@ impl RpcSender for MockSender {
                 Value::String(signature)
             }
             "simulateTransaction" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: RpcSimulateTransactionResult {
                     err: None,
                     logs: None,
@@ -353,14 +353,14 @@ impl RpcSender for MockSender {
                 })
             }
             "getLatestBlockhash" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: RpcBlockhash {
                     blockhash: PUBKEY.to_string(),
                     last_valid_block_height: 1234,
                 },
             })?,
             "getFeeForMessage" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: json!(Some(0)),
             })?,
             "getClusterNodes" => serde_json::to_value(vec![RpcContactInfo {
@@ -441,7 +441,7 @@ impl RpcSender for MockSender {
             "minimumLedgerSlot" => json![123],
             "getMaxRetransmitSlot" => json![123],
             "getMultipleAccounts" => serde_json::to_value(Response {
-                context: RpcResponseContext { slot: 1 },
+                context: RpcResponseContext { slot: 1, api_version: None },
                 value: vec![Value::Null, Value::Null]
             })?,
             "getProgramAccounts" => {

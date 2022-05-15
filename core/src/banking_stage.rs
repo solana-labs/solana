@@ -75,19 +75,16 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
 pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 
 // Fixed thread size seems to be fastest on GCP setup
-pub const NUM_THREADS: u32 = 4;
+pub const NUM_THREADS: u32 = 6;
 
-const TOTAL_BUFFERED_PACKETS: usize = 500_000;
+const TOTAL_BUFFERED_PACKETS: usize = 700_000;
 
-const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
+const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
 const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
-
-const MAX_RECEIVE_BATCH_SIZE_PER_ITERATION: usize = 50_000;
-const MAX_RECEIVE_TIME_MS_PER_ITERATION: u64 = 50;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -1982,18 +1979,27 @@ impl BankingStage {
     fn receive_until(
         verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
         recv_timeout: Duration,
-        batching_timeout: Duration,
-        batch_size_upperbound: usize,
+        packet_count_upperbound: usize,
     ) -> Result<Vec<PacketBatch>, RecvTimeoutError> {
         let start = Instant::now();
         let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
+        let mut num_packets_received: usize =
+            packet_batches.iter().map(|batch| batch.packets.len()).sum();
         while let Ok(packet_batch) = verified_receiver.try_recv() {
-            trace!("got more packets");
+            trace!("got more packet batches in banking stage");
+            let (packets_received, packet_count_overflowed) = num_packets_received
+                .overflowing_add(packet_batch.iter().map(|batch| batch.packets.len()).sum());
             packet_batches.extend(packet_batch);
-            if start.elapsed() >= batching_timeout || packet_batches.len() >= batch_size_upperbound
+
+            // Spend any leftover receive time budget to greedily receive more packet batches,
+            // until the upperbound of the packet count is reached.
+            if start.elapsed() >= recv_timeout
+                || packet_count_overflowed
+                || packets_received >= packet_count_upperbound
             {
                 break;
             }
+            num_packets_received = packets_received;
         }
         Ok(packet_batches)
     }
@@ -2013,8 +2019,7 @@ impl BankingStage {
         let packet_batches = Self::receive_until(
             verified_receiver,
             recv_timeout,
-            Duration::from_millis(MAX_RECEIVE_TIME_MS_PER_ITERATION),
-            MAX_RECEIVE_BATCH_SIZE_PER_ITERATION,
+            buffered_packet_batches.capacity() - buffered_packet_batches.len(),
         )?;
         recv_time.stop();
 
@@ -2468,7 +2473,29 @@ mod tests {
         } = create_slow_genesis_config(2);
         let (verified_sender, verified_receiver) = unbounded();
 
+        // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
+        let tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 2, genesis_config.hash());
+
+        let packet_batches = to_packet_batches(&[tx], 1);
+        let packet_batches = packet_batches
+            .into_iter()
+            .map(|batch| (batch, vec![1u8]))
+            .collect();
+        let packet_batches = convert_from_old_verified(packet_batches);
+        verified_sender.send(packet_batches).unwrap();
+
+        // Process a second batch that uses the same from account, so conflicts with above TX
+        let tx =
+            system_transaction::transfer(&mint_keypair, &alice.pubkey(), 1, genesis_config.hash());
+        let packet_batches = to_packet_batches(&[tx], 1);
+        let packet_batches = packet_batches
+            .into_iter()
+            .map(|batch| (batch, vec![1u8]))
+            .collect();
+        let packet_batches = convert_from_old_verified(packet_batches);
+        verified_sender.send(packet_batches).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
@@ -2505,41 +2532,9 @@ mod tests {
                     Arc::new(RwLock::new(CostModel::default())),
                 );
 
-                // Process a batch that includes a transaction that receives two lamports.
-                let tx = system_transaction::transfer(
-                    &mint_keypair,
-                    &alice.pubkey(),
-                    2,
-                    genesis_config.hash(),
-                );
-
-                let packet_batches = to_packet_batches(&[tx], 1);
-                let packet_batches = packet_batches
-                    .into_iter()
-                    .map(|batch| (batch, vec![1u8]))
-                    .collect();
-                let packet_batches = convert_from_old_verified(packet_batches);
-                verified_sender.send(packet_batches).unwrap();
-
-                sleep(Duration::from_millis(200));
-                // Process a second batch that uses the same from account, so conflicts with above TX
-                let tx = system_transaction::transfer(
-                    &mint_keypair,
-                    &alice.pubkey(),
-                    1,
-                    genesis_config.hash(),
-                );
-                let packet_batches = to_packet_batches(&[tx], 1);
-                let packet_batches = packet_batches
-                    .into_iter()
-                    .map(|batch| (batch, vec![1u8]))
-                    .collect();
-                let packet_batches = convert_from_old_verified(packet_batches);
-                verified_sender.send(packet_batches).unwrap();
-
                 // wait for banking_stage to eat the packets
-                while bank.get_balance(&alice.pubkey()) < 2 {
-                    sleep(Duration::from_millis(100));
+                while bank.get_balance(&alice.pubkey()) < 1 {
+                    sleep(Duration::from_millis(10));
                 }
                 exit.store(true, Ordering::Relaxed);
                 poh_service.join().unwrap();
@@ -2563,10 +2558,10 @@ mod tests {
                     .for_each(|x| assert_eq!(*x, Ok(())));
             }
 
-            // Assert the user holds two lamports, not three. If the stage only outputs one
-            // entry, then the second transaction will be rejected, because it drives
+            // Assert the user doesn't hold three lamports. If the stage only outputs one
+            // entry, then one of the transactions will be rejected, because it drives
             // the account balance below zero before the credit is added.
-            assert_eq!(bank.get_balance(&alice.pubkey()), 2);
+            assert!(bank.get_balance(&alice.pubkey()) != 3);
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
     }

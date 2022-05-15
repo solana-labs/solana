@@ -37,6 +37,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
+        ancient_append_vecs::is_ancient,
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         bank::Rewrites,
         cache_hash_data::CacheHashData,
@@ -999,6 +1000,9 @@ pub struct AccountsDb {
     /// Keeps tracks of index into AppendVec on a per slot basis
     pub accounts_index: AccountInfoAccountsIndex,
 
+    /// slot that is one epoch older than the highest slot where accounts hash calculation has completed
+    pub accounts_hash_complete_one_epoch_old: RwLock<Slot>,
+
     /// true iff rent exempt accounts are not rewritten in their normal rent collection slot
     pub skip_rewrites: bool,
 
@@ -1611,6 +1615,7 @@ impl AccountsDb {
 
         AccountsDb {
             active_stats: ActiveStats::default(),
+            accounts_hash_complete_one_epoch_old: RwLock::default(),
             skip_rewrites: false,
             ancient_append_vecs: false,
             accounts_index,
@@ -1843,8 +1848,7 @@ impl AccountsDb {
         self.handle_reclaims(
             &reclaims,
             None,
-            Some(&self.clean_accounts_stats.purge_stats),
-            Some(&mut reclaim_result),
+            Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
         );
         measure.stop();
@@ -1998,6 +2002,34 @@ impl AccountsDb {
                 Some(std::cmp::min(min_scan_root, proposed_clean_root))
             }
         }
+    }
+
+    /// return 'slot' - slots_in_epoch
+    fn get_slot_one_epoch_prior(slot: Slot, epoch_schedule: &EpochSchedule) -> Slot {
+        // would like to use:
+        // slot.saturating_sub(epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)))
+        // but there are problems with warmup and such on tests and probably test clusters.
+        // So, just use the maximum below (epoch_schedule.slots_per_epoch)
+        slot.saturating_sub(epoch_schedule.slots_per_epoch)
+    }
+
+    /// hash calc is completed as of 'slot'
+    /// so, any process that wants to take action on really old slots can now proceed up to 'completed_slot'-slots per epoch
+    pub fn notify_accounts_hash_calculated_complete(
+        &self,
+        completed_slot: Slot,
+        epoch_schedule: &EpochSchedule,
+    ) {
+        let one_epoch_old_slot = Self::get_slot_one_epoch_prior(completed_slot, epoch_schedule);
+        let mut accounts_hash_complete_one_epoch_old =
+            self.accounts_hash_complete_one_epoch_old.write().unwrap();
+        *accounts_hash_complete_one_epoch_old =
+            std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
+    }
+
+    /// get the slot that is one epoch older than the highest slot that has been used for hash calculation
+    fn get_accounts_hash_complete_one_epoch_old(&self) -> Slot {
+        *self.accounts_hash_complete_one_epoch_old.read().unwrap()
     }
 
     /// Collect all the uncleaned slots, up to a max slot
@@ -2364,12 +2396,10 @@ impl AccountsDb {
         // and those stores may be used for background hashing.
         let reset_accounts = false;
         let mut reclaim_result = ReclaimResult::default();
-        let reclaim_result = Some(&mut reclaim_result);
         self.handle_reclaims(
             &reclaims,
             None,
-            Some(&self.clean_accounts_stats.purge_stats),
-            reclaim_result,
+            Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
         );
 
@@ -2477,15 +2507,15 @@ impl AccountsDb {
     ///    from store or slot shrinking, as those should only touch the slot they are
     ///    currently storing to or shrinking.
     ///
-    /// * `purge_stats` - The stats used to track performance of purging dead slots. This
-    ///    also serves a correctness assertion. If `purge_stats.is_none()`, this implies
-    ///    there can be no dead slots that happen as a result of this call, and the function
-    ///    will check that no slots are cleaned up/removed via `process_dead_slots`. For instance,
-    ///    on store, no slots should be cleaned up, but during the background clean accounts
-    ///    purges accounts from old rooted slots, so outdated slots may be removed.
-    ///
-    /// * `reclaim_result` - Information about accounts that were removed from storage, does
-    ///    not include accounts that were removed from the cache
+    /// * `purge_stats_and_reclaim_result` - Option containing `purge_stats` and `reclaim_result`.
+    ///    `purge_stats`. `purge_stats` are stats used to track performance of purging dead slots.
+    ///    `reclaim_result` contains information about accounts that were removed from storage,
+    ///    does not include accounts that were removed from the cache.
+    ///    If `purge_stats_and_reclaim_result.is_none()`, this implies there can be no dead slots
+    ///    that happen as a result of this call, and the function will check that no slots are
+    ///    cleaned up/removed via `process_dead_slots`. For instance, on store, no slots should
+    ///    be cleaned up, but during the background clean accounts purges accounts from old rooted
+    ///    slots, so outdated slots may be removed.
     ///
     /// * `reset_accounts` - Reset the append_vec store when the store is dead (count==0)
     ///    From the clean and shrink paths it should be false since there may be an in-progress
@@ -2494,38 +2524,44 @@ impl AccountsDb {
         &self,
         reclaims: SlotSlice<AccountInfo>,
         expected_single_dead_slot: Option<Slot>,
-        // TODO: coalesce `purge_stats` and `reclaim_result` together into one option, as they
-        // are both either Some or None
-        purge_stats: Option<&PurgeStats>,
-        reclaim_result: Option<&mut ReclaimResult>,
+        purge_stats_and_reclaim_result: Option<(&PurgeStats, &mut ReclaimResult)>,
         reset_accounts: bool,
     ) {
         if reclaims.is_empty() {
             return;
         }
-        let (purged_account_slots, reclaimed_offsets) =
-            if let Some((ref mut x, ref mut y)) = reclaim_result {
-                (Some(x), Some(y))
+
+        let (purge_stats, purged_account_slots, reclaimed_offsets) =
+            if let Some((purge_stats, (ref mut purged_account_slots, ref mut reclaimed_offsets))) =
+                purge_stats_and_reclaim_result
+            {
+                (
+                    Some(purge_stats),
+                    Some(purged_account_slots),
+                    Some(reclaimed_offsets),
+                )
             } else {
-                (None, None)
+                (None, None, None)
             };
+
         let dead_slots = self.remove_dead_accounts(
             reclaims,
             expected_single_dead_slot,
             reclaimed_offsets,
             reset_accounts,
         );
-        if purge_stats.is_none() {
-            assert!(dead_slots.is_empty());
-        } else if let Some(expected_single_dead_slot) = expected_single_dead_slot {
-            assert!(dead_slots.len() <= 1);
-            if dead_slots.len() == 1 {
-                assert!(dead_slots.contains(&expected_single_dead_slot));
-            }
-        }
 
         if let Some(purge_stats) = purge_stats {
+            if let Some(expected_single_dead_slot) = expected_single_dead_slot {
+                assert!(dead_slots.len() <= 1);
+                if dead_slots.len() == 1 {
+                    assert!(dead_slots.contains(&expected_single_dead_slot));
+                }
+            }
+
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
+        } else {
+            assert!(dead_slots.is_empty());
         }
     }
 
@@ -2813,9 +2849,9 @@ impl AccountsDb {
         let mut store_accounts_timing = StoreAccountsTiming::default();
         if aligned_total > 0 {
             let mut start = Measure::start("find_alive_elapsed");
-            let mut accounts = Vec::with_capacity(alive_accounts.len());
-            let mut hashes = Vec::with_capacity(alive_accounts.len());
-            let mut write_versions = Vec::with_capacity(alive_accounts.len());
+            let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
+            let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
+            let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
 
             for (pubkey, alive_account) in alive_accounts {
                 accounts.push((pubkey, &alive_account.account));
@@ -4333,8 +4369,7 @@ impl AccountsDb {
         self.handle_reclaims(
             &reclaims,
             expected_dead_slot,
-            Some(purge_stats),
-            Some(&mut ReclaimResult::default()),
+            Some((purge_stats, &mut ReclaimResult::default())),
             false,
         );
         handle_reclaims_elapsed.stop();
@@ -5319,6 +5354,8 @@ impl AccountsDb {
                 i64
             ),
         );
+        self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
+
         Ok((accumulated_hash, total_lamports))
     }
 
@@ -5421,7 +5458,16 @@ impl AccountsDb {
     ) {
         if let Some(sub_storages) = sub_storages {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
-            let num_accounts = sub_storages.iter().map(|storage| storage.count()).sum();
+            let mut ancients = 0;
+            let num_accounts = sub_storages
+                .iter()
+                .map(|storage| {
+                    if is_ancient(&storage.accounts) {
+                        ancients += 1;
+                    }
+                    storage.count()
+                })
+                .sum();
             let sizes = sub_storages
                 .iter()
                 .map(|storage| storage.total_bytes())
@@ -5432,6 +5478,9 @@ impl AccountsDb {
             stats
                 .accounts_in_roots_older_than_epoch
                 .fetch_add(num_accounts, Ordering::Relaxed);
+            stats
+                .ancient_append_vecs
+                .fetch_add(ancients, Ordering::Relaxed);
         }
     }
 
@@ -5623,7 +5672,7 @@ impl AccountsDb {
     // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
     fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
         if let Some(slots_per_epoch) = slots_per_epoch {
-            let max = storages.range().end;
+            let max = storages.max_slot_inclusive();
             let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
             let sub = slots_per_epoch + acceptable_straggler_slot_count;
             let in_epoch_range_start = max.saturating_sub(sub);
@@ -5796,7 +5845,7 @@ impl AccountsDb {
                     config.epoch_schedule,
                     config.rent_collector,
                     stats,
-                    storage.range().end.saturating_sub(1), // 'end' is exclusive, convert to inclusive
+                    storage.max_slot_inclusive(),
                     find_unskipped_slot,
                     filler_account_suffix,
                 );
@@ -5868,6 +5917,19 @@ impl AccountsDb {
         )
     }
 
+    /// if we ever try to calc hash where there are squashed append vecs within the last epoch, we will fail
+    fn assert_safe_squashing_accounts_hash(&self, slot: Slot, epoch_schedule: &EpochSchedule) {
+        let previous = self.get_accounts_hash_complete_one_epoch_old();
+        let current = Self::get_slot_one_epoch_prior(slot, epoch_schedule);
+        assert!(
+            previous <= current,
+            "get_accounts_hash_complete_one_epoch_old: {}, get_slot_one_epoch_prior: {}, slot: {}",
+            previous,
+            current,
+            slot
+        );
+    }
+
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -5920,17 +5982,22 @@ impl AccountsDb {
             }
 
             info!(
-                "calculate_accounts_hash_without_index: slot (exclusive): {} {:?}",
-                storages.range().end,
+                "calculate_accounts_hash_without_index: slot: {} {:?}",
+                storages.max_slot_inclusive(),
                 final_result
             );
             Ok(final_result)
         };
-        if use_bg_thread_pool {
+        let result = if use_bg_thread_pool {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
-        }
+        };
+        self.assert_safe_squashing_accounts_hash(
+            storages.max_slot_inclusive(),
+            config.epoch_schedule,
+        );
+        result
     }
 
     /// calculate oldest_slot_to_keep and alive_roots
@@ -6265,13 +6332,26 @@ impl AccountsDb {
         true
     }
 
-    fn is_candidate_for_shrink(&self, store: &Arc<AccountStorageEntry>) -> bool {
+    fn is_candidate_for_shrink(
+        &self,
+        store: &Arc<AccountStorageEntry>,
+        allow_shrink_ancient: bool,
+    ) -> bool {
+        let total_bytes = if is_ancient(&store.accounts) {
+            if !allow_shrink_ancient {
+                return false;
+            }
+
+            store.written_bytes()
+        } else {
+            store.total_bytes()
+        };
         match self.shrink_ratio {
             AccountShrinkThreshold::TotalSpace { shrink_ratio: _ } => {
-                Self::page_align(store.alive_bytes() as u64) < store.total_bytes()
+                Self::page_align(store.alive_bytes() as u64) < total_bytes
             }
             AccountShrinkThreshold::IndividualStore { shrink_ratio } => {
-                (Self::page_align(store.alive_bytes() as u64) as f64 / store.total_bytes() as f64)
+                (Self::page_align(store.alive_bytes() as u64) as f64 / total_bytes as f64)
                     < shrink_ratio
             }
         }
@@ -6316,7 +6396,7 @@ impl AccountsDb {
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
                     && Self::is_shrinking_productive(*slot, &[store.clone()])
-                    && self.is_candidate_for_shrink(&store)
+                    && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
                     // should be a sufficient indication that the slot is ready to be shrunk
@@ -6800,15 +6880,8 @@ impl AccountsDb {
         //
         // From 1) and 2) we guarantee passing `no_purge_stats` == None, which is
         // equivalent to asserting there will be no dead slots, is safe.
-        let no_purge_stats = None;
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(
-            &reclaims,
-            expected_single_dead_slot,
-            no_purge_stats,
-            None,
-            reset_accounts,
-        );
+        self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts);
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
@@ -13661,14 +13734,14 @@ pub mod tests {
             }
         }
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry));
+        assert!(accounts.is_candidate_for_shrink(&entry, false));
         entry.alive_bytes.store(5000, Ordering::Release);
-        assert!(!accounts.is_candidate_for_shrink(&entry));
+        assert!(!accounts.is_candidate_for_shrink(&entry, false));
         accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.3 };
         entry.alive_bytes.store(3000, Ordering::Release);
-        assert!(accounts.is_candidate_for_shrink(&entry));
+        assert!(accounts.is_candidate_for_shrink(&entry, false));
         accounts.shrink_ratio = AccountShrinkThreshold::IndividualStore { shrink_ratio: 0.3 };
-        assert!(!accounts.is_candidate_for_shrink(&entry));
+        assert!(!accounts.is_candidate_for_shrink(&entry, false));
     }
 
     #[test]

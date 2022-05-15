@@ -4754,16 +4754,21 @@ version = "1.11.0"
 dependencies = [
  "bincode",
  "clap 3.1.12",
+ "itertools",
  "log",
  "rand 0.7.3",
  "serde",
+ "serial_test",
+ "solana-bench-tps",
  "solana-client",
  "solana-core",
+ "solana-faucet",
  "solana-gossip",
  "solana-local-cluster",
  "solana-logger 1.11.0",
  "solana-net-utils",
  "solana-perf",
+ "solana-rpc",
  "solana-sdk 1.11.0",
  "solana-streamer",
  "solana-version",
@@ -6103,6 +6108,7 @@ version = "1.11.0"
 dependencies = [
  "log",
  "rustc_version",
+ "semver",
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.11.0",
@@ -7568,9 +7574,9 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.11.1+zstd.1.5.2"
+version = "0.11.2+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a16b8414fde0414e90c612eba70985577451c4c504b99885ebed24762cb81a"
+checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
 dependencies = [
  "zstd-safe",
 ]

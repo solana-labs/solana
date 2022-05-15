@@ -29,6 +29,12 @@ pub struct Version {
     pub feature_set: u32,    // first 4 bytes of the FeatureSet identifier
 }
 
+impl Version {
+    pub fn as_semver_version(&self) -> semver::Version {
+        semver::Version::new(self.major as u64, self.minor as u64, self.patch as u64)
+    }
+}
+
 impl From<LegacyVersion> for Version {
     fn from(legacy_version: LegacyVersion) -> Self {
         Self {

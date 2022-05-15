@@ -49,9 +49,9 @@ To prevent a program from abusing computation resources, each instruction in a
 transaction is given a compute budget. The budget consists of computation units
 that are consumed as the program performs various operations and bounds that the
 program may not exceed. When the program consumes its entire budget or exceeds
-a bound, then the runtime halts the program and returns an error.
+a bound, the runtime halts the program and returns an error.
 
-Note: The compute budget currently applies per-instruction but is moving toward
+Note: The compute budget currently applies per-instruction, but is moving toward
 a per-transaction model. For more information see [Transaction-wide Compute
 Budget](#transaction-wide-compute-budget).
 
@@ -101,6 +101,23 @@ At runtime a program may log how much of the compute budget remains. See
 [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
 
+A transaction may request a specific level of `max_units` it is allowed to
+consume by including a
+[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
+Transaction prioritization depends on the fee/compute-unit ratio so transaction
+should request the minimum amount of compute units required for them to process.
+
+Compute Budget instructions don't require any accounts and don't consume any
+compute units to process.  Transactions can only contain one of each type of
+compute budget instruction, duplicate types will result in an error.
+
+The `ComputeBudgetInstruction::request_units` function can be used to create
+these instructions:
+
+```rust
+let instruction = ComputeBudgetInstruction::request_units(300_000);
+```
+
 ## Transaction-wide Compute Budget
 
 Transactions are processed as a single entity and are the primary unit of block
@@ -111,32 +128,17 @@ transaction-wide budget rather than per-instruction.
 For information on what the compute budget is and how it is applied see [Compute
 Budget](#compute-budget).
 
-With a transaction-wide compute budget the `max_units` cap is applied to the
-entire transaction rather than to each instruction within the transaction. The
-transaction-wide default maximum number of units will be calculated as the product
-of the instruction count and the existing per-instruction maximum units. This means
-that the sum of the compute units used by each instruction in the transaction must
-not exceed that value. This default maximum value attempts to retain existing behavior
-to avoid breaking client logic.
-
-### Reduce transaction fees
-
-_Note: At the time of writing, transaction fees are still charged by the number of
-signatures but will eventually be calculated from requested compute unit cap._
-
-Most transactions won't use the default number of compute units so they can include a
-[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39)
-to lower the compute unit cap. **Important: Lower compute caps will be charged lower fees.**
-
-Compute Budget instructions don't require any accounts and must lie in the first
-3 instructions of a transaction otherwise they will be ignored.
-
-The `ComputeBudgetInstruction::request_units` function can be used to create
-these instructions:
-
-```rust
-let instruction = ComputeBudgetInstruction::request_units(300_000);
-```
+The transaction-wide compute budget applies the `max_units` cap to the entire
+transaction rather than to each instruction within the transaction. The default
+transaction-wide `max_units` will be calculated as the product of the number of
+instructions in the transaction by the default per-instruction units, which is
+currently 200k. During processing, the sum of the compute units used by each
+instruction in the transaction must not exceed that value. This default value
+attempts to retain existing behavior to avoid breaking clients. Transactions can
+request a specific number of `max_units` via [Compute Budget](#compute-budget)
+instructions.  Clients should request only what they need; requesting the
+minimum amount of units required to process the transaction will improve their
+fee/compute-unit ratio, which transaction prioritization is based on.
 
 ## New Features
 

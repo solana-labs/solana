@@ -716,6 +716,12 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             }
         }
 
+        if let Some(duplicate_instruction) = transaction_error.duplicate_instruction_error {
+            return Ok(TransactionError::DuplicateInstruction(
+                duplicate_instruction.index as u8,
+            ));
+        }
+
         Ok(match transaction_error.transaction_error {
             0 => TransactionError::AccountInUse,
             1 => TransactionError::AccountLoadedTwice,
@@ -842,6 +848,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::WouldExceedAccountDataTotalLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedAccountDataTotalLimit
+                }
+                TransactionError::DuplicateInstruction(_) => {
+                    tx_by_addr::TransactionErrorType::DuplicateInstruction
                 }
             } as i32,
             instruction_error: match transaction_error {
@@ -1010,6 +1019,14 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             _ => None,
                         },
+                    })
+                }
+                _ => None,
+            },
+            duplicate_instruction_error: match transaction_error {
+                TransactionError::DuplicateInstruction(index) => {
+                    Some(tx_by_addr::DuplicateInstructionError {
+                        index: index as u32,
                     })
                 }
                 _ => None,
@@ -1681,6 +1698,14 @@ mod test {
             transaction_error,
             tx_by_addr_transaction_error.try_into().unwrap()
         );
+
+        let transaction_error = TransactionError::DuplicateInstruction(10);
+        let tx_by_addr_transaction_error: tx_by_addr::TransactionError =
+            transaction_error.clone().into();
+        assert_eq!(
+            transaction_error,
+            tx_by_addr_transaction_error.try_into().unwrap()
+        );
     }
 
     #[test]
@@ -1689,15 +1714,31 @@ mod test {
         let custom_error = 42;
         for error in tx_by_addr::TransactionErrorType::into_enum_iter() {
             if error != tx_by_addr::TransactionErrorType::InstructionError {
-                let tx_by_addr_error = tx_by_addr::TransactionError {
-                    transaction_error: error as i32,
-                    instruction_error: None,
-                };
-                let transaction_error: TransactionError = tx_by_addr_error
-                    .clone()
-                    .try_into()
-                    .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
-                assert_eq!(tx_by_addr_error, transaction_error.into());
+                if error == tx_by_addr::TransactionErrorType::DuplicateInstruction {
+                    let tx_by_addr_error = tx_by_addr::TransactionError {
+                        transaction_error: error as i32,
+                        instruction_error: None,
+                        duplicate_instruction_error: Some(tx_by_addr::DuplicateInstructionError {
+                            index: ix_index,
+                        }),
+                    };
+                    let transaction_error: TransactionError = tx_by_addr_error
+                        .clone()
+                        .try_into()
+                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                    assert_eq!(tx_by_addr_error, transaction_error.into());
+                } else {
+                    let tx_by_addr_error = tx_by_addr::TransactionError {
+                        transaction_error: error as i32,
+                        instruction_error: None,
+                        duplicate_instruction_error: None,
+                    };
+                    let transaction_error: TransactionError = tx_by_addr_error
+                        .clone()
+                        .try_into()
+                        .unwrap_or_else(|_| panic!("{:?} conversion implemented?", error));
+                    assert_eq!(tx_by_addr_error, transaction_error.into());
+                }
             } else {
                 for ix_error in tx_by_addr::InstructionErrorType::into_enum_iter() {
                     if ix_error != tx_by_addr::InstructionErrorType::Custom {
@@ -1708,6 +1749,7 @@ mod test {
                                 error: ix_error as i32,
                                 custom: None,
                             }),
+                            duplicate_instruction_error: None,
                         };
                         let transaction_error: TransactionError = tx_by_addr_error
                             .clone()
@@ -1724,6 +1766,7 @@ mod test {
                                     custom: custom_error,
                                 }),
                             }),
+                            duplicate_instruction_error: None,
                         };
                         let transaction_error: TransactionError =
                             tx_by_addr_error.clone().try_into().unwrap();
