@@ -980,6 +980,7 @@ impl BankingStage {
             let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
                 |_| {
                     let current_poh_bank = {
+                        // TODO (B): constant spinning here may have an impact on poh, discuss in PR
                         let poh = poh_recorder.lock().unwrap();
                         poh.bank_start()
                     };
