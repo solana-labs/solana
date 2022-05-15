@@ -44,7 +44,7 @@ mod tests {
         let addr = s.local_addr().unwrap().ip();
         let port = s.local_addr().unwrap().port() - QUIC_PORT_OFFSET;
         let tpu_addr = SocketAddr::new(addr, port);
-        let client = QuicTpuConnection::new(UdpSocket::bind("127.0.0.1:0").unwrap(), tpu_addr);
+        let client = QuicTpuConnection::new(tpu_addr);
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
