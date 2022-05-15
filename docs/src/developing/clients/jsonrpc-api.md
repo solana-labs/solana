@@ -226,15 +226,15 @@ Returns all information associated with the account of provided Pubkey
 #### Parameters:
 
 - `<string>` - Pubkey of account to query, as base-58 encoded string
-- `<object>` - (optional) Configuration object containing the following optional
-  fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -350,7 +350,9 @@ Returns the balance of the account of provided Pubkey
 #### Parameters:
 
 - `<string>` - Pubkey of account to query, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -601,7 +603,9 @@ Returns the current block height of the node
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -921,7 +925,9 @@ Returns information about the current epoch
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -1351,10 +1357,10 @@ Returns the inflation / staking reward for a list of addresses for an epoch
 #### Parameters:
 
 - `<array>` - An array of addresses to query, as base-58 encoded strings
-
-* `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `epoch: <u64>` - An epoch for which the reward occurs. If omitted, the previous epoch will be used
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results
 
@@ -1526,7 +1532,9 @@ Returns the latest blockhash
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -1738,14 +1746,15 @@ Returns the account information for a list of Pubkeys.
 #### Parameters:
 
 - `<array>` - An array of Pubkeys to query, as base-58 encoded strings (up to a maximum of 100).
-- `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -1880,9 +1889,9 @@ Returns all accounts owned by the provided program Pubkey
 #### Parameters:
 
 - `<string>` - Pubkey of program, as base-58 encoded string
-- `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
     "base58" is limited to Account data of less than 129 bytes.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
@@ -1890,6 +1899,7 @@ Returns all accounts owned by the provided program Pubkey
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
   - (optional) `filters: <array>` - filter results using up to 4 [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
   - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 ##### Filters:
 
@@ -2071,11 +2081,12 @@ provided signature or most recent confirmed block
 
 - `<string>` - account address as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following fields:
-  - `limit: <number>` - (optional) maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
-  - `before: <string>` - (optional) start searching backwards from this transaction signature.
+  - (optional) `limit: <number>` - maximum transaction signatures to return (between 1 and 1,000, default: 1,000).
+  - (optional) `before: <string>` - start searching backwards from this transaction signature.
     If not provided the search starts from the top of the highest max confirmed block.
-  - `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `until: <string>` - search until this transaction signature, if found before limit reached.
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -2258,7 +2269,9 @@ Returns the slot that has reached the [given or default commitment level](jsonrp
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -2286,7 +2299,9 @@ Returns the current slot leader
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -2367,9 +2382,10 @@ Returns epoch activation information for a stake account
 #### Parameters:
 
 - `<string>` - Pubkey of stake account to query, as base-58 encoded string
-- `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `epoch: <u64>` - epoch for which to calculate activation details. If parameter not provided, defaults to current epoch.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -2548,11 +2564,15 @@ Returns all SPL Token accounts by approved Delegate.
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
-- `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
-    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
+    "base58" is limited to Account data of less than 129 bytes.
+    "base64" will return base64 encoded data for Account data of any size.
+    "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
+    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -2650,11 +2670,15 @@ Returns all SPL Token accounts by token owner.
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
   - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
-- `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
-  - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
-    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a valid mint cannot be found for a particular account, that account will be filtered out from results.
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
+    "base58" is limited to Account data of less than 129 bytes.
+    "base64" will return base64 encoded data for Account data of any size.
+    "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
+    "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -3011,7 +3035,9 @@ Returns the current Transaction count from the ledger
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -3189,7 +3215,9 @@ Returns whether a blockhash is still valid or not
 #### Parameters:
 
 - `blockhash: <string>` - the blockhash of this block, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -3329,6 +3357,7 @@ submission.
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
   - `maxRetries: <usize>` - (optional) Maximum number of times for the RPC node to retry sending the transaction to the leader.
     If this parameter not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -3377,6 +3406,7 @@ Simulate sending a transaction
     - `encoding: <string>` - (optional) encoding for returned Account data, either "base64" (default), "base64+zstd" or "jsonParsed".
       "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
     - `addresses: <array>` - An array of accounts to return, as base-58 encoded strings
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
@@ -5056,7 +5086,9 @@ Returns the fee calculator associated with the query blockhash, or `null` if the
 #### Parameters:
 
 - `<string>` - query blockhash as a Base58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
