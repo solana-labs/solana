@@ -1,7 +1,7 @@
 use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
-    solana_runtime::bank::Bank,
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         hash::Hash,
         message::{Message, SanitizedVersionedMessage},
@@ -15,7 +15,6 @@ use {
         collections::{hash_map::Entry, HashMap},
         mem::size_of,
         rc::Rc,
-        sync::Arc,
     },
     thiserror::Error,
 };
@@ -31,6 +30,8 @@ pub enum DeserializedPacketError {
     SignatureOverflowed(usize),
     #[error("packet failed sanitization {0}")]
     SanitizeError(#[from] SanitizeError),
+    #[error("transaction failed prioritization")]
+    PrioritizationFailure,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,7 +40,7 @@ pub struct ImmutableDeserializedPacket {
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    fee_per_cu: u64,
+    priority: u64,
 }
 
 impl ImmutableDeserializedPacket {
@@ -63,8 +64,8 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn fee_per_cu(&self) -> u64 {
-        self.fee_per_cu
+    pub fn priority(&self) -> u64 {
+        self.priority
     }
 }
 
@@ -77,22 +78,18 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
-    pub fn new(packet: Packet, bank: Option<&Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, bank, None)
+    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, None)
     }
 
     #[cfg(test)]
-    fn new_with_fee_per_cu(
-        packet: Packet,
-        fee_per_cu: u64,
-    ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None, Some(fee_per_cu))
+    fn new_with_priority(packet: Packet, priority: u64) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, Some(priority))
     }
 
     pub fn new_internal(
         packet: Packet,
-        bank: Option<&Arc<Bank>>,
-        fee_per_cu: Option<u64>,
+        priority: Option<u64>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction =
             limited_deserialize(&packet.data[0..packet.meta.size])?;
@@ -101,18 +98,18 @@ impl DeserializedPacket {
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
-            bank.as_ref()
-                .map(|bank| compute_fee_per_cu(sanitized_transaction.get_message(), bank))
-                .unwrap_or(0)
-        });
+        // drop transaction if prioritization fails.
+        let priority = priority
+            .or_else(|| get_priority(sanitized_transaction.get_message()))
+            .ok_or(DeserializedPacketError::PrioritizationFailure)?;
+
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
                 original_packet: packet,
                 transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
-                fee_per_cu,
+                priority,
             }),
             forwarded: false,
         })
@@ -133,8 +130,8 @@ impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
         match self
             .immutable_section()
-            .fee_per_cu()
-            .cmp(&other.immutable_section().fee_per_cu())
+            .priority()
+            .cmp(&other.immutable_section().priority())
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -153,7 +150,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.fee_per_cu().cmp(&other.fee_per_cu()) {
+        match self.priority().cmp(&other.priority()) {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
@@ -193,8 +190,8 @@ impl UnprocessedPacketBatches {
         self.message_hash_to_transaction.clear();
     }
 
-    /// Insert new `deserizlized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
-    /// weighted first by the fee-per-cu, then the stake of the sender.
+    /// Insert new `deserialized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
+    /// weighted first by the tx priority, then the stake of the sender.
     /// If buffer is at the max limit, the lowest weighted packet is dropped
     ///
     /// Returns tuple of number of packets dropped
@@ -351,10 +348,9 @@ impl UnprocessedPacketBatches {
 pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
-    bank: Option<&'a Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
+        DeserializedPacket::new(packet_batch.packets[*packet_index].clone()).ok()
     })
 }
 
@@ -372,9 +368,17 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-/// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
-fn compute_fee_per_cu(_message: &SanitizedVersionedMessage, _bank: &Bank) -> u64 {
-    1
+fn get_priority(message: &SanitizedVersionedMessage) -> Option<u64> {
+    let mut compute_budget = ComputeBudget::default();
+    let prioritization_fee_details = compute_budget
+        .process_instructions(
+            message.program_instructions_iter(),
+            false, // not request heap size
+            true,  // use default units per instruction
+            true,  // use changed prioritization fee
+        )
+        .ok()?;
+    Some(prioritization_fee_details.get_priority())
 }
 
 pub fn transactions_to_deserialized_packets(
@@ -384,7 +388,7 @@ pub fn transactions_to_deserialized_packets(
         .iter()
         .map(|transaction| {
             let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet, None)
+            DeserializedPacket::new(packet)
         })
         .collect()
 }
@@ -409,10 +413,10 @@ mod tests {
         if let Some(ip) = ip {
             packet.meta.addr = ip;
         }
-        DeserializedPacket::new(packet, None).unwrap()
+        DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_fee_per_cu(fee_per_cu: u64) -> DeserializedPacket {
+    fn packet_with_priority(priority: u64) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -420,7 +424,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        DeserializedPacket::new_with_fee_per_cu(packet, fee_per_cu).unwrap()
+        DeserializedPacket::new_with_priority(packet, priority).unwrap()
     }
 
     #[test]
@@ -441,10 +445,10 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
         let heavier_packet_weight = 2;
-        let heavier_packet = packet_with_fee_per_cu(heavier_packet_weight);
+        let heavier_packet = packet_with_priority(heavier_packet_weight);
 
         let lesser_packet_weight = heavier_packet_weight - 1;
-        let lesser_packet = packet_with_fee_per_cu(lesser_packet_weight);
+        let lesser_packet = packet_with_priority(lesser_packet_weight);
 
         // Test that the heavier packet is actually heavier
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
