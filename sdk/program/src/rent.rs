@@ -1,9 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 //! configuration for network rent
-use crate::clock::DEFAULT_SLOTS_PER_EPOCH;
+
+use {
+    crate::{clock::DEFAULT_SLOTS_PER_EPOCH, clone_zeroed, copy_field},
+    std::mem::MaybeUninit,
+};
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Debug, AbiExample)]
 pub struct Rent {
     /// Rental rate
     pub lamports_per_byte_year: u64,
@@ -38,6 +42,19 @@ impl Default for Rent {
             exemption_threshold: DEFAULT_EXEMPTION_THRESHOLD,
             burn_percent: DEFAULT_BURN_PERCENT,
         }
+    }
+}
+
+impl Clone for Rent {
+    fn clone(&self) -> Self {
+        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
+            let ptr = cloned.as_mut_ptr();
+            unsafe {
+                copy_field!(ptr, self, lamports_per_byte_year);
+                copy_field!(ptr, self, exemption_threshold);
+                copy_field!(ptr, self, burn_percent);
+            }
+        })
     }
 }
 
@@ -187,5 +204,17 @@ mod tests {
     fn test_rent_due_is_exempt() {
         assert!(RentDue::Exempt.is_exempt());
         assert!(!RentDue::Paying(0).is_exempt());
+    }
+
+    #[test]
+    fn test_clone() {
+        let rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 2.2,
+            burn_percent: 3,
+        };
+        #[allow(clippy::clone_on_copy)]
+        let cloned_rent = rent.clone();
+        assert_eq!(cloned_rent, rent);
     }
 }
