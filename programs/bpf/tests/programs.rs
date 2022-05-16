@@ -3489,7 +3489,7 @@ fn test_program_fees() {
     );
 
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_max_fee = Bank::calculate_fee(
+    let expected_normal_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
@@ -3500,32 +3500,31 @@ fn test_program_fees() {
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_max_fee);
+    assert_eq!(pre_balance - post_balance, expected_normal_fee);
 
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::request_units(100),
-            ComputeBudgetInstruction::set_prioritization_fee(42),
+            ComputeBudgetInstruction::set_compute_unit_price(1),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_min_fee = Bank::calculate_fee(
+    let expected_prioritized_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
         true,
         true,
     );
-    assert!(expected_min_fee < expected_max_fee);
+    assert!(expected_normal_fee < expected_prioritized_fee);
 
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_min_fee);
+    assert_eq!(pre_balance - post_balance, expected_prioritized_fee);
 }
 
 #[test]
