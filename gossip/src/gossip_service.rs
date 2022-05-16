@@ -59,6 +59,7 @@ impl GossipService {
             Arc::new(StreamerReceiveStats::new("gossip_receiver")),
             1,
             false,
+            None,
         );
         let (consume_sender, listen_receiver) = channel();
         // https://github.com/rust-lang/rust/issues/39364#issuecomment-634545136

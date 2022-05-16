@@ -40,6 +40,7 @@ impl ServeRepairService {
             Arc::new(StreamerReceiveStats::new("serve_repair_receiver")),
             1,
             false,
+            None,
         );
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder(
