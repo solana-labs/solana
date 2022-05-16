@@ -67,6 +67,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
+        cmp::min,
         net::{SocketAddr, UdpSocket},
         process::exit,
         sync::Arc,
@@ -233,6 +234,8 @@ impl TransactionGenerator {
     }
 }
 
+const SEND_BATCH_MAX_SIZE: usize = 1 << 10;
+
 fn get_target(
     nodes: &[ContactInfo],
     mode: Mode,
@@ -386,8 +389,6 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
 ) {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
     // Number of payers is the number of generating threads, for now it is 1
     // Later, we will create a new payer for each thread since Keypair is not clonable
     let payers: Vec<Option<Keypair>> =
@@ -417,34 +418,43 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
 
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
+    let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
+    let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
+
     let mut count = 0;
     let mut total_count = 0;
     let mut error_count = 0;
     let mut last_log = Instant::now();
+
+    let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
     loop {
-        let chunk_keypairs = if generate_keypairs {
-            let permutation = it.next();
-            if permutation.is_none() {
-                // if ran out of permutations, regenerate keys
-                keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                info!("Regenerate keypairs");
-                continue;
-            }
-            let permutation = permutation.unwrap();
-            Some(apply_permutation(permutation, &keypairs_flat))
-        } else {
-            None
-        };
-
-        let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
-
-        let data = bincode::serialize(&tx).unwrap();
-        let res = socket.send_to(&data, target);
-        if res.is_err() {
-            error_count += 1;
+        let send_batch_size = min(iterations - total_count, SEND_BATCH_MAX_SIZE);
+        data.clear();
+        for _ in 0..send_batch_size {
+            let chunk_keypairs = if generate_keypairs {
+                let mut permutation = it.next();
+                if permutation.is_none() {
+                    // if ran out of permutations, regenerate keys
+                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                    info!("Regenerate keypairs");
+                    permutation = it.next();
+                }
+                let permutation = permutation.unwrap();
+                Some(apply_permutation(permutation, &keypairs_flat))
+            } else {
+                None
+            };
+            let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
+            data.push(bincode::serialize(&tx).unwrap());
         }
-        count += 1;
-        total_count += 1;
+
+        let res = udp_client.send_wire_transaction_batch(&data);
+
+        if res.is_err() {
+            error_count += send_batch_size;
+        }
+        count += send_batch_size;
+        total_count += send_batch_size;
         if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
             info!(
                 "count: {}, errors: {}, rps: {}",
