@@ -952,9 +952,9 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches = VecDeque::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
-        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
 
-        let mut last_slot_metrics_track = Instant::now();
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
+        let mut last_metrics_update = Instant::now();
 
         loop {
             let my_pubkey = cluster_info.id();
@@ -985,9 +985,7 @@ impl BankingStage {
             }
 
             // avoid excessively locking poh_recorder
-            if Instant::now().duration_since(last_slot_metrics_track)
-                >= Duration::from_millis(SLOT_BOUNDARY_CHECK_MS)
-            {
+            if last_metrics_update.elapsed() >= Duration::from_millis(SLOT_BOUNDARY_CHECK_MS) {
                 let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
                     |_| {
                         let current_poh_bank = {
@@ -1003,7 +1001,7 @@ impl BankingStage {
                     slot_metrics_checker_check_slot_boundary_time.as_us(),
                 );
 
-                last_slot_metrics_track = Instant::now();
+                last_metrics_update = Instant::now();
             }
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
