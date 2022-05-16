@@ -688,6 +688,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
             },
@@ -704,6 +705,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
             },
@@ -720,6 +722,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
             },
@@ -736,6 +739,7 @@ pub mod test {
                 data_input: Some(Pubkey::default()),
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
             },
@@ -767,6 +771,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
             },
@@ -804,6 +809,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -829,6 +835,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -854,6 +861,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -931,6 +939,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -958,6 +967,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -984,6 +994,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -1010,6 +1021,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,

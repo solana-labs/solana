@@ -48,6 +48,13 @@ pub struct DosClientParameters {
     #[clap(long, help = "Allow contacting private ip addresses")]
     pub allow_private_addr: bool,
 
+    #[clap(
+        long,
+        default_value = "1",
+        help = "Number of threads generating transactions"
+    )]
+    pub num_gen_threads: usize,
+
     #[clap(flatten)]
     pub transaction_params: TransactionParams,
 
@@ -219,6 +226,7 @@ mod tests {
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                num_gen_threads: 1,
             },
         );
     }
@@ -249,6 +257,7 @@ mod tests {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -289,6 +298,7 @@ mod tests {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -344,6 +354,7 @@ mod tests {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -382,6 +393,7 @@ mod tests {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
