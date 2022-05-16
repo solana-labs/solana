@@ -66,7 +66,7 @@ pub struct DosClientParameters {
     pub tpu_use_quic: bool,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Args, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[clap(rename_all = "kebab-case")]
 pub struct TransactionParams {
     #[clap(
