@@ -122,7 +122,7 @@ pub mod tests {
 
     #[test]
     fn test_accounts_to_store_simple() {
-        let map = vec![].into_iter().collect::<Vec<_>>();
+        let map = vec![];
         let slot = 1;
         let accounts_to_store = AccountsToStore::new(0, &map, slot);
         for selector in [StorageSelector::Primary, StorageSelector::Overflow] {
@@ -172,8 +172,7 @@ pub mod tests {
             store_id,
             account_size,
         };
-        let src = vec![(pubkey, found)];
-        let map = src.iter().map(|(a, b)| (a, b)).collect::<Vec<_>>();
+        let map = vec![(&pubkey, &found)];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
