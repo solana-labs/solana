@@ -72,6 +72,7 @@ use {
         net::{SocketAddr, UdpSocket},
         process::exit,
         sync::Arc,
+        thread,
         time::{Duration, Instant},
     },
 };
@@ -98,6 +99,7 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
 /// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
 /// 2.2 Create an account
 ///
+#[derive(Clone)]
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
@@ -235,7 +237,111 @@ impl TransactionGenerator {
     }
 }
 
+// Multithreading-related functions
+//
+// The most computationally expensive work is signing new transactions.
+// Here we generate them in `num_gen_threads` threads.
+//
+/// number of transactions in one batch for sendmmsg
 const SEND_BATCH_MAX_SIZE: usize = 1 << 10;
+
+fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> usize {
+    if max_iterations_per_thread == 0 {
+        return SEND_BATCH_MAX_SIZE
+    }
+    min(max_iterations_per_thread - total_count, SEND_BATCH_MAX_SIZE)
+}
+
+fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
+    max_iterations_per_thread: usize,
+    transaction_generator: &mut TransactionGenerator,
+    client: Option<Arc<T>>,
+    payer: Option<Keypair>,
+    target: &SocketAddr,
+    tpu_use_quic: bool,
+) -> thread::JoinHandle<()> {
+    let connection_cache = match tpu_use_quic {
+        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+    };
+    let connection = connection_cache.get_connection(&target);
+
+    let mut transaction_generator = transaction_generator.clone();
+    let transaction_params: &TransactionParams = &transaction_generator.transaction_params;
+    let client = client.clone();
+
+    // Generate n=1000 unique keypairs
+    // The number of chunks is described by binomial coefficient
+    // and hence this choice of n provides large enough number of permutations
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    // 1000 is arbitrary number. In case of permutation_size > 1,
+    // this guaranties large enough set of unique permutations
+    let permutation_size = get_permutation_size(
+        transaction_params.num_signatures.as_ref(),
+        transaction_params.num_instructions.as_ref(),
+    );
+    let num_keypairs = 1000 * permutation_size;
+
+    let generate_keypairs =
+        transaction_params.valid_signatures || transaction_params.valid_blockhash;
+    if generate_keypairs {
+        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
+    }
+
+    thread::Builder::new().name("Generator".to_string()).spawn(move || {
+        let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+        let mut it = indexes.iter().permutations(permutation_size);
+
+        let mut total_count = 0;
+        let mut error_count = 0;
+        let mut last_log = Instant::now();
+
+        loop {
+            let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
+            let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+            data.clear();
+            for _ in 0..send_batch_size {
+                let chunk_keypairs = if generate_keypairs {
+                    let mut permutation = it.next();
+                    if permutation.is_none() {
+                        // if ran out of permutations, regenerate keys
+                        keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                        info!("Regenerate keypairs");
+                        permutation = it.next();
+                    }
+                    let permutation = permutation.unwrap();
+                    Some(apply_permutation(permutation, &keypairs_flat))
+                } else {
+                    None
+                };
+                let tx =
+                    transaction_generator.generate(payer.as_ref(), chunk_keypairs, client.as_ref());
+                data.push(bincode::serialize(&tx).unwrap());
+            }
+
+            let res = connection.send_wire_transaction_batch_async(data); 
+
+            if res.is_err() {
+                error_count += send_batch_size;
+            }
+            count += send_batch_size;
+            total_count += send_batch_size;
+            if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
+                info!(
+                    "count: {}, errors: {}, rps: {}",
+                    count,
+                    error_count,
+                    compute_rate_per_second(count)
+                );
+                last_log = Instant::now();
+                count = 0;
+            }
+            if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
+                break;
+            }
+        }
+    }).unwrap()
+}
 
 fn get_target(
     nodes: &[ContactInfo],
@@ -390,90 +496,42 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
     tpu_use_quic: bool,
+    num_gen_threads: usize,
 ) {
-    // Number of payers is the number of generating threads, for now it is 1
+    let max_iterations_per_thread = iterations / num_gen_threads;
+    // Number of payers is the number of generating threads
     // Later, we will create a new payer for each thread since Keypair is not clonable
-    let payers: Vec<Option<Keypair>> =
-        create_payers(transaction_params.valid_blockhash, 1, client.as_ref());
-    let payer = payers[0].as_ref();
-
-    // Generate n=1000 unique keypairs
-    // The number of chunks is described by binomial coefficient
-    // and hence this choice of n provides large enough number of permutations
-    let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    // 1000 is arbitrary number. In case of permutation_size > 1,
-    // this guaranties large enough set of unique permutations
-    let permutation_size = get_permutation_size(
-        transaction_params.num_signatures.as_ref(),
-        transaction_params.num_instructions.as_ref(),
+    let payers: Vec<Option<Keypair>> = create_payers(
+        transaction_params.valid_blockhash,
+        num_gen_threads,
+        client.as_ref(),
     );
-    let num_keypairs = 1000 * permutation_size;
-
-    let generate_keypairs =
-        transaction_params.valid_signatures || transaction_params.valid_blockhash;
-    if generate_keypairs {
-        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
-    }
-
-    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-    let mut it = indexes.iter().permutations(permutation_size);
 
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let mut thread_id = 0;
+    let tx_generator_threads: Vec<_> = payers
+        .into_iter()
+        .map(|payer| {
+            let mut num_iterations = max_iterations_per_thread;
+            // last thread will handle remaining iterations
+            if thread_id+1 == num_gen_threads {
+                num_iterations += iterations%num_gen_threads;
+            }
+            thread_id += 1;
 
-    //let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-    //let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
-
-    let connection_cache = match tpu_use_quic {
-        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-    };
-    let connection = connection_cache.get_connection(&target);
-
-    let mut count = 0;
-    let mut total_count = 0;
-    let mut error_count = 0;
-    let mut last_log = Instant::now();
-
-    loop {
-        let send_batch_size = min(iterations - total_count, SEND_BATCH_MAX_SIZE);
-        let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
-        for _ in 0..send_batch_size {
-            let chunk_keypairs = if generate_keypairs {
-                let mut permutation = it.next();
-                if permutation.is_none() {
-                    // if ran out of permutations, regenerate keys
-                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                    info!("Regenerate keypairs");
-                    permutation = it.next();
-                }
-                let permutation = permutation.unwrap();
-                Some(apply_permutation(permutation, &keypairs_flat))
-            } else {
-                None
-            };
-            let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
-            data.push(bincode::serialize(&tx).unwrap());
-        }
-
-        let res = connection.send_wire_transaction_batch_async(data);
-
-        if res.is_err() {
-            error_count += send_batch_size;
-        }
-        count += send_batch_size;
-        total_count += send_batch_size;
-        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
-            info!(
-                "count: {}, errors: {}, rps: {}",
-                count,
-                error_count,
-                compute_rate_per_second(count)
-            );
-            last_log = Instant::now();
-            count = 0;
-        }
-        if iterations != 0 && total_count >= iterations {
-            break;
+            create_generator_thread(
+                num_iterations,
+                &mut transaction_generator,
+                client.clone(),
+                payer,
+                &target.clone(),
+                tpu_use_quic,
+            )
+        })
+        .collect();
+    for t_generator in tx_generator_threads {
+        if let Err(err) = t_generator.join() {
+            println!("join() failed with: {:?}", err);
         }
     }
 }
@@ -508,6 +566,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             client,
             params.transaction_params,
             params.tpu_use_quic,
+            params.num_gen_threads,
         );
     } else {
         let target = target.expect("should have target");
