@@ -351,6 +351,17 @@ pub mod add_set_compute_unit_price_ix {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
 
+<<<<<<< HEAD
+=======
+pub mod disable_deploy_of_alloc_free_syscall {
+    solana_sdk::declare_id!("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im");
+}
+
+pub mod include_account_index_in_rent_error {
+    solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
+}
+
+>>>>>>> f81c5df1f (Include account index in rent paying account tx error (#25189))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -433,6 +444,11 @@ lazy_static! {
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
+<<<<<<< HEAD
+=======
+        (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
+        (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
+>>>>>>> f81c5df1f (Include account index in rent paying account tx error (#25189))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

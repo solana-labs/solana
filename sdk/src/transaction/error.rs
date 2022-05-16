@@ -141,6 +141,12 @@ pub enum TransactionError {
     /// Transaction contains a duplicate instruction that is not allowed
     #[error("Transaction contains a duplicate instruction ({0}) that is not allowed")]
     DuplicateInstruction(u8),
+
+    /// Transaction results in an account without insufficient funds for rent
+    #[error(
+        "Transaction results in an account ({account_index}) without insufficient funds for rent"
+    )]
+    InsufficientFundsForRent { account_index: u8 },
 }
 
 impl From<SanitizeError> for TransactionError {
