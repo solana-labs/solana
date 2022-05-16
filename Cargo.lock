@@ -5104,6 +5104,7 @@ version = "1.11.5"
 dependencies = [
  "bincode",
  "clap 3.1.8",
+ "crossbeam-channel",
  "itertools",
  "log",
  "rand 0.7.3",
