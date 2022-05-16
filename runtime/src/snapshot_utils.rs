@@ -1596,6 +1596,12 @@ fn untar_snapshot_mmap(
             account_paths,
             parallel_divisions,
         )?,
+        ArchiveFormat::TarLz4 => unpack_snapshot_local(
+            || lz4::Decoder::new(slice).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
         ArchiveFormat::Tar => {
             unpack_snapshot_local(|| slice, unpack_dir, account_paths, parallel_divisions)?
         }
