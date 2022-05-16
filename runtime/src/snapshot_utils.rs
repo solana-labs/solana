@@ -22,6 +22,7 @@ use {
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
+    memmap2::Mmap,
     rayon::prelude::*,
     regex::Regex,
     solana_measure::measure::Measure,
@@ -34,6 +35,7 @@ use {
         io::{BufReader, BufWriter, Error as IoError, ErrorKind, Read, Seek, Write},
         path::{Path, PathBuf},
         process::ExitStatus,
+        slice,
         str::FromStr,
         sync::Arc,
     },
@@ -781,8 +783,8 @@ pub struct BankFromArchiveTimings {
     pub verify_snapshot_bank_us: u64,
 }
 
-// From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
-const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
+// From testing, 8 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
+const PARALLEL_UNTAR_READERS_DEFAULT: usize = 8;
 
 /// Rebuild bank from snapshot archives.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
@@ -1451,6 +1453,7 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
             unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
         })
         .collect::<Vec<_>>();
+
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
     for h in all_unpacked_append_vec_map {
         unpacked_append_vec_map.extend(h?);
@@ -1459,8 +1462,8 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     Ok(unpacked_append_vec_map)
 }
 
-fn untar_snapshot_in<P: AsRef<Path>>(
-    snapshot_tar: P,
+fn untar_snapshot_file(
+    snapshot_tar: &Path,
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
@@ -1493,6 +1496,94 @@ fn untar_snapshot_in<P: AsRef<Path>>(
             parallel_divisions,
         )?,
     };
+    Ok(account_paths_map)
+}
+
+fn untar_snapshot_in<P: AsRef<Path>>(
+    snapshot_tar: P,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
+    let ret = untar_snapshot_mmap(
+        snapshot_tar.as_ref(),
+        unpack_dir,
+        account_paths,
+        archive_format,
+        parallel_divisions,
+    );
+
+    if ret.is_ok() {
+        ret
+    } else {
+        warn!(
+            "Failed to memory map the snapshot file: {}",
+            snapshot_tar.as_ref().display(),
+        );
+
+        untar_snapshot_file(
+            snapshot_tar.as_ref(),
+            unpack_dir,
+            account_paths,
+            archive_format,
+            parallel_divisions,
+        )
+    }
+}
+
+fn untar_snapshot_mmap(
+    snapshot_tar: &Path,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
+    let file = File::open(snapshot_tar).unwrap();
+    let mmap = unsafe { Mmap::map(&file) };
+    if mmap.is_err() {
+        return Err(SnapshotError::Io(std::io::Error::new(
+            ErrorKind::Other,
+            "mmap failure",
+        )));
+    }
+
+    let mmap = mmap.unwrap();
+
+    // `unpack_snapshot_local` takes a BufReader creator, which requires a
+    // static lifetime because of its background reader thread. Therefore, we
+    // can't pass the &mmap. Instead, we construct and pass a a slice
+    // explicitly. However, the following code is guaranteed to be safe because
+    // the lifetime of mmap last till the end of the function while the usage of
+    // mmap, BufReader's lifetime only last within fn unpack_snapshot_local.
+    let len = &mmap[..].len();
+    let ptr = &mmap[0] as *const u8;
+    let slice = unsafe { slice::from_raw_parts(ptr, *len) };
+
+    let account_paths_map = match archive_format {
+        ArchiveFormat::TarBzip2 => unpack_snapshot_local(
+            || BzDecoder::new(slice),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarGzip => unpack_snapshot_local(
+            || GzDecoder::new(slice),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarZstd => unpack_snapshot_local(
+            || zstd::stream::read::Decoder::new(slice).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::Tar => {
+            unpack_snapshot_local(|| slice, unpack_dir, account_paths, parallel_divisions)?
+        }
+    };
+
     Ok(account_paths_map)
 }
 
