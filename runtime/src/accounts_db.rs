@@ -3267,31 +3267,43 @@ impl AccountsDb {
         let slot = storage.slot();
         let (stored_accounts, num_stores, original_bytes) =
             self.get_unique_accounts_from_storages(std::iter::once(&storage));
-
-        // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
         stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
-        let (unfiltered_accounts, filtered_accounts): (_, Vec<_>) = stored_accounts
-            .iter()
-            .partition(|(pubkey, _account)| minimized_account_set.contains(pubkey));
+        let unfiltered_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let total_bytes_collect = AtomicUsize::new(0);
+        self.thread_pool_clean.install(|| {
+            const CHUNK_SIZE: usize = 50;
 
-        error!(
-            "filtered out {}/{} accounts...",
-            filtered_accounts.len(),
-            filtered_accounts.len() + unfiltered_accounts.len()
-        );
+            stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
+                let (mut unfiltered_accounts, filtered_accounts): (_, Vec<_>) = chunk
+                    .iter()
+                    .partition(|(pubkey, _account)| minimized_account_set.contains(pubkey));
 
-        filtered_accounts.iter().for_each(|(pubkey, account)| {
-            if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                read_entry.unref();
-            }
+                filtered_accounts.iter().for_each(|(pubkey, account)| {
+                    if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                        read_entry.unref();
+                    }
+                });
+
+                let chunk_bytes: usize = unfiltered_accounts
+                    .iter()
+                    .map(|(_pubkey, account)| account.account_size)
+                    .sum();
+
+                unfiltered_accounts_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut unfiltered_accounts);
+                total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
+            });
         });
 
-        let total_bytes: usize = unfiltered_accounts
-            .iter()
-            .map(|(_pubkey, account)| account.account_size)
-            .sum();
+        // sort by pubkey to keep account index lookups close
+        let unfiltered_accounts = unfiltered_accounts_collect.into_inner().unwrap();
+        let total_bytes = total_bytes_collect.load(Ordering::Relaxed);
+
+        error!("reduced from {} to {} bytes", original_bytes, total_bytes);
 
         let aligned_total: u64 = Self::page_align(total_bytes as u64);
         if aligned_total > 0 {
