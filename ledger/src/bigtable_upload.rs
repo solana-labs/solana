@@ -1,3 +1,4 @@
+use std::cmp::max;
 use {
     crate::blockstore::Blockstore,
     crossbeam_channel::{bounded, unbounded},
@@ -262,14 +263,14 @@ pub async fn upload_confirmed_blocks(
         loader_threads.into_iter().map(|t| t.join()).collect();
 
     let mut blockstore_num_blocks_read = 0;
-    let mut blockstore_elapsed = Duration::default();
+    let mut blockstore_load_wallclock = Duration::default();
     let mut blockstore_errors = 0;
 
     for r in blockstore_results {
         match r {
             Ok(stats) => {
                 blockstore_num_blocks_read += stats.num_blocks_read;
-                blockstore_elapsed += stats.elapsed;
+                blockstore_load_wallclock = max(stats.elapsed, blockstore_load_wallclock);
             }
             Err(e) => {
                 error!("error joining blockstore thread: {:?}", e);
@@ -280,9 +281,9 @@ pub async fn upload_confirmed_blocks(
 
     info!(
         "blockstore upload took {:?} for {} blocks ({:.2} blocks/s) errors: {}",
-        blockstore_elapsed,
+        blockstore_load_wallclock,
         blockstore_num_blocks_read,
-        blockstore_num_blocks_read as f64 / blockstore_elapsed.as_secs_f64(),
+        blockstore_num_blocks_read as f64 / blockstore_load_wallclock.as_secs_f64(),
         blockstore_errors
     );
 
