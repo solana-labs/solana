@@ -243,7 +243,7 @@ A fraction of a [block](#block); the smallest unit sent between [validators](#va
 
 A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
 This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](#transaction-id)
+Thus, the first signature in transaction can be treated as [transaction id](#transaction-id)
 
 ## skipped slot
 
