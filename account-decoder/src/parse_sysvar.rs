@@ -40,7 +40,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                         .iter()
                         .map(|entry| UiRecentBlockhashesEntry {
                             blockhash: entry.blockhash.to_string(),
-                            fee_calculator: entry.fee_calculator.clone().into(),
+                            fee_calculator: entry.fee_calculator.into(),
                         })
                         .collect();
                     SysvarAccountType::RecentBlockhashes(recent_blockhashes)
