@@ -145,13 +145,6 @@ Clients should request only what they need; requesting the minimum amount of
 units required to process the transaction will reduce overall transaction cost,
 which may include a prioritization-fee charged for every compute unit.
 
-Transaction prioritization is determined by the transactions prioritization fee
-which itself is the product of the transaction's compute unit budget and its
-compute unit price (measured in micro-lamports). The compute unit budget and
-compute unit fee can be set by adding instructions created by the
-`ComputeBudgetInstruction::request_compute_units` and
-`ComputeBudgetInstruction::set_compute_unit_price` function, respectively.
-
 ## New Features
 
 As Solana evolves, new features or patches may be introduced that changes the
