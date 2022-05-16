@@ -1007,7 +1007,7 @@ impl BankingStage {
             }
 
             // avoid excessively locking poh_recorder
-            if last_metrics_update.elapsed() > SLOT_BOUNDARY_CHECK_PERIOD {
+            if last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD {
                 let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
                     |_| {
                         let current_poh_bank = {
