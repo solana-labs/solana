@@ -404,6 +404,10 @@ pub mod disable_deploy_of_alloc_free_syscall {
     solana_sdk::declare_id!("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im");
 }
 
+pub mod include_account_index_in_rent_error {
+    solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -498,6 +502,7 @@ lazy_static! {
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
+        (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
