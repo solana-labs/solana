@@ -6,15 +6,13 @@ use {
     },
     indexmap::map::IndexMap,
     lazy_static::lazy_static,
-    quinn_proto::ConnectionStats,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
     },
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::SocketAddr,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
@@ -194,7 +192,6 @@ struct GetConnectionResult {
     map_timing_ms: u64,
     lock_timing_ms: u64,
     connection_cache_stats: Arc<ConnectionCacheStats>,
-    other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
     num_evictions: u64,
     eviction_timing_ms: u64,
 }
@@ -211,6 +208,7 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
 
     let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
+<<<<<<< HEAD
     let (
         connection,
         cache_hit,
@@ -272,6 +270,57 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
             )
         }
     };
+=======
+    let (connection, cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
+        match map.map.get(addr) {
+            Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
+            None => {
+                // Upgrade to write access by dropping read lock and acquire write lock
+                drop(map);
+                let mut get_connection_map_lock_measure =
+                    Measure::start("get_connection_map_lock_measure");
+                let mut map = (*CONNECTION_MAP).write().unwrap();
+                get_connection_map_lock_measure.stop();
+
+                lock_timing_ms =
+                    lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
+
+                // Read again, as it is possible that between read lock dropped and the write lock acquired
+                // another thread could have setup the connection.
+                match map.map.get(addr) {
+                    Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
+                    None => {
+                        let connection = if map.use_quic {
+                            Connection::Quic(Arc::new(QuicTpuConnection::new(*addr)))
+                        } else {
+                            Connection::Udp(Arc::new(UdpTpuConnection::new(*addr)))
+                        };
+
+                        // evict a connection if the cache is reaching upper bounds
+                        let mut num_evictions = 0;
+                        let mut get_connection_cache_eviction_measure =
+                            Measure::start("get_connection_cache_eviction_measure");
+                        while map.map.len() >= MAX_CONNECTIONS {
+                            let mut rng = thread_rng();
+                            let n = rng.gen_range(0, MAX_CONNECTIONS);
+                            map.map.swap_remove_index(n);
+                            num_evictions += 1;
+                        }
+                        get_connection_cache_eviction_measure.stop();
+
+                        map.map.insert(*addr, connection.clone());
+                        (
+                            connection,
+                            false,
+                            map.stats.clone(),
+                            num_evictions,
+                            get_connection_cache_eviction_measure.as_ms(),
+                        )
+                    }
+                }
+            }
+        };
+>>>>>>> 196de1c04 (Refactor make_connection (#25225))
     get_connection_map_measure.stop();
 
     GetConnectionResult {
@@ -281,7 +330,6 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
         map_timing_ms: get_connection_map_measure.as_ms(),
         lock_timing_ms,
         connection_cache_stats,
-        other_stats: maybe_stats,
         num_evictions,
         eviction_timing_ms,
     }
@@ -298,10 +346,15 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
         map_timing_ms,
         lock_timing_ms,
         connection_cache_stats,
-        other_stats,
         num_evictions,
         eviction_timing_ms,
     } = get_or_add_connection(addr);
+
+    let other_stats = if let Connection::Quic(conn) = &connection {
+        conn.stats().map(|s| (conn.base_stats(), s))
+    } else {
+        None
+    };
 
     if report_stats {
         connection_cache_stats.report();
