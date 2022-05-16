@@ -370,6 +370,12 @@ pub fn archive_snapshot_package(
                 do_archive_files(&mut encoder)?;
                 encoder.finish()?;
             }
+            ArchiveFormat::TarLz4 => {
+                let mut encoder = lz4::EncoderBuilder::new().level(1).build(archive_file)?;
+                do_archive_files(&mut encoder)?;
+                let (_output, result) = encoder.finish();
+                result?
+            }
             ArchiveFormat::Tar => {
                 do_archive_files(&mut archive_file)?;
             }
@@ -401,6 +407,11 @@ pub fn archive_snapshot_package(
     datapoint_info!(
         "archive-snapshot-package",
         ("slot", snapshot_package.slot(), i64),
+        (
+            "archive_format",
+            snapshot_package.archive_format().to_string(),
+            String
+        ),
         ("duration_ms", timer.as_ms(), i64),
         (
             if snapshot_package.snapshot_type.is_full_snapshot() {
@@ -1489,6 +1500,12 @@ fn untar_snapshot_file(
             account_paths,
             parallel_divisions,
         )?,
+        ArchiveFormat::TarLz4 => unpack_snapshot_local(
+            || lz4::Decoder::new(BufReader::new(open_file())).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
         ArchiveFormat::Tar => unpack_snapshot_local(
             || BufReader::new(open_file()),
             unpack_dir,
@@ -1575,6 +1592,12 @@ fn untar_snapshot_mmap(
         )?,
         ArchiveFormat::TarZstd => unpack_snapshot_local(
             || zstd::stream::read::Decoder::new(slice).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
+        ArchiveFormat::TarLz4 => unpack_snapshot_local(
+            || lz4::Decoder::new(slice).unwrap(),
             unpack_dir,
             account_paths,
             parallel_divisions,

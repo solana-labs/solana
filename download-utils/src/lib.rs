@@ -281,6 +281,7 @@ pub fn download_snapshot_archive<'a, 'b>(
         ArchiveFormat::TarZstd,
         ArchiveFormat::TarGzip,
         ArchiveFormat::TarBzip2,
+        ArchiveFormat::TarLz4,
         ArchiveFormat::Tar, // `solana-test-validator` creates uncompressed snapshots
     ] {
         let destination_path = match snapshot_type {

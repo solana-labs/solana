@@ -57,6 +57,9 @@ tar = "0.4.38"
 tempfile = "3.3.0"
 thiserror = "1.0"
 zstd = "0.11.2"
+lz4 = "1.23.3"
+strum_macros = "0.24"
+strum = { version = "0.24", features = ["derive"] }
 
 [lib]
 crate-type = ["lib"]

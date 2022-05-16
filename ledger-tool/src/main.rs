@@ -44,8 +44,9 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1524,7 +1525,17 @@ fn main() {
                           base for the incremental snapshot.")
                     .conflicts_with("no_snapshot")
             )
-        ).subcommand(
+            .arg(
+                Arg::with_name("snapshot_archive_format")
+                    .long("snapshot-archive-format")
+                    .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
+                    .default_value(DEFAULT_ARCHIVE_COMPRESSION)
+                    .value_name("ARCHIVE_TYPE")
+                    .takes_value(true)
+                    .help("Snapshot archive format to use.")
+                    .conflicts_with("no_snapshot")
+            )
+    ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -2292,6 +2303,14 @@ fn main() {
                     },
                 );
 
+                let snapshot_archive_format = {
+                    let archive_format_str =
+                        value_t_or_exit!(matches, "snapshot_archive_format", String);
+                    ArchiveFormat::from_cli_arg(&archive_format_str).unwrap_or_else(|| {
+                        panic!("Archive format not recognized: {}", archive_format_str)
+                    })
+                };
+
                 let maximum_full_snapshot_archives_to_retain =
                     value_t_or_exit!(arg_matches, "maximum_full_snapshots_to_retain", usize);
                 let maximum_incremental_snapshot_archives_to_retain = value_t_or_exit!(
@@ -2568,7 +2587,7 @@ fn main() {
                                     Some(snapshot_version),
                                     output_directory.clone(),
                                     output_directory,
-                                    ArchiveFormat::TarZstd,
+                                    snapshot_archive_format,
                                     maximum_full_snapshot_archives_to_retain,
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
@@ -2592,7 +2611,7 @@ fn main() {
                                     Some(snapshot_version),
                                     output_directory.clone(),
                                     output_directory,
-                                    ArchiveFormat::TarZstd,
+                                    snapshot_archive_format,
                                     maximum_full_snapshot_archives_to_retain,
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
