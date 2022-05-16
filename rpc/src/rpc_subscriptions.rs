@@ -804,16 +804,16 @@ impl RpcSubscriptions {
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
                         NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
-                            let rpc_vote = RpcVote {
-                                vote_pubkey: vote_pubkey.to_string(),
-                                slots: vote_info.slots(),
-                                hash: bs58::encode(vote_info.hash()).into_string(),
-                                timestamp: vote_info.timestamp(),
-                            };
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()
                                 .get(&SubscriptionParams::Vote)
                             {
+                                let rpc_vote = RpcVote {
+                                    vote_pubkey: vote_pubkey.to_string(),
+                                    slots: vote_info.slots(),
+                                    hash: bs58::encode(vote_info.hash()).into_string(),
+                                    timestamp: vote_info.timestamp(),
+                                };
                                 debug!("vote notify: {:?}", vote_info);
                                 inc_new_counter_info!("rpc-subscription-notify-vote", 1);
                                 notifier.notify(&rpc_vote, sub, false);
