@@ -12,10 +12,12 @@ use {
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
-        sync::Arc,
+        sync::{atomic::AtomicBool, Arc},
         time::Instant,
     },
 };
+
+pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
 
 #[derive(Debug, Default, Copy, Clone)]
 struct SetRootMetrics {
@@ -48,6 +50,7 @@ pub struct BankForks {
 
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
+    in_vote_only_mode: Arc<AtomicBool>,
 }
 
 impl Index<u64> for BankForks {
@@ -65,6 +68,18 @@ impl BankForks {
 
     pub fn banks(&self) -> HashMap<Slot, Arc<Bank>> {
         self.banks.clone()
+    }
+
+    pub fn get_vote_only_mode_signal(&self) -> Arc<AtomicBool> {
+        self.in_vote_only_mode.clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.banks.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.banks.is_empty()
     }
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
@@ -151,6 +166,7 @@ impl BankForks {
             snapshot_config: None,
             accounts_hash_interval_slots: std::u64::MAX,
             last_accounts_hash_slot: root,
+            in_vote_only_mode: Arc::new(AtomicBool::new(false)),
         }
     }
 

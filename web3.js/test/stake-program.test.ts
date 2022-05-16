@@ -339,9 +339,10 @@ describe('StakeProgram', () => {
       lockup: new Lockup(0, 0, from.publicKey),
       lamports: amount,
     });
-    const createWithSeedTransaction = new Transaction({recentBlockhash}).add(
-      createWithSeed,
-    );
+    const createWithSeedTransaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(createWithSeed);
 
     expect(createWithSeedTransaction.instructions).to.have.length(2);
     const systemInstructionType = SystemInstruction.decodeInstructionType(
@@ -368,9 +369,10 @@ describe('StakeProgram', () => {
       votePubkey: vote.publicKey,
     });
 
-    const delegateTransaction = new Transaction({recentBlockhash}).add(
-      delegate,
-    );
+    const delegateTransaction = new Transaction({
+      blockhash: recentBlockhash,
+      lastValidBlockHeight: 9999,
+    }).add(delegate);
     const anotherStakeInstructionType = StakeInstruction.decodeInstructionType(
       delegateTransaction.instructions[0],
     );
