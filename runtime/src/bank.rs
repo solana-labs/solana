@@ -605,6 +605,9 @@ pub struct TransactionExecutionDetails {
     pub durable_nonce_fee: Option<DurableNonceFee>,
     pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
+    /// The change in accounts data len for this transaction.
+    /// NOTE: This value is valid IFF `status` is `Ok`.
+    pub accounts_data_len_delta: i64,
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -4229,8 +4232,12 @@ impl Bank {
             process_message_time.as_us()
         );
 
+        let accounts_data_len_delta = process_result
+            .as_ref()
+            .map(|info| info.accounts_data_len_delta)
+            .unwrap_or(0);
         let status = process_result
-            .and_then(|info| {
+            .and_then(|_| {
                 let post_account_state_info =
                     self.get_transaction_account_state_info(&transaction_context, tx.message());
                 self.verify_transaction_account_state_changes(
@@ -4238,10 +4245,6 @@ impl Bank {
                     &post_account_state_info,
                     &transaction_context,
                 )
-                .map(|_| info)
-            })
-            .map(|info| {
-                self.update_accounts_data_len(info.accounts_data_len_delta);
             })
             .map_err(|err| {
                 match err {
@@ -4299,6 +4302,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
+                accounts_data_len_delta,
             },
             executors,
         }
@@ -4808,6 +4812,16 @@ impl Bank {
             timings.execute_accessories.update_executors_us,
             update_executors_time.as_us()
         );
+
+        let accounts_data_len_delta = execution_results
+            .iter()
+            .filter_map(|execution_result| {
+                execution_result
+                    .details()
+                    .map(|details| details.accounts_data_len_delta)
+            })
+            .sum();
+        self.update_accounts_data_len(accounts_data_len_delta);
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
         timings.saturating_add_in_place(
@@ -7311,7 +7325,8 @@ pub(crate) mod tests {
                 inner_instructions: None,
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
                 return_data: None,
-                executed_units: 0u64,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
             },
             executors: Rc::new(RefCell::new(Executors::default())),
         }
