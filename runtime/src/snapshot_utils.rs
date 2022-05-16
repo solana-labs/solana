@@ -1423,8 +1423,6 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     Ok(account_paths_map)
 }
 
-<<<<<<< HEAD
-=======
 fn untar_snapshot_in<P: AsRef<Path>>(
     snapshot_tar: P,
     unpack_dir: &Path,
@@ -1519,7 +1517,6 @@ fn untar_snapshot_mmap(
     Ok(account_paths_map)
 }
 
->>>>>>> 3e44046a7 (Support lz4 for snapshot archives (#25089))
 fn verify_unpacked_snapshots_dir_and_version(
     unpacked_snapshots_dir_and_version: &UnpackedSnapshotsDirAndVersion,
 ) -> Result<(SnapshotVersion, BankSnapshotInfo)> {
