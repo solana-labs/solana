@@ -60,9 +60,12 @@ struct SigVerifierStats {
     total_packets: usize,
     total_dedup: usize,
     total_excess_fail: usize,
-    total_shrink_time: usize,
-    total_shrinks: usize,
     total_valid_packets: usize,
+    total_shrinks: usize,
+    total_dedup_time_us: usize,
+    total_discard_time_us: usize,
+    total_verify_time_us: usize,
+    total_shrink_time_us: usize,
 }
 
 impl SigVerifierStats {
@@ -171,9 +174,12 @@ impl SigVerifierStats {
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
-            ("total_shrink_time", self.total_shrink_time, i64),
-            ("total_shrinks", self.total_shrinks, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
+            ("total_shrinks", self.total_shrinks, i64),
+            ("total_dedup_time_us", self.total_dedup_time_us, i64),
+            ("total_discard_time_us", self.total_discard_time_us, i64),
+            ("total_verify_time_us", self.total_verify_time_us, i64),
+            ("total_shrink_time_us", self.total_shrink_time_us, i64),
         );
     }
 }
@@ -256,9 +262,9 @@ impl SigVerifyStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
-        let mut verify_batch_time = Measure::start("sigverify_batch_time");
+        let mut verify_time = Measure::start("sigverify_batch_time");
         let mut batches = verifier.verify_batches(batches, num_valid_packets);
-        verify_batch_time.stop();
+        verify_time.stop();
 
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_valid_packets = count_valid_packets(&batches);
@@ -272,15 +278,14 @@ impl SigVerifyStage {
         shrink_time.stop();
 
         sendr.send(batches)?;
-        verify_batch_time.stop();
 
         debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
-            verify_batch_time.as_ms(),
+            verify_time.as_ms(),
             num_packets,
-            (num_packets as f32 / verify_batch_time.as_s())
+            (num_packets as f32 / verify_time.as_s())
         );
 
         stats
@@ -289,7 +294,7 @@ impl SigVerifyStage {
             .unwrap();
         stats
             .verify_batches_pp_us_hist
-            .increment(verify_batch_time.as_us() / (num_packets as u64))
+            .increment(verify_time.as_us() / (num_packets as u64))
             .unwrap();
         stats
             .discard_packets_pp_us_hist
@@ -306,8 +311,11 @@ impl SigVerifyStage {
         stats.total_dedup += dedup_fail;
         stats.total_valid_packets += num_valid_packets;
         stats.total_excess_fail += excess_fail;
-        stats.total_shrink_time += shrink_time.as_us() as usize;
         stats.total_shrinks += total_shrinks;
+        stats.total_dedup_time_us += dedup_time.as_us() as usize;
+        stats.total_discard_time_us += discard_time.as_us() as usize;
+        stats.total_verify_time_us += verify_time.as_us() as usize;
+        stats.total_shrink_time_us += shrink_time.as_us() as usize;
 
         Ok(())
     }
