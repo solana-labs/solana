@@ -56,7 +56,14 @@ symlink = "0.1.0"
 tar = "0.4.38"
 tempfile = "3.3.0"
 thiserror = "1.0"
+<<<<<<< HEAD
 zstd = "0.11.1"
+=======
+zstd = "0.11.2"
+lz4 = "1.23.3"
+strum_macros = "0.24"
+strum = { version = "0.24", features = ["derive"] }
+>>>>>>> 3e44046a7 (Support lz4 for snapshot archives (#25089))
 
 [lib]
 crate-type = ["lib"]
