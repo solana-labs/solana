@@ -6391,10 +6391,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
 dependencies = [
  "heck 0.4.0",
- "proc-macro2 1.0.37",
+ "proc-macro2 1.0.38",
  "quote 1.0.18",
  "rustversion",
- "syn 1.0.91",
+ "syn 1.0.93",
 ]
 
 [[package]]
