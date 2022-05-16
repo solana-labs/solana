@@ -106,7 +106,7 @@ consume by including a "request units"
 [`ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
 Note that a transaction's prioritization fee is calculated from multiplying the
 number of compute units requested by the compute unit price (measured in
-milli-lamports) set by the transaction.  So transactions should request the
+micro-lamports) set by the transaction.  So transactions should request the
 minimum amount of compute units required for execution to minimize fees. Also
 note that fees are not adjusted when the number of requested compute units
 exceeds the number of compute units consumed by an executed transaction.
@@ -143,10 +143,10 @@ existing behavior to avoid breaking clients. Transactions can request a specific
 number of `max_units` via [Compute Budget](#compute-budget) instructions.
 Clients should request only what they need; requesting the minimum amount of
 units required to process the transaction will reduce overall transaction cost,
-which includes prioritization-fee for every 10K compute-units.
+which may include a prioritization-fee charged for every compute unit.
 
 Transaction prioritization is determined by the transactions prioritization fee
-which itself is the produce of the transaction's compute unit budget and its
+which itself is the product of the transaction's compute unit budget and its
 compute unit price (measured in micro-lamports). The compute unit budget and
 compute unit fee can be set by adding instructions created by the
 `ComputeBudgetInstruction::request_compute_units` and

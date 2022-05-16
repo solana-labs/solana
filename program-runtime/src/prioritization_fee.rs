@@ -33,11 +33,9 @@ impl PrioritizationFeeDetails {
                 let fee = {
                     let micro_lamport_fee: MicroLamports =
                         (cu_price as u128).saturating_mul(max_compute_units as u128);
-                    let mut fee =
-                        micro_lamport_fee.saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
-                    if fee.saturating_mul(MICRO_LAMPORTS_PER_LAMPORT as u128) < micro_lamport_fee {
-                        fee = fee.saturating_add(1);
-                    }
+                    let fee = micro_lamport_fee
+                        .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+                        .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
                     u64::try_from(fee).unwrap_or(u64::MAX)
                 };
 
