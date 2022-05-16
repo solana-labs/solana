@@ -2,7 +2,10 @@
 //! an interface for sending transactions
 
 use {
-    crate::tpu_connection::{ClientStats, TpuConnection},
+    crate::{
+        connection_cache::ConnectionCacheStats,
+        tpu_connection::{ClientStats, TpuConnection},
+    },
     core::iter::repeat,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::transport::Result as TransportResult,
@@ -19,7 +22,7 @@ pub struct UdpTpuConnection {
 }
 
 impl TpuConnection for UdpTpuConnection {
-    fn new(tpu_addr: SocketAddr) -> Self {
+    fn new(tpu_addr: SocketAddr, _connection_stats: Arc<ConnectionCacheStats>) -> Self {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,

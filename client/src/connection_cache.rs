@@ -30,7 +30,7 @@ pub enum Connection {
 }
 
 #[derive(Default)]
-struct ConnectionCacheStats {
+pub struct ConnectionCacheStats {
     cache_hits: AtomicU64,
     cache_misses: AtomicU64,
     cache_evictions: AtomicU64,
@@ -46,7 +46,7 @@ struct ConnectionCacheStats {
 
     // Need to track these separately per-connection
     // because we need to track the base stat value from quinn
-    total_client_stats: ClientStats,
+    pub total_client_stats: ClientStats,
 }
 
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
@@ -287,9 +287,15 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
                     Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
                     None => {
                         let connection = if map.use_quic {
-                            Connection::Quic(Arc::new(QuicTpuConnection::new(*addr)))
+                            Connection::Quic(Arc::new(QuicTpuConnection::new(
+                                *addr,
+                                map.stats.clone(),
+                            )))
                         } else {
-                            Connection::Udp(Arc::new(UdpTpuConnection::new(*addr)))
+                            Connection::Udp(Arc::new(UdpTpuConnection::new(
+                                *addr,
+                                map.stats.clone(),
+                            )))
                         };
 
                         // evict a connection if the cache is reaching upper bounds
@@ -345,45 +351,8 @@ fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) 
         eviction_timing_ms,
     } = get_or_add_connection(addr);
 
-    let other_stats = if let Connection::Quic(conn) = &connection {
-        conn.stats().map(|s| (conn.base_stats(), s))
-    } else {
-        None
-    };
-
     if report_stats {
         connection_cache_stats.report();
-    }
-
-    if let Some((connection_stats, new_stats)) = other_stats {
-        connection_cache_stats
-            .total_client_stats
-            .congestion_events
-            .update_stat(
-                &connection_stats.congestion_events,
-                new_stats.path.congestion_events,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_streams_blocked_uni
-            .update_stat(
-                &connection_stats.tx_streams_blocked_uni,
-                new_stats.frame_tx.streams_blocked_uni,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_data_blocked
-            .update_stat(
-                &connection_stats.tx_data_blocked,
-                new_stats.frame_tx.data_blocked,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_acks
-            .update_stat(&connection_stats.tx_acks, new_stats.frame_tx.acks);
     }
 
     if cache_hit {
