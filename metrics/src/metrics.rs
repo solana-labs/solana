@@ -12,6 +12,7 @@ use {
         collections::HashMap,
         convert::Into,
         env,
+        fmt::Write,
         sync::{Arc, Barrier, Mutex, Once, RwLock},
         thread,
         time::{Duration, Instant, UNIX_EPOCH},
@@ -77,6 +78,35 @@ impl InfluxDbMetricsWriter {
     }
 }
 
+pub fn serialize_points(points: &Vec<DataPoint>, host_id: &str) -> String {
+    const TIMESTAMP_LEN: usize = 20;
+    const HOST_ID_LEN: usize = 8; // "host_id=".len()
+    const EXTRA_LEN: usize = 2; // "=,".len()
+    let mut len = 0;
+    for point in points {
+        for (name, value) in &point.fields {
+            len += name.len() + value.len() + EXTRA_LEN;
+        }
+        len += point.name.len();
+        len += TIMESTAMP_LEN;
+        len += host_id.len() + HOST_ID_LEN;
+    }
+    let mut line = String::with_capacity(len);
+    for point in points {
+        let _ = write!(line, "{},host_id={}", &point.name, host_id);
+
+        let mut first = true;
+        for (name, value) in point.fields.iter() {
+            let _ = write!(line, "{}{}={}", if first { ' ' } else { ',' }, name, value);
+            first = false;
+        }
+        let timestamp = point.timestamp.duration_since(UNIX_EPOCH);
+        let nanos = timestamp.unwrap().as_nanos();
+        let _ = writeln!(line, " {}", nanos);
+    }
+    line
+}
+
 impl MetricsWriter for InfluxDbMetricsWriter {
     fn write(&self, points: Vec<DataPoint>) {
         if let Some(ref write_url) = self.write_url {
@@ -84,24 +114,7 @@ impl MetricsWriter for InfluxDbMetricsWriter {
 
             let host_id = HOST_ID.read().unwrap();
 
-            let mut line = String::new();
-            for point in points {
-                line.push_str(&format!("{},host_id={}", &point.name, &host_id));
-
-                let mut first = true;
-                for (name, value) in point.fields {
-                    line.push_str(&format!(
-                        "{}{}={}",
-                        if first { ' ' } else { ',' },
-                        name,
-                        value
-                    ));
-                    first = false;
-                }
-                let timestamp = point.timestamp.duration_since(UNIX_EPOCH);
-                let nanos = timestamp.unwrap().as_nanos();
-                line.push_str(&format!(" {}\n", nanos));
-            }
+            let line = serialize_points(&points, &host_id);
 
             let client = reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(5))
