@@ -93,7 +93,7 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 
-const SLOT_BOUNDARY_CHECK_MS: u64 = 10;
+const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -985,7 +985,7 @@ impl BankingStage {
             }
 
             // avoid excessively locking poh_recorder
-            if last_metrics_update.elapsed() >= Duration::from_millis(SLOT_BOUNDARY_CHECK_MS) {
+            if last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD {
                 let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
                     |_| {
                         let current_poh_bank = {
