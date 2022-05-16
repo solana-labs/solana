@@ -926,6 +926,10 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_sdk::{
+    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+    transaction::TransactionVerificationMode,
+};
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -1598,7 +1602,42 @@ fn main() {
                     .takes_value(true)
                     .help("Snapshot archive format to use.")
             )
-    ).subcommand(
+        ).subcommand(
+            SubCommand::with_name("create-minimized-snapshot")
+            .about("Create a minimized snapshot w/ only the accounts necessary for processing the specified slot range")
+            .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&snapshot_version_arg)
+            .arg(
+                Arg::with_name("snapshot_archive_format")
+                    .long("snapshot-archive-format")
+                    .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
+                    .default_value(DEFAULT_ARCHIVE_COMPRESSION)
+                    .value_name("ARCHIVE_TYPE")
+                    .takes_value(true)
+                    .help("Snapshot archive format to use.")
+            )
+            .arg(
+                Arg::with_name("output_directory")
+                    .index(1)
+                    .value_name("DIR")
+                    .takes_value(true)
+                    .help("Output directory for the snapshot [default: --snapshot-archive-path if present else --ledger directory]"),
+            )
+            .arg(
+                Arg::with_name("starting_slot")
+                    .long("starting-slot")
+                    .help("Slot to create the minimized snapshot at")
+                    .takes_value(true)
+                    .required(true)
+            )
+            .arg(
+                Arg::with_name("ending_slot")
+                    .long("ending-slot")
+                    .help("Ending slot in range for transactions of interest")
+                    .takes_value(true)
+                    .required(true)
+            )
+        ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -2726,6 +2765,211 @@ fn main() {
                         exit(1);
                     }
                 }
+            }
+            ("create-minimized-snapshot", Some(arg_matches)) => {
+                let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
+                    .unwrap_or_else(|_| match &snapshot_archive_path {
+                        Some(snapshot_archive_path) => snapshot_archive_path.clone(),
+                        None => ledger_path.clone(),
+                    });
+                let snapshot_version = arg_matches.value_of("snapshot_version").map_or(
+                    SnapshotVersion::default(),
+                    |s| {
+                        s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
+                            eprintln!("Error: {}", e);
+                            exit(1)
+                        })
+                    },
+                );
+
+                let snapshot_archive_format = {
+                    let archive_format_str =
+                        value_t_or_exit!(arg_matches, "snapshot_archive_format", String);
+                    ArchiveFormat::from_cli_arg(&archive_format_str).unwrap_or_else(|| {
+                        panic!("Archive format not recognized: {}", archive_format_str)
+                    })
+                };
+
+                let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
+                let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+                if ending_slot <= starting_slot {
+                    eprintln!(
+                        "ending_slot ({}) must be greater than starting_slot ({})",
+                        ending_slot, starting_slot
+                    );
+                    exit(1);
+                }
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                assert!(
+                    blockstore.meta(ending_slot).unwrap().is_some(),
+                    "Ending slot doesn't exist"
+                );
+
+                // Load the bank forks
+                let snapshot_slot = starting_slot;
+                let bank_forks = load_bank_forks(
+                    arg_matches,
+                    &genesis_config,
+                    &blockstore,
+                    ProcessOptions {
+                        halt_at_slot: Some(snapshot_slot),
+                        poh_verify: false,
+                        ..ProcessOptions::default()
+                    },
+                    snapshot_archive_path,
+                    incremental_snapshot_archive_path,
+                );
+                if let Err(err) = bank_forks {
+                    error!("Unable to load bank forks: {:?}", err);
+                    exit(1);
+                }
+
+                let (bank_forks, _) = Some(bank_forks).unwrap().unwrap();
+                let bank_forks = bank_forks.read().unwrap();
+                let bank = bank_forks.get(snapshot_slot).unwrap();
+
+                let mut minimized_account_set = HashSet::new();
+                for slot in starting_slot..=ending_slot {
+                    if let Ok(entries) = blockstore.get_slot_entries(slot, 0) {
+                        for entry in entries {
+                            for transaction in entry.transactions {
+                                let tx = bank
+                                    .verify_transaction(
+                                        transaction,
+                                        TransactionVerificationMode::HashOnly,
+                                    )
+                                    .unwrap();
+                                for pubkey in tx.message().account_keys().iter() {
+                                    minimized_account_set.insert(*pubkey);
+
+                                    if let Some(account) = bank.get_account(pubkey) {
+                                        minimized_account_set.insert(*account.owner());
+                                        if account.executable() {
+                                            if bpf_loader_upgradeable::check_id(account.owner()) {
+                                                if let Ok(UpgradeableLoaderState::Program {
+                                                    programdata_address,
+                                                }) = account.state()
+                                                {
+                                                    minimized_account_set
+                                                        .insert(programdata_address);
+
+                                                    error!(
+                                                        "found a bpf upgradeable program: {} => {}",
+                                                        pubkey, programdata_address
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                error!("got accounts from slots...");
+
+                for (pubkey, _) in bank.vote_accounts().iter() {
+                    minimized_account_set.insert(*pubkey);
+                }
+
+                for (pubkey, _) in bank
+                    .get_program_accounts(&stake::program::id(), &ScanConfig::default())
+                    .unwrap()
+                    .into_iter()
+                {
+                    minimized_account_set.insert(pubkey);
+                }
+
+                for (pubkey, _) in genesis_config.accounts.iter() {
+                    minimized_account_set.insert(*pubkey);
+                }
+
+                for (pubkey, _) in bank.feature_set.active.iter() {
+                    minimized_account_set.insert(*pubkey);
+                }
+
+                for pubkey in bank.feature_set.inactive.iter() {
+                    minimized_account_set.insert(*pubkey);
+                }
+
+                for pubkey in solana_sdk::sysvar::ALL_IDS.iter() {
+                    minimized_account_set.insert(*pubkey);
+                }
+
+                for pubkey in solana_runtime::builtins::get_pubkeys() {
+                    minimized_account_set.insert(pubkey);
+                }
+
+                minimized_account_set.insert(solana_sdk::bpf_loader::id());
+                minimized_account_set.insert(solana_sdk::bpf_loader_deprecated::id());
+                minimized_account_set.insert(solana_sdk::bpf_loader_upgradeable::id());
+                minimized_account_set.insert(solana_sdk::ed25519_program::id());
+                minimized_account_set.insert(solana_sdk::secp256k1_program::id());
+                minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
+
+                let mut minimized_slot_set = HashSet::new();
+                minimized_account_set.iter().for_each(|pubkey| {
+                    if let Some(read_entry) = bank
+                        .accounts()
+                        .accounts_db
+                        .accounts_index
+                        .get_account_read_entry(pubkey)
+                    {
+                        for (slot, _) in read_entry.slot_list() {
+                            minimized_slot_set.insert(*slot);
+                        }
+                    }
+                });
+
+                error!(
+                    "minimized slot set has {} slots...",
+                    minimized_slot_set.len()
+                );
+
+                let mut dead_slots = Vec::new();
+                for storages in bank.get_snapshot_storages(None) {
+                    let slot = storages.first().unwrap().slot();
+
+                    if minimized_slot_set.contains(&slot) {
+                        bank.accounts()
+                            .accounts_db
+                            .filter_storages(storages, &minimized_account_set);
+                    } else {
+                        dead_slots.push(slot);
+                    }
+                }
+
+                bank.accounts()
+                    .accounts_db
+                    .remove_slots_for_minimize(dead_slots.iter());
+                bank.set_capitalization();
+
+                let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+                    ledger_path,
+                    &bank,
+                    Some(snapshot_version),
+                    output_directory.clone(),
+                    output_directory,
+                    snapshot_archive_format,
+                    usize::MAX,
+                    usize::MAX,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Unable to create snapshot: {}", err);
+                    exit(1);
+                });
+
+                println!(
+                    "Successfully created snapshot for slot {}, hash {}: {}",
+                    bank.slot(),
+                    bank.hash(),
+                    full_snapshot_archive_info.path().display(),
+                );
+
+                info!("Success");
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();

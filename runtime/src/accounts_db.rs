@@ -3249,6 +3249,81 @@ impl AccountsDb {
         total_accounts_after_shrink
     }
 
+    pub fn filter_storages(
+        &self,
+        storages: Vec<Arc<AccountStorageEntry>>,
+        minimized_account_set: &HashSet<Pubkey>,
+    ) {
+        for storage in storages {
+            self.filter_storage(storage, minimized_account_set);
+        }
+    }
+
+    fn filter_storage(
+        &self,
+        storage: Arc<AccountStorageEntry>,
+        minimized_account_set: &HashSet<Pubkey>,
+    ) {
+        let slot = storage.slot();
+        let (stored_accounts, num_stores, original_bytes) =
+            self.get_unique_accounts_from_storages(std::iter::once(&storage));
+
+        // sort by pubkey to keep account index lookups close
+        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        let (unfiltered_accounts, filtered_accounts): (_, Vec<_>) = stored_accounts
+            .iter()
+            .partition(|(pubkey, _account)| minimized_account_set.contains(pubkey));
+
+        error!(
+            "filtered out {}/{} accounts...",
+            filtered_accounts.len(),
+            filtered_accounts.len() + unfiltered_accounts.len()
+        );
+
+        filtered_accounts.iter().for_each(|(pubkey, account)| {
+            if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                read_entry.unref();
+            }
+        });
+
+        let total_bytes: usize = unfiltered_accounts
+            .iter()
+            .map(|(_pubkey, account)| account.account_size)
+            .sum();
+
+        let aligned_total: u64 = Self::page_align(total_bytes as u64);
+        if aligned_total > 0 {
+            let mut accounts = Vec::with_capacity(unfiltered_accounts.len());
+            let mut hashes = Vec::with_capacity(unfiltered_accounts.len());
+            let mut write_versions = Vec::with_capacity(unfiltered_accounts.len());
+
+            for (pubkey, alive_account) in unfiltered_accounts {
+                accounts.push((pubkey, &alive_account.account));
+                hashes.push(alive_account.account.hash);
+                write_versions.push(alive_account.account.meta.write_version);
+            }
+
+            let (new_storage, time) = self.get_store_for_shrink(slot, aligned_total);
+
+            self.store_accounts_frozen(
+                (slot, &accounts[..]),
+                Some(&hashes),
+                Some(&new_storage),
+                Some(Box::new(write_versions.into_iter())),
+            );
+
+            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+        }
+
+        let mut dead_storages = vec![storage.clone()];
+        self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
+            store.append_vec_id() != storage.append_vec_id()
+        });
+        self.drop_or_recycle_stores(dead_storages);
+    }
+
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
     /// for stores not retained, insert in 'dirty_stores' and 'dead_storages'
@@ -4894,6 +4969,17 @@ impl AccountsDb {
             }
         }
         recycle_stores_write_elapsed.as_us()
+    }
+
+    pub fn remove_slots_for_minimize<'a>(
+        &self,
+        slots_to_remove: impl Iterator<Item = &'a Slot> + Clone,
+    ) {
+        self.purge_slots_from_cache_and_store(
+            slots_to_remove,
+            &self.external_purge_slots_stats,
+            true,
+        );
     }
 
     /// Purges every slot in `removed_slots` from both the cache and storage. This includes
