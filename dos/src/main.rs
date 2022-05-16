@@ -40,6 +40,7 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 use {
+    crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
@@ -242,9 +243,65 @@ impl TransactionGenerator {
 // The most computationally expensive work is signing new transactions.
 // Here we generate them in `num_gen_threads` threads.
 //
+enum TransactionMsg {
+    Transaction(Vec<Vec<u8>>),
+    Exit,
+}
 /// number of transactions in one batch for sendmmsg
-const SEND_BATCH_MAX_SIZE: usize = 1 << 10;
+const SEND_BATCH_MAX_SIZE: usize = 1 << 14;
 
+fn create_sender_thread(
+    tx_receiver: Receiver<TransactionMsg>,
+    mut n_alive_threads: usize,
+    target: &SocketAddr,
+) -> thread::JoinHandle<()> {
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let target = target.clone();
+    let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
+
+    let client = UdpTpuConnection::new(socket, target);
+
+    thread::Builder::new().name("Sender".to_string()).spawn(move || {
+        let mut count: usize = 0;
+        let mut error_count = 0;
+        let client_stats = ClientStats::default();
+
+        loop {
+            select! {
+                recv(tx_receiver) -> msg => {
+                    match msg {
+                        Ok(TransactionMsg::Transaction(data)) => {
+                            let res = client.send_wire_transaction_batch(&data, &client_stats);
+
+                            if res.is_err() {
+                                error_count += data.len();
+                            }
+                            count += data.len();
+                        }
+                        Ok(TransactionMsg::Exit) => {
+                            info!("Worker is done");
+                            n_alive_threads -= 1;
+                            if n_alive_threads == 0 {
+                                break;
+                            }
+                        }
+                        _ => panic!("Sender panics"),
+                    }
+                },
+                recv(timer_receiver) -> _ => {
+                    info!("tx_receiver queue len: {}", tx_receiver.len());
+                    info!("Count: {}, error count: {}, rps: {}",
+                        count,
+                        error_count,
+                        compute_rate_per_second(count),
+                    );
+                    count = 0;
+                    error_count = 0;
+                }
+            }
+        }
+    }).unwrap()
+}
 fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> usize {
     if max_iterations_per_thread == 0 {
         return SEND_BATCH_MAX_SIZE
@@ -253,14 +310,13 @@ fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> 
 }
 
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
+    tx_sender: &Sender<TransactionMsg>,
     max_iterations_per_thread: usize,
     transaction_generator: &mut TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
-    target: &SocketAddr,
 ) -> thread::JoinHandle<()> {
-    let target = target.clone();
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let tx_sender = tx_sender.clone();
 
     let mut transaction_generator = transaction_generator.clone();
     let transaction_params: &TransactionParams = &transaction_generator.transaction_params;
@@ -288,18 +344,11 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
         let mut it = indexes.iter().permutations(permutation_size);
 
-        let udp_client = UdpTpuConnection::new(socket, target);
-        let client_stats = ClientStats::default();
-
-        let mut count = 0;
         let mut total_count = 0;
-        let mut error_count = 0;
-        let mut last_log = Instant::now();
 
-        let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
         loop {
             let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
-            data.clear();
+            let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
             for _ in 0..send_batch_size {
                 let chunk_keypairs = if generate_keypairs {
                     let mut permutation = it.next();
@@ -319,24 +368,11 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                 data.push(bincode::serialize(&tx).unwrap());
             }
 
-            let res = udp_client.send_wire_transaction_batch(&data, &client_stats);
+            let _ = tx_sender.send(TransactionMsg::Transaction(data));
 
-            if res.is_err() {
-                error_count += send_batch_size;
-            }
-            count += send_batch_size;
             total_count += send_batch_size;
-            if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
-                info!(
-                    "count: {}, errors: {}, rps: {}",
-                    count,
-                    error_count,
-                    compute_rate_per_second(count)
-                );
-                last_log = Instant::now();
-                count = 0;
-            }
             if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
+                let _ = tx_sender.send(TransactionMsg::Exit);
                 break;
             }
         }
@@ -507,6 +543,9 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     );
 
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let (tx_sender, tx_receiver) = unbounded();
+
+    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target); //, addr);
     let mut thread_id = 0;
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
@@ -519,14 +558,17 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             thread_id += 1;
 
             create_generator_thread(
+                &tx_sender,
                 num_iterations,
                 &mut transaction_generator,
                 client.clone(),
                 payer,
-                &target.clone(),
             )
         })
         .collect();
+    if let Err(err) = sender_thread.join() {
+        println!("join() failed with: {:?}", err);
+    }
     for t_generator in tx_generator_threads {
         if let Err(err) = t_generator.join() {
             println!("join() failed with: {:?}", err);
