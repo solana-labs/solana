@@ -3,7 +3,7 @@ use {
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     std::{
-        net::{SocketAddr, UdpSocket},
+        net::SocketAddr,
         sync::{atomic::AtomicU64, Arc},
     },
 };
@@ -24,7 +24,7 @@ pub struct ClientStats {
 }
 
 pub trait TpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self;
+    fn new(tpu_addr: SocketAddr) -> Self;
 
     fn tpu_addr(&self) -> &SocketAddr;
 
