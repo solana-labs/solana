@@ -59,7 +59,7 @@ pub struct DosClientParameters {
     pub transaction_params: TransactionParams,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Args, Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
 #[clap(rename_all = "kebab-case")]
 pub struct TransactionParams {
     #[clap(
