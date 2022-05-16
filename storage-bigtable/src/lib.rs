@@ -58,7 +58,7 @@ pub enum Error {
     SignatureNotFound,
 
     #[error("tokio error")]
-    TokioError(JoinError),
+    TokioJoinError(JoinError),
 }
 
 impl std::convert::From<bigtable::Error> for Error {
@@ -822,7 +822,7 @@ impl LedgerStorage {
             match result {
                 Err(err) => {
                     if maybe_first_err.is_none() {
-                        maybe_first_err = Some(Error::TokioError(err));
+                        maybe_first_err = Some(Error::TokioJoinError(err));
                     }
                 }
                 Ok(Err(err)) => {

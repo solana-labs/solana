@@ -1,4 +1,3 @@
-use std::cmp::max;
 use {
     crate::blockstore::Blockstore,
     crossbeam_channel::{bounded, unbounded},
@@ -6,7 +5,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
-        cmp::min,
+        cmp::{max, min},
         collections::HashSet,
         result::Result,
         sync::{
@@ -177,17 +176,10 @@ pub async fn upload_confirmed_blocks(
                         let start = Instant::now();
                         let mut num_blocks_read = 0;
 
-                        loop {
+                        while let Ok(slot) = slot_receiver.recv() {
                             if exit.load(Ordering::Relaxed) {
                                 break;
                             }
-
-                            let slot = match slot_receiver.recv() {
-                                Ok(slot) => slot,
-                                Err(_) => {
-                                    break;
-                                }
-                            };
 
                             let _ = match blockstore.get_rooted_block(slot, true) {
                                 Ok(confirmed_block) => {
@@ -244,10 +236,10 @@ pub async fn upload_confirmed_blocks(
 
         for result in futures::future::join_all(uploads).await {
             if let Err(err) = result {
-                error!("upload_confirmed_block() failed: {:?}", err);
+                error!("upload_confirmed_block() join failed: {:?}", err);
                 failures += 1;
             } else if let Err(err) = result.unwrap() {
-                error!("upload_confirmed_block() failed: {:?}", err);
+                error!("upload_confirmed_block() upload failed: {:?}", err);
                 failures += 1;
             }
         }
@@ -259,8 +251,7 @@ pub async fn upload_confirmed_blocks(
     measure.stop();
     info!("{}", measure);
 
-    let blockstore_results: Vec<std::thread::Result<BlockstoreLoadStats>> =
-        loader_threads.into_iter().map(|t| t.join()).collect();
+    let blockstore_results = loader_threads.into_iter().map(|t| t.join());
 
     let mut blockstore_num_blocks_read = 0;
     let mut blockstore_load_wallclock = Duration::default();
