@@ -115,8 +115,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
-        invoke_context.set_orig_account_lengths(vec![]).unwrap();
-        let mut vm = create_vm(&executable, &mut inner_iter, invoke_context).unwrap();
+        let mut vm = create_vm(&executable, &mut inner_iter, vec![], invoke_context).unwrap();
 
         println!("Interpreted:");
         assert_eq!(
@@ -220,9 +219,6 @@ fn bench_create_vm(bencher: &mut Bencher) {
                 .unwrap(),
         )
         .unwrap();
-        invoke_context
-            .set_orig_account_lengths(account_lengths)
-            .unwrap();
 
         let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &elf,
@@ -233,7 +229,13 @@ fn bench_create_vm(bencher: &mut Bencher) {
         .unwrap();
 
         bencher.iter(|| {
-            let _ = create_vm(&executable, serialized.as_slice_mut(), invoke_context).unwrap();
+            let _ = create_vm(
+                &executable,
+                serialized.as_slice_mut(),
+                account_lengths.clone(),
+                invoke_context,
+            )
+            .unwrap();
         });
     });
 }
@@ -268,10 +270,13 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
-        invoke_context
-            .set_orig_account_lengths(account_lengths)
-            .unwrap();
-        let mut vm = create_vm(&executable, serialized.as_slice_mut(), invoke_context).unwrap();
+        let mut vm = create_vm(
+            &executable,
+            serialized.as_slice_mut(),
+            account_lengths,
+            invoke_context,
+        )
+        .unwrap();
 
         let mut measure = Measure::start("tune");
         let _ = vm.execute_program_interpreted(&mut instruction_meter);

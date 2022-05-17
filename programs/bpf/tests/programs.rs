@@ -246,11 +246,13 @@ fn run_program(name: &str) -> u64 {
                 .unwrap();
             let mut parameter_bytes = parameter_bytes.clone();
             {
-                invoke_context
-                    .set_orig_account_lengths(account_lengths.clone())
-                    .unwrap();
-                let mut vm =
-                    create_vm(&executable, parameter_bytes.as_slice_mut(), invoke_context).unwrap();
+                let mut vm = create_vm(
+                    &executable,
+                    parameter_bytes.as_slice_mut(),
+                    account_lengths.clone(),
+                    invoke_context,
+                )
+                .unwrap();
                 let result = if i == 0 {
                     vm.execute_program_interpreted(&mut instruction_meter)
                 } else {
@@ -3553,5 +3555,58 @@ fn test_get_minimum_delegation() {
     let account_metas = vec![AccountMeta::new_readonly(stake::program::id(), false)];
     let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
+}
+
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_inner_instruction_alignment_checks() {
+    solana_logger::setup();
+
+    let GenesisConfigInfo {
+        mut genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(50);
+    genesis_config
+        .accounts
+        .remove(&solana_sdk::feature_set::disable_deprecated_loader::id())
+        .unwrap();
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank_client = BankClient::new(bank);
+
+    // load aligned program
+    let noop = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_noop",
+    );
+
+    // Load unaligned program
+    let inner_instruction_alignment_check = load_bpf_program(
+        &bank_client,
+        &bpf_loader_deprecated::id(),
+        &mint_keypair,
+        "solana_bpf_rust_inner_instruction_alignment_check",
+    );
+
+    // invoke unaligned program, which will call aligned program twice,
+    // unaligned should be allowed once invoke completes
+    let mut instruction = Instruction::new_with_bytes(
+        inner_instruction_alignment_check,
+        &[0],
+        vec![
+            AccountMeta::new_readonly(noop, false),
+            AccountMeta::new_readonly(mint_keypair.pubkey(), false),
+        ],
+    );
+
+    instruction.data[0] += 1;
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert!(result.is_ok());
 }
