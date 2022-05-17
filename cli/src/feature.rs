@@ -5,9 +5,9 @@ use {
     },
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     console::style,
-    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    serde::{Deserialize, Serialize},
     solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
-    solana_cli_output::{QuietDisplay, VerboseDisplay},
+    solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_client::{client_error::ClientError, rpc_client::RpcClient},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
@@ -398,50 +398,6 @@ pub struct CliSoftwareVersionStats {
     rpc_percent: f32,
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone)]
-struct CliVersion(Option<semver::Version>);
-
-impl fmt::Display for CliVersion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match &self.0 {
-            None => "unknown".to_string(),
-            Some(version) => version.to_string(),
-        };
-        write!(f, "{}", s)
-    }
-}
-
-impl FromStr for CliVersion {
-    type Err = semver::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let version_option = if s == "unknown" {
-            None
-        } else {
-            Some(semver::Version::from_str(s)?)
-        };
-        Ok(CliVersion(version_option))
-    }
-}
-
-impl Serialize for CliVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for CliVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: &str = Deserialize::deserialize(deserializer)?;
-        CliVersion::from_str(s).map_err(serde::de::Error::custom)
-    }
-}
-
 pub trait FeatureSubCommands {
     fn feature_subcommands(self) -> Self;
 }
@@ -634,7 +590,8 @@ fn cluster_info_stats(rpc_client: &RpcClient) -> Result<ClusterInfoStats, Client
                 contact_info.rpc.is_some(),
                 contact_info
                     .version
-                    .and_then(|v| semver::Version::parse(&v).ok()),
+                    .and_then(|v| CliVersion::from_str(&v).ok())
+                    .unwrap_or_else(CliVersion::unknown_version),
             )
         })
         .collect::<Vec<_>>();
@@ -661,7 +618,7 @@ fn cluster_info_stats(rpc_client: &RpcClient) -> Result<ClusterInfoStats, Client
     for (node_id, feature_set, is_rpc, version) in cluster_info_list {
         let feature_set = feature_set.unwrap_or(0);
         let stats_entry = cluster_info_stats
-            .entry((feature_set, CliVersion(version)))
+            .entry((feature_set, version))
             .or_default();
 
         if let Some(vote_stake) = vote_stakes.get(&node_id) {
@@ -721,11 +678,11 @@ fn feature_activation_allowed(
 
     let tool_version = solana_version::Version::default();
     let tool_feature_set = tool_version.feature_set;
-    let tool_software_version = CliVersion(Some(semver::Version::new(
+    let tool_software_version = CliVersion::from(semver::Version::new(
         tool_version.major as u64,
         tool_version.minor as u64,
         tool_version.patch as u64,
-    )));
+    ));
     let (stake_allowed, rpc_allowed) = feature_set_stats
         .get(&tool_feature_set)
         .map(

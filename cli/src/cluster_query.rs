@@ -14,6 +14,7 @@ use {
         offline::{blockhash_arg, BLOCKHASH_ARG},
     },
     solana_cli_output::{
+        cli_version::CliVersion,
         display::{
             build_balance_message, format_labeled_address, new_spinner_progress_bar,
             println_transaction, unix_timestamp_to_string, writeln_name_value,
@@ -1872,13 +1873,13 @@ pub fn process_show_validators(
 
     progress_bar.set_message("Fetching version information...");
     let mut node_version = HashMap::new();
-    let unknown_version = "unknown".to_string();
     for contact_info in rpc_client.get_cluster_nodes()? {
         node_version.insert(
             contact_info.pubkey,
             contact_info
                 .version
-                .unwrap_or_else(|| unknown_version.clone()),
+                .and_then(|version| CliVersion::from_str(&version).ok())
+                .unwrap_or_else(CliVersion::unknown_version),
         );
     }
 
@@ -1907,8 +1908,8 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
@@ -1923,15 +1924,15 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
         })
         .collect();
 
-    let mut stake_by_version: BTreeMap<_, CliValidatorsStakeByVersion> = BTreeMap::new();
+    let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
         let mut entry = stake_by_version
             .entry(validator.version.clone())
