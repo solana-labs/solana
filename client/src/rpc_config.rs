@@ -22,6 +22,7 @@ pub struct RpcSendTransactionConfig {
     pub preflight_commitment: Option<CommitmentLevel>,
     pub encoding: Option<UiTransactionEncoding>,
     pub max_retries: Option<usize>,
+    pub min_context_slot: Option<Slot>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -42,6 +43,7 @@ pub struct RpcSimulateTransactionConfig {
     pub commitment: Option<CommitmentConfig>,
     pub encoding: Option<UiTransactionEncoding>,
     pub accounts: Option<RpcSimulateTransactionAccountsConfig>,
+    pub min_context_slot: Option<Slot>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -132,6 +134,7 @@ pub struct RpcEpochConfig {
     pub epoch: Option<Epoch>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub min_context_slot: Option<Slot>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -141,6 +144,7 @@ pub struct RpcAccountInfoConfig {
     pub data_slice: Option<UiDataSliceConfig>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub min_context_slot: Option<Slot>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -208,6 +212,7 @@ pub struct RpcSignaturesForAddressConfig {
     pub limit: Option<usize>,
     #[serde(flatten)]
     pub commitment: Option<CommitmentConfig>,
+    pub min_context_slot: Option<Slot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,4 +321,12 @@ impl RpcBlocksConfigWrapper {
             RpcBlocksConfigWrapper::CommitmentOnly(commitment) => (None, *commitment),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcContextConfig {
+    #[serde(flatten)]
+    pub commitment: Option<CommitmentConfig>,
+    pub min_context_slot: Option<Slot>,
 }

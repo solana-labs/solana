@@ -3691,6 +3691,7 @@ impl RpcClient {
     ///             length: 5,
     ///         }),
     ///         commitment: Some(CommitmentConfig::processed()),
+    ///         min_context_slot: Some(1234),
     ///     },
     ///     with_context: Some(false),
     /// };
