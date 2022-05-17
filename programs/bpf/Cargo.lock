@@ -5227,6 +5227,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
+ "futures 0.3.21",
  "goauth",
  "log",
  "openssl",
@@ -5240,7 +5241,12 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
+<<<<<<< HEAD
  "tonic 0.7.1",
+=======
+ "tokio",
+ "tonic 0.7.2",
+>>>>>>> 6bcadc755 (Speedup bigtable block upload by factor of 8-10x (#24534))
  "zstd",
 ]
 
