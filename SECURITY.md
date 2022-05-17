@@ -65,6 +65,7 @@ If this issue is eligible for a bounty, prefix the title of the security advisor
 - [Bounty Category: Critical: DoS Attacks]
 - [Bounty Category: Supply Chain Attacks]
 - [Bounty Category: RPC]
+
 Confirm with the reporter that they agree with the severity assessment, and discuss as required to reach a conclusion.
 
 We currently do not use the Github workflow to publish security advisories. Once the issue and fix have been disclosed, and a bounty category is assessed if appropriate, the GitHub security advisory is no longer needed and can be closed.
