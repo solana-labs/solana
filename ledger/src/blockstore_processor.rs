@@ -3585,7 +3585,7 @@ pub mod tests {
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
         let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
-            .map(|(vote_pubkey, _, _)| vote_pubkey)
+            .map(|(vote_pubkey, ..)| vote_pubkey)
             .collect();
         assert_eq!(successes, expected_successful_voter_pubkeys);
     }

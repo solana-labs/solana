@@ -307,7 +307,7 @@ impl ClusterInfoVoteListener {
                 !packet_batch.packets[0].meta.discard()
             })
             .filter_map(|(tx, packet_batch)| {
-                let (vote_account_key, vote, _) = vote_parser::parse_vote_transaction(&tx)?;
+                let (vote_account_key, vote, ..) = vote_parser::parse_vote_transaction(&tx)?;
                 let slot = vote.last_voted_slot()?;
                 let epoch = epoch_schedule.get_epoch(slot);
                 let authorized_voter = root_bank
@@ -570,6 +570,7 @@ impl ClusterInfoVoteListener {
     fn track_new_votes_and_notify_confirmations(
         vote: VoteTransaction,
         vote_pubkey: &Pubkey,
+        vote_transaction_signature: Signature,
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
@@ -678,7 +679,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(*vote_pubkey, vote);
+            subscriptions.notify_vote(*vote_pubkey, vote, vote_transaction_signature);
             let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }
@@ -703,10 +704,11 @@ impl ClusterInfoVoteListener {
             .filter_map(vote_parser::parse_vote_transaction)
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
-        for ((vote_pubkey, vote, _), is_gossip) in votes {
+        for ((vote_pubkey, vote, _switch_proof, signature), is_gossip) in votes {
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
+                signature,
                 vote_tracker,
                 root_bank,
                 subscriptions,
@@ -1018,6 +1020,7 @@ mod tests {
                         vote_keypair.pubkey(),
                         VoteTransaction::from(replay_vote.clone()),
                         switch_proof_hash,
+                        Signature::default(),
                     ))
                     .unwrap();
             }
@@ -1306,6 +1309,7 @@ mod tests {
                             vote_keypair.pubkey(),
                             VoteTransaction::from(Vote::new(vec![vote_slot], Hash::default())),
                             switch_proof_hash,
+                            Signature::default(),
                         ))
                         .unwrap();
                 }
@@ -1401,6 +1405,7 @@ mod tests {
                 validator0_keypairs.vote_keypair.pubkey(),
                 VoteTransaction::from(Vote::new(vec![voted_slot], Hash::default())),
                 None,
+                Signature::default(),
             )],
             &bank,
             &subscriptions,
@@ -1446,6 +1451,7 @@ mod tests {
                 validator_keypairs[1].vote_keypair.pubkey(),
                 VoteTransaction::from(Vote::new(vec![first_slot_in_new_epoch], Hash::default())),
                 None,
+                Signature::default(),
             )],
             &new_root_bank,
             &subscriptions,
