@@ -4335,7 +4335,10 @@ mod tests {
                         ReturnDataEncoding::Base64,
                     );
                     serde_json::to_value(Response {
-                        context: RpcResponseContext { slot: 1 },
+                        context: RpcResponseContext {
+                            slot: 1,
+                            api_version: None,
+                        },
                         value: RpcSimulateTransactionResult {
                             err: None,
                             logs: None,
