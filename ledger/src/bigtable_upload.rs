@@ -1,18 +1,18 @@
 use {
     crate::blockstore::Blockstore,
-    crossbeam_channel::bounded,
+    crossbeam_channel::{bounded, unbounded},
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
-        cmp::min,
+        cmp::{max, min},
         collections::HashSet,
         result::Result,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
         },
-        time::Duration,
+        time::{Duration, Instant},
     },
 };
 
@@ -26,14 +26,19 @@ pub struct ConfirmedBlockUploadConfig {
 
 impl Default for ConfirmedBlockUploadConfig {
     fn default() -> Self {
-        const NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL: usize = 32;
+        let num_blocks_to_upload_in_parallel = num_cpus::get() / 2;
         ConfirmedBlockUploadConfig {
             force_reupload: false,
-            max_num_slots_to_check: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 4,
-            num_blocks_to_upload_in_parallel: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL,
-            block_read_ahead_depth: NUM_BLOCKS_TO_UPLOAD_IN_PARALLEL * 2,
+            max_num_slots_to_check: num_blocks_to_upload_in_parallel * 4,
+            num_blocks_to_upload_in_parallel,
+            block_read_ahead_depth: num_blocks_to_upload_in_parallel * 2,
         }
     }
+}
+
+struct BlockstoreLoadStats {
+    pub num_blocks_read: usize,
+    pub elapsed: Duration,
 }
 
 pub async fn upload_confirmed_blocks(
@@ -147,42 +152,56 @@ pub async fn upload_confirmed_blocks(
         last_slot
     );
 
-    // Load the blocks out of blockstore in a separate thread to allow for concurrent block uploading
-    let (_loader_thread, receiver) = {
+    // Distribute the blockstore reading across a few background threads to speed up the bigtable uploading
+    let (loader_threads, receiver): (Vec<_>, _) = {
         let exit = exit.clone();
 
         let (sender, receiver) = bounded(config.block_read_ahead_depth);
+
+        let (slot_sender, slot_receiver) = unbounded();
+        let _ = blocks_to_upload
+            .into_iter()
+            .for_each(|b| slot_sender.send(b).unwrap());
+        drop(slot_sender);
+
         (
-            std::thread::spawn(move || {
-                let mut measure = Measure::start("block loader thread");
-                for (i, slot) in blocks_to_upload.iter().enumerate() {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
+            (0..config.num_blocks_to_upload_in_parallel)
+                .map(|_| {
+                    let blockstore = blockstore.clone();
+                    let sender = sender.clone();
+                    let slot_receiver = slot_receiver.clone();
+                    let exit = exit.clone();
 
-                    let _ = match blockstore.get_rooted_block(*slot, true) {
-                        Ok(confirmed_block) => sender.send((*slot, Some(confirmed_block))),
-                        Err(err) => {
-                            warn!(
-                                "Failed to get load confirmed block from slot {}: {:?}",
-                                slot, err
-                            );
-                            sender.send((*slot, None))
+                    std::thread::spawn(move || {
+                        let start = Instant::now();
+                        let mut num_blocks_read = 0;
+
+                        while let Ok(slot) = slot_receiver.recv() {
+                            if exit.load(Ordering::Relaxed) {
+                                break;
+                            }
+
+                            let _ = match blockstore.get_rooted_block(slot, true) {
+                                Ok(confirmed_block) => {
+                                    num_blocks_read += 1;
+                                    sender.send((slot, Some(confirmed_block)))
+                                }
+                                Err(err) => {
+                                    warn!(
+                                        "Failed to get load confirmed block from slot {}: {:?}",
+                                        slot, err
+                                    );
+                                    sender.send((slot, None))
+                                }
+                            };
                         }
-                    };
-
-                    if i > 0 && i % config.num_blocks_to_upload_in_parallel == 0 {
-                        info!(
-                            "{}% of blocks processed ({}/{})",
-                            i * 100 / blocks_to_upload.len(),
-                            i,
-                            blocks_to_upload.len()
-                        );
-                    }
-                }
-                measure.stop();
-                info!("{} to load {} blocks", measure, blocks_to_upload.len());
-            }),
+                        BlockstoreLoadStats {
+                            num_blocks_read,
+                            elapsed: start.elapsed(),
+                        }
+                    })
+                })
+                .collect(),
             receiver,
         )
     };
@@ -207,12 +226,20 @@ pub async fn upload_confirmed_blocks(
                 num_blocks -= 1;
                 None
             }
-            Some(confirmed_block) => Some(bigtable.upload_confirmed_block(slot, confirmed_block)),
+            Some(confirmed_block) => {
+                let bt = bigtable.clone();
+                Some(tokio::spawn(async move {
+                    bt.upload_confirmed_block(slot, confirmed_block).await
+                }))
+            }
         });
 
         for result in futures::future::join_all(uploads).await {
-            if result.is_err() {
-                error!("upload_confirmed_block() failed: {:?}", result.err());
+            if let Err(err) = result {
+                error!("upload_confirmed_block() join failed: {:?}", err);
+                failures += 1;
+            } else if let Err(err) = result.unwrap() {
+                error!("upload_confirmed_block() upload failed: {:?}", err);
                 failures += 1;
             }
         }
@@ -223,6 +250,34 @@ pub async fn upload_confirmed_blocks(
 
     measure.stop();
     info!("{}", measure);
+
+    let blockstore_results = loader_threads.into_iter().map(|t| t.join());
+
+    let mut blockstore_num_blocks_read = 0;
+    let mut blockstore_load_wallclock = Duration::default();
+    let mut blockstore_errors = 0;
+
+    for r in blockstore_results {
+        match r {
+            Ok(stats) => {
+                blockstore_num_blocks_read += stats.num_blocks_read;
+                blockstore_load_wallclock = max(stats.elapsed, blockstore_load_wallclock);
+            }
+            Err(e) => {
+                error!("error joining blockstore thread: {:?}", e);
+                blockstore_errors += 1;
+            }
+        }
+    }
+
+    info!(
+        "blockstore upload took {:?} for {} blocks ({:.2} blocks/s) errors: {}",
+        blockstore_load_wallclock,
+        blockstore_num_blocks_read,
+        blockstore_num_blocks_read as f64 / blockstore_load_wallclock.as_secs_f64(),
+        blockstore_errors
+    );
+
     if failures > 0 {
         Err(format!("Incomplete upload, {} operations failed", failures).into())
     } else {

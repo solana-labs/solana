@@ -5875,6 +5875,7 @@ dependencies = [
  "bzip2",
  "enum-iterator",
  "flate2",
+ "futures 0.3.21",
  "goauth",
  "log",
  "openssl",
@@ -5888,6 +5889,7 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
+ "tokio",
  "tonic 0.7.2",
  "zstd",
 ]
