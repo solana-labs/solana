@@ -3,7 +3,9 @@
 extern crate test;
 
 use {
+    rayon::{iter::ParallelIterator, prelude::*},
     solana_perf::turbine_merkle::{TurbineMerkleHash, TurbineMerkleTree},
+    solana_sdk::signature::{Keypair, Signer},
     test::Bencher,
 };
 
@@ -168,4 +170,80 @@ fn bench_merkle_create_tree_from_bufs_vec_par_64_16(b: &mut Bencher) {
 #[bench]
 fn bench_merkle_create_tree_from_bufs_vec_par_64_8(b: &mut Bencher) {
     bench_merkle_create_tree_from_bufs_vec_par(b, 64, 8);
+}
+
+#[bench]
+fn bench_merkle_fec64_outgoing(b: &mut Bencher) {
+    let keypair = Keypair::new();
+    let packets = create_random_packets(64);
+    b.iter(|| {
+        let bufs_vec: Vec<_> = packets.iter().map(|p| vec![&p[..333], &p[333..]]).collect();
+        let tree = TurbineMerkleTree::new_from_bufs_vec_par(&bufs_vec, 16);
+        let root_hash = tree.root();
+        let _signature = keypair.sign_message(root_hash.as_ref());
+        let _proofs: Vec<_> = (0..64)
+            .collect::<Vec<_>>()
+            .par_chunks(16)
+            .map(|slice| {
+                slice
+                    .iter()
+                    .map(|i| (i, tree.prove_fec64(*i)))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+    });
+}
+
+#[bench]
+fn bench_merkle_fec64_incoming(b: &mut Bencher) {
+    let keypair = Keypair::new();
+    let packets = create_random_packets(64);
+    let bufs_vec: Vec<_> = packets.iter().map(|p| vec![&p[..333], &p[333..]]).collect();
+    let tree = TurbineMerkleTree::new_from_bufs_vec_par(&bufs_vec, 16);
+    let root_hash = tree.root();
+    let signature = keypair.sign_message(root_hash.as_ref());
+    let proof_data: Vec<_> = bufs_vec
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (i, v, &signature, tree.prove_fec64(i)))
+        .collect();
+    b.iter(|| {
+        proof_data.par_chunks(16).for_each(|slice| {
+            slice.iter().for_each(|(i, v, sig, proof)| {
+                let leaf_hash = TurbineMerkleHash::hash(v);
+                assert!(proof.verify(&root_hash, &leaf_hash, *i));
+                assert!(sig.verify(keypair.pubkey().as_ref(), root_hash.as_ref()));
+            });
+        });
+    });
+}
+
+#[bench]
+fn bench_signature_fec64_outgoing(b: &mut Bencher) {
+    let keypair = Keypair::new();
+    let packets = create_random_packets(64);
+    b.iter(|| {
+        packets.par_chunks(16).for_each(|slice| {
+            for p in slice {
+                keypair.sign_message(p);
+            }
+        });
+    });
+}
+
+#[bench]
+fn bench_signature_fec64_incoming(b: &mut Bencher) {
+    let keypair = Keypair::new();
+    let packets = create_random_packets(64);
+    let sig_data: Vec<_> = packets
+        .iter()
+        .map(|p| (p, keypair.sign_message(p)))
+        .collect();
+    b.iter(|| {
+        sig_data.par_chunks(16).for_each(|slice| {
+            for (p, s) in slice {
+                assert!(s.verify(keypair.pubkey().as_ref(), p));
+            }
+        });
+    });
 }

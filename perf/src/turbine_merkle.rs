@@ -14,19 +14,6 @@ pub const TURBINE_MERKLE_PROOF_BYTES_FEC64: usize =
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleHash([u8; TURBINE_MERKLE_HASH_BYTES]);
 
-#[repr(transparent)]
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleProof(Vec<TurbineMerkleHash>);
-
-#[repr(transparent)]
-#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_LENGTH_FEC64]);
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TurbineMerkleTree {
-    tree: Vec<TurbineMerkleHash>,
-}
-
 impl TurbineMerkleHash {
     pub fn hash<T>(bufs: &[T]) -> TurbineMerkleHash
     where
@@ -39,12 +26,17 @@ impl TurbineMerkleHash {
         ret.0[..].copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
         ret
     }
-}
 
-impl From<&[u8]> for TurbineMerkleHash {
-    fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() == TURBINE_MERKLE_HASH_BYTES);
-        TurbineMerkleHash(buf.try_into().unwrap())
+    fn _hash_raw<T>(bufs: &[T]) -> [u8; TURBINE_MERKLE_HASH_BYTES]
+    where
+        T: AsRef<[u8]> + Sync,
+    {
+        let mut hasher = Sha256::new();
+        bufs.iter().for_each(|b| hasher.update(b));
+        let h = hasher.finalize();
+        let mut buf = [0u8; TURBINE_MERKLE_HASH_BYTES];
+        buf.copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
+        buf
     }
 }
 
@@ -54,7 +46,30 @@ impl AsRef<[u8]> for TurbineMerkleHash {
     }
 }
 
+impl From<&[u8]> for TurbineMerkleHash {
+    fn from(buf: &[u8]) -> Self {
+        assert!(buf.len() == TURBINE_MERKLE_HASH_BYTES);
+        TurbineMerkleHash(buf.try_into().unwrap())
+    }
+}
+
+#[repr(transparent)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProof(Vec<TurbineMerkleHash>);
+
 impl TurbineMerkleProof {
+    fn generic_to_bytes(proof: &[TurbineMerkleHash]) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        let mut buf = [0u8; TURBINE_MERKLE_PROOF_BYTES_FEC64];
+        buf.chunks_exact_mut(TURBINE_MERKLE_HASH_BYTES)
+            .enumerate()
+            .for_each(|(i, b)| b.copy_from_slice(proof[i].as_ref()));
+        buf
+    }
+
+    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        Self::generic_to_bytes(&self.0[..])
+    }
+
     #[allow(clippy::integer_arithmetic)]
     fn generic_compute_root(
         proof: &[TurbineMerkleHash],
@@ -71,6 +86,27 @@ impl TurbineMerkleProof {
             };
             idx >>= 1;
         }
+        hash
+    }
+
+    #[allow(clippy::integer_arithmetic)]
+    fn _generic_compute_root_raw(
+        proof: &[u8],
+        leaf_hash: &[u8],
+        leaf_index: usize,
+    ) -> [u8; TURBINE_MERKLE_HASH_BYTES] {
+        assert_eq!(proof.len() % TURBINE_MERKLE_HASH_BYTES, 0);
+        assert_eq!(leaf_hash.len(), TURBINE_MERKLE_HASH_BYTES);
+        let mut hash: [u8; TURBINE_MERKLE_HASH_BYTES] = leaf_hash.try_into().unwrap();
+        let mut idx = leaf_index;
+        proof.chunks_exact(TURBINE_MERKLE_HASH_BYTES).for_each(|b| {
+            hash = if idx & 1 == 0 {
+                TurbineMerkleHash::_hash_raw(&[&hash[..], b])
+            } else {
+                TurbineMerkleHash::_hash_raw(&[b, &hash[..]])
+            };
+            idx >>= 1;
+        });
         hash
     }
 
@@ -106,7 +142,7 @@ impl TurbineMerkleProof {
 impl From<&[u8]> for TurbineMerkleProof {
     #[allow(clippy::integer_arithmetic)]
     fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() % TURBINE_MERKLE_HASH_BYTES == 0);
+        assert_eq!(buf.len() % TURBINE_MERKLE_HASH_BYTES, 0);
         let v: Vec<TurbineMerkleHash> = buf
             .chunks_exact(TURBINE_MERKLE_HASH_BYTES)
             .map(|x| x.into())
@@ -115,7 +151,15 @@ impl From<&[u8]> for TurbineMerkleProof {
     }
 }
 
+#[repr(transparent)]
+#[derive(Default, Copy, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TurbineMerkleProofFec64(pub [TurbineMerkleHash; TURBINE_MERKLE_PROOF_LENGTH_FEC64]);
+
 impl TurbineMerkleProofFec64 {
+    pub fn to_bytes(&self) -> [u8; TURBINE_MERKLE_PROOF_BYTES_FEC64] {
+        TurbineMerkleProof::generic_to_bytes(&self.0[..])
+    }
+
     #[inline]
     pub fn compute_root(
         &self,
@@ -147,6 +191,11 @@ impl From<&[u8]> for TurbineMerkleProofFec64 {
                 .expect("expect 6 elements"),
         )
     }
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct TurbineMerkleTree {
+    tree: Vec<TurbineMerkleHash>,
 }
 
 impl TurbineMerkleTree {
@@ -304,6 +353,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_merkle() {
         let packets = create_random_packets(16);
         let leaves: Vec<TurbineMerkleHash> = packets
@@ -320,6 +370,32 @@ mod tests {
     }
 
     #[test]
+    fn test_merkle_proof_fec64() {
+        let packets = create_random_packets(64);
+        let leaves: Vec<TurbineMerkleHash> = packets
+            .iter()
+            .map(|p| TurbineMerkleHash::hash(&[p]))
+            .collect();
+
+        let tree = TurbineMerkleTree::new_from_leaves(&leaves);
+        let root = tree.root();
+
+        let ref_proof = tree.prove(11);
+        assert!(ref_proof.verify(&root, &tree.node(11), 11));
+
+        let proof11 = tree.prove_fec64(11);
+        assert!(proof11.verify(&root, &tree.node(11), 11));
+
+        assert_eq!(&ref_proof.0, &proof11.0);
+
+        for i in 0..64 {
+            let proof = tree.prove_fec64(i);
+            assert!(proof.verify(&root, &tree.node(i), i));
+        }
+    }
+
+    #[test]
+    #[ignore]
     fn test_merkle_from_buf_vecs_par() {
         let packets = create_random_packets(64);
         let ref_tree = TurbineMerkleTree::new_from_bufs(&packets[..]);
