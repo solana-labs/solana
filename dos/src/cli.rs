@@ -84,8 +84,11 @@ pub struct TransactionParams {
     )]
     pub valid_signatures: bool,
 
-    #[clap(long, help = "Generate unique transactions")]
-    pub unique_transactions: bool,
+    #[clap(
+        long,
+        help = "Unique transactions ratio coefficient, 0 means that all transactions are unique. If unset, all transactions are the same"
+    )]
+    pub unique_transactions_coefficient: Option<usize>,
 
     #[clap(
         long,
@@ -158,8 +161,9 @@ fn validate_input(params: &DosClientParameters) {
 
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
-        if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions {
-            eprintln!("Arguments valid-blockhash, valid-sign, unique-transactions are ignored if data-type != transaction");
+        if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions_coefficient.is_some()
+        {
+            eprintln!("Arguments valid-blockhash, valid-sign, unique-transactions-coefficient are ignored if data-type != transaction");
             exit(1);
         }
     }
@@ -232,7 +236,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--valid-signatures",
             "--num-signatures",
             "8",
@@ -253,7 +258,7 @@ mod tests {
                     num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: None,
                     num_instructions: None,
                 },
@@ -270,7 +275,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--valid-blockhash",
             "--transaction-type",
             "transfer",
@@ -293,7 +299,7 @@ mod tests {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: false,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
@@ -306,7 +312,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--transaction-type",
             "transfer",
             "--num-instructions",
@@ -325,7 +332,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--valid-blockhash",
             "--transaction-type",
             "transfer",
@@ -348,7 +356,7 @@ mod tests {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: false,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
@@ -365,7 +373,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--valid-blockhash",
             "--transaction-type",
             "account-creation",
@@ -386,7 +395,7 @@ mod tests {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: false,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
@@ -404,7 +413,8 @@ mod tests {
             "tpu",
             "--data-type",
             "transaction",
-            "--unique-transactions",
+            "--unique-transactions-coefficient",
+            "0",
             "--valid-signatures",
             "--num-signatures",
             "8",

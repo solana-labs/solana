@@ -609,7 +609,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             &params.data_input.unwrap(),
         );
     } else if params.data_type == DataType::Transaction
-        && params.transaction_params.unique_transactions
+        && params.transaction_params.unique_transactions_coefficient.is_some()
     {
         let target = target.expect("should have target");
         info!("Targeting {}", target);
@@ -914,7 +914,7 @@ pub mod test {
                     num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: true,
-                    unique_transactions: false,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: None,
                     num_instructions: None,
                 },
@@ -939,7 +939,7 @@ pub mod test {
                     num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: false,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: None,
                     num_instructions: None,
                 },
@@ -964,7 +964,7 @@ pub mod test {
                     num_signatures: Some(8),
                     valid_blockhash: false,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: None,
                     num_instructions: None,
                 },
@@ -1041,7 +1041,7 @@ pub mod test {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
-                    unique_transactions: false,
+                    unique_transactions_coefficient: None,
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
@@ -1068,7 +1068,7 @@ pub mod test {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
@@ -1094,7 +1094,7 @@ pub mod test {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
@@ -1120,7 +1120,7 @@ pub mod test {
                     num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
-                    unique_transactions: true,
+                    unique_transactions_coefficient: Some(0),
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
