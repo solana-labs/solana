@@ -256,6 +256,7 @@ fn create_sender_thread(
     mut n_alive_threads: usize,
     target: &SocketAddr,
     tpu_use_quic: bool,
+    num_send: usize,
 ) -> thread::JoinHandle<()> {
     // ConnectionCache is used instead of client because it gives ~6% higher pps
     let tpu_use_quic = UseQUIC::new(tpu_use_quic).expect("Failed to initialize QUIC flags");
@@ -278,16 +279,18 @@ fn create_sender_thread(
                         Ok(TransactionMsg::Transaction(data, time)) => {
                             let len = data.len();
                             let mut measure_send_txs = Measure::start("measure_send_txs");
-                            let res = connection.send_wire_transaction_batch_async(data);
+                            for _ in 0..num_send {
+                                let res = connection.send_wire_transaction_batch_async(data.clone());
+                                if res.is_err() {
+                                    error_count += len;
+                                }
+                            }
 
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();
                             time_generate_ns += time;
 
-                            if res.is_err() {
-                                error_count += len;
-                            }
-                            count += len;
+                            count += num_send * len;
                         }
                         Ok(TransactionMsg::Exit) => {
                             info!("Worker is done");
@@ -568,10 +571,18 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         client.as_ref(),
     );
 
+    let num_send = transaction_params.unique_transactions_coefficient.unwrap() + 1;
+
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
-    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target, tpu_use_quic);
+    let sender_thread = create_sender_thread(
+        tx_receiver,
+        num_gen_threads,
+        &target,
+        tpu_use_quic,
+        num_send,
+    );
     let mut thread_id = 0;
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
@@ -622,7 +633,10 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             &params.data_input.unwrap(),
         );
     } else if params.data_type == DataType::Transaction
-        && params.transaction_params.unique_transactions_coefficient.is_some()
+        && params
+            .transaction_params
+            .unique_transactions_coefficient
+            .is_some()
     {
         let target = target.expect("should have target");
         info!("Targeting {}", target);
