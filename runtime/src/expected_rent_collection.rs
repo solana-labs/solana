@@ -578,7 +578,7 @@ pub mod tests {
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
         let find_unskipped_slot = Some;
         // slot in current epoch
-        let expected = ExpectedRentCollection::new(
+        let result = ExpectedRentCollection::new(
             &pubkey,
             &account,
             storage_slot,
@@ -588,7 +588,7 @@ pub mod tests {
             find_unskipped_slot,
             None,
         );
-        assert!(expected.is_none());
+        assert!(result.is_none());
 
         let slots_per_epoch = 432_000;
         assert_eq!(
@@ -606,7 +606,7 @@ pub mod tests {
         let first_slot_in_max_epoch = 1388256;
         let expected_rent_collection_slot_max_epoch =
             first_slot_in_max_epoch + partition_from_pubkey;
-        let expected = ExpectedRentCollection::new(
+        let result = ExpectedRentCollection::new(
             &pubkey,
             &account,
             storage_slot,
@@ -617,7 +617,7 @@ pub mod tests {
             None,
         );
         assert_eq!(
-            expected,
+            result,
             Some(ExpectedRentCollection {
                 partition_from_pubkey,
                 epoch_of_max_storage_slot: rent_collector.epoch,
@@ -631,7 +631,7 @@ pub mod tests {
         // LeaveAloneNoRent
         for leave_alone in [true, false] {
             account.set_executable(leave_alone);
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 expected_rent_collection_slot_max_epoch,
@@ -642,7 +642,7 @@ pub mod tests {
                 None,
             );
             assert_eq!(
-                expected,
+                result,
                 (!leave_alone).then(|| ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
@@ -659,7 +659,7 @@ pub mod tests {
         // storage_slot > expected_rent_collection_slot_max_epoch
         // if greater, we return None
         for greater in [false, true] {
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 expected_rent_collection_slot_max_epoch + if greater { 1 } else { 0 },
@@ -670,7 +670,7 @@ pub mod tests {
                 None,
             );
             assert_eq!(
-                expected,
+                result,
                 (!greater).then(|| ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
@@ -685,7 +685,7 @@ pub mod tests {
         // test rewrite would have occurred in previous epoch from max_slot_in_storages_inclusive's epoch
         // the change is in 'rent_epoch' returned in 'expected'
         for previous_epoch in [false, true] {
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 expected_rent_collection_slot_max_epoch,
@@ -698,7 +698,7 @@ pub mod tests {
             let epoch_delta = if previous_epoch { 1 } else { 0 };
             let slot_delta = epoch_delta * slots_per_epoch;
             assert_eq!(
-                expected,
+                result,
                 Some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch + epoch_delta,
@@ -719,7 +719,7 @@ pub mod tests {
         for already_collected in [true, false] {
             // to consider: maybe if we already collected rent_epoch IN this slot and slot matches what we need, then we should return None here
             account.set_rent_epoch(original_rent_epoch + if already_collected { 1 } else { 0 });
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 expected_rent_collection_slot_max_epoch,
@@ -730,7 +730,7 @@ pub mod tests {
                 None,
             );
             assert_eq!(
-                expected,
+                result,
                 Some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
@@ -759,7 +759,7 @@ pub mod tests {
             ));
             // use both start and end from INclusive range separately
             for pubkey in [&range.start(), &range.end()] {
-                let expected = ExpectedRentCollection::new(
+                let result = ExpectedRentCollection::new(
                     pubkey,
                     &account,
                     storage_slot,
@@ -770,7 +770,7 @@ pub mod tests {
                     None,
                 );
                 assert_eq!(
-                    expected,
+                    result,
                     Some(ExpectedRentCollection {
                         partition_from_pubkey: end_partition_index,
                         epoch_of_max_storage_slot: rent_collector.epoch,
@@ -809,7 +809,7 @@ pub mod tests {
             // second normal epoch because we want to deal with accounts stored in the first normal epoch
             // + 1 because of exclusive
             let max_slot_in_storages_inclusive = first_slot_in_max_epoch + partition_index;
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 storage_slot,
@@ -831,7 +831,7 @@ pub mod tests {
                 };
 
             assert_eq!(
-                expected,
+                result,
                 Some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
@@ -852,7 +852,7 @@ pub mod tests {
         let first_slot_in_max_epoch = 1388256;
         for account_rent_epoch in [0, epoch] {
             account.set_rent_epoch(account_rent_epoch);
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 storage_slot,
@@ -863,7 +863,7 @@ pub mod tests {
                 None,
             );
             assert_eq!(
-                expected,
+                result,
                 (account_rent_epoch != 0).then(|| ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch + 1,
@@ -885,7 +885,7 @@ pub mod tests {
             let test_value = 10;
             let find_result = find_unskipped_slot(test_value);
             let increment = find_result.unwrap_or_default() == test_value + 1;
-            let expected = ExpectedRentCollection::new(
+            let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
                 storage_slot,
@@ -896,7 +896,7 @@ pub mod tests {
                 None,
             );
             assert_eq!(
-                expected,
+                result,
                 Some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch + 1,
@@ -1013,7 +1013,7 @@ pub mod tests {
                         epoch_schedule.get_epoch_and_slot_index(first_slot_in_max_epoch)
                     );
                     account.set_rent_epoch(1);
-                    let expected = ExpectedRentCollection::new(
+                    let result = ExpectedRentCollection::new(
                         &pubkey,
                         &account,
                         storage_slot,
@@ -1031,23 +1031,25 @@ pub mod tests {
                         true
                     };
                     assert_eq!(
-                        expected,
+                        result,
                         some_expected.then(|| ExpectedRentCollection {
                             partition_from_pubkey,
                             epoch_of_max_storage_slot: rent_collector.epoch,
                             partition_index_from_max_slot,
                             first_slot_in_max_epoch,
                             expected_rent_collection_slot_max_epoch,
-                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else { 1 },
+                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else {1},
                         }),
-                        "partition_index_from_max_slot: {}, epoch: {}",
+                        "partition_index_from_max_slot: {}, epoch: {}, hit_this_epoch: {}, skipped_slot: {}",
                         partition_index_from_max_slot,
                         epoch,
+                        hit_this_epoch,
+                        skipped_slot,
                     );
 
                     // test RentResult::LeaveAloneNoRent
                     {
-                        let expected = ExpectedRentCollection::new(
+                        let result = ExpectedRentCollection::new(
                             &pubkey,
                             &account,
                             storage_slot,
@@ -1059,7 +1061,7 @@ pub mod tests {
                             Some(&pubkey),
                         );
                         assert_eq!(
-                            expected,
+                            result,
                             some_expected.then(|| ExpectedRentCollection {
                                 partition_from_pubkey,
                                 epoch_of_max_storage_slot: rent_collector.epoch,
@@ -1093,13 +1095,13 @@ pub mod tests {
                         maybe_rehash,
                         some_expected.then(|| {
                             AccountsDb::hash_account_with_rent_epoch(
-                                expected
+                                result
                                     .as_ref()
                                     .unwrap()
                                     .expected_rent_collection_slot_max_epoch,
                                 &account,
                                 &pubkey,
-                                expected.as_ref().unwrap().rent_epoch,
+                                result.as_ref().unwrap().rent_epoch,
                             )
                         })
                     );
