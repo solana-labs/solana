@@ -2165,6 +2165,7 @@ impl RpcClient {
                 RpcEpochConfig {
                     epoch,
                     commitment: Some(self.commitment()),
+                    min_context_slot: None,
                 }
             ]),
         )
@@ -3074,6 +3075,7 @@ impl RpcClient {
             until: config.until.map(|signature| signature.to_string()),
             limit: config.limit,
             commitment: config.commitment,
+            min_context_slot: None,
         };
 
         let result: Vec<RpcConfirmedTransactionStatusWithSignature> = self
@@ -3726,6 +3728,7 @@ impl RpcClient {
                 RpcEpochConfig {
                     epoch,
                     commitment: Some(self.commitment()),
+                    min_context_slot: None,
                 }
             ]),
         )
@@ -3896,6 +3899,7 @@ impl RpcClient {
             encoding: Some(UiAccountEncoding::Base64Zstd),
             commitment: Some(self.maybe_map_commitment(commitment_config).await?),
             data_slice: None,
+            min_context_slot: None,
         };
 
         self.get_account_with_config(pubkey, config).await
@@ -4131,6 +4135,7 @@ impl RpcClient {
                 encoding: Some(UiAccountEncoding::Base64Zstd),
                 commitment: Some(self.maybe_map_commitment(commitment_config).await?),
                 data_slice: None,
+                min_context_slot: None,
             },
         )
         .await
@@ -4469,6 +4474,7 @@ impl RpcClient {
     ///             length: 5,
     ///         }),
     ///         commitment: Some(CommitmentConfig::processed()),
+    ///         min_context_slot: Some(1234),
     ///     },
     ///     with_context: Some(false),
     /// };
@@ -4784,6 +4790,7 @@ impl RpcClient {
             encoding: Some(UiAccountEncoding::JsonParsed),
             commitment: Some(self.maybe_map_commitment(commitment_config).await?),
             data_slice: None,
+            min_context_slot: None,
         };
         let response = self
             .send(
@@ -4886,6 +4893,7 @@ impl RpcClient {
             encoding: Some(UiAccountEncoding::JsonParsed),
             commitment: Some(self.maybe_map_commitment(commitment_config).await?),
             data_slice: None,
+            min_context_slot: None,
         };
 
         self.send(
@@ -4927,6 +4935,7 @@ impl RpcClient {
             encoding: Some(UiAccountEncoding::JsonParsed),
             commitment: Some(self.maybe_map_commitment(commitment_config).await?),
             data_slice: None,
+            min_context_slot: None,
         };
 
         self.send(
