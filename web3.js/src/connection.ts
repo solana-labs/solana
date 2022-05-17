@@ -2865,7 +2865,8 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config = strategy as BlockheightBasedTransactionConfirmationStrategy;
+      const config =
+        strategy as BlockheightBasedTransactionConfirmationStrategy;
       rawSignature = config.signature;
     }
 
@@ -2942,7 +2943,8 @@ export class Connection {
           timeoutMs,
         );
       } else {
-        let config = strategy as BlockheightBasedTransactionConfirmationStrategy;
+        let config =
+          strategy as BlockheightBasedTransactionConfirmationStrategy;
         (async () => {
           let currentBlockHeight = await checkBlockHeight();
           if (done) return;
