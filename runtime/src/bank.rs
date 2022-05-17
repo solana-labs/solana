@@ -6757,6 +6757,11 @@ impl Bank {
         old
     }
 
+    pub fn set_capitalization_no_check(&self) {
+        self.capitalization
+            .store(self.calculate_capitalization(false), Relaxed);
+    }
+
     pub fn get_accounts_hash(&self) -> Hash {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }

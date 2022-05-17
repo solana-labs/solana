@@ -1871,6 +1871,7 @@ pub fn bank_to_full_snapshot_archive(
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(None);
+
     let bank_snapshot_info =
         add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
 

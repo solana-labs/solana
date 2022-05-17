@@ -2854,11 +2854,6 @@ fn main() {
                                                 {
                                                     minimized_account_set
                                                         .insert(programdata_address);
-
-                                                    error!(
-                                                        "found a bpf upgradeable program: {} => {}",
-                                                        pubkey, programdata_address
-                                                    );
                                                 }
                                             }
                                         }
@@ -2868,8 +2863,6 @@ fn main() {
                         }
                     }
                 }
-
-                error!("got accounts from slots...");
 
                 for (pubkey, _) in bank.vote_accounts().iter() {
                     minimized_account_set.insert(*pubkey);
@@ -2910,6 +2903,13 @@ fn main() {
                 minimized_account_set.insert(solana_sdk::secp256k1_program::id());
                 minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
 
+                info!(
+                    "Generated minimized account set with {} accounts for slots {}..={}",
+                    minimized_account_set.len(),
+                    starting_slot,
+                    ending_slot
+                );
+
                 let mut minimized_slot_set = HashSet::new();
                 minimized_account_set.iter().for_each(|pubkey| {
                     if let Some(read_entry) = bank
@@ -2924,27 +2924,12 @@ fn main() {
                     }
                 });
 
-                error!(
-                    "minimized slot set has {} slots...",
-                    minimized_slot_set.len()
+                bank.accounts().accounts_db.minimize_accounts_db(
+                    snapshot_slot,
+                    &minimized_account_set,
+                    &minimized_slot_set,
                 );
-
-                let mut dead_slots = Vec::new();
-                for storages in bank.get_snapshot_storages(None) {
-                    let slot = storages.first().unwrap().slot();
-
-                    if minimized_slot_set.contains(&slot) {
-                        bank.accounts()
-                            .accounts_db
-                            .filter_storages(storages, &minimized_account_set);
-                    } else {
-                        dead_slots.push(slot);
-                    }
-                }
-
-                bank.accounts()
-                    .accounts_db
-                    .remove_slots_for_minimize(dead_slots.iter());
+                bank.force_flush_accounts_cache();
                 bank.set_capitalization();
 
                 let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
@@ -2968,8 +2953,6 @@ fn main() {
                     bank.hash(),
                     full_snapshot_archive_info.path().display(),
                 );
-
-                info!("Success");
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();

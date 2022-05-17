@@ -3249,75 +3249,98 @@ impl AccountsDb {
         total_accounts_after_shrink
     }
 
-    pub fn filter_storages(
+    pub fn minimize_accounts_db(
+        &self,
+        snapshot_slot: Slot,
+        minimized_account_set: &HashSet<Pubkey>,
+        minimized_slot_set: &HashSet<Slot>,
+    ) {
+        let mut dead_slots = Vec::new();
+        let mut dead_storages = Vec::new();
+        for storages in self.get_snapshot_storages(snapshot_slot, None, None).0 {
+            let slot = storages.first().unwrap().slot();
+            if slot == snapshot_slot {
+                continue;
+            }
+            if minimized_slot_set.contains(&slot) {
+                self.filter_storages(storages, &minimized_account_set, &mut dead_storages);
+            } else {
+                dead_slots.push(slot);
+            }
+        }
+
+        self.remove_slots_for_minimize(dead_slots.iter());
+        self.drop_or_recycle_stores(dead_storages);
+    }
+
+    fn filter_storages(
         &self,
         storages: Vec<Arc<AccountStorageEntry>>,
         minimized_account_set: &HashSet<Pubkey>,
+        mut dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
     ) {
-        for storage in storages {
-            self.filter_storage(storage, minimized_account_set);
-        }
-    }
-
-    fn filter_storage(
-        &self,
-        storage: Arc<AccountStorageEntry>,
-        minimized_account_set: &HashSet<Pubkey>,
-    ) {
-        let slot = storage.slot();
-        let (stored_accounts, num_stores, original_bytes) =
-            self.get_unique_accounts_from_storages(std::iter::once(&storage));
+        let slot = storages.first().unwrap().slot();
+        let (stored_accounts, _, _) = self.get_unique_accounts_from_storages(storages.iter());
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
         stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
-        let unfiltered_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let remove_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let total_bytes_collect = AtomicUsize::new(0);
         self.thread_pool_clean.install(|| {
             const CHUNK_SIZE: usize = 50;
-
             stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
-                let (mut unfiltered_accounts, filtered_accounts): (_, Vec<_>) = chunk
-                    .iter()
-                    .partition(|(pubkey, _account)| minimized_account_set.contains(pubkey));
-
-                filtered_accounts.iter().for_each(|(pubkey, account)| {
-                    if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                let mut chunk_bytes = 0;
+                let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
+                let mut remove_pubkeys = Vec::with_capacity(CHUNK_SIZE);
+                chunk.into_iter().for_each(|(pubkey, account)| {
+                    if minimized_account_set.contains(pubkey) {
+                        chunk_bytes += account.account_size;
+                        keep_accounts.push((pubkey, account));
+                    } else if let Some(read_entry) =
+                        self.accounts_index.get_account_read_entry(&pubkey)
+                    {
+                        remove_pubkeys.push(pubkey);
                         read_entry.unref();
                     }
                 });
 
-                let chunk_bytes: usize = unfiltered_accounts
-                    .iter()
-                    .map(|(_pubkey, account)| account.account_size)
-                    .sum();
-
-                unfiltered_accounts_collect
+                keep_accounts_collect
                     .lock()
                     .unwrap()
-                    .append(&mut unfiltered_accounts);
+                    .append(&mut keep_accounts);
+                remove_pubkeys_collect
+                    .lock()
+                    .unwrap()
+                    .append(&mut remove_pubkeys);
                 total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
             });
         });
 
-        // sort by pubkey to keep account index lookups close
-        let unfiltered_accounts = unfiltered_accounts_collect.into_inner().unwrap();
+        let keep_accounts = keep_accounts_collect.into_inner().unwrap();
+        let remove_pubkeys = remove_pubkeys_collect.into_inner().unwrap();
         let total_bytes = total_bytes_collect.load(Ordering::Relaxed);
 
-        error!("reduced from {} to {} bytes", original_bytes, total_bytes);
+        let remove_pubkeys: Vec<_> = remove_pubkeys
+            .into_iter()
+            .map(|pubkey| (*pubkey, slot))
+            .collect();
+        self.purge_keys_exact(remove_pubkeys.iter());
 
         let aligned_total: u64 = Self::page_align(total_bytes as u64);
+        let dead_storages_original_length = dead_storages.len();
         if aligned_total > 0 {
-            let mut accounts = Vec::with_capacity(unfiltered_accounts.len());
-            let mut hashes = Vec::with_capacity(unfiltered_accounts.len());
-            let mut write_versions = Vec::with_capacity(unfiltered_accounts.len());
+            let mut accounts = Vec::with_capacity(keep_accounts.len());
+            let mut hashes = Vec::with_capacity(keep_accounts.len());
+            let mut write_versions = Vec::with_capacity(keep_accounts.len());
 
-            for (pubkey, alive_account) in unfiltered_accounts {
+            for (pubkey, alive_account) in keep_accounts {
                 accounts.push((pubkey, &alive_account.account));
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
 
-            let (new_storage, time) = self.get_store_for_shrink(slot, aligned_total);
+            let (new_storage, _time) = self.get_store_for_shrink(slot, aligned_total);
 
             self.store_accounts_frozen(
                 (slot, &accounts[..]),
@@ -3326,14 +3349,22 @@ impl AccountsDb {
                 Some(Box::new(write_versions.into_iter())),
             );
 
-            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+            new_storage.flush().unwrap();
         }
 
-        let mut dead_storages = vec![storage.clone()];
+        self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+        let append_vec_set: HashSet<_> = storages
+            .iter()
+            .map(|storage| storage.append_vec_id())
+            .collect();
         self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-            store.append_vec_id() != storage.append_vec_id()
+            !append_vec_set.contains(&store.append_vec_id())
         });
-        self.drop_or_recycle_stores(dead_storages);
+
+        assert_eq!(
+            dead_storages.len() - dead_storages_original_length,
+            storages.len()
+        );
     }
 
     /// get stores for 'slot'
