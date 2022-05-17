@@ -341,21 +341,7 @@ impl TurbineMerkleTree {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, std::iter::repeat};
-
-    fn _create_packet_buf(byte_count: usize) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(byte_count);
-        for i in 0..byte_count {
-            buf.push((i % 256) as u8);
-        }
-        buf
-    }
-
-    fn _create_counted_packets(npackets: usize) -> Vec<Vec<u8>> {
-        repeat(_create_packet_buf(1024))
-            .take(npackets)
-            .collect::<Vec<_>>()
-    }
+    use super::*;
 
     fn create_random_packets(npackets: usize) -> Vec<Vec<u8>> {
         let mut packets = Vec::default();
