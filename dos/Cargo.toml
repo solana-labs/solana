@@ -29,6 +29,7 @@ solana-rpc = { path = "../rpc", version = "=1.11.2" }
 solana-sdk = { path = "../sdk", version = "=1.11.2" }
 solana-streamer = { path = "../streamer", version = "=1.11.2" }
 solana-version = { path = "../version", version = "=1.11.2" }
+solana-measure = { path = "../measure", version = "=1.11.2" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
