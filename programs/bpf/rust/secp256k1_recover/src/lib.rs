@@ -1,7 +1,7 @@
 //! Secp256k1Recover Syscall test
 
 extern crate solana_program;
-use solana_program::{custom_heap_default, custom_panic_default, msg};
+use solana_program::{custom_panic_default, msg};
 
 fn test_secp256k1_recover() {
     use solana_program::secp256k1_recover::secp256k1_recover;
@@ -41,5 +41,4 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     0
 }
 
-custom_heap_default!();
 custom_panic_default!();

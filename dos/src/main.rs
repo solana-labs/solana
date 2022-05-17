@@ -12,36 +12,53 @@
 //! These options allow to compose transaction which fails at
 //! a particular stage of the processing pipeline.
 //!
-//! Example 1: send random transactions to TPU
+//! To limit the number of possible options and simplify the usage of the tool,
+//! The following configurations are suggested:
+//! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
+//! 1. Without blockhash or payer:
+//! 1.1 With invalid signatures
 //! ```bash
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
+//! solana-dos $COMMON --num-signatures 8
 //! ```
-//!
-//! Example 2: send unique transactions with valid recent blockhash to TPU
+//! 1.2 With valid signatures
 //! ```bash
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu --data-type random
-//! solana-dos --entrypoint 127.0.0.1:8001 --mode tpu \
-//!     --data-type transaction --generate-unique-transactions
-//!     --payer config/bootstrap-validator/identity.json \
-//!     --generate-valid-blockhash
+//! solana-dos $COMMON --valid-signatures --num-signatures 8
+//! ```
+//! 2. With blockhash and payer:
+//! 2.1 Single-instruction transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 1
+//! ```
+//! 2.2 Multi-instruction transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type transfer --num-instructions 8
+//! ```
+//! 2.3 Account-creation transaction
+//! ```bash
+//! solana-dos $COMMON --valid-blockhash --transaction-type account-creation
 //! ```
 //!
 #![allow(clippy::integer_arithmetic)]
 use {
-    clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
+    itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
-    serde::{Deserialize, Serialize},
+    solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
     solana_client::rpc_client::RpcClient,
     solana_core::serve_repair::RepairProtocol,
-    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
+    solana_dos::cli::*,
+    solana_gossip::{
+        contact_info::ContactInfo,
+        gossip_service::{discover, get_multi_client},
+    },
     solana_sdk::{
         hash::Hash,
-        instruction::{AccountMeta, CompiledInstruction, Instruction},
+        instruction::CompiledInstruction,
+        message::Message,
         pubkey::Pubkey,
-        signature::{read_keypair_file, Keypair, Signature, Signer},
+        signature::{Keypair, Signature, Signer},
         stake,
-        system_instruction::SystemInstruction,
+        system_instruction::{self, SystemInstruction},
         system_program,
         transaction::Transaction,
     },
@@ -49,10 +66,15 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
-        str::FromStr,
+        sync::Arc,
         time::{Duration, Instant},
     },
 };
+
+const SAMPLE_PERIOD_MS: usize = 10_000;
+fn compute_rate_per_second(count: usize) -> usize {
+    (count * 1000) / SAMPLE_PERIOD_MS
+}
 
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     let source = thread_rng().gen_range(0, nodes.len());
@@ -61,78 +83,130 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
     contact
 }
 
+/// Provide functionality to generate several types of transactions:
+///
+/// 1. Without blockhash
+/// 1.1 With valid signatures (number of signatures is configurable)
+/// 1.2 With invalid signatures (number of signatures is configurable)
+///
+/// 2. With blockhash (but still deliberately invalid):
+/// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
+/// 2.2 Create an account
+///
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
     transaction_params: TransactionParams,
-    cached_transaction: Option<Transaction>,
 }
 
 impl TransactionGenerator {
     fn new(transaction_params: TransactionParams) -> Self {
         TransactionGenerator {
             blockhash: Hash::default(),
-            last_generated: (Instant::now() - Duration::from_secs(100)),
+            last_generated: (Instant::now() - Duration::from_secs(100)), //to force generation when generate is called
             transaction_params,
-            cached_transaction: None,
         }
     }
 
-    fn generate(&mut self, payer: Option<&Keypair>, rpc_client: &Option<RpcClient>) -> Transaction {
-        if !self.transaction_params.unique_transactions && self.cached_transaction.is_some() {
-            return self.cached_transaction.as_ref().unwrap().clone();
+    /// Generate transaction
+    ///
+    /// `payer` - the account responsible for paying the cost of executing transaction, used as
+    /// a source for transfer instructions and as funding account for create-account instructions.
+    /// `destinations` - depending on the transaction type, might be destination accounts receiving transfers,
+    /// new accounts, signing accounts. It is `None` only if `valid_signatures==false`.
+    /// `client` - structure responsible for providing blockhash.
+    ///
+    fn generate<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        payer: Option<&Keypair>,
+        destinations: Option<Vec<&Keypair>>,
+        client: Option<&Arc<T>>,
+    ) -> Transaction {
+        if self.transaction_params.valid_blockhash {
+            let client = client.as_ref().unwrap();
+            let destinations = destinations.unwrap();
+            let payer = payer.as_ref().unwrap();
+            self.generate_with_blockhash(payer, destinations, client)
+        } else {
+            self.generate_without_blockhash(destinations)
         }
+    }
 
+    fn generate_with_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        payer: &Keypair,
+        destinations: Vec<&Keypair>,
+        client: &Arc<T>,
+    ) -> Transaction {
         // generate a new blockhash every 1sec
         if self.transaction_params.valid_blockhash
             && self.last_generated.elapsed().as_millis() > 1000
         {
-            self.blockhash = rpc_client.as_ref().unwrap().get_latest_blockhash().unwrap();
+            self.blockhash = client.get_latest_blockhash().unwrap();
             self.last_generated = Instant::now();
         }
 
-        // in order to evaluate the performance implications of the different transactions
-        // we create here transactions which are filtered out on different stages of processing pipeline
+        // transaction_type is known to be present because it is required by blockhash option in cli
+        let transaction_type = self.transaction_params.transaction_type.as_ref().unwrap();
+        match transaction_type {
+            TransactionType::Transfer => {
+                self.create_multi_transfer_transaction(payer, &destinations)
+            }
+            TransactionType::AccountCreation => {
+                self.create_account_transaction(payer, destinations[0])
+            }
+        }
+    }
 
+    /// Create a transaction which transfers some lamports from payer to several destinations
+    fn create_multi_transfer_transaction(&self, payer: &Keypair, to: &[&Keypair]) -> Transaction {
+        let to_transfer: u64 = 500_000_000; // specify amount which will cause error
+        let to: Vec<(Pubkey, u64)> = to.iter().map(|to| (to.pubkey(), to_transfer)).collect();
+        let instructions = system_instruction::transfer_many(&payer.pubkey(), to.as_slice());
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
+        let mut tx = Transaction::new_unsigned(message);
+        tx.sign(&[payer], self.blockhash);
+        tx
+    }
+
+    /// Create a transaction which opens account
+    fn create_account_transaction(&self, payer: &Keypair, to: &Keypair) -> Transaction {
+        let program_id = system_program::id(); // some valid program id
+        let balance = 500_000_000;
+        let space = 1024;
+        let instructions = vec![system_instruction::create_account(
+            &payer.pubkey(),
+            &to.pubkey(),
+            balance,
+            space,
+            &program_id,
+        )];
+
+        let message = Message::new(&instructions, Some(&payer.pubkey()));
+        let signers: Vec<&Keypair> = vec![payer, to];
+        Transaction::new(&signers, message, self.blockhash)
+    }
+
+    fn generate_without_blockhash(
+        &mut self,
+        destinations: Option<Vec<&Keypair>>, // provided for valid signatures
+    ) -> Transaction {
         // create an arbitrary valid instruction
         let lamports = 5;
         let transfer_instruction = SystemInstruction::Transfer { lamports };
         let program_ids = vec![system_program::id(), stake::program::id()];
+        let instructions = vec![CompiledInstruction::new(
+            0,
+            &transfer_instruction,
+            vec![0, 1],
+        )];
 
-        // transaction with payer, in this case signatures are valid and num_signatures is irrelevant
-        // random payer will cause error "attempt to debit an account but found no record of a prior credit"
-        // if payer is correct, it will trigger error with not enough signatures
-        let transaction = if let Some(payer) = payer {
-            let instruction = Instruction::new_with_bincode(
-                program_ids[0],
-                &transfer_instruction,
-                vec![
-                    AccountMeta::new(program_ids[0], false),
-                    AccountMeta::new(program_ids[1], false),
-                ],
-            );
-            Transaction::new_signed_with_payer(
-                &[instruction],
-                Some(&payer.pubkey()),
-                &[payer],
-                self.blockhash,
-            )
-        } else if self.transaction_params.valid_signatures {
+        if self.transaction_params.valid_signatures {
             // Since we don't provide a payer, this transaction will end up
             // filtered at legacy.rs sanitize method (banking_stage) with error "a program cannot be payer"
-            let kpvals: Vec<Keypair> = (0..self.transaction_params.num_signatures)
-                .map(|_| Keypair::new())
-                .collect();
-            let keypairs: Vec<&Keypair> = kpvals.iter().collect();
-
-            let instructions = vec![CompiledInstruction::new(
-                0,
-                &transfer_instruction,
-                vec![0, 1],
-            )];
-
+            let destinations = destinations.unwrap();
             Transaction::new_with_compiled_instructions(
-                &keypairs,
+                &destinations,
                 &[],
                 self.blockhash,
                 program_ids,
@@ -142,12 +216,6 @@ impl TransactionGenerator {
             // Since we provided invalid signatures
             // this transaction will end up filtered at legacy.rs (banking_stage) because
             // num_required_signatures == 0
-            let instructions = vec![CompiledInstruction::new(
-                0,
-                &transfer_instruction,
-                vec![0, 1],
-            )];
-
             let mut tx = Transaction::new_with_compiled_instructions(
                 &[] as &[&Keypair; 0],
                 &[],
@@ -155,294 +223,363 @@ impl TransactionGenerator {
                 program_ids,
                 instructions,
             );
-            tx.signatures = vec![Signature::new_unique(); self.transaction_params.num_signatures];
+            let num_signatures = self.transaction_params.num_signatures.unwrap();
+            tx.signatures = vec![Signature::new_unique(); num_signatures];
             tx
-        };
-
-        // if we need to generate only one transaction, we cache it to reuse later
-        if !self.transaction_params.unique_transactions {
-            self.cached_transaction = Some(transaction.clone());
         }
-
-        transaction
     }
 }
 
-fn run_dos(
+fn get_target(
     nodes: &[ContactInfo],
-    iterations: usize,
-    payer: Option<&Keypair>,
-    params: DosClientParameters,
-) {
+    mode: Mode,
+    entrypoint_addr: SocketAddr,
+) -> Option<SocketAddr> {
     let mut target = None;
-    let mut rpc_client = None;
     if nodes.is_empty() {
-        if params.mode == Mode::Rpc {
-            rpc_client = Some(RpcClient::new_socket(params.entrypoint_addr));
-        }
-        target = Some(params.entrypoint_addr);
+        // skip-gossip case
+        target = Some(entrypoint_addr);
     } else {
         info!("************ NODE ***********");
         for node in nodes {
             info!("{:?}", node);
         }
-        info!("ADDR = {}", params.entrypoint_addr);
+        info!("ADDR = {}", entrypoint_addr);
 
         for node in nodes {
-            if node.gossip == params.entrypoint_addr {
+            if node.gossip == entrypoint_addr {
                 info!("{}", node.gossip);
-                target = match params.mode {
+                target = match mode {
                     Mode::Gossip => Some(node.gossip),
                     Mode::Tvu => Some(node.tvu),
                     Mode::TvuForwards => Some(node.tvu_forwards),
-                    Mode::Tpu => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        Some(node.tpu)
-                    }
+                    Mode::Tpu => Some(node.tpu),
                     Mode::TpuForwards => Some(node.tpu_forwards),
                     Mode::Repair => Some(node.repair),
                     Mode::ServeRepair => Some(node.serve_repair),
-                    Mode::Rpc => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        None
-                    }
+                    Mode::Rpc => None,
                 };
                 break;
             }
         }
     }
-    let target = target.expect("should have target");
+    target
+}
 
-    info!("Targeting {}", target);
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
-    let mut data = Vec::new();
-    let mut transaction_generator = None;
-
-    match params.data_type {
-        DataType::RepairHighest => {
-            let slot = 100;
-            let req = RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::RepairShred => {
-            let slot = 100;
-            let req =
-                RepairProtocol::HighestWindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::RepairOrphan => {
-            let slot = 100;
-            let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-            data = bincode::serialize(&req).unwrap();
-        }
-        DataType::Random => {
-            data.resize(params.data_size, 0);
-        }
-        DataType::Transaction => {
-            let tp = params.transaction_params.clone();
-            info!("{:?}", tp);
-
-            let mut tg = TransactionGenerator::new(tp);
-            let tx = tg.generate(payer, &rpc_client);
-            info!("{:?}", tx);
-            data = bincode::serialize(&tx).unwrap();
-            if params.transaction_params.unique_transactions {
-                transaction_generator = Some(tg);
-            }
-        }
-        DataType::GetAccountInfo => {}
-        DataType::GetProgramAccounts => {}
+fn get_rpc_client(
+    nodes: &[ContactInfo],
+    entrypoint_addr: SocketAddr,
+) -> Result<RpcClient, &'static str> {
+    if nodes.is_empty() {
+        // skip-gossip case
+        return Ok(RpcClient::new_socket(entrypoint_addr));
     }
 
+    // find target node
+    for node in nodes {
+        if node.gossip == entrypoint_addr {
+            info!("{}", node.gossip);
+            return Ok(RpcClient::new_socket(node.rpc));
+        }
+    }
+    Err("Node with entrypoint_addr was not found")
+}
+
+fn run_dos_rpc_mode_helper<F: Fn() -> bool>(iterations: usize, rpc_client_call: F) {
     let mut last_log = Instant::now();
+    let mut total_count: usize = 0;
     let mut count = 0;
     let mut error_count = 0;
     loop {
-        if params.mode == Mode::Rpc {
-            match params.data_type {
-                DataType::GetAccountInfo => {
-                    let res = rpc_client.as_ref().unwrap().get_account(
-                        &Pubkey::from_str(params.data_input.as_ref().unwrap()).unwrap(),
-                    );
-                    if res.is_err() {
-                        error_count += 1;
-                    }
-                }
-                DataType::GetProgramAccounts => {
-                    let res = rpc_client.as_ref().unwrap().get_program_accounts(
-                        &Pubkey::from_str(params.data_input.as_ref().unwrap()).unwrap(),
-                    );
-                    if res.is_err() {
-                        error_count += 1;
-                    }
-                }
-                _ => {
-                    panic!("unsupported data type");
-                }
-            }
-        } else {
-            if params.data_type == DataType::Random {
-                thread_rng().fill(&mut data[..]);
-            }
-            if let Some(tg) = transaction_generator.as_mut() {
-                let tx = tg.generate(payer, &rpc_client);
-                debug!("{:?}", tx);
-                data = bincode::serialize(&tx).unwrap();
-            }
-            let res = socket.send_to(&data, target);
-            if res.is_err() {
-                error_count += 1;
-            }
+        if !rpc_client_call() {
+            error_count += 1;
         }
         count += 1;
-        if last_log.elapsed().as_millis() > 10_000 {
-            info!("count: {} errors: {}", count, error_count);
+        total_count += 1;
+        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
+            info!(
+                "count: {}, errors: {}, rps: {}",
+                count,
+                error_count,
+                compute_rate_per_second(count)
+            );
             last_log = Instant::now();
             count = 0;
         }
-        if iterations != 0 && count >= iterations {
+        if iterations != 0 && total_count >= iterations {
             break;
         }
     }
 }
 
-// command line parsing
-#[derive(Parser)]
-#[clap(name = crate_name!(),
-    version = crate_version!(),
-    about = crate_description!(),
-    rename_all = "kebab-case"
-)]
-struct DosClientParameters {
-    #[clap(long, arg_enum, help = "Interface to DoS")]
-    mode: Mode,
-
-    #[clap(long, arg_enum, help = "Type of data to send")]
+fn run_dos_rpc_mode(
+    rpc_client: RpcClient,
+    iterations: usize,
     data_type: DataType,
-
-    #[clap(
-        long = "entrypoint",
-        parse(try_from_str = addr_parser),
-        default_value = "127.0.0.1:8001",
-        help = "Gossip entrypoint address. Usually <ip>:8001"
-    )]
-    entrypoint_addr: SocketAddr,
-
-    #[clap(
-        long,
-        default_value = "128",
-        required_if_eq("data-type", "random"),
-        help = "Size of packet to DoS with, relevant only for data-type=random"
-    )]
-    data_size: usize,
-
-    #[clap(long, help = "Data to send [Optional]")]
-    data_input: Option<String>,
-
-    #[clap(long, help = "Just use entrypoint address directly")]
-    skip_gossip: bool,
-
-    #[clap(long, help = "Allow contacting private ip addresses")]
-    allow_private_addr: bool,
-
-    #[clap(flatten)]
-    transaction_params: TransactionParams,
-}
-
-#[derive(Clone, Args, Serialize, Deserialize, Debug, Default)]
-#[clap(rename_all = "kebab-case")]
-struct TransactionParams {
-    #[clap(
-        long,
-        default_value = "2",
-        help = "Number of signatures in transaction"
-    )]
-    num_signatures: usize,
-
-    #[clap(long, help = "Generate a valid blockhash for transaction")]
-    valid_blockhash: bool,
-
-    #[clap(long, help = "Generate valid signature(s) for transaction")]
-    valid_signatures: bool,
-
-    #[clap(long, help = "Generate unique transactions")]
-    unique_transactions: bool,
-
-    #[clap(
-        long = "payer",
-        help = "Payer's keypair file to fund transactions [Optional]"
-    )]
-    payer_filename: Option<String>,
-}
-
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
-enum Mode {
-    Gossip,
-    Tvu,
-    TvuForwards,
-    Tpu,
-    TpuForwards,
-    Repair,
-    ServeRepair,
-    Rpc,
-}
-
-#[derive(ArgEnum, Clone, Eq, PartialEq)]
-enum DataType {
-    RepairHighest,
-    RepairShred,
-    RepairOrphan,
-    Random,
-    GetAccountInfo,
-    GetProgramAccounts,
-    Transaction,
-}
-
-fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
-    match solana_net_utils::parse_host_port(addr) {
-        Ok(v) => Ok(v),
-        Err(_) => Err("failed to parse entrypoint address"),
-    }
-}
-
-/// input checks which are not covered by Clap
-fn validate_input(params: &DosClientParameters) {
-    if params.mode == Mode::Rpc
-        && (params.data_type != DataType::GetAccountInfo
-            && params.data_type != DataType::GetProgramAccounts)
-    {
-        panic!("unsupported data type");
-    }
-
-    if params.data_type != DataType::Transaction {
-        let tp = &params.transaction_params;
-        if tp.valid_blockhash
-            || tp.valid_signatures
-            || tp.unique_transactions
-            || tp.payer_filename.is_some()
-        {
-            println!("Arguments valid-blockhash, valid-sign, unique-trans, payer are ignored if data-type != transaction");
+    data_input: &Pubkey,
+) {
+    match data_type {
+        DataType::GetAccountInfo => {
+            run_dos_rpc_mode_helper(iterations, || -> bool {
+                rpc_client.get_account(data_input).is_ok()
+            });
+        }
+        DataType::GetProgramAccounts => {
+            run_dos_rpc_mode_helper(iterations, || -> bool {
+                rpc_client.get_program_accounts(data_input).is_ok()
+            });
+        }
+        _ => {
+            panic!("unsupported data type");
         }
     }
+}
 
-    if params.transaction_params.payer_filename.is_some()
-        && params.transaction_params.valid_signatures
+/// Apply given permutation to the vector of items
+fn apply_permutation<'a, T>(permutation: Vec<&usize>, items: &'a [T]) -> Vec<&'a T> {
+    let mut res = Vec::with_capacity(permutation.len());
+    for i in permutation {
+        res.push(&items[*i]);
+    }
+    res
+}
+
+fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
+    valid_blockhash: bool,
+    size: usize,
+    client: Option<&Arc<T>>,
+) -> Vec<Option<Keypair>> {
+    // Assume that if we use valid blockhash, we also have a payer
+    if valid_blockhash {
+        // each payer is used to fund transaction
+        // transactions are built to be invalid so the the amount here is arbitrary
+        let funding_key = Keypair::new();
+        let funding_key = Arc::new(funding_key);
+        let res =
+            generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
+                .unwrap_or_else(|e| {
+                    eprintln!("Error could not fund keys: {:?}", e);
+                    exit(1);
+                });
+        res.into_iter().map(Some).collect()
+    } else {
+        std::iter::repeat_with(|| None).take(size).collect()
+    }
+}
+
+fn get_permutation_size(num_signatures: Option<&usize>, num_instructions: Option<&usize>) -> usize {
+    if let Some(num_signatures) = num_signatures {
+        *num_signatures
+    } else if let Some(num_instructions) = num_instructions {
+        *num_instructions
+    } else {
+        1 // for the case AccountCreation
+    }
+}
+
+fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
+    target: SocketAddr,
+    iterations: usize,
+    client: Option<Arc<T>>,
+    transaction_params: TransactionParams,
+) {
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+    // Number of payers is the number of generating threads, for now it is 1
+    // Later, we will create a new payer for each thread since Keypair is not clonable
+    let payers: Vec<Option<Keypair>> =
+        create_payers(transaction_params.valid_blockhash, 1, client.as_ref());
+    let payer = payers[0].as_ref();
+
+    // Generate n=1000 unique keypairs
+    // The number of chunks is described by binomial coefficient
+    // and hence this choice of n provides large enough number of permutations
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    // 1000 is arbitrary number. In case of permutation_size > 1,
+    // this guaranties large enough set of unique permutations
+    let permutation_size = get_permutation_size(
+        transaction_params.num_signatures.as_ref(),
+        transaction_params.num_instructions.as_ref(),
+    );
+    let num_keypairs = 1000 * permutation_size;
+
+    let generate_keypairs =
+        transaction_params.valid_signatures || transaction_params.valid_blockhash;
+    if generate_keypairs {
+        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
+    }
+
+    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+    let mut it = indexes.iter().permutations(permutation_size);
+
+    let mut transaction_generator = TransactionGenerator::new(transaction_params);
+
+    let mut count = 0;
+    let mut total_count = 0;
+    let mut error_count = 0;
+    let mut last_log = Instant::now();
+    loop {
+        let chunk_keypairs = if generate_keypairs {
+            let permutation = it.next();
+            if permutation.is_none() {
+                // if ran out of permutations, regenerate keys
+                keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                info!("Regenerate keypairs");
+                continue;
+            }
+            let permutation = permutation.unwrap();
+            Some(apply_permutation(permutation, &keypairs_flat))
+        } else {
+            None
+        };
+
+        let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
+
+        let data = bincode::serialize(&tx).unwrap();
+        let res = socket.send_to(&data, target);
+        if res.is_err() {
+            error_count += 1;
+        }
+        count += 1;
+        total_count += 1;
+        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
+            info!(
+                "count: {}, errors: {}, rps: {}",
+                count,
+                error_count,
+                compute_rate_per_second(count)
+            );
+            last_log = Instant::now();
+            count = 0;
+        }
+        if iterations != 0 && total_count >= iterations {
+            break;
+        }
+    }
+}
+
+fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
+    nodes: &[ContactInfo],
+    iterations: usize,
+    client: Option<Arc<T>>,
+    params: DosClientParameters,
+) {
+    let target = get_target(nodes, params.mode, params.entrypoint_addr);
+
+    if params.mode == Mode::Rpc {
+        // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
+        let rpc_client =
+            get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
+        // existence of data_input is checked at cli level
+        run_dos_rpc_mode(
+            rpc_client,
+            iterations,
+            params.data_type,
+            &params.data_input.unwrap(),
+        );
+    } else if params.data_type == DataType::Transaction
+        && params.transaction_params.unique_transactions
     {
-        println!("Arguments valid-signatures is ignored if payer is provided");
+        let target = target.expect("should have target");
+        info!("Targeting {}", target);
+        run_dos_transactions(target, iterations, client, params.transaction_params);
+    } else {
+        let target = target.expect("should have target");
+        info!("Targeting {}", target);
+        let mut data = match params.data_type {
+            DataType::RepairHighest => {
+                let slot = 100;
+                let req =
+                    RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
+                bincode::serialize(&req).unwrap()
+            }
+            DataType::RepairShred => {
+                let slot = 100;
+                let req = RepairProtocol::HighestWindowIndexWithNonce(
+                    get_repair_contact(nodes),
+                    slot,
+                    0,
+                    0,
+                );
+                bincode::serialize(&req).unwrap()
+            }
+            DataType::RepairOrphan => {
+                let slot = 100;
+                let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
+                bincode::serialize(&req).unwrap()
+            }
+            DataType::Random => {
+                vec![0; params.data_size]
+            }
+            DataType::Transaction => {
+                let tp = params.transaction_params;
+                info!("{:?}", tp);
+
+                let valid_blockhash = tp.valid_blockhash;
+                let payers: Vec<Option<Keypair>> =
+                    create_payers(valid_blockhash, 1, client.as_ref());
+                let payer = payers[0].as_ref();
+
+                let permutation_size =
+                    get_permutation_size(tp.num_signatures.as_ref(), tp.num_instructions.as_ref());
+                let keypairs: Vec<Keypair> =
+                    (0..permutation_size).map(|_| Keypair::new()).collect();
+                let keypairs_chunk: Option<Vec<&Keypair>> =
+                    if tp.valid_signatures || tp.valid_blockhash {
+                        Some(keypairs.iter().collect())
+                    } else {
+                        None
+                    };
+
+                let mut transaction_generator = TransactionGenerator::new(tp);
+                let tx = transaction_generator.generate(payer, keypairs_chunk, client.as_ref());
+                info!("{:?}", tx);
+                bincode::serialize(&tx).unwrap()
+            }
+            _ => panic!("Unsupported data_type detected"),
+        };
+
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut last_log = Instant::now();
+        let mut total_count: usize = 0;
+        let mut count: usize = 0;
+        let mut error_count = 0;
+        loop {
+            if params.data_type == DataType::Random {
+                thread_rng().fill(&mut data[..]);
+            }
+            let res = socket.send_to(&data, target);
+            if res.is_err() {
+                error_count += 1;
+            }
+
+            count += 1;
+            total_count += 1;
+            if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
+                info!(
+                    "count: {}, errors: {}, rps: {}",
+                    count,
+                    error_count,
+                    compute_rate_per_second(count)
+                );
+                last_log = Instant::now();
+                count = 0;
+            }
+            if iterations != 0 && total_count >= iterations {
+                break;
+            }
+        }
     }
 }
 
 fn main() {
     solana_logger::setup_with_default("solana=info");
-    let cmd_params = DosClientParameters::parse();
-    validate_input(&cmd_params);
+    let cmd_params = build_cli_parameters();
 
-    let mut nodes = vec![];
-    if !cmd_params.skip_gossip {
+    let (nodes, client) = if !cmd_params.skip_gossip {
         info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
         let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
-        let (gossip_nodes, _validators) = discover(
+        let (gossip_nodes, validators) = discover(
             None, // keypair
             Some(&cmd_params.entrypoint_addr),
             None,                              // num_nodes
@@ -460,29 +597,46 @@ fn main() {
             );
             exit(1);
         });
-        nodes = gossip_nodes;
-    }
+
+        let (client, num_clients) = get_multi_client(&validators, &SocketAddrSpace::Unspecified);
+        if validators.len() < num_clients {
+            eprintln!(
+                "Error: Insufficient nodes discovered.  Expecting {} or more",
+                validators.len()
+            );
+            exit(1);
+        }
+        (gossip_nodes, Some(Arc::new(client)))
+    } else {
+        (vec![], None)
+    };
 
     info!("done found {} nodes", nodes.len());
-    let payer = cmd_params
-        .transaction_params
-        .payer_filename
-        .as_ref()
-        .map(|keypair_file_name| {
-            read_keypair_file(&keypair_file_name)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_file_name))
-        });
 
-    run_dos(&nodes, 0, payer.as_ref(), cmd_params);
+    run_dos(&nodes, 0, client, cmd_params);
 }
 
 #[cfg(test)]
 pub mod test {
     use {
         super::*,
-        solana_local_cluster::{cluster::Cluster, local_cluster::LocalCluster},
+        solana_client::thin_client::{create_client, ThinClient},
+        solana_core::validator::ValidatorConfig,
+        solana_faucet::faucet::run_local_faucet,
+        solana_local_cluster::{
+            cluster::Cluster,
+            local_cluster::{ClusterConfig, LocalCluster},
+            validator_configs::make_identical_validator_configs,
+        },
+        solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::timing::timestamp,
     };
+
+    // thin wrapper for the run_dos function
+    // to avoid specifying everywhere generic parameters
+    fn run_dos_no_client(nodes: &[ContactInfo], iterations: usize, params: DosClientParameters) {
+        run_dos::<ThinClient>(nodes, iterations, None, params);
+    }
 
     #[test]
     fn test_dos() {
@@ -492,10 +646,9 @@ pub mod test {
         )];
         let entrypoint_addr = nodes[0].gossip;
 
-        run_dos(
+        run_dos_no_client(
             &nodes,
             1,
-            None,
             DosClientParameters {
                 entrypoint_addr,
                 mode: Mode::Tvu,
@@ -508,10 +661,9 @@ pub mod test {
             },
         );
 
-        run_dos(
+        run_dos_no_client(
             &nodes,
             1,
-            None,
             DosClientParameters {
                 entrypoint_addr,
                 mode: Mode::Repair,
@@ -524,10 +676,9 @@ pub mod test {
             },
         );
 
-        run_dos(
+        run_dos_no_client(
             &nodes,
             1,
-            None,
             DosClientParameters {
                 entrypoint_addr,
                 mode: Mode::ServeRepair,
@@ -539,11 +690,26 @@ pub mod test {
                 transaction_params: TransactionParams::default(),
             },
         );
+
+        run_dos_no_client(
+            &nodes,
+            1,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Rpc,
+                data_size: 0,
+                data_type: DataType::GetAccountInfo,
+                data_input: Some(Pubkey::default()),
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams::default(),
+            },
+        );
     }
 
     #[test]
-    #[ignore]
-    fn test_dos_local_cluster_transactions() {
+    fn test_dos_random() {
+        solana_logger::setup();
         let num_nodes = 1;
         let cluster =
             LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
@@ -555,10 +721,9 @@ pub mod test {
 
         // send random transactions to TPU
         // will be discarded on sigverify stage
-        run_dos(
+        run_dos_no_client(
             &nodes_slice,
-            1,
-            None,
+            10,
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
@@ -570,134 +735,10 @@ pub mod test {
                 transaction_params: TransactionParams::default(),
             },
         );
-
-        // send transactions to TPU with 2 random signatures
-        // will be filtered on dedup (because transactions are not unique)
-        run_dos(
-            &nodes_slice,
-            1,
-            None,
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant if not random
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: 2,
-                    valid_blockhash: false,
-                    valid_signatures: false,
-                    unique_transactions: false,
-                    payer_filename: None,
-                },
-            },
-        );
-
-        // send *unique* transactions to TPU with 4 random signatures
-        // will be discarded on banking stage in legacy.rs
-        // ("there should be at least 1 RW fee-payer account")
-        run_dos(
-            &nodes_slice,
-            1,
-            None,
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant if not random
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: 4,
-                    valid_blockhash: false,
-                    valid_signatures: false,
-                    unique_transactions: true,
-                    payer_filename: None,
-                },
-            },
-        );
-
-        // send unique transactions to TPU with 2 random signatures
-        // will be discarded on banking stage in legacy.rs (A program cannot be a payer)
-        // because we haven't provided a valid payer
-        run_dos(
-            &nodes_slice,
-            1,
-            None,
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant if not random
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: 2,
-                    valid_blockhash: false, // irrelevant without valid payer, because
-                    // it will be filtered before blockhash validity checks
-                    valid_signatures: true,
-                    unique_transactions: true,
-                    payer_filename: None,
-                },
-            },
-        );
-
-        // send unique transaction to TPU with valid blockhash
-        // will be discarded due to invalid hash
-        run_dos(
-            &nodes_slice,
-            1,
-            Some(&cluster.funding_keypair),
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant if not random
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: 2,
-                    valid_blockhash: false,
-                    valid_signatures: true,
-                    unique_transactions: true,
-                    payer_filename: None,
-                },
-            },
-        );
-
-        // send unique transaction to TPU with valid blockhash
-        // will fail with error processing Instruction 0: missing required signature for instruction
-        run_dos(
-            &nodes_slice,
-            1,
-            Some(&cluster.funding_keypair),
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant if not random
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: 2,
-                    valid_blockhash: true,
-                    valid_signatures: true,
-                    unique_transactions: true,
-                    payer_filename: None,
-                },
-            },
-        );
     }
 
     #[test]
-    #[ignore]
-    fn test_dos_local_cluster() {
+    fn test_dos_without_blockhash() {
         solana_logger::setup();
         let num_nodes = 1;
         let cluster =
@@ -706,11 +747,142 @@ pub mod test {
 
         let nodes = cluster.get_node_pubkeys();
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
 
+        let client = Arc::new(create_client(
+            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.tpu,
+        ));
+
+        // creates one transaction with 8 valid signatures and sends it 10 times
         run_dos(
-            &[node],
-            10_000_000,
-            Some(&cluster.funding_keypair),
+            &nodes_slice,
+            10,
+            Some(client.clone()),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: Some(8),
+                    valid_blockhash: false,
+                    valid_signatures: true,
+                    unique_transactions: false,
+                    transaction_type: None,
+                    num_instructions: None,
+                },
+            },
+        );
+
+        // creates and sends unique transactions which have invalid signatures
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client.clone()),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: Some(8),
+                    valid_blockhash: false,
+                    valid_signatures: false,
+                    unique_transactions: true,
+                    transaction_type: None,
+                    num_instructions: None,
+                },
+            },
+        );
+
+        // creates and sends unique transactions which have valid signatures
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: Some(8),
+                    valid_blockhash: false,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    transaction_type: None,
+                    num_instructions: None,
+                },
+            },
+        );
+    }
+
+    #[test]
+    fn test_dos_with_blockhash_and_payer() {
+        solana_logger::setup();
+
+        // 1. Create faucet thread
+        let faucet_keypair = Keypair::new();
+        let faucet_pubkey = faucet_keypair.pubkey();
+        let faucet_addr = run_local_faucet(faucet_keypair, None);
+        let mut validator_config = ValidatorConfig::default_for_test();
+        validator_config.rpc_config = JsonRpcConfig {
+            faucet_addr: Some(faucet_addr),
+            ..JsonRpcConfig::default_for_test()
+        };
+
+        // 2. Create a local cluster which is aware of faucet
+        let num_nodes = 1;
+        let native_instruction_processors = vec![];
+        let cluster = LocalCluster::new(
+            &mut ClusterConfig {
+                node_stakes: vec![999_990; num_nodes],
+                cluster_lamports: 200_000_000,
+                validator_configs: make_identical_validator_configs(
+                    &ValidatorConfig {
+                        rpc_config: JsonRpcConfig {
+                            faucet_addr: Some(faucet_addr),
+                            ..JsonRpcConfig::default_for_test()
+                        },
+                        ..ValidatorConfig::default_for_test()
+                    },
+                    num_nodes,
+                ),
+                native_instruction_processors,
+                ..ClusterConfig::default()
+            },
+            SocketAddrSpace::Unspecified,
+        );
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        // 3. Transfer funds to faucet account
+        cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
+
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
+
+        let client = Arc::new(create_client(
+            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.tpu,
+        ));
+
+        // creates one transaction and sends it 10 times
+        // this is done in single thread
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client.clone()),
             DosClientParameters {
                 entrypoint_addr: cluster.entry_point_info.gossip,
                 mode: Mode::Tpu,
@@ -720,11 +892,88 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams {
-                    num_signatures: 2,
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: false,
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(1),
+                },
+            },
+        );
+
+        // creates and sends unique transactions of Transfer
+        // which tries to send too much lamports from payer to one recipient
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client.clone()),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
                     valid_blockhash: true,
                     valid_signatures: true,
                     unique_transactions: true,
-                    payer_filename: None,
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(1),
+                },
+            },
+        );
+        // creates and sends unique transactions of type Transfer
+        // which tries to send too much lamports from payer to several recipients
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client.clone()),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    transaction_type: Some(TransactionType::Transfer),
+                    num_instructions: Some(8),
+                },
+            },
+        );
+        // creates and sends unique transactions of type CreateAccount
+        // which tries to create account with too large balance
+        // it uses several threads
+        run_dos(
+            &nodes_slice,
+            10,
+            Some(client),
+            DosClientParameters {
+                entrypoint_addr: cluster.entry_point_info.gossip,
+                mode: Mode::Tpu,
+                data_size: 0, // irrelevant if not random
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: true,
+                    valid_signatures: true,
+                    unique_transactions: true,
+                    transaction_type: Some(TransactionType::AccountCreation),
+                    num_instructions: None,
                 },
             },
         );

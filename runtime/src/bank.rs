@@ -107,8 +107,9 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, default_units_per_instruction, disable_fee_calculator, nonce_must_be_writable,
-            prioritization_fee_type_change, requestable_heap_size, tx_wide_compute_cap, FeatureSet,
+            self, add_set_compute_unit_price_ix, default_units_per_instruction,
+            disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
+            tx_wide_compute_cap, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -239,7 +240,7 @@ impl RentDebits {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HSBFEjhoubTjeGKeBJvRDAiCBTVeFfcWNPZSbDW1w4H4")]
+#[frozen_abi(digest = "2YZk2K45HmmAafmxPJnYVXyQ7uA7WuBrRkpwrCawdK31")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -2265,7 +2266,7 @@ impl Bank {
             block_height: self.block_height,
             collector_id: self.collector_id,
             collector_fees: self.collector_fees.load(Relaxed),
-            fee_calculator: self.fee_calculator.clone(),
+            fee_calculator: self.fee_calculator,
             fee_rate_governor: self.fee_rate_governor.clone(),
             collected_rent: self.collected_rent.load(Relaxed),
             rent_collector: self.rent_collector.clone(),
@@ -3638,7 +3639,7 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
-                .is_active(&prioritization_fee_type_change::id()),
+                .is_active(&add_set_compute_unit_price_ix::id()),
         ))
     }
 
@@ -3653,7 +3654,7 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
-                .is_active(&prioritization_fee_type_change::id()),
+                .is_active(&add_set_compute_unit_price_ix::id()),
         )
     }
 
@@ -4244,7 +4245,8 @@ impl Bank {
             })
             .map_err(|err| {
                 match err {
-                    TransactionError::InvalidRentPayingAccount => {
+                    TransactionError::InvalidRentPayingAccount
+                    | TransactionError::InsufficientFundsForRent { .. } => {
                         error_counters.invalid_rent_paying_account += 1;
                     }
                     _ => {
@@ -4389,11 +4391,11 @@ impl Bank {
                         if tx_wide_compute_cap {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_message(
-                                tx.message(),
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
                                 feature_set.is_active(&requestable_heap_size::id()),
                                 feature_set.is_active(&default_units_per_instruction::id()),
-                                feature_set.is_active(&prioritization_fee_type_change::id()),
+                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -4609,7 +4611,7 @@ impl Bank {
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         tx_wide_compute_cap: bool,
-        prioritization_fee_type_change: bool,
+        support_set_compute_unit_price_ix: bool,
     ) -> u64 {
         if tx_wide_compute_cap {
             // Fee based on compute units and signatures
@@ -4622,9 +4624,15 @@ impl Bank {
             };
 
             let mut compute_budget = ComputeBudget::default();
-            let prioritization_fee = compute_budget
-                .process_message(message, false, false, prioritization_fee_type_change)
+            let prioritization_fee_details = compute_budget
+                .process_instructions(
+                    message.program_instructions_iter(),
+                    false,
+                    false,
+                    support_set_compute_unit_price_ix,
+                )
                 .unwrap_or_default();
+            let prioritization_fee = prioritization_fee_details.get_fee();
             let signature_fee = Self::get_num_signatures_in_message(message)
                 .saturating_mul(fee_structure.lamports_per_signature);
             let write_lock_fee = Self::get_num_write_locks_in_message(message)
@@ -4691,7 +4699,7 @@ impl Bank {
                     &self.fee_structure,
                     self.feature_set.is_active(&tx_wide_compute_cap::id()),
                     self.feature_set
-                        .is_active(&prioritization_fee_type_change::id()),
+                        .is_active(&add_set_compute_unit_price_ix::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -6261,8 +6269,15 @@ impl Bank {
             .unwrap()
             .get_hash_data(self.slot(), self.parent_slot());
         if let Some(buf) = buf {
-            info!("hard fork at bank {}", self.slot());
-            hash = extend_and_hash(&hash, &buf)
+            let hard_forked_hash = extend_and_hash(&hash, &buf);
+            warn!(
+                "hard fork at slot {} by hashing {:?}: {} => {}",
+                self.slot(),
+                buf,
+                hash,
+                hard_forked_hash
+            );
+            hash = hard_forked_hash;
         }
 
         info!(
@@ -7235,7 +7250,11 @@ pub(crate) mod tests {
             status_cache::MAX_CACHE_ENTRIES,
         },
         crossbeam_channel::{bounded, unbounded},
-        solana_program_runtime::invoke_context::InvokeContext,
+        solana_program_runtime::{
+            compute_budget::MAX_UNITS,
+            invoke_context::InvokeContext,
+            prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+        },
         solana_sdk::{
             account::Account,
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -12732,7 +12751,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator.clone()))
+                        Some((data.blockhash, data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -12769,7 +12788,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator.clone()))
+                        Some((data.blockhash, data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -12802,7 +12821,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator.clone()))
+                        Some((data.blockhash, data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -12839,7 +12858,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator.clone()))
+                        Some((data.blockhash, data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -16758,26 +16777,19 @@ pub(crate) mod tests {
 
         // Explicit fee schedule
 
-        let expected_fee_structure = &[
-            // (units requested, fee in SOL),
-            (0, 0.0),
-            (5_000, 0.0),
-            (10_000, 0.0),
-            (100_000, 0.0),
-            (300_000, 0.0),
-            (500_000, 0.0),
-            (700_000, 0.0),
-            (900_000, 0.0),
-            (1_100_000, 0.0),
-            (1_300_000, 0.0),
-            (1_500_000, 0.0), // ComputeBudget capped
-        ];
-        for pair in expected_fee_structure.iter() {
-            const PRIORITIZATION_FEE: u64 = 42;
+        for requested_compute_units in [
+            0, 5_000, 10_000, 100_000, 300_000, 500_000, 700_000, 900_000, 1_100_000, 1_300_000,
+            MAX_UNITS,
+        ] {
+            const PRIORITIZATION_FEE_RATE: u64 = 42;
+            let prioritization_fee_details = PrioritizationFeeDetails::new(
+                PrioritizationFeeType::ComputeUnitPrice(PRIORITIZATION_FEE_RATE),
+                requested_compute_units as u64,
+            );
             let message = SanitizedMessage::try_from(Message::new(
                 &[
-                    ComputeBudgetInstruction::request_units(pair.0),
-                    ComputeBudgetInstruction::set_prioritization_fee(PRIORITIZATION_FEE),
+                    ComputeBudgetInstruction::request_units(requested_compute_units),
+                    ComputeBudgetInstruction::set_compute_unit_price(PRIORITIZATION_FEE_RATE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),
@@ -16786,7 +16798,7 @@ pub(crate) mod tests {
             let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
             assert_eq!(
                 fee,
-                sol_to_lamports(pair.1) + lamports_per_signature + PRIORITIZATION_FEE
+                lamports_per_signature + prioritization_fee_details.get_fee()
             );
         }
     }
@@ -17410,9 +17422,9 @@ pub(crate) mod tests {
             recent_blockhash,
         );
         let result = bank.process_transaction(&tx);
-        assert_ne!(
+        assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InstructionError(0, InstructionError::Custom(1))
         );
         assert_ne!(
             fee_payer_balance,
@@ -17455,7 +17467,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17477,7 +17489,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17504,7 +17516,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert_eq!(
             fee_payer_balance - fee,
@@ -17557,7 +17569,7 @@ pub(crate) mod tests {
         let result = bank.process_transaction(&tx);
         assert_eq!(
             result.unwrap_err(),
-            TransactionError::InvalidRentPayingAccount
+            TransactionError::InsufficientFundsForRent { account_index: 0 }
         );
         assert!(check_account_is_rent_exempt(
             &rent_exempt_fee_payer.pubkey()
@@ -17924,10 +17936,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_small - 1,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -17960,10 +17978,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_large,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -17996,10 +18020,16 @@ pub(crate) mod tests {
             mock_program_id,
             recent_blockhash,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &rent_paying_pubkey)
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
         assert_eq!(
             rent_exempt_minimum_small,
             bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -18033,10 +18063,16 @@ pub(crate) mod tests {
             account_data_size_small as u64,
             &system_program::id(),
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &created_keypair.pubkey())
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
 
         // create account, rent exempt
         let tx = system_transaction::create_account(
@@ -18082,10 +18118,16 @@ pub(crate) mod tests {
             recent_blockhash,
             (account_data_size_small + 1) as u64,
         );
-        assert_eq!(
-            bank.process_transaction(&tx).unwrap_err(),
-            TransactionError::InvalidRentPayingAccount,
-        );
+        let expected_err = {
+            let account_index = tx
+                .message
+                .account_keys
+                .iter()
+                .position(|key| key == &created_keypair.pubkey())
+                .unwrap() as u8;
+            TransactionError::InsufficientFundsForRent { account_index }
+        };
+        assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
 
         // bring balance of account up to rent exemption
         let tx = system_transaction::transfer(

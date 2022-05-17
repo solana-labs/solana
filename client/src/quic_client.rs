@@ -15,6 +15,7 @@ use {
         ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
     },
     quinn_proto::ConnectionStats,
+    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         quic::{
             QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
@@ -22,7 +23,7 @@ use {
         transport::Result as TransportResult,
     },
     std::{
-        net::{SocketAddr, UdpSocket},
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
         time::Duration,
     },
@@ -57,9 +58,91 @@ lazy_static! {
         .unwrap();
 }
 
-struct QuicClient {
+/// A wrapper over NewConnection with additional capability to create the endpoint as part
+/// of creating a new connection.
+#[derive(Clone)]
+struct QuicNewConnection {
     endpoint: Endpoint,
-    connection: Arc<Mutex<Option<Arc<NewConnection>>>>,
+    connection: Arc<NewConnection>,
+}
+
+impl QuicNewConnection {
+    /// Create a QuicNewConnection given the remote address 'addr'.
+    async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
+        let (_, client_socket) = solana_net_utils::bind_in_range(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            VALIDATOR_PORT_RANGE,
+        )
+        .unwrap();
+
+        let mut crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+        crypto.enable_early_data = true;
+
+        let mut endpoint =
+            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket).await;
+
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
+        transport_config.max_idle_timeout(Some(timeout));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+
+        endpoint.set_default_client_config(config);
+
+        let connecting = endpoint.connect(addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connecting_result = connecting.await;
+        if connecting_result.is_err() {
+            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+        }
+        let connection = connecting_result?;
+
+        Ok(Self {
+            endpoint,
+            connection: Arc::new(connection),
+        })
+    }
+
+    // If this function becomes public, it should be changed to
+    // not expose details of the specific Quic implementation we're using
+    async fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
+        quinn::Endpoint::new(config, None, client_socket).unwrap().0
+    }
+
+    // Attempts to make a faster connection by taking advantage of pre-existing key material.
+    // Only works if connection to this endpoint was previously established.
+    async fn make_connection_0rtt(
+        &mut self,
+        addr: SocketAddr,
+        stats: &ClientStats,
+    ) -> Result<Arc<NewConnection>, WriteError> {
+        let connecting = self.endpoint.connect(addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connection = match connecting.into_0rtt() {
+            Ok((connection, zero_rtt)) => {
+                if zero_rtt.await {
+                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                } else {
+                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                }
+                connection
+            }
+            Err(connecting) => {
+                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+                let connecting = connecting.await;
+                connecting?
+            }
+        };
+        self.connection = Arc::new(connection);
+        Ok(self.connection.clone())
+    }
+}
+
+struct QuicClient {
+    connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
 }
@@ -79,9 +162,9 @@ impl QuicTpuConnection {
 }
 
 impl TpuConnection for QuicTpuConnection {
-    fn new(client_socket: UdpSocket, tpu_addr: SocketAddr) -> Self {
+    fn new(tpu_addr: SocketAddr) -> Self {
         let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-        let client = Arc::new(QuicClient::new(client_socket, tpu_addr));
+        let client = Arc::new(QuicClient::new(tpu_addr));
 
         Self { client }
     }
@@ -156,29 +239,8 @@ impl TpuConnection for QuicTpuConnection {
 }
 
 impl QuicClient {
-    pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
-        let _guard = RUNTIME.enter();
-
-        let mut crypto = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
-        crypto.enable_early_data = true;
-
-        let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
-
-        let mut endpoint = RUNTIME.block_on(create_endpoint);
-
-        let mut config = ClientConfig::new(Arc::new(crypto));
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
-        let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
-        transport_config.max_idle_timeout(Some(timeout));
-        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
-
-        endpoint.set_default_client_config(config);
-
+    pub fn new(addr: SocketAddr) -> Self {
         Self {
-            endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
@@ -188,13 +250,7 @@ impl QuicClient {
     pub fn stats(&self) -> Option<ConnectionStats> {
         let conn_guard = self.connection.lock();
         let x = RUNTIME.block_on(conn_guard);
-        x.as_ref().map(|c| c.connection.stats())
-    }
-
-    // If this function becomes public, it should be changed to
-    // not expose details of the specific Quic implementation we're using
-    async fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket).unwrap().0
+        x.as_ref().map(|c| c.connection.connection.stats())
     }
 
     async fn _send_buffer_using_conn(
@@ -207,44 +263,6 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-        stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting_result = connecting.await;
-        if connecting_result.is_err() {
-            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-        }
-        let connection = connecting_result?;
-        Ok(Arc::new(connection))
-    }
-
-    // Attempts to make a faster connection by taking advantage of pre-existing key material.
-    // Only works if connection to this endpoint was previously established.
-    async fn make_connection_0rtt(
-        &self,
-        stats: &ClientStats,
-    ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-        stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connection = match connecting.into_0rtt() {
-            Ok((connection, zero_rtt)) => {
-                if zero_rtt.await {
-                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                } else {
-                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-                }
-                connection
-            }
-            Err(connecting) => {
-                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-                let connecting = connecting.await;
-                connecting?
-            }
-        };
-
-        Ok(Arc::new(connection))
-    }
-
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
     async fn _send_buffer(
@@ -255,16 +273,16 @@ impl QuicClient {
         let connection = {
             let mut conn_guard = self.connection.lock().await;
 
-            let maybe_conn = (*conn_guard).clone();
+            let maybe_conn = conn_guard.clone();
             match maybe_conn {
                 Some(conn) => {
                     stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
-                    conn.clone()
+                    conn.connection.clone()
                 }
                 None => {
-                    let connection = self.make_connection(stats).await?;
-                    *conn_guard = Some(connection.clone());
-                    connection
+                    let conn = QuicNewConnection::make_connection(self.addr, stats).await?;
+                    *conn_guard = Some(conn.clone());
+                    conn.connection.clone()
                 }
             }
         };
@@ -272,10 +290,9 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connection = self.make_connection_0rtt(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
-                    *conn_guard = Some(connection.clone());
-                    connection
+                    let conn = conn_guard.as_mut().unwrap();
+                    conn.make_connection_0rtt(self.addr, stats).await?
                 };
                 Self::_send_buffer_using_conn(data, &connection).await?;
                 Ok(connection)

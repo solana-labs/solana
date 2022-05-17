@@ -798,6 +798,25 @@ macro_rules! unchecked_div_by_const {
     }};
 }
 
+use std::{mem::MaybeUninit, ptr::write_bytes};
+
+#[macro_export]
+macro_rules! copy_field {
+    ($ptr:expr, $self:ident, $field:ident) => {
+        std::ptr::addr_of_mut!((*$ptr).$field).write($self.$field)
+    };
+}
+
+pub fn clone_zeroed<T, F>(clone: F) -> T
+where
+    F: Fn(&mut MaybeUninit<T>),
+{
+    let mut value = MaybeUninit::<T>::uninit();
+    unsafe { write_bytes(&mut value, 0, 1) }
+    clone(&mut value);
+    unsafe { value.assume_init() }
+}
+
 // This module is purposefully listed after all other exports: because of an
 // interaction within rustdoc between the reexports inside this module of
 // `solana_program`'s top-level modules, and `solana_sdk`'s glob re-export of

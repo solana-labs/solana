@@ -21,6 +21,12 @@ import type {CompiledInstruction} from './message';
  */
 export type TransactionSignature = string;
 
+export const enum TransactionStatus {
+  BLOCKHEIGHT_EXCEEDED,
+  PROCESSED,
+  TIMED_OUT,
+}
+
 /**
  * Default (empty) signature
  */
@@ -124,17 +130,30 @@ export type SignaturePubkeyPair = {
 
 /**
  * List of Transaction object fields that may be initialized at construction
- *
  */
-export type TransactionCtorFields = {
-  /** A recent blockhash */
-  recentBlockhash?: Blockhash | null;
+export type TransactionCtorFields_DEPRECATED = {
   /** Optional nonce information used for offline nonce'd transactions */
   nonceInfo?: NonceInformation | null;
   /** The transaction fee payer */
   feePayer?: PublicKey | null;
   /** One or more signatures */
   signatures?: Array<SignaturePubkeyPair>;
+  /** A recent blockhash */
+  recentBlockhash?: Blockhash;
+};
+
+/**
+ * List of Transaction object fields that may be initialized at construction
+ */
+export type TransactionBlockhashCtor = {
+  /** The transaction fee payer */
+  feePayer?: PublicKey | null;
+  /** One or more signatures */
+  signatures?: Array<SignaturePubkeyPair>;
+  /** A recent blockhash */
+  blockhash: Blockhash;
+  /** the last block chain can advance to before tx is declared expired */
+  lastValidBlockHeight: number;
 };
 
 /**
@@ -197,6 +216,11 @@ export class Transaction {
   recentBlockhash?: Blockhash;
 
   /**
+   * the last block chain can advance to before tx is declared expired
+   * */
+  lastValidBlockHeight?: number;
+
+  /**
    * Optional Nonce information. If populated, transaction will use a durable
    * Nonce hash instead of a recentBlockhash. Must be populated by the caller
    */
@@ -212,11 +236,35 @@ export class Transaction {
    */
   _json?: TransactionJSON;
 
+  // Construct a transaction with a blockhash and lastValidBlockHeight
+  constructor(opts?: TransactionBlockhashCtor);
+
+  /**
+   * @deprecated `TransactionCtorFields` has been deprecated and will be removed in a future version.
+   * Please supply a `TransactionBlockhashCtor` instead.
+   */
+  constructor(opts?: TransactionCtorFields_DEPRECATED);
+
   /**
    * Construct an empty Transaction
    */
-  constructor(opts?: TransactionCtorFields) {
-    opts && Object.assign(this, opts);
+  constructor(
+    opts?: TransactionBlockhashCtor | TransactionCtorFields_DEPRECATED,
+  ) {
+    if (!opts) {
+      return;
+    } else if (
+      Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')
+    ) {
+      const newOpts = opts as TransactionBlockhashCtor;
+      Object.assign(this, newOpts);
+      this.recentBlockhash = newOpts.blockhash;
+      this.lastValidBlockHeight = newOpts.lastValidBlockHeight;
+    } else {
+      const oldOpts = opts as TransactionCtorFields_DEPRECATED;
+      Object.assign(this, oldOpts);
+      this.recentBlockhash = oldOpts.recentBlockhash;
+    }
   }
 
   /**

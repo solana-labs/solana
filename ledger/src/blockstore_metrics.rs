@@ -245,7 +245,7 @@ thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefC
 /// and the PerfContext of the ubsequent RocksDB operation will be collected.
 pub(crate) fn maybe_enable_rocksdb_perf(
     sample_interval: usize,
-    perf_samples_counter: &Arc<AtomicUsize>,
+    perf_samples_counter: &AtomicUsize,
 ) -> bool {
     if sample_interval == 0 {
         return false;
@@ -512,11 +512,11 @@ pub(crate) fn report_rocksdb_write_perf(metric_header: &'static str) {
     });
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 /// A struct that holds the current status of RocksDB perf sampling.
-pub struct BlockstoreRocksDbPerfSamplingStatus {
+pub struct PerfSamplingStatus {
     // The number of RocksDB operations since the last perf sample.
-    pub(crate) op_count: Arc<AtomicUsize>,
+    pub(crate) op_count: AtomicUsize,
 }
 
 pub trait ColumnMetrics {

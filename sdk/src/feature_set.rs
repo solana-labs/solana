@@ -396,12 +396,16 @@ pub mod stake_raise_minimum_delegation_to_1_sol {
     solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
 }
 
+pub mod add_set_compute_unit_price_ix {
+    solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
+}
+
 pub mod disable_deploy_of_alloc_free_syscall {
     solana_sdk::declare_id!("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im");
 }
 
-pub mod prioritization_fee_type_change {
-    solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
+pub mod include_account_index_in_rent_error {
+    solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
 }
 
 lazy_static! {
@@ -496,8 +500,9 @@ lazy_static! {
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
-        (prioritization_fee_type_change::id(), "Switch compute budget to prioritization fee"),
+        (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
