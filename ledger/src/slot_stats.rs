@@ -1,5 +1,5 @@
 use {
-    crate::blockstore_meta::SlotMeta,
+    crate::{blockstore::OptimisticDistributionSlotSender, blockstore_meta::SlotMeta},
     bitflags::bitflags,
     lru::LruCache,
     solana_sdk::clock::Slot,
@@ -9,6 +9,8 @@ use {
     },
 };
 
+// TODO update this magic number
+const OPTIMISTIC_DISTRIBUTION_FEC_SET_COUNT_THRESHOLD: usize = 35;
 const SLOTS_STATS_CACHE_CAPACITY: usize = 300;
 
 #[derive(Copy, Clone, Debug)]
@@ -21,9 +23,10 @@ pub(crate) enum ShredSource {
 bitflags! {
     #[derive(Default)]
     struct SlotFlags: u8 {
-        const DEAD   = 0b00000001;
-        const FULL   = 0b00000010;
-        const ROOTED = 0b00000100;
+        const DEAD                 = 0b00000001;
+        const FULL                 = 0b00000010;
+        const ROOTED               = 0b00000100;
+        const OPTIMISTIC_THRESHOLD = 0b00001000;
     }
 }
 
@@ -45,6 +48,10 @@ impl SlotStats {
             .unwrap_or(0)
     }
 
+    pub fn reached_optimistic_threshold(&self) -> bool {
+        self.get_min_index_count() >= OPTIMISTIC_DISTRIBUTION_FEC_SET_COUNT_THRESHOLD
+    }
+
     fn report(&self, slot: Slot) {
         let min_fec_set_count = self.get_min_index_count();
         datapoint_info!(
@@ -57,6 +64,11 @@ impl SlotStats {
             ("is_full", self.flags.contains(SlotFlags::FULL), bool),
             ("is_rooted", self.flags.contains(SlotFlags::ROOTED), bool),
             ("is_dead", self.flags.contains(SlotFlags::DEAD), bool),
+            (
+                "is_optimistic_distribution",
+                self.flags.contains(SlotFlags::OPTIMISTIC_THRESHOLD),
+                bool
+            ),
         );
     }
 }
@@ -96,6 +108,7 @@ impl SlotsStats {
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
+        optimistic_distribution_slot_sender: &Mutex<Option<OptimisticDistributionSlotSender>>,
     ) {
         let mut slot_full_reporting_info = None;
         let mut stats = self.stats.lock().unwrap();
@@ -120,6 +133,23 @@ impl SlotsStats {
                 }
             }
         }
+
+        if !slot_stats.flags.contains(SlotFlags::OPTIMISTIC_THRESHOLD)
+            && slot_stats.flags.contains(SlotFlags::FULL)
+            && slot_stats.reached_optimistic_threshold()
+        {
+            slot_stats.flags |= SlotFlags::OPTIMISTIC_THRESHOLD;
+
+            if let Some(s) = &*optimistic_distribution_slot_sender.lock().unwrap() {
+                if let Err(e) = s.try_send(slot) {
+                    warn!(
+                        "failed to send to optimistic_distribution_slot_sender: {:?}",
+                        &e
+                    );
+                }
+            }
+        }
+
         drop(stats);
         if let Some((num_repaired, num_recovered)) = slot_full_reporting_info {
             let slot_meta = slot_meta.unwrap();

@@ -39,7 +39,8 @@ use {
     solana_ledger::{
         bank_forks_utils,
         blockstore::{
-            Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
+            Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver,
+            OptimisticDistributionSlotReceiver, PurgeType,
         },
         blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
@@ -58,9 +59,9 @@ use {
             OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
         },
         rpc::JsonRpcConfig,
-        rpc_completed_slots_service::RpcCompletedSlotsService,
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_service::JsonRpcService,
+        rpc_slot_services::{RpcCompletedSlotsService, RpcOptimisticDistributionSlotService},
         rpc_subscriptions::RpcSubscriptions,
         transaction_notifier_interface::TransactionNotifierLock,
         transaction_status_service::TransactionStatusService,
@@ -324,6 +325,7 @@ pub struct Validator {
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
     rpc_completed_slots_service: JoinHandle<()>,
+    rpc_optimistic_distribution_slot_service: JoinHandle<()>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
@@ -509,6 +511,7 @@ impl Validator {
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
+            optimistic_distribution_slot_receiver,
             leader_schedule_cache,
             starting_snapshot_hashes,
             TransactionHistoryServices {
@@ -915,6 +918,12 @@ impl Validator {
             exit.clone(),
         );
 
+        let rpc_optimistic_distribution_slot_service = RpcOptimisticDistributionSlotService::spawn(
+            optimistic_distribution_slot_receiver,
+            rpc_subscriptions.clone(),
+            exit.clone(),
+        );
+
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -1006,6 +1015,7 @@ impl Validator {
             json_rpc_service,
             pubsub_service,
             rpc_completed_slots_service,
+            rpc_optimistic_distribution_slot_service,
             optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
@@ -1087,6 +1097,10 @@ impl Validator {
         self.rpc_completed_slots_service
             .join()
             .expect("rpc_completed_slots_service");
+
+        self.rpc_optimistic_distribution_slot_service
+            .join()
+            .expect("rpc_optimistic_distribution_slot_service");
 
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
@@ -1307,6 +1321,7 @@ fn load_blockstore(
     Arc<Blockstore>,
     Receiver<bool>,
     CompletedSlotsReceiver,
+    OptimisticDistributionSlotReceiver,
     LeaderScheduleCache,
     Option<StartingSnapshotHashes>,
     TransactionHistoryServices,
@@ -1344,6 +1359,7 @@ fn load_blockstore(
         mut blockstore,
         ledger_signal_receiver,
         completed_slots_receiver,
+        optimistic_distribution_slot_receiver,
         ..
     } = Blockstore::open_with_signal(
         ledger_path,
@@ -1463,6 +1479,7 @@ fn load_blockstore(
         blockstore,
         ledger_signal_receiver,
         completed_slots_receiver,
+        optimistic_distribution_slot_receiver,
         leader_schedule_cache,
         starting_snapshot_hashes,
         transaction_history_services,

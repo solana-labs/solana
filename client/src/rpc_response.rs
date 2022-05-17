@@ -225,6 +225,10 @@ pub enum SlotUpdate {
         slot: Slot,
         timestamp: u64,
     },
+    OptimisticDistribution {
+        slot: Slot,
+        timestamp: u64,
+    },
 }
 
 impl SlotUpdate {
@@ -237,6 +241,7 @@ impl SlotUpdate {
             Self::Dead { slot, .. } => *slot,
             Self::OptimisticConfirmation { slot, .. } => *slot,
             Self::Root { slot, .. } => *slot,
+            Self::OptimisticDistribution { slot, .. } => *slot,
         }
     }
 }

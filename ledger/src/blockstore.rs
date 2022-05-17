@@ -89,10 +89,11 @@ lazy_static! {
         .unwrap();
 }
 
-pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
-pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
+const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
+const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
+const MAX_OPTIMISTIC_DISTRIBUTION_SLOTS_IN_CHANNEL: usize = 1_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
-pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
+const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -101,6 +102,8 @@ pub const MAX_DATA_SHREDS_PER_SLOT: usize = 32_768;
 
 pub type CompletedSlotsSender = Sender<Vec<Slot>>;
 pub type CompletedSlotsReceiver = Receiver<Vec<Slot>>;
+pub type OptimisticDistributionSlotSender = Sender<Slot>;
+pub type OptimisticDistributionSlotReceiver = Receiver<Slot>;
 type CompletedRanges = Vec<(u32, u32)>;
 
 #[derive(Default)]
@@ -133,6 +136,7 @@ pub struct BlockstoreSignals {
     pub blockstore: Blockstore,
     pub ledger_signal_receiver: Receiver<bool>,
     pub completed_slots_receiver: CompletedSlotsReceiver,
+    pub optimistic_distribution_slot_receiver: OptimisticDistributionSlotReceiver,
 }
 
 // ledger window
@@ -162,6 +166,7 @@ pub struct Blockstore {
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
+    optimistic_distribution_slot_sender: Mutex<Option<OptimisticDistributionSlotSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
@@ -432,6 +437,7 @@ impl Blockstore {
             bank_hash_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
+            optimistic_distribution_slot_sender: Mutex::default(),
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
@@ -453,14 +459,21 @@ impl Blockstore {
         let (ledger_signal_sender, ledger_signal_receiver) = bounded(MAX_REPLAY_WAKE_UP_SIGNALS);
         let (completed_slots_sender, completed_slots_receiver) =
             bounded(MAX_COMPLETED_SLOTS_IN_CHANNEL);
+        let (optimistic_distribution_slot_sender, optimistic_distribution_slot_receiver) =
+            bounded(MAX_OPTIMISTIC_DISTRIBUTION_SLOTS_IN_CHANNEL);
 
         blockstore.add_new_shred_signal(ledger_signal_sender);
         blockstore.add_completed_slots_signal(completed_slots_sender);
+        *blockstore
+            .optimistic_distribution_slot_sender
+            .lock()
+            .unwrap() = Some(optimistic_distribution_slot_sender);
 
         Ok(BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
             completed_slots_receiver,
+            optimistic_distribution_slot_receiver,
         })
     }
 
@@ -1049,11 +1062,11 @@ impl Blockstore {
         Ok((newly_completed_data_sets, inserted_indices))
     }
 
-    pub fn add_new_shred_signal(&self, s: Sender<bool>) {
+    fn add_new_shred_signal(&self, s: Sender<bool>) {
         self.new_shreds_signals.lock().unwrap().push(s);
     }
 
-    pub fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
+    fn add_completed_slots_signal(&self, s: CompletedSlotsSender) {
         self.completed_slots_senders.lock().unwrap().push(s);
     }
 
@@ -1068,6 +1081,7 @@ impl Blockstore {
     pub fn drop_signal(&self) {
         self.new_shreds_signals.lock().unwrap().clear();
         self.completed_slots_senders.lock().unwrap().clear();
+        *self.optimistic_distribution_slot_sender.lock().unwrap() = None;
     }
 
     /// Range-delete all entries which prefix matches the specified `slot` and
@@ -1207,8 +1221,13 @@ impl Blockstore {
             return false;
         }
 
-        self.slots_stats
-            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.fec_set_index(),
+            shred_source,
+            None,
+            &self.optimistic_distribution_slot_sender,
+        );
 
         // insert coding shred into rocks
         let result = self
@@ -1623,6 +1642,7 @@ impl Blockstore {
             shred.fec_set_index(),
             shred_source,
             Some(slot_meta),
+            &self.optimistic_distribution_slot_sender,
         );
 
         // slot is full, send slot full timing to poh_timing_report service.
@@ -3393,7 +3413,7 @@ fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u6
 
 fn send_signals(
     new_shreds_signals: &[Sender<bool>],
-    completed_slots_senders: &[Sender<Vec<u64>>],
+    completed_slots_senders: &[CompletedSlotsSender],
     should_signal: bool,
     newly_completed_slots: Vec<u64>,
 ) {
@@ -3453,7 +3473,7 @@ fn send_signals(
 ///    newly completed.
 fn commit_slot_meta_working_set(
     slot_meta_working_set: &HashMap<u64, SlotMetaWorkingSetEntry>,
-    completed_slots_senders: &[Sender<Vec<u64>>],
+    completed_slots_senders: &[CompletedSlotsSender],
     write_batch: &mut WriteBatch,
 ) -> Result<(bool, Vec<u64>)> {
     let mut should_signal = false;
