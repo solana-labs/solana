@@ -13,20 +13,12 @@ edition = "2021"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bincode = "1.3.3"
 bzip2 = "0.4.3"
-<<<<<<< HEAD
 enum-iterator = "0.7.0"
 flate2 = "1.0.22"
+futures = "0.3.21"
 goauth = "0.11.1"
 log = "0.4.14"
 prost = "0.10.0"
-=======
-enum-iterator = "0.8.1"
-flate2 = "1.0.23"
-futures = "0.3.21"
-goauth = "0.12.0"
-log = "0.4.17"
-prost = "0.10.3"
->>>>>>> 6bcadc755 (Speedup bigtable block upload by factor of 8-10x (#24534))
 prost-types = "0.10.0"
 serde = "1.0.136"
 serde_derive = "1.0.103"
@@ -36,14 +28,9 @@ solana-sdk = { path = "../sdk", version = "=1.10.15" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.10.15" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.15" }
 thiserror = "1.0"
-<<<<<<< HEAD
+tokio = "~1.14.1"
 tonic = { version = "0.7.1", features = ["tls", "transport"] }
 zstd = "0.11.1"
-=======
-tokio = "~1.14.1"
-tonic = { version = "0.7.2", features = ["tls", "transport"] }
-zstd = "0.11.2"
->>>>>>> 6bcadc755 (Speedup bigtable block upload by factor of 8-10x (#24534))
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
 # declare it here as well to activate the "vendored" feature that builds OpenSSL
