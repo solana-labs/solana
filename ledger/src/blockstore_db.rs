@@ -4,8 +4,7 @@ use {
         blockstore_meta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
-            BlockstoreRocksDbColumnFamilyMetrics, BlockstoreRocksDbPerfSamplingStatus,
-            ColumnMetrics,
+            BlockstoreRocksDbColumnFamilyMetrics, ColumnMetrics, PerfSamplingStatus,
         },
         rocksdb_metric_header,
     },
@@ -308,7 +307,7 @@ struct Rocks {
     access_type: AccessType,
     oldest_slot: OldestSlot,
     column_options: LedgerColumnOptions,
-    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus,
+    write_batch_perf_status: PerfSamplingStatus,
 }
 
 impl Rocks {
@@ -340,7 +339,7 @@ impl Rocks {
                 access_type: access_type.clone(),
                 oldest_slot,
                 column_options,
-                write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
+                write_batch_perf_status: PerfSamplingStatus::default(),
             },
             AccessType::Secondary => {
                 let secondary_path = path.join("solana-secondary");
@@ -361,7 +360,7 @@ impl Rocks {
                     access_type: access_type.clone(),
                     oldest_slot,
                     column_options,
-                    write_batch_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
+                    write_batch_perf_status: PerfSamplingStatus::default(),
                 }
             }
         };
@@ -985,14 +984,14 @@ impl TypedColumn for columns::ErasureMeta {
     type Type = blockstore_meta::ErasureMeta;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Database {
     backend: Arc<Rocks>,
     path: Arc<Path>,
     column_options: Arc<LedgerColumnOptions>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LedgerColumn<C>
 where
     C: Column + ColumnName + ColumnMetrics,
@@ -1000,8 +999,8 @@ where
     backend: Arc<Rocks>,
     column: PhantomData<C>,
     pub column_options: Arc<LedgerColumnOptions>,
-    read_perf_status: BlockstoreRocksDbPerfSamplingStatus,
-    write_perf_status: BlockstoreRocksDbPerfSamplingStatus,
+    read_perf_status: PerfSamplingStatus,
+    write_perf_status: PerfSamplingStatus,
 }
 
 impl<C: Column + ColumnName + ColumnMetrics> LedgerColumn<C> {
@@ -1248,8 +1247,8 @@ impl Database {
             backend: Arc::clone(&self.backend),
             column: PhantomData,
             column_options: Arc::clone(&self.column_options),
-            read_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
-            write_perf_status: BlockstoreRocksDbPerfSamplingStatus::default(),
+            read_perf_status: PerfSamplingStatus::default(),
+            write_perf_status: PerfSamplingStatus::default(),
         }
     }
 

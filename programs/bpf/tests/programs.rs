@@ -40,7 +40,7 @@ use {
         },
     },
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         client::SyncClient,
@@ -226,7 +226,7 @@ fn run_program(name: &str) -> u64 {
             &data,
             None,
             config,
-            register_syscalls(invoke_context, false /* no sol_alloc_free */).unwrap(),
+            register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
         Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
@@ -563,10 +563,6 @@ fn test_program_bpf_loader_deprecated() {
             .accounts
             .remove(&solana_sdk::feature_set::disable_deprecated_loader::id())
             .unwrap();
-        genesis_config
-            .accounts
-            .remove(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id())
-            .unwrap();
         let mut bank = Bank::new_for_tests(&genesis_config);
         let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
         bank.add_builtin(&name, &id, entrypoint);
@@ -583,84 +579,6 @@ fn test_program_bpf_loader_deprecated() {
         let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
         assert!(result.is_ok());
     }
-}
-
-#[test]
-fn test_sol_alloc_free_no_longer_deployable() {
-    solana_logger::setup();
-
-    let program_keypair = Keypair::new();
-    let program_address = program_keypair.pubkey();
-    let loader_address = bpf_loader_deprecated::id();
-
-    let GenesisConfigInfo {
-        genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config(50);
-    let mut bank = Bank::new_for_tests(&genesis_config);
-
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deprecated_loader::id());
-    let (name, id, entrypoint) = solana_bpf_loader_deprecated_program!();
-    bank.add_builtin(&name, &id, entrypoint);
-
-    // Populate loader account with elf that depends on _sol_alloc_free syscall
-    let elf = read_bpf_program("solana_bpf_rust_deprecated_loader");
-    let mut program_account = AccountSharedData::new(1, elf.len(), &loader_address);
-    program_account
-        .data_as_mut_slice()
-        .get_mut(..)
-        .unwrap()
-        .copy_from_slice(&elf);
-    bank.store_account(&program_address, &program_account);
-
-    let finalize_tx = Transaction::new(
-        &[&mint_keypair, &program_keypair],
-        Message::new(
-            &[loader_instruction::finalize(
-                &program_keypair.pubkey(),
-                &loader_address,
-            )],
-            Some(&mint_keypair.pubkey()),
-        ),
-        bank.last_blockhash(),
-    );
-
-    let invoke_tx = Transaction::new(
-        &[&mint_keypair],
-        Message::new(
-            &[Instruction::new_with_bytes(
-                program_address,
-                &[1],
-                vec![AccountMeta::new(mint_keypair.pubkey(), true)],
-            )],
-            Some(&mint_keypair.pubkey()),
-        ),
-        bank.last_blockhash(),
-    );
-
-    // Try and deploy a program that depends on _sol_alloc_free
-    assert_eq!(
-        bank.process_transaction(&finalize_tx).unwrap_err(),
-        TransactionError::InstructionError(0, InstructionError::InvalidAccountData)
-    );
-
-    // Enable _sol_alloc_free syscall
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
-
-    // Try and finalize the program now that sol_alloc_free is re-enabled
-    assert!(bank.process_transaction(&finalize_tx).is_ok());
-
-    // invoke the program
-    assert!(bank.process_transaction(&invoke_tx).is_ok());
-
-    // disable _sol_alloc_free
-    bank.deactivate_feature(&solana_sdk::feature_set::disable_deploy_of_alloc_free_syscall::id());
-    bank.clear_signatures();
-
-    // invoke should still succeed on execute because the program is already deployed
-    assert!(bank.process_transaction(&invoke_tx).is_ok());
 }
 
 #[test]
@@ -1519,7 +1437,7 @@ fn assert_instruction_count() {
     {
         programs.extend_from_slice(&[
             ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 4581),
+            ("solana_bpf_rust_alloc", 4459),
             ("solana_bpf_rust_custom_heap", 469),
             ("solana_bpf_rust_dep_crate", 2),
             ("solana_bpf_rust_external_spend", 338),
@@ -1532,7 +1450,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_rand", 429),
             ("solana_bpf_rust_sanity", 52290),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 25265),
+            ("solana_bpf_rust_sha", 25251),
         ]);
     }
 
@@ -3571,7 +3489,7 @@ fn test_program_fees() {
     );
 
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_max_fee = Bank::calculate_fee(
+    let expected_normal_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
@@ -3582,32 +3500,31 @@ fn test_program_fees() {
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_max_fee);
+    assert_eq!(pre_balance - post_balance, expected_normal_fee);
 
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::request_units(100),
-            ComputeBudgetInstruction::set_prioritization_fee(42),
+            ComputeBudgetInstruction::set_compute_unit_price(1),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_min_fee = Bank::calculate_fee(
+    let expected_prioritized_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
         true,
         true,
     );
-    assert!(expected_min_fee < expected_max_fee);
+    assert!(expected_normal_fee < expected_prioritized_fee);
 
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_min_fee);
+    assert_eq!(pre_balance - post_balance, expected_prioritized_fee);
 }
 
 #[test]

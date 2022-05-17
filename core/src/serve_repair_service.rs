@@ -42,6 +42,7 @@ impl ServeRepairService {
             Arc::new(StreamerReceiveStats::new("serve_repair_receiver")),
             1,
             false,
+            None,
         );
         let (response_sender, response_receiver) = unbounded();
         let t_responder = streamer::responder(

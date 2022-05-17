@@ -175,7 +175,7 @@ mod tests {
         let result = accounts_data_meter.adjust_delta(amount);
         assert!(result.is_ok());
         let remaining_after = accounts_data_meter.remaining();
-        assert_eq!(remaining_after, remaining_before + amount.abs() as u64);
+        assert_eq!(remaining_after, remaining_before + amount.unsigned_abs());
     }
 
     #[test]

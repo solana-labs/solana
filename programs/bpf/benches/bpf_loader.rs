@@ -109,7 +109,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
             &elf,
             None,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
         Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
@@ -228,7 +228,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
             &elf,
             None,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
 
@@ -263,7 +263,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             &elf,
             None,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(invoke_context).unwrap(),
         )
         .unwrap();
         let compute_meter = invoke_context.get_compute_meter();

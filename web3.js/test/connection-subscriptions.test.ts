@@ -518,9 +518,35 @@ describe('Subscriptions', () => {
                   );
                 });
               });
+              describe('then having the socket connection error', () => {
+                beforeEach(() => {
+                  stubbedSocket.emit(
+                    'error',
+                    new Error('A bad thing happened to the socket'),
+                  );
+                });
+                describe('making another subscription while disconnected', () => {
+                  beforeEach(() => {
+                    stubbedSocket.call.resetHistory();
+                    setupListener(spy());
+                  });
+                  it('does not issue an RPC call', () => {
+                    expect(stubbedSocket.call).not.to.have.been.called;
+                  });
+                });
+              });
               describe('then having the socket connection drop unexpectedly', () => {
                 beforeEach(() => {
                   stubbedSocket.emit('close');
+                });
+                describe('making another subscription while disconnected', () => {
+                  beforeEach(() => {
+                    stubbedSocket.call.resetHistory();
+                    setupListener(spy());
+                  });
+                  it('does not issue an RPC call', () => {
+                    expect(stubbedSocket.call).not.to.have.been.called;
+                  });
                 });
                 describe('upon the socket connection reopening', () => {
                   let fatalPriorUnubscribe;

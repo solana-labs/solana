@@ -243,33 +243,6 @@ EOF
       "downstream-projects skipped as no relevant files were modified"
   fi
 
-  # Downstream Anchor projects backwards compatibility
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             ^scripts/build-downstream-anchor-projects.sh \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-anchor-projects.sh"
-    name: "downstream-anchor-projects"
-    timeout_in_minutes: 10
-    agents:
-      - "queue=sol-private"
-EOF
-  else
-    annotate --style info \
-      "downstream-anchor-projects skipped as no relevant files were modified"
-  fi
-
   # Wasm support
   if affects \
              ^ci/test-wasm.sh \
