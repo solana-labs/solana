@@ -1,6 +1,6 @@
 [package]
 name = "solana-bucket-map"
-version = "1.9.22"
+version = "1.9.23"
 description = "solana-bucket-map"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bucket-map"
@@ -12,11 +12,11 @@ edition = "2021"
 
 [dependencies]
 rayon = "1.5.0"
-solana-logger = { path = "../logger", version = "=1.9.22" }
-solana-sdk = { path = "../sdk", version = "=1.9.22" }
+solana-logger = { path = "../logger", version = "=1.9.23" }
+solana-sdk = { path = "../sdk", version = "=1.9.23" }
 memmap2 = "0.5.0"
 log = { version = "0.4.11" }
-solana-measure = { path = "../measure", version = "=1.9.22" }
+solana-measure = { path = "../measure", version = "=1.9.23" }
 rand = "0.7.0"
 fs_extra = "1.2.0"
 tempfile = "3.2.0"
