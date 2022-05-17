@@ -67,6 +67,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
+    static_assertions::const_assert_eq,
     std::{fmt::Debug, io::Cursor, mem::size_of, ops::RangeInclusive},
     thiserror::Error,
 };
@@ -84,13 +85,17 @@ const SIZE_OF_SHRED_TYPE: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
+const_assert_eq!(SIZE_OF_CODING_SHRED_HEADERS, 89);
 const SIZE_OF_CODING_SHRED_HEADERS: usize =
     SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
+// Maximum size of data that a data-shred may contain (excluding headers).
+const_assert_eq!(SIZE_OF_DATA_SHRED_PAYLOAD, 1051);
 pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
     - SIZE_OF_COMMON_SHRED_HEADER
     - SIZE_OF_DATA_SHRED_HEADER
     - SIZE_OF_CODING_SHRED_HEADERS
     - SIZE_OF_NONCE;
+const_assert_eq!(SHRED_DATA_OFFSET, 88);
 const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
 // DataShredHeader.size is sum of common-shred-header, data-shred-header and
 // data.len(). Broadcast stage may create zero length data shreds when the
@@ -102,9 +107,11 @@ const DATA_SHRED_SIZE_RANGE: RangeInclusive<usize> =
 const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
+const_assert_eq!(SHRED_PAYLOAD_SIZE, 1228);
 const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 // SIZE_OF_CODING_SHRED_HEADERS bytes at the end of data shreds
 // is never used and is not part of erasure coding.
+const_assert_eq!(ENCODED_PAYLOAD_SIZE, 1139);
 const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
