@@ -10,14 +10,9 @@ documentation = "https://docs.rs/solana-version"
 edition = "2021"
 
 [dependencies]
-<<<<<<< HEAD
 log = "0.4.14"
+semver = "1.0.6"
 serde = "1.0.136"
-=======
-log = "0.4.17"
-semver = "1.0.9"
-serde = "1.0.137"
->>>>>>> a118af069 (RPC: Add API version to context response (#25134))
 serde_derive = "1.0.103"
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.15" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.15" }
