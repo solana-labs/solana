@@ -307,7 +307,7 @@ impl Sanitize for Vote {
 impl Vote {
     // Returns None if cannot parse transaction into a vote.
     pub fn new(from: Pubkey, transaction: Transaction, wallclock: u64) -> Option<Self> {
-        vote_parser::parse_vote_transaction(&transaction).map(|(_, vote, _)| Self {
+        vote_parser::parse_vote_transaction(&transaction).map(|(_, vote, ..)| Self {
             from,
             transaction,
             wallclock,
