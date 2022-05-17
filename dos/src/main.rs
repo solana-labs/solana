@@ -255,6 +255,7 @@ fn create_sender_thread(
     tx_receiver: Receiver<TransactionMsg>,
     mut n_alive_threads: usize,
     target: &SocketAddr,
+    num_send: usize,
 ) -> thread::JoinHandle<()> {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let target = target.clone();
@@ -275,15 +276,17 @@ fn create_sender_thread(
                     match msg {
                         Ok(TransactionMsg::Transaction(data, time)) => {
                             let mut measure_send_txs = Measure::start("measure_send_txs");
-                            let res = client.send_wire_transaction_batch(&data, &client_stats);
+                            for _ in 0..num_send {
+                                let res = client.send_wire_transaction_batch(&data, &client_stats);
+                                if res.is_err() {
+                                    error_count += data.len();
+                                }
+                            }
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();
                             time_generate_ns += time;
 
-                            if res.is_err() {
-                                error_count += data.len();
-                            }
-                            count += data.len();
+                            count += num_send * data.len();
                         }
                         Ok(TransactionMsg::Exit) => {
                             info!("Worker is done");
@@ -315,7 +318,7 @@ fn create_sender_thread(
 }
 fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> usize {
     if max_iterations_per_thread == 0 {
-        return SEND_BATCH_MAX_SIZE
+        return SEND_BATCH_MAX_SIZE;
     }
     min(max_iterations_per_thread - total_count, SEND_BATCH_MAX_SIZE)
 }
@@ -351,45 +354,54 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
     }
 
-    thread::Builder::new().name("Generator".to_string()).spawn(move || {
-        let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-        let mut it = indexes.iter().permutations(permutation_size);
+    thread::Builder::new()
+        .name("Generator".to_string())
+        .spawn(move || {
+            let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+            let mut it = indexes.iter().permutations(permutation_size);
 
-        let mut total_count = 0;
+            let mut total_count = 0;
 
-        loop {
-            let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
-            let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
-            let mut measure_generate_txs = Measure::start("measure_generate_txs");
-            for _ in 0..send_batch_size {
-                let chunk_keypairs = if generate_keypairs {
-                    let mut permutation = it.next();
-                    if permutation.is_none() {
-                        // if ran out of permutations, regenerate keys
-                        keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                        info!("Regenerate keypairs");
-                        permutation = it.next();
-                    }
-                    let permutation = permutation.unwrap();
-                    Some(apply_permutation(permutation, &keypairs_flat))
-                } else {
-                    None
-                };
-                let tx =
-                    transaction_generator.generate(payer.as_ref(), chunk_keypairs, client.as_ref());
-                data.push(bincode::serialize(&tx).unwrap());
+            loop {
+                let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
+                let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+                let mut measure_generate_txs = Measure::start("measure_generate_txs");
+                for _ in 0..send_batch_size {
+                    let chunk_keypairs = if generate_keypairs {
+                        let mut permutation = it.next();
+                        if permutation.is_none() {
+                            // if ran out of permutations, regenerate keys
+                            keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                            info!("Regenerate keypairs");
+                            permutation = it.next();
+                        }
+                        let permutation = permutation.unwrap();
+                        Some(apply_permutation(permutation, &keypairs_flat))
+                    } else {
+                        None
+                    };
+                    let tx = transaction_generator.generate(
+                        payer.as_ref(),
+                        chunk_keypairs,
+                        client.as_ref(),
+                    );
+                    data.push(bincode::serialize(&tx).unwrap());
+                }
+                measure_generate_txs.stop();
+
+                let _ = tx_sender.send(TransactionMsg::Transaction(
+                    data,
+                    measure_generate_txs.as_ns(),
+                ));
+
+                total_count += send_batch_size;
+                if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
+                    let _ = tx_sender.send(TransactionMsg::Exit);
+                    break;
+                }
             }
-            measure_generate_txs.stop();
-
-            let _ = tx_sender.send(TransactionMsg::Transaction(data, measure_generate_txs.as_ns()));
-
-            total_count += send_batch_size;
-            if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
-                let _ = tx_sender.send(TransactionMsg::Exit);
-                break;
-            }
-        }
-    }).unwrap()
+        })
+        .unwrap()
 }
 
 fn get_target(
@@ -555,18 +567,20 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         client.as_ref(),
     );
 
+    let num_send = transaction_params.unique_transactions_coefficient.unwrap() + 1;
+
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
-    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target); //, addr);
+    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target, num_send);
     let mut thread_id = 0;
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
         .map(|payer| {
             let mut num_iterations = max_iterations_per_thread;
             // last thread will handle remaining iterations
-            if thread_id+1 == num_gen_threads {
-                num_iterations += iterations%num_gen_threads;
+            if thread_id + 1 == num_gen_threads {
+                num_iterations += iterations % num_gen_threads;
             }
             thread_id += 1;
 
@@ -609,7 +623,10 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             &params.data_input.unwrap(),
         );
     } else if params.data_type == DataType::Transaction
-        && params.transaction_params.unique_transactions_coefficient.is_some()
+        && params
+            .transaction_params
+            .unique_transactions_coefficient
+            .is_some()
     {
         let target = target.expect("should have target");
         info!("Targeting {}", target);
