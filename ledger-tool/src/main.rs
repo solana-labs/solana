@@ -1527,6 +1527,7 @@ fn main() {
             )
             .arg(
                 Arg::with_name("snapshot_archive_format")
+                    .required(false)
                     .long("snapshot-archive-format")
                     .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
                     .default_value(DEFAULT_ARCHIVE_COMPRESSION)
