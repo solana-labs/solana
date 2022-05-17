@@ -23,6 +23,7 @@ solana-core = { path = "../core", version = "=1.11.5" }
 solana-faucet = { path = "../faucet", version = "=1.11.5" }
 solana-gossip = { path = "../gossip", version = "=1.11.5" }
 solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-measure = { path = "../measure", version = "=1.11.5" }
 solana-net-utils = { path = "../net-utils", version = "=1.11.5" }
 solana-perf = { path = "../perf", version = "=1.11.5" }
 solana-rpc = { path = "../rpc", version = "=1.11.5" }

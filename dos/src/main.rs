@@ -56,6 +56,7 @@ use {
         contact_info::ContactInfo,
         gossip_service::{discover, get_multi_client},
     },
+    solana_measure::measure::Measure,
     solana_sdk::{
         hash::Hash,
         instruction::CompiledInstruction,
@@ -244,7 +245,7 @@ impl TransactionGenerator {
 // Here we generate them in `num_gen_threads` threads.
 //
 enum TransactionMsg {
-    Transaction(Vec<Vec<u8>>),
+    Transaction(Vec<Vec<u8>>, u64),
     Exit,
 }
 /// number of transactions in one batch for sendmmsg
@@ -264,6 +265,9 @@ fn create_sender_thread(
 
     let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
 
+    let mut time_send_ns = 0;
+    let mut time_generate_ns = 0;
+
     thread::Builder::new().name("Sender".to_string()).spawn(move || {
         let mut count: usize = 0;
         let mut error_count = 0;
@@ -272,9 +276,15 @@ fn create_sender_thread(
             select! {
                 recv(tx_receiver) -> msg => {
                     match msg {
-                        Ok(TransactionMsg::Transaction(data)) => {
+                        Ok(TransactionMsg::Transaction(data, time)) => {
                             let len = data.len();
+                            let mut measure_send_txs = Measure::start("measure_send_txs");
+                            //let res = client.send_wire_transaction_batch(&data, &client_stats);
                             let res = connection.send_wire_transaction_batch_async(data); 
+
+                            measure_send_txs.stop();
+                            time_send_ns += measure_send_txs.as_ns();
+                            time_generate_ns += time;
 
                             if res.is_err() {
                                 error_count += len;
@@ -293,13 +303,17 @@ fn create_sender_thread(
                 },
                 recv(timer_receiver) -> _ => {
                     info!("tx_receiver queue len: {}", tx_receiver.len());
-                    info!("Count: {}, error count: {}, rps: {}",
+                    info!("Count: {}, error count: {}, send mean time: {}, generate mean time: {}, rps: {}",
                         count,
                         error_count,
+                        time_send_ns.checked_div(count as u64).unwrap_or(0),
+                        time_generate_ns.checked_div(count as u64).unwrap_or(0),
                         compute_rate_per_second(count),
                     );
                     count = 0;
                     error_count = 0;
+                    time_send_ns = 0;
+                    time_generate_ns = 0;
                 }
             }
         }
@@ -351,6 +365,7 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         loop {
             let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
             let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+            let mut measure_generate_txs = Measure::start("measure_generate_txs");
             for _ in 0..send_batch_size {
                 let chunk_keypairs = if generate_keypairs {
                     let mut permutation = it.next();
@@ -369,8 +384,9 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                     transaction_generator.generate(payer.as_ref(), chunk_keypairs, client.as_ref());
                 data.push(bincode::serialize(&tx).unwrap());
             }
+            measure_generate_txs.stop();
 
-            let _ = tx_sender.send(TransactionMsg::Transaction(data));
+            let _ = tx_sender.send(TransactionMsg::Transaction(data, measure_generate_txs.as_ns()));
 
             total_count += send_batch_size;
             if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
