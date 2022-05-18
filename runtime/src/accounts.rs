@@ -1430,13 +1430,8 @@ mod tests {
 
     fn load_accounts(
         tx: Transaction,
-<<<<<<< HEAD
         ka: &[(Pubkey, AccountSharedData)],
-        error_counters: &mut ErrorCounters,
-=======
-        ka: &[TransactionAccount],
         error_counters: &mut TransactionErrorMetrics,
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
     ) -> Vec<TransactionLoadResult> {
         load_accounts_with_fee(tx, ka, 0, error_counters)
     }
@@ -1496,13 +1491,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_account_0_exists() {
-<<<<<<< HEAD
         let accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
 
@@ -1527,13 +1517,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_unknown_program_id() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1566,13 +1551,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_insufficient_funds() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1609,13 +1589,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_invalid_account_for_fee() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1724,13 +1699,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_no_loaders() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1770,13 +1740,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_max_call_depth() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1841,13 +1806,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_bad_owner() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1881,13 +1841,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_not_executable() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -1920,13 +1875,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_multiple_loaders() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2164,13 +2114,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_executable_with_write_lock() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2225,13 +2170,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_upgradeable_with_write_lock() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
@@ -2327,13 +2267,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_programdata_with_write_lock() {
-<<<<<<< HEAD
         let mut accounts: Vec<(Pubkey, AccountSharedData)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-=======
-        let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
->>>>>>> 8a062273d (Move error counters to be reported by leader only at end of slot (#24581))
 
         let keypair = Keypair::new();
         let key0 = keypair.pubkey();
