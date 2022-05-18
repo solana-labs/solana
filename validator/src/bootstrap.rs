@@ -570,8 +570,12 @@ fn get_rpc_node(
             }
         }
 
-        let peer_snapshot_hashes =
-            get_peer_snapshot_hashes(cluster_info, validator_config, &rpc_peers);
+        let peer_snapshot_hashes = get_peer_snapshot_hashes(
+            cluster_info,
+            validator_config,
+            &rpc_peers,
+            bootstrap_config.incremental_snapshot_fetch,
+        );
 
         if peer_snapshot_hashes.is_empty() {
             match newer_cluster_snapshot_timeout {
@@ -650,8 +654,10 @@ fn get_peer_snapshot_hashes(
     cluster_info: &ClusterInfo,
     validator_config: &ValidatorConfig,
     rpc_peers: &[ContactInfo],
+    incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
-    let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers);
+    let mut peer_snapshot_hashes =
+        get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
     if validator_config.known_validators.is_some() {
         let known_snapshot_hashes =
             get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
@@ -842,20 +848,22 @@ where
 fn get_eligible_peer_snapshot_hashes(
     cluster_info: &ClusterInfo,
     rpc_peers: &[ContactInfo],
+    incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes = Vec::new();
     for rpc_peer in rpc_peers {
-        let mut highest_snapshot_hash =
-            get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
-
         // Get this peer's highest (full) snapshot hash.  We need to get these snapshot hashes
         // (instead of just the IncrementalSnapshotHashes) in case the peer is either (1) not
         // taking incremental snapshots, or (2) if the last snapshot taken was a full snapshot,
         // which would get pushed to CRDS here (i.e. `crds_value::SnapshotHashes`) first.
-        let snapshot_hash = get_highest_full_snapshot_hash_for_peer(cluster_info, &rpc_peer.id);
-        if snapshot_hash > highest_snapshot_hash {
-            highest_snapshot_hash = snapshot_hash;
-        }
+        let highest_snapshot_hash =
+            get_highest_full_snapshot_hash_for_peer(cluster_info, &rpc_peer.id).max(
+                if incremental_snapshot_fetch {
+                    get_highest_incremental_snapshot_hash_for_peer(cluster_info, &rpc_peer.id)
+                } else {
+                    None
+                },
+            );
 
         if let Some(snapshot_hash) = highest_snapshot_hash {
             peer_snapshot_hashes.push(PeerSnapshotHash {
