@@ -1098,6 +1098,7 @@ mod with_incremental_snapshots {
         bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
+<<<<<<< HEAD
         let known_snapshot_hashes =
             get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
 
@@ -1111,6 +1112,17 @@ mod with_incremental_snapshots {
             &known_snapshot_hashes,
             &mut peer_snapshot_hashes,
         );
+=======
+        let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers);
+        if validator_config.known_validators.is_some() {
+            let known_snapshot_hashes =
+                get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
+            retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
+                &known_snapshot_hashes,
+                &mut peer_snapshot_hashes,
+            );
+        }
+>>>>>>> 24122768d (fix bootstrap without known validators (#25293))
         retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
