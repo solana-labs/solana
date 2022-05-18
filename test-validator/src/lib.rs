@@ -111,6 +111,10 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+<<<<<<< HEAD
+=======
+    compute_unit_limit: Option<u64>,
+>>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
 }
 
 impl Default for TestValidatorGenesis {
@@ -138,6 +142,10 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
+<<<<<<< HEAD
+=======
+            compute_unit_limit: Option::<u64>::default(),
+>>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         }
     }
 }
@@ -235,6 +243,19 @@ impl TestValidatorGenesis {
         self
     }
 
+<<<<<<< HEAD
+=======
+    pub fn compute_unit_limit(&mut self, compute_unit_limit: u64) -> &mut Self {
+        self.compute_unit_limit = Some(compute_unit_limit);
+        self
+    }
+
+    #[deprecated(note = "Please use `compute_unit_limit` instead")]
+    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
+        self.compute_unit_limit(max_compute_units)
+    }
+
+>>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
     /// Add an account to the test environment
     pub fn add_account(&mut self, address: Pubkey, account: AccountSharedData) -> &mut Self {
         self.accounts.insert(address, account);
@@ -675,6 +696,19 @@ impl TestValidator {
             ..AccountsDbConfig::default()
         });
 
+<<<<<<< HEAD
+=======
+        let runtime_config = RuntimeConfig {
+            bpf_jit: !config.no_bpf_jit,
+            compute_budget: config
+                .compute_unit_limit
+                .map(|compute_unit_limit| ComputeBudget {
+                    compute_unit_limit,
+                    ..ComputeBudget::default()
+                }),
+        };
+
+>>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,
