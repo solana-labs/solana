@@ -45,7 +45,7 @@ assert_cmd = "2.0"
 bytecount = "0.6.2"
 
 [target."cfg(unix)".dependencies]
-signal-hook = "0.3.13"
+signal-hook = "0.3.14"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
