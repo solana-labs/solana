@@ -15,6 +15,7 @@ use {
         ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
     },
     quinn_proto::ConnectionStats,
+    solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         quic::{
@@ -69,6 +70,7 @@ struct QuicNewConnection {
 impl QuicNewConnection {
     /// Create a QuicNewConnection given the remote address 'addr'.
     async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
+        let mut make_connection_measure = Measure::start("make_connection_measure");
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
@@ -98,6 +100,11 @@ impl QuicNewConnection {
         if connecting_result.is_err() {
             stats.connection_errors.fetch_add(1, Ordering::Relaxed);
         }
+        make_connection_measure.stop();
+        stats
+            .make_connection_ms
+            .fetch_add(make_connection_measure.as_ms(), Ordering::Relaxed);
+
         let connection = connecting_result?;
 
         Ok(Self {
@@ -257,7 +264,15 @@ impl QuicClient {
         data: &[u8],
         connection: &NewConnection,
     ) -> Result<(), WriteError> {
+        let mut open_uni_measure = Measure::start("open_uni_measure");
         let mut send_stream = connection.connection.open_uni().await?;
+        open_uni_measure.stop();
+
+        datapoint_info!(
+            "quic-client-connection-stats",
+            ("open_uni_ms", open_uni_measure.as_ms(), i64)
+        );
+
         send_stream.write_all(data).await?;
         send_stream.finish().await?;
         Ok(())
