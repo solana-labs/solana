@@ -59,7 +59,7 @@ jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.125"
-signal-hook = "0.3.13"
+signal-hook = "0.3.14"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
