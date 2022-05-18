@@ -20,7 +20,7 @@ fnv = "1.0.7"
 lazy_static = "1.4.0"
 log = "0.4.17"
 rand = "0.7.0"
-rayon = "1.5.2"
+rayon = "1.5.3"
 serde = "1.0.137"
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
