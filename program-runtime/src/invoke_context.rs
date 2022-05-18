@@ -255,7 +255,7 @@ impl<'a> InvokeContext<'a> {
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
-            compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
+            compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(initial_accounts_data_len),
             executors,
             feature_set,
@@ -351,7 +351,7 @@ impl<'a> InvokeContext<'a> {
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
-                compute_budget.max_units = compute_budget.max_units.max(500_000);
+                compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
             }
             if !self.feature_set.is_active(&requestable_heap_size::id())
                 && self.feature_set.is_active(&neon_evm_compute_budget::id())
@@ -363,7 +363,8 @@ impl<'a> InvokeContext<'a> {
             self.current_compute_budget = compute_budget;
 
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter = ComputeMeter::new_ref(self.current_compute_budget.max_units);
+                self.compute_meter =
+                    ComputeMeter::new_ref(self.current_compute_budget.compute_unit_limit);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
@@ -1760,20 +1761,21 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
-        invoke_context.compute_budget = ComputeBudget::new(compute_budget::DEFAULT_UNITS);
+        invoke_context.compute_budget =
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         );
         invoke_context.pop().unwrap();
 
         invoke_context.push(&[], &[1], &[]).unwrap();
         let expected_compute_budget = ComputeBudget {
-            max_units: 500_000,
+            compute_unit_limit: 500_000,
             heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ..ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         };
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1784,7 +1786,7 @@ mod tests {
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         );
         invoke_context.pop().unwrap();
     }
