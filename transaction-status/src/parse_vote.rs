@@ -57,7 +57,7 @@ pub fn parse_vote(
             let vote = json!({
                 "slots": vote.slots,
                 "hash": vote.hash.to_string(),
-                "timestamp": vote.timestamp,
+                "timestamp_ms": vote.timestamp_ms,
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "vote".to_string(),
@@ -76,7 +76,7 @@ pub fn parse_vote(
                 "lockouts": vote_state_update.lockouts,
                 "root": vote_state_update.root,
                 "hash": vote_state_update.hash.to_string(),
-                "timestamp": vote_state_update.timestamp,
+                "timestamp_ms": vote_state_update.timestamp_ms,
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "updatevotestate".to_string(),
@@ -95,7 +95,7 @@ pub fn parse_vote(
                 "lockouts": vote_state_update.lockouts,
                 "root": vote_state_update.root,
                 "hash": vote_state_update.hash.to_string(),
-                "timestamp": vote_state_update.timestamp,
+                "timestamp_ms": vote_state_update.timestamp_ms,
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "updatevotestateswitch".to_string(),
@@ -285,7 +285,7 @@ mod test {
         let vote = Vote {
             slots: vec![1, 2, 4],
             hash,
-            timestamp: Some(1_234_567_890),
+            timestamp_ms: Some(1_234_567_890),
         };
 
         let vote_pubkey = Pubkey::new_unique();
@@ -308,7 +308,7 @@ mod test {
                     "vote": {
                         "slots": [1, 2, 4],
                         "hash": hash.to_string(),
-                        "timestamp": 1_234_567_890,
+                        "timestamp_ms": 1_234_567_890,
                     },
                 }),
             }
@@ -428,7 +428,7 @@ mod test {
         let vote = Vote {
             slots: vec![1, 2, 4],
             hash,
-            timestamp: Some(1_234_567_890),
+            timestamp_ms: Some(1_234_567_890),
         };
 
         let vote_pubkey = Pubkey::new_unique();
@@ -453,7 +453,7 @@ mod test {
                     "vote": {
                         "slots": [1, 2, 4],
                         "hash": hash.to_string(),
-                        "timestamp": 1_234_567_890,
+                        "timestamp_ms": 1_234_567_890,
                     },
                     "hash": proof_hash.to_string(),
                 }),

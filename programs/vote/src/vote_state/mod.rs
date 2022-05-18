@@ -89,15 +89,15 @@ impl VoteTransaction {
 
     pub fn timestamp(&self) -> Option<UnixTimestamp> {
         match self {
-            VoteTransaction::Vote(vote) => vote.timestamp,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
+            VoteTransaction::Vote(vote) => vote.timestamp_ms,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp_ms,
         }
     }
 
     pub fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
         match self {
-            VoteTransaction::Vote(vote) => vote.timestamp = ts,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp = ts,
+            VoteTransaction::Vote(vote) => vote.timestamp_ms = ts,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp_ms = ts,
         }
     }
 
@@ -135,7 +135,7 @@ pub struct Vote {
     /// signature of the bank's state at the last slot
     pub hash: Hash,
     /// processing timestamp of last slot
-    pub timestamp: Option<UnixTimestamp>,
+    pub timestamp_ms: Option<UnixTimestamp>,
 }
 
 impl Vote {
@@ -143,7 +143,7 @@ impl Vote {
         Self {
             slots,
             hash,
-            timestamp: None,
+            timestamp_ms: None,
         }
     }
 }
@@ -189,7 +189,7 @@ pub struct VoteStateUpdate {
     /// signature of the bank's state at the last slot
     pub hash: Hash,
     /// processing timestamp of last slot
-    pub timestamp: Option<UnixTimestamp>,
+    pub timestamp_ms: Option<UnixTimestamp>,
 }
 
 impl From<Vec<(Slot, u32)>> for VoteStateUpdate {
@@ -205,7 +205,7 @@ impl From<Vec<(Slot, u32)>> for VoteStateUpdate {
             lockouts,
             root: None,
             hash: Hash::default(),
-            timestamp: None,
+            timestamp_ms: None,
         }
     }
 }
@@ -216,7 +216,7 @@ impl VoteStateUpdate {
             lockouts,
             root,
             hash,
-            timestamp: None,
+            timestamp_ms: None,
         }
     }
 
@@ -1372,7 +1372,7 @@ pub fn process_vote<S: std::hash::BuildHasher>(
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
     vote_state.process_vote(vote, slot_hashes, clock.epoch, Some(feature_set))?;
-    if let Some(timestamp) = vote.timestamp {
+    if let Some(timestamp) = vote.timestamp_ms {
         vote.slots
             .iter()
             .max()
@@ -1394,7 +1394,7 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     vote_state.process_new_vote_state(
         vote_state_update.lockouts,
         vote_state_update.root,
-        vote_state_update.timestamp,
+        vote_state_update.timestamp_ms,
         clock.epoch,
     )?;
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))

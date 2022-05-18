@@ -42,8 +42,8 @@ impl VoteTransaction {
 
     pub fn timestamp(&self) -> Option<UnixTimestamp> {
         match self {
-            VoteTransaction::Vote(vote) => vote.timestamp,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
+            VoteTransaction::Vote(vote) => vote.timestamp_ms,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp_ms,
         }
     }
 

@@ -7018,7 +7018,7 @@ pub mod tests {
                     Vote {
                         slots: vec![bank.slot()],
                         hash: bank.hash(),
-                        timestamp: None,
+                        timestamp_ms: None,
                     },
                 ),
                 vote_instruction::vote(
@@ -7027,7 +7027,7 @@ pub mod tests {
                     Vote {
                         slots: vec![bank.slot()],
                         hash: bank.hash(),
-                        timestamp: None,
+                        timestamp_ms: None,
                     },
                 ),
             ];

@@ -1338,7 +1338,7 @@ mod tests {
         let vote = Vote {
             slots: vec![1, 2],
             hash: Hash::default(),
-            timestamp: None,
+            timestamp_ms: None,
         };
         subscriptions.notify_vote(Pubkey::default(), VoteTransaction::from(vote));
 

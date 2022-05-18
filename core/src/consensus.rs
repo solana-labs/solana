@@ -536,7 +536,7 @@ impl Tower {
         if current_slot > self.last_timestamp.slot
             || self.last_timestamp.slot == 0 && current_slot == self.last_timestamp.slot
         {
-            let timestamp = Utc::now().timestamp();
+            let timestamp = Utc::now().timestamp_millis();
             if timestamp >= self.last_timestamp.timestamp {
                 self.last_timestamp = BlockTimestamp {
                     slot: current_slot,
@@ -2360,7 +2360,7 @@ pub mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
-            timestamp: None,
+            timestamp_ms: None,
         };
         local.process_vote_unchecked(vote);
         assert_eq!(local.votes.len(), 1);
@@ -2376,7 +2376,7 @@ pub mod test {
         let vote = Vote {
             slots: vec![0],
             hash: Hash::default(),
-            timestamp: None,
+            timestamp_ms: None,
         };
         local.process_vote_unchecked(vote);
         assert_eq!(local.votes.len(), 1);
@@ -2477,7 +2477,7 @@ pub mod test {
             tower.record_vote(i as u64, Hash::default());
         }
 
-        expected.timestamp = tower.last_vote.timestamp();
+        expected.timestamp_ms = tower.last_vote.timestamp();
         assert_eq!(VoteTransaction::from(expected), tower.last_vote)
     }
 
