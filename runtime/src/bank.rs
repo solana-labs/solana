@@ -695,13 +695,20 @@ impl DurableNonceFee {
     }
 }
 
+#[derive(Debug)]
 pub struct TransactionSimulationResult {
     pub result: Result<()>,
     pub logs: TransactionLogMessages,
     pub post_simulation_accounts: Vec<TransactionAccount>,
-    pub units_consumed: u64,
     pub return_data: Option<TransactionReturnData>,
 }
+
+#[derive(Debug)]
+pub struct TransactionsSimulationResult {
+    pub transaction_results: Vec<TransactionSimulationResult>,
+    pub units_consumed: u64,
+}
+
 pub struct TransactionBalancesSet {
     pub pre_balances: TransactionBalances,
     pub post_balances: TransactionBalances,
@@ -3858,11 +3865,14 @@ impl Bank {
     /// Prepare a transaction batch without locking accounts for transaction simulation.
     pub(crate) fn prepare_simulation_batch<'a>(
         &'a self,
-        transaction: SanitizedTransaction,
+        transactions: Vec<SanitizedTransaction>,
     ) -> TransactionBatch<'a, '_> {
-        let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
-        let mut batch =
-            TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
+        let lock_results = transactions
+            .iter()
+            .map(|transaction| transaction.get_account_locks(&self.feature_set).map(|_| ()))
+            .collect();
+
+        let mut batch = TransactionBatch::new(lock_results, self, Cow::Owned(transactions));
         batch.set_needs_unlock(false);
         batch
     }
@@ -3871,27 +3881,35 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: SanitizedTransaction,
-    ) -> TransactionSimulationResult {
+    ) -> TransactionsSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        self.simulate_transactions_unchecked(vec![transaction])
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
     /// is frozen, enabling use in single-Bank test frameworks
-    pub fn simulate_transaction_unchecked(
+    pub fn simulate_transactions_unchecked(
         &self,
-        transaction: SanitizedTransaction,
-    ) -> TransactionSimulationResult {
-        let account_keys = transaction.message().account_keys();
-        let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
-        let batch = self.prepare_simulation_batch(transaction);
+        transactions: Vec<SanitizedTransaction>,
+    ) -> TransactionsSimulationResult {
+        let mut all_account_keys = vec![];
+        for transaction in &transactions {
+            let account_keys = transaction.message().account_keys();
+            all_account_keys.push(account_keys);
+        }
+        let account_overrides = self.get_account_overrides_for_simulation(&all_account_keys);
+        let batch = self.prepare_simulation_batch(transactions);
         let mut timings = ExecuteTimings::default();
+
+        // TODO(fabio): Not all txns can co-exist in the same block. Esp. if they debit the same account or
+        // modify the same account state. This is normally solved by the "AccountInUse" lock. We don't have that.
+        // We need a way of breaking up the txns into ones that can be canonicalized together. Then process
+        // each group ontop of the last. Getting the final state.
 
         let LoadAndExecuteTransactionsOutput {
             loaded_transactions,
-            mut execution_results,
+            execution_results,
             ..
         } = self.load_and_execute_transactions(
             &batch,
@@ -3906,21 +3924,6 @@ impl Bank {
             Some(&account_overrides),
         );
 
-        let post_simulation_accounts = loaded_transactions
-            .into_iter()
-            .next()
-            .unwrap()
-            .0
-            .ok()
-            .map(|loaded_transaction| {
-                loaded_transaction
-                    .accounts
-                    .into_iter()
-                    .take(number_of_accounts)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
         let units_consumed = timings
             .details
             .per_program_timings
@@ -3929,42 +3932,75 @@ impl Bank {
                 acc.saturating_add(program_timing.accumulated_units)
             });
 
+        let transaction_results = loaded_transactions
+            .into_iter()
+            .map(|accs| match accs {
+                (Err(_e), _nonce) => None,
+                (Ok(loaded_transaction), _nonce) => Some(loaded_transaction),
+            })
+            .map(|loaded_transaction| match loaded_transaction {
+                None => vec![],
+                Some(loaded_transaction) => {
+                    let accounts_length = &loaded_transaction.accounts.len();
+                    loaded_transaction
+                        .accounts
+                        .into_iter()
+                        .take(*accounts_length)
+                        .collect::<Vec<_>>()
+                }
+            })
+            .zip(execution_results)
+            .map(|(post_simulation_accounts, execution_result)| {
+                let flattened_result = execution_result.flattened_result();
+                let (logs, return_data) = match execution_result {
+                    TransactionExecutionResult::Executed { details, .. } => {
+                        (details.log_messages, details.return_data)
+                    }
+                    TransactionExecutionResult::NotExecuted(_) => (None, None),
+                };
+                let logs = logs.unwrap_or_default();
+
+                TransactionSimulationResult {
+                    result: flattened_result,
+                    logs,
+                    post_simulation_accounts,
+                    return_data,
+                }
+            })
+            .collect();
+
+        let transactions_simulation_results = TransactionsSimulationResult {
+            transaction_results,
+            units_consumed,
+        };
+
         debug!("simulate_transaction: {:?}", timings);
 
-        let execution_result = execution_results.pop().unwrap();
-        let flattened_result = execution_result.flattened_result();
-        let (logs, return_data) = match execution_result {
-            TransactionExecutionResult::Executed { details, .. } => {
-                (details.log_messages, details.return_data)
-            }
-            TransactionExecutionResult::NotExecuted(_) => (None, None),
-        };
-        let logs = logs.unwrap_or_default();
-
-        TransactionSimulationResult {
-            result: flattened_result,
-            logs,
-            post_simulation_accounts,
-            units_consumed,
-            return_data,
-        }
+        transactions_simulation_results
     }
 
-    fn get_account_overrides_for_simulation(&self, account_keys: &AccountKeys) -> AccountOverrides {
+    fn get_account_overrides_for_simulation(
+        &self,
+        all_account_keys: &Vec<AccountKeys>,
+    ) -> AccountOverrides {
         let mut account_overrides = AccountOverrides::default();
         let slot_history_id = sysvar::slot_history::id();
-        if account_keys.iter().any(|pubkey| *pubkey == slot_history_id) {
-            let current_account = self.get_account_with_fixed_root(&slot_history_id);
-            let slot_history = current_account
-                .as_ref()
-                .map(|account| from_account::<SlotHistory, _>(account).unwrap())
-                .unwrap_or_default();
-            if slot_history.check(self.slot()) == Check::Found {
-                let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
-                if let Some((account, _)) =
-                    self.load_slow_with_fixed_root(&ancestors, &slot_history_id)
-                {
-                    account_overrides.set_slot_history(Some(account));
+        for account_keys in all_account_keys {
+            if account_keys.iter().any(|pubkey| *pubkey == slot_history_id)
+                && account_overrides.slot_history.is_none()
+            {
+                let current_account = self.get_account_with_fixed_root(&slot_history_id);
+                let slot_history = current_account
+                    .as_ref()
+                    .map(|account| from_account::<SlotHistory, _>(account).unwrap())
+                    .unwrap_or_default();
+                if slot_history.check(self.slot()) == Check::Found {
+                    let ancestors = Ancestors::from(self.proper_ancestors().collect::<Vec<_>>());
+                    if let Some((account, _)) =
+                        self.load_slow_with_fixed_root(&ancestors, &slot_history_id)
+                    {
+                        account_overrides.set_slot_history(Some(account));
+                    }
                 }
             }
         }
@@ -9645,6 +9681,56 @@ pub(crate) mod tests {
         assert_eq!(bank.transaction_count(), 2);
     }
 
+    // TODO(fabio): Finish writing this test
+    #[test]
+    fn test_one_source_two_tx_one_batch_simulation() {
+        let (genesis_config, mint_keypair) = create_genesis_config(2);
+        println!("mint: {}", mint_keypair.pubkey());
+        let key1 = solana_sdk::pubkey::new_rand();
+        println!("Key1: {}", key1);
+        let key2 = solana_sdk::pubkey::new_rand();
+        println!("Key2: {}", key2);
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.last_blockhash(), genesis_config.hash());
+
+        let t1 = system_transaction::transfer(&mint_keypair, &key1, 1, genesis_config.hash());
+        let t2 = system_transaction::transfer(&mint_keypair, &key2, 1, genesis_config.hash());
+        let txs = vec![t1.clone(), t2.clone()];
+        let txs: Vec<VersionedTransaction> = txs
+            .iter()
+            .map(|tx| VersionedTransaction::from(tx.clone()))
+            .collect();
+        let sanitized_txs = txs
+            .into_iter()
+            .map(|tx| {
+                SanitizedTransaction::try_create(
+                    tx,
+                    MessageHash::Compute,
+                    None,
+                    &bank,
+                    bank.feature_set
+                        .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                )
+            })
+            .collect::<Result<Vec<_>>>()
+            .expect("Unable to sanitize txns");
+        let res = bank.simulate_transactions_unchecked(sanitized_txs);
+        // let res = bank.process_transactions(txs.iter());
+
+        println!("{:#?}", res);
+
+        // assert_eq!(res.len(), 2);
+        // assert_eq!(res[0], Ok(()));
+        // assert_eq!(res[1], Err(TransactionError::AccountInUse));
+        // assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        // assert_eq!(bank.get_balance(&key1), 1);
+        // assert_eq!(bank.get_balance(&key2), 0);
+        // assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
+        // // TODO: Transactions that fail to pay a fee could be dropped silently.
+        // // Non-instruction errors don't get logged in the signature cache
+        // assert_eq!(bank.get_signature_status(&t2.signatures[0]), None);
+    }
+
     #[test]
     fn test_one_source_two_tx_one_batch() {
         let (genesis_config, mint_keypair) = create_genesis_config(1);
@@ -10440,6 +10526,7 @@ pub(crate) mod tests {
         assert_eq!(results[1], Err(TransactionError::AccountInUse));
     }
 
+    // NOTE(fabio): Also interesting
     #[test]
     fn test_interleaving_locks() {
         let (genesis_config, mint_keypair) = create_genesis_config(3);
@@ -12972,6 +13059,7 @@ pub(crate) mod tests {
         assert_eq!(balances[1], vec![8, 11, 1]);
     }
 
+    // NOTE(fabio): Also potentially interesting
     #[test]
     fn test_pre_post_transaction_balances() {
         let (mut genesis_config, _mint_keypair) = create_genesis_config(500);

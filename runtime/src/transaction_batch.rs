@@ -90,7 +90,7 @@ mod tests {
         let (bank, txs) = setup();
 
         // Prepare batch without locks
-        let batch = bank.prepare_simulation_batch(txs[0].clone());
+        let batch = bank.prepare_simulation_batch(vec![txs[0].clone()]);
         assert!(batch.lock_results().iter().all(|x| x.is_ok()));
 
         // Grab locks
@@ -98,7 +98,7 @@ mod tests {
         assert!(batch2.lock_results().iter().all(|x| x.is_ok()));
 
         // Prepare another batch without locks
-        let batch3 = bank.prepare_simulation_batch(txs[0].clone());
+        let batch3 = bank.prepare_simulation_batch(vec![txs[0].clone()]);
         assert!(batch3.lock_results().iter().all(|x| x.is_ok()));
     }
 

@@ -71,8 +71,8 @@ use {
         system_instruction,
         sysvar::stake_history,
         transaction::{
-            self, AddressLoader, MessageHash, SanitizedTransaction, TransactionError,
-            VersionedTransaction,
+            self, AddressLoader, MessageHash, SanitizedTransaction, SanitizedVersionedTransaction,
+            TransactionError, VersionedTransaction,
         },
     },
     solana_send_transaction_service::{
@@ -3646,13 +3646,17 @@ pub mod rpc_full {
                     }
                 }
 
+                let mut transactions_simulation_results =
+                    preflight_bank.simulate_transaction(transaction);
+
                 if let TransactionSimulationResult {
                     result: Err(err),
                     logs,
                     post_simulation_accounts: _,
-                    units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                } = transactions_simulation_results
+                    .transaction_results
+                    .remove(0)
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3668,7 +3672,7 @@ pub mod rpc_full {
                             err: Some(err),
                             logs: Some(logs),
                             accounts: None,
-                            units_consumed: Some(units_consumed),
+                            units_consumed: Some(transactions_simulation_results.units_consumed),
                             return_data: return_data.map(|return_data| return_data.into()),
                         },
                     }
@@ -3732,13 +3736,16 @@ pub mod rpc_full {
             }
             let number_of_accounts = transaction.message().account_keys().len();
 
+            let mut transactions_simulation_results = bank.simulate_transaction(transaction);
             let TransactionSimulationResult {
                 result,
                 logs,
                 post_simulation_accounts,
-                units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+            } = transactions_simulation_results
+                .transaction_results
+                .remove(0);
+            let units_consumed = transactions_simulation_results.units_consumed;
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -5816,6 +5823,7 @@ pub mod tests {
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
+        // This equality is failing
         assert_eq!(result, expected);
 
         // Bad signature with default sigVerify setting (false)

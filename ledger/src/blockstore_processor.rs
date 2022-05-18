@@ -427,6 +427,7 @@ pub fn process_entries_for_tests(
 
     let mut timings = ExecuteTimings::default();
     let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
+    // fabio: Check when entries become transactions
     let result = process_entries_with_callback(
         bank,
         &mut entries,
@@ -496,6 +497,7 @@ fn process_entries_with_callback(
                     transactions.shuffle(&mut rng);
                 }
 
+                // NOTE(fabio): Here is the logic for computing batches!
                 loop {
                     // try to lock the accounts
                     let batch = bank.prepare_sanitized_batch(transactions);
@@ -955,6 +957,7 @@ pub fn confirm_slot(
     )
 }
 
+// fabio: hm...
 #[allow(clippy::too_many_arguments)]
 fn confirm_slot_entries(
     bank: &Arc<Bank>,

@@ -262,21 +262,23 @@ impl Banks for BanksServer {
                 }
                 Ok(tx) => tx,
             };
+        let mut transactions_simulation_results = self
+            .bank(commitment)
+            .simulate_transactions_unchecked(vec![sanitized_transaction]);
         if let TransactionSimulationResult {
             result: Err(err),
             logs,
             post_simulation_accounts: _,
-            units_consumed,
             return_data,
-        } = self
-            .bank(commitment)
-            .simulate_transaction_unchecked(sanitized_transaction)
+        } = transactions_simulation_results
+            .transaction_results
+            .remove(0)
         {
             return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),
                 simulation_details: Some(TransactionSimulationDetails {
                     logs,
-                    units_consumed,
+                    units_consumed: transactions_simulation_results.units_consumed,
                     return_data,
                 }),
             };
