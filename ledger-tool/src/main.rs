@@ -1690,7 +1690,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("latest-optimistic-slots")
                 .about("Output up to the most recent <num-slots> optimistic \
-                        slots and their hashes and timestamps.")
+                        slots with their hashes and timestamps.")
                 .arg(
                     Arg::with_name("num_slots")
                         .long("num-slots")
