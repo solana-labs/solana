@@ -3263,7 +3263,7 @@ impl AccountsDb {
                 continue;
             }
             if minimized_slot_set.contains(&slot) {
-                self.filter_storages(storages, &minimized_account_set, &mut dead_storages);
+                self.filter_storages(storages, minimized_account_set, &mut dead_storages);
             } else {
                 dead_slots.push(slot);
             }
@@ -3281,7 +3281,7 @@ impl AccountsDb {
         &self,
         storages: Vec<Arc<AccountStorageEntry>>,
         minimized_account_set: &HashSet<Pubkey>,
-        mut dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
+        dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
     ) {
         let slot = storages.first().unwrap().slot();
         let (stored_accounts, _, _) = self.get_unique_accounts_from_storages(storages.iter());
@@ -3297,12 +3297,12 @@ impl AccountsDb {
                 let mut chunk_bytes = 0;
                 let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
                 let mut remove_pubkeys = Vec::with_capacity(CHUNK_SIZE);
-                chunk.into_iter().for_each(|(pubkey, account)| {
+                chunk.iter().for_each(|(pubkey, account)| {
                     if minimized_account_set.contains(pubkey) {
                         chunk_bytes += account.account_size;
                         keep_accounts.push((pubkey, account));
                     } else if let Some(read_entry) =
-                        self.accounts_index.get_account_read_entry(&pubkey)
+                        self.accounts_index.get_account_read_entry(pubkey)
                     {
                         remove_pubkeys.push(pubkey);
                         read_entry.unref();
@@ -3361,7 +3361,7 @@ impl AccountsDb {
             .iter()
             .map(|storage| storage.append_vec_id())
             .collect();
-        self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
+        self.mark_dirty_dead_stores(slot, dead_storages, |store| {
             !append_vec_set.contains(&store.append_vec_id())
         });
 
