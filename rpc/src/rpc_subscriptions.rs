@@ -1356,6 +1356,7 @@ pub(crate) mod tests {
                         commitment: Some(CommitmentConfig::processed()),
                         encoding: None,
                         data_slice: None,
+                        min_context_slot: None,
                     }),
                 )
                 .unwrap();
@@ -2694,6 +2695,7 @@ pub(crate) mod tests {
                     commitment: Some(CommitmentConfig::confirmed()),
                     encoding: None,
                     data_slice: None,
+                    min_context_slot: None,
                 }),
             )
             .unwrap();
@@ -2781,6 +2783,7 @@ pub(crate) mod tests {
                     commitment: Some(CommitmentConfig::confirmed()),
                     encoding: None,
                     data_slice: None,
+                    min_context_slot: None,
                 }),
             )
             .unwrap();

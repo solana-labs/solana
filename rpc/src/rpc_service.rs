@@ -544,6 +544,7 @@ mod tests {
     use {
         super::*,
         crate::rpc::create_validator_exit,
+        solana_client::rpc_config::RpcContextConfig,
         solana_gossip::{
             contact_info::ContactInfo,
             crds::GossipRoute,
@@ -624,7 +625,8 @@ mod tests {
             10_000,
             rpc_service
                 .request_processor
-                .get_balance(&mint_keypair.pubkey(), None)
+                .get_balance(&mint_keypair.pubkey(), RpcContextConfig::default())
+                .unwrap()
                 .value
         );
         rpc_service.exit();
