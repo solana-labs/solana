@@ -2332,6 +2332,11 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
+                if blockstore.meta(snapshot_slot).unwrap().is_none() {
+                    eprintln!("snapshot slot {} is not available in the blockstore. Cannot create a snapshot at this slot", snapshot_slot);
+                    exit(1);
+                }
+
                 info!(
                     "Creating {}snapshot of slot {} in {}",
                     if is_incremental { "incremental " } else { "" },
