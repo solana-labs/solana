@@ -19,12 +19,16 @@ use {
     solana_rpc::rpc::JsonRpcConfig,
     solana_sdk::{
         commitment_config::CommitmentConfig,
+        native_token::LAMPORTS_PER_SOL,
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
     std::{sync::Arc, time::Duration},
 };
+
+const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
+const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
 
 fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
@@ -38,8 +42,8 @@ fn test_bench_tps_local_cluster(config: Config) {
     const NUM_NODES: usize = 1;
     let cluster = LocalCluster::new(
         &mut ClusterConfig {
-            node_stakes: vec![999_990; NUM_NODES],
-            cluster_lamports: 200_000_000,
+            node_stakes: vec![DEFAULT_NODE_STAKE; NUM_NODES],
+            cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
             validator_configs: make_identical_validator_configs(
                 &ValidatorConfig {
                     rpc_config: JsonRpcConfig {

@@ -10,7 +10,7 @@ use {
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
-const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
+const NUM_LAMPORTS_PER_ACCOUNT_DEFAULT: u64 = 10 * solana_sdk::native_token::LAMPORTS_PER_SOL;
 
 pub enum ExternalClientType {
     // Submits transactions to an Rpc node using an RpcClient
