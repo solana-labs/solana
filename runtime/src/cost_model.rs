@@ -420,23 +420,14 @@ mod tests {
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
-<<<<<<< HEAD
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-        let expected_cost = testee.instruction_execution_cost_table.get_default_units() * 2;
-        assert_eq!((0, expected_cost), result);
-=======
         let expected_cost = testee
             .instruction_execution_cost_table
             .get_default_compute_unit_limit()
             * 2;
-        let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &tx);
-        assert_eq!(0, tx_cost.builtins_execution_cost);
-        assert_eq!(expected_cost, tx_cost.bpf_execution_cost);
-        assert_eq!(0, tx_cost.data_bytes_cost);
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
+        assert_eq!((0, expected_cost), result);
     }
 
     #[test]

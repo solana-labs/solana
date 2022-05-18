@@ -368,18 +368,6 @@ fn main() {
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
         )
-<<<<<<< HEAD
-=======
-        .arg(
-            Arg::with_name("compute_unit_limit")
-                .long("compute-unit-limit")
-                .alias("max-compute-units")
-                .value_name("COMPUTE_UNITS")
-                .validator(is_parsable::<u64>)
-                .takes_value(true)
-                .help("Override the runtime's compute unit limit per transaction")
-        )
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -488,10 +476,6 @@ fn main() {
             exit(1);
         })
     });
-<<<<<<< HEAD
-=======
-    let compute_unit_limit = value_t!(matches, "compute_unit_limit", u64).ok();
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -769,13 +753,6 @@ fn main() {
         );
     }
 
-<<<<<<< HEAD
-=======
-    if let Some(compute_unit_limit) = compute_unit_limit {
-        genesis.compute_unit_limit(compute_unit_limit);
-    }
-
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
             *admin_service_post_init.write().unwrap() =

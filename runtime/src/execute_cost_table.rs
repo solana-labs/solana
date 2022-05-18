@@ -49,11 +49,7 @@ impl ExecuteCostTable {
     }
 
     /// average cost of all recorded programs
-<<<<<<< HEAD
-    pub fn get_average_units(&self) -> u64 {
-=======
     pub fn get_global_average_program_cost(&self) -> u64 {
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         if self.table.is_empty() {
             self.get_default_compute_unit_limit()
         } else {
@@ -78,14 +74,9 @@ impl ExecuteCostTable {
     }
 
     /// returns None if program doesn't exist in table. In this case,
-<<<<<<< HEAD
-    /// `get_default_units()`, `get_average_units()` or `get_statistical_mode_units()`
-    /// can be used to assign a value to new program.
-=======
     /// `get_default_compute_unit_limit()`, `get_global_average_program_cost()`
     /// or `get_statistical_mode_program_cost()` can be used to assign a value
     /// to new program.
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
     pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
         self.table.get(key)
     }
@@ -230,28 +221,18 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-<<<<<<< HEAD
-        assert_eq!(cost1, testee.get_average_units());
-        assert_eq!(cost1, testee.get_statistical_mode_units());
-=======
         assert_eq!(cost1, testee.get_global_average_program_cost());
         assert_eq!(cost1, testee.get_statistical_mode_program_cost());
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-<<<<<<< HEAD
-        assert_eq!((cost1 + cost2) / 2_u64, testee.get_average_units());
-        assert_eq!(cost2, testee.get_statistical_mode_units());
-=======
         assert_eq!(
             (cost1 + cost2) / 2_u64,
             testee.get_global_average_program_cost()
         );
         assert_eq!(cost2, testee.get_statistical_mode_program_cost());
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
@@ -260,15 +241,7 @@ mod tests {
         assert_eq!(2, testee.get_count());
         assert_eq!(
             ((cost1 + cost2) / 2 + cost2) / 2_u64,
-<<<<<<< HEAD
-            testee.get_average_units()
-=======
             testee.get_global_average_program_cost()
-        );
-        assert_eq!(
-            (cost1 + cost2) / 2,
-            testee.get_statistical_mode_program_cost()
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         );
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
@@ -303,16 +276,11 @@ mod tests {
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
-<<<<<<< HEAD
-        assert_eq!((cost2 + cost3) / 2_u64, testee.get_average_units());
-        assert_eq!(cost3, testee.get_statistical_mode_units());
-=======
         assert_eq!(
             (cost2 + cost3) / 2_u64,
             testee.get_global_average_program_cost()
         );
         assert_eq!(cost3, testee.get_statistical_mode_program_cost());
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
         assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
@@ -323,15 +291,7 @@ mod tests {
         testee.upsert(&key4, cost4);
         assert_eq!(
             ((cost1 + cost2) / 2 + cost4) / 2_u64,
-<<<<<<< HEAD
-            testee.get_average_units()
-=======
             testee.get_global_average_program_cost()
-        );
-        assert_eq!(
-            (cost1 + cost2) / 2,
-            testee.get_statistical_mode_program_cost()
->>>>>>> a1522d002 (Use consistent naming for compute unit limit (#25229))
         );
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
