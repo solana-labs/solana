@@ -802,7 +802,7 @@ impl ProgramTest {
         bank.set_capitalization();
         if let Some(max_units) = self.compute_max_units {
             bank.set_compute_budget(Some(ComputeBudget {
-                max_units,
+                compute_unit_limit: max_units,
                 ..ComputeBudget::default()
             }));
         }
