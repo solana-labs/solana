@@ -256,7 +256,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.len();
                 }
-                verified_sender.send(v.to_vec()).unwrap();
+                verified_sender.send((v.to_vec(), None)).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);
 

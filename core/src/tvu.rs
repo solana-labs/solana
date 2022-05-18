@@ -161,8 +161,11 @@ impl Tvu {
         let (verified_sender, verified_receiver) = unbounded();
         let sigverify_stage = SigVerifyStage::new(
             fetch_receiver,
-            verified_sender,
-            ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
+            ShredSigVerifier::new(
+                bank_forks.clone(),
+                leader_schedule_cache.clone(),
+                verified_sender,
+            ),
             "shred-verifier",
         );
 
