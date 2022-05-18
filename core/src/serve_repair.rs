@@ -45,7 +45,7 @@ use {
 type SlotHash = (Slot, Hash);
 
 /// the number of slots to respond with when responding to `Orphan` requests
-pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
+pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 11;
 // Number of slots to cache their respective repair peers and sampling weights.
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
@@ -81,7 +81,7 @@ impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
+            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
             ShredRepairType::HighestShred(_, _) => 1,
             ShredRepairType::Shred(_, _) => 1,
         }
@@ -684,7 +684,8 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<PacketBatch> {
-        let mut res = PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res =
+            PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -703,7 +704,7 @@ impl ServeRepair {
                 } else {
                     break;
                 }
-                if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+                if meta.parent_slot.is_some() && res.packets.len() < max_responses {
                     slot = meta.parent_slot.unwrap();
                 } else {
                     break;
