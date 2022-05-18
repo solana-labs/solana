@@ -1317,12 +1317,11 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_pubsub_notification_threads")
                 .long("rpc-pubsub-notification-threads")
-                .requires("full_rpc_api")
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
                 .help("The maximum number of threads that RPC PubSub will use \
-                       for generating notifications. 0 will disable RPC PubSub notifications"),
+                       for generating notifications."),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -2348,7 +2347,6 @@ pub fn main() {
         );
         exit(1);
     }
-    let full_api = matches.is_present("full_rpc_api");
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2369,7 +2367,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            full_api,
+            full_api: matches.is_present("full_rpc_api"),
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2416,11 +2414,7 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: if full_api {
-                value_of(&matches, "rpc_pubsub_notification_threads")
-            } else {
-                Some(0)
-            },
+            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
