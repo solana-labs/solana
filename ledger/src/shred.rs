@@ -483,10 +483,16 @@ impl Shred {
         limited_deserialize(buffer).ok()
     }
 
-    pub(crate) fn reference_tick_from_data(data: &[u8]) -> u8 {
-        // TODO: should check the type bit as well!
+    pub(crate) fn reference_tick_from_data(data: &[u8]) -> Result<u8, Error> {
         const SHRED_FLAGS_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + std::mem::size_of::<u16>();
-        data[SHRED_FLAGS_OFFSET] & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
+        if Self::shred_type_from_payload(data)? != ShredType::Data {
+            return Err(Error::InvalidShredType);
+        }
+        let flags = match data.get(SHRED_FLAGS_OFFSET) {
+            None => return Err(Error::InvalidPayloadSize(data.len())),
+            Some(flags) => flags,
+        };
+        Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
@@ -891,7 +897,7 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(&packet.data)
+            Shred::reference_tick_from_data(&packet.data).unwrap()
         );
         assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
         assert_eq!(
@@ -932,7 +938,7 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(&packet.data)
+            Shred::reference_tick_from_data(&packet.data).unwrap()
         );
         assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
         assert_eq!(
@@ -1017,7 +1023,7 @@ mod tests {
             assert_eq!(shred.last_in_slot(), is_last_in_slot);
             assert_eq!(shred.reference_tick(), reference_tick.min(63u8));
             assert_eq!(
-                Shred::reference_tick_from_data(shred.payload()),
+                Shred::reference_tick_from_data(shred.payload()).unwrap(),
                 reference_tick.min(63u8),
             );
         }

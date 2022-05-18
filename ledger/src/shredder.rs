@@ -519,7 +519,7 @@ mod tests {
         );
         data_shreds.iter().for_each(|s| {
             assert_eq!(s.reference_tick(), 5);
-            assert_eq!(Shred::reference_tick_from_data(s.payload()), 5);
+            assert_eq!(Shred::reference_tick_from_data(s.payload()).unwrap(), 5);
         });
 
         let deserialized_shred =
@@ -555,7 +555,7 @@ mod tests {
                 ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
             );
             assert_eq!(
-                Shred::reference_tick_from_data(s.payload()),
+                Shred::reference_tick_from_data(s.payload()).unwrap(),
                 ShredFlags::SHRED_TICK_REFERENCE_MASK.bits()
             );
         });
