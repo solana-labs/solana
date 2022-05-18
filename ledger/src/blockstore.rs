@@ -2733,6 +2733,32 @@ impl Blockstore {
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
 
+    pub fn get_accounts_used_in_range(
+        &self,
+        starting_slot: Slot,
+        ending_slot: Slot,
+    ) -> Result<HashSet<Pubkey>> {
+        let mut result = HashSet::new();
+        for slot in starting_slot..=ending_slot {
+            let entries = self.get_slot_entries(slot, 0)?;
+            let slot_accounts: Vec<HashSet<Pubkey>> = PAR_THREAD_POOL.install(|| {
+                entries
+                    .par_iter()
+                    .map(|entry| {
+                        entry
+                            .transactions
+                            .iter()
+                            .flat_map(|tx| tx.message.static_account_keys().into_iter().cloned())
+                            .collect()
+                    })
+                    .collect()
+            });
+            result.extend(slot_accounts.into_iter().flatten());
+        }
+
+        Ok(result)
+    }
+
     fn get_completed_ranges(
         &self,
         slot: Slot,

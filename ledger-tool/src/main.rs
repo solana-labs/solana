@@ -53,6 +53,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Epoch, Slot},
         feature::{self, Feature},
         feature_set,
@@ -927,35 +928,9 @@ fn minimize_bank_for_snapshot(
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) {
-    let mut minimized_account_set = HashSet::new();
-    for slot in snapshot_slot..=ending_slot {
-        if let Ok(entries) = blockstore.get_slot_entries(slot, 0) {
-            for entry in entries {
-                for transaction in entry.transactions {
-                    let tx = bank
-                        .verify_transaction(transaction, TransactionVerificationMode::HashOnly)
-                        .unwrap();
-                    for pubkey in tx.message().account_keys().iter() {
-                        minimized_account_set.insert(*pubkey);
-
-                        if let Some(account) = bank.get_account(pubkey) {
-                            minimized_account_set.insert(*account.owner());
-                            if account.executable() {
-                                if bpf_loader_upgradeable::check_id(account.owner()) {
-                                    if let Ok(UpgradeableLoaderState::Program {
-                                        programdata_address,
-                                    }) = account.state()
-                                    {
-                                        minimized_account_set.insert(programdata_address);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let mut minimized_account_set = blockstore
+        .get_accounts_used_in_range(snapshot_slot, ending_slot)
+        .unwrap();
 
     for (pubkey, _) in bank.vote_accounts().iter() {
         minimized_account_set.insert(*pubkey);
@@ -996,6 +971,40 @@ fn minimize_bank_for_snapshot(
     minimized_account_set.insert(solana_sdk::secp256k1_program::id());
     minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
 
+    // Add account owners and program data to the set
+    let owner_accounts: HashSet<_> = minimized_account_set
+        .iter()
+        .filter_map(|pubkey| bank.get_account(pubkey).map(|account| *account.owner()))
+        .collect();
+    minimized_account_set.extend(owner_accounts.into_iter());
+
+    let program_data_accounts: HashSet<_> = minimized_account_set
+        .iter()
+        .filter_map(|pubkey| {
+            if let Some(account) = bank.get_account(pubkey) {
+                if account.executable() {
+                    if bpf_loader_upgradeable::check_id(account.owner()) {
+                        if let Ok(UpgradeableLoaderState::Program {
+                            programdata_address,
+                        }) = account.state()
+                        {
+                            Some(programdata_address)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    minimized_account_set.extend(program_data_accounts.into_iter());
+
     info!(
         "Generated minimized account set with {} accounts for slots {}..={}",
         minimized_account_set.len(),
@@ -1032,10 +1041,6 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
-use solana_sdk::{
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    transaction::TransactionVerificationMode,
-};
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
