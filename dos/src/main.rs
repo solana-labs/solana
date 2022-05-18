@@ -268,7 +268,7 @@ fn create_sender_thread(
     thread::Builder::new().name("Sender".to_string()).spawn(move || {
         let mut count: usize = 0;
         let mut error_count = 0;
-        let client_stats = ClientStats::default();
+        let client_stats = Arc::new(ClientStats::default());
 
         loop {
             select! {
@@ -276,17 +276,18 @@ fn create_sender_thread(
                     match msg {
                         Ok(TransactionMsg::Transaction(data, time)) => {
                             let mut measure_send_txs = Measure::start("measure_send_txs");
+                            let len = data.len();
                             for _ in 0..num_send {
-                                let res = client.send_wire_transaction_batch(&data, &client_stats);
+                                let res = client.send_wire_transaction_batch_async(data.clone(), client_stats.clone());
                                 if res.is_err() {
-                                    error_count += data.len();
+                                    error_count += len;
                                 }
                             }
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();
                             time_generate_ns += time;
 
-                            count += num_send * data.len();
+                            count += num_send * len;
                         }
                         Ok(TransactionMsg::Exit) => {
                             info!("Worker is done");
