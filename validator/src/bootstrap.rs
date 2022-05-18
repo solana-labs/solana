@@ -51,49 +51,6 @@ pub struct RpcBootstrapConfig {
     pub incremental_snapshot_fetch: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn rpc_bootstrap(
-    node: &Node,
-    identity_keypair: &Arc<Keypair>,
-    ledger_path: &Path,
-    full_snapshot_archives_dir: &Path,
-    incremental_snapshot_archives_dir: &Path,
-    vote_account: &Pubkey,
-    authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
-    cluster_entrypoints: &[ContactInfo],
-    validator_config: &mut ValidatorConfig,
-    bootstrap_config: RpcBootstrapConfig,
-    do_port_check: bool,
-    use_progress_bar: bool,
-    maximum_local_snapshot_age: Slot,
-    should_check_duplicate_instance: bool,
-    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
-    minimal_snapshot_download_speed: f32,
-    maximum_snapshot_download_abort: u64,
-    socket_addr_space: SocketAddrSpace,
-) {
-    rpc_bootstrap_with_incremental_snapshots(
-        node,
-        identity_keypair,
-        ledger_path,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-        vote_account,
-        authorized_voter_keypairs,
-        cluster_entrypoints,
-        validator_config,
-        bootstrap_config,
-        do_port_check,
-        use_progress_bar,
-        maximum_local_snapshot_age,
-        should_check_duplicate_instance,
-        start_progress,
-        minimal_snapshot_download_speed,
-        maximum_snapshot_download_abort,
-        socket_addr_space,
-    )
-}
-
 fn verify_reachable_ports(
     node: &Node,
     cluster_entrypoint: &ContactInfo,
@@ -371,7 +328,7 @@ struct SnapshotHash {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn rpc_bootstrap_with_incremental_snapshots(
+pub fn rpc_bootstrap(
     node: &Node,
     identity_keypair: &Arc<Keypair>,
     ledger_path: &Path,
