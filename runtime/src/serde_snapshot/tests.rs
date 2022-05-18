@@ -361,13 +361,130 @@ fn test_bank_serialize_newer() {
     }
 }
 
+#[test]
+fn test_extra_fields_eof() {
+    solana_logger::setup();
+    let (genesis_config, _) = create_genesis_config(500);
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    bank0.squash();
+
+    // Set extra fields
+    bank1.fee_calculator.lamports_per_signature = 7000;
+    bank1.fee_rate_governor.lamports_per_signature = 7000;
+
+    // Serialize
+    let snapshot_storages = bank1.get_snapshot_storages(None);
+    let mut buf = vec![];
+    let mut writer = Cursor::new(&mut buf);
+    crate::serde_snapshot::bank_to_stream(
+        SerdeStyle::Newer,
+        &mut std::io::BufWriter::new(&mut writer),
+        &bank1,
+        &snapshot_storages,
+    )
+    .unwrap();
+
+    // Deserialize
+    let rdr = Cursor::new(&buf[..]);
+    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+    let copied_accounts = TempDir::new().unwrap();
+    let unpacked_append_vec_map =
+        copy_append_vecs(&bank1.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+    let dbank = crate::serde_snapshot::bank_from_streams(
+        SerdeStyle::Newer,
+        &mut snapshot_streams,
+        &dbank_paths,
+        unpacked_append_vec_map,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(7000, dbank.fee_rate_governor.lamports_per_signature);
+}
+
+#[test]
+fn test_blank_extra_fields() {
+    solana_logger::setup();
+    let (genesis_config, _) = create_genesis_config(500);
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    bank0.squash();
+
+    // Set extra fields
+    bank1.fee_rate_governor.lamports_per_signature = 7000;
+
+    // On default it falls back to this value
+    bank1.fee_calculator.lamports_per_signature = 600;
+
+    // Serialize, but don't serialize the extra fields
+    let snapshot_storages = bank1.get_snapshot_storages(None);
+    let mut buf = vec![];
+    let mut writer = Cursor::new(&mut buf);
+    crate::serde_snapshot::bank_to_stream_no_extra_fields(
+        SerdeStyle::Newer,
+        &mut std::io::BufWriter::new(&mut writer),
+        &bank1,
+        &snapshot_storages,
+    )
+    .unwrap();
+
+    // Deserialize
+    let rdr = Cursor::new(&buf[..]);
+    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+    let copied_accounts = TempDir::new().unwrap();
+    let unpacked_append_vec_map =
+        copy_append_vecs(&bank1.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+    let dbank = crate::serde_snapshot::bank_from_streams(
+        SerdeStyle::Newer,
+        &mut snapshot_streams,
+        &dbank_paths,
+        unpacked_append_vec_map,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(
+        bank1.fee_calculator.lamports_per_signature,
+        dbank.fee_rate_governor.lamports_per_signature
+    );
+}
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "HT9yewU4zJ6ZAgJ7aDSbHPtzZGZqASpq6rkq6ET42Kki")]
+    #[frozen_abi(digest = "9vGBt7YfymKUTPWLHVVpQbDtPD7dFDwXRMFkCzwujNqJ")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
