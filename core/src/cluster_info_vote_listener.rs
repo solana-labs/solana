@@ -482,8 +482,10 @@ impl ClusterInfoVoteListener {
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
-                    confirmation_verifier
-                        .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
+                    confirmation_verifier.add_new_optimistic_confirmed_slots(
+                        confirmed_slots.clone(),
+                        Some(&blockstore),
+                    );
                 }
                 Err(e) => match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected) => {

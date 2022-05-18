@@ -1,7 +1,10 @@
 use {
     crate::shred::{Shred, ShredType},
     serde::{Deserialize, Deserializer, Serialize, Serializer},
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        hash::Hash,
+    },
     std::{
         collections::BTreeSet,
         ops::{Range, RangeBounds},
@@ -325,6 +328,12 @@ pub struct PerfSample {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct ProgramCost {
     pub cost: u64,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct OptimisticSlot {
+    pub hash: Hash,
+    pub timestamp: UnixTimestamp,
 }
 
 #[cfg(test)]

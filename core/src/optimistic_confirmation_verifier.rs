@@ -2,7 +2,7 @@ use {
     crate::cluster_info_vote_listener::VoteTracker,
     solana_ledger::blockstore::Blockstore,
     solana_runtime::bank::Bank,
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},
     std::{collections::BTreeSet, time::Instant},
 };
 
@@ -52,7 +52,11 @@ impl OptimisticConfirmationVerifier {
             .collect()
     }
 
-    pub fn add_new_optimistic_confirmed_slots(&mut self, new_optimistic_slots: Vec<(Slot, Hash)>) {
+    pub fn add_new_optimistic_confirmed_slots(
+        &mut self,
+        new_optimistic_slots: Vec<(Slot, Hash)>,
+        blockstore: Option<&Blockstore>,
+    ) {
         if new_optimistic_slots.is_empty() {
             return;
         }
@@ -70,6 +74,18 @@ impl OptimisticConfirmationVerifier {
         // so ignore those slots
         for (new_optimistic_slot, hash) in new_optimistic_slots {
             if new_optimistic_slot > self.snapshot_start_slot {
+                if let Some(blockstore) = blockstore {
+                    if let Err(e) = blockstore.insert_optimistic_slot(
+                        new_optimistic_slot,
+                        &hash,
+                        timestamp().try_into().unwrap(),
+                    ) {
+                        error!(
+                            "failed to record optimistic slot in blockstore: slot={}: {:?}",
+                            new_optimistic_slot, &e
+                        );
+                    }
+                }
                 datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
                 self.unchecked_slots.insert((new_optimistic_slot, hash));
             }
@@ -154,11 +170,11 @@ mod test {
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
         optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot - 1, bank_hash)]);
+            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot - 1, bank_hash)], None);
         optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot, bank_hash)]);
+            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot, bank_hash)], None);
         optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot + 1, bank_hash)]);
+            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot + 1, bank_hash)], None);
         assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
         assert!(optimistic_confirmation_verifier
             .unchecked_slots
@@ -175,7 +191,8 @@ mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
             let optimistic_slots = vec![(1, bad_bank_hash), (3, Hash::default())];
-            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
+            optimistic_confirmation_verifier
+                .add_new_optimistic_confirmed_slots(optimistic_slots, None);
             let vote_simulator = setup_forks();
             let bank1 = vote_simulator.bank_forks.read().unwrap().get(1).unwrap();
             assert_eq!(
@@ -218,7 +235,7 @@ mod test {
 
             // If root is on same fork, nothing should be returned
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+                .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), None);
             let bank5 = vote_simulator.bank_forks.read().unwrap().get(5).unwrap();
             assert!(optimistic_confirmation_verifier
                 .verify_for_unrooted_optimistic_slots(&bank5, &blockstore)
@@ -228,7 +245,7 @@ mod test {
 
             // If root is on same fork, nothing should be returned
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+                .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), None);
             let bank3 = vote_simulator.bank_forks.read().unwrap().get(3).unwrap();
             assert!(optimistic_confirmation_verifier
                 .verify_for_unrooted_optimistic_slots(&bank3, &blockstore)
@@ -242,7 +259,7 @@ mod test {
             // If root is on different fork, the slots < root on different fork should
             // be returned
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+                .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), None);
             let bank4 = vote_simulator.bank_forks.read().unwrap().get(4).unwrap();
             assert_eq!(
                 optimistic_confirmation_verifier
@@ -271,7 +288,7 @@ mod test {
             // Should return slots 1, 3 as part of the rooted fork because there's no
             // ancestry information
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
+                .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), None);
             assert_eq!(
                 optimistic_confirmation_verifier
                     .verify_for_unrooted_optimistic_slots(&bank7, &blockstore),
@@ -281,7 +298,8 @@ mod test {
 
             // If we know set the root in blockstore, should return nothing
             blockstore.set_roots(vec![1, 3].iter()).unwrap();
-            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
+            optimistic_confirmation_verifier
+                .add_new_optimistic_confirmed_slots(optimistic_slots, None);
             assert!(optimistic_confirmation_verifier
                 .verify_for_unrooted_optimistic_slots(&bank7, &blockstore)
                 .is_empty());

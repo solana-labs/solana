@@ -693,6 +693,7 @@ fn analyze_storage(database: &Database) {
     analyze_column::<PerfSamples>(database, "PerfSamples");
     analyze_column::<BlockHeight>(database, "BlockHeight");
     analyze_column::<ProgramCosts>(database, "ProgramCosts");
+    analyze_column::<OptimisticSlot>(database, "OptimisticSlot");
 }
 
 fn open_blockstore(
@@ -895,6 +896,7 @@ fn main() {
     }
 
     const DEFAULT_ROOT_COUNT: &str = "1";
+    const DEFAULT_LATEST_OPTIMISTIC_SLOT_COUNT: &str = "1";
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     solana_logger::setup_with_default("solana=info");
 
@@ -1684,6 +1686,20 @@ fn main() {
                     .required(false)
                     .help("Number of roots in the output"),
             )
+        )
+        .subcommand(
+            SubCommand::with_name("latest-optimistic-slots")
+                .about("Output up to the most recent <num-slots> optimistic \
+                        slots and their hashes and timestamps.")
+                .arg(
+                    Arg::with_name("num_slots")
+                        .long("num-slots")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .default_value(DEFAULT_LATEST_OPTIMISTIC_SLOT_COUNT)
+                        .required(false)
+                        .help("Number of slots in the output"),
+                )
         )
         .subcommand(
             SubCommand::with_name("repair-roots")
@@ -3374,6 +3390,23 @@ fn main() {
                                 .expect("failed to write");
                         }
                     });
+            }
+            ("latest-optimistic-slots", Some(arg_matches)) => {
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let num_slots = if let Some(num_slots) = arg_matches.value_of("num_slots") {
+                    usize::from_str(num_slots).expect("Number of slots must be a number")
+                } else {
+                    usize::from_str(DEFAULT_LATEST_OPTIMISTIC_SLOT_COUNT).unwrap()
+                };
+                let slots = blockstore
+                    .get_latest_optimistic_slots(num_slots)
+                    .expect("Failed to get latest optimistic slots");
+                println!("{:>20} {:>44} {:>20}", "Slot", "Hash", "Timestamp");
+                for (slot, hash, timestamp) in slots.iter() {
+                    let hash_str = format!("{}", hash);
+                    println!("{:>20} {:>44} {:>20}", slot, &hash_str, timestamp);
+                }
             }
             ("repair-roots", Some(arg_matches)) => {
                 let blockstore =
