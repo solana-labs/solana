@@ -622,26 +622,27 @@ fn get_rpc_node(
 fn get_highest_local_snapshot_hash(
     full_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_archives_dir: impl AsRef<Path>,
+    incremental_snapshot_fetch: bool,
 ) -> Option<(Slot, Hash)> {
-    if let Some(full_snapshot_info) =
-        snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
-    {
-        if let Some(incremental_snapshot_info) =
-            snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                incremental_snapshot_archives_dir,
-                full_snapshot_info.slot(),
-            )
-        {
-            Some((
-                incremental_snapshot_info.slot(),
-                *incremental_snapshot_info.hash(),
-            ))
-        } else {
-            Some((full_snapshot_info.slot(), *full_snapshot_info.hash()))
-        }
-    } else {
-        None
-    }
+    snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir).and_then(
+        |full_snapshot_info| {
+            if incremental_snapshot_fetch {
+                snapshot_utils::get_highest_incremental_snapshot_archive_info(
+                    incremental_snapshot_archives_dir,
+                    full_snapshot_info.slot(),
+                )
+            } else {
+                None
+            }
+            .and_then(|incremental_snapshot_info| {
+                Some((
+                    incremental_snapshot_info.slot(),
+                    *incremental_snapshot_info.hash(),
+                ))
+            })
+            .or_else(|| Some((full_snapshot_info.slot(), *full_snapshot_info.hash())))
+        },
+    )
 }
 
 /// Get peer snapshot hashes
@@ -1018,6 +1019,7 @@ fn download_snapshots(
         maximum_local_snapshot_age,
         full_snapshot_hash,
         incremental_snapshot_hash,
+        bootstrap_config.incremental_snapshot_fetch,
     ) {
         return Ok(());
     }
@@ -1170,6 +1172,7 @@ fn should_use_local_snapshot(
     maximum_local_snapshot_age: Slot,
     full_snapshot_hash: (Slot, Hash),
     incremental_snapshot_hash: Option<(Slot, Hash)>,
+    incremental_snapshot_fetch: bool,
 ) -> bool {
     let cluster_snapshot_slot = incremental_snapshot_hash
         .map(|(slot, _)| slot)
@@ -1178,6 +1181,7 @@ fn should_use_local_snapshot(
     match get_highest_local_snapshot_hash(
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
+        incremental_snapshot_fetch,
     ) {
         None => {
             info!(
