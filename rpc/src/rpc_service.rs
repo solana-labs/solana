@@ -161,7 +161,22 @@ impl RpcRequestMiddleware {
     where
         P: AsRef<Path>,
     {
-        let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
+        let root = if self
+            .full_snapshot_archive_path_regex
+            .is_match(Path::new("").join(&stem).to_str().unwrap())
+        {
+            &self
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .full_snapshot_archives_dir
+        } else {
+            &self
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .incremental_snapshot_archives_dir
+        };
         let local_path = root.join(&stem);
         if local_path.exists() {
             local_path
@@ -237,7 +252,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 // Convenience redirect to the latest snapshot
                 let full_snapshot_archive_info =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.snapshot_archives_dir,
+                        &snapshot_config.full_snapshot_archives_dir,
                     );
                 let snapshot_archive_info =
                     if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
@@ -245,7 +260,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             Some(full_snapshot_archive_info.snapshot_archive_info().clone())
                         } else {
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &snapshot_config.snapshot_archives_dir,
+                                &snapshot_config.incremental_snapshot_archives_dir,
                                 full_snapshot_archive_info.slot(),
                             )
                             .map(|incremental_snapshot_archive_info| {

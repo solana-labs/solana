@@ -1,3 +1,7 @@
+//! Instructions for the [non-upgradable BPF loader][nubpfl].
+//!
+//! [nubpfl]: crate::bpf_loader
+
 use crate::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,

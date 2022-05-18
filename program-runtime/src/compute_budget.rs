@@ -1,17 +1,14 @@
-use {
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
-    solana_sdk::{
-        borsh::try_from_slice_unchecked,
-        compute_budget::{self, ComputeBudgetInstruction},
-        entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
-        instruction::{CompiledInstruction, InstructionError},
-        pubkey::Pubkey,
-        transaction::TransactionError,
-    },
+use solana_sdk::{
+    borsh::try_from_slice_unchecked,
+    compute_budget::{self, ComputeBudgetInstruction},
+    entrypoint::HEAP_LENGTH as MIN_HEAP_FRAME_BYTES,
+    instruction::InstructionError,
+    message::SanitizedMessage,
+    transaction::TransactionError,
 };
 
-pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
-pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
+pub const DEFAULT_UNITS: u32 = 200_000;
+pub const MAX_UNITS: u32 = 1_400_000;
 const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
@@ -24,10 +21,9 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ComputeBudget {
-    /// Number of compute units that a transaction or individual instruction is
-    /// allowed to consume. Compute units are consumed by program execution,
-    /// resources they use, etc...
-    pub compute_unit_limit: u64,
+    /// Number of compute units that an instruction is allowed.  Compute units
+    /// are consumed by program execution, resources they use, etc...
+    pub max_units: u64,
     /// Number of compute units consumed by a log_u64 call
     pub log_64_units: u64,
     /// Number of compute units consumed by a create_program_address call
@@ -60,7 +56,23 @@ pub struct ComputeBudget {
     /// Number of compute units consumed to do a syscall without any work
     pub syscall_base_cost: u64,
     /// Number of compute units consumed to call zktoken_crypto_op
-    pub zk_token_elgamal_op_cost: u64,
+    pub zk_token_elgamal_op_cost: u64, // to be replaced by curve25519 operations
+    /// Number of compute units consumed to validate a curve25519 edwards point
+    pub curve25519_edwards_validate_point_cost: u64,
+    /// Number of compute units consumed to add two curve25519 edwards points
+    pub curve25519_edwards_add_cost: u64,
+    /// Number of compute units consumed to subtract two curve25519 edwards points
+    pub curve25519_edwards_subtract_cost: u64,
+    /// Number of compute units consumed to multiply a curve25519 edwards point
+    pub curve25519_edwards_multiply_cost: u64,
+    /// Number of compute units consumed to validate a curve25519 ristretto point
+    pub curve25519_ristretto_validate_point_cost: u64,
+    /// Number of compute units consumed to add two curve25519 ristretto points
+    pub curve25519_ristretto_add_cost: u64,
+    /// Number of compute units consumed to subtract two curve25519 ristretto points
+    pub curve25519_ristretto_subtract_cost: u64,
+    /// Number of compute units consumed to multiply a curve25519 ristretto point
+    pub curve25519_ristretto_multiply_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -72,14 +84,14 @@ pub struct ComputeBudget {
 
 impl Default for ComputeBudget {
     fn default() -> Self {
-        Self::new(MAX_COMPUTE_UNIT_LIMIT as u64)
+        Self::new(MAX_UNITS)
     }
 }
 
 impl ComputeBudget {
-    pub fn new(compute_unit_limit: u64) -> Self {
+    pub fn new(max_units: u32) -> Self {
         ComputeBudget {
-            compute_unit_limit,
+            max_units: max_units as u64,
             log_64_units: 100,
             create_program_address_units: 1500,
             invoke_units: 1000,
@@ -96,27 +108,38 @@ impl ComputeBudget {
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
             zk_token_elgamal_op_cost: 25_000,
+            curve25519_edwards_validate_point_cost: 25_000, // TODO: precisely determine curve25519 costs
+            curve25519_edwards_add_cost: 25_000,
+            curve25519_edwards_subtract_cost: 25_000,
+            curve25519_edwards_multiply_cost: 25_000,
+            curve25519_ristretto_validate_point_cost: 25_000,
+            curve25519_ristretto_add_cost: 25_000,
+            curve25519_ristretto_subtract_cost: 25_000,
+            curve25519_ristretto_multiply_cost: 25_000,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
         }
     }
 
-    pub fn process_instructions<'a>(
+    pub fn process_message(
         &mut self,
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        message: &SanitizedMessage,
         requestable_heap_size: bool,
         default_units_per_instruction: bool,
-        support_set_compute_unit_price_ix: bool,
-    ) -> Result<PrioritizationFeeDetails, TransactionError> {
-        let mut num_non_compute_budget_instructions: usize = 0;
-        let mut updated_compute_unit_limit = None;
+        prioritization_fee_type_change: bool,
+    ) -> Result<u64, TransactionError> {
+        let mut num_instructions = message.instructions().len();
+        let mut requested_units = None;
         let mut requested_heap_size = None;
         let mut prioritization_fee = None;
 
-        for (i, (program_id, instruction)) in instructions.enumerate() {
+        for (i, (program_id, instruction)) in message.program_instructions_iter().enumerate() {
             if compute_budget::check_id(program_id) {
-                if support_set_compute_unit_price_ix {
+                // don't include request instructions in default max calc
+                num_instructions = num_instructions.saturating_sub(1);
+
+                if prioritization_fee_type_change {
                     let invalid_instruction_data_error = TransactionError::InstructionError(
                         i as u8,
                         InstructionError::InvalidInstructionData,
@@ -126,18 +149,17 @@ impl ComputeBudget {
 
                     match try_from_slice_unchecked(&instruction.data) {
                         Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                            units: compute_unit_limit,
+                            units,
                             additional_fee,
                         }) => {
-                            if updated_compute_unit_limit.is_some() {
+                            if requested_units.is_some() {
                                 return Err(duplicate_instruction_error);
                             }
                             if prioritization_fee.is_some() {
                                 return Err(duplicate_instruction_error);
                             }
-                            updated_compute_unit_limit = Some(compute_unit_limit);
-                            prioritization_fee =
-                                Some(PrioritizationFeeType::Deprecated(additional_fee as u64));
+                            requested_units = Some(units as u64);
+                            prioritization_fee = Some(additional_fee as u64);
                         }
                         Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
                             if requested_heap_size.is_some() {
@@ -145,30 +167,28 @@ impl ComputeBudget {
                             }
                             requested_heap_size = Some((bytes, i as u8));
                         }
-                        Ok(ComputeBudgetInstruction::SetComputeUnitLimit(compute_unit_limit)) => {
-                            if updated_compute_unit_limit.is_some() {
+                        Ok(ComputeBudgetInstruction::RequestUnits(units)) => {
+                            if requested_units.is_some() {
                                 return Err(duplicate_instruction_error);
                             }
-                            updated_compute_unit_limit = Some(compute_unit_limit);
+                            requested_units = Some(units as u64);
                         }
-                        Ok(ComputeBudgetInstruction::SetComputeUnitPrice(micro_lamports)) => {
+                        Ok(ComputeBudgetInstruction::SetPrioritizationFee(fee)) => {
                             if prioritization_fee.is_some() {
                                 return Err(duplicate_instruction_error);
                             }
-                            prioritization_fee =
-                                Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
+                            prioritization_fee = Some(fee);
                         }
                         _ => return Err(invalid_instruction_data_error),
                     }
                 } else if i < 3 {
                     match try_from_slice_unchecked(&instruction.data) {
                         Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
-                            units: compute_unit_limit,
+                            units,
                             additional_fee,
                         }) => {
-                            updated_compute_unit_limit = Some(compute_unit_limit);
-                            prioritization_fee =
-                                Some(PrioritizationFeeType::Deprecated(additional_fee as u64));
+                            requested_units = Some(units as u64);
+                            prioritization_fee = Some(additional_fee as u64);
                         }
                         Ok(ComputeBudgetInstruction::RequestHeapFrame(bytes)) => {
                             requested_heap_size = Some((bytes, 0));
@@ -181,10 +201,6 @@ impl ComputeBudget {
                         }
                     }
                 }
-            } else {
-                // only include non-request instructions in default max calc
-                num_non_compute_budget_instructions =
-                    num_non_compute_budget_instructions.saturating_add(1);
             }
         }
 
@@ -202,22 +218,16 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = if default_units_per_instruction {
-            updated_compute_unit_limit.or_else(|| {
-                Some(
-                    (num_non_compute_budget_instructions as u32)
-                        .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
-                )
-            })
+        self.max_units = if default_units_per_instruction {
+            requested_units
+                .or_else(|| Some(num_instructions.saturating_mul(DEFAULT_UNITS as usize) as u64))
         } else {
-            updated_compute_unit_limit
+            requested_units
         }
-        .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-        .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
+        .unwrap_or(MAX_UNITS as u64)
+        .min(MAX_UNITS as u64);
 
-        Ok(prioritization_fee
-            .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
-            .unwrap_or_default())
+        Ok(prioritization_fee.unwrap_or(0))
     }
 }
 
@@ -248,7 +258,7 @@ mod tests {
     }
 
     macro_rules! test {
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr, $type_change: expr  ) => {
+        ( $instructions: expr, $expected_error: expr, $expected_budget: expr, $type_change: expr  ) => {
             let payer_keypair = Keypair::new();
             let tx = SanitizedTransaction::from_transaction_for_tests(Transaction::new(
                 &[&payer_keypair],
@@ -256,74 +266,69 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget.process_instructions(
-                tx.message().program_instructions_iter(),
-                true,
-                true,
-                $type_change,
-            );
-            assert_eq!($expected_result, result);
+            let result = compute_budget.process_message(&tx.message(), true, true, $type_change);
+            assert_eq!($expected_error, result);
             assert_eq!(compute_budget, $expected_budget);
         };
-        ( $instructions: expr, $expected_result: expr, $expected_budget: expr) => {
-            test!($instructions, $expected_result, $expected_budget, true);
+        ( $instructions: expr, $expected_error: expr, $expected_budget: expr) => {
+            test!($instructions, $expected_error, $expected_budget, true);
         };
     }
 
     #[test]
-    fn test_process_instructions() {
+    fn test_process_mesage() {
         // Units
         test!(
             &[],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: 0,
+                max_units: 0,
                 ..ComputeBudget::default()
             }
         );
         test!(
             &[
-                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::request_units(1),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: 1,
                 ..ComputeBudget::default()
             }
         );
         test!(
             &[
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT + 1),
+                ComputeBudgetInstruction::request_units(MAX_UNITS + 1),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
-                ..ComputeBudget::default()
-            }
-        );
-        test!(
-            &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-            ],
-            Ok(PrioritizationFeeDetails::default()),
-            ComputeBudget {
-                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
+                max_units: MAX_UNITS as u64,
                 ..ComputeBudget::default()
             }
         );
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: MAX_UNITS as u64,
+                ..ComputeBudget::default()
+            }
+        );
+        test!(
+            &[
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                ComputeBudgetInstruction::request_units(1),
+            ],
+            Ok(0),
+            ComputeBudget {
+                max_units: 1,
                 ..ComputeBudget::default()
             }
         );
@@ -333,11 +338,11 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(1), // ignored
+                ComputeBudgetInstruction::request_units(1), // ignored
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 3,
+                max_units: DEFAULT_UNITS as u64 * 3,
                 ..ComputeBudget::default()
             },
             false
@@ -346,12 +351,9 @@ mod tests {
         // Prioritization fee
         test!(
             &[request_units_deprecated(1, 42)],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::Deprecated(42),
-                1,
-            )),
+            Ok(42),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: 1,
                 ..ComputeBudget::default()
             },
             false
@@ -359,27 +361,21 @@ mod tests {
 
         test!(
             &[
-                ComputeBudgetInstruction::set_compute_unit_limit(1),
-                ComputeBudgetInstruction::set_compute_unit_price(42)
+                ComputeBudgetInstruction::request_units(1),
+                ComputeBudgetInstruction::set_prioritization_fee(42)
             ],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::ComputeUnitPrice(42),
-                1
-            )),
+            Ok(42),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: 1,
                 ..ComputeBudget::default()
             }
         );
 
         test!(
             &[request_units_deprecated(1, u32::MAX)],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::Deprecated(u32::MAX as u64),
-                1
-            )),
+            Ok(u32::MAX as u64),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: 1,
                 ..ComputeBudget::default()
             },
             false
@@ -388,9 +384,9 @@ mod tests {
         // HeapFrame
         test!(
             &[],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: 0,
+                max_units: 0,
                 ..ComputeBudget::default()
             }
         );
@@ -399,9 +395,9 @@ mod tests {
                 ComputeBudgetInstruction::request_heap_frame(40 * 1024),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                max_units: DEFAULT_UNITS as u64,
                 heap_size: Some(40 * 1024),
                 ..ComputeBudget::default()
             }
@@ -444,9 +440,9 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+                max_units: DEFAULT_UNITS as u64,
                 heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             }
@@ -476,9 +472,9 @@ mod tests {
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
             ],
-            Ok(PrioritizationFeeDetails::default()),
+            Ok(0),
             ComputeBudget {
-                compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 7,
+                max_units: DEFAULT_UNITS as u64 * 7,
                 ..ComputeBudget::default()
             }
         );
@@ -488,15 +484,12 @@ mod tests {
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::ComputeUnitPrice(u64::MAX),
-                MAX_COMPUTE_UNIT_LIMIT as u64,
-            )),
+            Ok(u64::MAX),
             ComputeBudget {
-                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
+                max_units: MAX_UNITS as u64,
                 heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             }
@@ -506,8 +499,8 @@ mod tests {
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -520,16 +513,13 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(1),
+                ComputeBudgetInstruction::request_units(1),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::ComputeUnitPrice(u64::MAX),
-                1
-            )),
+            Ok(u64::MAX),
             ComputeBudget {
-                compute_unit_limit: 1,
+                max_units: 1,
                 heap_size: Some(MAX_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             }
@@ -538,15 +528,12 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                request_units_deprecated(MAX_COMPUTE_UNIT_LIMIT, u32::MAX),
+                request_units_deprecated(MAX_UNITS, u32::MAX),
                 ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES as u32),
             ],
-            Ok(PrioritizationFeeDetails::new(
-                PrioritizationFeeType::Deprecated(u32::MAX as u64),
-                MAX_COMPUTE_UNIT_LIMIT as u64,
-            )),
+            Ok(u32::MAX as u64),
             ComputeBudget {
-                compute_unit_limit: MAX_COMPUTE_UNIT_LIMIT as u64,
+                max_units: MAX_UNITS as u64,
                 heap_size: Some(MIN_HEAP_FRAME_BYTES as usize),
                 ..ComputeBudget::default()
             },
@@ -557,8 +544,8 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
-                ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT - 1),
+                ComputeBudgetInstruction::request_units(MAX_UNITS),
+                ComputeBudgetInstruction::request_units(MAX_UNITS - 1),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
             ComputeBudget::default()
@@ -577,8 +564,8 @@ mod tests {
         test!(
             &[
                 Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                ComputeBudgetInstruction::set_compute_unit_price(0),
-                ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
+                ComputeBudgetInstruction::set_prioritization_fee(0),
+                ComputeBudgetInstruction::set_prioritization_fee(u64::MAX),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
             ComputeBudget::default()

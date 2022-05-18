@@ -46,6 +46,17 @@ pub enum StakeError {
 
     #[error("custodian signature not present")]
     CustodianSignatureMissing,
+
+    #[error("insufficient voting activity in the reference vote account")]
+    InsufficientReferenceVotes,
+
+    #[error("stake account is not delegated to the provided vote account")]
+    VoteAddressMismatch,
+
+    #[error(
+        "stake account has not been delinquent for the minimum epochs required for deactivation"
+    )]
+    MinimumDelinquentEpochsForDeactivationNotMet,
 }
 
 impl<E> DecodeError<E> for StakeError {
@@ -222,6 +233,31 @@ pub enum StakeInstruction {
     ///   1. `[SIGNER]` Lockup authority or withdraw authority
     ///   2. Optional: `[SIGNER]` New lockup authority
     SetLockupChecked(LockupCheckedArgs),
+
+    /// Get the minimum stake delegation, in lamports
+    ///
+    /// # Account references
+    ///   None
+    ///
+    /// Returns the minimum delegation as a little-endian encoded u64 value.
+    /// Programs can use the [`get_minimum_delegation()`] helper function to invoke and
+    /// retrieve the return value for this instruction.
+    ///
+    /// [`get_minimum_delegation()`]: super::tools::get_minimum_delegation
+    GetMinimumDelegation,
+
+    /// Deactivate stake delegated to a vote account that has been delinquent for at least
+    /// `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` epochs.
+    ///
+    /// No signer is required for this instruction as it is a common good to deactivate abandoned
+    /// stake.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Delegated stake account
+    ///   1. `[]` Delinquent vote account for the delegated stake account
+    ///   2. `[]` Reference vote account that has voted at least once in the last
+    ///      `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` epochs
+    DeactivateDelinquent,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -292,7 +328,7 @@ pub fn create_account_with_seed(
             base,
             seed,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -311,7 +347,7 @@ pub fn create_account(
             from_pubkey,
             stake_pubkey,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize(stake_pubkey, authorized, lockup),
@@ -333,7 +369,7 @@ pub fn create_account_with_seed_checked(
             base,
             seed,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -351,7 +387,7 @@ pub fn create_account_checked(
             from_pubkey,
             stake_pubkey,
             lamports,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         initialize_checked(stake_pubkey, authorized),
@@ -380,7 +416,7 @@ pub fn split(
     split_stake_pubkey: &Pubkey,
 ) -> Vec<Instruction> {
     vec![
-        system_instruction::allocate(split_stake_pubkey, std::mem::size_of::<StakeState>() as u64),
+        system_instruction::allocate(split_stake_pubkey, StakeState::size_of() as u64),
         system_instruction::assign(split_stake_pubkey, &id()),
         _split(
             stake_pubkey,
@@ -404,7 +440,7 @@ pub fn split_with_seed(
             split_stake_pubkey,
             base,
             seed,
-            std::mem::size_of::<StakeState>() as u64,
+            StakeState::size_of() as u64,
             &id(),
         ),
         _split(
@@ -676,6 +712,27 @@ pub fn set_lockup_checked(
         &StakeInstruction::SetLockupChecked(lockup_checked),
         account_metas,
     )
+}
+
+pub fn get_minimum_delegation() -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &StakeInstruction::GetMinimumDelegation,
+        Vec::default(),
+    )
+}
+
+pub fn deactivate_delinquent_stake(
+    stake_account: &Pubkey,
+    delinquent_vote_account: &Pubkey,
+    reference_vote_account: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_account, false),
+        AccountMeta::new_readonly(*delinquent_vote_account, false),
+        AccountMeta::new_readonly(*reference_vote_account, false),
+    ];
+    Instruction::new_with_bincode(id(), &StakeInstruction::DeactivateDelinquent, account_metas)
 }
 
 #[cfg(test)]

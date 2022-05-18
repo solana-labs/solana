@@ -1,6 +1,12 @@
 import * as BufferLayout from '@solana/buffer-layout';
+import {u64} from '@solana/buffer-layout-utils';
 
-import {encodeData, decodeData, InstructionType} from './instruction';
+import {
+  encodeData,
+  decodeData,
+  InstructionType,
+  IInstructionInputData,
+} from './instruction';
 import * as Layout from './layout';
 import {NONCE_ACCOUNT_LENGTH} from './nonce-account';
 import {PublicKey} from './publickey';
@@ -33,7 +39,7 @@ export type TransferParams = {
   /** Account that will receive transferred lamports */
   toPubkey: PublicKey;
   /** Amount of lamports to transfer */
-  lamports: number;
+  lamports: number | bigint;
 };
 
 /**
@@ -195,7 +201,33 @@ export type TransferWithSeedParams = {
   /** Account that will receive transferred lamports */
   toPubkey: PublicKey;
   /** Amount of lamports to transfer */
-  lamports: number;
+  lamports: number | bigint;
+  /** Seed to use to derive the funding account address */
+  seed: string;
+  /** Program id to use to derive the funding account address */
+  programId: PublicKey;
+};
+
+/** Decoded transfer system transaction instruction */
+export type DecodedTransferInstruction = {
+  /** Account that will transfer lamports */
+  fromPubkey: PublicKey;
+  /** Account that will receive transferred lamports */
+  toPubkey: PublicKey;
+  /** Amount of lamports to transfer */
+  lamports: bigint;
+};
+
+/** Decoded transferWithSeed system transaction instruction */
+export type DecodedTransferWithSeedInstruction = {
+  /** Account that will transfer lamports */
+  fromPubkey: PublicKey;
+  /** Base public key to use to derive the funding account address */
+  basePubkey: PublicKey;
+  /** Account that will receive transferred lamports */
+  toPubkey: PublicKey;
+  /** Amount of lamports to transfer */
+  lamports: bigint;
   /** Seed to use to derive the funding account address */
   seed: string;
   /** Program id to use to derive the funding account address */
@@ -263,7 +295,9 @@ export class SystemInstruction {
   /**
    * Decode a transfer system instruction and retrieve the instruction params.
    */
-  static decodeTransfer(instruction: TransactionInstruction): TransferParams {
+  static decodeTransfer(
+    instruction: TransactionInstruction,
+  ): DecodedTransferInstruction {
     this.checkProgramId(instruction.programId);
     this.checkKeyLength(instruction.keys, 2);
 
@@ -284,7 +318,7 @@ export class SystemInstruction {
    */
   static decodeTransferWithSeed(
     instruction: TransactionInstruction,
-  ): TransferWithSeedParams {
+  ): DecodedTransferWithSeedInstruction {
     this.checkProgramId(instruction.programId);
     this.checkKeyLength(instruction.keys, 3);
 
@@ -517,6 +551,10 @@ export class SystemInstruction {
  * An enumeration of valid SystemInstructionType's
  */
 export type SystemInstructionType =
+  // FIXME
+  // It would be preferable for this type to be `keyof SystemInstructionInputData`
+  // but Typedoc does not transpile `keyof` expressions.
+  // See https://github.com/TypeStrong/typedoc/issues/1894
   | 'AdvanceNonceAccount'
   | 'Allocate'
   | 'AllocateWithSeed'
@@ -530,16 +568,68 @@ export type SystemInstructionType =
   | 'TransferWithSeed'
   | 'WithdrawNonceAccount';
 
+type SystemInstructionInputData = {
+  AdvanceNonceAccount: IInstructionInputData;
+  Allocate: IInstructionInputData & {
+    space: number;
+  };
+  AllocateWithSeed: IInstructionInputData & {
+    base: Uint8Array;
+    programId: Uint8Array;
+    seed: string;
+    space: number;
+  };
+  Assign: IInstructionInputData & {
+    programId: Uint8Array;
+  };
+  AssignWithSeed: IInstructionInputData & {
+    base: Uint8Array;
+    seed: string;
+    programId: Uint8Array;
+  };
+  AuthorizeNonceAccount: IInstructionInputData & {
+    authorized: Uint8Array;
+  };
+  Create: IInstructionInputData & {
+    lamports: number;
+    programId: Uint8Array;
+    space: number;
+  };
+  CreateWithSeed: IInstructionInputData & {
+    base: Uint8Array;
+    lamports: number;
+    programId: Uint8Array;
+    seed: string;
+    space: number;
+  };
+  InitializeNonceAccount: IInstructionInputData & {
+    authorized: Uint8Array;
+  };
+  Transfer: IInstructionInputData & {
+    lamports: bigint;
+  };
+  TransferWithSeed: IInstructionInputData & {
+    lamports: bigint;
+    programId: Uint8Array;
+    seed: string;
+  };
+  WithdrawNonceAccount: IInstructionInputData & {
+    lamports: number;
+  };
+};
+
 /**
  * An enumeration of valid system InstructionType's
  * @internal
  */
-export const SYSTEM_INSTRUCTION_LAYOUTS: {
-  [type in SystemInstructionType]: InstructionType;
-} = Object.freeze({
+export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze<{
+  [Instruction in SystemInstructionType]: InstructionType<
+    SystemInstructionInputData[Instruction]
+  >;
+}>({
   Create: {
     index: 0,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['Create']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
       BufferLayout.ns64('space'),
@@ -548,21 +638,21 @@ export const SYSTEM_INSTRUCTION_LAYOUTS: {
   },
   Assign: {
     index: 1,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['Assign']>([
       BufferLayout.u32('instruction'),
       Layout.publicKey('programId'),
     ]),
   },
   Transfer: {
     index: 2,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['Transfer']>([
       BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
+      u64('lamports'),
     ]),
   },
   CreateWithSeed: {
     index: 3,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['CreateWithSeed']>([
       BufferLayout.u32('instruction'),
       Layout.publicKey('base'),
       Layout.rustString('seed'),
@@ -573,49 +663,50 @@ export const SYSTEM_INSTRUCTION_LAYOUTS: {
   },
   AdvanceNonceAccount: {
     index: 4,
-    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['AdvanceNonceAccount']
+    >([BufferLayout.u32('instruction')]),
   },
   WithdrawNonceAccount: {
     index: 5,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
-    ]),
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['WithdrawNonceAccount']
+    >([BufferLayout.u32('instruction'), BufferLayout.ns64('lamports')]),
   },
   InitializeNonceAccount: {
     index: 6,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('authorized'),
-    ]),
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['InitializeNonceAccount']
+    >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
   },
   AuthorizeNonceAccount: {
     index: 7,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('authorized'),
-    ]),
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['AuthorizeNonceAccount']
+    >([BufferLayout.u32('instruction'), Layout.publicKey('authorized')]),
   },
   Allocate: {
     index: 8,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['Allocate']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('space'),
     ]),
   },
   AllocateWithSeed: {
     index: 9,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('base'),
-      Layout.rustString('seed'),
-      BufferLayout.ns64('space'),
-      Layout.publicKey('programId'),
-    ]),
+    layout: BufferLayout.struct<SystemInstructionInputData['AllocateWithSeed']>(
+      [
+        BufferLayout.u32('instruction'),
+        Layout.publicKey('base'),
+        Layout.rustString('seed'),
+        BufferLayout.ns64('space'),
+        Layout.publicKey('programId'),
+      ],
+    ),
   },
   AssignWithSeed: {
     index: 10,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<SystemInstructionInputData['AssignWithSeed']>([
       BufferLayout.u32('instruction'),
       Layout.publicKey('base'),
       Layout.rustString('seed'),
@@ -624,12 +715,14 @@ export const SYSTEM_INSTRUCTION_LAYOUTS: {
   },
   TransferWithSeed: {
     index: 11,
-    layout: BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      BufferLayout.ns64('lamports'),
-      Layout.rustString('seed'),
-      Layout.publicKey('programId'),
-    ]),
+    layout: BufferLayout.struct<SystemInstructionInputData['TransferWithSeed']>(
+      [
+        BufferLayout.u32('instruction'),
+        u64('lamports'),
+        Layout.rustString('seed'),
+        Layout.publicKey('programId'),
+      ],
+    ),
   },
 });
 
@@ -681,7 +774,7 @@ export class SystemProgram {
     if ('basePubkey' in params) {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.TransferWithSeed;
       data = encodeData(type, {
-        lamports: params.lamports,
+        lamports: BigInt(params.lamports),
         seed: params.seed,
         programId: toBuffer(params.programId.toBuffer()),
       });
@@ -692,7 +785,7 @@ export class SystemProgram {
       ];
     } else {
       const type = SYSTEM_INSTRUCTION_LAYOUTS.Transfer;
-      data = encodeData(type, {lamports: params.lamports});
+      data = encodeData(type, {lamports: BigInt(params.lamports)});
       keys = [
         {pubkey: params.fromPubkey, isSigner: true, isWritable: true},
         {pubkey: params.toPubkey, isSigner: false, isWritable: true},

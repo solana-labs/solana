@@ -12,6 +12,8 @@ import {
   useRawTransactionDetails,
 } from "providers/transactions/raw";
 import { Address } from "components/common/Address";
+import { useScrollAnchor } from "providers/scroll-anchor";
+import getInstructionCardScrollAnchorId from "utils/get-instruction-card-scroll-anchor-id";
 
 type InstructionProps = {
   title: string;
@@ -54,9 +56,13 @@ export function InstructionCard({
 
     return setShowRaw((r) => !r);
   };
-
+  const scrollAnchorRef = useScrollAnchor(
+    getInstructionCardScrollAnchorId(
+      childIndex != null ? [index + 1, childIndex + 1] : [index + 1]
+    )
+  );
   return (
-    <div className="card">
+    <div className="card" ref={scrollAnchorRef}>
       <div className="card-header">
         <h3 className="card-header-title mb-0 d-flex align-items-center">
           <span className={`badge bg-${resultClass}-soft me-2`}>
@@ -100,12 +106,16 @@ export function InstructionCard({
               children
             )}
             {innerCards && innerCards.length > 0 && (
-              <tr>
-                <td colSpan={2}>
-                  Inner Instructions
-                  <div className="inner-cards">{innerCards}</div>
-                </td>
-              </tr>
+              <>
+                <tr className="table-sep">
+                  <td colSpan={3}>Inner Instructions</td>
+                </tr>
+                <tr>
+                  <td colSpan={3}>
+                    <div className="inner-cards">{innerCards}</div>
+                  </td>
+                </tr>
+              </>
             )}
           </tbody>
         </table>

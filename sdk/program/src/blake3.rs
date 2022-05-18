@@ -1,4 +1,7 @@
-//! The `blake3` module provides functions for creating hashes.
+//! Hashing with the [blake3] hash function.
+//!
+//! [blake3]: https://github.com/BLAKE3-team/BLAKE3
+
 use {
     crate::sanitize::Sanitize,
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
@@ -6,10 +9,12 @@ use {
     thiserror::Error,
 };
 
-/// Size of hash
+/// Size of a hash in bytes.
 pub const HASH_BYTES: usize = 32;
-/// Maximum string length of a base58 encoded hash
+/// Maximum string length of a base58 encoded hash.
 const MAX_BASE58_LEN: usize = 44;
+
+/// A blake3 hash.
 #[derive(
     Serialize,
     Deserialize,

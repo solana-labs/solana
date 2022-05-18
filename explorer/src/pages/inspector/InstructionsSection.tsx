@@ -4,8 +4,10 @@ import { CompiledInstruction, Message } from "@solana/web3.js";
 import { TableCardBody } from "components/common/TableCardBody";
 import { AddressWithContext, programValidator } from "./AddressWithContext";
 import { useCluster } from "providers/cluster";
-import { programLabel } from "utils/tx";
+import { getProgramName } from "utils/tx";
 import { HexData } from "components/common/HexData";
+import getInstructionCardScrollAnchorId from "utils/get-instruction-card-scroll-anchor-id";
+import { useScrollAnchor } from "providers/scroll-anchor";
 
 export function InstructionsSection({ message }: { message: Message }) {
   return (
@@ -29,10 +31,12 @@ function InstructionCard({
   const [expanded, setExpanded] = React.useState(false);
   const { cluster } = useCluster();
   const programId = message.accountKeys[ix.programIdIndex];
-  const programName = programLabel(programId.toBase58(), cluster) || "Unknown";
-
+  const programName = getProgramName(programId.toBase58(), cluster);
+  const scrollAnchorRef = useScrollAnchor(
+    getInstructionCardScrollAnchorId([index + 1])
+  );
   return (
-    <div className="card" id={`instruction-index-${index + 1}`} key={index}>
+    <div className="card" key={index} ref={scrollAnchorRef}>
       <div className={`card-header${!expanded ? " border-bottom-none" : ""}`}>
         <h3 className="card-header-title mb-0 d-flex align-items-center">
           <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>

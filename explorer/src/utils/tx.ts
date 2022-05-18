@@ -24,6 +24,7 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 export enum PROGRAM_NAMES {
   // native built-ins
   ADDRESS_MAP = "Address Map Program",
+  COMPUTE_BUDGET = "Compute Budget Program",
   CONFIG = "Config Program",
   STAKE = "Stake Program",
   SYSTEM = "System Program",
@@ -50,6 +51,8 @@ export enum PROGRAM_NAMES {
   ACUMEN = "Acumen Program",
   BONFIDA_POOL = "Bonfida Pool Program",
   BREAK_SOLANA = "Break Solana Program",
+  CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
+  CHAINLINK_STORE = "Chainlink Store Program",
   MANGO_GOVERNANCE = "Mango Governance Program",
   MANGO_ICO = "Mango ICO Program",
   MANGO_1 = "Mango Program v1",
@@ -60,6 +63,7 @@ export enum PROGRAM_NAMES {
   METAPLEX = "Metaplex Program",
   NFT_AUCTION = "NFT Auction Program",
   NFT_CANDY_MACHINE = "NFT Candy Machine Program",
+  NFT_CANDY_MACHINE_V2 = "NFT Candy Machine Program V2",
   ORCA_SWAP_1 = "Orca Swap Program v1",
   ORCA_SWAP_2 = "Orca Swap Program v2",
   ORCA_AQUAFARM = "Orca Aquafarm Program",
@@ -89,6 +93,8 @@ export enum PROGRAM_NAMES {
   SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  SOLANART = "Solanart",
+  SOLANART_GO = "Solanart - Global offers",
 }
 
 const ALL_CLUSTERS = [
@@ -109,6 +115,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   // native built-ins
   AddressMap111111111111111111111111111111111: {
     name: PROGRAM_NAMES.ADDRESS_MAP,
+    deployments: ALL_CLUSTERS,
+  },
+  ComputeBudget111111111111111111111111111111: {
+    name: PROGRAM_NAMES.COMPUTE_BUDGET,
     deployments: ALL_CLUSTERS,
   },
   Config1111111111111111111111111111111111111: {
@@ -197,6 +207,14 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.BREAK_SOLANA,
     deployments: LIVE_CLUSTERS,
   },
+  cjg3oHmg9uuPsP8D6g29NWvhySJkdYdAo9D25PRbKXJ: {
+    name: PROGRAM_NAMES.CHAINLINK_ORACLE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
+  HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny: {
+    name: PROGRAM_NAMES.CHAINLINK_STORE,
+    deployments: [Cluster.Devnet, Cluster.MainnetBeta],
+  },
   GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J: {
     name: PROGRAM_NAMES.MANGO_GOVERNANCE,
     deployments: [Cluster.MainnetBeta],
@@ -235,6 +253,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   cndyAnrLdpjq1Ssp1z8xxDsB8dxe7u4HL5Nxi2K5WXZ: {
     name: PROGRAM_NAMES.NFT_CANDY_MACHINE,
+    deployments: LIVE_CLUSTERS,
+  },
+  cndy3Z4yapfJBmL3ShUp5exZKqR3z33thTzeNMm2gRZ: {
+    name: PROGRAM_NAMES.NFT_CANDY_MACHINE_V2,
     deployments: LIVE_CLUSTERS,
   },
   DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1: {
@@ -353,6 +375,14 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.WORMHOLE,
     deployments: [Cluster.MainnetBeta],
   },
+  CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz: {
+    name: PROGRAM_NAMES.SOLANART,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "5ZfZAwP2m93waazg8DkrrVmsupeiPEvaEHowiUP7UAbJ": {
+    name: PROGRAM_NAMES.SOLANART_GO,
+    deployments: [Cluster.MainnetBeta],
+  },
 };
 
 export type LoaderName = typeof LOADER_IDS[keyof typeof LOADER_IDS];
@@ -381,6 +411,12 @@ export const SYSVAR_IDS = {
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "Sysvar: Stake History",
   Sysvar1nstructions1111111111111111111111111: "Sysvar: Instructions",
 };
+
+export function getProgramName(address: string, cluster: Cluster): string {
+  const label = programLabel(address, cluster);
+  if (label) return label;
+  return `Unknown Program (${address})`;
+}
 
 export function programLabel(
   address: string,

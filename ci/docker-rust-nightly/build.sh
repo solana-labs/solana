@@ -3,8 +3,14 @@ set -ex
 
 cd "$(dirname "$0")"
 
+platform=()
+if [[ $(uname -m) = arm64 ]]; then
+  # Ref: https://blog.jaimyn.dev/how-to-build-multi-architecture-docker-images-on-an-m1-mac/#tldr
+  platform+=(--platform linux/amd64)
+fi
+
 nightlyDate=${1:-$(date +%Y-%m-%d)}
-docker build -t solanalabs/rust-nightly:"$nightlyDate" --build-arg date="$nightlyDate" .
+docker build "${platform[@]}" -t solanalabs/rust-nightly:"$nightlyDate" --build-arg date="$nightlyDate" .
 
 maybeEcho=
 if [[ -z $CI ]]; then

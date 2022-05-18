@@ -15,25 +15,51 @@
 
 pub mod solana_client {
     pub mod client_error {
-        use thiserror::Error;
-
-        #[derive(Error, Debug)]
+        #[derive(thiserror::Error, Debug)]
         #[error("mock-error")]
         pub struct ClientError;
         pub type Result<T> = std::result::Result<T, ClientError>;
     }
 
-    pub mod rpc_client {
-        use super::{
-            super::solana_sdk::{hash::Hash, signature::Signature, transaction::Transaction},
-            client_error::Result as ClientResult,
+    pub mod nonce_utils {
+        use {
+            super::super::solana_sdk::{
+                account::ReadableAccount, account_utils::StateMut, hash::Hash, pubkey::Pubkey,
+            },
+            crate::nonce::state::{Data, Versions},
         };
 
-        pub struct RpcClient;
+        #[derive(thiserror::Error, Debug)]
+        #[error("mock-error")]
+        pub struct Error;
+
+        pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
+            _account: &T,
+        ) -> Result<Data, Error> {
+            Ok(Data::new(Pubkey::new_unique(), Hash::default(), 5000))
+        }
+    }
+
+    pub mod rpc_client {
+        use {
+            super::{
+                super::solana_sdk::{
+                    account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
+                    transaction::Transaction,
+                },
+                client_error::Result as ClientResult,
+            },
+            std::{cell::RefCell, collections::HashMap, rc::Rc},
+        };
+
+        #[derive(Default)]
+        pub struct RpcClient {
+            get_account_responses: Rc<RefCell<HashMap<Pubkey, Account>>>,
+        }
 
         impl RpcClient {
             pub fn new(_url: String) -> Self {
-                RpcClient
+                RpcClient::default()
             }
 
             pub fn get_latest_blockhash(&self) -> ClientResult<Hash> {
@@ -53,6 +79,25 @@ pub mod solana_client {
             ) -> ClientResult<u64> {
                 Ok(0)
             }
+
+            pub fn get_account(&self, pubkey: &Pubkey) -> ClientResult<Account> {
+                Ok(self
+                    .get_account_responses
+                    .borrow()
+                    .get(pubkey)
+                    .cloned()
+                    .unwrap())
+            }
+
+            pub fn set_get_account_response(&self, pubkey: Pubkey, account: Account) {
+                self.get_account_responses
+                    .borrow_mut()
+                    .insert(pubkey, account);
+            }
+
+            pub fn get_balance(&self, _pubkey: &Pubkey) -> ClientResult<u64> {
+                Ok(0)
+            }
         }
     }
 }
@@ -63,7 +108,41 @@ pub mod solana_client {
 /// This lets examples in solana-program appear to be written as client
 /// programs.
 pub mod solana_sdk {
-    pub use crate::{hash, instruction, message, nonce, pubkey, system_instruction};
+    pub use crate::{
+        address_lookup_table_account, hash, instruction, message, nonce,
+        pubkey::{self, Pubkey},
+        system_instruction, system_program,
+    };
+
+    pub mod account {
+        use crate::{clock::Epoch, pubkey::Pubkey};
+        #[derive(Clone)]
+        pub struct Account {
+            pub lamports: u64,
+            pub data: Vec<u8>,
+            pub owner: Pubkey,
+            pub executable: bool,
+            pub rent_epoch: Epoch,
+        }
+
+        pub trait ReadableAccount: Sized {
+            fn data(&self) -> &[u8];
+        }
+
+        impl ReadableAccount for Account {
+            fn data(&self) -> &[u8] {
+                &self.data
+            }
+        }
+    }
+
+    pub mod account_utils {
+        use super::account::Account;
+
+        pub trait StateMut<T> {}
+
+        impl<T> StateMut<T> for Account {}
+    }
 
     pub mod signature {
         use crate::pubkey::Pubkey;
@@ -77,15 +156,17 @@ pub mod solana_sdk {
             pub fn new() -> Keypair {
                 Keypair
             }
+        }
 
-            pub fn pubkey(&self) -> Pubkey {
+        impl Signer for Keypair {
+            fn pubkey(&self) -> Pubkey {
                 Pubkey::default()
             }
         }
 
-        impl Signer for Keypair {}
-
-        pub trait Signer {}
+        pub trait Signer {
+            fn pubkey(&self) -> Pubkey;
+        }
     }
 
     pub mod signers {
@@ -97,12 +178,44 @@ pub mod solana_sdk {
         impl<T: Signer> Signers for [&T; 2] {}
     }
 
+    pub mod signer {
+        use thiserror::Error;
+
+        #[derive(Error, Debug)]
+        #[error("mock-error")]
+        pub struct SignerError;
+    }
+
     pub mod transaction {
         use {
-            super::signers::Signers,
-            crate::{hash::Hash, instruction::Instruction, message::Message, pubkey::Pubkey},
+            super::{signature::Signature, signer::SignerError, signers::Signers},
+            crate::{
+                hash::Hash,
+                instruction::Instruction,
+                message::{Message, VersionedMessage},
+                pubkey::Pubkey,
+            },
+            serde::Serialize,
         };
 
+        pub struct VersionedTransaction {
+            pub signatures: Vec<Signature>,
+            pub message: VersionedMessage,
+        }
+
+        impl VersionedTransaction {
+            pub fn try_new<T: Signers>(
+                message: VersionedMessage,
+                _keypairs: &T,
+            ) -> std::result::Result<Self, SignerError> {
+                Ok(VersionedTransaction {
+                    signatures: vec![],
+                    message,
+                })
+            }
+        }
+
+        #[derive(Serialize)]
         pub struct Transaction {
             pub message: Message,
         }
@@ -141,6 +254,45 @@ pub mod solana_sdk {
             }
 
             pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
+
+            pub fn try_sign<T: Signers>(
+                &mut self,
+                _keypairs: &T,
+                _recent_blockhash: Hash,
+            ) -> Result<(), SignerError> {
+                Ok(())
+            }
+        }
+    }
+}
+
+pub mod solana_address_lookup_table_program {
+    crate::declare_id!("AddressLookupTab1e1111111111111111111111111");
+
+    pub mod state {
+        use {
+            crate::{instruction::InstructionError, pubkey::Pubkey},
+            std::borrow::Cow,
+        };
+
+        pub struct AddressLookupTable<'a> {
+            pub addresses: Cow<'a, [Pubkey]>,
+        }
+
+        impl<'a> AddressLookupTable<'a> {
+            pub fn serialize_for_tests(self) -> Result<Vec<u8>, InstructionError> {
+                let mut data = vec![];
+                self.addresses.iter().for_each(|address| {
+                    data.extend_from_slice(address.as_ref());
+                });
+                Ok(data)
+            }
+
+            pub fn deserialize(data: &'a [u8]) -> Result<AddressLookupTable<'a>, InstructionError> {
+                Ok(Self {
+                    addresses: Cow::Borrowed(bytemuck::try_cast_slice(data).unwrap()),
+                })
+            }
         }
     }
 }

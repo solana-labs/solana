@@ -132,7 +132,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
                 if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
                     data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                        sock.send_to(b.payload(), &peer.tvu_forwards).unwrap();
                     });
                 }
             });

@@ -247,6 +247,7 @@ impl BanksClient {
                 err,
                 logs: simulation_details.logs,
                 units_consumed: simulation_details.units_consumed,
+                return_data: simulation_details.return_data,
             }),
             BanksTransactionResultWithSimulation {
                 result: Some(result),

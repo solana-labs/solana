@@ -6,7 +6,11 @@ extern crate test;
 use {
     log::*,
     solana_program_runtime::invoke_context::InvokeContext,
-    solana_runtime::{bank::*, bank_client::BankClient, loader_utils::create_invoke_instruction},
+    solana_runtime::{
+        bank::{test_utils::goto_end_of_slot, *},
+        bank_client::BankClient,
+        loader_utils::create_invoke_instruction,
+    },
     solana_sdk::{
         client::{AsyncClient, SyncClient},
         clock::MAX_RECENT_BLOCKHASHES,
@@ -34,7 +38,6 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
     _first_instruction_account: usize,
-    _data: &[u8],
     _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())
@@ -200,10 +203,7 @@ fn bench_bank_update_recent_blockhashes(bencher: &mut Bencher) {
         goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
     }
     // Verify blockhash_queue is full (genesis hash has been kicked out)
-    assert_eq!(
-        Some(false),
-        bank.check_hash_age(&genesis_hash, MAX_RECENT_BLOCKHASHES)
-    );
+    assert!(!bank.is_hash_valid_for_age(&genesis_hash, MAX_RECENT_BLOCKHASHES));
     bencher.iter(|| {
         bank.update_recent_blockhashes();
     });

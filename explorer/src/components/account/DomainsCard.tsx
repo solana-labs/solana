@@ -21,15 +21,14 @@ export function DomainsCard({ pubkey }: { pubkey: PublicKey }) {
   return (
     <div className="card">
       <div className="card-header align-items-center">
-        <h3 className="card-header-title">Domain Names Owned</h3>
+        <h3 className="card-header-title">Owned Domain Names</h3>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">Domain name</th>
-              <th className="text-muted">Domain Address</th>
-              <th className="text-muted">Domain Class Address</th>
+              <th className="text-muted">Domain Name</th>
+              <th className="text-muted">Name Service Account</th>
             </tr>
           </thead>
           <tbody className="list">
@@ -52,9 +51,6 @@ function RenderDomainRow({ domainInfo }: { domainInfo: DomainInfo }) {
       <td>{domainInfo.name}</td>
       <td>
         <Address pubkey={domainInfo.address} link />
-      </td>
-      <td>
-        <Address pubkey={domainInfo.class} link />
       </td>
     </tr>
   );

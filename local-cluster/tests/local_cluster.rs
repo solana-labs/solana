@@ -70,8 +70,12 @@ mod common;
 fn test_local_cluster_start_and_exit() {
     solana_logger::setup();
     let num_nodes = 1;
-    let cluster =
-        LocalCluster::new_with_equal_stakes(num_nodes, 100, 3, SocketAddrSpace::Unspecified);
+    let cluster = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     assert_eq!(cluster.validators.len(), num_nodes);
 }
 
@@ -84,8 +88,8 @@ fn test_local_cluster_start_and_exit_with_config() {
             &ValidatorConfig::default_for_test(),
             NUM_NODES,
         ),
-        node_stakes: vec![3; NUM_NODES],
-        cluster_lamports: 100,
+        node_stakes: vec![DEFAULT_NODE_STAKE; NUM_NODES],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         ticks_per_slot: 8,
         slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
         stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
@@ -101,8 +105,12 @@ fn test_spend_and_verify_all_nodes_1() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_1");
     let num_nodes = 1;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -118,8 +126,12 @@ fn test_spend_and_verify_all_nodes_2() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_2");
     let num_nodes = 2;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -135,8 +147,12 @@ fn test_spend_and_verify_all_nodes_3() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_spend_and_verify_all_nodes_3");
     let num_nodes = 3;
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -151,8 +167,12 @@ fn test_spend_and_verify_all_nodes_3() {
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
-    let cluster =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let cluster = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     let nodes = cluster.get_node_pubkeys();
 
     // Get non leader
@@ -162,7 +182,9 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let tx_client = create_client(non_bootstrap_info.client_facing_addr());
+    let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
+    let tx_client = create_client(rpc, tpu);
+
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
@@ -226,8 +248,12 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         .expect("please set environment variable NUM_NODES")
         .parse()
         .expect("could not parse NUM_NODES as a number");
-    let local =
-        LocalCluster::new_with_equal_stakes(num_nodes, 10_000, 100, SocketAddrSpace::Unspecified);
+    let local = LocalCluster::new_with_equal_stakes(
+        num_nodes,
+        DEFAULT_CLUSTER_LAMPORTS,
+        DEFAULT_NODE_STAKE,
+        SocketAddrSpace::Unspecified,
+    );
     cluster_tests::spend_and_verify_all_nodes(
         &local.entry_point_info,
         &local.funding_keypair,
@@ -235,28 +261,6 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         HashSet::new(),
         SocketAddrSpace::Unspecified,
     );
-}
-
-#[allow(unused_attributes)]
-#[ignore]
-#[test]
-#[serial]
-fn test_cluster_partition_1_2() {
-    let empty = |_: &mut LocalCluster, _: &mut ()| {};
-    let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
-        cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
-    };
-    run_cluster_partition(
-        &[vec![1], vec![1, 1]],
-        None,
-        (),
-        empty,
-        empty,
-        on_partition_resolved,
-        None,
-        None,
-        vec![],
-    )
 }
 
 #[test]
@@ -271,8 +275,8 @@ fn test_two_unbalanced_stakes() {
 
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
-            node_stakes: vec![999_990, 3],
-            cluster_lamports: 1_000_000,
+            node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+            cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
             validator_configs: make_identical_validator_configs(&validator_config, 2),
             ticks_per_slot: num_ticks_per_slot,
             slots_per_epoch: num_slots_per_epoch,
@@ -298,11 +302,12 @@ fn test_two_unbalanced_stakes() {
 #[test]
 #[serial]
 fn test_forwarding() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
     let mut config = ClusterConfig {
-        node_stakes: vec![999_990, 3],
-        cluster_lamports: 2_000_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
             2,
@@ -340,8 +345,8 @@ fn test_restart_node() {
     let validator_config = ValidatorConfig::default_for_test();
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
-            node_stakes: vec![100; 1],
-            cluster_lamports: 100,
+            node_stakes: vec![DEFAULT_NODE_STAKE],
+            cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
             validator_configs: vec![safe_clone_config(&validator_config)],
             ticks_per_slot,
             slots_per_epoch,
@@ -379,8 +384,8 @@ fn test_mainnet_beta_cluster_type() {
 
     let mut config = ClusterConfig {
         cluster_type: ClusterType::MainnetBeta,
-        node_stakes: vec![100; 1],
-        cluster_lamports: 1_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
             1,
@@ -396,7 +401,8 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let client = create_client(cluster.entry_point_info.client_facing_addr());
+    let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
+    let client = create_client(rpc, tpu);
 
     // Programs that are available at epoch 0
     for program_id in [
@@ -448,10 +454,10 @@ fn test_snapshot_download() {
     let validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -461,21 +467,29 @@ fn test_snapshot_download() {
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
+    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
     trace!("found: {}", full_snapshot_archive_info.path().display());
 
     // Download the snapshot, then boot a validator from it.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -530,10 +544,10 @@ fn test_incremental_snapshot_download() {
         num_account_paths,
     );
 
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -543,43 +557,60 @@ fn test_incremental_snapshot_download() {
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
+    let incremental_snapshot_archives_dir = &leader_snapshot_test_config
+        .validator_config
+        .snapshot_config
+        .as_ref()
+        .unwrap()
+        .incremental_snapshot_archives_dir;
 
     debug!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
            full_snapshot_interval,
            incremental_snapshot_interval,
            accounts_hash_interval);
     debug!(
-        "leader config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "leader config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         leader_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         leader_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        leader_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
     debug!(
-        "validator config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "validator config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         validator_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
 
     trace!("Waiting for snapshots");
-    let (incremental_snapshot_archive_info, full_snapshot_archive_info) =
-        cluster.wait_for_next_incremental_snapshot(snapshot_archives_dir);
+    let (incremental_snapshot_archive_info, full_snapshot_archive_info) = cluster
+        .wait_for_next_incremental_snapshot(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+        );
     trace!(
         "found: {} and {}",
         full_snapshot_archive_info.path().display(),
@@ -589,7 +620,8 @@ fn test_incremental_snapshot_download() {
     // Download the snapshots, then boot a validator from them.
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             full_snapshot_archive_info.slot(),
             *full_snapshot_archive_info.hash(),
@@ -614,7 +646,8 @@ fn test_incremental_snapshot_download() {
 
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        snapshot_archives_dir,
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
         (
             incremental_snapshot_archive_info.slot(),
             *incremental_snapshot_archive_info.hash(),
@@ -684,10 +717,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         accounts_hash_interval,
         num_account_paths,
     );
-    let stake = 10_000;
+    let stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![stake],
-        cluster_lamports: 1_000_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -697,58 +730,74 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
 
-    debug!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
+    info!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
            full_snapshot_interval,
            incremental_snapshot_interval,
            accounts_hash_interval);
     debug!(
-        "leader config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "leader config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         leader_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         leader_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        leader_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
     debug!(
-        "validator config:\n\tbank snapshots dir: {}\n\tsnapshot archives dir: {}",
+        "validator config:\n\tbank snapshots dir: {}\n\tfull snapshot archives dir: {}\n\tincremental snapshot archives dir: {}",
         validator_snapshot_test_config
             .bank_snapshots_dir
             .path()
             .display(),
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path()
+            .display(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path()
             .display(),
     );
 
-    info!("Waiting for leader to create snapshots...");
-    let (incremental_snapshot_archive_info, full_snapshot_archive_info) =
+    info!("Waiting for leader to create the next incremental snapshot...");
+    let (incremental_snapshot_archive, full_snapshot_archive) =
         LocalCluster::wait_for_next_incremental_snapshot(
             &cluster,
-            leader_snapshot_test_config.snapshot_archives_dir.path(),
+            leader_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
+            leader_snapshot_test_config
+                .incremental_snapshot_archives_dir
+                .path(),
         );
-    debug!(
+    info!(
         "Found snapshots:\n\tfull snapshot: {}\n\tincremental snapshot: {}",
-        full_snapshot_archive_info.path().display(),
-        incremental_snapshot_archive_info.path().display()
+        full_snapshot_archive.path().display(),
+        incremental_snapshot_archive.path().display()
     );
     assert_eq!(
-        full_snapshot_archive_info.slot(),
-        incremental_snapshot_archive_info.base_slot()
+        full_snapshot_archive.slot(),
+        incremental_snapshot_archive.base_slot()
     );
+    info!("Waiting for leader to create snapshots... DONE");
 
     // Download the snapshots, then boot a validator from them.
     info!("Downloading full snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
-        (
-            full_snapshot_archive_info.slot(),
-            *full_snapshot_archive_info.hash(),
-        ),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+        (full_snapshot_archive.slot(), *full_snapshot_archive.hash()),
         SnapshotType::FullSnapshot,
         validator_snapshot_test_config
             .validator_config
@@ -766,25 +815,31 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         &mut None,
     )
     .unwrap();
-    let downloaded_full_snapshot_archive_info =
-        snapshot_utils::get_highest_full_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
-        )
-        .unwrap();
-    debug!(
+    let downloaded_full_snapshot_archive = snapshot_utils::get_highest_full_snapshot_archive_info(
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    )
+    .unwrap();
+    info!(
         "Downloaded full snapshot, slot: {}",
-        downloaded_full_snapshot_archive_info.slot()
+        downloaded_full_snapshot_archive.slot()
     );
 
     info!("Downloading incremental snapshot to validator...");
     download_snapshot_archive(
         &cluster.entry_point_info.rpc,
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
         (
-            incremental_snapshot_archive_info.slot(),
-            *incremental_snapshot_archive_info.hash(),
+            incremental_snapshot_archive.slot(),
+            *incremental_snapshot_archive.hash(),
         ),
-        SnapshotType::IncrementalSnapshot(incremental_snapshot_archive_info.base_slot()),
+        SnapshotType::IncrementalSnapshot(incremental_snapshot_archive.base_slot()),
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
@@ -801,20 +856,22 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         &mut None,
     )
     .unwrap();
-    let downloaded_incremental_snapshot_archive_info =
+    let downloaded_incremental_snapshot_archive =
         snapshot_utils::get_highest_incremental_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
-            full_snapshot_archive_info.slot(),
+            validator_snapshot_test_config
+                .incremental_snapshot_archives_dir
+                .path(),
+            full_snapshot_archive.slot(),
         )
         .unwrap();
-    debug!(
+    info!(
         "Downloaded incremental snapshot, slot: {}, base slot: {}",
-        downloaded_incremental_snapshot_archive_info.slot(),
-        downloaded_incremental_snapshot_archive_info.base_slot(),
+        downloaded_incremental_snapshot_archive.slot(),
+        downloaded_incremental_snapshot_archive.base_slot(),
     );
     assert_eq!(
-        downloaded_full_snapshot_archive_info.slot(),
-        downloaded_incremental_snapshot_archive_info.base_slot()
+        downloaded_full_snapshot_archive.slot(),
+        downloaded_incremental_snapshot_archive.base_slot()
     );
 
     // closure to copy files in a directory to another directory
@@ -873,17 +930,33 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // restart the node and guarantee that the only snapshots present are these initial ones.  So,
     // the easiest way to do that is create a backup now, delete the ones on the node before
     // restart, then copy the backup ones over again.
-    let backup_validator_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+    let backup_validator_full_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
     trace!(
-        "Backing up validator snapshots to dir: {}...",
-        backup_validator_snapshot_archives_dir.path().display()
+        "Backing up validator full snapshots to dir: {}...",
+        backup_validator_full_snapshot_archives_dir.path().display()
     );
     copy_files_with_remote(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
-        backup_validator_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+        backup_validator_full_snapshot_archives_dir.path(),
+    );
+    let backup_validator_incremental_snapshot_archives_dir =
+        tempfile::tempdir_in(farf_dir()).unwrap();
+    trace!(
+        "Backing up validator incremental snapshots to dir: {}...",
+        backup_validator_incremental_snapshot_archives_dir
+            .path()
+            .display()
+    );
+    copy_files_with_remote(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+        backup_validator_incremental_snapshot_archives_dir.path(),
     );
 
-    info!("Starting a new validator...");
+    info!("Starting the validator...");
     let validator_identity = Arc::new(Keypair::new());
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
@@ -892,11 +965,13 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         None,
         SocketAddrSpace::Unspecified,
     );
+    info!("Starting the validator... DONE");
 
     // To ensure that a snapshot will be taken during startup, the blockstore needs to have roots
     // that cross a full snapshot interval.
-    info!("Waiting for the validator to see enough slots to cross a full snapshot interval...");
-    let starting_slot = incremental_snapshot_archive_info.slot();
+    let starting_slot = incremental_snapshot_archive.slot();
+    let next_full_snapshot_slot = starting_slot + full_snapshot_interval;
+    info!("Waiting for the validator to see enough slots to cross a full snapshot interval ({next_full_snapshot_slot})...");
     let timer = Instant::now();
     loop {
         let validator_current_slot = cluster
@@ -904,7 +979,8 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             .unwrap()
             .get_slot_with_commitment(CommitmentConfig::finalized())
             .unwrap();
-        if validator_current_slot > (starting_slot + full_snapshot_interval) {
+        trace!("validator current slot: {validator_current_slot}");
+        if validator_current_slot > next_full_snapshot_slot {
             break;
         }
         assert!(
@@ -913,7 +989,9 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         );
         std::thread::yield_now();
     }
-    trace!("Waited {:?}", timer.elapsed());
+    info!(
+        "Waited {:?} for the validator to see enough slots to cross a full snapshot interval... DONE", timer.elapsed()
+    );
 
     // Get the highest full snapshot archive info for the validator, now that it has crossed the
     // next full snapshot interval.  We are going to use this to look up the same snapshot on the
@@ -921,24 +999,24 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // during startup.  This ensures the snapshot creation process during startup is correct.
     //
     // Putting this all in its own block so its clear we're only intended to keep the leader's info
-    let leader_full_snapshot_archive_info_for_comparison = {
+    let leader_full_snapshot_archive_for_comparison = {
         let validator_full_snapshot = snapshot_utils::get_highest_full_snapshot_archive_info(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         )
         .unwrap();
 
         // Now get the same full snapshot on the LEADER that we just got from the validator
         let mut leader_full_snapshots = snapshot_utils::get_full_snapshot_archives(
-            leader_snapshot_test_config.snapshot_archives_dir.path(),
+            leader_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         );
         leader_full_snapshots.retain(|full_snapshot| {
             full_snapshot.slot() == validator_full_snapshot.slot()
                 && full_snapshot.hash() == validator_full_snapshot.hash()
         });
-
-        // NOTE: If this unwrap() ever fails, it may be that the leader's old full snapshot archives
-        // were purged.  If that happens, increase the maximum_full_snapshot_archives_to_retain
-        // in the leader's Snapshotconfig.
         let leader_full_snapshot = leader_full_snapshots.first().unwrap();
 
         // And for sanity, the full snapshot from the leader and the validator MUST be the same
@@ -952,88 +1030,134 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 
         leader_full_snapshot.clone()
     };
+    info!("leader full snapshot archive for comparison: {leader_full_snapshot_archive_for_comparison:#?}");
 
-    trace!(
-        "Delete all the snapshots on the validator and restore the originals from the backup..."
+    info!("Delete all the snapshots on the validator and restore the originals from the backup...");
+    delete_files_with_remote(
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
     );
-    delete_files_with_remote(validator_snapshot_test_config.snapshot_archives_dir.path());
+    delete_files_with_remote(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+    );
     copy_files_with_remote(
-        backup_validator_snapshot_archives_dir.path(),
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        backup_validator_full_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    copy_files_with_remote(
+        backup_validator_incremental_snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+    );
+    info!(
+        "Delete all the snapshots on the validator and restore the originals from the backup... DONE"
     );
 
     // Get the highest full snapshot slot *before* restarting, as a comparison
     let validator_full_snapshot_slot_at_startup =
         snapshot_utils::get_highest_full_snapshot_archive_slot(
-            validator_snapshot_test_config.snapshot_archives_dir.path(),
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
         )
         .unwrap();
 
-    info!("Restarting the validator...");
+    info!(
+        "Restarting the validator with full snapshot {validator_full_snapshot_slot_at_startup}..."
+    );
     let validator_info = cluster.exit_node(&validator_identity.pubkey());
     cluster.restart_node(
         &validator_identity.pubkey(),
         validator_info,
         SocketAddrSpace::Unspecified,
     );
+    info!("Restarting the validator... DONE");
 
     // Now, we want to ensure that the validator can make a new incremental snapshot based on the
     // new full snapshot that was created during the restart.
+    info!("Waiting for the validator to make new snapshots...");
+    let validator_next_full_snapshot_slot =
+        validator_full_snapshot_slot_at_startup + full_snapshot_interval;
+    let validator_next_incremental_snapshot_slot =
+        validator_next_full_snapshot_slot + incremental_snapshot_interval;
+    info!("Waiting for validator next full snapshot slot: {validator_next_full_snapshot_slot}");
+    info!("Waiting for validator next incremental snapshot slot: {validator_next_incremental_snapshot_slot}");
     let timer = Instant::now();
-    let (
-        validator_highest_full_snapshot_archive_info,
-        _validator_highest_incremental_snapshot_archive_info,
-    ) = loop {
-        if let Some(highest_full_snapshot_info) =
-            snapshot_utils::get_highest_full_snapshot_archive_info(
-                validator_snapshot_test_config.snapshot_archives_dir.path(),
-            )
-        {
-            if highest_full_snapshot_info.slot() > validator_full_snapshot_slot_at_startup {
-                if let Some(highest_incremental_snapshot_info) =
-                    snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                        validator_snapshot_test_config.snapshot_archives_dir.path(),
-                        highest_full_snapshot_info.slot(),
+    loop {
+        if let Some(full_snapshot_slot) = snapshot_utils::get_highest_full_snapshot_archive_slot(
+            validator_snapshot_test_config
+                .full_snapshot_archives_dir
+                .path(),
+        ) {
+            if full_snapshot_slot >= validator_next_full_snapshot_slot {
+                if let Some(incremental_snapshot_slot) =
+                    snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                        validator_snapshot_test_config
+                            .incremental_snapshot_archives_dir
+                            .path(),
+                        full_snapshot_slot,
                     )
                 {
-                    info!("Success! Made new full and incremental snapshots!");
-                    trace!(
-                        "Full snapshot slot: {}, incremental snapshot slot: {}",
-                        highest_full_snapshot_info.slot(),
-                        highest_incremental_snapshot_info.slot(),
-                    );
-                    break (
-                        highest_full_snapshot_info,
-                        highest_incremental_snapshot_info,
-                    );
+                    if incremental_snapshot_slot >= validator_next_incremental_snapshot_slot {
+                        // specific incremental snapshot is not important, just that one was created
+                        info!(
+                             "Validator made new snapshots, full snapshot slot: {}, incremental snapshot slot: {}",
+                             full_snapshot_slot,
+                             incremental_snapshot_slot,
+                        );
+                        break;
+                    }
                 }
             }
         }
+
         assert!(
-            timer.elapsed() < Duration::from_secs(10),
-            "It should not take longer than 10 seconds to cross the next incremental snapshot interval."
+            timer.elapsed() < Duration::from_secs(30),
+            "It should not take longer than 30 seconds to cross the next incremental snapshot interval."
         );
         std::thread::yield_now();
-    };
-    trace!("Waited {:?}", timer.elapsed());
+    }
+    info!(
+        "Waited {:?} for the validator to make new snapshots... DONE",
+        timer.elapsed()
+    );
 
     // Check to make sure that the full snapshot the validator created during startup is the same
-    // as the snapshot the leader created.
-    // NOTE: If the assert fires and the _slots_ don't match (specifically are off by a full
-    // snapshot interval), then that means the loop to get the
-    // `validator_highest_full_snapshot_archive_info` saw the wrong one, and that may've been due
-    // to some weird scheduling/delays on the machine running the test.  Run the test again.  If
-    // this ever fails repeatedly then the test will need to be modified to handle this case.
-    assert_eq!(
-        (
-            validator_highest_full_snapshot_archive_info.slot(),
-            validator_highest_full_snapshot_archive_info.hash()
-        ),
-        (
-            leader_full_snapshot_archive_info_for_comparison.slot(),
-            leader_full_snapshot_archive_info_for_comparison.hash()
-        )
+    // or one greater than the snapshot the leader created.
+    let validator_full_snapshot_archives = snapshot_utils::get_full_snapshot_archives(
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
     );
+    info!("validator full snapshot archives: {validator_full_snapshot_archives:#?}");
+    let validator_full_snapshot_archive_for_comparison = validator_full_snapshot_archives
+        .into_iter()
+        .find(|validator_full_snapshot_archive| {
+            [
+                leader_full_snapshot_archive_for_comparison.slot(),
+                leader_full_snapshot_archive_for_comparison.slot() + full_snapshot_interval,
+            ]
+            .contains(&validator_full_snapshot_archive.slot())
+        })
+        .expect("validator created an unexpected full snapshot");
+    info!("Validator full snapshot archive for comparison: {validator_full_snapshot_archive_for_comparison:#?}");
+
+    if validator_full_snapshot_archive_for_comparison.slot()
+        == leader_full_snapshot_archive_for_comparison.slot()
+    {
+        assert_eq!(
+            validator_full_snapshot_archive_for_comparison.hash(),
+            leader_full_snapshot_archive_for_comparison.hash(),
+        );
+    } else {
+        info!("Hash check skipped due to slot mismatch");
+    }
 
     // And lastly, startup another node with the new snapshots to ensure they work
     let final_validator_snapshot_test_config = SnapshotValidatorConfig::new(
@@ -1046,12 +1170,29 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // Copy over the snapshots to the new node, but need to remove the tmp snapshot dir so it
     // doesn't break the simple copy_files closure.
     snapshot_utils::remove_tmp_snapshot_archives(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    snapshot_utils::remove_tmp_snapshot_archives(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
     );
     copy_files(
-        validator_snapshot_test_config.snapshot_archives_dir.path(),
+        validator_snapshot_test_config
+            .full_snapshot_archives_dir
+            .path(),
         final_validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
+            .path(),
+    );
+    copy_files(
+        validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
+            .path(),
+        final_validator_snapshot_test_config
+            .incremental_snapshot_archives_dir
             .path(),
     );
 
@@ -1064,8 +1205,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         None,
         SocketAddrSpace::Unspecified,
     );
-
-    // Success!
+    info!("Starting final validator... DONE");
 }
 
 #[allow(unused_attributes)]
@@ -1083,8 +1223,8 @@ fn test_snapshot_restart_tower() {
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000, 10],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         validator_configs: vec![
             safe_clone_config(&leader_snapshot_test_config.validator_config),
             safe_clone_config(&validator_snapshot_test_config.validator_config),
@@ -1104,19 +1244,20 @@ fn test_snapshot_restart_tower() {
     let validator_info = cluster.exit_node(&validator_id);
 
     // Get slot after which this was generated
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
-    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+    let full_snapshot_archive_info =
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
             .into_path(),
         full_snapshot_archive_info.slot(),
         full_snapshot_archive_info.hash(),
@@ -1154,16 +1295,16 @@ fn test_snapshots_blockstore_floor() {
     let mut validator_snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
 
-    let snapshot_archives_dir = &leader_snapshot_test_config
+    let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &leader_snapshot_test_config.validator_config,
             1,
@@ -1177,7 +1318,7 @@ fn test_snapshots_blockstore_floor() {
 
     let archive_info = loop {
         let archive =
-            snapshot_utils::get_highest_full_snapshot_archive_info(&snapshot_archives_dir);
+            snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir);
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
@@ -1188,7 +1329,7 @@ fn test_snapshots_blockstore_floor() {
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         validator_snapshot_test_config
-            .snapshot_archives_dir
+            .full_snapshot_archives_dir
             .into_path(),
         archive_info.slot(),
         archive_info.hash(),
@@ -1198,8 +1339,6 @@ fn test_snapshots_blockstore_floor() {
     let slot_floor = archive_info.slot();
 
     // Start up a new node from a snapshot
-    let validator_stake = 5;
-
     let cluster_nodes = discover_cluster(
         &cluster.entry_point_info.gossip,
         1,
@@ -1214,7 +1353,7 @@ fn test_snapshots_blockstore_floor() {
 
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
-        validator_stake,
+        DEFAULT_NODE_STAKE,
         Arc::new(Keypair::new()),
         None,
         SocketAddrSpace::Unspecified,
@@ -1258,12 +1397,12 @@ fn test_snapshots_restart_validity() {
     let num_account_paths = 1;
     let mut snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
-    let snapshot_archives_dir = &snapshot_test_config
+    let full_snapshot_archives_dir = &snapshot_test_config
         .validator_config
         .snapshot_config
         .as_ref()
         .unwrap()
-        .snapshot_archives_dir;
+        .full_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
     let mut all_account_storage_dirs = vec![vec![]];
@@ -1274,8 +1413,8 @@ fn test_snapshots_restart_validity() {
     );
 
     let mut config = ClusterConfig {
-        node_stakes: vec![10000],
-        cluster_lamports: 100_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: make_identical_validator_configs(
             &snapshot_test_config.validator_config,
             1,
@@ -1301,7 +1440,7 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        cluster.wait_for_next_full_snapshot(snapshot_archives_dir);
+        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point
@@ -1373,8 +1512,8 @@ fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default_for_test();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; 4],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE; 4],
         validator_configs: make_identical_validator_configs(&validator_config, 4),
         ..ClusterConfig::default()
     };
@@ -1397,8 +1536,8 @@ fn test_no_voting() {
         ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
         validator_configs: vec![validator_config],
         ..ClusterConfig::default()
     };
@@ -1434,7 +1573,7 @@ fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
+    let node_stakes = vec![51 * DEFAULT_NODE_STAKE, 50 * DEFAULT_NODE_STAKE];
     let validator_keys: Vec<_> = vec![
         "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
         "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
@@ -1444,7 +1583,7 @@ fn test_optimistic_confirmation_violation_detection() {
     .take(node_stakes.len())
     .collect();
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1573,8 +1712,8 @@ fn test_validator_saves_tower() {
     let validator_identity_keypair = Arc::new(Keypair::new());
     let validator_id = validator_identity_keypair.pubkey();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
         validator_configs: vec![validator_config],
         validator_keys: Some(vec![(validator_identity_keypair.clone(), true)]),
         ..ClusterConfig::default()
@@ -1713,8 +1852,8 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
     let node_stakes = match cluster_mode {
-        ClusterMode::MasterOnly => vec![100],
-        ClusterMode::MasterSlave => vec![100, 1],
+        ClusterMode::MasterOnly => vec![DEFAULT_NODE_STAKE],
+        ClusterMode::MasterSlave => vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE],
     };
 
     let validator_keys = vec![
@@ -1735,7 +1874,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
     };
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1827,7 +1966,7 @@ fn test_hard_fork_invalidates_tower() {
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![60, 40];
+    let node_stakes = vec![60 * DEFAULT_NODE_STAKE, 40 * DEFAULT_NODE_STAKE];
 
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
@@ -1846,7 +1985,7 @@ fn test_hard_fork_invalidates_tower() {
     let validator_b_pubkey = validators[1];
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -1972,7 +2111,7 @@ fn test_restart_tower_rollback() {
 
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![10000, 1];
+    let node_stakes = vec![DEFAULT_NODE_STAKE * 100, DEFAULT_NODE_STAKE];
 
     let validator_strings = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
@@ -1988,7 +2127,7 @@ fn test_restart_tower_rollback() {
     let b_pubkey = validator_keys[1].0.pubkey();
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + DEFAULT_NODE_STAKE * 100,
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),
@@ -2066,7 +2205,7 @@ fn test_run_test_load_program_accounts_partition_root() {
 
 fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
     let num_slots_per_validator = 8;
-    let partitions: [Vec<usize>; 2] = [vec![1], vec![1]];
+    let partitions: [usize; 2] = [1, 1];
     let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
         num_slots_per_validator,
         num_slots_per_validator,
@@ -2116,7 +2255,6 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
         on_partition_before_resolved,
         on_partition_resolved,
         None,
-        None,
         additional_accounts,
     );
 }
@@ -2124,7 +2262,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 #[test]
 #[serial]
 fn test_votes_land_in_fork_during_long_partition() {
-    let total_stake = 100;
+    let total_stake = 3 * DEFAULT_NODE_STAKE;
     // Make `lighter_stake` insufficient for switching threshold
     let lighter_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
     let heavier_stake = lighter_stake + 1;
@@ -2132,10 +2270,8 @@ fn test_votes_land_in_fork_during_long_partition() {
 
     // Give lighter stake 30 consecutive slots before
     // the heavier stake gets a single slot
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(heavier_stake as usize, 1)],
-        &[(lighter_stake as usize, 30)],
-    ];
+    let partitions: &[(usize, usize)] =
+        &[(heavier_stake as usize, 1), (lighter_stake as usize, 30)];
 
     #[derive(Default)]
     struct PartitionContext {
@@ -2211,9 +2347,8 @@ fn test_votes_land_in_fork_during_long_partition() {
     };
 
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 0)]],
+        &[(failures_stake as usize, 0)],
         partitions,
-        None,
         None,
         PartitionContext::default(),
         on_partition_start,
@@ -2340,7 +2475,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![51, 50];
+    let node_stakes = vec![51 * DEFAULT_NODE_STAKE, 50 * DEFAULT_NODE_STAKE];
     let validator_keys: Vec<_> = vec![
         "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
         "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
@@ -2365,7 +2500,7 @@ fn run_test_load_program_accounts(scan_commitment: CommitmentConfig) {
     );
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),

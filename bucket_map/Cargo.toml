@@ -1,6 +1,6 @@
 [package]
 name = "solana-bucket-map"
-version = "1.10.16"
+version = "1.11.0"
 description = "solana-bucket-map"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bucket-map"
@@ -11,18 +11,18 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-log = { version = "0.4.11" }
+log = { version = "0.4.17" }
 memmap2 = "0.5.3"
 modular-bitfield = "0.11.2"
 rand = "0.7.0"
-solana-measure = { path = "../measure", version = "=1.10.16" }
-solana-sdk = { path = "../sdk", version = "=1.10.16" }
+solana-measure = { path = "../measure", version = "=1.11.0" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
 tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"
-rayon = "1.5.0"
-solana-logger = { path = "../logger", version = "=1.10.16" }
+rayon = "1.5.2"
+solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [lib]
 crate-type = ["lib"]

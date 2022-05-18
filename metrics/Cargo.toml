@@ -1,6 +1,6 @@
 [package]
 name = "solana-metrics"
-version = "1.10.16"
+version = "1.11.0"
 description = "Solana Metrics"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,9 +13,9 @@ edition = "2021"
 crossbeam-channel = "0.5"
 gethostname = "0.2.3"
 lazy_static = "1.4.0"
-log = "0.4.14"
+log = "0.4.17"
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-solana-sdk = { path = "../sdk", version = "=1.10.16" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
 
 [dev-dependencies]
 env_logger = "0.9.0"
@@ -24,6 +24,9 @@ serial_test = "0.6.0"
 
 [lib]
 name = "solana_metrics"
+
+[[bench]]
+name = "metrics"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

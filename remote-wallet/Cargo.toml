@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-remote-wallet"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.16"
+version = "1.11.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -11,17 +11,17 @@ documentation = "https://docs.rs/solana-remote-wallet"
 
 [dependencies]
 console = "0.15.0"
-dialoguer = "0.10.0"
-hidapi = { version = "1.3.4", default-features = false, optional = true }
-log = "0.4.14"
+dialoguer = "0.10.1"
+hidapi = { version = "1.4.1", default-features = false, optional = true }
+log = "0.4.17"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 parking_lot = "0.12"
 qstring = "0.7.2"
 semver = "1.0"
-solana-sdk = { path = "../sdk", version = "=1.10.16" }
+solana-sdk = { path = "../sdk", version = "=1.11.0" }
 thiserror = "1.0"
-uriparse = "0.6.3"
+uriparse = "0.6.4"
 
 [features]
 default = ["linux-static-hidraw", "hidapi"]

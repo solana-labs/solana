@@ -16,13 +16,10 @@ use {
     rayon::prelude::*,
     serde::Serialize,
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
-    solana_client::{
-        rpc_filter::RpcFilterType,
-        rpc_response::{
-            ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcBlockUpdate,
-            RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
-            RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
-        },
+    solana_client::rpc_response::{
+        ProcessedSignatureResult, ReceivedSignatureResult, Response as RpcResponse, RpcBlockUpdate,
+        RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
+        RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
@@ -157,7 +154,7 @@ where
             filter_results(results, params, *w_last_notified_slot, bank);
         for result in filter_results {
             notifier.notify(
-                Response::from(RpcNotificationResponse {
+                RpcResponse::from(RpcNotificationResponse {
                     context: RpcNotificationContext { slot },
                     value: result,
                 }),
@@ -186,7 +183,7 @@ struct RpcNotificationResponse<T> {
     value: T,
 }
 
-impl<T> From<RpcNotificationResponse<T>> for Response<T> {
+impl<T> From<RpcNotificationResponse<T>> for RpcResponse<T> {
     fn from(notification: RpcNotificationResponse<T>) -> Self {
         let RpcNotificationResponse {
             context: RpcNotificationContext { slot },
@@ -429,10 +426,9 @@ fn filter_program_results(
     let encoding = params.encoding;
     let filters = params.filters.clone();
     let keyed_accounts = accounts.into_iter().filter(move |(_, account)| {
-        filters.iter().all(|filter_type| match filter_type {
-            RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-            RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-        })
+        filters
+            .iter()
+            .all(|filter_type| filter_type.allows(account))
     });
     let accounts: Box<dyn Iterator<Item = RpcKeyedAccount>> =
         if is_known_spl_token_id(&params.pubkey)
@@ -531,7 +527,7 @@ impl PubsubNotificationStats {
 }
 
 pub struct RpcSubscriptions {
-    notification_sender: Option<Sender<TimestampedNotificationEntry>>,
+    notification_sender: Sender<TimestampedNotificationEntry>,
     t_cleanup: Option<JoinHandle<()>>,
 
     exit: Arc<AtomicBool>,
@@ -630,36 +626,30 @@ impl RpcSubscriptions {
                 config.queue_capacity_bytes,
             )),
         };
-        let notification_threads = config.notification_threads.unwrap_or_else(get_thread_count);
-        let t_cleanup = if notification_threads == 0 {
-            None
-        } else {
-            Some(
-                Builder::new()
-                    .name("solana-rpc-notifications".to_string())
-                    .spawn(move || {
-                        let pool = rayon::ThreadPoolBuilder::new()
-                            .num_threads(notification_threads)
-                            .thread_name(|i| format!("sol-sub-notif-{}", i))
-                            .build()
-                            .unwrap();
-                        pool.install(|| {
-                            Self::process_notifications(
-                                exit_clone,
-                                max_complete_transaction_status_slot,
-                                blockstore,
-                                notifier,
-                                notification_receiver,
-                                subscriptions,
-                                bank_forks,
-                                block_commitment_cache,
-                                optimistically_confirmed_bank,
-                            )
-                        });
-                    })
-                    .unwrap(),
-            )
-        };
+        let notification_threads = config.notification_threads;
+        let t_cleanup = Builder::new()
+            .name("solana-rpc-notifications".to_string())
+            .spawn(move || {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(notification_threads.unwrap_or_else(get_thread_count))
+                    .thread_name(|i| format!("sol-sub-notif-{}", i))
+                    .build()
+                    .unwrap();
+                pool.install(|| {
+                    Self::process_notifications(
+                        exit_clone,
+                        max_complete_transaction_status_slot,
+                        blockstore,
+                        notifier,
+                        notification_receiver,
+                        subscriptions,
+                        bank_forks,
+                        block_commitment_cache,
+                        optimistically_confirmed_bank,
+                    )
+                });
+            })
+            .unwrap();
 
         let control = SubscriptionControl::new(
             config.max_active_subscriptions,
@@ -668,8 +658,9 @@ impl RpcSubscriptions {
         );
 
         Self {
-            notification_sender: Some(notification_sender),
-            t_cleanup,
+            notification_sender,
+            t_cleanup: Some(t_cleanup),
+
             exit: exit.clone(),
             control,
         }
@@ -744,15 +735,13 @@ impl RpcSubscriptions {
     }
 
     fn enqueue_notification(&self, notification_entry: NotificationEntry) {
-        if let Some(ref notification_sender) = self.notification_sender {
-            match notification_sender.send(notification_entry.into()) {
-                Ok(()) => (),
-                Err(SendError(notification)) => {
-                    warn!(
-                        "Dropped RPC Notification - receiver disconnected : {:?}",
-                        notification
-                    );
-                }
+        match self.notification_sender.send(notification_entry.into()) {
+            Ok(()) => (),
+            Err(SendError(notification)) => {
+                warn!(
+                    "Dropped RPC Notification - receiver disconnected : {:?}",
+                    notification
+                );
             }
         }
     }
@@ -815,16 +804,16 @@ impl RpcSubscriptions {
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
                         NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
+                            let rpc_vote = RpcVote {
+                                vote_pubkey: vote_pubkey.to_string(),
+                                slots: vote_info.slots(),
+                                hash: bs58::encode(vote_info.hash()).into_string(),
+                                timestamp: vote_info.timestamp(),
+                            };
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()
                                 .get(&SubscriptionParams::Vote)
                             {
-                                let rpc_vote = RpcVote {
-                                    vote_pubkey: vote_pubkey.to_string(),
-                                    slots: vote_info.slots(),
-                                    hash: bs58::encode(vote_info.hash()).into_string(),
-                                    timestamp: vote_info.timestamp(),
-                                };
                                 debug!("vote notify: {:?}", vote_info);
                                 inc_new_counter_info!("rpc-subscription-notify-vote", 1);
                                 notifier.notify(&rpc_vote, sub, false);
@@ -878,7 +867,7 @@ impl RpcSubscriptions {
                                         {
                                             if params.enable_received_notification {
                                                 notifier.notify(
-                                                    Response::from(RpcNotificationResponse {
+                                                    RpcResponse::from(RpcNotificationResponse {
                                                         context: RpcNotificationContext { slot },
                                                         value: RpcSignatureResult::ReceivedSignature(
                                                             ReceivedSignatureResult::ReceivedSignature,
@@ -1026,7 +1015,7 @@ impl RpcSubscriptions {
                                     Ok(block_update) => {
                                         if let Some(block_update) = block_update {
                                             notifier.notify(
-                                                Response::from(RpcNotificationResponse {
+                                                RpcResponse::from(RpcNotificationResponse {
                                                     context: RpcNotificationContext { slot: s },
                                                     value: block_update,
                                                 }),
@@ -1043,7 +1032,7 @@ impl RpcSubscriptions {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
                                         notifier.notify(
-                                            Response::from(RpcNotificationResponse {
+                                            RpcResponse::from(RpcNotificationResponse {
                                                 context: RpcNotificationContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
@@ -1244,7 +1233,8 @@ pub(crate) mod tests {
         serial_test::serial,
         solana_client::rpc_config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
-            RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsFilter,
+            RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
+            RpcTransactionLogsFilter,
         },
         solana_runtime::{
             commitment::BlockCommitment,
@@ -2823,6 +2813,114 @@ pub(crate) mod tests {
         rpc1.account_unsubscribe(sub_id1).unwrap();
 
         assert!(!subscriptions.control.account_subscribed(&alice.pubkey()));
+    }
+
+    fn make_logs_result(signature: &str, subscription_id: u64) -> serde_json::Value {
+        json!({
+            "jsonrpc": "2.0",
+            "method": "logsNotification",
+            "params": {
+                "result": {
+                    "context": {
+                        "slot": 0
+                    },
+                    "value": {
+                        "signature": signature,
+                        "err": null,
+                        "logs": [
+                            "Program 11111111111111111111111111111111 invoke [1]",
+                            "Program 11111111111111111111111111111111 success"
+                        ]
+                    }
+                },
+                "subscription": subscription_id
+            }
+        })
+    }
+
+    #[test]
+    #[serial]
+    fn test_logs_subscribe() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let blockhash = bank.last_blockhash();
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        let alice = Keypair::new();
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let optimistically_confirmed_bank =
+            OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
+            &exit,
+            max_complete_transaction_status_slot,
+            bank_forks.clone(),
+            Arc::new(RwLock::new(BlockCommitmentCache::new_for_tests())),
+            optimistically_confirmed_bank,
+        ));
+
+        let sub_config = RpcTransactionLogsConfig {
+            commitment: Some(CommitmentConfig::processed()),
+        };
+
+        let (rpc_all, mut receiver_all) = rpc_pubsub_service::test_connection(&subscriptions);
+        let sub_id_for_all = rpc_all
+            .logs_subscribe(RpcTransactionLogsFilter::All, Some(sub_config.clone()))
+            .unwrap();
+        assert!(subscriptions.control.logs_subscribed(None));
+
+        let (rpc_alice, mut receiver_alice) = rpc_pubsub_service::test_connection(&subscriptions);
+        let sub_id_for_alice = rpc_alice
+            .logs_subscribe(
+                RpcTransactionLogsFilter::Mentions(vec![alice.pubkey().to_string()]),
+                Some(sub_config),
+            )
+            .unwrap();
+        assert!(subscriptions.control.logs_subscribed(Some(&alice.pubkey())));
+
+        let tx = system_transaction::create_account(
+            &mint_keypair,
+            &alice,
+            blockhash,
+            1,
+            0,
+            &system_program::id(),
+        );
+
+        bank_forks
+            .read()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .process_transaction_with_logs(&tx)
+            .unwrap();
+
+        subscriptions.notify_subscribers(CommitmentSlots::new_from_slot(0));
+
+        let expected_response_all =
+            make_logs_result(&tx.signatures[0].to_string(), u64::from(sub_id_for_all));
+        let response_all = receiver_all.recv();
+        assert_eq!(
+            expected_response_all,
+            serde_json::from_str::<serde_json::Value>(&response_all).unwrap(),
+        );
+        let expected_response_alice =
+            make_logs_result(&tx.signatures[0].to_string(), u64::from(sub_id_for_alice));
+        let response_alice = receiver_alice.recv();
+        assert_eq!(
+            expected_response_alice,
+            serde_json::from_str::<serde_json::Value>(&response_alice).unwrap(),
+        );
+
+        rpc_all.logs_unsubscribe(sub_id_for_all).unwrap();
+        assert!(!subscriptions.control.logs_subscribed(None));
+        rpc_alice.logs_unsubscribe(sub_id_for_alice).unwrap();
+        assert!(!subscriptions.control.logs_subscribed(Some(&alice.pubkey())));
     }
 
     #[test]

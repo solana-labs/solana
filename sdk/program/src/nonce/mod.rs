@@ -1,3 +1,5 @@
+//! Durable transaction nonces.
+
 pub mod state;
 pub use state::State;
 

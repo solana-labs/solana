@@ -1,5 +1,6 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
@@ -9,7 +10,6 @@ use {
     solana_sdk::timing::timestamp,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        cell::RefCell,
         collections::HashMap,
         net::IpAddr,
         sync::{Arc, RwLock},
@@ -20,11 +20,13 @@ use {
 
 const IP_TO_STAKE_REFRESH_DURATION: Duration = Duration::from_secs(5);
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
-                    .build()
-                    .unwrap()));
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
+        .build()
+        .unwrap();
+}
 
 pub type FindPacketSenderStakeSender = Sender<Vec<PacketBatch>>;
 pub type FindPacketSenderStakeReceiver = Receiver<Vec<PacketBatch>>;
@@ -41,25 +43,25 @@ struct FindPacketSenderStakeStats {
 }
 
 impl FindPacketSenderStakeStats {
-    fn report(&mut self) {
+    fn report(&mut self, name: &'static str) {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 2000 {
             datapoint_info!(
-                "find_packet_sender_stake-services_stats",
+                name,
                 (
-                    "refresh_ip_to_stake_time",
+                    "refresh_ip_to_stake_time_us",
                     self.refresh_ip_to_stake_time as i64,
                     i64
                 ),
                 (
-                    "apply_sender_stakes_time",
+                    "apply_sender_stakes_time_us",
                     self.apply_sender_stakes_time as i64,
                     i64
                 ),
-                ("send_batches_time", self.send_batches_time as i64, i64),
+                ("send_batches_time_us", self.send_batches_time as i64, i64),
                 (
-                    "receive_batches_time",
+                    "receive_batches_time_ns",
                     self.receive_batches_time as i64,
                     i64
                 ),
@@ -82,6 +84,7 @@ impl FindPacketSenderStakeStage {
         sender: FindPacketSenderStakeSender,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
+        name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
         let thread_hdl = Builder::new()
@@ -137,7 +140,7 @@ impl FindPacketSenderStakeStage {
                         },
                     }
 
-                    stats.report();
+                    stats.report(name);
                 }
             })
             .unwrap();
@@ -166,16 +169,14 @@ impl FindPacketSenderStakeStage {
     }
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .flat_map(|batch| batch.packets.par_iter_mut())
-                    .for_each(|packet| {
-                        packet.meta.sender_stake =
-                            *ip_to_stake.get(&packet.meta.addr().ip()).unwrap_or(&0);
-                    });
-            })
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .flat_map(|batch| batch.packets.par_iter_mut())
+                .for_each(|packet| {
+                    packet.meta.sender_stake =
+                        *ip_to_stake.get(&packet.meta.addr().ip()).unwrap_or(&0);
+                });
         });
     }
 

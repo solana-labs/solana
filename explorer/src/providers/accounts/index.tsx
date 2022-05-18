@@ -90,6 +90,7 @@ export interface Details {
   owner: PublicKey;
   space: number;
   data?: ProgramData;
+  rawData?: Buffer;
 }
 
 export interface Account {
@@ -284,11 +285,19 @@ async function fetchAccountInfo(
         }
       }
 
+      // If we cannot parse account layout as native spl account
+      // then keep raw data for other components to decode
+      let rawData: Buffer | undefined;
+      if (!data && !("parsed" in result.data)) {
+        rawData = result.data;
+      }
+
       details = {
         space,
         executable: result.executable,
         owner: result.owner,
         data,
+        rawData,
       };
     }
     data = { pubkey, lamports, details };
@@ -308,6 +317,8 @@ async function fetchAccountInfo(
   });
 }
 
+const IMAGE_MIME_TYPE_REGEX = /data:image\/(svg\+xml|png|jpeg|gif)/g;
+
 const getMetaDataJSON = async (
   id: string,
   metadata: programs.metadata.MetadataData
@@ -322,9 +333,11 @@ const getMetaDataJSON = async (
       }
 
       if (extended?.image) {
-        extended.image = extended.image.startsWith("http")
-          ? extended.image
-          : `${metadata.data.uri}/${extended.image}`;
+        extended.image =
+          extended.image.startsWith("http") ||
+          IMAGE_MIME_TYPE_REGEX.test(extended.image)
+            ? extended.image
+            : `${metadata.data.uri}/${extended.image}`;
       }
 
       return extended;

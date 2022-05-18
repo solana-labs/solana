@@ -101,25 +101,21 @@ At runtime a program may log how much of the compute budget remains. See
 [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
 
-A transaction may set the maximum number of compute units it is allowed to
-consume by including a "request units"
-[`ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
-Note that a transaction's prioritization fee is calculated from multiplying the
-number of compute units requested by the compute unit price (measured in
-micro-lamports) set by the transaction.  So transactions should request the
-minimum amount of compute units required for execution to minimize fees. Also
-note that fees are not adjusted when the number of requested compute units
-exceeds the number of compute units consumed by an executed transaction.
+A transaction may request a specific level of `max_units` it is allowed to
+consume by including a
+[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
+Transaction prioritization depends on the fee/compute-unit ratio so transaction
+should request the minimum amount of compute units required for them to process.
 
 Compute Budget instructions don't require any accounts and don't consume any
 compute units to process.  Transactions can only contain one of each type of
 compute budget instruction, duplicate types will result in an error.
 
-The `ComputeBudgetInstruction::set_compute_unit_limit` function can be used to create
+The `ComputeBudgetInstruction::request_units` function can be used to create
 these instructions:
 
 ```rust
-let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
+let instruction = ComputeBudgetInstruction::request_units(300_000);
 ```
 
 ## Transaction-wide Compute Budget
@@ -135,15 +131,14 @@ Budget](#compute-budget).
 The transaction-wide compute budget applies the `max_units` cap to the entire
 transaction rather than to each instruction within the transaction. The default
 transaction-wide `max_units` will be calculated as the product of the number of
-instructions in the transaction (excluding [Compute Budget](#compute-budget)
-instructions) by the default per-instruction units, which is currently 200k.
-During processing, the sum of the compute units used by each instruction in the
-transaction must not exceed that value. This default value attempts to retain
-existing behavior to avoid breaking clients. Transactions can request a specific
-number of `max_units` via [Compute Budget](#compute-budget) instructions.
-Clients should request only what they need; requesting the minimum amount of
-units required to process the transaction will reduce overall transaction cost,
-which may include a prioritization-fee charged for every compute unit.
+instructions in the transaction by the default per-instruction units, which is
+currently 200k. During processing, the sum of the compute units used by each
+instruction in the transaction must not exceed that value. This default value
+attempts to retain existing behavior to avoid breaking clients. Transactions can
+request a specific number of `max_units` via [Compute Budget](#compute-budget)
+instructions.  Clients should request only what they need; requesting the
+minimum amount of units required to process the transaction will improve their
+fee/compute-unit ratio, which transaction prioritization is based on.
 
 ## New Features
 

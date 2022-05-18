@@ -163,7 +163,7 @@ fn sort_data_coding_into_fec_sets(
         assert!(!data_slot_and_index.contains(&key));
         data_slot_and_index.insert(key);
         let fec_entry = fec_data
-            .entry(shred.common_header.fec_set_index)
+            .entry(shred.fec_set_index())
             .or_insert_with(Vec::new);
         fec_entry.push(shred);
     }
@@ -174,7 +174,7 @@ fn sort_data_coding_into_fec_sets(
         assert!(!coding_slot_and_index.contains(&key));
         coding_slot_and_index.insert(key);
         let fec_entry = fec_coding
-            .entry(shred.common_header.fec_set_index)
+            .entry(shred.fec_set_index())
             .or_insert_with(Vec::new);
         fec_entry.push(shred);
     }

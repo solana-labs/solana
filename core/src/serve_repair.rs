@@ -761,7 +761,7 @@ mod tests {
             blockstore::make_many_slot_entries,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             get_tmp_ledger_path,
-            shred::{max_ticks_per_n_shreds, Shred},
+            shred::{max_ticks_per_n_shreds, Shred, ShredFlags},
         },
         solana_perf::packet::Packet,
         solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Keypair, timing::timestamp},
@@ -876,7 +876,7 @@ mod tests {
                 nonce,
             );
             assert!(rv.is_none());
-            let shred = Shred::new_from_data(slot, 1, 1, None, false, false, 0, 2, 0);
+            let shred = Shred::new_from_data(slot, 1, 1, &[], ShredFlags::empty(), 0, 2, 0);
 
             blockstore
                 .insert_shreds(vec![shred], None, false)
@@ -1095,11 +1095,12 @@ mod tests {
             // Create slots [1, 2] with 1 shred apiece
             let (mut shreds, _) = make_many_slot_entries(1, 2, 1);
 
-            // Make shred for slot 1 too large
             assert_eq!(shreds[0].slot(), 1);
             assert_eq!(shreds[0].index(), 0);
-            shreds[0].payload.push(10);
-            shreds[0].data_header.size = shreds[0].payload.len() as u16;
+            // TODO: The test previously relied on corrupting shred payload
+            // size which we no longer want to expose. Current test no longer
+            // covers packet size check in repair_response_packet_from_bytes.
+            shreds.remove(0);
             blockstore
                 .insert_shreds(shreds, None, false)
                 .expect("Expect successful ledger write");
@@ -1148,6 +1149,10 @@ mod tests {
 
     #[test]
     fn test_run_ancestor_hashes() {
+        fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponseVersion {
+            limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap()
+        }
+
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
@@ -1177,8 +1182,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
@@ -1194,8 +1198,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
 
             // Set duplicate confirmed
@@ -1218,8 +1221,7 @@ mod tests {
             .packets;
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-            let ancestor_hashes_response: AncestorHashesResponseVersion =
-                limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap();
+            let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             assert_eq!(
                 ancestor_hashes_response.into_slot_hashes(),
                 expected_ancestors
@@ -1303,6 +1305,9 @@ mod tests {
 
     #[test]
     fn test_verify_shred_response() {
+        fn new_test_data_shred(slot: Slot, index: u32) -> Shred {
+            Shred::new_from_data(slot, index, 1, &[], ShredFlags::empty(), 0, 0, 0)
+        }
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test
         match repair {
@@ -1315,41 +1320,34 @@ mod tests {
         let index = 5;
 
         // Orphan
-        let mut shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
+        let shred = new_test_data_shred(slot, 0);
         let request = ShredRepairType::Orphan(slot);
         assert!(request.verify_response(&shred));
-        shred.set_slot(slot - 1);
+        let shred = new_test_data_shred(slot - 1, 0);
         assert!(request.verify_response(&shred));
-        shred.set_slot(slot + 1);
+        let shred = new_test_data_shred(slot + 1, 0);
         assert!(!request.verify_response(&shred));
 
         // HighestShred
-        shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot, index);
         let request = ShredRepairType::HighestShred(slot, index as u64);
         assert!(request.verify_response(&shred));
-        shred.set_index(index + 1);
+        let shred = new_test_data_shred(slot, index + 1);
         assert!(request.verify_response(&shred));
-        shred.set_index(index - 1);
+        let shred = new_test_data_shred(slot, index - 1);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot - 1);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot - 1, index);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot + 1);
+        let shred = new_test_data_shred(slot + 1, index);
         assert!(!request.verify_response(&shred));
 
         // Shred
-        shred = Shred::new_empty_data_shred();
-        shred.set_slot(slot);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot, index);
         let request = ShredRepairType::Shred(slot, index as u64);
         assert!(request.verify_response(&shred));
-        shred.set_index(index + 1);
+        let shred = new_test_data_shred(slot, index + 1);
         assert!(!request.verify_response(&shred));
-        shred.set_slot(slot + 1);
-        shred.set_index(index);
+        let shred = new_test_data_shred(slot + 1, index);
         assert!(!request.verify_response(&shred));
     }
 

@@ -596,6 +596,40 @@ mod test {
         );
 
         assert!(transfer_data.is_err());
+
+        // Case 5: invalid destination or auditor pubkey
+        let spendable_balance: u64 = 0;
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        let transfer_amount: u64 = 0;
+
+        // destination pubkey invalid
+        let dest_pk = pod::ElGamalPubkey::zeroed().try_into().unwrap();
+        let auditor_pk = ElGamalKeypair::new_rand().public;
+
+        let transfer_data = TransferData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&dest_pk, &auditor_pk),
+        )
+        .unwrap();
+
+        assert!(transfer_data.verify().is_err());
+
+        // auditor pubkey invalid
+        let dest_pk = ElGamalKeypair::new_rand().public;
+        let auditor_pk = pod::ElGamalPubkey::zeroed().try_into().unwrap();
+
+        let transfer_data = TransferData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&dest_pk, &auditor_pk),
+        )
+        .unwrap();
+
+        assert!(transfer_data.verify().is_err());
     }
 
     #[test]

@@ -221,7 +221,7 @@ impl LocalCluster {
             create_stake_config_account(
                 1,
                 &stake_config::Config {
-                    warmup_cooldown_rate: 1_000_000_000.0f64,
+                    warmup_cooldown_rate: std::f64::MAX,
                     slash_penalty: std::u8::MAX,
                 },
             ),
@@ -389,7 +389,8 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let client = create_client(self.entry_point_info.client_facing_addr());
+        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let client = create_client(rpc, tpu);
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -474,7 +475,8 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let client = create_client(self.entry_point_info.client_facing_addr());
+        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let client = create_client(rpc, tpu);
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -566,8 +568,8 @@ impl LocalCluster {
         let vote_account_pubkey = vote_account.pubkey();
         let node_pubkey = from_account.pubkey();
         info!(
-            "setup_vote_and_stake_accounts: {}, {}",
-            node_pubkey, vote_account_pubkey
+            "setup_vote_and_stake_accounts: {}, {}, amount: {}",
+            node_pubkey, vote_account_pubkey, amount,
         );
         let stake_account_keypair = Keypair::new();
         let stake_account_pubkey = stake_account_keypair.pubkey();
@@ -696,9 +698,10 @@ impl Cluster for LocalCluster {
     }
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-        self.validators
-            .get(pubkey)
-            .map(|f| create_client(f.info.contact_info.client_facing_addr()))
+        self.validators.get(pubkey).map(|f| {
+            let (rpc, tpu) = f.info.contact_info.client_facing_addr();
+            create_client(rpc, tpu)
+        })
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {

@@ -7,7 +7,7 @@ use {
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
     solana_program_runtime::timings::ExecuteTimingType,
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
@@ -516,7 +516,7 @@ impl PropagatedStats {
         &mut self,
         node_pubkey: &Pubkey,
         vote_account_pubkeys: &[Pubkey],
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
+        epoch_vote_accounts: &VoteAccountsHashMap,
     ) {
         self.propagated_node_ids.insert(*node_pubkey);
         for vote_account_pubkey in vote_account_pubkeys.iter() {
@@ -695,7 +695,15 @@ impl ProgressMap {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, solana_runtime::vote_account::VoteAccount, solana_sdk::account::Account};
+
+    fn new_test_vote_account() -> VoteAccount {
+        let account = Account {
+            owner: solana_vote_program::id(),
+            ..Account::default()
+        };
+        VoteAccount::try_from(account).unwrap()
+    }
 
     #[test]
     fn test_add_vote_pubkey() {
@@ -730,7 +738,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, new_test_vote_account())))
             .collect();
 
         let mut stats = PropagatedStats::default();
@@ -772,7 +780,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, new_test_vote_account())))
             .collect();
         stats.add_node_pubkey_internal(&node_pubkey, &vote_account_pubkeys, &epoch_vote_accounts);
         assert!(stats.propagated_node_ids.contains(&node_pubkey));

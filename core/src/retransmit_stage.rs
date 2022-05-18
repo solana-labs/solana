@@ -242,7 +242,7 @@ fn retransmit(
     epoch_fetch.stop();
     stats.epoch_fetch += epoch_fetch.as_us();
 
-    let mut epoch_cache_update = Measure::start("retransmit_epoch_cach_update");
+    let mut epoch_cache_update = Measure::start("retransmit_epoch_cache_update");
     maybe_reset_shreds_received_cache(shreds_received, hasher_reset_ts);
     epoch_cache_update.stop();
     stats.epoch_cache_update += epoch_cache_update.as_us();
@@ -295,7 +295,7 @@ fn retransmit(
             .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
         let mut retransmit_time = Measure::start("retransmit_to");
-        let num_nodes = match multi_target_send(socket, &shred.payload, &addrs) {
+        let num_nodes = match multi_target_send(socket, shred.payload(), &addrs) {
             Ok(()) => addrs.len(),
             Err(SendPktsError::IoError(ioerr, num_failed)) => {
                 stats
@@ -440,7 +440,7 @@ impl RetransmitStage {
         exit: Arc<AtomicBool>,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
-        cfg: Option<Arc<AtomicBool>>,
+        turbine_disabled: Option<Arc<AtomicBool>>,
         shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
@@ -492,10 +492,10 @@ impl RetransmitStage {
             repair_info,
             leader_schedule_cache,
             move |id, shred, working_bank, last_root| {
-                let is_connected = cfg
+                let turbine_disabled = turbine_disabled
                     .as_ref()
                     .map(|x| x.load(Ordering::Relaxed))
-                    .unwrap_or(true);
+                    .unwrap_or(false);
                 let rv = should_retransmit_and_persist(
                     shred,
                     working_bank,
@@ -504,7 +504,7 @@ impl RetransmitStage {
                     last_root,
                     shred_version,
                 );
-                rv && is_connected
+                rv && !turbine_disabled
             },
             verified_vote_receiver,
             completed_data_sets_sender,
@@ -528,44 +528,71 @@ impl RetransmitStage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, solana_ledger::shred::ShredFlags};
 
     #[test]
     fn test_already_received() {
         let slot = 1;
         let index = 5;
         let version = 0x40;
-        let shred = Shred::new_from_data(slot, index, 0, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         let shreds_received = Arc::new(Mutex::new((LruCache::new(100), PacketHasher::default())));
         // unique shred for (1, 5) should pass
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 2, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            2,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         // first duplicate shred for (1, 5) passed
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_from_data(slot, index, 8, None, true, true, 0, version, 0);
+        let shred = Shred::new_from_data(
+            slot,
+            index,
+            8,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            version,
+            0,
+        );
         // 2nd duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 0, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 0, 1, 1, 0, version);
         // Coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // then blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 2, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 2, 1, 1, 0, version);
         // 2nd unique coding at (1, 5) passes
         assert!(!should_skip_retransmit(&shred, &shreds_received));
         // same again is blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
 
-        let shred = Shred::new_empty_coding(slot, index, 3, 1, 1, 0, version);
+        let shred = Shred::new_from_parity_shard(slot, index, &[], 3, 1, 1, 0, version);
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(&shred, &shreds_received));
         assert!(should_skip_retransmit(&shred, &shreds_received));

@@ -588,6 +588,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
 - `owner: <string | undefined>` - Pubkey of token balance's owner.
+- `programId: <string | undefined>` - Pubkey of the Token program that owns the account.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
@@ -776,7 +777,7 @@ Returns a list of confirmed blocks between two slots
 #### Parameters:
 
 - `<u64>` - start_slot, as u64 integer
-- `<u64>` - (optional) end_slot, as u64 integer
+- `<u64>` - (optional) end_slot, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
@@ -808,7 +809,7 @@ Returns a list of confirmed blocks starting at the given slot
 #### Parameters:
 
 - `<u64>` - start_slot, as u64 integer
-- `<u64>` - limit, as u64 integer
+- `<u64>` - limit, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
 - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
@@ -1732,11 +1733,11 @@ Result:
 
 ### getMultipleAccounts
 
-Returns the account information for a list of Pubkeys
+Returns the account information for a list of Pubkeys.
 
 #### Parameters:
 
-- `<array>` - An array of Pubkeys to query, as base-58 encoded strings
+- `<array>` - An array of Pubkeys to query, as base-58 encoded strings (up to a maximum of 100).
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd", or "jsonParsed".
@@ -1887,7 +1888,7 @@ Returns all accounts owned by the provided program Pubkey
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     "jsonParsed" encoding attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
   - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
-  - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
+  - (optional) `filters: <array>` - filter results using up to 4 [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
   - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
 
 ##### Filters:
@@ -2135,7 +2136,7 @@ active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
 
 #### Parameters:
 
-- `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings
+- `<array>` - An array of transaction signatures to confirm, as base-58 encoded strings (up to a maximum of 256)
 - `<object>` - (optional) Configuration object containing the following field:
   - `searchTransactionHistory: <bool>` - if true, a Solana node will search its ledger cache for any signatures not found in the recent status cache
 
@@ -2318,7 +2319,7 @@ Returns the slot leaders for a given slot range
 #### Parameters:
 
 - `<u64>` - Start slot, as u64 integer
-- `<u64>` - Limit, as u64 integer
+- `<u64>` - Limit, as u64 integer (between 1 and 5,000)
 
 #### Results:
 
@@ -2546,7 +2547,7 @@ Returns all SPL Token accounts by approved Delegate.
 - `<string>` - Pubkey of account delegate to query, as base-58 encoded string
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
-  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+  - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
@@ -2648,7 +2649,7 @@ Returns all SPL Token accounts by token owner.
 - `<string>` - Pubkey of account owner to query, as base-58 encoded string
 - `<object>` - Either:
   - `mint: <string>` - Pubkey of the specific token Mint to limit accounts to, as base-58 encoded string; or
-  - `programId: <string>` - Pubkey of the Token program ID that owns the accounts, as base-58 encoded string
+  - `programId: <string>` - Pubkey of the Token program that owns the accounts, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
@@ -3059,7 +3060,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.10.16" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -3384,7 +3385,7 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
 
 - `err: <object | string | null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
 - `logs: <array | null>` - Array of log messages the transaction instructions output during execution, null if simulation failed before the transaction was able to execute (for example due to an invalid blockhash or signature verification failure)
-- `accounts: <array> | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
+- `accounts: <array | null>` - array of accounts with the same length as the `accounts.addresses` array in the request
   - `<null>` - if the account doesn't exist or if `err` is not null
   - `<object>` - otherwise, a JSON object containing:
     - `lamports: <u64>`, number of lamports assigned to this account, as a u64
@@ -3393,6 +3394,9 @@ The result will be an RpcResponse JSON object with `value` set to a JSON object 
     - `executable: <bool>`, boolean indicating if the account contains a program \(and is strictly read-only\)
     - `rentEpoch: <u64>`, the epoch at which this account will next owe rent, as u64
 - `unitsConsumed: <u64 | undefined>`, The number of compute budget units consumed during the processing of this transaction
+- `returnData: <object | null>` - the most-recent return data generated by an instruction in the transaction, with the following fields:
+  - `programId: <string>`, the program that generated the return data, as base-58 encoded Pubkey
+  - `data: <[string, encoding]>`, the return data itself, as base-64 encoded binary data
 
 #### Example:
 
@@ -3403,7 +3407,10 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
     "id": 1,
     "method": "simulateTransaction",
     "params": [
-      "4hXTCkRzt9WyecNzV1XPgCDfGAZzQKNxLXgynz5QDuWWPSAZBZSHptvWRL3BjCvzUXRdKvHL2b7yGrRQcWyaqsaBCncVG7BFggS8w9snUts67BSh3EqKpXLUm5UMHfD7ZBe9GhARjbNQMLJ1QD3Spr6oMTBU6EhdB4RD8CP2xUxr2u3d6fos36PD98XS6oX8TQjLpsMwncs5DAMiD4nNnR8NBfyghGCWvCVifVwvA8B8TJxE1aiyiv2L429BCWfyzAme5sZW8rDb14NeCQHhZbtNqfXhcp2tAnaAT"
+      "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEDArczbMia1tLmq7zz4DinMNN0pJ1JtLdqIJPUw3YrGCzYAMHBsgN27lcgB6H2WQvFgyZuJYHa46puOQo9yQ8CVQbd9uHXZaGT2cvhRs7reawctIXtX1s3kTqM9YV+/wCp20C7Wj2aiuk5TReAXo+VTVg8QTHjs0UjNMMKCvpzZ+ABAgEBARU=",
+      {
+        "encoding":"base64",
+      }
     ]
   }
 '
@@ -3422,8 +3429,19 @@ Result:
       "err": null,
       "accounts": null,
       "logs": [
-        "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
-      ]
+        "Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri invoke [1]",
+        "Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri consumed 2366 of 1400000 compute units",
+        "Program return: 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri KgAAAAAAAAA=",
+        "Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
+      ],
+      "returnData": {
+        "data": [
+          "Kg==",
+          "base64"
+        ],
+        "programId": "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"
+      },
+      "unitsConsumed": 2366
     }
   },
   "id": 1
@@ -3745,7 +3763,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3756,7 +3775,8 @@ The notification will be an object with the following fields:
                       "amount": "11513067900",
                       "uiAmountString": "11513.0679"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3767,7 +3787,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3778,7 +3799,8 @@ The notification will be an object with the following fields:
                       "amount": "15138514093",
                       "uiAmountString": "15138.514093"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "postTokenBalances": [
@@ -3791,7 +3813,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3802,7 +3825,8 @@ The notification will be an object with the following fields:
                       "amount": "11513103028",
                       "uiAmountString": "11513.103028"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3813,7 +3837,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3824,7 +3849,8 @@ The notification will be an object with the following fields:
                       "amount": "15489767829",
                       "uiAmountString": "15489.767829"
                     },
-                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at"
+                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "rewards": []

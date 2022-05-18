@@ -1,3 +1,7 @@
+//! Hashing with the [keccak] (SHA-3) hash function.
+//!
+//! [keccak]: https://keccak.team/keccak.html
+
 use {
     crate::sanitize::Sanitize,
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},

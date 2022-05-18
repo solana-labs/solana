@@ -190,6 +190,7 @@ impl fmt::Display for RpcRequest {
     }
 }
 
+// Changing any of these? Update the JSON RPC docs!
 pub const MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS: usize = 256;
 pub const MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE: u64 = 10_000;
 pub const MAX_GET_CONFIRMED_BLOCKS_RANGE: u64 = 500_000;

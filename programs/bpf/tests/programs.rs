@@ -56,6 +56,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         signature::{keypair_from_seed, Keypair, Signer},
+        stake,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         system_program,
         sysvar::{self, clock, rent},
@@ -245,13 +246,11 @@ fn run_program(name: &str) -> u64 {
                 .unwrap();
             let mut parameter_bytes = parameter_bytes.clone();
             {
-                let mut vm = create_vm(
-                    &executable,
-                    parameter_bytes.as_slice_mut(),
-                    invoke_context,
-                    &account_lengths,
-                )
-                .unwrap();
+                invoke_context
+                    .set_orig_account_lengths(account_lengths.clone())
+                    .unwrap();
+                let mut vm =
+                    create_vm(&executable, parameter_bytes.as_slice_mut(), invoke_context).unwrap();
                 let result = if i == 0 {
                     vm.execute_program_interpreted(&mut instruction_meter)
                 } else {
@@ -265,7 +264,7 @@ fn run_program(name: &str) -> u64 {
                 if config.enable_instruction_tracing {
                     if i == 1 {
                         if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                            let analysis = Analysis::from_executable(&executable);
+                            let analysis = Analysis::from_executable(&executable).unwrap();
                             let stdout = std::io::stdout();
                             println!("TRACE (interpreted):");
                             tracer
@@ -279,7 +278,7 @@ fn run_program(name: &str) -> u64 {
                                 .unwrap();
                             assert!(false);
                         } else if log_enabled!(Trace) {
-                            let analysis = Analysis::from_executable(&executable);
+                            let analysis = Analysis::from_executable(&executable).unwrap();
                             let mut trace_buffer = Vec::<u8>::new();
                             tracer
                                 .as_ref()
@@ -323,6 +322,7 @@ fn process_transaction_and_record_inner(
             false,
             true,
             false,
+            false,
             &mut ExecuteTimings::default(),
         )
         .0;
@@ -364,6 +364,7 @@ fn execute_transactions(
         true,
         true,
         true,
+        true,
         &mut timings,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
@@ -392,6 +393,7 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
+                        return_data,
                         ..
                     } = details;
 
@@ -433,6 +435,7 @@ fn execute_transactions(
                         log_messages,
                         rewards: None,
                         loaded_addresses: LoadedAddresses::default(),
+                        return_data,
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {
@@ -1395,7 +1398,7 @@ fn test_program_bpf_compute_budget() {
     );
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_limit(1),
+            ComputeBudgetInstruction::request_units(1),
             Instruction::new_with_bincode(program_id, &0, vec![]),
         ],
         Some(&mint_keypair.pubkey()),
@@ -1415,7 +1418,7 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_c")]
     {
         programs.extend_from_slice(&[
-            ("alloc", 1237),
+            ("alloc", 11502),
             ("bpf_to_bpf", 313),
             ("multiple_static", 208),
             ("noop", 5),
@@ -1425,7 +1428,7 @@ fn assert_instruction_count() {
             ("sanity", 2378),
             ("sanity++", 2278),
             ("secp256k1_recover", 25383),
-            ("sha", 1895),
+            ("sha", 1355),
             ("struct_pass", 108),
             ("struct_ret", 122),
         ]);
@@ -3486,7 +3489,7 @@ fn test_program_fees() {
     );
 
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_normal_fee = Bank::calculate_fee(
+    let expected_max_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
@@ -3497,29 +3500,59 @@ fn test_program_fees() {
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_normal_fee);
+    assert_eq!(pre_balance - post_balance, expected_max_fee);
 
     let pre_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
     let message = Message::new(
         &[
-            ComputeBudgetInstruction::set_compute_unit_price(1),
+            ComputeBudgetInstruction::request_units(100),
+            ComputeBudgetInstruction::set_prioritization_fee(42),
             Instruction::new_with_bytes(program_id, &[], vec![]),
         ],
         Some(&mint_keypair.pubkey()),
     );
     let sanitized_message = SanitizedMessage::try_from(message.clone()).unwrap();
-    let expected_prioritized_fee = Bank::calculate_fee(
+    let expected_min_fee = Bank::calculate_fee(
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
         true,
         true,
     );
-    assert!(expected_normal_fee < expected_prioritized_fee);
+    assert!(expected_min_fee < expected_max_fee);
 
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
         .unwrap();
     let post_balance = bank_client.get_balance(&mint_keypair.pubkey()).unwrap();
-    assert_eq!(pre_balance - post_balance, expected_prioritized_fee);
+    assert_eq!(pre_balance - post_balance, expected_min_fee);
+}
+
+#[test]
+#[cfg(feature = "bpf_rust")]
+fn test_get_minimum_delegation() {
+    let GenesisConfigInfo {
+        genesis_config,
+        mint_keypair,
+        ..
+    } = create_genesis_config(100_123_456_789);
+    let mut bank = Bank::new_for_tests(&genesis_config);
+    bank.feature_set = Arc::new(FeatureSet::all_enabled());
+
+    let (name, id, entrypoint) = solana_bpf_loader_program!();
+    bank.add_builtin(&name, &id, entrypoint);
+    let bank = Arc::new(bank);
+    let bank_client = BankClient::new_shared(&bank);
+
+    let program_id = load_bpf_program(
+        &bank_client,
+        &bpf_loader::id(),
+        &mint_keypair,
+        "solana_bpf_rust_get_minimum_delegation",
+    );
+
+    let account_metas = vec![AccountMeta::new_readonly(stake::program::id(), false)];
+    let instruction = Instruction::new_with_bytes(program_id, &[], account_metas);
+    let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction);
+    assert!(result.is_ok());
 }

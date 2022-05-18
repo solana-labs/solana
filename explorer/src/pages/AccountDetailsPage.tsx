@@ -5,7 +5,6 @@ import {
   useFetchAccountInfo,
   useAccountInfo,
   Account,
-  ProgramData,
   TokenProgramData,
   useMintAccountInfo,
 } from "providers/accounts";
@@ -37,9 +36,14 @@ import { TokenTransfersCard } from "components/account/history/TokenTransfersCar
 import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
 import { RewardsCard } from "components/account/RewardsCard";
 import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
+import { MetaplexNFTAttributesCard } from "components/account/MetaplexNFTAttributesCard";
 import { NFTHeader } from "components/account/MetaplexNFTHeader";
 import { DomainsCard } from "components/account/DomainsCard";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import { SecurityCard } from "components/account/SecurityCard";
+import { AnchorAccountCard } from "components/account/AnchorAccountCard";
+import { AnchorProgramCard } from "components/account/AnchorProgramCard";
+import { useAnchorProgram } from "providers/anchor";
 
 const IDENTICON_WIDTH = 64;
 
@@ -66,6 +70,11 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "metadata",
       title: "Metadata",
       path: "/metadata",
+    },
+    {
+      slug: "attributes",
+      title: "Attributes",
+      path: "/attributes",
     },
   ],
   stake: [
@@ -106,6 +115,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "stake-history",
       title: "Stake History",
       path: "/stake-history",
+    },
+  ],
+  "bpf-upgradeable-loader": [
+    {
+      slug: "security",
+      title: "Security",
+      path: "/security",
     },
   ],
 };
@@ -175,14 +191,34 @@ export function AccountHeader({
     );
   }
 
-  if (tokenDetails && isToken) {
+  if (isToken) {
+    let token;
+    let unverified = false;
+
+    if (tokenDetails) {
+      token = tokenDetails;
+    } else {
+      token = {
+        logoURI: data?.nftData?.json?.image,
+        name: data?.nftData?.json?.name,
+      };
+      unverified = true;
+    }
+
     return (
       <div className="row align-items-end">
+        {unverified && (
+          <div className="alert alert-warning alert-scam" role="alert">
+            Warning! Token names and logos are not unique. This token may have
+            spoofed its name and logo to look like another token. Verify the
+            token's mint address to ensure it is correct.
+          </div>
+        )}
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
-            {tokenDetails?.logoURI ? (
+            {token?.logoURI ? (
               <img
-                src={tokenDetails.logoURI}
+                src={token.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
@@ -198,9 +234,7 @@ export function AccountHeader({
 
         <div className="col mb-3 ms-n3 ms-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">
-            {tokenDetails?.name || "Unknown Token"}
-          </h2>
+          <h2 className="header-title">{token?.name || "Unknown Token"}</h2>
         </div>
       </div>
     );
@@ -238,11 +272,16 @@ function DetailsSections({
   }
 
   const account = info.data;
-  const data = account?.details?.data;
-  const tabs = getTabs(data);
+  const tabComponents = getTabs(pubkey, account).concat(
+    getAnchorTabs(pubkey, account)
+  );
 
   let moreTab: MoreTabs = "history";
-  if (tab && tabs.filter(({ slug }) => slug === tab).length === 0) {
+  if (
+    tab &&
+    tabComponents.filter((tabComponent) => tabComponent.tab.slug === tab)
+      .length === 0
+  ) {
     return <Redirect to={{ ...location, pathname: `/address/${address}` }} />;
   } else if (tab) {
     moreTab = tab as MoreTabs;
@@ -256,8 +295,12 @@ function DetailsSections({
           account. Please be cautious sending SOL to this account.
         </div>
       )}
-      {<InfoSection account={account} />}
-      {<MoreSection account={account} tab={moreTab} tabs={tabs} />}
+      <InfoSection account={account} />
+      <MoreSection
+        account={account}
+        tab={moreTab}
+        tabs={tabComponents.map(({ component }) => component)}
+      />
     </>
   );
 }
@@ -307,6 +350,11 @@ type Tab = {
   path: string;
 };
 
+type TabComponent = {
+  tab: Tab;
+  component: JSX.Element | null;
+};
+
 export type MoreTabs =
   | "history"
   | "tokens"
@@ -319,7 +367,11 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
-  | "domains";
+  | "attributes"
+  | "domains"
+  | "security"
+  | "anchor-program"
+  | "anchor-account";
 
 function MoreSection({
   account,
@@ -328,29 +380,17 @@ function MoreSection({
 }: {
   account: Account;
   tab: MoreTabs;
-  tabs: Tab[];
+  tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const address = account.pubkey.toBase58();
   const data = account?.details?.data;
+
   return (
     <>
       <div className="container">
         <div className="header">
           <div className="header-body pt-0">
-            <ul className="nav nav-tabs nav-overflow header-tabs">
-              {tabs.map(({ title, slug, path }) => (
-                <li key={slug} className="nav-item">
-                  <NavLink
-                    className="nav-link"
-                    to={clusterPath(`/address/${address}${path}`)}
-                    exact
-                  >
-                    {title}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
+            <ul className="nav nav-tabs nav-overflow header-tabs">{tabs}</ul>
           </div>
         </div>
       </div>
@@ -388,12 +428,38 @@ function MoreSection({
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
+      {tab === "attributes" && (
+        <MetaplexNFTAttributesCard
+          nftData={(account.details?.data as TokenProgramData).nftData!}
+        />
+      )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
+      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
+        <SecurityCard data={data} />
+      )}
+      {tab === "anchor-program" && (
+        <React.Suspense
+          fallback={<LoadingCard message="Loading anchor program IDL" />}
+        >
+          <AnchorProgramCard programId={pubkey} />
+        </React.Suspense>
+      )}
+      {tab === "anchor-account" && (
+        <React.Suspense
+          fallback={
+            <LoadingCard message="Decoding account data using anchor interface" />
+          }
+        >
+          <AnchorAccountCard account={account} />
+        </React.Suspense>
+      )}
     </>
   );
 }
 
-function getTabs(data?: ProgramData): Tab[] {
+function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
+  const address = pubkey.toBase58();
+  const data = account.details?.data;
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -443,5 +509,122 @@ function getTabs(data?: ProgramData): Tab[] {
     });
   }
 
-  return tabs;
+  return tabs.map((tab) => {
+    return {
+      tab,
+      component: (
+        <li key={tab.slug} className="nav-item">
+          <NavLink
+            className="nav-link"
+            to={clusterPath(`/address/${address}${tab.path}`)}
+            exact
+          >
+            {tab.title}
+          </NavLink>
+        </li>
+      ),
+    };
+  });
+}
+
+function getAnchorTabs(pubkey: PublicKey, account: Account) {
+  const tabComponents = [];
+  const anchorProgramTab: Tab = {
+    slug: "anchor-program",
+    title: "Anchor Program IDL",
+    path: "/anchor-program",
+  };
+  tabComponents.push({
+    tab: anchorProgramTab,
+    component: (
+      <React.Suspense key={anchorProgramTab.slug} fallback={<></>}>
+        <AnchorProgramLink
+          tab={anchorProgramTab}
+          address={pubkey.toString()}
+          pubkey={pubkey}
+        />
+      </React.Suspense>
+    ),
+  });
+
+  const accountDataTab: Tab = {
+    slug: "anchor-account",
+    title: "Anchor Data",
+    path: "/anchor-account",
+  };
+  tabComponents.push({
+    tab: accountDataTab,
+    component: (
+      <React.Suspense key={accountDataTab.slug} fallback={<></>}>
+        <AccountDataLink
+          tab={accountDataTab}
+          address={pubkey.toString()}
+          programId={account.details?.owner}
+        />
+      </React.Suspense>
+    ),
+  });
+
+  return tabComponents;
+}
+
+function AnchorProgramLink({
+  tab,
+  address,
+  pubkey,
+}: {
+  tab: Tab;
+  address: string;
+  pubkey: PublicKey;
+}) {
+  const { url } = useCluster();
+  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
+
+  if (!anchorProgram) {
+    return null;
+  }
+
+  return (
+    <li key={tab.slug} className="nav-item">
+      <NavLink
+        className="nav-link"
+        to={clusterPath(`/address/${address}${tab.path}`)}
+        exact
+      >
+        {tab.title}
+      </NavLink>
+    </li>
+  );
+}
+
+function AccountDataLink({
+  address,
+  tab,
+  programId,
+}: {
+  address: string;
+  tab: Tab;
+  programId: PublicKey | undefined;
+}) {
+  const { url } = useCluster();
+  const accountAnchorProgram = useAnchorProgram(
+    programId?.toString() ?? "",
+    url
+  );
+
+  if (!accountAnchorProgram) {
+    return null;
+  }
+
+  return (
+    <li key={tab.slug} className="nav-item">
+      <NavLink
+        className="nav-link"
+        to={clusterPath(`/address/${address}${tab.path}`)}
+        exact
+      >
+        {tab.title}
+      </NavLink>
+    </li>
+  );
 }

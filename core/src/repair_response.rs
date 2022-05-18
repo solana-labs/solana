@@ -53,7 +53,7 @@ mod test {
     use {
         super::*,
         solana_ledger::{
-            shred::{Shred, Shredder},
+            shred::{Shred, ShredFlags},
             sigverify_shreds::verify_shred_cpu,
         },
         solana_sdk::{
@@ -72,20 +72,19 @@ mod test {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
-        trace!("signature {}", shred.common_header.signature);
+        shred.sign(&keypair);
+        trace!("signature {}", shred.signature());
         let nonce = 9;
         let mut packet = repair_response_packet_from_bytes(
-            shred.payload,
+            shred.into_payload(),
             &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             nonce,
         )

@@ -24,6 +24,7 @@ struct Config {
     offline: bool,
     verbose: bool,
     workspace: bool,
+    jobs: Option<String>,
 }
 
 impl Default for Config {
@@ -42,6 +43,7 @@ impl Default for Config {
             offline: false,
             verbose: false,
             workspace: false,
+            jobs: None,
         }
     }
 }
@@ -115,6 +117,10 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
     }
     if config.verbose {
         cargo_args.push("--verbose");
+    }
+    if let Some(jobs) = &config.jobs {
+        cargo_args.push("--jobs");
+        cargo_args.push(jobs);
     }
 
     let mut build_bpf_args = cargo_args.clone();
@@ -295,6 +301,15 @@ fn main() {
                 .help("Test all BPF packages in the workspace"),
         )
         .arg(
+            Arg::new("jobs")
+                .short('j')
+                .long("jobs")
+                .takes_value(true)
+                .value_name("N")
+                .validator(|val| val.parse::<usize>().map_err(|e| e.to_string()))
+                .help("Number of parallel jobs, defaults to # of CPUs"),
+        )
+        .arg(
             Arg::new("extra_cargo_test_args")
                 .value_name("extra args for cargo test and the test binary")
                 .index(1)
@@ -319,6 +334,7 @@ fn main() {
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
+        jobs: matches.value_of_t("jobs").ok(),
         ..Config::default()
     };
 

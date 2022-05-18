@@ -31,17 +31,10 @@ module.exports = {
         'newlines-between': 'always',
       },
     ],
-    indent: [
-      'error',
-      2,
-      {
-        MemberExpression: 1,
-        SwitchCase: 1,
-      },
-    ],
     'linebreak-style': ['error', 'unix'],
     'no-console': [0],
     'no-trailing-spaces': ['error'],
+    'no-undef': 'off',
     'no-unused-vars': 'off',
     quotes: [
       'error',

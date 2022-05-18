@@ -1,0 +1,37 @@
+name: 'Autolock RitBot for for PR'
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: lock
+
+jobs:
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dessant/lock-threads@v3
+        with:
+          
+          github-token: ${{ github.token }}
+          pr-inactive-days: '14'
+          exclude-pr-created-before: ''
+          exclude-pr-created-after: ''
+          exclude-pr-created-between: ''
+          exclude-pr-closed-before: ''
+          exclude-pr-closed-after: ''
+          exclude-pr-closed-between: ''
+          include-any-pr-labels: 'automerge'
+          include-all-pr-labels: ''
+          exclude-any-pr-labels: ''
+          add-pr-labels: 'locked PR'
+          remove-pr-labels: ''
+          pr-comment: 'This PR has been automatically locked since there has not been any activity in past 14 days after it was merged.'
+          pr-lock-reason: 'resolved'
+          log-output: true

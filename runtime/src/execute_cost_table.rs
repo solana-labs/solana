@@ -4,14 +4,15 @@
 /// When its capacity limit is reached, it prunes old and less-used programs
 /// to make room for new ones.
 use {
-    log::*, solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-    solana_sdk::pubkey::Pubkey, std::collections::HashMap,
+    log::*, solana_program_runtime::compute_budget::DEFAULT_UNITS, solana_sdk::pubkey::Pubkey,
+    std::collections::HashMap,
 };
 
 // prune is rather expensive op, free up bulk space in each operation
-// would be more efficient. PRUNE_RATIO defines the after prune table
-// size will be original_size * PRUNE_RATIO.
-const PRUNE_RATIO: f64 = 0.75;
+// would be more efficient. PRUNE_RATIO defines that after prune, table
+// size will be original_size * PRUNE_RATIO. The value is defined in
+// scale of 100.
+const PRUNE_RATIO: usize = 75;
 // with 50_000 TPS as norm, weights occurrences '100' per microsec
 const OCCURRENCES_WEIGHT: i64 = 100;
 
@@ -43,24 +44,24 @@ impl ExecuteCostTable {
         self.table.len()
     }
 
-    /// default program cost, set to ComputeBudget::DEFAULT_COMPUTE_UNIT_LIMIT
-    pub fn get_default_compute_unit_limit(&self) -> u64 {
-        DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64
+    /// default program cost, set to ComputeBudget::DEFAULT_UNITS
+    pub fn get_default_units(&self) -> u64 {
+        DEFAULT_UNITS as u64
     }
 
     /// average cost of all recorded programs
-    pub fn get_global_average_program_cost(&self) -> u64 {
+    pub fn get_global_average_units(&self) -> u64 {
         if self.table.is_empty() {
-            self.get_default_compute_unit_limit()
+            self.get_default_units()
         } else {
             self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
         }
     }
 
     /// the most frequently occurring program's cost
-    pub fn get_statistical_mode_program_cost(&self) -> u64 {
+    pub fn get_statistical_mode_units(&self) -> u64 {
         if self.occurrences.is_empty() {
-            self.get_default_compute_unit_limit()
+            self.get_default_units()
         } else {
             let key = self
                 .occurrences
@@ -74,9 +75,8 @@ impl ExecuteCostTable {
     }
 
     /// returns None if program doesn't exist in table. In this case,
-    /// `get_default_compute_unit_limit()`, `get_global_average_program_cost()`
-    /// or `get_statistical_mode_program_cost()` can be used to assign a value
-    /// to new program.
+    /// `get_default_units()`, `get_global_average_units()` or `get_statistical_mode_units()`
+    /// can be used to assign a value to new program.
     pub fn get_cost(&self, key: &Pubkey) -> Option<&u64> {
         self.table.get(key)
     }
@@ -86,8 +86,12 @@ impl ExecuteCostTable {
     pub fn upsert(&mut self, key: &Pubkey, value: u64) {
         let need_to_add = !self.table.contains_key(key);
         let current_size = self.get_count();
-        if current_size == self.capacity && need_to_add {
-            self.prune_to(&((current_size as f64 * PRUNE_RATIO) as usize));
+        if current_size >= self.capacity && need_to_add {
+            let prune_to_size = current_size
+                .checked_mul(PRUNE_RATIO)
+                .and_then(|v| v.checked_div(100))
+                .unwrap_or(self.capacity);
+            self.prune_to(&prune_to_size);
         }
 
         let program_cost = self.table.entry(*key).or_insert(value);
@@ -221,18 +225,15 @@ mod tests {
         // insert one record
         testee.upsert(&key1, cost1);
         assert_eq!(1, testee.get_count());
-        assert_eq!(cost1, testee.get_global_average_program_cost());
-        assert_eq!(cost1, testee.get_statistical_mode_program_cost());
+        assert_eq!(cost1, testee.get_global_average_units());
+        assert_eq!(cost1, testee.get_statistical_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
 
         // insert 2nd record
         testee.upsert(&key2, cost2);
         assert_eq!(2, testee.get_count());
-        assert_eq!(
-            (cost1 + cost2) / 2_u64,
-            testee.get_global_average_program_cost()
-        );
-        assert_eq!(cost2, testee.get_statistical_mode_program_cost());
+        assert_eq!((cost1 + cost2) / 2_u64, testee.get_global_average_units());
+        assert_eq!(cost2, testee.get_statistical_mode_units());
         assert_eq!(&cost1, testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
 
@@ -241,8 +242,9 @@ mod tests {
         assert_eq!(2, testee.get_count());
         assert_eq!(
             ((cost1 + cost2) / 2 + cost2) / 2_u64,
-            testee.get_global_average_program_cost()
+            testee.get_global_average_units()
         );
+        assert_eq!((cost1 + cost2) / 2, testee.get_statistical_mode_units());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key1).unwrap());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
     }
@@ -276,11 +278,8 @@ mod tests {
         // insert 3rd record, pushes out the oldest (eg 1st) record
         testee.upsert(&key3, cost3);
         assert_eq!(2, testee.get_count());
-        assert_eq!(
-            (cost2 + cost3) / 2_u64,
-            testee.get_global_average_program_cost()
-        );
-        assert_eq!(cost3, testee.get_statistical_mode_program_cost());
+        assert_eq!((cost2 + cost3) / 2_u64, testee.get_global_average_units());
+        assert_eq!(cost3, testee.get_statistical_mode_units());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&cost2, testee.get_cost(&key2).unwrap());
         assert_eq!(&cost3, testee.get_cost(&key3).unwrap());
@@ -291,8 +290,9 @@ mod tests {
         testee.upsert(&key4, cost4);
         assert_eq!(
             ((cost1 + cost2) / 2 + cost4) / 2_u64,
-            testee.get_global_average_program_cost()
+            testee.get_global_average_units()
         );
+        assert_eq!((cost1 + cost2) / 2, testee.get_statistical_mode_units());
         assert_eq!(2, testee.get_count());
         assert!(testee.get_cost(&key1).is_none());
         assert_eq!(&((cost1 + cost2) / 2), testee.get_cost(&key2).unwrap());

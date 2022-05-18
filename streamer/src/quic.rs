@@ -668,24 +668,7 @@ mod test {
     #[test]
     fn test_quic_timeout() {
         solana_logger::setup();
-        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let exit = Arc::new(AtomicBool::new(false));
-        let (sender, receiver) = unbounded();
-        let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
-        let server_address = s.local_addr().unwrap();
-        let t = spawn_server(
-            s,
-            &keypair,
-            ip,
-            sender,
-            exit.clone(),
-            1,                                              // max_connections_per_ip
-            Arc::<RwLock<HashMap<IpAddr, u64>>>::default(), // staked_nodes
-            MAX_STAKED_CONNECTIONS,
-            MAX_UNSTAKED_CONNECTIONS,
-        )
-        .unwrap();
+        let (t, exit, receiver, server_address) = setup_quic_server();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();

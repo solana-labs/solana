@@ -28,6 +28,8 @@ pub enum ProofError {
     InconsistentCTData,
     #[error("failed to decrypt ciphertext from transfer data")]
     Decryption,
+    #[error("discrete log number of threads not power-of-two")]
+    DiscreteLogThreads,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

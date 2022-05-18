@@ -65,11 +65,12 @@ mod tests {
             accounts_index::AccountSecondaryIndexes,
             bank::{Bank, BankSlotDelta},
             bank_forks::BankForks,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
             snapshot_archive_info::FullSnapshotArchiveInfo,
             snapshot_config::SnapshotConfig,
             snapshot_package::{
-                AccountsPackage, PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+                AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
+                SnapshotType,
             },
             snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
             status_cache::MAX_CACHE_ENTRIES,
@@ -106,7 +107,8 @@ mod tests {
     struct SnapshotTestConfig {
         accounts_dir: TempDir,
         bank_snapshots_dir: TempDir,
-        snapshot_archives_dir: TempDir,
+        full_snapshot_archives_dir: TempDir,
+        incremental_snapshot_archives_dir: TempDir,
         snapshot_config: SnapshotConfig,
         bank_forks: BankForks,
         genesis_config_info: GenesisConfigInfo,
@@ -122,8 +124,17 @@ mod tests {
         ) -> SnapshotTestConfig {
             let accounts_dir = TempDir::new().unwrap();
             let bank_snapshots_dir = TempDir::new().unwrap();
-            let snapshot_archives_dir = TempDir::new().unwrap();
-            let mut genesis_config_info = create_genesis_config(10_000);
+            let full_snapshot_archives_dir = TempDir::new().unwrap();
+            let incremental_snapshot_archives_dir = TempDir::new().unwrap();
+            // validator_stake_lamports should be non-zero otherwise stake
+            // account will not be stored in accounts-db but still cached in
+            // bank stakes which results in mismatch when banks are loaded from
+            // snapshots.
+            let mut genesis_config_info = create_genesis_config_with_leader(
+                10_000,                          // mint_lamports
+                &solana_sdk::pubkey::new_rand(), // validator_pubkey
+                1,                               // validator_stake_lamports
+            );
             genesis_config_info.genesis_config.cluster_type = cluster_type;
             let bank0 = Bank::new_with_paths_for_tests(
                 &genesis_config_info.genesis_config,
@@ -142,7 +153,10 @@ mod tests {
             let snapshot_config = SnapshotConfig {
                 full_snapshot_archive_interval_slots,
                 incremental_snapshot_archive_interval_slots,
-                snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+                full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+                incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                    .path()
+                    .to_path_buf(),
                 bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
                 snapshot_version,
                 ..SnapshotConfig::default()
@@ -151,7 +165,8 @@ mod tests {
             SnapshotTestConfig {
                 accounts_dir,
                 bank_snapshots_dir,
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
                 snapshot_config,
                 bank_forks,
                 genesis_config_info,
@@ -165,17 +180,17 @@ mod tests {
         old_genesis_config: &GenesisConfig,
         account_paths: &[PathBuf],
     ) {
-        let (snapshot_path, snapshot_archives_dir) = old_bank_forks
+        let full_snapshot_archives_dir = old_bank_forks
             .snapshot_config
             .as_ref()
-            .map(|c| (&c.bank_snapshots_dir, &c.snapshot_archives_dir))
+            .map(|c| &c.full_snapshot_archives_dir)
             .unwrap();
 
         let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
         let check_hash_calculation = false;
         let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
             old_last_bank.slot(),
             &old_last_bank.get_accounts_hash(),
             ArchiveFormat::TarBzip2,
@@ -209,12 +224,6 @@ mod tests {
 
         let bank = old_bank_forks.get(deserialized_bank.slot()).unwrap();
         assert_eq!(bank.as_ref(), &deserialized_bank);
-
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&snapshot_path);
-
-        for p in bank_snapshots {
-            snapshot_utils::remove_bank_snapshot(p.slot, &snapshot_path).unwrap();
-        }
     }
 
     // creates banks up to "last_slot" and runs the input function `f` on each bank created
@@ -243,13 +252,12 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-        let (s, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _r) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(s));
+        let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: PendingAccountsPackage::default(),
         };
         for slot in 1..=last_slot {
             let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -262,8 +270,7 @@ mod tests {
                 // set_root should send a snapshot request
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
-                snapshot_request_handler
-                    .handle_snapshot_requests(false, false, false, 0, &mut None);
+                snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
             }
         }
 
@@ -272,14 +279,15 @@ mod tests {
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
         let last_bank_snapshot_info =
-            snapshot_utils::get_highest_bank_snapshot_info(bank_snapshots_dir)
+            snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
                 .expect("no bank snapshots found in path");
         let accounts_package = AccountsPackage::new(
             &last_bank,
             &last_bank_snapshot_info,
             bank_snapshots_dir,
             last_bank.src.slot_deltas(&last_bank.src.roots()),
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             last_bank.get_snapshot_storages(None),
             ArchiveFormat::TarBzip2,
             snapshot_version,
@@ -287,9 +295,17 @@ mod tests {
             Some(SnapshotType::FullSnapshot),
         )
         .unwrap();
-        let snapshot_package = SnapshotPackage::from(accounts_package);
+        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+            accounts_package.snapshot_links.path(),
+            accounts_package.slot,
+            &last_bank.get_accounts_hash(),
+        );
+        let snapshot_package =
+            SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
         snapshot_utils::archive_snapshot_package(
             &snapshot_package,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         )
@@ -353,7 +369,8 @@ mod tests {
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let snapshot_config = &snapshot_test_config.snapshot_config;
         let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
-        let snapshot_archives_dir = &snapshot_config.snapshot_archives_dir;
+        let full_snapshot_archives_dir = &snapshot_config.full_snapshot_archives_dir;
+        let incremental_snapshot_archives_dir = &snapshot_config.incremental_snapshot_archives_dir;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
         let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
 
@@ -364,8 +381,8 @@ mod tests {
             .unwrap();
 
         // Set up snapshotting channels
-        let (sender, receiver) = unbounded();
-        let (fake_sender, _fake_receiver) = unbounded();
+        let real_pending_accounts_package = PendingAccountsPackage::default();
+        let fake_pending_accounts_package = PendingAccountsPackage::default();
 
         // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
         // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -390,25 +407,25 @@ mod tests {
             let tx = system_transaction::transfer(mint_keypair, &key1, 1, genesis_config.hash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
             bank.squash();
-            let accounts_hash = bank.update_accounts_hash();
 
-            let package_sender = {
+            let pending_accounts_package = {
                 if slot == saved_slot as u64 {
-                    // Only send one package on the real sender so that the packaging service
-                    // doesn't take forever to run the packaging logic on all MAX_CACHE_ENTRIES
-                    // later
-                    &sender
+                    // Only send one package on the real pending_accounts_package so that the
+                    // packaging service doesn't take forever to run the packaging logic on all
+                    // MAX_CACHE_ENTRIES later
+                    &real_pending_accounts_package
                 } else {
-                    &fake_sender
+                    &fake_pending_accounts_package
                 }
             };
 
             snapshot_utils::snapshot_bank(
                 &bank,
                 vec![],
-                package_sender,
+                pending_accounts_package,
                 bank_snapshots_dir,
-                snapshot_archives_dir,
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
                 snapshot_config.snapshot_version,
                 snapshot_config.archive_format,
                 None,
@@ -458,9 +475,11 @@ mod tests {
                 fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
                 saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
-                    snapshot_archives_dir,
+                    full_snapshot_archives_dir,
                     slot,
-                    &accounts_hash,
+                    // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
+                    // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
+                    &Hash::default(),
                     ArchiveFormat::TarBzip2,
                 ));
             }
@@ -470,7 +489,7 @@ mod tests {
         // currently sitting in the channel
         snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-        let mut bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_dir);
+        let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
         bank_snapshots.sort_unstable();
         assert!(bank_snapshots
             .into_iter()
@@ -504,15 +523,21 @@ mod tests {
         let _package_receiver = std::thread::Builder::new()
             .name("package-receiver".to_string())
             .spawn(move || {
-                while let Ok(mut accounts_package) = receiver.recv() {
-                    // Only package the latest
-                    while let Ok(new_accounts_package) = receiver.try_recv() {
-                        accounts_package = new_accounts_package;
-                    }
-
-                    let snapshot_package = SnapshotPackage::from(accounts_package);
-                    *pending_snapshot_package.lock().unwrap() = Some(snapshot_package);
-                }
+                let accounts_package = real_pending_accounts_package
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap();
+                solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                    accounts_package.snapshot_links.path(),
+                    accounts_package.slot,
+                    &Hash::default(),
+                );
+                let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
+                pending_snapshot_package
+                    .lock()
+                    .unwrap()
+                    .replace(snapshot_package);
 
                 // Wait until the package is consumed by SnapshotPackagerService
                 while pending_snapshot_package.lock().unwrap().is_some() {
@@ -523,10 +548,6 @@ mod tests {
                 exit.store(true, Ordering::Relaxed);
             })
             .unwrap();
-
-        // Close the channel so that the package receiver will exit after reading all the
-        // packages off the channel
-        drop(sender);
 
         // Wait for service to finish
         snapshot_packager_service
@@ -549,11 +570,19 @@ mod tests {
         )
         .unwrap();
 
+        // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
+        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+            saved_snapshots_dir.path(),
+            saved_slot,
+            &Hash::default(),
+        );
+
         snapshot_utils::verify_snapshot_archive(
             saved_archive_path.unwrap(),
             saved_snapshots_dir.path(),
             saved_accounts_dir.path(),
             ArchiveFormat::TarBzip2,
+            snapshot_utils::VerifyBank::NonDeterministic(saved_slot),
         );
     }
 
@@ -572,7 +601,7 @@ mod tests {
                 Slot::MAX,
             );
             let mut current_bank = snapshot_test_config.bank_forks[0].clone();
-            let request_sender = AbsRequestSender::new(Some(snapshot_sender));
+            let request_sender = AbsRequestSender::new(snapshot_sender);
             for _ in 0..num_set_roots {
                 for _ in 0..*add_root_interval {
                     let new_slot = current_bank.slot() + 1;
@@ -661,18 +690,18 @@ mod tests {
             FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
         );
-        trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nsnapshot_archives_dir: {}", snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.snapshot_archives_dir.path().display());
+        trace!("SnapshotTestConfig:\naccounts_dir: {}\nbank_snapshots_dir: {}\nfull_snapshot_archives_dir: {}\nincremental_snapshot_archives_dir: {}",
+            snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
         let bank_forks = &mut snapshot_test_config.bank_forks;
         let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, _accounts_package_receiver) = unbounded();
-        let request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: PendingAccountsPackage::default(),
         };
 
         let mut last_full_snapshot_slot = None;
@@ -704,7 +733,6 @@ mod tests {
                 bank_forks.set_root(bank.slot(), &request_sender, None);
                 bank.update_accounts_hash();
                 snapshot_request_handler.handle_snapshot_requests(
-                    false,
                     false,
                     false,
                     0,
@@ -754,7 +782,7 @@ mod tests {
         let slot = bank.slot();
         info!("Making full snapshot archive from bank at slot: {}", slot);
         let bank_snapshot_info =
-            snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir)
+            snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
                 .into_iter()
                 .find(|elem| elem.slot == slot)
                 .ok_or_else(|| {
@@ -767,7 +795,8 @@ mod tests {
             bank,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             bank.get_snapshot_storages(None),
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -789,7 +818,7 @@ mod tests {
             slot, incremental_snapshot_base_slot,
         );
         let bank_snapshot_info =
-            snapshot_utils::get_bank_snapshots(&snapshot_config.bank_snapshots_dir)
+            snapshot_utils::get_bank_snapshots_pre(&snapshot_config.bank_snapshots_dir)
                 .into_iter()
                 .find(|elem| elem.slot == slot)
                 .ok_or_else(|| {
@@ -804,7 +833,8 @@ mod tests {
             incremental_snapshot_base_slot,
             &bank_snapshot_info,
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             storages,
             snapshot_config.archive_format,
             snapshot_config.snapshot_version,
@@ -823,7 +853,8 @@ mod tests {
     ) -> snapshot_utils::Result<()> {
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             &[accounts_dir],
             genesis_config,
             None,
@@ -891,7 +922,7 @@ mod tests {
 
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let (accounts_package_sender, accounts_package_receiver) = unbounded();
+        let pending_accounts_package = PendingAccountsPackage::default();
         let pending_snapshot_package = PendingSnapshotPackage::default();
 
         let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
@@ -907,11 +938,11 @@ mod tests {
             bank.set_callback(Some(Box::new(callback.clone())));
         }
 
-        let abs_request_sender = AbsRequestSender::new(Some(snapshot_request_sender));
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_request_handler = Some(SnapshotRequestHandler {
             snapshot_config: snapshot_test_config.snapshot_config.clone(),
             snapshot_request_receiver,
-            accounts_package_sender,
+            pending_accounts_package: Arc::clone(&pending_accounts_package),
         });
         let abs_request_handler = AbsRequestHandler {
             snapshot_request_handler,
@@ -928,9 +959,8 @@ mod tests {
             true,
         );
 
-        let tmpdir = TempDir::new().unwrap();
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            accounts_package_receiver,
+            pending_accounts_package,
             Some(pending_snapshot_package),
             &exit,
             &cluster_info,
@@ -938,14 +968,12 @@ mod tests {
             false,
             0,
             Some(snapshot_test_config.snapshot_config.clone()),
-            tmpdir.path().to_path_buf(),
         );
 
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
             &exit,
             abs_request_handler,
-            false,
             false,
             true,
             None,
@@ -1002,7 +1030,12 @@ mod tests {
 
         let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_test_config.snapshot_config.bank_snapshots_dir,
-            &snapshot_test_config.snapshot_config.snapshot_archives_dir,
+            &snapshot_test_config
+                .snapshot_config
+                .full_snapshot_archives_dir,
+            &snapshot_test_config
+                .snapshot_config
+                .incremental_snapshot_archives_dir,
             &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
             &snapshot_test_config.genesis_config_info.genesis_config,
             None,

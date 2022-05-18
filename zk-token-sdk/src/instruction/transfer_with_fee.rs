@@ -848,5 +848,67 @@ mod test {
         );
 
         assert!(fee_data.is_err());
+
+        // Case 5: invalid destination, auditor, or withdraw authority pubkeys
+        let spendable_balance: u64 = 120;
+        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
+
+        let transfer_amount: u64 = 0;
+
+        let fee_parameters = FeeParameters {
+            fee_rate_basis_points: 400,
+            maximum_fee: 3,
+        };
+
+        // destination pubkey invalid
+        let destination_pubkey: ElGamalPubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        )
+        .unwrap();
+
+        assert!(fee_data.verify().is_err());
+
+        // auditor pubkey invalid
+        let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
+        let withdraw_withheld_authority_pubkey = ElGamalKeypair::new_rand().public;
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        )
+        .unwrap();
+
+        assert!(fee_data.verify().is_err());
+
+        // withdraw authority invalid
+        let destination_pubkey: ElGamalPubkey = ElGamalKeypair::new_rand().public;
+        let auditor_pubkey = ElGamalKeypair::new_rand().public;
+        let withdraw_withheld_authority_pubkey = pod::ElGamalPubkey::zeroed().try_into().unwrap();
+
+        let fee_data = TransferWithFeeData::new(
+            transfer_amount,
+            (spendable_balance, &spendable_ciphertext),
+            &source_keypair,
+            (&destination_pubkey, &auditor_pubkey),
+            fee_parameters,
+            &withdraw_withheld_authority_pubkey,
+        )
+        .unwrap();
+
+        assert!(fee_data.verify().is_err());
     }
 }

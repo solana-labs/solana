@@ -6,6 +6,20 @@ pub struct PurgeStats {
     write_batch: u64,
 }
 
+#[derive(Clone, Copy)]
+/// Controls how `blockstore::purge_slots` purges the data.
+pub enum PurgeType {
+    /// A slower but more accurate way to purge slots by also ensuring higher
+    /// level of consistency between data during the clean up process.
+    Exact,
+    /// A faster approximation of `Exact` where the purge process only takes
+    /// care of the primary index and does not update the associated entries.
+    PrimaryIndex,
+    /// The fastest purge mode that relies on the slot-id based TTL
+    /// compaction filter to do the cleanup.
+    CompactionFilter,
+}
+
 impl Blockstore {
     /// Performs cleanup based on the specified deletion range.  After this
     /// function call, entries within \[`from_slot`, `to_slot`\] will become

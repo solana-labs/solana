@@ -58,10 +58,10 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-    let client = Arc::new(create_client((
+    let client = Arc::new(create_client(
         cluster.entry_point_info.rpc,
         cluster.entry_point_info.tpu,
-    )));
+    ));
 
     let lamports_per_account = 100;
 

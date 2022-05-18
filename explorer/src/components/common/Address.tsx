@@ -18,6 +18,7 @@ type Props = {
   truncateUnknown?: boolean;
   truncateChars?: number;
   useMetadata?: boolean;
+  overrideText?: string;
 };
 
 export function Address({
@@ -29,6 +30,7 @@ export function Address({
   truncateUnknown,
   truncateChars,
   useMetadata,
+  overrideText,
 }: Props) {
   const address = pubkey.toBase58();
   const { tokenRegistry } = useTokenRegistry();
@@ -50,6 +52,10 @@ export function Address({
     addressLabel = metaplexData.data.data.name;
   if (truncateChars && addressLabel === address) {
     addressLabel = addressLabel.slice(0, truncateChars) + "…";
+  }
+
+  if (overrideText) {
+    addressLabel = overrideText;
   }
 
   const content = (

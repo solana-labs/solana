@@ -14,6 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+        snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -62,7 +63,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq)]
 struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -104,8 +105,8 @@ impl<T> SnapshotAccountsDbFields<T> {
                 incremental_snapshot_version,
                 incremental_snapshot_slot,
                 incremental_snapshot_bank_hash_info,
-                incremental_snapshot_prior_roots,
-                incremental_snapshot_prior_roots_with_hash,
+                incremental_snapshot_historical_roots,
+                incremental_snapshot_historical_roots_with_hash,
             )) => {
                 let full_snapshot_storages = self.full_snapshot_accounts_db_fields.0;
                 let full_snapshot_slot = self.full_snapshot_accounts_db_fields.2;
@@ -128,15 +129,15 @@ impl<T> SnapshotAccountsDbFields<T> {
                     incremental_snapshot_version,
                     incremental_snapshot_slot,
                     incremental_snapshot_bank_hash_info,
-                    incremental_snapshot_prior_roots,
-                    incremental_snapshot_prior_roots_with_hash,
+                    incremental_snapshot_historical_roots,
+                    incremental_snapshot_historical_roots_with_hash,
                 ))
             }
         }
     }
 }
 
-trait TypeContext<'a> {
+trait TypeContext<'a>: PartialEq {
     type SerializableAccountStorageEntry: Serialize
         + DeserializeOwned
         + From<&'a AccountStorageEntry>
@@ -174,6 +175,18 @@ trait TypeContext<'a> {
     ) -> Result<AccountsDbFields<Self::SerializableAccountStorageEntry>, Error>
     where
         R: Read;
+
+    /// deserialize the bank from 'stream_reader'
+    /// modify the accounts_hash
+    /// reserialize the bank to 'stream_writer'
+    fn reserialize_bank_fields_with_hash<R, W>(
+        stream_reader: &mut BufReader<R>,
+        stream_writer: &mut BufWriter<W>,
+        accounts_hash: &Hash,
+    ) -> std::result::Result<(), Box<bincode::ErrorKind>>
+    where
+        R: Read,
+        W: Write;
 }
 
 fn deserialize_from<R, T>(reader: R) -> bincode::Result<T>
@@ -186,6 +199,23 @@ where
         .with_fixint_encoding()
         .allow_trailing_bytes()
         .deserialize_from::<R, T>(reader)
+}
+
+/// used by tests to compare contents of serialized bank fields
+/// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+pub(crate) fn compare_two_serialized_banks(
+    path1: impl AsRef<Path>,
+    path2: impl AsRef<Path>,
+) -> std::result::Result<bool, Error> {
+    use std::fs::File;
+    let file1 = File::open(path1)?;
+    let mut stream1 = BufReader::new(file1);
+    let file2 = File::open(path2)?;
+    let mut stream2 = BufReader::new(file2);
+
+    let fields1 = newer::Context::deserialize_bank_fields(&mut stream1)?;
+    let fields2 = newer::Context::deserialize_bank_fields(&mut stream2)?;
+    Ok(fields1 == fields2)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -283,6 +313,57 @@ where
         warn!("bankrc_to_stream error: {:?}", err);
         err
     })
+}
+
+/// deserialize the bank from 'stream_reader'
+/// modify the accounts_hash
+/// reserialize the bank to 'stream_writer'
+fn reserialize_bank_fields_with_new_hash<W, R>(
+    stream_reader: &mut BufReader<R>,
+    stream_writer: &mut BufWriter<W>,
+    accounts_hash: &Hash,
+) -> Result<(), Error>
+where
+    W: Write,
+    R: Read,
+{
+    newer::Context::reserialize_bank_fields_with_hash(stream_reader, stream_writer, accounts_hash)
+}
+
+/// effectively updates the accounts hash in the serialized bank file on disk
+/// read serialized bank from pre file
+/// update accounts_hash
+/// write serialized bank to post file
+/// return true if pre file found
+pub fn reserialize_bank_with_new_accounts_hash(
+    bank_snapshots_dir: impl AsRef<Path>,
+    slot: Slot,
+    accounts_hash: &Hash,
+) -> bool {
+    let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
+    let mut bank_pre = bank_post.clone();
+    bank_pre.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
+
+    let mut found = false;
+    {
+        let file = std::fs::File::open(&bank_pre);
+        // some tests don't create the file
+        if let Ok(file) = file {
+            found = true;
+            let file_out = std::fs::File::create(bank_post).unwrap();
+            reserialize_bank_fields_with_new_hash(
+                &mut BufReader::new(file),
+                &mut BufWriter::new(file_out),
+                accounts_hash,
+            )
+            .unwrap();
+        }
+    }
+    if found {
+        std::fs::remove_file(bank_pre).unwrap();
+    }
+    found
 }
 
 struct SerializableBankAndStorage<'a, C> {
@@ -429,8 +510,8 @@ where
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
-        _snapshot_prior_roots,
-        _snapshot_prior_roots_with_hash,
+        snapshot_historical_roots,
+        snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
 
     let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();
@@ -440,6 +521,12 @@ where
         std::fs::create_dir_all(path)
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
+
+    reconstruct_historical_roots(
+        &accounts_db,
+        snapshot_historical_roots,
+        snapshot_historical_roots_with_hash,
+    );
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
@@ -555,7 +642,7 @@ where
         genesis_config,
     );
 
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule);
+    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, &genesis_config.rent);
 
     handle.join().unwrap();
     measure_notify.stop();
@@ -575,4 +662,26 @@ where
         Arc::try_unwrap(accounts_db).unwrap(),
         ReconstructedAccountsDbInfo { accounts_data_len },
     ))
+}
+
+/// populate 'historical_roots' from 'snapshot_historical_roots' and 'snapshot_historical_roots_with_hash'
+fn reconstruct_historical_roots(
+    accounts_db: &AccountsDb,
+    mut snapshot_historical_roots: Vec<Slot>,
+    snapshot_historical_roots_with_hash: Vec<(Slot, Hash)>,
+) {
+    // inflate 'historical_roots'
+    // inserting into 'historical_roots' needs to be in order
+    // combine the slots into 1 vec, then sort
+    // dups are ok
+    snapshot_historical_roots.extend(
+        snapshot_historical_roots_with_hash
+            .into_iter()
+            .map(|(root, _)| root),
+    );
+    snapshot_historical_roots.sort_unstable();
+    let mut roots_tracker = accounts_db.accounts_index.roots_tracker.write().unwrap();
+    snapshot_historical_roots.into_iter().for_each(|root| {
+        roots_tracker.historical_roots.insert(root);
+    });
 }

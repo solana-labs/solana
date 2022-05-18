@@ -10,7 +10,6 @@ use {
 #[derive(Clone, Debug)]
 pub struct FixedSchedule {
     pub leader_schedule: Arc<LeaderSchedule>,
-    pub start_epoch: u64,
 }
 
 /// Stake-weighted leader schedule for one epoch.

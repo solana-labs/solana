@@ -14,7 +14,7 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
-        bank::{Bank, CommitTransactionCounts},
+        bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
@@ -26,7 +26,7 @@ use {
         clock::Slot,
         entrypoint::{ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
-        fee_calculator::{FeeCalculator, FeeRateGovernor},
+        fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         instruction::{Instruction, InstructionError},
@@ -94,13 +94,13 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
-    input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
 
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let indices_in_instruction = instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts();
 
@@ -167,7 +167,7 @@ pub fn builtin_process_instruction(
         .collect::<Result<Vec<AccountInfo>, InstructionError>>()?;
 
     // Execute the program
-    process_instruction(program_id, &account_infos, input).map_err(|err| {
+    process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
         let err = u64::from(err);
         stable_log::program_failure(&log_collector, program_id, &err.into());
         err
@@ -197,12 +197,10 @@ macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
             |first_instruction_account: usize,
-             input: &[u8],
              invoke_context: &mut solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
                     first_instruction_account,
-                    input,
                     invoke_context,
                 )
             },
@@ -421,46 +419,6 @@ pub fn read_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
     file.read_to_end(&mut file_data)
         .unwrap_or_else(|err| panic!("Failed to read \"{}\": {}", path.display(), err));
     file_data
-}
-
-fn setup_fees(bank: Bank) -> Bank {
-    // Realistic fees part 1: Fake a single signature by calling
-    // `bank.commit_transactions()` so that the fee in the child bank will be
-    // initialized with a non-zero fee.
-    assert_eq!(bank.signature_count(), 0);
-    let (last_blockhash, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
-    bank.commit_transactions(
-        &[],     // transactions
-        &mut [], // loaded accounts
-        vec![],  // transaction execution results
-        last_blockhash,
-        lamports_per_signature,
-        CommitTransactionCounts {
-            committed_transactions_count: 0,
-            committed_with_failure_result_count: 0,
-            signature_count: 1,
-        },
-        &mut ExecuteTimings::default(),
-    );
-    assert_eq!(bank.signature_count(), 1);
-
-    // Advance beyond slot 0 for a slightly more realistic test environment
-    let bank = Arc::new(bank);
-    let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
-    debug!("Bank slot: {}", bank.slot());
-
-    // Realistic fees part 2: Tick until a new blockhash is produced to pick up the
-    // non-zero fees
-    let last_blockhash = bank.last_blockhash();
-    while last_blockhash == bank.last_blockhash() {
-        bank.register_tick(&Hash::new_unique());
-    }
-
-    // Make sure a fee is now required
-    let lamports_per_signature = bank.get_lamports_per_signature();
-    assert_ne!(lamports_per_signature, 0);
-
-    bank
 }
 
 pub struct ProgramTest {
@@ -755,7 +713,11 @@ impl ProgramTest {
         }
 
         let rent = Rent::default();
-        let fee_rate_governor = FeeRateGovernor::default();
+        let fee_rate_governor = FeeRateGovernor {
+            // Initialize with a non-zero fee
+            lamports_per_signature: DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE / 2,
+            ..FeeRateGovernor::default()
+        };
         let bootstrap_validator_pubkey = Pubkey::new_unique();
         let bootstrap_validator_stake_lamports =
             rent.minimum_balance(VoteState::size_of()) + sol_to_lamports(1_000_000.0);
@@ -840,11 +802,18 @@ impl ProgramTest {
         bank.set_capitalization();
         if let Some(max_units) = self.compute_max_units {
             bank.set_compute_budget(Some(ComputeBudget {
-                compute_unit_limit: max_units,
+                max_units,
                 ..ComputeBudget::default()
             }));
         }
-        let bank = setup_fees(bank);
+        // Advance beyond slot 0 for a slightly more realistic test environment
+        let bank = {
+            let bank = Arc::new(bank);
+            bank.fill_bank_with_ticks_for_tests();
+            let bank = Bank::new_from_parent(&bank, bank.collector_id(), bank.slot() + 1);
+            debug!("Bank slot: {}", bank.slot());
+            bank
+        };
         let slot = bank.slot();
         let last_blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -868,6 +837,7 @@ impl ProgramTest {
     pub async fn start(self) -> (BanksClient, Keypair, Hash) {
         let (bank_forks, block_commitment_cache, last_blockhash, gci) = self.setup_bank();
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
+        let target_slot_duration = target_tick_duration * gci.genesis_config.ticks_per_slot as u32;
         let transport = start_local_server(
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -883,12 +853,12 @@ impl ProgramTest {
         // test
         tokio::spawn(async move {
             loop {
+                tokio::time::sleep(target_slot_duration).await;
                 bank_forks
                     .read()
                     .unwrap()
                     .working_bank()
-                    .register_tick(&Hash::new_unique());
-                tokio::time::sleep(target_tick_duration).await;
+                    .register_recent_blockhash(&Hash::new_unique());
             }
         });
 
@@ -1025,6 +995,8 @@ impl ProgramTestContext {
             .genesis_config
             .poh_config
             .target_tick_duration;
+        let target_slot_duration =
+            target_tick_duration * genesis_config_info.genesis_config.ticks_per_slot as u32;
         let exit = Arc::new(AtomicBool::new(false));
         let bank_task = DroppableTask(
             exit.clone(),
@@ -1033,12 +1005,12 @@ impl ProgramTestContext {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
+                    tokio::time::sleep(target_slot_duration).await;
                     running_bank_forks
                         .read()
                         .unwrap()
                         .working_bank()
-                        .register_tick(&Hash::new_unique());
-                    tokio::time::sleep(target_tick_duration).await;
+                        .register_recent_blockhash(&Hash::new_unique());
                 }
             }),
         );
@@ -1109,12 +1081,9 @@ impl ProgramTestContext {
         let mut bank_forks = self.bank_forks.write().unwrap();
         let bank = bank_forks.working_bank();
 
-        // Force ticks until a new blockhash, otherwise retried transactions will have
+        // Fill ticks until a new blockhash is recorded, otherwise retried transactions will have
         // the same signature
-        let last_blockhash = bank.last_blockhash();
-        while last_blockhash == bank.last_blockhash() {
-            bank.register_tick(&Hash::new_unique());
-        }
+        bank.fill_bank_with_ticks_for_tests();
 
         // Ensure that we are actually progressing forward
         let working_slot = bank.slot();

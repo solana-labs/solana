@@ -358,6 +358,7 @@ mod tests {
                                 ..BlockstoreRocksFifoOptions::default()
                             },
                         ),
+                        ..LedgerColumnOptions::default()
                     },
                     ..BlockstoreOptions::default()
                 }

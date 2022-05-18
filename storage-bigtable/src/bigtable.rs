@@ -8,12 +8,12 @@ use {
     },
     backoff::{future::retry, ExponentialBackoff},
     log::*,
-    std::time::{Duration, Instant},
-    thiserror::Error,
-    tonic::{
-        codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
-        Status,
+    std::{
+        str::FromStr,
+        time::{Duration, Instant},
     },
+    thiserror::Error,
+    tonic::{codegen::InterceptedService, transport::ClientTlsConfig, Request, Status},
 };
 
 mod google {
@@ -197,7 +197,7 @@ impl BigTableConnection {
             self.channel.clone(),
             move |mut req: Request<()>| {
                 if let Some(access_token) = &access_token {
-                    match MetadataValue::from_str(&access_token.get()) {
+                    match FromStr::from_str(&access_token.get()) {
                         Ok(authorization_header) => {
                             req.metadata_mut()
                                 .insert("authorization", authorization_header);
@@ -817,7 +817,7 @@ mod tests {
         prost::Message,
         solana_sdk::{
             hash::Hash, message::v0::LoadedAddresses, signature::Keypair, system_transaction,
-            transaction::VersionedTransaction,
+            transaction::VersionedTransaction, transaction_context::TransactionReturnData,
         },
         solana_storage_proto::convert::generated,
         solana_transaction_status::{
@@ -867,6 +867,7 @@ mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
+                return_data: Some(TransactionReturnData::default()),
             },
         });
         let expected_block = ConfirmedBlock {
@@ -924,6 +925,7 @@ mod tests {
                 meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.rewards = None; // Legacy bincode implementation does not support rewards
+                meta.return_data = None; // Legacy bincode implementation does not support return data
             }
             assert_eq!(block, bincode_block.into());
         } else {

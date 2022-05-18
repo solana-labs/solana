@@ -1,5 +1,8 @@
-//! Solana Rust-based BPF program entry point supported by the latest
-//! BPFLoader.  For more information see './bpf_loader.rs'
+//! The Rust-based BPF program entry point supported by the latest BPF loader.
+//!
+//! For more information see the [`bpf_loader`] module.
+//!
+//! [`bpf_loader`]: crate::bpf_loader
 
 extern crate alloc;
 use {

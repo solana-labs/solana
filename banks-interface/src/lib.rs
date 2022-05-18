@@ -12,6 +12,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, Transaction, TransactionError},
+        transaction_context::TransactionReturnData,
     },
 };
 
@@ -35,6 +36,7 @@ pub struct TransactionStatus {
 pub struct TransactionSimulationDetails {
     pub logs: Vec<String>,
     pub units_consumed: u64,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

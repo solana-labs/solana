@@ -56,6 +56,10 @@ export function lamportsToSolString(
   return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
 }
 
+export function numberWithSeparator(s: string) {
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 export function SolBalance({
   lamports,
   maximumFractionDigits = 9,
@@ -124,6 +128,27 @@ export function localStorageIsAvailable() {
 export function camelToTitleCase(str: string): string {
   const result = str.replace(/([A-Z])/g, " $1");
   return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
+export function snakeToTitleCase(str: string): string {
+  const result = str.replace(/([-_]\w)/g, (g) => ` ${g[1].toUpperCase()}`);
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
+export function snakeToPascal(string: string) {
+  return string
+    .split("/")
+    .map((snake) =>
+      snake
+        .split("_")
+        .map((substr) => substr.charAt(0).toUpperCase() + substr.slice(1))
+        .join("")
+    )
+    .join("/");
+}
+
+export function capitalizeFirstLetter(input: string) {
+  return input.charAt(0).toUpperCase() + input.slice(1);
 }
 
 export function abbreviatedNumber(value: number, fixed = 1) {

@@ -14,7 +14,7 @@ use {
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         system_instruction,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
         transport::{Result, TransportError},
     },
     std::{
@@ -28,7 +28,7 @@ use {
 
 pub struct BankClient {
     bank: Arc<Bank>,
-    transaction_sender: Mutex<Sender<Transaction>>,
+    transaction_sender: Mutex<Sender<VersionedTransaction>>,
 }
 
 impl Client for BankClient {
@@ -38,51 +38,14 @@ impl Client for BankClient {
 }
 
 impl AsyncClient for BankClient {
-    fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> Result<Signature> {
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
         Ok(signature)
-    }
-
-    fn async_send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
-        for t in transactions {
-            self.async_send_transaction(t)?;
-        }
-        Ok(())
-    }
-
-    fn async_send_message<T: Signers>(
-        &self,
-        keypairs: &T,
-        message: Message,
-        recent_blockhash: Hash,
-    ) -> Result<Signature> {
-        let transaction = Transaction::new(keypairs, message, recent_blockhash);
-        self.async_send_transaction(transaction)
-    }
-
-    fn async_send_instruction(
-        &self,
-        keypair: &Keypair,
-        instruction: Instruction,
-        recent_blockhash: Hash,
-    ) -> Result<Signature> {
-        let message = Message::new(&[instruction], Some(&keypair.pubkey()));
-        self.async_send_message(&[keypair], message, recent_blockhash)
-    }
-
-    /// Transfer `lamports` from `keypair` to `pubkey`
-    fn async_transfer(
-        &self,
-        lamports: u64,
-        keypair: &Keypair,
-        pubkey: &Pubkey,
-        recent_blockhash: Hash,
-    ) -> Result<Signature> {
-        let transfer_instruction =
-            system_instruction::transfer(&keypair.pubkey(), pubkey, lamports);
-        self.async_send_instruction(keypair, transfer_instruction, recent_blockhash)
     }
 }
 
@@ -333,13 +296,13 @@ impl SyncClient for BankClient {
 }
 
 impl BankClient {
-    fn run(bank: &Bank, transaction_receiver: Receiver<Transaction>) {
+    fn run(bank: &Bank, transaction_receiver: Receiver<VersionedTransaction>) {
         while let Ok(tx) = transaction_receiver.recv() {
             let mut transactions = vec![tx];
             while let Ok(tx) = transaction_receiver.try_recv() {
                 transactions.push(tx);
             }
-            let _ = bank.try_process_transactions(transactions.iter());
+            let _ = bank.try_process_entry_transactions(transactions);
         }
     }
 

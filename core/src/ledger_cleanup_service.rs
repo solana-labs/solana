@@ -1,4 +1,8 @@
-//! The `ledger_cleanup_service` drops older ledger data to limit disk space usage
+//! The `ledger_cleanup_service` drops older ledger data to limit disk space usage.
+//! The service works by counting the number of live data shreds in the ledger; this
+//! can be done quickly and should have a fairly stable correlation to actual bytes.
+//! Once the shred count (and thus roughly the byte count) reaches a threshold,
+//! the services begins removing data in FIFO order.
 
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError},

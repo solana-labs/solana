@@ -32,11 +32,12 @@ pub enum ComputeBudgetInstruction {
     /// size applies to each program executed in the transaction, including all
     /// calls to CPIs.
     RequestHeapFrame(u32),
-    /// Set a specific compute unit limit that the transaction is allowed to consume.
-    SetComputeUnitLimit(u32),
-    /// Set a compute unit price in "micro-lamports" to pay a higher transaction
-    /// fee for higher transaction prioritization.
-    SetComputeUnitPrice(u64),
+    /// Request a specific maximum number of compute units the transaction is
+    /// allowed to consume and an additional fee to pay.
+    RequestUnits(u32),
+    /// Additional fee in lamports to charge the payer, used for transaction
+    /// prioritization
+    SetPrioritizationFee(u64),
 }
 
 impl ComputeBudgetInstruction {
@@ -45,13 +46,13 @@ impl ComputeBudgetInstruction {
         Instruction::new_with_borsh(id(), &Self::RequestHeapFrame(bytes), vec![])
     }
 
-    /// Create a `ComputeBudgetInstruction::SetComputeUnitLimit` `Instruction`
-    pub fn set_compute_unit_limit(units: u32) -> Instruction {
-        Instruction::new_with_borsh(id(), &Self::SetComputeUnitLimit(units), vec![])
+    /// Create a `ComputeBudgetInstruction::RequestUnits` `Instruction`
+    pub fn request_units(units: u32) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::RequestUnits(units), vec![])
     }
 
-    /// Create a `ComputeBudgetInstruction::SetComputeUnitPrice` `Instruction`
-    pub fn set_compute_unit_price(micro_lamports: u64) -> Instruction {
-        Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
+    /// Create a `ComputeBudgetInstruction::SetPrioritizationFee` `Instruction`
+    pub fn set_prioritization_fee(fee: u64) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetPrioritizationFee(fee), vec![])
     }
 }

@@ -17,39 +17,69 @@ export type Lockout = {
 /**
  * History of how many credits earned by the end of each epoch
  */
-export type EpochCredits = {
+export type EpochCredits = Readonly<{
   epoch: number;
   credits: number;
   prevCredits: number;
-};
+}>;
 
-export type AuthorizedVoter = {
+export type AuthorizedVoter = Readonly<{
   epoch: number;
   authorizedVoter: PublicKey;
-};
+}>;
 
-export type PriorVoter = {
+type AuthorizedVoterRaw = Readonly<{
+  authorizedVoter: Uint8Array;
+  epoch: number;
+}>;
+
+type PriorVoters = Readonly<{
+  buf: PriorVoterRaw[];
+  idx: number;
+  isEmpty: number;
+}>;
+
+export type PriorVoter = Readonly<{
   authorizedPubkey: PublicKey;
   epochOfLastAuthorizedSwitch: number;
   targetEpoch: number;
-};
+}>;
 
-export type BlockTimestamp = {
+type PriorVoterRaw = Readonly<{
+  authorizedPubkey: Uint8Array;
+  epochOfLastAuthorizedSwitch: number;
+  targetEpoch: number;
+}>;
+
+export type BlockTimestamp = Readonly<{
   slot: number;
-  timetamp: number;
-};
+  timestamp: number;
+}>;
+
+type VoteAccountData = Readonly<{
+  authorizedVoters: AuthorizedVoterRaw[];
+  authorizedWithdrawer: Uint8Array;
+  commission: number;
+  epochCredits: EpochCredits[];
+  lastTimestamp: BlockTimestamp;
+  nodePubkey: Uint8Array;
+  priorVoters: PriorVoters;
+  rootSlot: number;
+  rootSlotValid: number;
+  votes: Lockout[];
+}>;
 
 /**
  * See https://github.com/solana-labs/solana/blob/8a12ed029cfa38d4a45400916c2463fb82bbec8c/programs/vote_api/src/vote_state.rs#L68-L88
  *
  * @internal
  */
-const VoteAccountLayout = BufferLayout.struct([
+const VoteAccountLayout = BufferLayout.struct<VoteAccountData>([
   Layout.publicKey('nodePubkey'),
   Layout.publicKey('authorizedWithdrawer'),
   BufferLayout.u8('commission'),
   BufferLayout.nu64(), // votes.length
-  BufferLayout.seq(
+  BufferLayout.seq<Lockout>(
     BufferLayout.struct([
       BufferLayout.nu64('slot'),
       BufferLayout.u32('confirmationCount'),
@@ -60,7 +90,7 @@ const VoteAccountLayout = BufferLayout.struct([
   BufferLayout.u8('rootSlotValid'),
   BufferLayout.nu64('rootSlot'),
   BufferLayout.nu64(), // authorizedVoters.length
-  BufferLayout.seq(
+  BufferLayout.seq<AuthorizedVoterRaw>(
     BufferLayout.struct([
       BufferLayout.nu64('epoch'),
       Layout.publicKey('authorizedVoter'),
@@ -68,7 +98,7 @@ const VoteAccountLayout = BufferLayout.struct([
     BufferLayout.offset(BufferLayout.u32(), -8),
     'authorizedVoters',
   ),
-  BufferLayout.struct(
+  BufferLayout.struct<PriorVoters>(
     [
       BufferLayout.seq(
         BufferLayout.struct([
@@ -85,7 +115,7 @@ const VoteAccountLayout = BufferLayout.struct([
     'priorVoters',
   ),
   BufferLayout.nu64(), // epochCredits.length
-  BufferLayout.seq(
+  BufferLayout.seq<EpochCredits>(
     BufferLayout.struct([
       BufferLayout.nu64('epoch'),
       BufferLayout.nu64('credits'),
@@ -94,7 +124,7 @@ const VoteAccountLayout = BufferLayout.struct([
     BufferLayout.offset(BufferLayout.u32(), -8),
     'epochCredits',
   ),
-  BufferLayout.struct(
+  BufferLayout.struct<BlockTimestamp>(
     [BufferLayout.nu64('slot'), BufferLayout.nu64('timestamp')],
     'lastTimestamp',
   ),
@@ -172,7 +202,10 @@ export class VoteAccount {
   }
 }
 
-function parseAuthorizedVoter({epoch, authorizedVoter}: AuthorizedVoter) {
+function parseAuthorizedVoter({
+  authorizedVoter,
+  epoch,
+}: AuthorizedVoterRaw): AuthorizedVoter {
   return {
     epoch,
     authorizedVoter: new PublicKey(authorizedVoter),
@@ -183,7 +216,7 @@ function parsePriorVoters({
   authorizedPubkey,
   epochOfLastAuthorizedSwitch,
   targetEpoch,
-}: PriorVoter) {
+}: PriorVoterRaw): PriorVoter {
   return {
     authorizedPubkey: new PublicKey(authorizedPubkey),
     epochOfLastAuthorizedSwitch,
@@ -191,18 +224,13 @@ function parsePriorVoters({
   };
 }
 
-function getPriorVoters({
-  buf,
-  idx,
-  isEmpty,
-}: {
-  buf: PriorVoter[];
-  idx: number;
-  isEmpty: boolean;
-}): PriorVoter[] {
+function getPriorVoters({buf, idx, isEmpty}: PriorVoters): PriorVoter[] {
   if (isEmpty) {
     return [];
   }
 
-  return [...buf.slice(idx + 1).map(parsePriorVoters), ...buf.slice(0, idx)];
+  return [
+    ...buf.slice(idx + 1).map(parsePriorVoters),
+    ...buf.slice(0, idx).map(parsePriorVoters),
+  ];
 }

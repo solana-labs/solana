@@ -17,7 +17,7 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, Builder, JoinHandle},
-        time::Instant,
+        time::{Duration, Instant},
     },
 };
 
@@ -72,6 +72,7 @@ impl ShredFetchStage {
     ) where
         F: Fn(&mut Packet),
     {
+        const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut last_updated = Instant::now();
 
@@ -80,7 +81,6 @@ impl ShredFetchStage {
         let mut last_slot = std::u64::MAX;
         let mut slots_per_epoch = 0;
 
-        let mut last_stats = Instant::now();
         let mut stats = ShredFetchStats::default();
         let mut packet_hasher = PacketHasher::default();
 
@@ -111,20 +111,7 @@ impl ShredFetchStage {
                     &packet_hasher,
                 );
             });
-            if last_stats.elapsed().as_millis() > 1000 {
-                datapoint_info!(
-                    name,
-                    ("index_overrun", stats.index_overrun, i64),
-                    ("shred_count", stats.shred_count, i64),
-                    ("slot_bad_deserialize", stats.slot_bad_deserialize, i64),
-                    ("index_bad_deserialize", stats.index_bad_deserialize, i64),
-                    ("index_out_of_bounds", stats.index_out_of_bounds, i64),
-                    ("slot_out_of_range", stats.slot_out_of_range, i64),
-                    ("duplicate_shred", stats.duplicate_shred, i64),
-                );
-                stats = ShredFetchStats::default();
-                last_stats = Instant::now();
-            }
+            stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
             if sendr.send(vec![packet_batch]).is_err() {
                 break;
             }
@@ -230,7 +217,10 @@ impl ShredFetchStage {
 mod tests {
     use {
         super::*,
-        solana_ledger::{blockstore::MAX_DATA_SHREDS_PER_SLOT, shred::Shred},
+        solana_ledger::{
+            blockstore::MAX_DATA_SHREDS_PER_SLOT,
+            shred::{Shred, ShredFlags},
+        },
     };
 
     #[test]
@@ -242,14 +232,14 @@ mod tests {
 
         let slot = 1;
         let shred = Shred::new_from_data(
-            slot, 3,    // shred index
-            0,    // parent offset
-            None, // data
-            true, // is_last_in_fec_set
-            true, // is_last_in_slot
-            0,    // reference_tick
-            0,    // version
-            3,    // fec_set_index
+            slot,
+            3,   // shred index
+            0,   // parent offset
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
+            0, // version
+            3, // fec_set_index
         );
         shred.copy_to_packet(&mut packet);
 
@@ -313,7 +303,7 @@ mod tests {
         );
         assert_eq!(stats.index_overrun, 1);
         assert!(packet.meta.discard());
-        let shred = Shred::new_from_data(1, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
 
         // rejected slot is 1, root is 3
@@ -355,7 +345,16 @@ mod tests {
         );
         assert!(packet.meta.discard());
 
-        let shred = Shred::new_from_data(1_000_000, 3, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(
+            1_000_000,
+            3,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            0,
+        );
         shred.copy_to_packet(&mut packet);
 
         // Slot 1 million is too high
@@ -372,7 +371,7 @@ mod tests {
         assert!(packet.meta.discard());
 
         let index = MAX_DATA_SHREDS_PER_SLOT as u32;
-        let shred = Shred::new_from_data(5, index, 0, None, true, true, 0, 0, 0);
+        let shred = Shred::new_from_data(5, index, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         ShredFetchStage::process_packet(
             &mut packet,

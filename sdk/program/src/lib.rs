@@ -154,14 +154,14 @@
 //!
 //! - [`Pubkey`] &mdash; The address of a [Solana account][acc]. Some account
 //!   addresses are [ed25519] public keys, with corresponding secret keys that
-//!   are managed off-chain. Often though account addresses do not have
-//!   corresponding secret keys, as with [_program derived addresses_][pdas], or
-//!   the secret key is not relevant to the operation of a program, and may have
-//!   even been disposed of. As running Solana programs can not safely create or
-//!   manage secret keys, the full [`Keypair`] is not defined in
-//!   `solana-program` but in `solana-sdk`.
-//! - [`Hash`] &mdash; A [SHA-256] hash. Used to uniquely identify blocks, and
-//!   also for general purpose hashing.
+//!   are managed off-chain. Often, though, account addresses do not have
+//!   corresponding secret keys &mdash; as with [_program derived
+//!   addresses_][pdas] &mdash; or the secret key is not relevant to the
+//!   operation of a program, and may have even been disposed of. As running
+//!   Solana programs can not safely create or manage secret keys, the full
+//!   [`Keypair`] is not defined in `solana-program` but in `solana-sdk`.
+//! - [`Hash`] &mdash; A cryptographic hash. Used to uniquely identify blocks,
+//!   and also for general purpose hashing.
 //! - [`AccountInfo`] &mdash; A description of a single Solana account. All accounts
 //!   that might be accessed by a program invocation are provided to the program
 //!   entrypoint as `AccountInfo`.
@@ -195,7 +195,7 @@
 //! In user-written Solana program code, serialization is primarily used for
 //! accessing [`AccountInfo`] data and [`Instruction`] data, both of which are
 //! program-specific binary data. Every program is free to decide their own
-//! serialization format, but data recieved from other sources &mdash;
+//! serialization format, but data received from other sources &mdash;
 //! [sysvars][sysvar] for example &mdash; must be deserialized using the methods
 //! indicated by the documentation for that data or data type.
 //!
@@ -316,7 +316,7 @@
 //! }
 //! ```
 //!
-//! Solana also includes a mechinasm to let programs control and sign for
+//! Solana also includes a mechanism to let programs control and sign for
 //! accounts without needing to protect a corresponding secret key, called
 //! [_program derived addresses_][pdas]. PDAs are derived with the
 //! [`Pubkey::find_program_address`] function. With a PDA, a program can call
@@ -558,6 +558,7 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub mod address_lookup_table_account;
 pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;
@@ -609,26 +610,35 @@ pub mod wasm;
 
 #[cfg(target_arch = "bpf")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
+/// Re-export of [wasm-bindgen].
+///
+/// [wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
 #[cfg(not(target_arch = "bpf"))]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 
+/// The [config native program][np].
+///
+/// [np]: https://docs.solana.com/developing/runtime-facilities/programs#config-program
 pub mod config {
     pub mod program {
         crate::declare_id!("Config1111111111111111111111111111111111111");
     }
 }
 
+/// The [vote native program][np].
+///
+/// [np]: https://docs.solana.com/developing/runtime-facilities/programs#vote-program
 pub mod vote {
     pub mod program {
         crate::declare_id!("Vote111111111111111111111111111111111111111");
     }
 }
 
-/// Same as `declare_id` except report that this id has been deprecated
+/// Same as [`declare_id`] except that it reports that this ID has been deprecated.
 pub use solana_sdk_macro::program_declare_deprecated_id as declare_deprecated_id;
-/// Convenience macro to declare a static public key and functions to interact with it
+/// Convenience macro to declare a static public key and functions to interact with it.
 ///
-/// Input: a single literal base58 string representation of a program's id
+/// Input: a single literal base58 string representation of a program's ID.
 ///
 /// # Example
 ///
@@ -648,9 +658,9 @@ pub use solana_sdk_macro::program_declare_deprecated_id as declare_deprecated_id
 /// assert_eq!(id(), my_id);
 /// ```
 pub use solana_sdk_macro::program_declare_id as declare_id;
-/// Convenience macro to define a static public key
+/// Convenience macro to define a static public key.
 ///
-/// Input: a single literal base58 string representation of a Pubkey
+/// Input: a single literal base58 string representation of a Pubkey.
 ///
 /// # Example
 ///
@@ -671,95 +681,106 @@ extern crate serde_derive;
 #[macro_use]
 extern crate solana_frozen_abi_macro;
 
-/// Convenience macro for doing integer division where the opersation's safety
-/// can be checked at compile-time
+/// Convenience macro for doing integer division where the operation's safety
+/// can be checked at compile-time.
 ///
 /// Since `unchecked_div_by_const!()` is supposed to fail at compile-time, abuse
 /// doctests to cover failure modes
-/// Literal denominator div-by-zero fails
+///
+/// # Examples
+///
+/// Literal denominator div-by-zero fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # let _ = unchecked_div_by_const!(10, 0);
+/// let _ = unchecked_div_by_const!(10, 0);
 /// # }
 /// ```
-/// #
-/// # Const denominator div-by-zero fails
+///
+/// Const denominator div-by-zero fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # const D: u64 = 0;
-/// # let _ = unchecked_div_by_const!(10, D);
+/// const D: u64 = 0;
+/// let _ = unchecked_div_by_const!(10, D);
 /// # }
 /// ```
-/// #
-/// # Non-const denominator fails
+///
+/// Non-const denominator fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # let d = 0;
-/// # let _ = unchecked_div_by_const!(10, d);
+/// let d = 0;
+/// let _ = unchecked_div_by_const!(10, d);
 /// # }
 /// ```
-/// #
-/// Literal denominator div-by-zero fails
+///
+/// Literal denominator div-by-zero fails:
+///
+/// ```compile_fail
+/// # use solana_program::unchecked_div_by_const;
+/// # fn main() {
+/// const N: u64 = 10;
+/// let _ = unchecked_div_by_const!(N, 0);
+/// # }
+/// ```
+///
+/// Const denominator div-by-zero fails:
+///
+/// ```compile_fail
+/// # use solana_program::unchecked_div_by_const;
+/// # fn main() {
+/// const N: u64 = 10;
+/// const D: u64 = 0;
+/// let _ = unchecked_div_by_const!(N, D);
+/// # }
+/// ```
+///
+/// Non-const denominator fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
 /// # const N: u64 = 10;
-/// # let _ = unchecked_div_by_const!(N, 0);
+/// let d = 0;
+/// let _ = unchecked_div_by_const!(N, d);
 /// # }
 /// ```
-/// #
-/// # Const denominator div-by-zero fails
+///
+/// Literal denominator div-by-zero fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # const N: u64 = 10;
-/// # const D: u64 = 0;
-/// # let _ = unchecked_div_by_const!(N, D);
+/// let n = 10;
+/// let _ = unchecked_div_by_const!(n, 0);
 /// # }
 /// ```
-/// #
-/// # Non-const denominator fails
+///
+/// Const denominator div-by-zero fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # const N: u64 = 10;
-/// # let d = 0;
-/// # let _ = unchecked_div_by_const!(N, d);
+/// let n = 10;
+/// const D: u64 = 0;
+/// let _ = unchecked_div_by_const!(n, D);
 /// # }
 /// ```
-/// #
-/// Literal denominator div-by-zero fails
+///
+/// Non-const denominator fails:
+///
 /// ```compile_fail
 /// # use solana_program::unchecked_div_by_const;
 /// # fn main() {
-/// # let n = 10;
-/// # let _ = unchecked_div_by_const!(n, 0);
+/// let n = 10;
+/// let d = 0;
+/// let _ = unchecked_div_by_const!(n, d);
 /// # }
 /// ```
-/// #
-/// # Const denominator div-by-zero fails
-/// ```compile_fail
-/// # use solana_program::unchecked_div_by_const;
-/// # fn main() {
-/// # let n = 10;
-/// # const D: u64 = 0;
-/// # let _ = unchecked_div_by_const!(n, D);
-/// # }
-/// ```
-/// #
-/// # Non-const denominator fails
-/// ```compile_fail
-/// # use solana_program::unchecked_div_by_const;
-/// # fn main() {
-/// # let n = 10;
-/// # let d = 0;
-/// # let _ = unchecked_div_by_const!(n, d);
-/// # }
-/// ```
-/// #
 #[macro_export]
 macro_rules! unchecked_div_by_const {
     ($num:expr, $den:expr) => {{
@@ -775,25 +796,6 @@ macro_rules! unchecked_div_by_const {
         let quotient = $num / $den;
         quotient
     }};
-}
-
-use std::{mem::MaybeUninit, ptr::write_bytes};
-
-#[macro_export]
-macro_rules! copy_field {
-    ($ptr:expr, $self:ident, $field:ident) => {
-        std::ptr::addr_of_mut!((*$ptr).$field).write($self.$field)
-    };
-}
-
-pub fn clone_zeroed<T, F>(clone: F) -> T
-where
-    F: Fn(&mut MaybeUninit<T>),
-{
-    let mut value = MaybeUninit::<T>::uninit();
-    unsafe { write_bytes(&mut value, 0, 1) }
-    clone(&mut value);
-    unsafe { value.assume_init() }
 }
 
 // This module is purposefully listed after all other exports: because of an

@@ -132,7 +132,7 @@ impl ReceiveWindowStats {
             ("elapsed_micros", self.elapsed.as_micros(), i64),
         );
         for (slot, num_shreds) in &self.slots {
-            datapoint_info!(
+            datapoint_debug!(
                 "receive_window_num_slot_shreds",
                 ("slot", *slot, i64),
                 ("num_shreds", *num_shreds, i64)
@@ -193,8 +193,8 @@ pub(crate) fn should_retransmit_and_persist(
         } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
             inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
             false
-        } else if shred.data_header.size as usize > shred.payload.len() {
-            inc_new_counter_warn!("streamer-recv_window-shred_bad_meta_size", 1);
+        } else if shred.sanitize().is_err() {
+            inc_new_counter_warn!("streamer-recv_window-invalid-shred", 1);
             false
         } else {
             true
@@ -209,22 +209,22 @@ fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
     shred_receiver: &Receiver<Shred>,
-    duplicate_slot_sender: &DuplicateSlotSender,
+    duplicate_slots_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
         let shred_slot = shred.slot();
         if !blockstore.has_duplicate_shreds_in_slot(shred_slot) {
             if let Some(existing_shred_payload) =
-                blockstore.is_shred_duplicate(shred.id(), shred.payload.clone())
+                blockstore.is_shred_duplicate(shred.id(), shred.payload().clone())
             {
                 cluster_info.push_duplicate_shred(&shred, &existing_shred_payload)?;
                 blockstore.store_duplicate_slot(
                     shred_slot,
                     existing_shred_payload,
-                    shred.payload,
+                    shred.into_payload(),
                 )?;
 
-                duplicate_slot_sender.send(shred_slot)?;
+                duplicate_slots_sender.send(shred_slot)?;
             }
         }
 
@@ -530,7 +530,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         duplicate_receiver: Receiver<Shred>,
-        duplicate_slot_sender: DuplicateSlotSender,
+        duplicate_slots_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
@@ -547,7 +547,7 @@ impl WindowService {
                     &cluster_info,
                     &blockstore,
                     &duplicate_receiver,
-                    &duplicate_slot_sender,
+                    &duplicate_slots_sender,
                 ) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;
@@ -604,7 +604,7 @@ impl WindowService {
                     }
 
                     if last_print.elapsed().as_secs() > 2 {
-                        metrics.report_metrics("recv-window-insert-shreds");
+                        metrics.report_metrics("blockstore-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
                         ws_metrics.report_metrics("recv-window-insert-shreds");
                         ws_metrics = WindowServiceMetrics::default();
@@ -717,7 +717,7 @@ mod test {
             blockstore::{make_many_slot_entries, Blockstore},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
-            shred::{DataShredHeader, Shredder},
+            shred::Shredder,
         },
         solana_sdk::{
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -825,21 +825,9 @@ mod test {
             0
         ));
 
-        // with a bad header size
-        let mut bad_header_shred = shreds[0].clone();
-        bad_header_shred.data_header.size = (bad_header_shred.payload.len() + 1) as u16;
-        assert!(!should_retransmit_and_persist(
-            &bad_header_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-            0
-        ));
-
         // with an invalid index, shred gets thrown out
         let mut bad_index_shred = shreds[0].clone();
-        bad_index_shred.common_header.index = (MAX_DATA_SHREDS_PER_SLOT + 1) as u32;
+        bad_index_shred.set_index((MAX_DATA_SHREDS_PER_SLOT + 1) as u32);
         assert!(!should_retransmit_and_persist(
             &bad_index_shred,
             Some(bank.clone()),
@@ -875,18 +863,17 @@ mod test {
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
-        let (common, coding) = Shredder::new_coding_shred_header(
-            5, // slot
-            5, // index
-            5, // fec_set_index
-            6, // num_data_shreds
-            6, // num_coding_shreds
-            3, // position
-            0, // version
+        let mut coding_shred = Shred::new_from_parity_shard(
+            5,   // slot
+            5,   // index
+            &[], // parity_shard
+            5,   // fec_set_index
+            6,   // num_data_shreds
+            6,   // num_coding_shreds
+            3,   // position
+            0,   // version
         );
-        let mut coding_shred =
-            Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
-        Shredder::sign_shred(&leader_keypair, &mut coding_shred);
+        coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
         assert!(should_retransmit_and_persist(
             &coding_shred,
@@ -959,16 +946,16 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let (common, coding) = Shredder::new_coding_shred_header(
-            5, // slot
-            5, // index
-            5, // fec_set_index
-            6, // num_data_shreds
-            6, // num_coding_shreds
-            4, // position
-            0, // version
+        let shred = Shred::new_from_parity_shard(
+            5,   // slot
+            5,   // index
+            &[], // parity_shard
+            5,   // fec_set_index
+            6,   // num_data_shreds
+            6,   // num_coding_shreds
+            4,   // position
+            0,   // version
         );
-        let shred = Shred::new_empty_from_header(common, DataShredHeader::default(), coding);
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let repair_meta = RepairMeta {

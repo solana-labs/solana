@@ -14,7 +14,9 @@
     "isolatedModules": true,
     "baseUrl": "src",
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true
   },
   "include": ["src"]
 }

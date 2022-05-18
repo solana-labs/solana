@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { Connection, BlockResponse } from "@solana/web3.js";
+import { Connection, BlockResponse, PublicKey } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -17,7 +17,10 @@ export enum ActionType {
 
 type Block = {
   block?: BlockResponse;
-  child?: number;
+  blockLeader?: PublicKey;
+  childSlot?: number;
+  childLeader?: PublicKey;
+  parentLeader?: PublicKey;
 };
 
 type State = Cache.State<Block>;
@@ -59,12 +62,12 @@ export async function fetchBlock(
   dispatch: Dispatch,
   url: string,
   cluster: Cluster,
-  key: number
+  slot: number
 ) {
   dispatch({
     type: ActionType.Update,
     status: FetchStatus.Fetching,
-    key,
+    key: slot,
     url,
   });
 
@@ -73,13 +76,39 @@ export async function fetchBlock(
 
   try {
     const connection = new Connection(url, "confirmed");
-    const block = await connection.getBlock(key);
-    const child = (await connection.getBlocks(key + 1, key + 100)).shift();
+    const block = await connection.getBlock(slot);
     if (block === null) {
       data = {};
       status = FetchStatus.Fetched;
     } else {
-      data = { block, child };
+      const childSlot = (
+        await connection.getBlocks(slot + 1, slot + 100)
+      ).shift();
+      const firstLeaderSlot = block.parentSlot;
+
+      let leaders: PublicKey[] = [];
+      try {
+        const lastLeaderSlot = childSlot !== undefined ? childSlot : slot;
+        const slotLeadersLimit = lastLeaderSlot - block.parentSlot + 1;
+        leaders = await connection.getSlotLeaders(
+          firstLeaderSlot,
+          slotLeadersLimit
+        );
+      } catch (err) {
+        // ignore errors
+      }
+
+      const getLeader = (slot: number) => {
+        return leaders.at(slot - firstLeaderSlot);
+      };
+
+      data = {
+        block,
+        blockLeader: getLeader(slot),
+        childSlot,
+        childLeader: childSlot !== undefined ? getLeader(childSlot) : undefined,
+        parentLeader: getLeader(block.parentSlot),
+      };
       status = FetchStatus.Fetched;
     }
   } catch (err) {
@@ -92,7 +121,7 @@ export async function fetchBlock(
   dispatch({
     type: ActionType.Update,
     url,
-    key,
+    key: slot,
     status,
     data,
   });

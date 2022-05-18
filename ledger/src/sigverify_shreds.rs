@@ -459,7 +459,7 @@ pub fn sign_shreds_gpu(
 pub mod tests {
     use {
         super::*,
-        crate::shred::{Shred, Shredder, SIZE_OF_DATA_SHRED_PAYLOAD},
+        crate::shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -470,19 +470,18 @@ pub mod tests {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
-        trace!("signature {}", shred.common_header.signature);
-        packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        packet.meta.size = shred.payload.len();
+        shred.sign(&keypair);
+        trace!("signature {}", shred.signature());
+        packet.data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        packet.meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -516,18 +515,17 @@ pub mod tests {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
         );
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -571,18 +569,17 @@ pub mod tests {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
         );
         let keypair = Keypair::new();
-        Shredder::sign_shred(&keypair, &mut shred);
+        shred.sign(&keypair);
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
 
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
@@ -639,9 +636,8 @@ pub mod tests {
                 slot,
                 0xc0de,
                 i as u16,
-                Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-                true,
-                true,
+                &[5; SIZE_OF_DATA_SHRED_PAYLOAD],
+                ShredFlags::LAST_SHRED_IN_SLOT,
                 1,
                 2,
                 0xc0de,
@@ -685,16 +681,15 @@ pub mod tests {
             slot,
             0xc0de,
             0xdead,
-            Some(&[1, 2, 3, 4]),
-            true,
-            true,
+            &[1, 2, 3, 4],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             0,
             0,
             0xc0de,
         );
         batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
-        batches[0].packets[0].meta.size = shred.payload.len();
+        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0].packets[0].meta.size = shred.payload().len();
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, Pubkey::default().to_bytes()),

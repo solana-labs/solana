@@ -47,6 +47,7 @@ impl WithdrawWithheldTokensData {
         withdraw_withheld_authority_ciphertext: &ElGamalCiphertext,
         amount: u64,
     ) -> Result<Self, ProofError> {
+        // encrypt withdraw amount under destination public key
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_pubkey.encrypt_with(amount, &destination_opening);
 
@@ -193,11 +194,39 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_close_account_correctness() {
+    fn test_withdraw_withheld() {
         let withdraw_withheld_authority_keypair = ElGamalKeypair::new_rand();
         let dest_keypair = ElGamalKeypair::new_rand();
 
+        let amount: u64 = 0;
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
+
+        let withdraw_withheld_tokens_data = WithdrawWithheldTokensData::new(
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
+            amount,
+        )
+        .unwrap();
+
+        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+
         let amount: u64 = 55;
+        let withdraw_withheld_authority_ciphertext =
+            withdraw_withheld_authority_keypair.public.encrypt(amount);
+
+        let withdraw_withheld_tokens_data = WithdrawWithheldTokensData::new(
+            &withdraw_withheld_authority_keypair,
+            &dest_keypair.public,
+            &withdraw_withheld_authority_ciphertext,
+            amount,
+        )
+        .unwrap();
+
+        assert!(withdraw_withheld_tokens_data.verify().is_ok());
+
+        let amount = u64::max_value();
         let withdraw_withheld_authority_ciphertext =
             withdraw_withheld_authority_keypair.public.encrypt(amount);
 

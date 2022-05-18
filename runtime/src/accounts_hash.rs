@@ -1,12 +1,21 @@
 use {
+    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, rent_collector::RentCollector},
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        sysvar::epoch_schedule::EpochSchedule,
     },
-    std::{borrow::Borrow, convert::TryInto, sync::Mutex},
+    std::{
+        borrow::Borrow,
+        convert::TryInto,
+        sync::{
+            atomic::{AtomicU64, AtomicUsize, Ordering},
+            Mutex,
+        },
+    },
 };
 pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
@@ -17,6 +26,35 @@ pub struct PreviousPass {
     pub remaining_unhashed: Vec<Hash>,
     pub lamports: u64,
 }
+
+/// parameters to calculate accounts hash
+#[derive(Debug)]
+pub struct CalcAccountsHashConfig<'a> {
+    /// true to use a thread pool dedicated to bg operations
+    pub use_bg_thread_pool: bool,
+    /// verify every hash in append vec/write cache with a recalculated hash
+    /// this option will be removed
+    pub check_hash: bool,
+    /// 'ancestors' is used to get storages and also used if 'use_write_cache' is true to
+    /// get account data from the write cache
+    pub ancestors: Option<&'a Ancestors>,
+    /// does hash calc need to consider account data that exists in the write cache?
+    /// if so, 'ancestors' will be used for this purpose as well as storages.
+    pub use_write_cache: bool,
+    pub epoch_schedule: &'a EpochSchedule,
+    pub rent_collector: &'a RentCollector,
+}
+
+impl<'a> CalcAccountsHashConfig<'a> {
+    /// return true if we should cache accounts hash intermediate data between calls
+    pub fn get_should_cache_hash_data() -> bool {
+        // when we are skipping rewrites, we cannot rely on the cached data from old append vecs, so we have to disable caching for now
+        false
+    }
+}
+
+// smallest, 3 quartiles, largest, average
+pub type StorageSizeQuartileStats = [usize; 6];
 
 #[derive(Debug, Default)]
 pub struct HashStats {
@@ -33,8 +71,54 @@ pub struct HashStats {
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
     pub max_bin_size: usize,
+    pub storage_size_quartiles: StorageSizeQuartileStats,
+    /// time spent hashing during rehash calls
+    pub rehash_hash_us: AtomicU64,
+    /// time spent determining whether to rehash during rehash calls
+    pub rehash_calc_us: AtomicU64,
+    /// # rehashes that took place and were necessary
+    pub rehash_required: AtomicUsize,
+    /// # rehashes that took place and were UNnecessary
+    pub rehash_unnecessary: AtomicUsize,
+    pub roots_older_than_epoch: AtomicUsize,
+    pub accounts_in_roots_older_than_epoch: AtomicUsize,
+    pub append_vec_sizes_older_than_epoch: AtomicUsize,
+    /// # ancient append vecs encountered
+    pub ancient_append_vecs: AtomicUsize,
 }
 impl HashStats {
+    pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
+        let mut sum = 0;
+        let mut sizes = storages
+            .iter()
+            .flat_map(|storages| {
+                let result = storages
+                    .iter()
+                    .map(|storage| {
+                        let cap = storage.accounts.capacity() as usize;
+                        sum += cap;
+                        cap
+                    })
+                    .collect::<Vec<_>>();
+                result
+            })
+            .collect::<Vec<_>>();
+        sizes.sort_unstable();
+        let len = sizes.len();
+        self.storage_size_quartiles = if len == 0 {
+            StorageSizeQuartileStats::default()
+        } else {
+            [
+                *sizes.first().unwrap(),
+                sizes[len / 4],
+                sizes[len * 2 / 4],
+                sizes[len * 3 / 4],
+                *sizes.last().unwrap(),
+                sum / len,
+            ]
+        };
+    }
+
     fn log(&mut self) {
         let total_time_us = self.scan_time_total_us
             + self.zeros_time_total_us
@@ -64,7 +148,79 @@ impl HashStats {
             ("num_slots", self.num_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
+            (
+                "storage_size_min",
+                self.storage_size_quartiles[0] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_1",
+                self.storage_size_quartiles[1] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_2",
+                self.storage_size_quartiles[2] as i64,
+                i64
+            ),
+            (
+                "storage_size_quartile_3",
+                self.storage_size_quartiles[3] as i64,
+                i64
+            ),
+            (
+                "storage_size_max",
+                self.storage_size_quartiles[4] as i64,
+                i64
+            ),
+            (
+                "storage_size_avg",
+                self.storage_size_quartiles[5] as i64,
+                i64
+            ),
             ("total", total_time_us as i64, i64),
+            (
+                "rehashed_rewrites",
+                self.rehash_required.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_hash_us",
+                self.rehash_hash_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehash_calc_us",
+                self.rehash_calc_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "rehashed_rewrites_unnecessary",
+                self.rehash_unnecessary.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_older_than_epoch",
+                self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "ancient_append_vecs",
+                self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "append_vec_sizes_older_than_epoch",
+                self.append_vec_sizes_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "accounts_in_roots_older_than_epoch",
+                self.accounts_in_roots_older_than_epoch
+                    .load(Ordering::Relaxed) as i64,
+                i64
+            ),
         );
     }
 }

@@ -109,8 +109,8 @@ impl ConstantTimeEq for PedersenOpening {
 impl<'a, 'b> Add<&'b PedersenOpening> for &'a PedersenOpening {
     type Output = PedersenOpening;
 
-    fn add(self, other: &'b PedersenOpening) -> PedersenOpening {
-        PedersenOpening(&self.0 + &other.0)
+    fn add(self, opening: &'b PedersenOpening) -> PedersenOpening {
+        PedersenOpening(&self.0 + &opening.0)
     }
 }
 
@@ -123,8 +123,8 @@ define_add_variants!(
 impl<'a, 'b> Sub<&'b PedersenOpening> for &'a PedersenOpening {
     type Output = PedersenOpening;
 
-    fn sub(self, other: &'b PedersenOpening) -> PedersenOpening {
-        PedersenOpening(&self.0 - &other.0)
+    fn sub(self, opening: &'b PedersenOpening) -> PedersenOpening {
+        PedersenOpening(&self.0 - &opening.0)
     }
 }
 
@@ -137,14 +137,28 @@ define_sub_variants!(
 impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenOpening {
     type Output = PedersenOpening;
 
-    fn mul(self, other: &'b Scalar) -> PedersenOpening {
-        PedersenOpening(&self.0 * other)
+    fn mul(self, scalar: &'b Scalar) -> PedersenOpening {
+        PedersenOpening(&self.0 * scalar)
     }
 }
 
 define_mul_variants!(
     LHS = PedersenOpening,
     RHS = Scalar,
+    Output = PedersenOpening
+);
+
+impl<'a, 'b> Mul<&'b PedersenOpening> for &'a Scalar {
+    type Output = PedersenOpening;
+
+    fn mul(self, opening: &'b PedersenOpening) -> PedersenOpening {
+        PedersenOpening(self * &opening.0)
+    }
+}
+
+define_mul_variants!(
+    LHS = Scalar,
+    RHS = PedersenOpening,
     Output = PedersenOpening
 );
 
@@ -171,8 +185,8 @@ impl PedersenCommitment {
 impl<'a, 'b> Add<&'b PedersenCommitment> for &'a PedersenCommitment {
     type Output = PedersenCommitment;
 
-    fn add(self, other: &'b PedersenCommitment) -> PedersenCommitment {
-        PedersenCommitment(&self.0 + &other.0)
+    fn add(self, commitment: &'b PedersenCommitment) -> PedersenCommitment {
+        PedersenCommitment(&self.0 + &commitment.0)
     }
 }
 
@@ -185,8 +199,8 @@ define_add_variants!(
 impl<'a, 'b> Sub<&'b PedersenCommitment> for &'a PedersenCommitment {
     type Output = PedersenCommitment;
 
-    fn sub(self, other: &'b PedersenCommitment) -> PedersenCommitment {
-        PedersenCommitment(&self.0 - &other.0)
+    fn sub(self, commitment: &'b PedersenCommitment) -> PedersenCommitment {
+        PedersenCommitment(&self.0 - &commitment.0)
     }
 }
 
@@ -199,14 +213,28 @@ define_sub_variants!(
 impl<'a, 'b> Mul<&'b Scalar> for &'a PedersenCommitment {
     type Output = PedersenCommitment;
 
-    fn mul(self, other: &'b Scalar) -> PedersenCommitment {
-        PedersenCommitment(&self.0 * other)
+    fn mul(self, scalar: &'b Scalar) -> PedersenCommitment {
+        PedersenCommitment(scalar * &self.0)
     }
 }
 
 define_mul_variants!(
     LHS = PedersenCommitment,
     RHS = Scalar,
+    Output = PedersenCommitment
+);
+
+impl<'a, 'b> Mul<&'b PedersenCommitment> for &'a Scalar {
+    type Output = PedersenCommitment;
+
+    fn mul(self, commitment: &'b PedersenCommitment) -> PedersenCommitment {
+        PedersenCommitment(self * &commitment.0)
+    }
+}
+
+define_mul_variants!(
+    LHS = Scalar,
+    RHS = PedersenCommitment,
     Output = PedersenCommitment
 );
 
@@ -256,6 +284,7 @@ mod tests {
         let comm_addition = Pedersen::with(amt_0 * amt_1, &(open * scalar));
 
         assert_eq!(comm_addition, comm * scalar);
+        assert_eq!(comm_addition, scalar * comm);
     }
 
     #[test]

@@ -76,7 +76,7 @@ mod common;
 fn test_fork_choice_refresh_old_votes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
-    let total_stake = 100;
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
     let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
 
     // 1% less than the failure stake, where the 2% is allocated to a validator that
@@ -89,14 +89,14 @@ fn test_fork_choice_refresh_old_votes() {
     // Heavier fork still doesn't have enough stake to switch. Both branches need
     // the vote to land from the validator with `alive_stake_3` to allow the other
     // fork to switch.
-    let alive_stake_3 = 2;
+    let alive_stake_3 = 2 * DEFAULT_NODE_STAKE;
     assert!(alive_stake_1 < alive_stake_2);
     assert!(alive_stake_1 + alive_stake_3 > alive_stake_2);
 
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(alive_stake_1 as usize, 8)],
-        &[(alive_stake_2 as usize, 8)],
-        &[(alive_stake_3 as usize, 0)],
+    let partitions: &[(usize, usize)] = &[
+        (alive_stake_1 as usize, 8),
+        (alive_stake_2 as usize, 8),
+        (alive_stake_3 as usize, 0),
     ];
 
     #[derive(Default)]
@@ -249,11 +249,8 @@ fn test_fork_choice_refresh_old_votes() {
     };
 
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize - 1, 16)]],
+        &[(failures_stake as usize - 1, 16)],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
@@ -274,7 +271,12 @@ fn test_kill_heaviest_partition() {
     // eventually choose the major partition
     // 4) Check for recovery
     let num_slots_per_validator = 8;
-    let partitions: [Vec<usize>; 4] = [vec![11], vec![10], vec![10], vec![10]];
+    let partitions: [usize; 4] = [
+        11 * DEFAULT_NODE_STAKE as usize,
+        10 * DEFAULT_NODE_STAKE as usize,
+        10 * DEFAULT_NODE_STAKE as usize,
+        10 * DEFAULT_NODE_STAKE as usize,
+    ];
     let (leader_schedule, validator_keys) = create_custom_leader_schedule_with_random_keys(&[
         num_slots_per_validator * (partitions.len() - 1),
         num_slots_per_validator,
@@ -297,7 +299,6 @@ fn test_kill_heaviest_partition() {
         empty,
         on_partition_resolved,
         None,
-        None,
         vec![],
     )
 }
@@ -306,7 +307,7 @@ fn test_kill_heaviest_partition() {
 #[serial]
 fn test_kill_partition_switch_threshold_no_progress() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
-    let total_stake = 10_000;
+    let total_stake = 10_000 * DEFAULT_NODE_STAKE;
     let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
 
     let failures_stake = max_failures_stake;
@@ -326,12 +327,8 @@ fn test_kill_partition_switch_threshold_no_progress() {
 
     // This kills `max_failures_stake`, so no progress should be made
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 16)]],
-        &[
-            &[(alive_stake_1 as usize, 8)],
-            &[(alive_stake_2 as usize, 8)],
-        ],
-        None,
+        &[(failures_stake as usize, 16)],
+        &[(alive_stake_1 as usize, 8), (alive_stake_2 as usize, 8)],
         None,
         (),
         on_partition_start,
@@ -344,7 +341,7 @@ fn test_kill_partition_switch_threshold_no_progress() {
 #[serial]
 fn test_kill_partition_switch_threshold_progress() {
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
-    let total_stake = 10_000;
+    let total_stake = 10_000 * DEFAULT_NODE_STAKE;
 
     // Kill `< max_failures_stake` of the validators
     let max_failures_stake = (max_switch_threshold_failure_pct * total_stake as f64) as u64;
@@ -377,12 +374,8 @@ fn test_kill_partition_switch_threshold_progress() {
         cluster.check_for_new_roots(16, "PARTITION_TEST", SocketAddrSpace::Unspecified);
     };
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 16)]],
-        &[
-            &[(alive_stake_1 as usize, 8)],
-            &[(alive_stake_2 as usize, 8)],
-        ],
-        None,
+        &[(failures_stake as usize, 16)],
+        &[(alive_stake_1 as usize, 8), (alive_stake_2 as usize, 8)],
         None,
         (),
         on_partition_start,
@@ -413,13 +406,13 @@ fn test_duplicate_shreds_broadcast_leader() {
     // Critical that bad_leader_stake + good_node_stake < DUPLICATE_THRESHOLD and that
     // bad_leader_stake + good_node_stake + our_node_stake > DUPLICATE_THRESHOLD so that
     // our vote is the determining factor
-    let bad_leader_stake = 10000000000;
+    let bad_leader_stake = 10_000_000 * DEFAULT_NODE_STAKE;
     // Ensure that the good_node_stake is always on the critical path, and the partition node
     // should never be on the critical path. This way, none of the bad shreds sent to the partition
     // node corrupt the good node.
-    let good_node_stake = 500000;
-    let our_node_stake = 10000000000;
-    let partition_node_stake = 1;
+    let good_node_stake = 500 * DEFAULT_NODE_STAKE;
+    let our_node_stake = 10_000_000 * DEFAULT_NODE_STAKE;
+    let partition_node_stake = DEFAULT_NODE_STAKE;
 
     let node_stakes = vec![
         bad_leader_stake,
@@ -596,7 +589,7 @@ fn test_duplicate_shreds_broadcast_leader() {
 #[serial]
 fn test_switch_threshold_uses_gossip_votes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let total_stake = 100;
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
 
     // Minimum stake needed to generate a switching proof
     let minimum_switch_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
@@ -607,10 +600,7 @@ fn test_switch_threshold_uses_gossip_votes() {
     let lighter_stake = heavier_stake - 1;
     let failures_stake = total_stake - heavier_stake - lighter_stake;
 
-    let partitions: &[&[(usize, usize)]] = &[
-        &[(heavier_stake as usize, 8)],
-        &[(lighter_stake as usize, 8)],
-    ];
+    let partitions: &[(usize, usize)] = &[(heavier_stake as usize, 8), (lighter_stake as usize, 8)];
 
     #[derive(Default)]
     struct PartitionContext {
@@ -820,11 +810,8 @@ fn test_switch_threshold_uses_gossip_votes() {
 
     let ticks_per_slot = 8;
     run_kill_partition_switch_threshold(
-        &[&[(failures_stake as usize, 0)]],
+        &[(failures_stake as usize, 0)],
         partitions,
-        // Partition long enough such that the first vote made by validator with
-        // `alive_stake_3` won't be ingested due to BlockhashTooOld,
-        None,
         Some(ticks_per_slot),
         PartitionContext::default(),
         on_partition_start,
@@ -837,8 +824,8 @@ fn test_switch_threshold_uses_gossip_votes() {
 #[serial]
 fn test_listener_startup() {
     let mut config = ClusterConfig {
-        node_stakes: vec![100; 1],
-        cluster_lamports: 1_000,
+        node_stakes: vec![DEFAULT_NODE_STAKE],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         num_listeners: 3,
         validator_configs: make_identical_validator_configs(
             &ValidatorConfig::default_for_test(),

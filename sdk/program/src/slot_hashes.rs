@@ -1,27 +1,33 @@
-//! named accounts for synthesized data accounts for bank state, etc.
+//! A type to hold data for the [`SlotHashes` sysvar][sv].
 //!
-//! this account carries the Bank's most recent bank hashes for some N parents
+//! [sv]: https://docs.solana.com/developing/runtime-facilities/sysvars#slothashes
 //!
+//! The sysvar ID is declared in [`sysvar::slot_hashes`].
+//!
+//! [`sysvar::slot_hashes`]: crate::slot_hashes
+
 pub use crate::clock::Slot;
 use {
     crate::hash::Hash,
-    std::{iter::FromIterator, ops::Deref},
+    std::{
+        iter::FromIterator,
+        ops::Deref,
+        sync::atomic::{AtomicUsize, Ordering},
+    },
 };
 
 pub const MAX_ENTRIES: usize = 512; // about 2.5 minutes to get your vote in
 
 // This is to allow tests with custom slot hash expiry to avoid having to generate
 // 512 blocks for such tests.
-static mut NUM_ENTRIES: usize = MAX_ENTRIES;
+static NUM_ENTRIES: AtomicUsize = AtomicUsize::new(MAX_ENTRIES);
 
 pub fn get_entries() -> usize {
-    unsafe { NUM_ENTRIES }
+    NUM_ENTRIES.load(Ordering::Relaxed)
 }
 
-pub fn set_entries_for_tests_only(_entries: usize) {
-    unsafe {
-        NUM_ENTRIES = _entries;
-    }
+pub fn set_entries_for_tests_only(entries: usize) {
+    NUM_ENTRIES.store(entries, Ordering::Relaxed);
 }
 
 pub type SlotHash = (Slot, Hash);

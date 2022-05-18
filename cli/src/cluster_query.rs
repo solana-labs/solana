@@ -271,11 +271,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
                 .arg(
-                    Arg::with_name("compute_unit_price")
-                        .long("compute-unit-price")
-                        .value_name("MICRO-LAMPORTS")
+                    Arg::with_name("prioritization-fee")
+                        .long("prioritization-fee")
+                        .alias("additional-fee")
+                        .value_name("NUMBER")
                         .takes_value(true)
-                        .help("Set the price in micro-lamports of each transaction compute unit"),
+                        .help("Set prioritization-fee for transaction"),
                 )
                 .arg(blockhash_arg()),
         )
@@ -522,7 +523,7 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
-    let compute_unit_price = value_of(matches, "compute_unit_price");
+    let prioritization_fee = value_of(matches, "prioritization_fee");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
@@ -530,7 +531,7 @@ pub fn parse_cluster_ping(
             timeout,
             blockhash,
             print_timestamp,
-            compute_unit_price,
+            prioritization_fee,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1363,7 +1364,7 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
-    compute_unit_price: &Option<u64>,
+    prioritization_fee: &Option<u64>,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1408,9 +1409,9 @@ pub fn process_ping(
                 &to,
                 lamports,
             )];
-            if let Some(compute_unit_price) = compute_unit_price {
-                ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
-                    *compute_unit_price,
+            if let Some(prioritization_fee) = prioritization_fee {
+                ixs.push(ComputeBudgetInstruction::set_prioritization_fee(
+                    *prioritization_fee,
                 ));
             }
             Message::new(&ixs, Some(&config.signers[0].pubkey()))
@@ -2111,7 +2112,7 @@ impl RentLengthValue {
     pub fn length(&self) -> usize {
         match self {
             Self::Nonce => NonceState::size(),
-            Self::Stake => std::mem::size_of::<StakeState>(),
+            Self::Stake => StakeState::size_of(),
             Self::System => 0,
             Self::Vote => VoteState::size_of(),
             Self::Bytes(l) => *l,
@@ -2337,7 +2338,7 @@ mod tests {
                         Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
                     ),
                     print_timestamp: true,
-                    compute_unit_price: None,
+                    prioritization_fee: None,
                 },
                 signers: vec![default_keypair.into()],
             }

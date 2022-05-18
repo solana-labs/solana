@@ -38,7 +38,7 @@ example_helloworld() {
 
 spl() {
   (
-  # Mind the order!
+    # Mind the order!
     PROGRAMS=(
       token/program
       token/program-2022

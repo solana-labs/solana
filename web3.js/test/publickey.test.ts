@@ -200,6 +200,12 @@ describe('PublicKey', function () {
         ),
       ).to.be.true;
     }
+
+    // Should work in promise mode, for backwards compatibility
+    PublicKey.createProgramAddress(
+      [Buffer.from('', 'utf8'), Buffer.from([1])],
+      programId,
+    ).then();
   });
 
   it('findProgramAddress', async () => {
@@ -218,11 +224,16 @@ describe('PublicKey', function () {
         ),
       ),
     ).to.be.true;
+
+    // Should work in promise mode, for backwards compatibility
+    PublicKey.findProgramAddress([Buffer.from('', 'utf8')], programId).then();
   });
 
   it('isOnCurve', () => {
     let onCurve = Keypair.generate().publicKey;
     expect(PublicKey.isOnCurve(onCurve.toBuffer())).to.be.true;
+    expect(PublicKey.isOnCurve(onCurve.toBase58())).to.be.true;
+    expect(PublicKey.isOnCurve(onCurve)).to.be.true;
     // A program address, yanked from one of the above tests. This is a pretty
     // poor test vector since it was created by the same code it is testing.
     // Unfortunately, I've been unable to find a golden negative example input
@@ -231,6 +242,8 @@ describe('PublicKey', function () {
       '12rqwuEgBYiGhBrDJStCiqEtzQpTTiZbh7teNVLuYcFA',
     );
     expect(PublicKey.isOnCurve(offCurve.toBuffer())).to.be.false;
+    expect(PublicKey.isOnCurve(offCurve.toBase58())).to.be.false;
+    expect(PublicKey.isOnCurve(offCurve)).to.be.false;
   });
 
   it('canBeSerializedWithBorsh', () => {

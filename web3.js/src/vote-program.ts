@@ -1,6 +1,11 @@
 import * as BufferLayout from '@solana/buffer-layout';
 
-import {encodeData, decodeData, InstructionType} from './instruction';
+import {
+  encodeData,
+  decodeData,
+  InstructionType,
+  IInstructionInputData,
+} from './instruction';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {SystemProgram} from './system-program';
@@ -202,23 +207,45 @@ export class VoteInstruction {
  * An enumeration of valid VoteInstructionType's
  */
 export type VoteInstructionType =
-  | 'Authorize'
-  | 'InitializeAccount'
-  | 'Withdraw';
+  // FIXME
+  // It would be preferable for this type to be `keyof VoteInstructionInputData`
+  // but Typedoc does not transpile `keyof` expressions.
+  // See https://github.com/TypeStrong/typedoc/issues/1894
+  'Authorize' | 'InitializeAccount' | 'Withdraw';
 
-const VOTE_INSTRUCTION_LAYOUTS: {
-  [type in VoteInstructionType]: InstructionType;
-} = Object.freeze({
+type VoteInstructionInputData = {
+  Authorize: IInstructionInputData & {
+    newAuthorized: Uint8Array;
+    voteAuthorizationType: number;
+  };
+  InitializeAccount: IInstructionInputData & {
+    voteInit: Readonly<{
+      authorizedVoter: Uint8Array;
+      authorizedWithdrawer: Uint8Array;
+      commission: number;
+      nodePubkey: Uint8Array;
+    }>;
+  };
+  Withdraw: IInstructionInputData & {
+    lamports: number;
+  };
+};
+
+const VOTE_INSTRUCTION_LAYOUTS = Object.freeze<{
+  [Instruction in VoteInstructionType]: InstructionType<
+    VoteInstructionInputData[Instruction]
+  >;
+}>({
   InitializeAccount: {
     index: 0,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<VoteInstructionInputData['InitializeAccount']>([
       BufferLayout.u32('instruction'),
       Layout.voteInit(),
     ]),
   },
   Authorize: {
     index: 1,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<VoteInstructionInputData['Authorize']>([
       BufferLayout.u32('instruction'),
       Layout.publicKey('newAuthorized'),
       BufferLayout.u32('voteAuthorizationType'),
@@ -226,7 +253,7 @@ const VOTE_INSTRUCTION_LAYOUTS: {
   },
   Withdraw: {
     index: 3,
-    layout: BufferLayout.struct([
+    layout: BufferLayout.struct<VoteInstructionInputData['Withdraw']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
     ]),

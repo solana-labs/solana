@@ -1,5 +1,5 @@
 use {
-    crate::{stakes::Stakes, vote_account::VoteAccount},
+    crate::{stakes::StakesEnum, vote_account::VoteAccountsHashMap},
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::{collections::HashMap, sync::Arc},
@@ -16,26 +16,27 @@ pub struct NodeVoteAccounts {
 
 #[derive(Clone, Debug, Serialize, Deserialize, AbiExample, PartialEq)]
 pub struct EpochStakes {
-    stakes: Arc<Stakes>,
+    #[serde(with = "crate::stakes::serde_stakes_enum_compat")]
+    stakes: Arc<StakesEnum>,
     total_stake: u64,
     node_id_to_vote_accounts: Arc<NodeIdToVoteAccounts>,
     epoch_authorized_voters: Arc<EpochAuthorizedVoters>,
 }
 
 impl EpochStakes {
-    pub fn new(stakes: &Stakes, leader_schedule_epoch: Epoch) -> Self {
+    pub(crate) fn new(stakes: Arc<StakesEnum>, leader_schedule_epoch: Epoch) -> Self {
         let epoch_vote_accounts = stakes.vote_accounts();
         let (total_stake, node_id_to_vote_accounts, epoch_authorized_voters) =
             Self::parse_epoch_vote_accounts(epoch_vote_accounts.as_ref(), leader_schedule_epoch);
         Self {
-            stakes: Arc::new(stakes.clone()),
+            stakes,
             total_stake,
             node_id_to_vote_accounts: Arc::new(node_id_to_vote_accounts),
             epoch_authorized_voters: Arc::new(epoch_authorized_voters),
         }
     }
 
-    pub fn stakes(&self) -> &Stakes {
+    pub fn stakes(&self) -> &StakesEnum {
         &self.stakes
     }
 
@@ -60,7 +61,7 @@ impl EpochStakes {
     }
 
     fn parse_epoch_vote_accounts(
-        epoch_vote_accounts: &HashMap<Pubkey, (u64, VoteAccount)>,
+        epoch_vote_accounts: &VoteAccountsHashMap,
         leader_schedule_epoch: Epoch,
     ) -> (u64, NodeIdToVoteAccounts, EpochAuthorizedVoters) {
         let mut node_id_to_vote_accounts: NodeIdToVoteAccounts = HashMap::new();
@@ -119,7 +120,7 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use {
-        super::*, solana_sdk::account::AccountSharedData,
+        super::*, crate::vote_account::VoteAccount, solana_sdk::account::AccountSharedData,
         solana_vote_program::vote_state::create_account_with_authorized, std::iter,
     };
 
@@ -189,10 +190,8 @@ pub(crate) mod tests {
             .iter()
             .flat_map(|(_, vote_accounts)| {
                 vote_accounts.iter().map(|v| {
-                    (
-                        v.vote_account,
-                        (stake_per_account, VoteAccount::from(v.account.clone())),
-                    )
+                    let vote_account = VoteAccount::try_from(v.account.clone()).unwrap();
+                    (v.vote_account, (stake_per_account, vote_account))
                 })
             })
             .collect();

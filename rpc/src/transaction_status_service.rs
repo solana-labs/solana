@@ -32,7 +32,7 @@ impl TransactionStatusService {
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: Arc<Blockstore>,
-        enable_cpi_and_log_storage: bool,
+        enable_extended_tx_metadata_storage: bool,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let exit = exit.clone();
@@ -49,7 +49,7 @@ impl TransactionStatusService {
                     enable_rpc_transaction_history,
                     transaction_notifier.clone(),
                     &blockstore,
-                    enable_cpi_and_log_storage,
+                    enable_extended_tx_metadata_storage,
                 ) {
                     break;
                 }
@@ -64,7 +64,7 @@ impl TransactionStatusService {
         enable_rpc_transaction_history: bool,
         transaction_notifier: Option<TransactionNotifierLock>,
         blockstore: &Arc<Blockstore>,
-        enable_cpi_and_log_storage: bool,
+        enable_extended_tx_metadata_storage: bool,
     ) -> Result<(), RecvTimeoutError> {
         match write_transaction_status_receiver.recv_timeout(Duration::from_secs(1))? {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
@@ -99,6 +99,7 @@ impl TransactionStatusService {
                             log_messages,
                             inner_instructions,
                             durable_nonce_fee,
+                            return_data,
                             ..
                         } = details;
                         let lamports_per_signature = match durable_nonce_fee {
@@ -155,6 +156,7 @@ impl TransactionStatusService {
                             post_token_balances,
                             rewards,
                             loaded_addresses,
+                            return_data,
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {
@@ -166,9 +168,11 @@ impl TransactionStatusService {
                             );
                         }
 
-                        if !(enable_cpi_and_log_storage || transaction_notifier.is_some()) {
+                        if !(enable_extended_tx_metadata_storage || transaction_notifier.is_some())
+                        {
                             transaction_status_meta.log_messages.take();
                             transaction_status_meta.inner_instructions.take();
+                            transaction_status_meta.return_data.take();
                         }
 
                         if enable_rpc_transaction_history {
@@ -346,6 +350,7 @@ pub(crate) mod tests {
                 )
                 .unwrap(),
             )),
+            return_data: None,
             executed_units: 0u64,
         });
 
@@ -355,11 +360,13 @@ pub(crate) mod tests {
         };
 
         let owner = Pubkey::new_unique().to_string();
+        let token_program_id = Pubkey::new_unique().to_string();
         let pre_token_balance = TransactionTokenBalance {
             account_index: 0,
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(42, 2),
             owner: owner.clone(),
+            program_id: token_program_id.clone(),
         };
 
         let post_token_balance = TransactionTokenBalance {
@@ -367,6 +374,7 @@ pub(crate) mod tests {
             mint: Pubkey::new_unique().to_string(),
             ui_token_amount: token_amount_to_ui_amount(58, 2),
             owner,
+            program_id: token_program_id,
         };
 
         let token_balances = TransactionTokenBalancesSet {

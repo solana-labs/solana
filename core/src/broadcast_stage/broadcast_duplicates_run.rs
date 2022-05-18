@@ -325,13 +325,13 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .filter_map(|pubkey| {
                                 let tvu = cluster_info
                                     .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
-                                Some((&shred.payload, tvu))
+                                Some((shred.payload(), tvu))
                             })
                             .collect(),
                     );
                 }
 
-                Some(vec![(&shred.payload, node.tvu)])
+                Some(vec![(shred.payload(), node.tvu)])
             })
             .flatten()
             .collect();

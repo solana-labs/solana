@@ -1,3 +1,5 @@
+//! Key recovery from secp256k1 signatures.
+
 use {
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
     core::convert::TryFrom,

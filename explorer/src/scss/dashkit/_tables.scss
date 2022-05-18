@@ -1,9 +1,9 @@
-// 
+//
 // tables.scss
 // Extended from Bootstrap
 //
 
-// 
+//
 // Bootstrap Overrides =====================================
 //
 
@@ -23,6 +23,15 @@
 .table td, .table th {
   border-top: $table-border-width solid $table-border-color;
   border-bottom: 0;
+}
+
+.table-sep {
+  background-color: $table-head-bg;
+  text-transform: uppercase;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  letter-spacing: .08em;
+  color: $table-head-color;
 }
 
 

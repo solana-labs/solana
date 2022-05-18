@@ -368,6 +368,14 @@ fn main() {
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
         )
+        .arg(
+            Arg::with_name("max_compute_units")
+                .long("max-compute-units")
+                .value_name("COMPUTE_UNITS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's maximum compute units")
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -476,6 +484,7 @@ fn main() {
             exit(1);
         })
     });
+    let max_compute_units = value_t!(matches, "max_compute_units", u64).ok();
 
     let faucet_addr = Some(SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -675,7 +684,7 @@ fn main() {
         )
         .rpc_config(JsonRpcConfig {
             enable_rpc_transaction_history: true,
-            enable_cpi_and_log_storage: true,
+            enable_extended_tx_metadata_storage: true,
             rpc_bigtable_config,
             faucet_addr,
             ..JsonRpcConfig::default_for_test()
@@ -751,6 +760,10 @@ fn main() {
                 .map(PathBuf::from)
                 .collect(),
         );
+    }
+
+    if let Some(max_compute_units) = max_compute_units {
+        genesis.max_compute_units(max_compute_units);
     }
 
     match genesis.start_with_mint_address(mint_address, socket_addr_space) {
