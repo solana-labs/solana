@@ -6,7 +6,7 @@ use {
     log::*,
 };
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
     /// The current cost of a signature.

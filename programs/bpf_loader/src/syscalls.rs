@@ -4610,34 +4610,55 @@ mod tests {
         );
     }
 
+    fn create_filled_type<T: Default>(zero_init: bool) -> T {
+        let mut val = T::default();
+        let p = &mut val as *mut _ as *mut u8;
+        for i in 0..(size_of::<T>() as isize) {
+            unsafe {
+                *p.offset(i) = if zero_init { 0 } else { i as u8 };
+            }
+        }
+        val
+    }
+
+    fn are_bytes_equal<T>(first: &T, second: &T) -> bool {
+        let p_first = first as *const _ as *const u8;
+        let p_second = second as *const _ as *const u8;
+        for i in 0..(size_of::<T>() as isize) {
+            unsafe {
+                if *p_first.offset(i) != *p_second.offset(i) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     #[test]
     #[allow(deprecated)]
     fn test_syscall_get_sysvar() {
         let config = Config::default();
-        let src_clock = Clock {
-            slot: 1,
-            epoch_start_timestamp: 2,
-            epoch: 3,
-            leader_schedule_epoch: 4,
-            unix_timestamp: 5,
+
+        let mut src_clock = create_filled_type::<Clock>(false);
+        src_clock.slot = 1;
+        src_clock.epoch_start_timestamp = 2;
+        src_clock.epoch = 3;
+        src_clock.leader_schedule_epoch = 4;
+        src_clock.unix_timestamp = 5;
+        let mut src_epochschedule = create_filled_type::<EpochSchedule>(false);
+        src_epochschedule.slots_per_epoch = 1;
+        src_epochschedule.leader_schedule_slot_offset = 2;
+        src_epochschedule.warmup = false;
+        src_epochschedule.first_normal_epoch = 3;
+        src_epochschedule.first_normal_slot = 4;
+        let mut src_fees = create_filled_type::<Fees>(false);
+        src_fees.fee_calculator = FeeCalculator {
+            lamports_per_signature: 1,
         };
-        let src_epochschedule = EpochSchedule {
-            slots_per_epoch: 1,
-            leader_schedule_slot_offset: 2,
-            warmup: false,
-            first_normal_epoch: 3,
-            first_normal_slot: 4,
-        };
-        let src_fees = Fees {
-            fee_calculator: FeeCalculator {
-                lamports_per_signature: 1,
-            },
-        };
-        let src_rent = Rent {
-            lamports_per_byte_year: 1,
-            exemption_threshold: 2.0,
-            burn_percent: 3,
-        };
+        let mut src_rent = create_filled_type::<Rent>(false);
+        src_rent.lamports_per_byte_year = 1;
+        src_rent.exemption_threshold = 2.0;
+        src_rent.burn_percent = 3;
 
         let mut sysvar_cache = SysvarCache::default();
         sysvar_cache.set_clock(src_clock.clone());
@@ -4680,6 +4701,14 @@ mod tests {
             syscall.call(got_clock_va, 0, 0, 0, 0, &memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_clock, src_clock);
+
+            let mut clean_clock = create_filled_type::<Clock>(true);
+            clean_clock.slot = src_clock.slot;
+            clean_clock.epoch_start_timestamp = src_clock.epoch_start_timestamp;
+            clean_clock.epoch = src_clock.epoch;
+            clean_clock.leader_schedule_epoch = src_clock.leader_schedule_epoch;
+            clean_clock.unix_timestamp = src_clock.unix_timestamp;
+            assert!(are_bytes_equal(&got_clock, &clean_clock));
         }
 
         // Test epoch_schedule sysvar
@@ -4717,6 +4746,15 @@ mod tests {
             );
             result.unwrap();
             assert_eq!(got_epochschedule, src_epochschedule);
+
+            let mut clean_epochschedule = create_filled_type::<EpochSchedule>(true);
+            clean_epochschedule.slots_per_epoch = src_epochschedule.slots_per_epoch;
+            clean_epochschedule.leader_schedule_slot_offset =
+                src_epochschedule.leader_schedule_slot_offset;
+            clean_epochschedule.warmup = src_epochschedule.warmup;
+            clean_epochschedule.first_normal_epoch = src_epochschedule.first_normal_epoch;
+            clean_epochschedule.first_normal_slot = src_epochschedule.first_normal_slot;
+            assert!(are_bytes_equal(&got_epochschedule, &clean_epochschedule));
         }
 
         // Test fees sysvar
@@ -4746,11 +4784,15 @@ mod tests {
             syscall.call(got_fees_va, 0, 0, 0, 0, &memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_fees, src_fees);
+
+            let mut clean_fees = create_filled_type::<Fees>(true);
+            clean_fees.fee_calculator = src_fees.fee_calculator;
+            assert!(are_bytes_equal(&got_fees, &clean_fees));
         }
 
         // Test rent sysvar
         {
-            let got_rent = Rent::default();
+            let got_rent = create_filled_type::<Rent>(true);
             let got_rent_va = 0x100000000;
 
             let memory_mapping = MemoryMapping::new::<UserError>(
@@ -4775,6 +4817,12 @@ mod tests {
             syscall.call(got_rent_va, 0, 0, 0, 0, &memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_rent, src_rent);
+
+            let mut clean_rent = create_filled_type::<Rent>(true);
+            clean_rent.lamports_per_byte_year = src_rent.lamports_per_byte_year;
+            clean_rent.exemption_threshold = src_rent.exemption_threshold;
+            clean_rent.burn_percent = src_rent.burn_percent;
+            assert!(are_bytes_equal(&got_rent, &clean_rent));
         }
     }
 
