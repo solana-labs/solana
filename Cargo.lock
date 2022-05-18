@@ -4787,6 +4787,7 @@ dependencies = [
  "solana-gossip",
  "solana-local-cluster",
  "solana-logger 1.11.0",
+ "solana-measure",
  "solana-net-utils",
  "solana-perf",
  "solana-rpc",
