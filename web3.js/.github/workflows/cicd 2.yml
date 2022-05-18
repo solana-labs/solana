@@ -1,0 +1,48 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Build
+        run: |
+          sh -c "$(curl -sSfL https://release.solana.com/edge/install)"
+          PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
+          npm install -g npm@7
+          npm install
+          npm run build
+          ls -l lib
+          test -r lib/index.iife.js
+          test -r lib/index.cjs.js
+          test -r lib/index.esm.js
+          npm run ok
+          npm run codecov
+          npm run test:live-with-test-validator
+
+      - name: Publish NPM
+        run: |
+          npx semantic-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Deploy Github Page
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./doc
