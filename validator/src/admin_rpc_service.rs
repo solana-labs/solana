@@ -288,6 +288,7 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
 
     let event_loop = tokio::runtime::Builder::new_multi_thread()
         .thread_name("sol-adminrpc-el")
+        .worker_threads(3) // Three still seems like a lot, and better than the default of available core count
         .enable_all()
         .build()
         .unwrap();
