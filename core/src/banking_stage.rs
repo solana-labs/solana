@@ -562,7 +562,11 @@ impl BankingStage {
             &mut retryable_packets,
         );
 
+<<<<<<< HEAD
         let mut retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+=======
+        let mut retryable_packets: MinMaxHeap<PacketPriorityQueueEntry> = retryable_packets
+>>>>>>> origin/AddActualFeePerCu
             .drain_desc()
             .chunks(num_packets_to_process_per_iteration)
             .into_iter()
@@ -592,7 +596,11 @@ impl BankingStage {
                                     &working_bank,
                                     &bank_creation_time,
                                     recorder,
+<<<<<<< HEAD
                                     packets_to_process.iter().map(|p| &**p),
+=======
+                                    packets_to_process.iter().map(|p| &**p.immutable_section()),
+>>>>>>> origin/AddActualFeePerCu
                                     transaction_status_sender.clone(),
                                     gossip_vote_sender,
                                     banking_stage_stats,
@@ -676,7 +684,11 @@ impl BankingStage {
                             for processed_packet in &packets_to_process[start..end] {
                                 buffered_packet_batches
                                     .message_hash_to_transaction
+<<<<<<< HEAD
                                     .remove(processed_packet.message_hash());
+=======
+                                    .remove(&processed_packet.immutable_section().message_hash());
+>>>>>>> origin/AddActualFeePerCu
                             }
                         },
                     );
@@ -1737,10 +1749,17 @@ impl BankingStage {
             return None;
         }
 
+<<<<<<< HEAD
         let tx = SanitizedTransaction::try_new(
             deserialized_packet.transaction().clone(),
             *deserialized_packet.message_hash(),
             deserialized_packet.is_simple_vote(),
+=======
+        let tx = SanitizedTransaction::try_create(
+            deserialized_packet.versioned_transaction().clone(),
+            deserialized_packet.message_hash(),
+            Some(deserialized_packet.is_simple_vote()),
+>>>>>>> origin/AddActualFeePerCu
             address_loader,
         )
         .ok()?;
@@ -1946,7 +1965,11 @@ impl BankingStage {
             let mut unprocessed_packet_conversion_time =
                 Measure::start("unprocessed_packet_conversion");
 
+<<<<<<< HEAD
             let should_retain = |deserialized_packet: &mut DeserializedPacket| {
+=======
+            let should_retain = |deserialized_packet: &DeserializedPacket| {
+>>>>>>> origin/AddActualFeePerCu
                 Self::transaction_from_deserialized_packet(
                     deserialized_packet.immutable_section(),
                     &bank.feature_set,
@@ -1955,7 +1978,11 @@ impl BankingStage {
                 )
                 .is_some()
             };
+<<<<<<< HEAD
             unprocessed_packets.retain(should_retain);
+=======
+            unprocessed_packets.retain(|deserialized_packet| should_retain(deserialized_packet));
+>>>>>>> origin/AddActualFeePerCu
             unprocessed_packet_conversion_time.stop();
             banking_stage_stats
                 .unprocessed_packet_conversion_elapsed
@@ -3959,7 +3986,11 @@ mod tests {
                         );
                     let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
                         .iter()
+<<<<<<< HEAD
                         .map(|packet| *packet.immutable_section().message_hash())
+=======
+                        .map(|packet| packet.immutable_section().message_hash())
+>>>>>>> origin/AddActualFeePerCu
                         .collect();
                     BankingStage::consume_buffered_packets(
                         &Pubkey::default(),
@@ -3984,7 +4015,11 @@ mod tests {
                     );
                     for packet in buffered_packet_batches.iter() {
                         assert!(all_packet_message_hashes
+<<<<<<< HEAD
                             .contains(packet.immutable_section().message_hash()));
+=======
+                            .contains(&packet.immutable_section().message_hash()));
+>>>>>>> origin/AddActualFeePerCu
                     }
                 })
                 .unwrap();

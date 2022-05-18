@@ -117,7 +117,10 @@ fn bench_packet_clone(bencher: &mut Bencher) {
 // v1, bench: 5,600,038,163 ns/iter (+/- 940,818,988)
 // v2, bench: 5,265,382,750 ns/iter (+/- 153,623,264)
 #[bench]
+<<<<<<< HEAD
 #[ignore]
+=======
+>>>>>>> origin/AddActualFeePerCu
 fn bench_unprocessed_packet_batches_within_limit(bencher: &mut Bencher) {
     let buffer_capacity = 1_000 * 128;
     let batch_count = 1_000;
@@ -131,7 +134,10 @@ fn bench_unprocessed_packet_batches_within_limit(bencher: &mut Bencher) {
 // v1, bench: 6,607,014,940 ns/iter (+/- 768,191,361)
 // v2, bench: 5,692,753,323 ns/iter (+/- 548,959,624)
 #[bench]
+<<<<<<< HEAD
 #[ignore]
+=======
+>>>>>>> origin/AddActualFeePerCu
 fn bench_unprocessed_packet_batches_beyond_limit(bencher: &mut Bencher) {
     let buffer_capacity = 1_000 * 128;
     let batch_count = 1_100;
@@ -150,7 +156,10 @@ fn bench_unprocessed_packet_batches_beyond_limit(bencher: &mut Bencher) {
 // v1, bench: 5,843,307,086 ns/iter (+/- 844,249,298)
 // v2, bench: 5,139,525,951 ns/iter (+/- 48,005,521)
 #[bench]
+<<<<<<< HEAD
 #[ignore]
+=======
+>>>>>>> origin/AddActualFeePerCu
 fn bench_unprocessed_packet_batches_randomized_within_limit(bencher: &mut Bencher) {
     let buffer_capacity = 1_000 * 128;
     let batch_count = 1_000;
@@ -164,7 +173,10 @@ fn bench_unprocessed_packet_batches_randomized_within_limit(bencher: &mut Benche
 // v1, bench: 6,497,623,849 ns/iter (+/- 3,206,382,212)
 // v2, bench: 5,762,071,682 ns/iter (+/- 168,244,418)
 #[bench]
+<<<<<<< HEAD
 #[ignore]
+=======
+>>>>>>> origin/AddActualFeePerCu
 fn bench_unprocessed_packet_batches_randomized_beyond_limit(bencher: &mut Bencher) {
     let buffer_capacity = 1_000 * 128;
     let batch_count = 1_100;
