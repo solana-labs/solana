@@ -5132,6 +5132,7 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "solana-vote-program",
+ "static_assertions",
  "tempfile",
  "thiserror",
  "tokio",

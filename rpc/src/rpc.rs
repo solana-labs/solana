@@ -47,6 +47,7 @@ use {
         bank_forks::BankForks,
         commitment::{BlockCommitmentArray, BlockCommitmentCache, CommitmentSlots},
         inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
+        inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
         non_circulating_supply::calculate_non_circulating_supply,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
@@ -87,7 +88,8 @@ use {
         UiConfirmedBlock, UiTransactionEncoding,
     },
     solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
-    spl_token::{
+    spl_token_2022::{
+        extension::StateWithExtensions,
         solana_program::program_pack::Pack,
         state::{Account as TokenAccount, Mint},
     },
@@ -1791,12 +1793,12 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a Token account".to_string(),
             ));
         }
-        let token_account = TokenAccount::unpack(account.data())
+        let token_account = StateWithExtensions::<TokenAccount>::unpack(account.data())
             .map_err(|_| Error::invalid_params("Invalid param: not a Token account".to_string()))?;
-        let mint = &Pubkey::from_str(&token_account.mint.to_string())
+        let mint = &Pubkey::from_str(&token_account.base.mint.to_string())
             .expect("Token account mint should be convertible to Pubkey");
         let (_, decimals) = get_mint_owner_and_decimals(&bank, mint)?;
-        let balance = token_amount_to_ui_amount(token_account.amount, decimals);
+        let balance = token_amount_to_ui_amount(token_account.base.amount, decimals);
         Ok(new_response(&bank, balance))
     }
 
@@ -1814,11 +1816,11 @@ impl JsonRpcRequestProcessor {
                 "Invalid param: not a Token mint".to_string(),
             ));
         }
-        let mint = Mint::unpack(mint_account.data()).map_err(|_| {
+        let mint = StateWithExtensions::<Mint>::unpack(mint_account.data()).map_err(|_| {
             Error::invalid_params("Invalid param: mint could not be unpacked".to_string())
         })?;
 
-        let supply = token_amount_to_ui_amount(mint.supply, mint.decimals);
+        let supply = token_amount_to_ui_amount(mint.base.supply, mint.base.decimals);
         Ok(new_response(&bank, supply))
     }
 
@@ -1838,8 +1840,8 @@ impl JsonRpcRequestProcessor {
             .get_filtered_spl_token_accounts_by_mint(&bank, &mint_owner, mint, vec![])?
             .into_iter()
             .map(|(address, account)| {
-                let amount = TokenAccount::unpack(account.data())
-                    .map(|account| account.amount)
+                let amount = StateWithExtensions::<TokenAccount>::unpack(account.data())
+                    .map(|account| account.base.amount)
                     .unwrap_or(0);
                 let amount = token_amount_to_ui_amount(amount, decimals);
                 RpcTokenAccountBalance {
@@ -1951,9 +1953,7 @@ impl JsonRpcRequestProcessor {
             self.get_filtered_spl_token_accounts_by_mint(&bank, &token_program_id, &mint, filters)?
         } else {
             // Filter on Token Account state
-            filters.push(RpcFilterType::DataSize(
-                TokenAccount::get_packed_len() as u64
-            ));
+            filters.push(RpcFilterType::TokenAccountState);
             self.get_filtered_program_accounts(&bank, &token_program_id, filters)?
         };
         let accounts = if encoding == UiAccountEncoding::JsonParsed {
@@ -2340,26 +2340,40 @@ fn get_spl_token_owner_filter(program_id: &Pubkey, filters: &[RpcFilterType]) ->
         return None;
     }
     let mut data_size_filter: Option<u64> = None;
+    let mut memcmp_filter: Option<&[u8]> = None;
     let mut owner_key: Option<Pubkey> = None;
     let mut incorrect_owner_len: Option<usize> = None;
+    let mut token_account_state_filter = false;
+    let account_packed_len = TokenAccount::get_packed_len();
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
             RpcFilterType::Memcmp(Memcmp {
-                offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
+                offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
-            }) => {
+            }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
+                memcmp_filter = Some(bytes)
+            }
+            RpcFilterType::Memcmp(Memcmp {
+                offset,
+                bytes: MemcmpEncodedBytes::Bytes(bytes),
+                ..
+            }) if *offset == SPL_TOKEN_ACCOUNT_OWNER_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
                     owner_key = Some(Pubkey::new(bytes));
                 } else {
                     incorrect_owner_len = Some(bytes.len());
                 }
             }
+            RpcFilterType::TokenAccountState => token_account_state_filter = true,
             _ => {}
         }
     }
-    if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+    if data_size_filter == Some(account_packed_len as u64)
+        || memcmp_filter == Some(&[ACCOUNTTYPE_ACCOUNT])
+        || token_account_state_filter
+    {
         if let Some(incorrect_owner_len) = incorrect_owner_len {
             info!(
                 "Incorrect num bytes ({:?}) provided for spl_token_owner_filter",
@@ -2382,26 +2396,40 @@ fn get_spl_token_mint_filter(program_id: &Pubkey, filters: &[RpcFilterType]) -> 
         return None;
     }
     let mut data_size_filter: Option<u64> = None;
+    let mut memcmp_filter: Option<&[u8]> = None;
     let mut mint: Option<Pubkey> = None;
     let mut incorrect_mint_len: Option<usize> = None;
+    let mut token_account_state_filter = false;
+    let account_packed_len = TokenAccount::get_packed_len();
     for filter in filters {
         match filter {
             RpcFilterType::DataSize(size) => data_size_filter = Some(*size),
             RpcFilterType::Memcmp(Memcmp {
-                offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
+                offset,
                 bytes: MemcmpEncodedBytes::Bytes(bytes),
                 ..
-            }) => {
+            }) if *offset == account_packed_len && *program_id == inline_spl_token_2022::id() => {
+                memcmp_filter = Some(bytes)
+            }
+            RpcFilterType::Memcmp(Memcmp {
+                offset,
+                bytes: MemcmpEncodedBytes::Bytes(bytes),
+                ..
+            }) if *offset == SPL_TOKEN_ACCOUNT_MINT_OFFSET => {
                 if bytes.len() == PUBKEY_BYTES {
                     mint = Some(Pubkey::new(bytes));
                 } else {
                     incorrect_mint_len = Some(bytes.len());
                 }
             }
+            RpcFilterType::TokenAccountState => token_account_state_filter = true,
             _ => {}
         }
     }
-    if data_size_filter == Some(TokenAccount::get_packed_len() as u64) {
+    if data_size_filter == Some(account_packed_len as u64)
+        || memcmp_filter == Some(&[ACCOUNTTYPE_ACCOUNT])
+        || token_account_state_filter
+    {
         if let Some(incorrect_mint_len) = incorrect_mint_len {
             info!(
                 "Incorrect num bytes ({:?}) provided for spl_token_mint_filter",
@@ -4533,7 +4561,7 @@ pub mod tests {
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender, commitment::BlockCommitment,
-            non_circulating_supply::non_circulating_accounts,
+            inline_spl_token, non_circulating_supply::non_circulating_accounts,
         },
         solana_sdk::{
             account::{Account, WritableAccount},
@@ -4559,16 +4587,17 @@ pub mod tests {
             vote_instruction,
             vote_state::{Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
-        spl_token::{
+        spl_token_2022::{
+            extension::{
+                immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
+                mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
+            },
+            pod::OptionalNonZeroPubkey,
             solana_program::{program_option::COption, pubkey::Pubkey as SplTokenPubkey},
             state::{AccountState as TokenAccountState, Mint},
         },
         std::{borrow::Cow, collections::HashMap},
     };
-
-    fn spl_token_id() -> Pubkey {
-        solana_account_decoder::parse_token::spl_token_ids()[0]
-    }
 
     const TEST_MINT_LAMPORTS: u64 = 1_000_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
@@ -7182,466 +7211,632 @@ pub mod tests {
 
     #[test]
     fn test_token_rpcs() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        let RpcHandler { io, meta, .. } = rpc;
+        for program_id in solana_account_decoder::parse_token::spl_token_ids() {
+            let rpc = RpcHandler::start();
+            let bank = rpc.working_bank();
+            let RpcHandler { io, meta, .. } = rpc;
+            let mint = SplTokenPubkey::new(&[2; 32]);
+            let owner = SplTokenPubkey::new(&[3; 32]);
+            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let token_account_pubkey = solana_sdk::pubkey::new_rand();
+            let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
+            let new_mint = SplTokenPubkey::new(&[5; 32]);
+            if program_id == inline_spl_token_2022::id() {
+                // Add the token account
+                let account_base = TokenAccount {
+                    mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 420,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+                    ExtensionType::ImmutableOwner,
+                    ExtensionType::MemoTransfer,
+                ]);
+                let mut account_data = vec![0; account_size];
+                let mut account_state =
+                    StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
+                        .unwrap();
 
-        let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        let mint = SplTokenPubkey::new(&[2; 32]);
-        let owner = SplTokenPubkey::new(&[3; 32]);
-        let delegate = SplTokenPubkey::new(&[4; 32]);
-        let token_account = TokenAccount {
-            mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 420,
-            state: TokenAccountState::Initialized,
-            is_native: COption::None,
-            delegated_amount: 30,
-            close_authority: COption::Some(owner),
-        };
-        TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: account_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        let token_account_pubkey = solana_sdk::pubkey::new_rand();
-        bank.store_account(&token_account_pubkey, &token_account);
+                account_state.base = account_base;
+                account_state.pack_base();
+                account_state.init_account_type().unwrap();
+                account_state.init_extension::<ImmutableOwner>().unwrap();
+                let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+                memo_transfer.require_incoming_transfer_memos = true.into();
 
-        // Add the mint
-        let mut mint_data = vec![0; Mint::get_packed_len()];
-        let mint_state = Mint {
-            mint_authority: COption::Some(owner),
-            supply: 500,
-            decimals: 2,
-            is_initialized: true,
-            freeze_authority: COption::Some(owner),
-        };
-        Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: mint_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_account_pubkey, &token_account);
 
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
-            token_account_pubkey,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let balance: UiTokenAmount =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        let error = f64::EPSILON;
-        assert!((balance.ui_amount.unwrap() - 4.2).abs() < error);
-        assert_eq!(balance.amount, 420.to_string());
-        assert_eq!(balance.decimals, 2);
-        assert_eq!(balance.ui_amount_string, "4.2".to_string());
+                // Add the mint
+                let mint_size =
+                    ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+                let mint_base = Mint {
+                    mint_authority: COption::Some(owner),
+                    supply: 500,
+                    decimals: 2,
+                    is_initialized: true,
+                    freeze_authority: COption::Some(owner),
+                };
+                let mut mint_data = vec![0; mint_size];
+                let mut mint_state =
+                    StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut mint_data).unwrap();
 
-        // Test non-existent token account
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
+                mint_state.base = mint_base;
+                mint_state.pack_base();
+                mint_state.init_account_type().unwrap();
+                let mut mint_close_authority =
+                    mint_state.init_extension::<MintCloseAuthority>().unwrap();
+                mint_close_authority.close_authority =
+                    OptionalNonZeroPubkey::try_from(Some(owner)).unwrap();
 
-        // Test get token supply, pulls supply from mint
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
-            mint,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let supply: UiTokenAmount =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        let error = f64::EPSILON;
-        assert!((supply.ui_amount.unwrap() - 5.0).abs() < error);
-        assert_eq!(supply.amount, 500.to_string());
-        assert_eq!(supply.decimals, 2);
-        assert_eq!(supply.ui_amount_string, "5".to_string());
+                let mint_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: mint_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 
-        // Test non-existent mint address
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
+                // Add another token account with the same owner, delegate, and mint
+                let other_token_account_pubkey = solana_sdk::pubkey::new_rand();
+                bank.store_account(&other_token_account_pubkey, &token_account);
 
-        // Add another token account with the same owner, delegate, and mint
-        let other_token_account_pubkey = solana_sdk::pubkey::new_rand();
-        bank.store_account(&other_token_account_pubkey, &token_account);
+                // Add another token account with the same owner and delegate but different mint
+                let mut account_data = vec![0; TokenAccount::get_packed_len()];
+                let token_account = TokenAccount {
+                    mint: new_mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 42,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                TokenAccount::pack(token_account, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_with_different_mint_pubkey, &token_account);
+            } else {
+                // Add the token account
+                let mut account_data = vec![0; TokenAccount::get_packed_len()];
+                let token_account = TokenAccount {
+                    mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 420,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                TokenAccount::pack(token_account, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_account_pubkey, &token_account);
 
-        // Add another token account with the same owner and delegate but different mint
-        let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        let new_mint = SplTokenPubkey::new(&[5; 32]);
-        let token_account = TokenAccount {
-            mint: new_mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 42,
-            state: TokenAccountState::Initialized,
-            is_native: COption::None,
-            delegated_amount: 30,
-            close_authority: COption::Some(owner),
-        };
-        TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: account_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        let token_with_different_mint_pubkey = solana_sdk::pubkey::new_rand();
-        bank.store_account(&token_with_different_mint_pubkey, &token_account);
+                // Add the mint
+                let mut mint_data = vec![0; Mint::get_packed_len()];
+                let mint_state = Mint {
+                    mint_authority: COption::Some(owner),
+                    supply: 500,
+                    decimals: 2,
+                    is_initialized: true,
+                    freeze_authority: COption::Some(owner),
+                };
+                Mint::pack(mint_state, &mut mint_data).unwrap();
+                let mint_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: mint_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
 
-        // Test getTokenAccountsByOwner with Token program id returns all accounts, regardless of Mint address
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
-            }}"#,
-            owner,
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(accounts.len(), 3);
+                // Add another token account with the same owner, delegate, and mint
+                let other_token_account_pubkey = solana_sdk::pubkey::new_rand();
+                bank.store_account(&other_token_account_pubkey, &token_account);
 
-        // Test getTokenAccountsByOwner with jsonParsed encoding doesn't return accounts with invalid mints
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
-            }}"#,
-            owner,
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(accounts.len(), 2);
+                // Add another token account with the same owner and delegate but different mint
+                let mut account_data = vec![0; TokenAccount::get_packed_len()];
+                let token_account = TokenAccount {
+                    mint: new_mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 42,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::None,
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                TokenAccount::pack(token_account, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_with_different_mint_pubkey, &token_account);
+            }
 
-        // Test getProgramAccounts with jsonParsed encoding returns mints, but doesn't return accounts with invalid mints
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getProgramAccounts",
-                "params":["{}", {{"encoding": "jsonParsed"}}]
-            }}"#,
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"].clone()).unwrap();
-        assert_eq!(accounts.len(), 4);
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
+                token_account_pubkey,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let balance: UiTokenAmount =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            let error = f64::EPSILON;
+            assert!((balance.ui_amount.unwrap() - 4.2).abs() < error);
+            assert_eq!(balance.amount, 420.to_string());
+            assert_eq!(balance.decimals, 2);
+            assert_eq!(balance.ui_amount_string, "4.2".to_string());
 
-        // Test returns only mint accounts
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,"method":"getTokenAccountsByOwner",
-                "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
-            }}"#,
-            owner, mint,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(accounts.len(), 2);
+            // Test non-existent token account
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenAccountBalance","params":["{}"]}}"#,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
 
-        // Test non-existent Mint/program id
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"programId": "{}"}}]
-            }}"#,
-            owner,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"mint": "{}"}}]
-            }}"#,
-            owner,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
+            // Test get token supply, pulls supply from mint
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
+                mint,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let supply: UiTokenAmount =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            let error = f64::EPSILON;
+            assert!((supply.ui_amount.unwrap() - 5.0).abs() < error);
+            assert_eq!(supply.amount, 500.to_string());
+            assert_eq!(supply.decimals, 2);
+            assert_eq!(supply.ui_amount_string, "5".to_string());
 
-        // Test non-existent Owner
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByOwner",
-                "params":["{}", {{"programId": "{}"}}]
-            }}"#,
-            solana_sdk::pubkey::new_rand(),
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert!(accounts.is_empty());
+            // Test non-existent mint address
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["{}"]}}"#,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
 
-        // Test getTokenAccountsByDelegate with Token program id returns all accounts, regardless of Mint address
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByDelegate",
-                "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
-            }}"#,
-            delegate,
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(accounts.len(), 3);
+            // Test getTokenAccountsByOwner with Token program id returns all accounts, regardless of Mint address
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
+                }}"#,
+                owner, program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(accounts.len(), 3);
 
-        // Test returns only mint accounts
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,"method":
-                "getTokenAccountsByDelegate",
-                "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
-            }}"#,
-            delegate, mint,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(accounts.len(), 2);
+            // Test getTokenAccountsByOwner with jsonParsed encoding doesn't return accounts with invalid mints
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"programId": "{}"}}, {{"encoding": "jsonParsed"}}]
+                }}"#,
+                owner, program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(accounts.len(), 2);
 
-        // Test non-existent Mint/program id
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByDelegate",
-                "params":["{}", {{"programId": "{}"}}]
-            }}"#,
-            delegate,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByDelegate",
-                "params":["{}", {{"mint": "{}"}}]
-            }}"#,
-            delegate,
-            solana_sdk::pubkey::new_rand(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert!(result.get("error").is_some());
+            // Test getProgramAccounts with jsonParsed encoding returns mints, but doesn't return accounts with invalid mints
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getProgramAccounts",
+                    "params":["{}", {{"encoding": "jsonParsed"}}]
+                }}"#,
+                program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"].clone()).unwrap();
+            if program_id == inline_spl_token::id() {
+                // native mint is included for token-v3
+                assert_eq!(accounts.len(), 4);
+            } else {
+                assert_eq!(accounts.len(), 3);
+            }
 
-        // Test non-existent Delegate
-        let req = format!(
-            r#"{{
-                "jsonrpc":"2.0",
-                "id":1,
-                "method":"getTokenAccountsByDelegate",
-                "params":["{}", {{"programId": "{}"}}]
-            }}"#,
-            solana_sdk::pubkey::new_rand(),
-            spl_token_id(),
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let accounts: Vec<RpcKeyedAccount> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert!(accounts.is_empty());
+            // Test returns only mint accounts
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,"method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
+                }}"#,
+                owner, mint,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(accounts.len(), 2);
 
-        // Add new_mint, and another token account on new_mint with different balance
-        let mut mint_data = vec![0; Mint::get_packed_len()];
-        let mint_state = Mint {
-            mint_authority: COption::Some(owner),
-            supply: 500,
-            decimals: 2,
-            is_initialized: true,
-            freeze_authority: COption::Some(owner),
-        };
-        Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: mint_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        bank.store_account(
-            &Pubkey::from_str(&new_mint.to_string()).unwrap(),
-            &mint_account,
-        );
-        let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        let token_account = TokenAccount {
-            mint: new_mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 10,
-            state: TokenAccountState::Initialized,
-            is_native: COption::None,
-            delegated_amount: 30,
-            close_authority: COption::Some(owner),
-        };
-        TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: account_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
-        bank.store_account(&token_with_smaller_balance, &token_account);
+            // Test non-existent Mint/program id
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"programId": "{}"}}]
+                }}"#,
+                owner,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"mint": "{}"}}]
+                }}"#,
+                owner,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
 
-        // Test largest token accounts
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenLargestAccounts","params":["{}"]}}"#,
-            new_mint,
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let largest_accounts: Vec<RpcTokenAccountBalance> =
-            serde_json::from_value(result["result"]["value"].clone()).unwrap();
-        assert_eq!(
-            largest_accounts,
-            vec![
-                RpcTokenAccountBalance {
-                    address: token_with_different_mint_pubkey.to_string(),
-                    amount: UiTokenAmount {
-                        ui_amount: Some(0.42),
-                        decimals: 2,
-                        amount: "42".to_string(),
-                        ui_amount_string: "0.42".to_string(),
+            // Test non-existent Owner
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByOwner",
+                    "params":["{}", {{"programId": "{}"}}]
+                }}"#,
+                solana_sdk::pubkey::new_rand(),
+                program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert!(accounts.is_empty());
+
+            // Test getTokenAccountsByDelegate with Token program id returns all accounts, regardless of Mint address
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByDelegate",
+                    "params":["{}", {{"programId": "{}"}}, {{"encoding":"base64"}}]
+                }}"#,
+                delegate, program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(accounts.len(), 3);
+
+            // Test returns only mint accounts
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,"method":
+                    "getTokenAccountsByDelegate",
+                    "params":["{}", {{"mint": "{}"}}, {{"encoding":"base64"}}]
+                }}"#,
+                delegate, mint,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(accounts.len(), 2);
+
+            // Test non-existent Mint/program id
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByDelegate",
+                    "params":["{}", {{"programId": "{}"}}]
+                }}"#,
+                delegate,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByDelegate",
+                    "params":["{}", {{"mint": "{}"}}]
+                }}"#,
+                delegate,
+                solana_sdk::pubkey::new_rand(),
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            assert!(result.get("error").is_some());
+
+            // Test non-existent Delegate
+            let req = format!(
+                r#"{{
+                    "jsonrpc":"2.0",
+                    "id":1,
+                    "method":"getTokenAccountsByDelegate",
+                    "params":["{}", {{"programId": "{}"}}]
+                }}"#,
+                solana_sdk::pubkey::new_rand(),
+                program_id,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let accounts: Vec<RpcKeyedAccount> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert!(accounts.is_empty());
+
+            // Add new_mint, and another token account on new_mint with different balance
+            let mut mint_data = vec![0; Mint::get_packed_len()];
+            let mint_state = Mint {
+                mint_authority: COption::Some(owner),
+                supply: 500,
+                decimals: 2,
+                is_initialized: true,
+                freeze_authority: COption::Some(owner),
+            };
+            Mint::pack(mint_state, &mut mint_data).unwrap();
+            let mint_account = AccountSharedData::from(Account {
+                lamports: 111,
+                data: mint_data.to_vec(),
+                owner: program_id,
+                ..Account::default()
+            });
+            bank.store_account(
+                &Pubkey::from_str(&new_mint.to_string()).unwrap(),
+                &mint_account,
+            );
+            let mut account_data = vec![0; TokenAccount::get_packed_len()];
+            let token_account = TokenAccount {
+                mint: new_mint,
+                owner,
+                delegate: COption::Some(delegate),
+                amount: 10,
+                state: TokenAccountState::Initialized,
+                is_native: COption::None,
+                delegated_amount: 30,
+                close_authority: COption::Some(owner),
+            };
+            TokenAccount::pack(token_account, &mut account_data).unwrap();
+            let token_account = AccountSharedData::from(Account {
+                lamports: 111,
+                data: account_data.to_vec(),
+                owner: program_id,
+                ..Account::default()
+            });
+            let token_with_smaller_balance = solana_sdk::pubkey::new_rand();
+            bank.store_account(&token_with_smaller_balance, &token_account);
+
+            // Test largest token accounts
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getTokenLargestAccounts","params":["{}"]}}"#,
+                new_mint,
+            );
+            let res = io.handle_request_sync(&req, meta);
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let largest_accounts: Vec<RpcTokenAccountBalance> =
+                serde_json::from_value(result["result"]["value"].clone()).unwrap();
+            assert_eq!(
+                largest_accounts,
+                vec![
+                    RpcTokenAccountBalance {
+                        address: token_with_different_mint_pubkey.to_string(),
+                        amount: UiTokenAmount {
+                            ui_amount: Some(0.42),
+                            decimals: 2,
+                            amount: "42".to_string(),
+                            ui_amount_string: "0.42".to_string(),
+                        }
+                    },
+                    RpcTokenAccountBalance {
+                        address: token_with_smaller_balance.to_string(),
+                        amount: UiTokenAmount {
+                            ui_amount: Some(0.1),
+                            decimals: 2,
+                            amount: "10".to_string(),
+                            ui_amount_string: "0.1".to_string(),
+                        }
                     }
-                },
-                RpcTokenAccountBalance {
-                    address: token_with_smaller_balance.to_string(),
-                    amount: UiTokenAmount {
-                        ui_amount: Some(0.1),
-                        decimals: 2,
-                        amount: "10".to_string(),
-                        ui_amount_string: "0.1".to_string(),
-                    }
-                }
-            ]
-        );
+                ]
+            );
+        }
     }
 
     #[test]
     fn test_token_parsing() {
-        let rpc = RpcHandler::start();
-        let bank = rpc.working_bank();
-        let RpcHandler { io, meta, .. } = rpc;
+        for program_id in solana_account_decoder::parse_token::spl_token_ids() {
+            let rpc = RpcHandler::start();
+            let bank = rpc.working_bank();
+            let RpcHandler { io, meta, .. } = rpc;
 
-        let mut account_data = vec![0; TokenAccount::get_packed_len()];
-        let mint = SplTokenPubkey::new(&[2; 32]);
-        let owner = SplTokenPubkey::new(&[3; 32]);
-        let delegate = SplTokenPubkey::new(&[4; 32]);
-        let token_account = TokenAccount {
-            mint,
-            owner,
-            delegate: COption::Some(delegate),
-            amount: 420,
-            state: TokenAccountState::Initialized,
-            is_native: COption::Some(10),
-            delegated_amount: 30,
-            close_authority: COption::Some(owner),
-        };
-        TokenAccount::pack(token_account, &mut account_data).unwrap();
-        let token_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: account_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        let token_account_pubkey = solana_sdk::pubkey::new_rand();
-        bank.store_account(&token_account_pubkey, &token_account);
+            let mint = SplTokenPubkey::new(&[2; 32]);
+            let owner = SplTokenPubkey::new(&[3; 32]);
+            let delegate = SplTokenPubkey::new(&[4; 32]);
+            let token_account_pubkey = solana_sdk::pubkey::new_rand();
+            let (program_name, account_size, mint_size) = if program_id
+                == inline_spl_token_2022::id()
+            {
+                let account_base = TokenAccount {
+                    mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 420,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::Some(10),
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+                    ExtensionType::ImmutableOwner,
+                    ExtensionType::MemoTransfer,
+                ]);
+                let mut account_data = vec![0; account_size];
+                let mut account_state =
+                    StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
+                        .unwrap();
 
-        // Add the mint
-        let mut mint_data = vec![0; Mint::get_packed_len()];
-        let mint_state = Mint {
-            mint_authority: COption::Some(owner),
-            supply: 500,
-            decimals: 2,
-            is_initialized: true,
-            freeze_authority: COption::Some(owner),
-        };
-        Mint::pack(mint_state, &mut mint_data).unwrap();
-        let mint_account = AccountSharedData::from(Account {
-            lamports: 111,
-            data: mint_data.to_vec(),
-            owner: spl_token_id(),
-            ..Account::default()
-        });
-        bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+                account_state.base = account_base;
+                account_state.pack_base();
+                account_state.init_account_type().unwrap();
+                account_state.init_extension::<ImmutableOwner>().unwrap();
+                let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+                memo_transfer.require_incoming_transfer_memos = true.into();
 
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
-            token_account_pubkey,
-        );
-        let res = io.handle_request_sync(&req, meta.clone());
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(
-            result["result"]["value"]["data"],
-            json!({
-                "program": "spl-token",
-                "space": TokenAccount::get_packed_len(),
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_account_pubkey, &token_account);
+
+                let mint_size =
+                    ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+                let mint_base = Mint {
+                    mint_authority: COption::Some(owner),
+                    supply: 500,
+                    decimals: 2,
+                    is_initialized: true,
+                    freeze_authority: COption::Some(owner),
+                };
+                let mut mint_data = vec![0; mint_size];
+                let mut mint_state =
+                    StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut mint_data).unwrap();
+
+                mint_state.base = mint_base;
+                mint_state.pack_base();
+                mint_state.init_account_type().unwrap();
+                let mut mint_close_authority =
+                    mint_state.init_extension::<MintCloseAuthority>().unwrap();
+                mint_close_authority.close_authority =
+                    OptionalNonZeroPubkey::try_from(Some(owner)).unwrap();
+
+                let mint_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: mint_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+                ("spl-token-2022", account_size, mint_size)
+            } else {
+                let account_size = TokenAccount::get_packed_len();
+                let mut account_data = vec![0; account_size];
+                let token_account = TokenAccount {
+                    mint,
+                    owner,
+                    delegate: COption::Some(delegate),
+                    amount: 420,
+                    state: TokenAccountState::Initialized,
+                    is_native: COption::Some(10),
+                    delegated_amount: 30,
+                    close_authority: COption::Some(owner),
+                };
+                TokenAccount::pack(token_account, &mut account_data).unwrap();
+                let token_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: account_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&token_account_pubkey, &token_account);
+
+                // Add the mint
+                let mint_size = Mint::get_packed_len();
+                let mut mint_data = vec![0; mint_size];
+                let mint_state = Mint {
+                    mint_authority: COption::Some(owner),
+                    supply: 500,
+                    decimals: 2,
+                    is_initialized: true,
+                    freeze_authority: COption::Some(owner),
+                };
+                Mint::pack(mint_state, &mut mint_data).unwrap();
+                let mint_account = AccountSharedData::from(Account {
+                    lamports: 111,
+                    data: mint_data.to_vec(),
+                    owner: program_id,
+                    ..Account::default()
+                });
+                bank.store_account(&Pubkey::from_str(&mint.to_string()).unwrap(), &mint_account);
+                ("spl-token", account_size, mint_size)
+            };
+
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
+                token_account_pubkey,
+            );
+            let res = io.handle_request_sync(&req, meta.clone());
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let mut expected_value = json!({
+                "program": program_name,
+                "space": account_size,
                 "parsed": {
                     "type": "account",
                     "info": {
@@ -7671,22 +7866,33 @@ pub mod tests {
                         "closeAuthority": owner.to_string(),
                     }
                 }
-            })
-        );
+            });
+            if program_id == inline_spl_token_2022::id() {
+                expected_value["parsed"]["info"]["extensions"] = json!([
+                    {
+                        "extension": "immutableOwner"
+                    },
+                    {
+                        "extension": "memoTransfer",
+                        "state": {
+                            "requireIncomingTransferMemos": true
+                        }
+                    },
+                ]);
+            }
+            assert_eq!(result["result"]["value"]["data"], expected_value);
 
-        // Test Mint
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
-            mint,
-        );
-        let res = io.handle_request_sync(&req, meta);
-        let result: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(
-            result["result"]["value"]["data"],
-            json!({
-                "program": "spl-token",
-                "space": Mint::get_packed_len(),
+            // Test Mint
+            let req = format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}", {{"encoding": "jsonParsed"}}]}}"#,
+                mint,
+            );
+            let res = io.handle_request_sync(&req, meta);
+            let result: Value = serde_json::from_str(&res.expect("actual response"))
+                .expect("actual response deserialization");
+            let mut expected_value = json!({
+                "program": program_name,
+                "space": mint_size,
                 "parsed": {
                     "type": "mint",
                     "info": {
@@ -7697,12 +7903,24 @@ pub mod tests {
                         "freezeAuthority": owner.to_string(),
                     }
                 }
-            })
-        );
+            });
+            if program_id == inline_spl_token_2022::id() {
+                expected_value["parsed"]["info"]["extensions"] = json!([
+                    {
+                        "extension": "mintCloseAuthority",
+                        "state": {
+                            "closeAuthority": owner.to_string(),
+                        }
+                    }
+                ]);
+            }
+            assert_eq!(result["result"]["value"]["data"], expected_value,);
+        }
     }
 
     #[test]
     fn test_get_spl_token_owner_filter() {
+        // Filtering on token-v3 length
         let owner = Pubkey::new_unique();
         assert_eq!(
             get_spl_token_owner_filter(
@@ -7719,6 +7937,62 @@ pub mod tests {
             .unwrap(),
             owner
         );
+
+        // Filtering on token-2022 account type
+        assert_eq!(
+            get_spl_token_owner_filter(
+                &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 32,
+                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 165,
+                        bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                        encoding: None
+                    })
+                ],
+            )
+            .unwrap(),
+            owner
+        );
+
+        // Filtering on token account state
+        assert_eq!(
+            get_spl_token_owner_filter(
+                &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 32,
+                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::TokenAccountState,
+                ],
+            )
+            .unwrap(),
+            owner
+        );
+
+        // Can't filter on account type for token-v3
+        assert!(get_spl_token_owner_filter(
+            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 32,
+                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 165,
+                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                    encoding: None
+                })
+            ],
+        )
+        .is_none());
 
         // Filtering on mint instead of owner
         assert!(get_spl_token_owner_filter(
@@ -7744,6 +8018,143 @@ pub mod tests {
                     encoding: None
                 }),
                 RpcFilterType::DataSize(165)
+            ],
+        )
+        .is_none());
+        assert!(get_spl_token_owner_filter(
+            &Pubkey::new_unique(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 32,
+                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 165,
+                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                    encoding: None
+                })
+            ],
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn test_get_spl_token_mint_filter() {
+        // Filtering on token-v3 length
+        let mint = Pubkey::new_unique();
+        assert_eq!(
+            get_spl_token_mint_filter(
+                &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 0,
+                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::DataSize(165)
+                ],
+            )
+            .unwrap(),
+            mint
+        );
+
+        // Filtering on token-2022 account type
+        assert_eq!(
+            get_spl_token_mint_filter(
+                &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 0,
+                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 165,
+                        bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                        encoding: None
+                    })
+                ],
+            )
+            .unwrap(),
+            mint
+        );
+
+        // Filtering on token account state
+        assert_eq!(
+            get_spl_token_mint_filter(
+                &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+                &[
+                    RpcFilterType::Memcmp(Memcmp {
+                        offset: 0,
+                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                        encoding: None
+                    }),
+                    RpcFilterType::TokenAccountState,
+                ],
+            )
+            .unwrap(),
+            mint
+        );
+
+        // Can't filter on account type for token-v3
+        assert!(get_spl_token_mint_filter(
+            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 165,
+                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                    encoding: None
+                })
+            ],
+        )
+        .is_none());
+
+        // Filtering on owner instead of mint
+        assert!(get_spl_token_mint_filter(
+            &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 32,
+                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::DataSize(165)
+            ],
+        )
+        .is_none());
+
+        // Wrong program id
+        assert!(get_spl_token_mint_filter(
+            &Pubkey::new_unique(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::DataSize(165)
+            ],
+        )
+        .is_none());
+        assert!(get_spl_token_mint_filter(
+            &Pubkey::new_unique(),
+            &[
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 0,
+                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
+                    encoding: None
+                }),
+                RpcFilterType::Memcmp(Memcmp {
+                    offset: 165,
+                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
+                    encoding: None
+                })
             ],
         )
         .is_none());

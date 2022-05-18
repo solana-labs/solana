@@ -15,15 +15,15 @@ pub struct PrioritizationFeeDetails {
 }
 
 impl PrioritizationFeeDetails {
-    pub fn new(fee_type: PrioritizationFeeType, max_compute_units: u64) -> Self {
+    pub fn new(fee_type: PrioritizationFeeType, compute_unit_limit: u64) -> Self {
         match fee_type {
             PrioritizationFeeType::Deprecated(fee) => {
-                let priority = if max_compute_units == 0 {
+                let priority = if compute_unit_limit == 0 {
                     0
                 } else {
                     let micro_lamport_fee: MicroLamports =
                         (fee as u128).saturating_mul(MICRO_LAMPORTS_PER_LAMPORT as u128);
-                    let priority = micro_lamport_fee.saturating_div(max_compute_units as u128);
+                    let priority = micro_lamport_fee.saturating_div(compute_unit_limit as u128);
                     u64::try_from(priority).unwrap_or(u64::MAX)
                 };
 
@@ -32,7 +32,7 @@ impl PrioritizationFeeDetails {
             PrioritizationFeeType::ComputeUnitPrice(cu_price) => {
                 let fee = {
                     let micro_lamport_fee: MicroLamports =
-                        (cu_price as u128).saturating_mul(max_compute_units as u128);
+                        (cu_price as u128).saturating_mul(compute_unit_limit as u128);
                     let fee = micro_lamport_fee
                         .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
                         .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);

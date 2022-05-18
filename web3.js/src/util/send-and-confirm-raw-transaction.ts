@@ -1,7 +1,7 @@
 import type {Buffer} from 'buffer';
 
 import {
-  BlockheightBasedTransactionConfimationStrategy,
+  BlockheightBasedTransactionConfirmationStrategy,
   Connection,
 } from '../connection';
 import type {TransactionSignature} from '../transaction';
@@ -14,14 +14,14 @@ import type {ConfirmOptions} from '../connection';
  *
  * @param {Connection} connection
  * @param {Buffer} rawTransaction
- * @param {BlockheightBasedTransactionConfimationStrategy} confirmationStrategy
+ * @param {BlockheightBasedTransactionConfirmationStrategy} confirmationStrategy
  * @param {ConfirmOptions} [options]
  * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
-  confirmationStrategy: BlockheightBasedTransactionConfimationStrategy,
+  confirmationStrategy: BlockheightBasedTransactionConfirmationStrategy,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature>;
 
@@ -41,13 +41,13 @@ export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
   confirmationStrategyOrConfirmOptions:
-    | BlockheightBasedTransactionConfimationStrategy
+    | BlockheightBasedTransactionConfirmationStrategy
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
 ): Promise<TransactionSignature> {
   let confirmationStrategy:
-    | BlockheightBasedTransactionConfimationStrategy
+    | BlockheightBasedTransactionConfirmationStrategy
     | undefined;
   let options: ConfirmOptions | undefined;
   if (
@@ -58,7 +58,7 @@ export async function sendAndConfirmRawTransaction(
     )
   ) {
     confirmationStrategy =
-      confirmationStrategyOrConfirmOptions as BlockheightBasedTransactionConfimationStrategy;
+      confirmationStrategyOrConfirmOptions as BlockheightBasedTransactionConfirmationStrategy;
     options = maybeConfirmOptions;
   } else {
     options = confirmationStrategyOrConfirmOptions as
