@@ -992,6 +992,11 @@ fn main() {
                   This produces snapshots that older versions cannot read.",
         )
         .hidden(true);
+    let accounts_db_skip_initial_hash_calc_arg =
+        Arg::with_name("accounts_db_skip_initial_hash_calculation")
+            .long("accounts-db-skip-initial-hash-calculation")
+            .help("Do not verify accounts hash at startup.")
+            .hidden(true);
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
         .help("AppendVecs that are older than an epoch are squashed together.")
@@ -1337,6 +1342,7 @@ fn main() {
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
             .arg(&skip_rewrites_arg)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
@@ -2143,6 +2149,8 @@ fn main() {
                     filler_accounts_config,
                     skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
+                    skip_initial_hash_calc: matches
+                        .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
                 });
 
