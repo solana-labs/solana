@@ -60,10 +60,11 @@ jobs:
         if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
         shell: bash
         run: |
-          mkdir -p "github-action-s3-upload/${{ inputs.commit }}"
-          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/${{ inputs.commit }}/"
-          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/${{ inputs.commit }}/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/${{ inputs.commit }}/"
+          FOLDER_NAME=${{ steps.build.outputs.tag || steps.build.outputs.channel }}
+          mkdir -p "github-action-s3-upload/$FOLDER_NAME"
+          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/$FOLDER_NAME/"
+          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/$FOLDER_NAME/"
+          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/$FOLDER_NAME"
 
       - name: Upload Artifacts
         if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
@@ -108,7 +109,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.commit }}
+          tag_name: ${{ needs.windows-build.outputs.tag }}
           draft: true
           files: |
-            github-action-s3-upload/${{ inputs.commit }}/*
+            github-action-s3-upload/${{ needs.windows-build.outputs.tag }}/*
