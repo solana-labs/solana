@@ -91,7 +91,7 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    with_incremental_snapshots::rpc_bootstrap(
+    with_incremental_snapshots::rpc_bootstrap_with_incremental_snapshots(
         node,
         identity_keypair,
         ledger_path,
@@ -392,7 +392,7 @@ mod with_incremental_snapshots {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn rpc_bootstrap(
+    pub fn rpc_bootstrap_with_incremental_snapshots(
         node: &Node,
         identity_keypair: &Arc<Keypair>,
         ledger_path: &Path,
