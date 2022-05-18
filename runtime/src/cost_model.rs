@@ -115,7 +115,9 @@ impl CostModel {
         match self.instruction_execution_cost_table.get_cost(program_key) {
             Some(cost) => *cost,
             None => {
-                let default_value = self.instruction_execution_cost_table.get_default_units();
+                let default_value = self
+                    .instruction_execution_cost_table
+                    .get_default_compute_unit_limit();
                 debug!(
                     "Program {:?} does not have aggregated cost, using default value {}",
                     program_key, default_value
@@ -286,7 +288,9 @@ mod tests {
 
         // unknown program is assigned with default cost
         assert_eq!(
-            testee.instruction_execution_cost_table.get_default_units(),
+            testee
+                .instruction_execution_cost_table
+                .get_default_compute_unit_limit(),
             testee.find_instruction_cost(
                 &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
             )
@@ -419,7 +423,10 @@ mod tests {
         let result = testee.get_transaction_cost(&tx);
 
         // expected cost for two random/unknown program is
-        let expected_cost = testee.instruction_execution_cost_table.get_default_units() * 2;
+        let expected_cost = testee
+            .instruction_execution_cost_table
+            .get_default_compute_unit_limit()
+            * 2;
         assert_eq!((0, expected_cost), result);
     }
 
@@ -465,7 +472,7 @@ mod tests {
         assert_eq!(
             cost_model
                 .instruction_execution_cost_table
-                .get_default_units(),
+                .get_default_compute_unit_limit(),
             cost_model.find_instruction_cost(&key1)
         );
 

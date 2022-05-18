@@ -4075,12 +4075,12 @@ impl Bank {
                         compute_budget
                     } else {
                         let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
-                        let compute_budget_max_units = if tx_wide_compute_cap {
-                            compute_budget::MAX_UNITS
+                        let compute_unit_limit = if tx_wide_compute_cap {
+                            compute_budget::MAX_COMPUTE_UNIT_LIMIT
                         } else {
-                            compute_budget::DEFAULT_UNITS
+                            compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                         };
-                        let mut compute_budget = ComputeBudget::new(compute_budget_max_units);
+                        let mut compute_budget = ComputeBudget::new(compute_unit_limit as u64);
                         if tx_wide_compute_cap {
                             let mut compute_budget_process_transaction_time =
                                 Measure::start("compute_budget_process_transaction_time");
@@ -4332,7 +4332,7 @@ impl Bank {
             let compute_fee = fee_structure
                 .compute_fee_bins
                 .iter()
-                .find(|bin| compute_budget.max_units <= bin.limit)
+                .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
                 .map(|bin| bin.fee)
                 .unwrap_or_else(|| {
                     fee_structure
@@ -6831,7 +6831,7 @@ pub(crate) mod tests {
         },
         crossbeam_channel::{bounded, unbounded},
         solana_program_runtime::{
-            compute_budget::MAX_UNITS,
+            compute_budget::MAX_COMPUTE_UNIT_LIMIT,
             invoke_context::InvokeContext,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
@@ -15881,7 +15881,7 @@ pub(crate) mod tests {
             assert_eq!(
                 *compute_budget,
                 ComputeBudget {
-                    max_units: 200_000,
+                    compute_unit_limit: 200_000,
                     heap_size: None,
                     ..ComputeBudget::default()
                 }
@@ -15893,7 +15893,7 @@ pub(crate) mod tests {
 
         let message = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -15926,7 +15926,7 @@ pub(crate) mod tests {
             assert_eq!(
                 *compute_budget,
                 ComputeBudget {
-                    max_units: 1,
+                    compute_unit_limit: 1,
                     heap_size: Some(48 * 1024),
                     ..ComputeBudget::default()
                 }
@@ -15938,7 +15938,7 @@ pub(crate) mod tests {
 
         let message = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -15978,7 +15978,7 @@ pub(crate) mod tests {
             assert_eq!(
                 *compute_budget,
                 ComputeBudget {
-                    max_units: 1,
+                    compute_unit_limit: 1,
                     heap_size: Some(48 * 1024),
                     ..ComputeBudget::default()
                 }
@@ -15999,7 +15999,7 @@ pub(crate) mod tests {
         // This message will be processed successfully
         let message1 = Message::new(
             &[
-                ComputeBudgetInstruction::request_units(1),
+                ComputeBudgetInstruction::set_compute_unit_limit(1),
                 ComputeBudgetInstruction::request_heap_frame(48 * 1024),
                 Instruction::new_with_bincode(program_id, &0, vec![]),
             ],
@@ -16237,8 +16237,17 @@ pub(crate) mod tests {
         // Explicit fee schedule
 
         for requested_compute_units in [
-            0, 5_000, 10_000, 100_000, 300_000, 500_000, 700_000, 900_000, 1_100_000, 1_300_000,
-            MAX_UNITS,
+            0,
+            5_000,
+            10_000,
+            100_000,
+            300_000,
+            500_000,
+            700_000,
+            900_000,
+            1_100_000,
+            1_300_000,
+            MAX_COMPUTE_UNIT_LIMIT,
         ] {
             const PRIORITIZATION_FEE_RATE: u64 = 42;
             let prioritization_fee_details = PrioritizationFeeDetails::new(
@@ -16247,7 +16256,7 @@ pub(crate) mod tests {
             );
             let message = SanitizedMessage::try_from(Message::new(
                 &[
-                    ComputeBudgetInstruction::request_units(requested_compute_units),
+                    ComputeBudgetInstruction::set_compute_unit_limit(requested_compute_units),
                     ComputeBudgetInstruction::set_compute_unit_price(PRIORITIZATION_FEE_RATE),
                     Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
                 ],
@@ -17092,9 +17101,9 @@ pub(crate) mod tests {
             None,
         );
 
-        let compute_budget = bank
-            .compute_budget
-            .unwrap_or_else(|| ComputeBudget::new(compute_budget::DEFAULT_UNITS));
+        let compute_budget = bank.compute_budget.unwrap_or_else(|| {
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
+        });
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),
