@@ -659,8 +659,11 @@ fn get_peer_snapshot_hashes(
     let mut peer_snapshot_hashes =
         get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
     if validator_config.known_validators.is_some() {
-        let known_snapshot_hashes =
-            get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
+        let known_snapshot_hashes = get_snapshot_hashes_from_known_validators(
+            cluster_info,
+            validator_config,
+            incremental_snapshot_fetch,
+        );
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
             &known_snapshot_hashes,
             &mut peer_snapshot_hashes,
@@ -691,6 +694,7 @@ type KnownSnapshotHashes = HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>;
 fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
     validator_config: &ValidatorConfig,
+    incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
     let get_full_snapshot_hashes_for_node = |node| {
@@ -716,6 +720,7 @@ fn get_snapshot_hashes_from_known_validators(
                 known_validators,
                 get_full_snapshot_hashes_for_node,
                 get_incremental_snapshot_hashes_for_node,
+                incremental_snapshot_fetch,
             )
         })
         .unwrap_or_else(|| {
@@ -734,6 +739,7 @@ fn build_known_snapshot_hashes<'a, F1, F2>(
     nodes: impl IntoIterator<Item = &'a Pubkey>,
     get_full_snapshot_hashes_for_node: F1,
     get_incremental_snapshot_hashes_for_node: F2,
+    incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes
 where
     F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
@@ -781,59 +787,61 @@ where
             }
         }
 
-        // Then get the incremental snapshot hashes for each node and add them as the values in the
-        // known snapshot hashes map.
-        if let Some((base_snapshot_hash, incremental_snapshot_hashes)) =
-            get_incremental_snapshot_hashes_for_node(node)
-        {
-            // Incremental snapshots must be based off a valid full snapshot.  Ensure the node
-            // has a full snapshot hash that matches its base snapshot hash.
-            if !full_snapshot_hashes.contains(&base_snapshot_hash) {
-                warn!(
-                    "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes. base snapshot hash: {:?}, full snapshot hashes: {:?}",
-                    node,
-                    base_snapshot_hash,
-                    full_snapshot_hashes
-                    );
-                continue 'outer;
-            }
-
-            if let Some(known_incremental_snapshot_hashes) =
-                known_snapshot_hashes.get_mut(&base_snapshot_hash)
+        if incremental_snapshot_fetch {
+            // Then get the incremental snapshot hashes for each node and add them as the values in the
+            // known snapshot hashes map.
+            if let Some((base_snapshot_hash, incremental_snapshot_hashes)) =
+                get_incremental_snapshot_hashes_for_node(node)
             {
-                // Do not add this snapshot hash if there's already an incremental snapshot
-                // hash with the same slot, but with a _different_ hash.
-                // NOTE: Nodes should not produce snapshots at the same slot with _different_
-                // hashes.  So if it happens, keep the first and ignore the rest.
-                for incremental_snapshot_hash in &incremental_snapshot_hashes {
-                    if !is_any_same_slot_and_different_hash(
-                        incremental_snapshot_hash,
-                        known_incremental_snapshot_hashes.iter(),
-                    ) {
-                        known_incremental_snapshot_hashes.insert(*incremental_snapshot_hash);
-                    } else {
-                        warn!(
-                            "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot. incremental snapshot hash: {:?}",
-                            node,
-                            incremental_snapshot_hash,
+                // Incremental snapshots must be based off a valid full snapshot.  Ensure the node
+                // has a full snapshot hash that matches its base snapshot hash.
+                if !full_snapshot_hashes.contains(&base_snapshot_hash) {
+                    warn!(
+                        "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes. base snapshot hash: {:?}, full snapshot hashes: {:?}",
+                        node,
+                        base_snapshot_hash,
+                        full_snapshot_hashes
                         );
-                    }
+                    continue 'outer;
                 }
-            } else {
-                // Since incremental snapshots *must* have a valid base (i.e. full)
-                // snapshot, if .get() returned None, then that can only happen if there
-                // already is a full snapshot hash in the known snapshot hashes with the
-                // same slot but _different_ a hash.  Assert that below.  If the assert
-                // ever fails, there is a programmer bug.
-                assert!(
-                    is_any_same_slot_and_different_hash(&base_snapshot_hash, known_snapshot_hashes.keys()),
-                    "There must exist a full snapshot hash already in the known snapshot hashes with the same slot but a different hash!",
-                );
-                debug!(
-                    "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot. base snapshot hash: {:?}",
-                    node,
-                    base_snapshot_hash,
-                );
+
+                if let Some(known_incremental_snapshot_hashes) =
+                    known_snapshot_hashes.get_mut(&base_snapshot_hash)
+                {
+                    // Do not add this snapshot hash if there's already an incremental snapshot
+                    // hash with the same slot, but with a _different_ hash.
+                    // NOTE: Nodes should not produce snapshots at the same slot with _different_
+                    // hashes.  So if it happens, keep the first and ignore the rest.
+                    for incremental_snapshot_hash in &incremental_snapshot_hashes {
+                        if !is_any_same_slot_and_different_hash(
+                            incremental_snapshot_hash,
+                            known_incremental_snapshot_hashes.iter(),
+                        ) {
+                            known_incremental_snapshot_hashes.insert(*incremental_snapshot_hash);
+                        } else {
+                            warn!(
+                                "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot. incremental snapshot hash: {:?}",
+                                node,
+                                incremental_snapshot_hash,
+                            );
+                        }
+                    }
+                } else {
+                    // Since incremental snapshots *must* have a valid base (i.e. full)
+                    // snapshot, if .get() returned None, then that can only happen if there
+                    // already is a full snapshot hash in the known snapshot hashes with the
+                    // same slot but _different_ a hash.  Assert that below.  If the assert
+                    // ever fails, there is a programmer bug.
+                    assert!(
+                        is_any_same_slot_and_different_hash(&base_snapshot_hash, known_snapshot_hashes.keys()),
+                        "There must exist a full snapshot hash already in the known snapshot hashes with the same slot but a different hash!",
+                    );
+                    debug!(
+                        "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot. base snapshot hash: {:?}",
+                        node,
+                        base_snapshot_hash,
+                    );
+                }
             }
         }
     }
@@ -1380,6 +1388,7 @@ mod tests {
             oracle.keys(),
             node_to_full_snapshot_hashes,
             node_to_incremental_snapshot_hashes,
+            true,
         );
 
         let mut known_full_snapshot_hashes: Vec<_> =
