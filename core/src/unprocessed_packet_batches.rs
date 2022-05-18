@@ -373,9 +373,9 @@ fn get_priority(message: &SanitizedVersionedMessage) -> Option<u64> {
     let prioritization_fee_details = compute_budget
         .process_instructions(
             message.program_instructions_iter(),
-            false, // not request heap size
-            true,  // use default units per instruction
-            true,  // use changed prioritization fee
+            true, // don't reject txs that use request heap size ix
+            true, // use default units per instruction
+            true, // don't reject txs that use set compute unit price ix
         )
         .ok()?;
     Some(prioritization_fee_details.get_priority())
@@ -397,7 +397,10 @@ pub fn transactions_to_deserialized_packets(
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_sdk::{
+            compute_budget::ComputeBudgetInstruction, message::VersionedMessage, pubkey::Pubkey,
+            signature::Keypair, system_transaction,
+        },
         std::net::IpAddr,
     };
 
@@ -523,5 +526,16 @@ mod tests {
         );
         assert!(unprocessed_packet_batches.is_empty());
         assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_request_heap_frame_tx() {
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[ComputeBudgetInstruction::request_heap_frame(32 * 1024)],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(get_priority(&message), Some(0));
     }
 }
