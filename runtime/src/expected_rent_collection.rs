@@ -448,11 +448,12 @@ impl ExpectedRentCollection {
         loaded_account: &impl ReadableAccount,
         storage_slot: Slot,
         epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
+        rent_collector_max_epoch: &RentCollector,
         max_slot_in_storages_inclusive: Slot,
         find_unskipped_slot: impl Fn(Slot) -> Option<Slot>,
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Self> {
+        let mut rent_collector = rent_collector_max_epoch;
         let slots_per_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
 
         let partition_from_pubkey =
@@ -476,6 +477,7 @@ impl ExpectedRentCollection {
                 expected_rent_collection_slot_max_epoch = find;
             }
         }
+        let mut use_previous_epoch_rent_collector = false;
         if expected_rent_collection_slot_max_epoch > max_slot_in_storages_inclusive {
             // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
             expected_rent_collection_slot_max_epoch =
@@ -486,6 +488,9 @@ impl ExpectedRentCollection {
                 // found a root (because we have a storage) that is >= expected_rent_collection_slot.
                 expected_rent_collection_slot_max_epoch = find;
             }
+
+            // since we have not hit the slot in the rent collector's epoch yet, we need to collect rent according to the previous epoch's rent collector.
+            use_previous_epoch_rent_collector = true;
         }
 
         // the slot we're dealing with is where we expected the rent to be collected for this pubkey, so use what is in this slot
@@ -499,21 +504,27 @@ impl ExpectedRentCollection {
             return None;
         }
 
+        let rent_collector_previous;
+        if use_previous_epoch_rent_collector {
+            // keep in mind the storage slot could be 0..inf epochs in the past
+            // we want to swap the rent collector for one whose epoch is the previous epoch
+            let mut rent_collector_temp = rent_collector.clone();
+            rent_collector_temp.epoch = rent_collector.epoch.saturating_sub(1); // previous epoch
+            rent_collector_previous = Some(rent_collector_temp);
+            rent_collector = rent_collector_previous.as_ref().unwrap();
+        }
+
         // ask the rent collector what rent should be collected.
         // Rent collector knows the current epoch.
         let rent_result =
             rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
         let current_rent_epoch = loaded_account.rent_epoch();
         let new_rent_epoch = match rent_result {
-            RentResult::CollectRent((mut next_epoch, rent_due)) => {
+            RentResult::CollectRent((next_epoch, rent_due)) => {
                 if next_epoch > current_rent_epoch && rent_due != 0 {
                     // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
                     // It would be a waste of time to recalcluate a hash.
                     return None;
-                }
-                if first_slot_in_max_epoch > expected_rent_collection_slot_max_epoch {
-                    // this account won't have had rent collected for the current epoch yet (rent_collector has a current epoch), so our expected next_epoch is for the previous epoch
-                    next_epoch = next_epoch.saturating_sub(1);
                 }
                 std::cmp::max(next_epoch, current_rent_epoch)
             }
@@ -895,6 +906,9 @@ pub mod tests {
                 find_unskipped_slot,
                 None,
             );
+            // the test case of max is hacky
+            let prior_epoch = (partition_from_pubkey > partition_index_max_inclusive)
+                || find_unskipped_slot(0) == Some(Slot::MAX);
             assert_eq!(
                 expected,
                 Some(ExpectedRentCollection {
@@ -911,8 +925,12 @@ pub mod tests {
                     } else {
                         expected_rent_collection_slot_max_epoch
                     },
-                    rent_epoch: rent_collector.epoch,
-                })
+                    rent_epoch: rent_collector.epoch - if prior_epoch { 1 } else { 0 },
+                }),
+                "find_unskipped_slot(0): {:?}, rent_collector.epoch: {}, prior_epoch: {}",
+                find_unskipped_slot(0),
+                rent_collector.epoch,
+                prior_epoch,
             );
         }
     }
