@@ -664,7 +664,11 @@ impl RpcSubscriptions {
         );
 
         Self {
-            notification_sender: Some(notification_sender),
+            notification_sender: if notification_threads == 0 {
+                None
+            } else {
+                Some(notification_sender)
+            },
             t_cleanup,
             exit: exit.clone(),
             control,
