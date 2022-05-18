@@ -1107,7 +1107,6 @@ mod with_incremental_snapshots {
         bootstrap_config: &RpcBootstrapConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
-
         let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(
             cluster_info,
             validator_config,
