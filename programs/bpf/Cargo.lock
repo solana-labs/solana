@@ -5073,17 +5073,9 @@ dependencies = [
  "solana-stake-program",
  "solana-vote-program",
  "solana-zk-token-proof-program",
-<<<<<<< HEAD
  "solana-zk-token-sdk 1.10.18",
-=======
-<<<<<<< HEAD
- "solana-zk-token-sdk 1.10.14",
-=======
- "solana-zk-token-sdk 1.11.0",
  "strum",
  "strum_macros",
->>>>>>> 3e44046a7 (Support lz4 for snapshot archives (#25089))
->>>>>>> Support lz4 for snapshot archives (#25089)
  "symlink",
  "tar",
  "tempfile",
