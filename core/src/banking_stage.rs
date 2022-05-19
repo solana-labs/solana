@@ -508,7 +508,7 @@ impl BankingStage {
             .iter()
             .filter_map(|p| {
                 if !p.meta.forwarded() && data_budget.take(p.meta.size) {
-                    Some(p.data[..p.meta.size].to_vec())
+                    Some(p.data().to_vec())
                 } else {
                     None
                 }

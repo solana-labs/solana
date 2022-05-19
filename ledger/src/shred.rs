@@ -287,7 +287,7 @@ impl Shred {
     pub fn copy_to_packet(&self, packet: &mut Packet) {
         let payload = self.payload();
         let size = payload.len();
-        packet.data[..size].copy_from_slice(&payload[..]);
+        packet.buffer_mut()[..size].copy_from_slice(&payload[..]);
         packet.meta.size = size;
     }
 
@@ -575,7 +575,7 @@ pub fn get_shred_slot_index_type(
         }
     };
 
-    let shred_type = match ShredType::try_from(p.data[OFFSET_OF_SHRED_TYPE]) {
+    let shred_type = match ShredType::try_from(p.data()[OFFSET_OF_SHRED_TYPE]) {
         Err(_) => {
             stats.bad_shred_type += 1;
             return None;
@@ -733,7 +733,7 @@ mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
+        let shred_res = Shred::new_from_serialized_shred(packet.data().to_vec());
         assert_matches!(
             shred.parent(),
             Err(Error::InvalidParentOffset {
@@ -825,7 +825,7 @@ mod tests {
             200, // version
         );
         shred.copy_to_packet(&mut packet);
-        packet.data[OFFSET_OF_SHRED_TYPE] = u8::MAX;
+        packet.buffer_mut()[OFFSET_OF_SHRED_TYPE] = u8::MAX;
 
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.bad_shred_type);
@@ -892,13 +892,13 @@ mod tests {
             data.iter().skip(skip).copied()
         });
         let mut packet = Packet::default();
-        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(&packet.data).unwrap()
+            Shred::reference_tick_from_data(packet.data()).unwrap()
         );
         assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
         assert_eq!(
@@ -933,13 +933,13 @@ mod tests {
         assert_matches!(shred.sanitize(), Ok(()));
         let payload = bs58_decode(PAYLOAD);
         let mut packet = Packet::default();
-        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(&packet.data).unwrap()
+            Shred::reference_tick_from_data(packet.data()).unwrap()
         );
         assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
         assert_eq!(
@@ -981,7 +981,7 @@ mod tests {
             parity_shard.iter().skip(skip).copied()
         });
         let mut packet = Packet::default();
-        packet.data[..payload.len()].copy_from_slice(&payload);
+        packet.buffer_mut()[..payload.len()].copy_from_slice(&payload);
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());

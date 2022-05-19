@@ -142,11 +142,11 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
         // get_packet_offsets should ensure pubkey_end and sig_end do
         // not overflow packet.meta.size
 
-        let signature = Signature::new(&packet.data[sig_start..sig_end]);
+        let signature = Signature::new(&packet.data()[sig_start..sig_end]);
 
         if !signature.verify(
-            &packet.data[pubkey_start..pubkey_end],
-            &packet.data[msg_start..msg_end],
+            &packet.data()[pubkey_start..pubkey_end],
+            &packet.data()[msg_start..msg_end],
         ) {
             packet.meta.set_discard(true);
             return;
@@ -154,7 +154,7 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
 
         // Check for tracer pubkey
         if !packet.meta.is_tracer_packet()
-            && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
+            && &packet.data()[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
             packet.meta.flags |= PacketFlags::TRACER_PACKET;
         }
@@ -202,7 +202,7 @@ fn do_get_packet_offsets(
 
     // read the length of Transaction.signatures (serialized with short_vec)
     let (sig_len_untrusted, sig_size) =
-        decode_shortu16_len(&packet.data).map_err(|_| PacketError::InvalidShortVec)?;
+        decode_shortu16_len(packet.data()).map_err(|_| PacketError::InvalidShortVec)?;
 
     // Using msg_start_offset which is based on sig_len_untrusted introduces uncertainty.
     // Ultimately, the actual sigverify will determine the uncertainty.
@@ -221,7 +221,7 @@ fn do_get_packet_offsets(
         // next byte indicates if the transaction is versioned. If the top bit
         // is set, the remaining bits encode a version number. If the top bit is
         // not set, this byte is the first byte of the message header.
-        let message_prefix = packet.data[msg_start_offset];
+        let message_prefix = packet.data()[msg_start_offset];
         if message_prefix & MESSAGE_VERSION_PREFIX != 0 {
             let version = message_prefix & !MESSAGE_VERSION_PREFIX;
             match version {
@@ -251,7 +251,7 @@ fn do_get_packet_offsets(
         .ok_or(PacketError::InvalidSignatureLen)?;
 
     // read MessageHeader.num_required_signatures (serialized with u8)
-    let sig_len_maybe_trusted = packet.data[msg_header_offset];
+    let sig_len_maybe_trusted = packet.data()[msg_header_offset];
 
     let message_account_keys_len_offset = msg_header_offset
         .checked_add(MESSAGE_HEADER_LENGTH)
@@ -262,7 +262,7 @@ fn do_get_packet_offsets(
     // num_readonly_signed_accounts, the first account is not debitable, and cannot be charged
     // required transaction fees.
     let readonly_signer_offset = msg_header_offset_plus_one;
-    if sig_len_maybe_trusted <= packet.data[readonly_signer_offset] {
+    if sig_len_maybe_trusted <= packet.data()[readonly_signer_offset] {
         return Err(PacketError::PayerNotWritable);
     }
 
@@ -272,7 +272,7 @@ fn do_get_packet_offsets(
 
     // read the length of Message.account_keys (serialized with short_vec)
     let (pubkey_len, pubkey_len_size) =
-        decode_shortu16_len(&packet.data[message_account_keys_len_offset..])
+        decode_shortu16_len(&packet.data()[message_account_keys_len_offset..])
             .map_err(|_| PacketError::InvalidShortVec)?;
 
     let pubkey_start = message_account_keys_len_offset
@@ -352,7 +352,7 @@ fn check_for_simple_vote_transaction(
         .ok_or(PacketError::InvalidLen)?;
 
     let (instruction_len, instruction_len_size) =
-        decode_shortu16_len(&packet.data[instructions_len_offset..])
+        decode_shortu16_len(&packet.data()[instructions_len_offset..])
             .map_err(|_| PacketError::InvalidLen)?;
 
     // skip if has more than 1 instruction
@@ -370,7 +370,7 @@ fn check_for_simple_vote_transaction(
         .filter(|v| *v <= packet.meta.size)
         .ok_or(PacketError::InvalidLen)?;
 
-    let instruction_program_id_index: usize = usize::from(packet.data[instruction_start]);
+    let instruction_program_id_index: usize = usize::from(packet.data()[instruction_start]);
 
     if instruction_program_id_index >= packet_offsets.pubkey_len as usize {
         return Err(PacketError::InvalidProgramIdIndex);
@@ -384,7 +384,7 @@ fn check_for_simple_vote_transaction(
         .checked_add(size_of::<Pubkey>())
         .ok_or(PacketError::InvalidLen)?;
 
-    if &packet.data[instruction_program_id_start..instruction_program_id_end]
+    if &packet.data()[instruction_program_id_start..instruction_program_id_end]
         == solana_sdk::vote::program::id().as_ref()
     {
         packet.meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
@@ -492,7 +492,7 @@ impl Deduper {
             return 1;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(&packet.data[0..packet.meta.size]);
+        hasher.write(packet.data());
         let hash = hasher.finish();
         let len = self.filter.len();
         let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
@@ -846,8 +846,8 @@ mod tests {
         let tx = test_tx();
         let mut packet = Packet::from_data(None, tx).unwrap();
 
-        packet.data[0] = 0xff;
-        packet.data[1] = 0xff;
+        packet.buffer_mut()[0] = 0xff;
+        packet.buffer_mut()[1] = 0xff;
         packet.meta.size = 2;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
@@ -919,7 +919,7 @@ mod tests {
         let mut packet = Packet::from_data(None, tx).unwrap();
 
         // Make the signatures len huge
-        packet.data[0] = 0x7f;
+        packet.buffer_mut()[0] = 0x7f;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidSignatureLen));
@@ -931,10 +931,10 @@ mod tests {
         let mut packet = Packet::from_data(None, tx).unwrap();
 
         // Make the signatures len huge
-        packet.data[0] = 0xff;
-        packet.data[1] = 0xff;
-        packet.data[2] = 0xff;
-        packet.data[3] = 0xff;
+        packet.buffer_mut()[0] = 0xff;
+        packet.buffer_mut()[1] = 0xff;
+        packet.buffer_mut()[2] = 0xff;
+        packet.buffer_mut()[3] = 0xff;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidShortVec));
@@ -948,7 +948,7 @@ mod tests {
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         // make pubkey len huge
-        packet.data[res.unwrap().pubkey_start as usize - 1] = 0x7f;
+        packet.buffer_mut()[res.unwrap().pubkey_start as usize - 1] = 0x7f;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::InvalidPubkeyLen));
@@ -982,7 +982,7 @@ mod tests {
         let res = sigverify::do_get_packet_offsets(&packet, 0);
 
         // set message version to 1
-        packet.data[res.unwrap().msg_start as usize] = MESSAGE_VERSION_PREFIX + 1;
+        packet.buffer_mut()[res.unwrap().msg_start as usize] = MESSAGE_VERSION_PREFIX + 1;
 
         let res = sigverify::do_get_packet_offsets(&packet, 0);
         assert_eq!(res, Err(PacketError::UnsupportedVersion));
@@ -997,10 +997,11 @@ mod tests {
 
         // set message version to 0
         let msg_start = legacy_offsets.msg_start as usize;
-        let msg_bytes = packet.data[msg_start..packet.meta.size].to_vec();
-        packet.data[msg_start] = MESSAGE_VERSION_PREFIX;
+        let msg_bytes = packet.data()[msg_start..].to_vec();
+        packet.buffer_mut()[msg_start] = MESSAGE_VERSION_PREFIX;
         packet.meta.size += 1;
-        packet.data[msg_start + 1..packet.meta.size].copy_from_slice(&msg_bytes);
+        let msg_end = packet.meta.size;
+        packet.buffer_mut()[msg_start + 1..msg_end].copy_from_slice(&msg_bytes);
 
         let offsets = sigverify::do_get_packet_offsets(&packet, 0).unwrap();
         let expected_offsets = {
@@ -1119,7 +1120,7 @@ mod tests {
 
         // jumble some data to test failure
         if modify_data {
-            packet.data[20] = packet.data[20].wrapping_add(10);
+            packet.buffer_mut()[20] = packet.data()[20].wrapping_add(10);
         }
 
         let mut batches = generate_packet_batches(&packet, n, 2);
@@ -1185,7 +1186,7 @@ mod tests {
         let num_batches = 3;
         let mut batches = generate_packet_batches(&packet, n, num_batches);
 
-        packet.data[40] = packet.data[40].wrapping_add(8);
+        packet.buffer_mut()[40] = packet.data()[40].wrapping_add(8);
 
         batches[0].push(packet);
 
@@ -1229,8 +1230,8 @@ mod tests {
                 let packet = thread_rng().gen_range(0, batches[batch].len());
                 let offset = thread_rng().gen_range(0, batches[batch][packet].meta.size);
                 let add = thread_rng().gen_range(0, 255);
-                batches[batch][packet].data[offset] =
-                    batches[batch][packet].data[offset].wrapping_add(add);
+                batches[batch][packet].buffer_mut()[offset] =
+                    batches[batch][packet].data()[offset].wrapping_add(add);
             }
 
             let batch_to_disable = thread_rng().gen_range(0, batches.len());
@@ -1504,7 +1505,7 @@ mod tests {
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| start.push(p.clone()))
             });
-            start.sort_by_key(|p| p.data);
+            start.sort_by(|a, b| a.data().cmp(b.data()));
 
             let packet_count = count_valid_packets(&batches, |_| ());
             let res = shrink_batches(&mut batches);
@@ -1517,7 +1518,7 @@ mod tests {
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| end.push(p.clone()))
             });
-            end.sort_by_key(|p| p.data);
+            end.sort_by(|a, b| a.data().cmp(b.data()));
             let packet_count2 = count_valid_packets(&batches, |_| ());
             assert_eq!(packet_count, packet_count2);
             assert_eq!(start, end);

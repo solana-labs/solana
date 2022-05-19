@@ -814,7 +814,7 @@ mod tests {
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
+                    Shred::new_from_serialized_shred(p.data().to_vec()).ok()
                 })
                 .collect();
             assert!(!rv.is_empty());
@@ -898,7 +898,7 @@ mod tests {
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
+                    Shred::new_from_serialized_shred(p.data().to_vec()).ok()
                 })
                 .collect();
             assert_eq!(rv[0].index(), 1);
@@ -1347,7 +1347,7 @@ mod tests {
 
     fn verify_responses<'a>(request: &ShredRepairType, packets: impl Iterator<Item = &'a Packet>) {
         for packet in packets {
-            let shred_payload = packet.data.to_vec();
+            let shred_payload = packet.data().to_vec();
             let shred = Shred::new_from_serialized_shred(shred_payload).unwrap();
             request.verify_response(&shred);
         }
