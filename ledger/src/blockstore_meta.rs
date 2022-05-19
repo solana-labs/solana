@@ -331,7 +331,7 @@ pub struct ProgramCost {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct OptimisticSlot {
+pub struct OptimisticSlotMeta {
     pub hash: Hash,
     pub timestamp: UnixTimestamp,
 }

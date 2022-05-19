@@ -1106,28 +1106,28 @@ impl ColumnMetrics for columns::BankHash {
     }
 }
 
-impl ColumnMetrics for columns::OptimisticSlot {
+impl ColumnMetrics for columns::OptimisticSlots {
     fn report_cf_metrics(
         cf_metrics: BlockstoreRocksDbColumnFamilyMetrics,
         column_options: &Arc<LedgerColumnOptions>,
     ) {
         cf_metrics.report_metrics(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
-            "optimistic_slot",
+            "optimistic_slots",
             column_options
         ));
     }
     fn rocksdb_get_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_read_perf,op=get",
-            "optimistic_slot",
+            "optimistic_slots",
             column_options
         )
     }
     fn rocksdb_put_perf_metric_header(column_options: &Arc<LedgerColumnOptions>) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_write_perf,op=put",
-            "optimistic_slot",
+            "optimistic_slots",
             column_options
         )
     }
@@ -1136,7 +1136,7 @@ impl ColumnMetrics for columns::OptimisticSlot {
     ) -> &'static str {
         rocksdb_metric_header!(
             "blockstore_rocksdb_write_perf,op=delete",
-            "optimistic_slot",
+            "optimistic_slots",
             column_options
         )
     }

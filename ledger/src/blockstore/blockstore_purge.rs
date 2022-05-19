@@ -214,7 +214,7 @@ impl Blockstore {
                 .is_ok()
             & self
                 .db
-                .delete_range_cf::<cf::OptimisticSlot>(&mut write_batch, from_slot, to_slot)
+                .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
 
         let mut w_active_transaction_status_index =
@@ -335,7 +335,7 @@ impl Blockstore {
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false)
             && self
-                .optimistic_slot_cf
+                .optimistic_slots_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         compact_timer.stop();

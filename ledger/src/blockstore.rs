@@ -68,7 +68,7 @@ pub mod blockstore_purge;
 pub use {
     crate::{
         blockstore_db::BlockstoreError,
-        blockstore_meta::{OptimisticSlot, SlotMeta},
+        blockstore_meta::{OptimisticSlotMeta, SlotMeta},
     },
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
@@ -161,7 +161,7 @@ pub struct Blockstore {
     block_height_cf: LedgerColumn<cf::BlockHeight>,
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
-    optimistic_slot_cf: LedgerColumn<cf::OptimisticSlot>,
+    optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
@@ -383,7 +383,7 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
-        let optimistic_slot_cf = db.column();
+        let optimistic_slots_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -435,7 +435,7 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
-            optimistic_slot_cf,
+            optimistic_slots_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             shred_timing_point_sender: None,
@@ -758,7 +758,7 @@ impl Blockstore {
         self.block_height_cf.submit_rocksdb_cf_metrics();
         self.program_costs_cf.submit_rocksdb_cf_metrics();
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
-        self.optimistic_slot_cf.submit_rocksdb_cf_metrics();
+        self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
     }
 
     fn try_shred_recovery(
@@ -3028,11 +3028,11 @@ impl Blockstore {
         hash: &Hash,
         timestamp: UnixTimestamp,
     ) -> Result<()> {
-        let slot_data = OptimisticSlot {
+        let slot_data = OptimisticSlotMeta {
             hash: *hash,
             timestamp,
         };
-        self.optimistic_slot_cf.put(slot, &slot_data)
+        self.optimistic_slots_cf.put(slot, &slot_data)
     }
 
     pub fn get_latest_optimistic_slots(
@@ -3041,10 +3041,10 @@ impl Blockstore {
     ) -> Result<Vec<(Slot, Hash, UnixTimestamp)>> {
         Ok(self
             .db
-            .iter::<cf::OptimisticSlot>(IteratorMode::End)?
+            .iter::<cf::OptimisticSlots>(IteratorMode::End)?
             .take(num)
             .map(|(slot, data)| {
-                let OptimisticSlot { hash, timestamp } = deserialize(&data).unwrap();
+                let OptimisticSlotMeta { hash, timestamp } = deserialize(&data).unwrap();
                 (slot, hash, timestamp)
             })
             .collect())
