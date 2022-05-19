@@ -591,6 +591,9 @@ pub struct TransactionExecutionDetails {
     pub inner_instructions: Option<InnerInstructionsList>,
     pub durable_nonce_fee: Option<DurableNonceFee>,
     pub executed_units: u64,
+    /// The change in accounts data len for this transaction.
+    /// NOTE: This value is valid IFF `status` is `Ok`.
+    pub accounts_data_len_delta: i64,
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -3953,9 +3956,6 @@ impl Bank {
                 )
                 .map(|_| info)
             })
-            .map(|info| {
-                self.update_accounts_data_len(info.accounts_data_len_delta);
-            })
             .map_err(|err| {
                 match err {
                     TransactionError::InvalidRentPayingAccount
@@ -3968,6 +3968,10 @@ impl Bank {
                 }
                 err
             });
+        let accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
@@ -3994,6 +3998,7 @@ impl Bank {
                 inner_instructions,
                 durable_nonce_fee,
                 executed_units,
+                accounts_data_len_delta,
             },
             executors,
         }
@@ -4504,6 +4509,16 @@ impl Bank {
             timings.execute_accessories.update_executors_us,
             update_executors_time.as_us()
         );
+
+        let accounts_data_len_delta = execution_results
+            .iter()
+            .filter_map(|execution_result| {
+                execution_result
+                    .details()
+                    .map(|details| details.accounts_data_len_delta)
+            })
+            .sum();
+        self.update_accounts_data_len(accounts_data_len_delta);
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
         timings.saturating_add_in_place(
@@ -6890,7 +6905,8 @@ pub(crate) mod tests {
                 log_messages: None,
                 inner_instructions: None,
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
-                executed_units: 0u64,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
             },
             executors: Rc::new(RefCell::new(Executors::default())),
         }

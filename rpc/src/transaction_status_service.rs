@@ -346,7 +346,8 @@ pub(crate) mod tests {
                 )
                 .unwrap(),
             )),
-            executed_units: 0u64,
+            executed_units: 0,
+            accounts_data_len_delta: 0,
         });
 
         let balances = TransactionBalancesSet {
