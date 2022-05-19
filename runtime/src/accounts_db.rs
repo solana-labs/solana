@@ -3713,10 +3713,11 @@ impl AccountsDb {
                 .get_slot_storage_entries(slot)
                 .unwrap_or_default();
             self.thread_pool.install(|| {
-                storage_maps
-                    .par_iter()
-                    .flat_map(|storage| storage.all_accounts())
-                    .for_each(|account| storage_scan_func(&retval, LoadedAccount::Stored(account)));
+                storage_maps.par_iter().for_each(|storage| {
+                    AppendVecAccountsIter::new(&storage.accounts).for_each(|account| {
+                        storage_scan_func(&retval, LoadedAccount::Stored(account))
+                    })
+                });
             });
 
             ScanStorageResult::Stored(retval)
@@ -7333,8 +7334,7 @@ impl AccountsDb {
             .sum();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage_maps.iter().for_each(|storage| {
-            let accounts = storage.all_accounts();
-            accounts.into_iter().for_each(|stored_account| {
+            AppendVecAccountsIter::new(&storage.accounts).for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
                 let pubkey = stored_account.meta.pubkey;
                 assert!(!self.is_filler_account(&pubkey));
