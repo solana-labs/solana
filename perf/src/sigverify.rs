@@ -471,10 +471,11 @@ impl Deduper {
         }
     }
 
+    // Returns 1 if packet is to be discarded. Else, 0.
     fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta.discard() {
-            return 0;
+            return 1;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(&packet.data[0..packet.meta.size]);
