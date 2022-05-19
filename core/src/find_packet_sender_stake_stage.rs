@@ -84,33 +84,20 @@ impl FindPacketSenderStakeStage {
         sender: FindPacketSenderStakeSender,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
+        ip_to_stake: Arc<RwLock<HashMap<IpAddr, u64>>>,
         name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
         let thread_hdl = Builder::new()
             .name("find-packet-sender-stake".to_string())
             .spawn(move || {
-                let mut last_stakes = Instant::now();
-                let mut ip_to_stake: HashMap<IpAddr, u64> = HashMap::new();
                 loop {
-                    let mut refresh_ip_to_stake_time = Measure::start("refresh_ip_to_stake_time");
-                    Self::try_refresh_ip_to_stake(
-                        &mut last_stakes,
-                        &mut ip_to_stake,
-                        bank_forks.clone(),
-                        cluster_info.clone(),
-                    );
-                    refresh_ip_to_stake_time.stop();
-                    stats.refresh_ip_to_stake_time = stats
-                        .refresh_ip_to_stake_time
-                        .saturating_add(refresh_ip_to_stake_time.as_us());
-
                     match streamer::recv_packet_batches(&packet_receiver) {
                         Ok((mut batches, num_packets, recv_duration)) => {
                             let num_batches = batches.len();
                             let mut apply_sender_stakes_time =
                                 Measure::start("apply_sender_stakes_time");
-                            Self::apply_sender_stakes(&mut batches, &ip_to_stake);
+                            Self::apply_sender_stakes(&mut batches, &ip_to_stake.read().unwrap());
                             apply_sender_stakes_time.stop();
 
                             let mut send_batches_time = Measure::start("send_batches_time");

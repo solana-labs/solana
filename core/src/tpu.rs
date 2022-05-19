@@ -116,6 +116,14 @@ impl Tpu {
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes_updater_service = StakedNodesUpdaterService::new(
+            exit.clone(),
+            cluster_info.clone(),
+            bank_forks.clone(),
+            staked_nodes.clone(),
+        );
+
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
@@ -123,6 +131,7 @@ impl Tpu {
             find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
+            staked_nodes.clone(),
             "tpu-find-packet-sender-stake",
         );
 
@@ -134,18 +143,12 @@ impl Tpu {
             vote_find_packet_sender_stake_sender,
             bank_forks.clone(),
             cluster_info.clone(),
+            staked_nodes.clone(),
             "tpu-vote-find-packet-sender-stake",
         );
 
         let (verified_sender, verified_receiver) = unbounded();
 
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
-        let staked_nodes_updater_service = StakedNodesUpdaterService::new(
-            exit.clone(),
-            cluster_info.clone(),
-            bank_forks.clone(),
-            staked_nodes.clone(),
-        );
         let tpu_quic_t = spawn_server(
             transactions_quic_sockets,
             keypair,
