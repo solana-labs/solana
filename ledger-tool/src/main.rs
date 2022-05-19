@@ -758,11 +758,9 @@ fn load_bank_forks(
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
                     &incremental_snapshot_archives_dir,
                     full_snapshot_slot,
-                );
-            starting_slot = std::cmp::max(
-                full_snapshot_slot,
-                incremental_snapshot_slot.unwrap_or_default(),
-            );
+                )
+                .unwrap_or_default();
+            starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
         }
 
         Some(SnapshotConfig {
