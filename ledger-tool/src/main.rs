@@ -741,6 +741,8 @@ fn load_bank_forks(
         } else {
             "snapshot.ledger-tool"
         });
+
+    let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
@@ -748,6 +750,21 @@ fn load_bank_forks(
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         let incremental_snapshot_archives_dir =
             incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
+
+        if let Some(full_snapshot_slot) =
+            snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
+        {
+            let incremental_snapshot_slot =
+                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                    &incremental_snapshot_archives_dir,
+                    full_snapshot_slot,
+                );
+            starting_slot = std::cmp::max(
+                full_snapshot_slot,
+                incremental_snapshot_slot.unwrap_or_default(),
+            );
+        }
+
         Some(SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
@@ -757,6 +774,22 @@ fn load_bank_forks(
             ..SnapshotConfig::default()
         })
     };
+
+    if let Some(halt_slot) = process_options.halt_at_slot {
+        for slot in starting_slot..=halt_slot {
+            if let Ok(Some(slot_meta)) = blockstore.meta(slot) {
+                if !slot_meta.is_full() {
+                    eprintln!("blockstore slot {} is not full which is required for replaying slots {}..={}",
+                        slot, starting_slot, halt_slot);
+                    exit(1);
+                }
+            } else {
+                eprintln!("blockstore missing data for slot {} which is required for replaying slots {}..={}", slot, starting_slot, halt_slot);
+                exit(1);
+            }
+        }
+    }
+
     let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
         if !blockstore.is_primary_access() {
             // Be defensive, when default account dir is explicitly specified, it's still possible
@@ -2331,11 +2364,6 @@ fn main() {
                 } else {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
-
-                if blockstore.meta(snapshot_slot).unwrap().is_none() {
-                    eprintln!("snapshot slot {} is not available in the blockstore. Cannot create a snapshot at this slot", snapshot_slot);
-                    exit(1);
-                }
 
                 info!(
                     "Creating {}snapshot of slot {} in {}",
