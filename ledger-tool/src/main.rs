@@ -187,6 +187,7 @@ fn output_slot(
     allow_dead_slots: bool,
     method: &LedgerOutputMethod,
     verbose_level: u64,
+    all_program_ids: &mut HashMap<Pubkey, u64>,
 ) -> Result<(), String> {
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
@@ -267,7 +268,11 @@ fn output_slot(
             "  Transactions: {}, hashes: {}, block_hash: {}",
             transactions, num_hashes, blockhash,
         );
-        println!("  Programs: {:?}", program_ids);
+        for (pubkey, count) in program_ids.iter() {
+            *all_program_ids.entry(*pubkey).or_insert(0) += count;
+        }
+        println!("  Programs:");
+        output_sorted_program_ids(program_ids);
     }
     Ok(())
 }
@@ -298,6 +303,7 @@ fn output_ledger(
 
     let num_slots = num_slots.unwrap_or(Slot::MAX);
     let mut num_printed = 0;
+    let mut all_program_ids = HashMap::new();
     for (slot, slot_meta) in slot_iterator {
         if only_rooted && !blockstore.is_root(slot) {
             continue;
@@ -316,7 +322,14 @@ fn output_ledger(
             }
         }
 
-        if let Err(err) = output_slot(&blockstore, slot, allow_dead_slots, &method, verbose_level) {
+        if let Err(err) = output_slot(
+            &blockstore,
+            slot,
+            allow_dead_slots,
+            &method,
+            verbose_level,
+            &mut all_program_ids,
+        ) {
             eprintln!("{}", err);
         }
         num_printed += 1;
@@ -327,6 +340,18 @@ fn output_ledger(
 
     if method == LedgerOutputMethod::Json {
         stdout().write_all(b"\n]}\n").expect("close array");
+    } else {
+        println!("Summary of Programs:");
+        output_sorted_program_ids(all_program_ids);
+    }
+}
+
+fn output_sorted_program_ids(program_ids: HashMap<Pubkey, u64>) {
+    let mut program_ids_array: Vec<_> = program_ids.into_iter().collect();
+    // Sort descending by count of program id
+    program_ids_array.sort_by(|a, b| b.1.cmp(&a.1));
+    for (program_id, count) in program_ids_array.iter() {
+        println!("{:<44}: {}", program_id.to_string(), count);
     }
 }
 
@@ -1965,6 +1990,7 @@ fn main() {
                         allow_dead_slots,
                         &LedgerOutputMethod::Print,
                         verbose_level,
+                        &mut HashMap::new(),
                     ) {
                         eprintln!("{}", err);
                     }
