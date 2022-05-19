@@ -73,6 +73,10 @@ impl ConnectionCacheStats {
             client_stats.zero_rtt_rejects.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
+        self.total_client_stats.make_connection_ms.fetch_add(
+            client_stats.make_connection_ms.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         self.sent_packets
             .fetch_add(num_packets as u64, Ordering::Relaxed);
         self.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -124,6 +128,13 @@ impl ConnectionCacheStats {
             (
                 "get_connection_miss_ms",
                 self.get_connection_miss_ms.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "make_connection_ms",
+                self.total_client_stats
+                    .make_connection_ms
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
