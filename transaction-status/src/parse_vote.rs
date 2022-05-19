@@ -148,7 +148,7 @@ pub fn parse_vote(
             let vote = json!({
                 "slots": vote.slots,
                 "hash": vote.hash.to_string(),
-                "timestamp": vote.timestamp,
+                "timestamp_ms": vote.timestamp_ms,
             });
             Ok(ParsedInstructionEnum {
                 instruction_type: "voteSwitch".to_string(),
