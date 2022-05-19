@@ -777,12 +777,15 @@ fn load_bank_forks(
         for slot in starting_slot..=halt_slot {
             if let Ok(Some(slot_meta)) = blockstore.meta(slot) {
                 if !slot_meta.is_full() {
-                    eprintln!("blockstore slot {} is not full which is required for replaying slots {}..={}",
-                        slot, starting_slot, halt_slot);
+                    eprintln!("Unable to process from slot {} to {} due to blockstore slot {} not being full",
+                        starting_slot, halt_slot, slot);
                     exit(1);
                 }
             } else {
-                eprintln!("blockstore missing data for slot {} which is required for replaying slots {}..={}", slot, starting_slot, halt_slot);
+                eprintln!(
+                    "Unable to process from slot {} to {} due to blockstore missing slot {}",
+                    starting_slot, halt_slot, slot
+                );
                 exit(1);
             }
         }
