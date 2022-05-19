@@ -3367,7 +3367,7 @@ impl AccountsDb {
 
                 ids.push(ancient_store.append_vec_id());
                 // if this slot is not the ancient slot we're writing to, then this root will be dropped
-                let mut drop_root = slot != ancient_slot;
+                drop_root = slot != ancient_slot;
 
                 // write what we can to the current ancient storage
                 self.store_ancient_accounts(
@@ -3485,12 +3485,6 @@ impl AccountsDb {
         let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
-
-        // could be temporary
-        if is_startup {
-            self.shrink_ancient_slots();
-        }
-
         if is_startup && self.caching_enabled {
             let slots = self.all_slots_in_storage();
             let threads = num_cpus::get();

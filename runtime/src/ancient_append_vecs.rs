@@ -5,12 +5,10 @@
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, AccountsDb, FoundStoredAccount},
-        accounts_index::AccountIndexGetResult,
+        accounts_db::FoundStoredAccount,
         append_vec::{AppendVec, StoredAccountMeta},
     },
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
-    std::sync::Arc,
 };
 
 /// a set of accounts need to be stored.
