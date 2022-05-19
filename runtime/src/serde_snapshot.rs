@@ -532,10 +532,6 @@ where
     let num_collisions = AtomicUsize::new(0);
     let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
-    let a_slot = snapshot_storages
-        .first()
-        .map(|(slot, _)| *slot)
-        .unwrap_or_default();
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
         .map(|i| {
@@ -649,7 +645,7 @@ where
     accounts_db.maybe_add_filler_accounts(
         &genesis_config.epoch_schedule,
         &genesis_config.rent,
-        genesis_config.epoch_schedule.get_epoch(a_slot),
+        genesis_config.epoch_schedule.get_epoch(snapshot_slot),
     );
 
     handle.join().unwrap();
