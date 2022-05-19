@@ -346,7 +346,13 @@ pub(crate) mod tests {
                 )
                 .unwrap(),
             )),
+<<<<<<< HEAD
             executed_units: 0u64,
+=======
+            return_data: None,
+            executed_units: 0,
+            accounts_data_len_delta: 0,
+>>>>>>> 021276c95 (Move updating accounts data len from execute to commit (#25256))
         });
 
         let balances = TransactionBalancesSet {
