@@ -4232,12 +4232,8 @@ impl Bank {
             process_message_time.as_us()
         );
 
-        let accounts_data_len_delta = process_result
-            .as_ref()
-            .map(|info| info.accounts_data_len_delta)
-            .unwrap_or(0);
         let status = process_result
-            .and_then(|_| {
+            .and_then(|info| {
                 let post_account_state_info =
                     self.get_transaction_account_state_info(&transaction_context, tx.message());
                 self.verify_transaction_account_state_changes(
@@ -4245,6 +4241,7 @@ impl Bank {
                     &post_account_state_info,
                     &transaction_context,
                 )
+                .map(|_| info)
             })
             .map_err(|err| {
                 match err {
@@ -4258,6 +4255,10 @@ impl Bank {
                 }
                 err
             });
+        let accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
