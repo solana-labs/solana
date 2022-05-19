@@ -5,7 +5,7 @@ pub use target_arch::*;
 #[repr(transparent)]
 pub struct PodEdwardsPoint(pub [u8; 32]);
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
         super::*,
@@ -99,7 +99,7 @@ mod target_arch {
             Some((&result).into())
         }
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(not(target_os = "solana"))]
         fn multiply(scalar: &PodScalar, point: &Self) -> Option<Self> {
             let scalar: Scalar = scalar.into();
             let point: EdwardsPoint = point.try_into().ok()?;
@@ -125,7 +125,7 @@ mod target_arch {
     }
 }
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 mod target_arch {
     use {
         super::*,

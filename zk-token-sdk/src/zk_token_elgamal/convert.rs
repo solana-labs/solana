@@ -10,7 +10,7 @@ impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphert
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
         super::pod,
@@ -97,14 +97,14 @@ mod target_arch {
     }
 
     // For proof verification, interpret pod::PedersenComm directly as CompressedRistretto
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl From<pod::PedersenCommitment> for CompressedRistretto {
         fn from(pod: pod::PedersenCommitment) -> Self {
             Self(pod.0)
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
         type Error = ProofError;
 
@@ -113,7 +113,7 @@ mod target_arch {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl From<DecryptHandle> for pod::DecryptHandle {
         fn from(handle: DecryptHandle) -> Self {
             Self(handle.to_bytes())
@@ -121,14 +121,14 @@ mod target_arch {
     }
 
     // For proof verification, interpret pod::PedersenDecHandle as CompressedRistretto
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl From<pod::DecryptHandle> for CompressedRistretto {
         fn from(pod: pod::DecryptHandle) -> Self {
             Self(pod.0)
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::DecryptHandle> for DecryptHandle {
         type Error = ProofError;
 
@@ -264,7 +264,7 @@ mod target_arch {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl TryFrom<RangeProof> for pod::RangeProof128 {
         type Error = RangeProofError;
 
@@ -294,7 +294,7 @@ mod target_arch {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     impl TryFrom<RangeProof> for pod::RangeProof256 {
         type Error = RangeProofError;
 
@@ -441,7 +441,7 @@ mod target_arch {
     }
 }
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 #[allow(unused_variables)]
 mod target_arch {}
 
