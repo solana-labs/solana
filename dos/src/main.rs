@@ -45,8 +45,8 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::rpc_client::RpcClient,
     solana_client::{
+        rpc_client::RpcClient,
         tpu_connection::{ClientStats, TpuConnection},
         udp_client::UdpTpuConnection,
     },
@@ -254,10 +254,9 @@ const SEND_BATCH_MAX_SIZE: usize = 1 << 14;
 fn create_sender_thread(
     tx_receiver: Receiver<TransactionMsg>,
     mut n_alive_threads: usize,
-    target: &SocketAddr,
+    target: SocketAddr,
     num_send: usize,
 ) -> thread::JoinHandle<()> {
-    let target = target.clone();
     let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
 
     let client = UdpTpuConnection::new(target);
@@ -334,7 +333,6 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
 
     let mut transaction_generator = transaction_generator.clone();
     let transaction_params: &TransactionParams = &transaction_generator.transaction_params;
-    let client = client.clone();
 
     // Generate n=1000 unique keypairs
     // The number of chunks is described by binomial coefficient
@@ -572,7 +570,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
-    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target, num_send);
+    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, target, num_send);
     let mut thread_id = 0;
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
