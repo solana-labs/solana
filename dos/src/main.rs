@@ -257,11 +257,10 @@ fn create_sender_thread(
     target: &SocketAddr,
     num_send: usize,
 ) -> thread::JoinHandle<()> {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let target = target.clone();
     let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
 
-    let client = UdpTpuConnection::new(socket, target);
+    let client = UdpTpuConnection::new(target);
     let mut time_send_ns = 0;
     let mut time_generate_ns = 0;
 
