@@ -129,8 +129,6 @@ impl Tpu {
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
             find_packet_sender_stake_sender,
-            bank_forks.clone(),
-            cluster_info.clone(),
             staked_nodes.clone(),
             "tpu-find-packet-sender-stake",
         );
@@ -141,8 +139,6 @@ impl Tpu {
         let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             vote_packet_receiver,
             vote_find_packet_sender_stake_sender,
-            bank_forks.clone(),
-            cluster_info.clone(),
             staked_nodes.clone(),
             "tpu-vote-find-packet-sender-stake",
         );

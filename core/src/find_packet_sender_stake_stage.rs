@@ -2,11 +2,9 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
-    solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank_forks::BankForks,
     solana_sdk::timing::timestamp,
     solana_streamer::streamer::{self, StreamerError},
     std::{
@@ -14,7 +12,7 @@ use {
         net::IpAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
-        time::{Duration, Instant},
+        time,
     },
 };
 
