@@ -3157,14 +3157,11 @@ impl AccountsDb {
         }
 
         // If we squash accounts in a slot that is still within an epoch of a hash calculation's max slot, then
-        //  we could calculate the wrong rent_epoch and slot and thus the wrong overall accounts hash.
-        // So, only squash accounts in slots that are more than 1 epoch older than the last successful hash calculation.
-        let slot_one_epoch_old = self.get_accounts_hash_complete_one_epoch_old();
-        // some buffer to give normal clean and shrink a chance to run
-        let extra = 1000;
-        let old_slot = slot_one_epoch_old.saturating_sub(extra);
-
-        let mut old_slots = self.get_roots_less_than(old_slot);
+        //  we could calculate the wrong rent_epoch and slot for an individual account and thus the wrong overall accounts hash.
+        // So, only squash accounts in slots that are more than 1 epoch older than the last hash calculation.
+        // Subsequent hash calculations should be a higher slot.
+        let mut old_slots =
+            self.get_roots_less_than(self.get_accounts_hash_complete_one_epoch_old());
         old_slots.sort_unstable();
         self.combine_ancient_slots(old_slots);
     }
@@ -3172,7 +3169,7 @@ impl AccountsDb {
     fn create_ancient_append_vec(&self, slot: Slot) -> Option<(Slot, Arc<AccountStorageEntry>)> {
         let (new_ancient_storage, _time) =
             self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
-        error!(
+        info!(
             "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
             slot,
             get_ancient_append_vec_capacity(),
@@ -3225,8 +3222,6 @@ impl AccountsDb {
             Some(ancient_store),
             None,
         );
-        // can call this for extra checks
-        // verify_contents(self, ancient_store, ancient_slot, accounts);
     }
 
     /// get the storages from 'slot' to squash
@@ -3252,6 +3247,10 @@ impl AccountsDb {
         slot: Slot,
     ) -> bool {
         if all_storages.len() != 1 {
+            // we are dealing with roots that are more than 1 epoch old. I chose not to support or test the case where we have > 1 append vec per slot.
+            // So, such slots will NOT participate in ancient shrinking.
+            // since we skipped an ancient append vec, we don't want to append to whatever append vec USED to be the current one
+            *current_ancient = None;
             return false;
         }
         let storage = all_storages.first().unwrap();
@@ -3307,6 +3306,8 @@ impl AccountsDb {
                         continue;
                     }
                 };
+
+            // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
             let (stored_accounts, _num_stores, _original_bytes) =
                 self.get_unique_accounts_from_storages(old_storages.iter());
 
@@ -3347,48 +3348,55 @@ impl AccountsDb {
 
             let alive_accounts = alive_accounts_collect.into_inner().unwrap();
 
-            // we could sort these
-            // could follow what shrink does more closely
-            if stored_accounts.is_empty() {
-                continue; // skipping slot with no useful accounts to write
-            }
-            self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
-            let (ancient_slot, ancient_store) =
-                current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
-            let available_bytes = ancient_store.accounts.remaining_bytes();
-            let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
+            let mut drop_root;
+            let mut ids = vec![];
 
-            let mut ids = vec![ancient_store.append_vec_id()];
-            // if this slot is not the ancient slot we're writing to, then this root will be dropped
-            let mut drop_root = slot != ancient_slot;
-
-            // write what we can to the current ancient storage
-            self.store_ancient_accounts(
-                ancient_slot,
-                ancient_store,
-                &to_store,
-                StorageSelector::Primary,
-            );
-
-            // handle accounts from 'slot' which did not fit into the current ancient append vec
-            if to_store.has_overflow() {
-                // we need a new ancient append vec
-                current_ancient = self.create_ancient_append_vec(slot);
+            if alive_accounts.is_empty() {
+                // slot has no alive accounts
+                // but, it was a root and it probably had unref'd accounts
+                // so, the slot is no longer a root
+                drop_root = true;
+            } else {
+                self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
+                let available_bytes = ancient_store.accounts.remaining_bytes();
 
-                // now that this slot will be used to create a new ancient append vec, there will still be a root present at this slot, so don't drop this root
-                drop_root = false;
+                // we could sort alive_accounts
+                let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
 
                 ids.push(ancient_store.append_vec_id());
+                // if this slot is not the ancient slot we're writing to, then this root will be dropped
+                let mut drop_root = slot != ancient_slot;
 
-                // write the rest to the next ancient storage
+                // write what we can to the current ancient storage
                 self.store_ancient_accounts(
                     ancient_slot,
                     ancient_store,
                     &to_store,
-                    StorageSelector::Overflow,
+                    StorageSelector::Primary,
                 );
+
+                // handle accounts from 'slot' which did not fit into the current ancient append vec
+                if to_store.has_overflow() {
+                    // we need a new ancient append vec
+                    current_ancient = self.create_ancient_append_vec(slot);
+                    let (ancient_slot, ancient_store) =
+                        current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
+
+                    // now that this slot will be used to create a new ancient append vec, there will still be a root present at this slot, so don't drop this root
+                    drop_root = false;
+
+                    ids.push(ancient_store.append_vec_id());
+
+                    // write the rest to the next ancient storage
+                    self.store_ancient_accounts(
+                        ancient_slot,
+                        ancient_store,
+                        &to_store,
+                        StorageSelector::Overflow,
+                    );
+                }
             }
 
             // Purge old, overwritten storage entries

@@ -3,7 +3,6 @@
 //! 1. a slot that is older than an epoch old
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
-#![allow(dead_code)]
 use {
     crate::{
         accounts_db::{AccountStorageEntry, AccountsDb, FoundStoredAccount},
@@ -87,38 +86,6 @@ impl<'a> AccountsToStore<'a> {
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
         };
         (&self.accounts[range.clone()], &self.hashes[range])
-    }
-}
-
-/// debug function to make sure that the index is correct after squashing ancient append vecs
-pub fn verify_contents<'a>(
-    db: &AccountsDb,
-    writer: &Arc<AccountStorageEntry>,
-    append_vec_slot: Slot,
-    recent: &[(&Pubkey, &StoredAccountMeta<'a>, u64)],
-) {
-    let store_id = writer.append_vec_id();
-    for c in recent {
-        if let AccountIndexGetResult::Found(g, _) =
-            db.accounts_index.get(c.0, None, Some(append_vec_slot))
-        {
-            assert!(
-                g.slot_list().iter().any(|(slot, info)| {
-                    if slot == &append_vec_slot {
-                        assert_eq!(info.store_id(), store_id);
-                        true
-                    } else {
-                        false
-                    }
-                }),
-                "{}, {:?}, id: {}",
-                c.0,
-                g.slot_list(),
-                writer.append_vec_id()
-            )
-        } else {
-            panic!("not found: {}", c.0);
-        }
     }
 }
 
