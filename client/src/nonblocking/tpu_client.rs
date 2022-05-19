@@ -2,16 +2,20 @@ use {
     crate::{
         client_error::ClientError,
         connection_cache::send_wire_transaction_async,
-        pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
-        rpc_client::RpcClient,
+        nonblocking::{
+            rpc_client::RpcClient,
+            pubsub_client::{PubsubClient, PubsubClientError},
+        },
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::SlotUpdate,
+        tpu_client::{MAX_FANOUT_SLOTS, RecentLeaderSlots, TpuClientConfig},
         spinner,
     },
     bincode::serialize,
+    futures_util::stream::StreamExt,
     log::*,
     solana_sdk::{
-        clock::Slot,
+        clock::{DEFAULT_MS_PER_SLOT, Slot},
         commitment_config::CommitmentConfig,
         message::Message,
         pubkey::Pubkey,
@@ -21,15 +25,17 @@ use {
         transport::{Result as TransportResult, TransportError},
     },
     std::{
-        collections::{HashMap, HashSet, VecDeque},
-        net::{SocketAddr, UdpSocket},
+        collections::{HashMap, HashSet},
+        net::SocketAddr,
         str::FromStr,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::{sleep, JoinHandle},
-        time::{Duration, Instant},
+    },
+    tokio::{
+        task::JoinHandle,
+        time::{sleep, timeout, Duration, Instant},
     },
     thiserror::Error,
 };
@@ -50,32 +56,9 @@ pub enum TpuSenderError {
 
 type Result<T> = std::result::Result<T, TpuSenderError>;
 
-/// Default number of slots used to build TPU socket fanout set
-pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
-
-/// Maximum number of slots used to build TPU socket fanout set
-pub const MAX_FANOUT_SLOTS: u64 = 100;
-
-/// Config params for `TpuClient`
-#[derive(Clone, Debug)]
-pub struct TpuClientConfig {
-    /// The range of upcoming slots to include when determining which
-    /// leaders to send transactions to (min: 1, max: `MAX_FANOUT_SLOTS`)
-    pub fanout_slots: u64,
-}
-
-impl Default for TpuClientConfig {
-    fn default() -> Self {
-        Self {
-            fanout_slots: DEFAULT_FANOUT_SLOTS,
-        }
-    }
-}
-
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
 pub struct TpuClient {
-    _deprecated: UdpSocket, // TpuClient now uses the connection_cache to choose a send_socket
     fanout_slots: u64,
     leader_tpu_service: LeaderTpuService,
     exit: Arc<AtomicBool>,
@@ -85,27 +68,27 @@ pub struct TpuClient {
 impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
-    pub fn send_transaction(&self, transaction: &Transaction) -> bool {
+    pub async fn send_transaction(&self, transaction: &Transaction) -> bool {
         let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.send_wire_transaction(wire_transaction)
+        self.send_wire_transaction(wire_transaction).await
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
-    pub fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
-        self.try_send_wire_transaction(wire_transaction).is_ok()
+    pub async fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
+        self.try_send_wire_transaction(wire_transaction).await.is_ok()
     }
 
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     /// Returns the last error if all sends fail
-    pub fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
+    pub async fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
         let wire_transaction = serialize(transaction).expect("serialization should succeed");
-        self.try_send_wire_transaction(wire_transaction)
+        self.try_send_wire_transaction(wire_transaction).await
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
-    fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    async fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let mut last_error: Option<TransportError> = None;
         let mut some_success = false;
 
@@ -113,6 +96,7 @@ impl TpuClient {
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
+            // TODO real async
             let result = send_wire_transaction_async(wire_transaction.clone(), &tpu_address);
             if let Err(err) = result {
                 last_error = Some(err);
@@ -132,17 +116,16 @@ impl TpuClient {
     }
 
     /// Create a new client that disconnects when dropped
-    pub fn new(
+    pub async fn new(
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let leader_tpu_service =
-            LeaderTpuService::new(rpc_client.clone(), websocket_url, exit.clone())?;
+            LeaderTpuService::new(rpc_client.clone(), websocket_url, exit.clone()).await?;
 
         Ok(Self {
-            _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
             fanout_slots: config.fanout_slots.min(MAX_FANOUT_SLOTS).max(1),
             leader_tpu_service,
             exit,
@@ -150,7 +133,7 @@ impl TpuClient {
         })
     }
 
-    pub fn send_and_confirm_messages_with_spinner<T: Signers>(
+    pub async fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
         signers: &T,
@@ -191,11 +174,11 @@ impl TpuClient {
         };
 
         let mut confirmed_transactions = 0;
-        let mut block_height = self.rpc_client.get_block_height()?;
+        let mut block_height = self.rpc_client.get_block_height().await?;
         while expired_blockhash_retries > 0 {
             let (blockhash, last_valid_block_height) = self
                 .rpc_client
-                .get_latest_blockhash_with_commitment(self.rpc_client.commitment())?;
+                .get_latest_blockhash_with_commitment(self.rpc_client.commitment()).await?;
 
             let mut pending_transactions = HashMap::new();
             for (i, mut transaction) in transactions {
@@ -210,8 +193,8 @@ impl TpuClient {
                 // Periodically re-send all pending transactions
                 if Instant::now().duration_since(last_resend) > TRANSACTION_RESEND_INTERVAL {
                     for (index, (_i, transaction)) in pending_transactions.values().enumerate() {
-                        if !self.send_transaction(transaction) {
-                            let _result = self.rpc_client.send_transaction(transaction).ok();
+                        if !self.send_transaction(transaction).await {
+                            let _result = self.rpc_client.send_transaction(transaction).await.ok();
                         }
                         set_message(
                             confirmed_transactions,
@@ -219,7 +202,7 @@ impl TpuClient {
                             last_valid_block_height,
                             &format!("Sending {}/{} transactions", index + 1, num_transactions,),
                         );
-                        sleep(SEND_TRANSACTION_INTERVAL);
+                        sleep(SEND_TRANSACTION_INTERVAL).await;
                     }
                     last_resend = Instant::now();
                 }
@@ -234,8 +217,8 @@ impl TpuClient {
                 );
                 let mut new_block_height = block_height;
                 while block_height == new_block_height && block_height_refreshes > 0 {
-                    sleep(Duration::from_millis(500));
-                    new_block_height = self.rpc_client.get_block_height()?;
+                    sleep(Duration::from_millis(500)).await;
+                    new_block_height = self.rpc_client.get_block_height().await?;
                     block_height_refreshes -= 1;
                 }
                 block_height = new_block_height;
@@ -248,6 +231,7 @@ impl TpuClient {
                     if let Ok(result) = self
                         .rpc_client
                         .get_signature_statuses(pending_signatures_chunk)
+                        .await
                     {
                         let statuses = result.value;
                         for (signature, status) in
@@ -295,12 +279,10 @@ impl TpuClient {
     pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_client
     }
-}
 
-impl Drop for TpuClient {
-    fn drop(&mut self) {
+    pub async fn shutdown(&mut self) {
         self.exit.store(true, Ordering::Relaxed);
-        self.leader_tpu_service.join();
+        self.leader_tpu_service.join().await;
     }
 }
 
@@ -313,10 +295,10 @@ struct LeaderTpuCache {
 }
 
 impl LeaderTpuCache {
-    fn new(rpc_client: &RpcClient, first_slot: Slot) -> Result<Self> {
-        let slots_in_epoch = rpc_client.get_epoch_info()?.slots_in_epoch;
-        let leaders = Self::fetch_slot_leaders(rpc_client, first_slot, slots_in_epoch)?;
-        let leader_tpu_map = Self::fetch_cluster_tpu_sockets(rpc_client)?;
+    async fn new(rpc_client: &RpcClient, first_slot: Slot) -> Result<Self> {
+        let slots_in_epoch = rpc_client.get_epoch_info().await?.slots_in_epoch;
+        let leaders = Self::fetch_slot_leaders(rpc_client, first_slot, slots_in_epoch).await?;
+        let leader_tpu_map = Self::fetch_cluster_tpu_sockets(rpc_client).await?;
         Ok(Self {
             first_slot,
             leaders,
@@ -367,8 +349,8 @@ impl LeaderTpuCache {
         }
     }
 
-    fn fetch_cluster_tpu_sockets(rpc_client: &RpcClient) -> Result<HashMap<Pubkey, SocketAddr>> {
-        let cluster_contact_info = rpc_client.get_cluster_nodes()?;
+    async fn fetch_cluster_tpu_sockets(rpc_client: &RpcClient) -> Result<HashMap<Pubkey, SocketAddr>> {
+        let cluster_contact_info = rpc_client.get_cluster_nodes().await?;
         Ok(cluster_contact_info
             .into_iter()
             .filter_map(|contact_info| {
@@ -380,67 +362,13 @@ impl LeaderTpuCache {
             .collect())
     }
 
-    fn fetch_slot_leaders(
+    async fn fetch_slot_leaders(
         rpc_client: &RpcClient,
         start_slot: Slot,
         slots_in_epoch: Slot,
     ) -> Result<Vec<Pubkey>> {
         let fanout = (2 * MAX_FANOUT_SLOTS).min(slots_in_epoch);
-        Ok(rpc_client.get_slot_leaders(start_slot, fanout)?)
-    }
-}
-
-// 48 chosen because it's unlikely that 12 leaders in a row will miss their slots
-const MAX_SLOT_SKIP_DISTANCE: u64 = 48;
-
-#[derive(Clone, Debug)]
-pub(crate) struct RecentLeaderSlots(Arc<RwLock<VecDeque<Slot>>>);
-impl RecentLeaderSlots {
-    pub(crate) fn new(current_slot: Slot) -> Self {
-        let mut recent_slots = VecDeque::new();
-        recent_slots.push_back(current_slot);
-        Self(Arc::new(RwLock::new(recent_slots)))
-    }
-
-    pub(crate) fn record_slot(&self, current_slot: Slot) {
-        let mut recent_slots = self.0.write().unwrap();
-        recent_slots.push_back(current_slot);
-        // 12 recent slots should be large enough to avoid a misbehaving
-        // validator from affecting the median recent slot
-        while recent_slots.len() > 12 {
-            recent_slots.pop_front();
-        }
-    }
-
-    // Estimate the current slot from recent slot notifications.
-    pub(crate) fn estimated_current_slot(&self) -> Slot {
-        let mut recent_slots: Vec<Slot> = self.0.read().unwrap().iter().cloned().collect();
-        assert!(!recent_slots.is_empty());
-        recent_slots.sort_unstable();
-
-        // Validators can broadcast invalid blocks that are far in the future
-        // so check if the current slot is in line with the recent progression.
-        let max_index = recent_slots.len() - 1;
-        let median_index = max_index / 2;
-        let median_recent_slot = recent_slots[median_index];
-        let expected_current_slot = median_recent_slot + (max_index - median_index) as u64;
-        let max_reasonable_current_slot = expected_current_slot + MAX_SLOT_SKIP_DISTANCE;
-
-        // Return the highest slot that doesn't exceed what we believe is a
-        // reasonable slot.
-        recent_slots
-            .into_iter()
-            .rev()
-            .find(|slot| *slot <= max_reasonable_current_slot)
-            .unwrap()
-    }
-}
-
-#[cfg(test)]
-impl From<Vec<Slot>> for RecentLeaderSlots {
-    fn from(recent_slots: Vec<Slot>) -> Self {
-        assert!(!recent_slots.is_empty());
-        Self(Arc::new(RwLock::new(recent_slots.into_iter().collect())))
+        Ok(rpc_client.get_slot_leaders(start_slot, fanout).await?)
     }
 }
 
@@ -449,34 +377,18 @@ impl From<Vec<Slot>> for RecentLeaderSlots {
 struct LeaderTpuService {
     recent_slots: RecentLeaderSlots,
     leader_tpu_cache: Arc<RwLock<LeaderTpuCache>>,
-    subscription: Option<PubsubClientSubscription<SlotUpdate>>,
-    t_leader_tpu_service: Option<JoinHandle<()>>,
+    t_leader_tpu_service: Option<JoinHandle<Result<()>>>,
 }
 
 impl LeaderTpuService {
-    fn new(rpc_client: Arc<RpcClient>, websocket_url: &str, exit: Arc<AtomicBool>) -> Result<Self> {
-        let start_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
+    async fn new(rpc_client: Arc<RpcClient>, websocket_url: &str, exit: Arc<AtomicBool>) -> Result<Self> {
+        let start_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::processed()).await?;
 
         let recent_slots = RecentLeaderSlots::new(start_slot);
-        let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(&rpc_client, start_slot)?));
+        let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(&rpc_client, start_slot).await?));
 
-        let subscription = if !websocket_url.is_empty() {
-            let recent_slots = recent_slots.clone();
-            Some(PubsubClient::slot_updates_subscribe(
-                websocket_url,
-                move |update| {
-                    let current_slot = match update {
-                        // This update indicates that a full slot was received by the connected
-                        // node so we can stop sending transactions to the leader for that slot
-                        SlotUpdate::Completed { slot, .. } => slot.saturating_add(1),
-                        // This update indicates that we have just received the first shred from
-                        // the leader for this slot and they are probably still accepting transactions.
-                        SlotUpdate::FirstShredReceived { slot, .. } => slot,
-                        _ => return,
-                    };
-                    recent_slots.record_slot(current_slot);
-                },
-            )?)
+        let pubsub_client = if !websocket_url.is_empty() {
+            Some(PubsubClient::new(websocket_url).await?)
         } else {
             None
         };
@@ -484,27 +396,21 @@ impl LeaderTpuService {
         let t_leader_tpu_service = Some({
             let recent_slots = recent_slots.clone();
             let leader_tpu_cache = leader_tpu_cache.clone();
-            std::thread::Builder::new()
-                .name("ldr-tpu-srv".to_string())
-                .spawn(move || Self::run(rpc_client, recent_slots, leader_tpu_cache, exit))
-                .unwrap()
+            tokio::spawn(async move {
+                Self::run(rpc_client, recent_slots, leader_tpu_cache, pubsub_client, exit).await
+            })
         });
 
         Ok(LeaderTpuService {
             recent_slots,
             leader_tpu_cache,
-            subscription,
             t_leader_tpu_service,
         })
     }
 
-    fn join(&mut self) {
-        if let Some(mut subscription) = self.subscription.take() {
-            let _ = subscription.send_unsubscribe();
-            let _ = subscription.shutdown();
-        }
+    async fn join(&mut self) {
         if let Some(t_handle) = self.t_leader_tpu_service.take() {
-            t_handle.join().unwrap();
+            t_handle.await.unwrap().unwrap();
         }
     }
 
@@ -516,27 +422,56 @@ impl LeaderTpuService {
             .get_leader_sockets(current_slot, fanout_slots)
     }
 
-    fn run(
+    async fn run(
         rpc_client: Arc<RpcClient>,
         recent_slots: RecentLeaderSlots,
         leader_tpu_cache: Arc<RwLock<LeaderTpuCache>>,
+        pubsub_client: Option<PubsubClient>,
         exit: Arc<AtomicBool>,
-    ) {
+    ) -> Result<()> {
+        let (mut notifications, unsubscribe) = if let Some(pubsub_client) = &pubsub_client {
+            let (notifications, unsubscribe) = pubsub_client.slot_updates_subscribe().await?;
+            (Some(notifications), Some(unsubscribe))
+        } else {
+            (None, None)
+        };
         let mut last_cluster_refresh = Instant::now();
-        let mut sleep_ms = 1000;
+        let mut sleep_ms = DEFAULT_MS_PER_SLOT;
         loop {
             if exit.load(Ordering::Relaxed) {
+                if let Some(unsubscribe) = unsubscribe {
+                    (unsubscribe)().await;
+                }
+                drop(notifications);
+                if let Some(pubsub_client) = pubsub_client {
+                    pubsub_client.shutdown().await.unwrap();
+                };
                 break;
             }
 
-            // Sleep a few slots before checking if leader cache needs to be refreshed again
-            std::thread::sleep(Duration::from_millis(sleep_ms));
-            sleep_ms = 1000;
+            // Sleep a slot before checking if leader cache needs to be refreshed again
+            sleep(Duration::from_millis(sleep_ms)).await;
+            sleep_ms = DEFAULT_MS_PER_SLOT;
+
+            if let Some(notifications) = &mut notifications {
+                while let Ok(Some(update)) = timeout(Duration::from_millis(10), notifications.next()).await {
+                    let current_slot = match update {
+                        // This update indicates that a full slot was received by the connected
+                        // node so we can stop sending transactions to the leader for that slot
+                        SlotUpdate::Completed { slot, .. } => slot.saturating_add(1),
+                        // This update indicates that we have just received the first shred from
+                        // the leader for this slot and they are probably still accepting transactions.
+                        SlotUpdate::FirstShredReceived { slot, .. } => slot,
+                        _ => continue,
+                    };
+                    recent_slots.record_slot(current_slot);
+                }
+            }
 
             // Refresh cluster TPU ports every 5min in case validators restart with new port configuration
             // or new validators come online
             if last_cluster_refresh.elapsed() > Duration::from_secs(5 * 60) {
-                match LeaderTpuCache::fetch_cluster_tpu_sockets(&rpc_client) {
+                match LeaderTpuCache::fetch_cluster_tpu_sockets(&rpc_client).await {
                     Ok(leader_tpu_map) => {
                         leader_tpu_cache.write().unwrap().leader_tpu_map = leader_tpu_map;
                         last_cluster_refresh = Instant::now();
@@ -558,7 +493,7 @@ impl LeaderTpuService {
                 )
             };
             if estimated_current_slot >= last_epoch_info_slot.saturating_sub(slots_in_epoch) {
-                if let Ok(epoch_info) = rpc_client.get_epoch_info() {
+                if let Ok(epoch_info) = rpc_client.get_epoch_info().await {
                     slots_in_epoch = epoch_info.slots_in_epoch;
                     let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
                     leader_tpu_cache.slots_in_epoch = slots_in_epoch;
@@ -570,7 +505,7 @@ impl LeaderTpuService {
                     &rpc_client,
                     estimated_current_slot,
                     slots_in_epoch,
-                ) {
+                ).await {
                     Ok(slot_leaders) => {
                         let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
                         leader_tpu_cache.first_slot = estimated_current_slot;
@@ -586,40 +521,6 @@ impl LeaderTpuService {
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_slot(recent_slots: RecentLeaderSlots, expected_slot: Slot) {
-        assert_eq!(recent_slots.estimated_current_slot(), expected_slot);
-    }
-
-    #[test]
-    fn test_recent_leader_slots() {
-        assert_slot(RecentLeaderSlots::new(0), 0);
-
-        let mut recent_slots: Vec<Slot> = (1..=12).collect();
-        assert_slot(RecentLeaderSlots::from(recent_slots.clone()), 12);
-
-        recent_slots.reverse();
-        assert_slot(RecentLeaderSlots::from(recent_slots), 12);
-
-        assert_slot(
-            RecentLeaderSlots::from(vec![0, 1 + MAX_SLOT_SKIP_DISTANCE]),
-            1 + MAX_SLOT_SKIP_DISTANCE,
-        );
-        assert_slot(
-            RecentLeaderSlots::from(vec![0, 2 + MAX_SLOT_SKIP_DISTANCE]),
-            0,
-        );
-
-        assert_slot(RecentLeaderSlots::from(vec![1]), 1);
-        assert_slot(RecentLeaderSlots::from(vec![1, 100]), 1);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 100]), 2);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 3, 100]), 3);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 3, 99, 100]), 3);
+        Ok(())
     }
 }
