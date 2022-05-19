@@ -2,7 +2,7 @@ use {
     crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::{
@@ -40,7 +40,7 @@ pub struct WithdrawWithheldTokensData {
 }
 
 impl WithdrawWithheldTokensData {
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn new(
         withdraw_withheld_authority_keypair: &ElGamalKeypair,
         destination_pubkey: &ElGamalPubkey,
@@ -84,7 +84,7 @@ impl WithdrawWithheldTokensData {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl Verifiable for WithdrawWithheldTokensData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
@@ -121,7 +121,7 @@ pub struct WithdrawWithheldTokensProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl WithdrawWithheldTokensProof {
     fn transcript_new(
         withdraw_withheld_authority_pubkey: &pod::ElGamalPubkey,
