@@ -3984,6 +3984,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-inner_instruction_alignment_check"
+version = "1.11.0"
+dependencies = [
+ "solana-program 1.11.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-instruction-introspection"
 version = "1.11.0"
 dependencies = [

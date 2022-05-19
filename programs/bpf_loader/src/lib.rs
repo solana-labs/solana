@@ -249,6 +249,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
 pub fn create_vm<'a, 'b>(
     program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
     parameter_bytes: &mut [u8],
+    orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
@@ -267,7 +268,7 @@ pub fn create_vm<'a, 'b>(
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap)?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;
     Ok(vm)
 }
 
@@ -1165,13 +1166,14 @@ impl Executor for BpfExecutor {
         let (mut parameter_bytes, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context)?;
         serialize_time.stop();
-        invoke_context.set_orig_account_lengths(account_lengths)?;
+
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
             let mut vm = match create_vm(
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
+                account_lengths,
                 invoke_context,
             ) {
                 Ok(info) => info,
