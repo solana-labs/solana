@@ -77,7 +77,7 @@ impl FindPacketSenderStakeStage {
     pub fn new(
         packet_receiver: streamer::PacketBatchReceiver,
         sender: FindPacketSenderStakeSender,
-        ip_to_stake: Arc<RwLock<HashMap<IpAddr, u64>>>,
+        staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
         name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
@@ -89,7 +89,9 @@ impl FindPacketSenderStakeStage {
                         let num_batches = batches.len();
                         let mut apply_sender_stakes_time =
                             Measure::start("apply_sender_stakes_time");
-                        Self::apply_sender_stakes(&mut batches, &ip_to_stake.read().unwrap());
+                        let ip_to_stake = staked_nodes.read().unwrap();
+                        Self::apply_sender_stakes(&mut batches, &ip_to_stake);
+                        drop(ip_to_stake);
                         apply_sender_stakes_time.stop();
 
                         let mut send_batches_time = Measure::start("send_batches_time");
