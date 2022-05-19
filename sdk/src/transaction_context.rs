@@ -552,24 +552,26 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a writable slice of the account data (transaction wide)
-    pub fn get_data_mut(&mut self) -> &mut [u8] {
-        self.account.data_as_mut_slice()
+    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
-    pub fn set_data(&mut self, data: &[u8]) {
+    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
         }
+        Ok(())
     }
 
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
-    pub fn set_data_length(&mut self, new_len: usize) {
+    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
         self.account.data_mut().resize(new_len, 0);
+        Ok(())
     }
 
     /// Deserializes the account data into a state

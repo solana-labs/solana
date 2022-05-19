@@ -16230,7 +16230,7 @@ pub(crate) mod tests {
             let instruction_context = transaction_context.get_current_instruction_context()?;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 1)?
-                .set_data(&[0; 40]);
+                .set_data(&[0; 40])?;
             Ok(())
         }
 
@@ -17850,7 +17850,7 @@ pub(crate) mod tests {
                     // Set data length
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_data_length(new_size);
+                        .set_data_length(new_size)?;
 
                     // set balance
                     let current_balance = instruction_context

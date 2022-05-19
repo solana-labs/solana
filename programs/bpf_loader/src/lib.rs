@@ -222,7 +222,7 @@ fn write_program_data(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let mut program =
         instruction_context.try_borrow_account(transaction_context, program_account_index)?;
-    let data = program.get_data_mut();
+    let data = program.get_data_mut()?;
     let write_offset = program_data_offset.saturating_add(bytes.len());
     if data.len() < write_offset {
         ic_msg!(
@@ -641,7 +641,7 @@ fn process_loader_upgradeable_instruction(
                     upgrade_authority_address: authority_key,
                 })?;
                 let dst_slice = programdata
-                    .get_data_mut()
+                    .get_data_mut()?
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
@@ -821,7 +821,7 @@ fn process_loader_upgradeable_instruction(
                     upgrade_authority_address: authority_key,
                 })?;
                 let dst_slice = programdata
-                    .get_data_mut()
+                    .get_data_mut()?
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
@@ -836,7 +836,7 @@ fn process_loader_upgradeable_instruction(
                 dst_slice.copy_from_slice(src_slice);
             }
             programdata
-                .get_data_mut()
+                .get_data_mut()?
                 .get_mut(programdata_data_offset.saturating_add(buffer_data_len)..)
                 .ok_or(InstructionError::AccountDataTooSmall)?
                 .fill(0);

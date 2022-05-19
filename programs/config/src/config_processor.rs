@@ -134,7 +134,7 @@ pub fn process_instruction(
         ic_msg!(invoke_context, "instruction data too large");
         return Err(InstructionError::InvalidInstructionData);
     }
-    config_account.get_data_mut()[..data.len()].copy_from_slice(data);
+    config_account.get_data_mut()?[..data.len()].copy_from_slice(data);
     Ok(())
 }
 

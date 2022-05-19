@@ -1410,13 +1410,16 @@ mod tests {
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ModifyNotOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ModifyReadonly => instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1430,7 +1433,8 @@ mod tests {
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len]),
+                    .set_data(&vec![0; new_len])
+                    .unwrap(),
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
