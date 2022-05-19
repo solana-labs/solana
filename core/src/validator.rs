@@ -1816,11 +1816,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-<<<<<<< HEAD
-        std::{fs::remove_dir_all, thread},
-=======
         std::{fs::remove_dir_all, thread, time::Duration},
->>>>>>> 51b37f018 (Modify rpc_completed_slot_service to be non-blocking (#24007))
     };
 
     #[test]
