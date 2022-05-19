@@ -1200,11 +1200,12 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("tpu_max_queued_batches")
-                .long("tpu-max-queued-batches-udp")
+                .long("tpu-max-queued-batches")
                 .value_name("BATCHES")
                 .takes_value(true)
                 .validator(|s| is_larger_or_equal::<usize>(s, 2000))
-                .help("Maximum number of batches that the fetch stage will queue up for processing from sockets."),
+                .help("Maximum number of batches that may queue up for processing between TPU stages. \
+                       A batch can have up to 128 packets, each of which is around 1250 bytes."),
         )
         .arg(
             Arg::with_name("tpu_use_quic")

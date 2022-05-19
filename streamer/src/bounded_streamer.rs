@@ -130,7 +130,7 @@ impl BoundedPacketBatchReceiver {
 
         let mut batches = Vec::with_capacity(min(
             packet_count_hint / PACKETS_PER_BATCH,
-            self.data.queue.len(),
+            self.batch_count(),
         ));
         while let Some(batch) = self.data.queue.pop() {
             packets += batch.packets.len();
@@ -260,11 +260,11 @@ impl BoundedPacketBatchSender {
     }
 
     /// Pushes a batch, potentially discarding others to make it happen.
-    fn push(&self, mut batch: PacketBatch, discarded_batches: &mut usize) {
+    fn push(&self, batch: PacketBatch, discarded_batches: &mut usize) {
         self.data.add_packet_count(batch.packets.len());
-        while let Err(uninserted_batch) = self.data.queue.push(batch) {
-            batch = uninserted_batch;
-            self.maybe_discard_one(discarded_batches);
+        if let Some(old) = self.data.queue.force_push(batch) {
+            self.data.sub_packet_count(old.packets.len());
+            *discarded_batches += 1;
         }
     }
 

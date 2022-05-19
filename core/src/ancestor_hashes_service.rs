@@ -68,7 +68,6 @@ type OutstandingAncestorHashesRepairs = OutstandingRequests<AncestorHashesRepair
 #[derive(Default)]
 pub struct AncestorHashesResponsesStats {
     pub total_packets: usize,
-    pub dropped_packets: usize,
     pub invalid_packets: usize,
     pub processed: usize,
 }
@@ -80,10 +79,6 @@ impl AncestorHashesResponsesStats {
             self.total_packets
         );
         inc_new_counter_info!("ancestor_hashes_responses-processed", self.processed);
-        inc_new_counter_info!(
-            "ancestor_hashes_responses-dropped_packets",
-            self.dropped_packets
-        );
         inc_new_counter_info!(
             "ancestor_hashes_responses-invalid_packets",
             self.invalid_packets

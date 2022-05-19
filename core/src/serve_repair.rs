@@ -143,7 +143,6 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 pub struct ServeRepairStats {
     pub total_packets: usize,
-    pub dropped_packets: usize,
     pub processed: usize,
     pub self_repair: usize,
     pub window_index: usize,
@@ -332,8 +331,8 @@ impl ServeRepair {
         stats.total_packets += total_packets;
 
         let timer = Instant::now();
-        for reqs in packet_batches {
-            Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
+        for packet_batch in packet_batches {
+            Self::handle_packets(obj, recycler, blockstore, packet_batch, response_sender, stats);
         }
         packet_threshold.update(total_packets, timer.elapsed());
         Ok(())
@@ -350,7 +349,6 @@ impl ServeRepair {
         }
 
         inc_new_counter_info!("serve_repair-total_packets", stats.total_packets);
-        inc_new_counter_info!("serve_repair-dropped_packets", stats.dropped_packets);
 
         debug!(
             "repair_listener: total_packets: {} passed: {}",

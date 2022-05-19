@@ -48,6 +48,7 @@ pub struct StreamerReceiveStats {
     pub packets_count: AtomicUsize,
     pub packet_batches_count: AtomicUsize,
     pub full_packet_batches_count: AtomicUsize,
+    pub dropped_packet_batches_count: AtomicUsize,
     pub max_channel_len: AtomicUsize,
 }
 
@@ -58,6 +59,7 @@ impl StreamerReceiveStats {
             packets_count: AtomicUsize::default(),
             packet_batches_count: AtomicUsize::default(),
             full_packet_batches_count: AtomicUsize::default(),
+            dropped_packet_batches_count: AtomicUsize::default(),
             max_channel_len: AtomicUsize::default(),
         }
     }
@@ -78,6 +80,11 @@ impl StreamerReceiveStats {
             (
                 "full_packet_batches_count",
                 self.full_packet_batches_count.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "dropped_packet_batches_count",
+                self.dropped_packet_batches_count.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -127,6 +134,7 @@ fn recv_loop(
                         packets_count,
                         packet_batches_count,
                         full_packet_batches_count,
+                        dropped_packet_batches_count,
                         max_channel_len,
                         ..
                     } = stats;
@@ -137,7 +145,9 @@ fn recv_loop(
                     if len == PACKETS_PER_BATCH {
                         full_packet_batches_count.fetch_add(1, Ordering::Relaxed);
                     }
-                    packet_batch_sender.send_batch(packet_batch)?;
+                    if packet_batch_sender.send_batch(packet_batch)? {
+                        dropped_packet_batches_count.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 break;
             }
@@ -302,57 +312,6 @@ fn recv_send(
     });
     batch_send(sock, &packets.collect::<Vec<_>>())?;
     Ok(())
-}
-
-pub fn recv_vec_packet_batches(
-    recvr: &Receiver<Vec<PacketBatch>>,
-) -> Result<(Vec<PacketBatch>, usize, Duration)> {
-    let timer = Duration::new(1, 0);
-    let mut packet_batches = recvr.recv_timeout(timer)?;
-    let recv_start = Instant::now();
-    trace!("got packets");
-    let mut num_packets = packet_batches
-        .iter()
-        .map(|packets| packets.packets.len())
-        .sum::<usize>();
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch
-            .iter()
-            .map(|packets| packets.packets.len())
-            .sum::<usize>();
-        packet_batches.extend(packet_batch);
-    }
-    let recv_duration = recv_start.elapsed();
-    trace!(
-        "packet batches len: {}, num packets: {}",
-        packet_batches.len(),
-        num_packets
-    );
-    Ok((packet_batches, num_packets, recv_duration))
-}
-
-pub fn recv_packet_batches(
-    recvr: &PacketBatchReceiver,
-) -> Result<(Vec<PacketBatch>, usize, Duration)> {
-    let timer = Duration::new(1, 0);
-    let packet_batch = recvr.recv_timeout(timer)?;
-    let recv_start = Instant::now();
-    trace!("got packets");
-    let mut num_packets = packet_batch.packets.len();
-    let mut packet_batches = vec![packet_batch];
-    while let Ok(packet_batch) = recvr.try_recv() {
-        trace!("got more packets");
-        num_packets += packet_batch.packets.len();
-        packet_batches.push(packet_batch);
-    }
-    let recv_duration = recv_start.elapsed();
-    trace!(
-        "packet batches len: {}, num packets: {}",
-        packet_batches.len(),
-        num_packets
-    );
-    Ok((packet_batches, num_packets, recv_duration))
 }
 
 pub fn responder(
