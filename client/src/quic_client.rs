@@ -84,7 +84,7 @@ impl QuicNewConnection {
         crypto.enable_early_data = true;
 
         let mut endpoint =
-            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket).await;
+            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut config = ClientConfig::new(Arc::new(crypto));
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
@@ -113,9 +113,7 @@ impl QuicNewConnection {
         })
     }
 
-    // If this function becomes public, it should be changed to
-    // not expose details of the specific Quic implementation we're using
-    async fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
+    fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
         quinn::Endpoint::new(config, None, client_socket).unwrap().0
     }
 
