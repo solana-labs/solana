@@ -136,12 +136,12 @@ impl<'a> StoredAccountMeta<'a> {
     }
 }
 
-pub struct AccountsInAppendVec<'a> {
+pub struct AppendVecAccountsIter<'a> {
     append_vec: &'a AppendVec,
     offset: usize,
 }
 
-impl<'a> AccountsInAppendVec<'a> {
+impl<'a> AppendVecAccountsIter<'a> {
     pub fn new(append_vec: &'a AppendVec) -> Self {
         Self {
             append_vec,
@@ -150,7 +150,7 @@ impl<'a> AccountsInAppendVec<'a> {
     }
 }
 
-impl<'a> Iterator for AccountsInAppendVec<'a> {
+impl<'a> Iterator for AppendVecAccountsIter<'a> {
     type Item = StoredAccountMeta<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {

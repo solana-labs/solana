@@ -39,7 +39,7 @@ use {
         ancestors::Ancestors,
         ancient_append_vecs::is_ancient,
         append_vec::{
-            AccountsInAppendVec, AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
+            AppendVec, AppendVecAccountsIter, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
         },
         bank::Rewrites,
         cache_hash_data::CacheHashData,
@@ -5415,7 +5415,7 @@ impl AccountsDb {
         let mut progress = Vec::with_capacity(len);
         let mut current = Vec::with_capacity(len);
         for storage in storages {
-            let mut iterator = AccountsInAppendVec::new(&storage.accounts);
+            let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
             if let Some(item) = iterator
                 .next()
                 .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
