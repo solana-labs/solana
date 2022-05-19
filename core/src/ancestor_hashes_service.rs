@@ -23,7 +23,12 @@ use {
         pubkey::Pubkey,
         timing::timestamp,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_streamer::{
+        bounded_streamer::{
+            packet_batch_channel, BoundedPacketBatchReceiver, DEFAULT_MAX_QUEUED_BATCHES,
+        },
+        streamer::{self, StreamerReceiveStats},
+    },
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -146,7 +151,7 @@ impl AncestorHashesService {
     ) -> Self {
         let outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>> =
             Arc::new(RwLock::new(OutstandingAncestorHashesRepairs::default()));
-        let (response_sender, response_receiver) = unbounded();
+        let (response_sender, response_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let t_receiver = streamer::receiver(
             ancestor_hashes_request_socket.clone(),
             exit.clone(),
@@ -199,7 +204,7 @@ impl AncestorHashesService {
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
-        response_receiver: PacketBatchReceiver,
+        response_receiver: BoundedPacketBatchReceiver,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -242,7 +247,7 @@ impl AncestorHashesService {
     /// Process messages from the network
     fn process_new_packets_from_channel(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        response_receiver: &PacketBatchReceiver,
+        response_receiver: &BoundedPacketBatchReceiver,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
@@ -251,20 +256,9 @@ impl AncestorHashesService {
         retryable_slots_sender: &RetryableSlotsSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
-        let mut total_packets = packet_batches[0].packets.len();
+        let (packet_batches, total_packets) =
+            response_receiver.recv_timeout(packet_threshold.threshold(), timeout)?;
 
-        let mut dropped_packets = 0;
-        while let Ok(batch) = response_receiver.try_recv() {
-            total_packets += batch.packets.len();
-            if packet_threshold.should_drop(total_packets) {
-                dropped_packets += batch.packets.len();
-            } else {
-                packet_batches.push(batch);
-            }
-        }
-
-        stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
         let timer = Instant::now();
@@ -696,7 +690,7 @@ mod test {
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
         solana_sdk::{hash::Hash, signature::Keypair},
-        solana_streamer::socket::SocketAddrSpace,
+        solana_streamer::{socket::SocketAddrSpace, streamer::PacketBatchReceiver},
         std::collections::HashMap,
         trees::tr,
     };
@@ -890,7 +884,8 @@ mod test {
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
             let exit = Arc::new(AtomicBool::new(false));
-            let (requests_sender, requests_receiver) = unbounded();
+            let (requests_sender, requests_receiver) =
+                packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
             let (response_sender, response_receiver) = unbounded();
 
             // Set up blockstore for responses

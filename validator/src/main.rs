@@ -12,9 +12,9 @@ use {
     solana_clap_utils::{
         input_parsers::{keypair_of, keypairs_of, pubkey_of, value_of},
         input_validators::{
-            is_keypair, is_keypair_or_ask_keyword, is_niceness_adjustment_valid, is_parsable,
-            is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
-            is_within_range,
+            is_keypair, is_keypair_or_ask_keyword, is_larger_or_equal,
+            is_niceness_adjustment_valid, is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair,
+            is_slot, is_valid_percentage, is_within_range,
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
@@ -71,7 +71,7 @@ use {
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{bounded_streamer::DEFAULT_MAX_QUEUED_BATCHES, socket::SocketAddrSpace},
     solana_validator::{
         admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
         new_spinner_progress_bar, println_name_value, redirect_stderr_to_file,
@@ -1199,6 +1199,14 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
+            Arg::with_name("tpu_max_queued_batches")
+                .long("tpu-max-queued-batches-udp")
+                .value_name("BATCHES")
+                .takes_value(true)
+                .validator(|s| is_larger_or_equal::<usize>(s, 2000))
+                .help("Maximum number of batches that the fetch stage will queue up for processing from sockets."),
+        )
+        .arg(
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
@@ -2150,6 +2158,8 @@ pub fn main() {
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
+    let tpu_max_queued_batches =
+        value_t!(matches, "tpu_max_queued_batches", usize).unwrap_or(DEFAULT_MAX_QUEUED_BATCHES);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -2539,6 +2549,7 @@ pub fn main() {
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         tpu_coalesce_ms,
+        tpu_max_queued_batches,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {

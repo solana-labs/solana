@@ -3,6 +3,7 @@
 
 use {
     crate::{
+        bounded_streamer::BoundedPacketBatchSender,
         packet::{self, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
@@ -36,7 +37,7 @@ pub enum StreamerError {
     RecvTimeout(#[from] RecvTimeoutError),
 
     #[error("send packets error")]
-    Send(#[from] SendError<PacketBatch>),
+    Send(#[from] SendError<()>),
 
     #[error(transparent)]
     SendPktsError(#[from] SendPktsError),
@@ -93,7 +94,7 @@ pub type Result<T> = std::result::Result<T, StreamerError>;
 fn recv_loop(
     socket: &UdpSocket,
     exit: Arc<AtomicBool>,
-    packet_batch_sender: &PacketBatchSender,
+    packet_batch_sender: &BoundedPacketBatchSender,
     recycler: &PacketBatchRecycler,
     stats: &StreamerReceiveStats,
     coalesce_ms: u64,
@@ -132,12 +133,11 @@ fn recv_loop(
 
                     packets_count.fetch_add(len, Ordering::Relaxed);
                     packet_batches_count.fetch_add(1, Ordering::Relaxed);
-                    max_channel_len.fetch_max(packet_batch_sender.len(), Ordering::Relaxed);
+                    max_channel_len.fetch_max(packet_batch_sender.batch_count(), Ordering::Relaxed);
                     if len == PACKETS_PER_BATCH {
                         full_packet_batches_count.fetch_add(1, Ordering::Relaxed);
                     }
-
-                    packet_batch_sender.send(packet_batch)?;
+                    packet_batch_sender.send_batch(packet_batch)?;
                 }
                 break;
             }
@@ -148,7 +148,7 @@ fn recv_loop(
 pub fn receiver(
     socket: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
-    packet_batch_sender: PacketBatchSender,
+    packet_batch_sender: BoundedPacketBatchSender,
     recycler: PacketBatchRecycler,
     stats: Arc<StreamerReceiveStats>,
     coalesce_ms: u64,
@@ -407,6 +407,9 @@ mod test {
     use {
         super::*,
         crate::{
+            bounded_streamer::{
+                packet_batch_channel, BoundedPacketBatchReceiver, DEFAULT_MAX_QUEUED_BATCHES,
+            },
             packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
             streamer::{receiver, responder},
         },
@@ -424,14 +427,14 @@ mod test {
         },
     };
 
-    fn get_packet_batches(r: PacketBatchReceiver, num_packets: &mut usize) {
+    fn get_packet_batches(r: BoundedPacketBatchReceiver, num_packets: &mut usize) {
         for _ in 0..10 {
-            let packet_batch_res = r.recv_timeout(Duration::new(1, 0));
-            if packet_batch_res.is_err() {
-                continue;
+            match r.recv_timeout(usize::MAX, Duration::new(1, 0)) {
+                Ok((_batches, packets)) => {
+                    *num_packets -= packets;
+                }
+                Err(_err) => continue,
             }
-
-            *num_packets -= packet_batch_res.unwrap().packets.len();
 
             if *num_packets == 0 {
                 break;
@@ -452,7 +455,7 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let (s_reader, r_reader) = unbounded();
+        let (s_reader, r_reader) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let stats = Arc::new(StreamerReceiveStats::new("test"));
         let t_receiver = receiver(
             Arc::new(read),

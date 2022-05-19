@@ -56,6 +56,24 @@ where
     }
 }
 
+// Return an error if string cannot be parsed as numeric type T or value is too small
+pub fn is_larger_or_equal<T>(string: String, min: T) -> Result<(), String>
+where
+    T: FromStr + Copy + std::fmt::Debug + PartialOrd + std::ops::Add<Output = T> + From<usize>,
+    T::Err: Display,
+{
+    match string.parse::<T>() {
+        Ok(input) => {
+            if input < min {
+                Err(format!("input '{:?}' must be >= {:?}", input, min))
+            } else {
+                Ok(())
+            }
+        }
+        Err(err) => Err(format!("error parsing '{}': {}", string, err)),
+    }
+}
+
 // Return an error if a pubkey cannot be parsed.
 pub fn is_pubkey<T>(string: T) -> Result<(), String>
 where

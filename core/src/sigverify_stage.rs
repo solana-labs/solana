@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{RecvTimeoutError, SendError},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -16,7 +16,7 @@ use {
         sigverify::{count_valid_packets, shrink_batches, Deduper},
     },
     solana_sdk::timing,
-    solana_streamer::streamer::{self, StreamerError},
+    solana_streamer::{bounded_streamer::BoundedPacketBatchSender, streamer::StreamerError},
     std::{
         thread::{self, Builder, JoinHandle},
         time::Instant,
@@ -24,6 +24,9 @@ use {
     thiserror::Error,
 };
 
+/// Maximum packets to receive per loop for QoS reasons.
+const RECV_MAX_PACKETS: usize = 100_000;
+/// Maximum unique packets to verify.
 const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
@@ -199,7 +202,7 @@ impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verified_sender: Sender<Vec<PacketBatch>>,
+        verified_sender: BoundedPacketBatchSender,
         verifier: T,
         name: &'static str,
     ) -> Self {
@@ -235,11 +238,13 @@ impl SigVerifyStage {
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        sendr: &Sender<Vec<PacketBatch>>,
+        sendr: &BoundedPacketBatchSender,
         verifier: &T,
         stats: &mut SigVerifierStats,
     ) -> Result<()> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, recv_duration) = recvr
+            .recv_duration_default_timeout(RECV_MAX_PACKETS)
+            .map_err(StreamerError::from)?;
 
         let batches_len = batches.len();
         debug!(
@@ -277,7 +282,7 @@ impl SigVerifyStage {
         let total_shrinks = start_len.saturating_sub(batches.len());
         shrink_time.stop();
 
-        sendr.send(batches)?;
+        sendr.send_batches(batches).map_err(StreamerError::from)?;
 
         debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
@@ -322,7 +327,7 @@ impl SigVerifyStage {
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verified_sender: Sender<Vec<PacketBatch>>,
+        verified_sender: BoundedPacketBatchSender,
         verifier: &T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -369,7 +374,7 @@ impl SigVerifyStage {
 
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verified_sender: Sender<Vec<PacketBatch>>,
+        verified_sender: BoundedPacketBatchSender,
         verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -386,11 +391,11 @@ mod tests {
     use {
         super::*,
         crate::{sigverify::TransactionSigVerifier, sigverify_stage::timing::duration_as_ms},
-        crossbeam_channel::unbounded,
         solana_perf::{
             packet::{to_packet_batches, Packet},
             test_tx::test_tx,
         },
+        solana_streamer::bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
     };
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
@@ -438,8 +443,8 @@ mod tests {
     fn test_sigverify_stage() {
         solana_logger::setup();
         trace!("start");
-        let (packet_s, packet_r) = unbounded();
-        let (verified_s, verified_r) = unbounded();
+        let (packet_s, packet_r) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (verified_s, verified_r) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let verifier = TransactionSigVerifier::default();
         let stage = SigVerifyStage::new(packet_r, verified_s, verifier, "test");
 
@@ -456,13 +461,15 @@ mod tests {
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
                 sent_len += batch.packets.len();
-                packet_s.send(vec![batch]).unwrap();
+                packet_s.send_batch(batch).unwrap();
             }
         }
         let mut received = 0;
         trace!("sent: {}", sent_len);
         loop {
-            if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
+            if let Ok((mut verifieds, _)) =
+                verified_r.recv_timeout(sent_len, Duration::from_millis(10))
+            {
                 while let Some(v) = verifieds.pop() {
                     received += v.packets.len();
                     batches.push(v);

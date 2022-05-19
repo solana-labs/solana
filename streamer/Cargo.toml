@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 crossbeam-channel = "0.5"
+crossbeam-queue = "0.3.5"
 futures-util = "0.3.21"
 histogram = "0.6.9"
 itertools = "0.10.3"

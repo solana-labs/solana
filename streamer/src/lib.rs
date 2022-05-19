@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+pub mod bounded_streamer;
 pub mod packet;
 pub mod quic;
 pub mod recvmmsg;

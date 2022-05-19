@@ -20,10 +20,11 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::packet::Packet,
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
+    solana_streamer::bounded_streamer::BoundedPacketBatchReceiver,
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -36,6 +37,9 @@ use {
         time::{Duration, Instant},
     },
 };
+
+/// Maximum packets to receive per loop for QoS reasons.
+const RECV_MAX_PACKETS: usize = 100_000;
 
 type DuplicateSlotSender = Sender<Slot>;
 pub(crate) type DuplicateSlotReceiver = Receiver<Slot>;
@@ -343,7 +347,7 @@ fn recv_window<F>(
     blockstore: &Blockstore,
     bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-    verified_receiver: &Receiver<Vec<PacketBatch>>,
+    verified_receiver: &BoundedPacketBatchReceiver,
     retransmit_sender: &Sender<Vec<Shred>>,
     shred_filter: F,
     thread_pool: &ThreadPool,
@@ -353,8 +357,7 @@ where
     F: Fn(&Shred, Arc<Bank>, /*last root:*/ Slot) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
-    let mut packets = verified_receiver.recv_timeout(timer)?;
-    packets.extend(verified_receiver.try_iter().flatten());
+    let (batches, num_packets) = verified_receiver.recv_timeout(RECV_MAX_PACKETS, timer)?;
     let now = Instant::now();
     let last_root = blockstore.last_root();
     let working_bank = bank_forks.read().unwrap().working_bank();
@@ -384,9 +387,9 @@ where
         }
     };
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
-        packets
+        batches
             .par_iter()
-            .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
+            .flat_map_iter(|batch| batch.packets.iter().filter_map(handle_packet))
             .unzip()
     });
     // Exclude repair packets from retransmit.
@@ -406,8 +409,8 @@ where
     }
     insert_shred_sender.send((shreds, repair_infos))?;
 
-    stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
-    for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
+    stats.num_packets += num_packets;
+    for packet in batches.iter().flat_map(|batch| batch.packets.iter()) {
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
     }
     stats.elapsed += now.elapsed();
@@ -448,7 +451,7 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
-        verified_receiver: Receiver<Vec<PacketBatch>>,
+        verified_receiver: BoundedPacketBatchReceiver,
         retransmit_sender: Sender<Vec<Shred>>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
@@ -621,7 +624,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         insert_sender: Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
-        verified_receiver: Receiver<Vec<PacketBatch>>,
+        verified_receiver: BoundedPacketBatchReceiver,
         shred_filter: F,
         bank_forks: Arc<RwLock<BankForks>>,
         retransmit_sender: Sender<Vec<Shred>>,

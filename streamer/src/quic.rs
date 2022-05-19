@@ -1,5 +1,5 @@
 use {
-    crossbeam_channel::Sender,
+    crate::bounded_streamer::BoundedPacketBatchSender,
     futures_util::stream::StreamExt,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
@@ -152,7 +152,7 @@ fn handle_chunk(
     chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
-    packet_sender: &Sender<PacketBatch>,
+    packet_sender: &BoundedPacketBatchSender,
     stats: Arc<StreamStats>,
     stake: u64,
 ) -> bool {
@@ -198,7 +198,7 @@ fn handle_chunk(
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
                     let len = batch.packets[0].meta.size;
-                    if let Err(e) = packet_sender.send(batch) {
+                    if let Err(e) = packet_sender.send_batch(batch) {
                         stats
                             .total_packet_batch_send_err
                             .fetch_add(1, Ordering::Relaxed);
@@ -429,7 +429,7 @@ impl StreamStats {
 
 fn handle_connection(
     mut uni_streams: IncomingUniStreams,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: BoundedPacketBatchSender,
     remote_addr: SocketAddr,
     last_update: Arc<AtomicU64>,
     connection_table: Arc<Mutex<ConnectionTable>>,
@@ -489,7 +489,7 @@ pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: BoundedPacketBatchSender,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
     staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
@@ -603,7 +603,9 @@ pub fn spawn_server(
 mod test {
     use {
         super::*,
-        crossbeam_channel::unbounded,
+        crate::bounded_streamer::{
+            packet_batch_channel, BoundedPacketBatchReceiver, DEFAULT_MAX_QUEUED_BATCHES,
+        },
         quinn::{ClientConfig, NewConnection},
         solana_sdk::quic::QUIC_KEEP_ALIVE_MS,
         std::{net::SocketAddr, time::Instant},
@@ -683,9 +685,11 @@ mod test {
                 std::thread::sleep(Duration::from_millis(1000));
             }
         });
+        let max_recv_packet_count = 10_000;
         let mut received = 0;
         loop {
-            if let Ok(_x) = receiver.recv_timeout(Duration::from_millis(500)) {
+            if let Ok(_x) = receiver.recv_timeout(max_recv_packet_count, Duration::from_millis(500))
+            {
                 received += 1;
                 info!("got {}", received);
             }
@@ -733,7 +737,7 @@ mod test {
         solana_logger::setup();
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
         let exit = Arc::new(AtomicBool::new(false));
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
@@ -775,10 +779,15 @@ mod test {
         let mut all_packets = vec![];
         let now = Instant::now();
         let mut total_packets = 0;
+        let max_recv_packet_count = 10_000;
         while now.elapsed().as_secs() < 10 {
-            if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
-                all_packets.push(packets)
+            if let Ok((batches, packets)) =
+                receiver.recv_timeout(max_recv_packet_count, Duration::from_secs(1))
+            {
+                total_packets += packets;
+                for batch in batches {
+                    all_packets.push(batch)
+                }
             }
             if total_packets == num_expected_packets {
                 break;
@@ -798,12 +807,12 @@ mod test {
     fn setup_quic_server() -> (
         std::thread::JoinHandle<()>,
         Arc<AtomicBool>,
-        crossbeam_channel::Receiver<PacketBatch>,
+        BoundedPacketBatchReceiver,
         SocketAddr,
     ) {
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
         let exit = Arc::new(AtomicBool::new(false));
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
@@ -847,10 +856,15 @@ mod test {
         let mut all_packets = vec![];
         let now = Instant::now();
         let mut total_packets = 0;
+        let max_recv_packet_count = 10_000;
         while now.elapsed().as_secs() < 5 {
-            if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
-                all_packets.push(packets)
+            if let Ok((batches, packets)) =
+                receiver.recv_timeout(max_recv_packet_count, Duration::from_secs(1))
+            {
+                total_packets += packets;
+                for batch in batches {
+                    all_packets.push(batch)
+                }
             }
             if total_packets > num_expected_packets {
                 break;

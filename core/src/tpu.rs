@@ -15,7 +15,7 @@ use {
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
     },
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    crossbeam_channel::{bounded, Receiver, RecvTimeoutError},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -29,7 +29,10 @@ use {
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::signature::Keypair,
-    solana_streamer::quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+    solana_streamer::{
+        bounded_streamer::packet_batch_channel,
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+    },
     std::{
         collections::HashMap,
         net::UdpSocket,
@@ -90,6 +93,7 @@ impl Tpu {
         replay_vote_sender: ReplayVoteSender,
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
+        tpu_max_queued_batches: usize,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
@@ -102,8 +106,9 @@ impl Tpu {
             transactions_quic: transactions_quic_sockets,
         } = sockets;
 
-        let (packet_sender, packet_receiver) = unbounded();
-        let (vote_packet_sender, vote_packet_receiver) = unbounded();
+        let (packet_sender, packet_receiver) = packet_batch_channel(tpu_max_queued_batches);
+        let (vote_packet_sender, vote_packet_receiver) =
+            packet_batch_channel(tpu_max_queued_batches);
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
@@ -116,7 +121,8 @@ impl Tpu {
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
+        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) =
+            packet_batch_channel(tpu_max_queued_batches);
 
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
@@ -127,7 +133,7 @@ impl Tpu {
         );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
-            unbounded();
+            packet_batch_channel(tpu_max_queued_batches);
 
         let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             vote_packet_receiver,
@@ -137,7 +143,7 @@ impl Tpu {
             "tpu-vote-find-packet-sender-stake",
         );
 
-        let (verified_sender, verified_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(tpu_max_queued_batches);
 
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
@@ -169,7 +175,8 @@ impl Tpu {
             )
         };
 
-        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
+        let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) =
+            packet_batch_channel(tpu_max_queued_batches);
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote();
@@ -182,7 +189,7 @@ impl Tpu {
         };
 
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            unbounded();
+            packet_batch_channel(tpu_max_queued_batches);
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),

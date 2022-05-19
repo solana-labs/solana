@@ -48,6 +48,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
+    solana_streamer::bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
     std::{
         collections::HashSet,
         net::UdpSocket,
@@ -142,7 +143,7 @@ impl Tvu {
             ancestor_hashes_requests: ancestor_hashes_socket,
         } = sockets;
 
-        let (fetch_sender, fetch_receiver) = unbounded();
+        let (fetch_sender, fetch_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
 
         let repair_socket = Arc::new(repair_socket);
         let ancestor_hashes_socket = Arc::new(ancestor_hashes_socket);
@@ -158,7 +159,7 @@ impl Tvu {
             exit,
         );
 
-        let (verified_sender, verified_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let sigverify_stage = SigVerifyStage::new(
             fetch_receiver,
             verified_sender,

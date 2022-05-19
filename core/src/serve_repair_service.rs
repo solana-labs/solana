@@ -4,6 +4,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_perf::recycler::Recycler,
     solana_streamer::{
+        bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
     },
@@ -27,7 +28,7 @@ impl ServeRepairService {
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = unbounded();
+        let (request_sender, request_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let serve_repair_socket = Arc::new(serve_repair_socket);
         trace!(
             "ServeRepairService: id: {}, listening on: {:?}",

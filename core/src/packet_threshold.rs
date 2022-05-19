@@ -48,8 +48,8 @@ impl DynamicPacketToProcessThreshold {
         }
     }
 
-    pub fn should_drop(&self, total: usize) -> bool {
-        total >= self.max_packets
+    pub fn threshold(&mut self) -> usize {
+        self.max_packets
     }
 }
 
@@ -64,9 +64,6 @@ mod test {
             threshold.max_packets,
             DynamicPacketToProcessThreshold::DEFAULT_MAX_PACKETS
         );
-
-        assert!(!threshold.should_drop(10));
-        assert!(threshold.should_drop(2000));
 
         let old = threshold.max_packets;
 

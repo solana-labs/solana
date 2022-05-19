@@ -18,7 +18,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, PacketBatch},
+    solana_perf::packet::{self},
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -41,6 +41,7 @@ use {
         slot_hashes,
         transaction::Transaction,
     },
+    solana_streamer::bounded_streamer::BoundedPacketBatchSender,
     std::{
         collections::{HashMap, HashSet},
         iter::repeat,
@@ -190,7 +191,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: Sender<Vec<PacketBatch>>,
+        verified_packets_sender: BoundedPacketBatchSender,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -333,7 +334,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &Sender<Vec<PacketBatch>>,
+        verified_packets_sender: &BoundedPacketBatchSender,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -382,7 +383,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &Sender<Vec<PacketBatch>>,
+        verified_packets_sender: &BoundedPacketBatchSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -423,7 +424,7 @@ impl ClusterInfoVoteListener {
         for single_validator_votes in gossip_votes_iterator {
             bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
             bank_send_votes_stats.num_batches_sent += 1;
-            verified_packets_sender.send(single_validator_votes)?;
+            verified_packets_sender.send_batches(single_validator_votes)?;
         }
         filter_gossip_votes_timing.stop();
         bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
@@ -818,6 +819,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
         },
+        solana_streamer::bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
         solana_vote_program::{vote_state::Vote, vote_transaction},
         std::{
             collections::BTreeSet,
@@ -1606,7 +1608,8 @@ mod tests {
         let current_leader_bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut bank_vote_sender_state_option: Option<BankVoteSenderState> = None;
         let verified_vote_packets = VerifiedVotePackets::default();
-        let (verified_packets_sender, _verified_packets_receiver) = unbounded();
+        let (verified_packets_sender, _verified_packets_receiver) =
+            packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
 
         // 1) If we hand over a `current_leader_bank`, vote sender state should be updated
         ClusterInfoVoteListener::check_for_leader_bank_and_send_votes(

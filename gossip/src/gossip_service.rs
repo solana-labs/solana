@@ -1,7 +1,10 @@
 //! The `gossip_service` module implements the network control plane.
 
 use {
-    crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
+    crate::{
+        cluster_info::{ClusterInfo, MAX_GOSSIP_TRAFFIC},
+        contact_info::ContactInfo,
+    },
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
     solana_client::thin_client::{create_client, ThinClient},
@@ -12,6 +15,7 @@ use {
         signature::{Keypair, Signer},
     },
     solana_streamer::{
+        bounded_streamer::packet_batch_channel,
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
     },
@@ -41,7 +45,7 @@ impl GossipService {
         stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = unbounded();
+        let (request_sender, request_receiver) = packet_batch_channel(MAX_GOSSIP_TRAFFIC);
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "GossipService: id: {}, listening on: {:?}",

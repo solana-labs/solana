@@ -927,6 +927,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-queue"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f25d8400f4a7a5778f0e4e52384a48cbd9b5c495d110786187fc750075277a2"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5926,6 +5936,7 @@ name = "solana-streamer"
 version = "1.11.0"
 dependencies = [
  "crossbeam-channel",
+ "crossbeam-queue",
  "futures-util",
  "histogram",
  "itertools",

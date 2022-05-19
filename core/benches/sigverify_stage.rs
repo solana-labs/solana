@@ -5,7 +5,6 @@ extern crate solana_core;
 extern crate test;
 
 use {
-    crossbeam_channel::unbounded,
     log::*,
     rand::{thread_rng, Rng},
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
@@ -19,6 +18,7 @@ use {
         system_transaction,
         timing::duration_as_ms,
     },
+    solana_streamer::bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
     std::time::{Duration, Instant},
     test::Bencher,
 };
@@ -140,8 +140,8 @@ fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
 fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
     trace!("start");
-    let (packet_s, packet_r) = unbounded();
-    let (verified_s, verified_r) = unbounded();
+    let (packet_s, packet_r) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+    let (verified_s, verified_r) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
     let verifier = TransactionSigVerifier::default();
     let stage = SigVerifyStage::new(packet_r, verified_s, verifier, "bench");
 
@@ -159,13 +159,15 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
                 sent_len += batch.packets.len();
-                packet_s.send(vec![batch]).unwrap();
+                packet_s.send_batch(batch).unwrap();
             }
         }
         let mut received = 0;
         trace!("sent: {}", sent_len);
         loop {
-            if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
+            if let Ok((mut verifieds, _)) =
+                verified_r.recv_timeout(usize::MAX, Duration::from_millis(10))
+            {
                 while let Some(v) = verifieds.pop() {
                     received += v.packets.len();
                     batches.push(v);

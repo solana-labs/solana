@@ -35,7 +35,10 @@ use {
         timing::{duration_as_us, timestamp},
         transaction::{Transaction, VersionedTransaction},
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{
+        bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
+        socket::SocketAddrSpace,
+    },
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
@@ -163,9 +166,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     // during the benchmark
     genesis_config.ticks_per_slot = 10_000;
 
-    let (verified_sender, verified_receiver) = unbounded();
-    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-    let (vote_sender, vote_receiver) = unbounded();
+    let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+    let (tpu_vote_sender, tpu_vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+    let (vote_sender, vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
@@ -256,7 +259,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.packets.len();
                 }
-                verified_sender.send(v.to_vec()).unwrap();
+                verified_sender.send_batches(v.to_vec()).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);
 

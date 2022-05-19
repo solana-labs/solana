@@ -29,7 +29,7 @@ use {
     solana_sdk::{
         clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
     },
-    solana_streamer::streamer::{PacketBatchReceiver, PacketBatchSender},
+    solana_streamer::{bounded_streamer::BoundedPacketBatchReceiver, streamer::PacketBatchSender},
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -319,31 +319,20 @@ impl ServeRepair {
         obj: &Arc<RwLock<Self>>,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
-        requests_receiver: &PacketBatchReceiver,
+        requests_receiver: &BoundedPacketBatchReceiver,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
         packet_threshold: &mut DynamicPacketToProcessThreshold,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
-        let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut total_packets = reqs_v[0].packets.len();
+        let (packet_batches, total_packets) =
+            requests_receiver.recv_timeout(packet_threshold.threshold(), timeout)?;
 
-        let mut dropped_packets = 0;
-        while let Ok(more) = requests_receiver.try_recv() {
-            total_packets += more.packets.len();
-            if packet_threshold.should_drop(total_packets) {
-                dropped_packets += more.packets.len();
-            } else {
-                reqs_v.push(more);
-            }
-        }
-
-        stats.dropped_packets += dropped_packets;
         stats.total_packets += total_packets;
 
         let timer = Instant::now();
-        for reqs in reqs_v {
+        for reqs in packet_batches {
             Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
         packet_threshold.update(total_packets, timer.elapsed());
@@ -384,7 +373,7 @@ impl ServeRepair {
     pub fn listen(
         me: Arc<RwLock<Self>>,
         blockstore: Option<Arc<Blockstore>>,
-        requests_receiver: PacketBatchReceiver,
+        requests_receiver: BoundedPacketBatchReceiver,
         response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {

@@ -10,7 +10,7 @@ use {
         qos_service::QosService,
         unprocessed_packet_batches::{self, *},
     },
-    crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
+    crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
@@ -52,6 +52,7 @@ use {
         },
         transport::TransportError,
     },
+    solana_streamer::bounded_streamer::BoundedPacketBatchReceiver,
     solana_transaction_status::token_balances::{
         collect_token_balances, TransactionTokenBalancesSet,
     },
@@ -379,9 +380,9 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: BoundedPacketBatchReceiver,
+        tpu_verified_vote_receiver: BoundedPacketBatchReceiver,
+        verified_vote_receiver: BoundedPacketBatchReceiver,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
@@ -403,9 +404,9 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: BoundedPacketBatchReceiver,
+        tpu_verified_vote_receiver: BoundedPacketBatchReceiver,
+        verified_vote_receiver: BoundedPacketBatchReceiver,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -988,7 +989,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: &BoundedPacketBatchReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1976,38 +1977,10 @@ impl BankingStage {
             .collect()
     }
 
-    fn receive_until(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
-        recv_timeout: Duration,
-        packet_count_upperbound: usize,
-    ) -> Result<Vec<PacketBatch>, RecvTimeoutError> {
-        let start = Instant::now();
-        let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
-        let mut num_packets_received: usize =
-            packet_batches.iter().map(|batch| batch.packets.len()).sum();
-        while let Ok(packet_batch) = verified_receiver.try_recv() {
-            trace!("got more packet batches in banking stage");
-            let (packets_received, packet_count_overflowed) = num_packets_received
-                .overflowing_add(packet_batch.iter().map(|batch| batch.packets.len()).sum());
-            packet_batches.extend(packet_batch);
-
-            // Spend any leftover receive time budget to greedily receive more packet batches,
-            // until the upperbound of the packet count is reached.
-            if start.elapsed() >= recv_timeout
-                || packet_count_overflowed
-                || packets_received >= packet_count_upperbound
-            {
-                break;
-            }
-            num_packets_received = packets_received;
-        }
-        Ok(packet_batches)
-    }
-
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     fn receive_and_buffer_packets(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: &BoundedPacketBatchReceiver,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
@@ -2016,15 +1989,13 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let packet_batches = Self::receive_until(
-            verified_receiver,
-            recv_timeout,
+        let (packet_batches, packet_count) = verified_receiver.recv_timeout(
             buffered_packet_batches.capacity() - buffered_packet_batches.len(),
+            recv_timeout,
         )?;
         recv_time.stop();
 
         let packet_batches_len = packet_batches.len();
-        let packet_count: usize = packet_batches.iter().map(|x| x.packets.len()).sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timestamp(),
@@ -2206,7 +2177,11 @@ mod tests {
                 VersionedTransaction,
             },
         },
-        solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
+        solana_streamer::{
+            bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
+            recvmmsg::recv_mmsg,
+            socket::SocketAddrSpace,
+        },
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
         solana_vote_program::vote_transaction,
         std::{
@@ -2231,9 +2206,10 @@ mod tests {
     fn test_banking_stage_shutdown1() {
         let genesis_config = create_genesis_config(2).genesis_config;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
-        let (verified_sender, verified_receiver) = unbounded();
-        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) =
+            packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (tpu_vote_sender, tpu_vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -2276,8 +2252,8 @@ mod tests {
         let num_extra_ticks = 2;
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
-        let (verified_sender, verified_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (tpu_vote_sender, tpu_vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -2292,7 +2268,8 @@ mod tests {
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);
             let cluster_info = Arc::new(cluster_info);
-            let (verified_gossip_vote_sender, verified_gossip_vote_receiver) = unbounded();
+            let (verified_gossip_vote_sender, verified_gossip_vote_receiver) =
+                packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let banking_stage = BankingStage::new(
@@ -2349,9 +2326,10 @@ mod tests {
         } = create_slow_genesis_config(10);
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
-        let (verified_sender, verified_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (tpu_vote_sender, tpu_vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) =
+            packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -2412,7 +2390,7 @@ mod tests {
                 .collect();
             let packet_batches = convert_from_old_verified(packet_batches);
             verified_sender // no_ver, anf, tx
-                .send(packet_batches)
+                .send_batches(packet_batches)
                 .unwrap();
 
             drop(verified_sender);
@@ -2471,7 +2449,7 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(2);
-        let (verified_sender, verified_receiver) = unbounded();
+        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
@@ -2484,7 +2462,7 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
+        verified_sender.send_batches(packet_batches).unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
@@ -2495,10 +2473,10 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
+        verified_sender.send_batches(packet_batches).unwrap();
 
-        let (vote_sender, vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (vote_sender, vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (tpu_vote_sender, tpu_vote_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -3128,7 +3106,7 @@ mod tests {
     }
 
     fn simulate_poh(
-        record_receiver: CrossbeamReceiver<Record>,
+        record_receiver: crossbeam_channel::Receiver<Record>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
     ) -> JoinHandle<()> {
         let poh_recorder = poh_recorder.clone();
