@@ -1,19 +1,6 @@
 use {
-    solana_client::{
-        nonblocking::{
-            pubsub_client::PubsubClient,
-            rpc_client::RpcClient,
-            tpu_client::TpuClient,
-        },
-        tpu_client::TpuClientConfig,
-    },
-    solana_sdk::{
-        commitment_config::CommitmentConfig,
-        pubkey::Pubkey,
-        signature::{Keypair, Signer},
-        system_transaction,
-    },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_client::{nonblocking::tpu_client::TpuClient, tpu_client::TpuClientConfig},
+    solana_sdk::{pubkey::Pubkey, system_transaction},
     solana_test_validator::TestValidatorGenesis,
     std::{
         sync::Arc,
@@ -29,7 +16,8 @@ async fn test_tpu_send_transaction() {
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),
-    ).await
+    )
+    .await
     .unwrap();
 
     let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
@@ -42,7 +30,10 @@ async fn test_tpu_send_transaction() {
     let signatures = vec![tx.signatures[0]];
     loop {
         assert!(now.elapsed() < timeout);
-        let statuses = rpc_client.get_signature_statuses(&signatures).await.unwrap();
+        let statuses = rpc_client
+            .get_signature_statuses(&signatures)
+            .await
+            .unwrap();
         if statuses.value.get(0).is_some() {
             return;
         }

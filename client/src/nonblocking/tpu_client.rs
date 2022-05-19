@@ -1,21 +1,23 @@
 use {
     crate::{
         client_error::ClientError,
-        connection_cache::send_wire_transaction_async,
         nonblocking::{
-            rpc_client::RpcClient,
             pubsub_client::{PubsubClient, PubsubClientError},
+            rpc_client::RpcClient,
+            tpu_connection::TpuConnection,
+            udp_client::UdpTpuConnection,
         },
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::SlotUpdate,
-        tpu_client::{MAX_FANOUT_SLOTS, RecentLeaderSlots, TpuClientConfig},
         spinner,
+        tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
+        tpu_connection::ClientStats,
     },
     bincode::serialize,
     futures_util::stream::StreamExt,
     log::*,
     solana_sdk::{
-        clock::{DEFAULT_MS_PER_SLOT, Slot},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
         message::Message,
         pubkey::Pubkey,
@@ -33,11 +35,11 @@ use {
             Arc, RwLock,
         },
     },
+    thiserror::Error,
     tokio::{
         task::JoinHandle,
         time::{sleep, timeout, Duration, Instant},
     },
-    thiserror::Error,
 };
 
 #[derive(Error, Debug)]
@@ -75,7 +77,9 @@ impl TpuClient {
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     pub async fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
-        self.try_send_wire_transaction(wire_transaction).await.is_ok()
+        self.try_send_wire_transaction(wire_transaction)
+            .await
+            .is_ok()
     }
 
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
@@ -91,13 +95,18 @@ impl TpuClient {
     async fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let mut last_error: Option<TransportError> = None;
         let mut some_success = false;
+        // TODO use a connection cache
+        let client_stats = ClientStats::default();
 
         for tpu_address in self
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
-            // TODO real async
-            let result = send_wire_transaction_async(wire_transaction.clone(), &tpu_address);
+            // TODO use connection cache with Quic option
+            let conn = UdpTpuConnection::new(tpu_address);
+            let result = conn
+                .send_wire_transaction(wire_transaction.clone(), &client_stats)
+                .await;
             if let Err(err) = result {
                 last_error = Some(err);
             } else {
@@ -178,7 +187,8 @@ impl TpuClient {
         while expired_blockhash_retries > 0 {
             let (blockhash, last_valid_block_height) = self
                 .rpc_client
-                .get_latest_blockhash_with_commitment(self.rpc_client.commitment()).await?;
+                .get_latest_blockhash_with_commitment(self.rpc_client.commitment())
+                .await?;
 
             let mut pending_transactions = HashMap::new();
             for (i, mut transaction) in transactions {
@@ -349,7 +359,9 @@ impl LeaderTpuCache {
         }
     }
 
-    async fn fetch_cluster_tpu_sockets(rpc_client: &RpcClient) -> Result<HashMap<Pubkey, SocketAddr>> {
+    async fn fetch_cluster_tpu_sockets(
+        rpc_client: &RpcClient,
+    ) -> Result<HashMap<Pubkey, SocketAddr>> {
         let cluster_contact_info = rpc_client.get_cluster_nodes().await?;
         Ok(cluster_contact_info
             .into_iter()
@@ -381,11 +393,19 @@ struct LeaderTpuService {
 }
 
 impl LeaderTpuService {
-    async fn new(rpc_client: Arc<RpcClient>, websocket_url: &str, exit: Arc<AtomicBool>) -> Result<Self> {
-        let start_slot = rpc_client.get_slot_with_commitment(CommitmentConfig::processed()).await?;
+    async fn new(
+        rpc_client: Arc<RpcClient>,
+        websocket_url: &str,
+        exit: Arc<AtomicBool>,
+    ) -> Result<Self> {
+        let start_slot = rpc_client
+            .get_slot_with_commitment(CommitmentConfig::processed())
+            .await?;
 
         let recent_slots = RecentLeaderSlots::new(start_slot);
-        let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(&rpc_client, start_slot).await?));
+        let leader_tpu_cache = Arc::new(RwLock::new(
+            LeaderTpuCache::new(&rpc_client, start_slot).await?,
+        ));
 
         let pubsub_client = if !websocket_url.is_empty() {
             Some(PubsubClient::new(websocket_url).await?)
@@ -397,7 +417,14 @@ impl LeaderTpuService {
             let recent_slots = recent_slots.clone();
             let leader_tpu_cache = leader_tpu_cache.clone();
             tokio::spawn(async move {
-                Self::run(rpc_client, recent_slots, leader_tpu_cache, pubsub_client, exit).await
+                Self::run(
+                    rpc_client,
+                    recent_slots,
+                    leader_tpu_cache,
+                    pubsub_client,
+                    exit,
+                )
+                .await
             })
         });
 
@@ -454,7 +481,9 @@ impl LeaderTpuService {
             sleep_ms = DEFAULT_MS_PER_SLOT;
 
             if let Some(notifications) = &mut notifications {
-                while let Ok(Some(update)) = timeout(Duration::from_millis(10), notifications.next()).await {
+                while let Ok(Some(update)) =
+                    timeout(Duration::from_millis(10), notifications.next()).await
+                {
                     let current_slot = match update {
                         // This update indicates that a full slot was received by the connected
                         // node so we can stop sending transactions to the leader for that slot
@@ -505,7 +534,9 @@ impl LeaderTpuService {
                     &rpc_client,
                     estimated_current_slot,
                     slots_in_epoch,
-                ).await {
+                )
+                .await
+                {
                     Ok(slot_leaders) => {
                         let mut leader_tpu_cache = leader_tpu_cache.write().unwrap();
                         leader_tpu_cache.first_slot = estimated_current_slot;
