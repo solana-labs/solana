@@ -97,7 +97,9 @@ impl VoteTransaction {
     pub fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
         match self {
             VoteTransaction::Vote(vote) => vote.timestamp_ms = ts,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp_ms = ts,
+            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+                vote_state_update.timestamp_ms = ts
+            }
         }
     }
 
