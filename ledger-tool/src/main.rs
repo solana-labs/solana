@@ -1533,7 +1533,6 @@ fn main() {
                     .value_name("ARCHIVE_TYPE")
                     .takes_value(true)
                     .help("Snapshot archive format to use.")
-                    .conflicts_with("no_snapshot")
             )
     ).subcommand(
             SubCommand::with_name("accounts")
