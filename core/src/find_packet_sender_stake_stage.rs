@@ -12,7 +12,6 @@ use {
         net::IpAddr,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
-        time,
     },
 };
 
