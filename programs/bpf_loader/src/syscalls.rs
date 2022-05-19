@@ -185,8 +185,10 @@ pub fn register_syscalls(
         .feature_set
         .is_active(&feature_set::curve25519_syscall_enabled::id())
     {
-        syscall_registry
-            .register_syscall_by_name(b"sol_curve25519_point_validation", SyscallCurvePointValidation::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_curve25519_point_validation",
+            SyscallCurvePointValidation::call,
+        )?;
     }
 
     syscall_registry
@@ -438,7 +440,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     bind_feature_gated_syscall_context_object!(
         vm,
         is_curve25519_syscall_enabled,
-        Box::new(SyscallCurvePointValidation{
+        Box::new(SyscallCurvePointValidation {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -2014,14 +2016,13 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
     }
 }
 
-
 // Elliptic Curve Point Validation
 //
 // Currently, only curve25519 Edwards and Ristretto representations are supported
 pub struct SyscallCurvePointValidation<'a, 'b> {
     invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
 }
-impl<'a, 'b>SyscallObject<BpfError> for SyscallCurvePointValidation<'a, 'b> {
+impl<'a, 'b> SyscallObject<BpfError> for SyscallCurvePointValidation<'a, 'b> {
     fn call(
         &mut self,
         curve_id: u64,
