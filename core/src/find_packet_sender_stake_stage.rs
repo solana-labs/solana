@@ -18,8 +18,6 @@ use {
     },
 };
 
-const IP_TO_STAKE_REFRESH_DURATION: Duration = Duration::from_secs(5);
-
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
@@ -82,77 +80,52 @@ impl FindPacketSenderStakeStage {
     pub fn new(
         packet_receiver: streamer::PacketBatchReceiver,
         sender: FindPacketSenderStakeSender,
-        bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<ClusterInfo>,
         ip_to_stake: Arc<RwLock<HashMap<IpAddr, u64>>>,
         name: &'static str,
     ) -> Self {
         let mut stats = FindPacketSenderStakeStats::default();
         let thread_hdl = Builder::new()
             .name("find-packet-sender-stake".to_string())
-            .spawn(move || {
-                loop {
-                    match streamer::recv_packet_batches(&packet_receiver) {
-                        Ok((mut batches, num_packets, recv_duration)) => {
-                            let num_batches = batches.len();
-                            let mut apply_sender_stakes_time =
-                                Measure::start("apply_sender_stakes_time");
-                            Self::apply_sender_stakes(&mut batches, &ip_to_stake.read().unwrap());
-                            apply_sender_stakes_time.stop();
+            .spawn(move || loop {
+                match streamer::recv_packet_batches(&packet_receiver) {
+                    Ok((mut batches, num_packets, recv_duration)) => {
+                        let num_batches = batches.len();
+                        let mut apply_sender_stakes_time =
+                            Measure::start("apply_sender_stakes_time");
+                        Self::apply_sender_stakes(&mut batches, &ip_to_stake.read().unwrap());
+                        apply_sender_stakes_time.stop();
 
-                            let mut send_batches_time = Measure::start("send_batches_time");
-                            if let Err(e) = sender.send(batches) {
-                                info!("Sender error: {:?}", e);
-                            }
-                            send_batches_time.stop();
-
-                            stats.apply_sender_stakes_time = stats
-                                .apply_sender_stakes_time
-                                .saturating_add(apply_sender_stakes_time.as_us());
-                            stats.send_batches_time = stats
-                                .send_batches_time
-                                .saturating_add(send_batches_time.as_us());
-                            stats.receive_batches_time = stats
-                                .receive_batches_time
-                                .saturating_add(recv_duration.as_nanos() as u64);
-                            stats.total_batches =
-                                stats.total_batches.saturating_add(num_batches as u64);
-                            stats.total_packets =
-                                stats.total_packets.saturating_add(num_packets as u64);
+                        let mut send_batches_time = Measure::start("send_batches_time");
+                        if let Err(e) = sender.send(batches) {
+                            info!("Sender error: {:?}", e);
                         }
-                        Err(e) => match e {
-                            StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
-                            StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
-                            _ => error!("error: {:?}", e),
-                        },
-                    }
+                        send_batches_time.stop();
 
-                    stats.report(name);
+                        stats.apply_sender_stakes_time = stats
+                            .apply_sender_stakes_time
+                            .saturating_add(apply_sender_stakes_time.as_us());
+                        stats.send_batches_time = stats
+                            .send_batches_time
+                            .saturating_add(send_batches_time.as_us());
+                        stats.receive_batches_time = stats
+                            .receive_batches_time
+                            .saturating_add(recv_duration.as_nanos() as u64);
+                        stats.total_batches =
+                            stats.total_batches.saturating_add(num_batches as u64);
+                        stats.total_packets =
+                            stats.total_packets.saturating_add(num_packets as u64);
+                    }
+                    Err(e) => match e {
+                        StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
+                        _ => error!("error: {:?}", e),
+                    },
                 }
+
+                stats.report(name);
             })
             .unwrap();
         Self { thread_hdl }
-    }
-
-    fn try_refresh_ip_to_stake(
-        last_stakes: &mut Instant,
-        ip_to_stake: &mut HashMap<IpAddr, u64>,
-        bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<ClusterInfo>,
-    ) {
-        if last_stakes.elapsed() > IP_TO_STAKE_REFRESH_DURATION {
-            let root_bank = bank_forks.read().unwrap().root_bank();
-            let staked_nodes = root_bank.staked_nodes();
-            *ip_to_stake = cluster_info
-                .tvu_peers()
-                .into_iter()
-                .filter_map(|node| {
-                    let stake = staked_nodes.get(&node.id)?;
-                    Some((node.tvu.ip(), *stake))
-                })
-                .collect();
-            *last_stakes = Instant::now();
-        }
     }
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
