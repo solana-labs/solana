@@ -14,7 +14,7 @@
 //!
 //! To limit the number of possible options and simplify the usage of the tool,
 //! The following configurations are suggested:
-//! Let `COMMON="--mode tpu --data-type transaction --unique-transactions"`
+//! Let `COMMON="--mode tpu --data-type transaction --unique-transactions-coefficient 0"`
 //! 1. Without blockhash or payer:
 //! 1.1 With invalid signatures
 //! ```bash
