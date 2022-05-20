@@ -1,5 +1,4 @@
 import * as BufferLayout from '@solana/buffer-layout';
-import {u64} from '@solana/buffer-layout-utils';
 
 import {
   encodeData,
@@ -9,6 +8,7 @@ import {
 } from './instruction';
 import {PublicKey} from './publickey';
 import {TransactionInstruction} from './transaction';
+import {u64} from './util/bigint';
 
 /**
  * Compute Budget Instruction class
