@@ -110,7 +110,7 @@
     "eslint": "^7.19.0",
     "eslint-config-prettier": "^8.0.0",
     "eslint-plugin-import": "2.26.0",
-    "eslint-plugin-mocha": "^9.0.0",
+    "eslint-plugin-mocha": "^10.0.4",
     "eslint-plugin-prettier": "^4.0.0",
     "esm": "^3.2.25",
     "http-server": "^14.0.0",
