@@ -5,10 +5,27 @@ use {
     std::{net::SocketAddr, process::exit, str::FromStr},
 };
 
+macro_rules! dos_tool_long_about {
+    () => {
+        concat!(crate_description!(),
+        "\n\n\
+        Example 1: generate one transaction request with 2 valid signatures (no blockhash) and send it indefinitely to tpu:\n\
+        solana-dos --mode tpu --data-type transaction --valid-signature --num-signatures 2\n\n\
+        Example 2: generate unique transactions requests with invalid signatures:\n\
+        solana-dos --mode tpu --data-type transaction --num-signatures 2 --unique-transactions-coefficient 0\n\n\
+        Example 3: as above but send each request 4 times:\n\
+        solana-dos --mode tpu --data-type transaction --num-signatures 2 --unique-transactions-coefficient 3\n\n\
+        Example 4: generate create-account requests with valid blockhash and send each 2 times\n \
+        solana-dos --mode tpu --data-type transaction --transaction-type account-creation --valid-blockhash --unique-transactions-coefficient 1\n\
+        ")
+    }
+}
+
 #[derive(Parser, Debug, PartialEq)]
 #[clap(name = crate_name!(),
     version = crate_version!(),
     about = crate_description!(),
+    long_about = dos_tool_long_about!(),
     rename_all = "kebab-case"
 )]
 pub struct DosClientParameters {
