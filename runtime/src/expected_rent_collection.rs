@@ -454,10 +454,10 @@ impl ExpectedRentCollection {
         filler_account_suffix: Option<&Pubkey>,
     ) -> Option<Self> {
         let mut rent_collector = rent_collector_max_epoch;
-        let slots_per_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
+        let slots_per_epoch_max_epoch = epoch_schedule.get_slots_in_epoch(rent_collector.epoch);
 
-        let partition_from_pubkey =
-            crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch);
+        let mut partition_from_pubkey =
+            crate::bank::Bank::partition_from_pubkey(pubkey, slots_per_epoch_max_epoch);
         let (epoch_of_max_storage_slot, partition_index_from_max_slot) =
             epoch_schedule.get_epoch_and_slot_index(max_slot_in_storages_inclusive);
 
@@ -480,9 +480,23 @@ impl ExpectedRentCollection {
         let mut use_previous_epoch_rent_collector = false;
         if expected_rent_collection_slot_max_epoch > max_slot_in_storages_inclusive {
             // max slot has not hit the slot in the max epoch where we would have collected rent yet, so the most recent rent-collected rewrite slot for this pubkey would be in the previous epoch
+            let previous_epoch = epoch_of_max_storage_slot.saturating_sub(1);
+            let slots_per_epoch_previous_epoch = epoch_schedule.get_slots_in_epoch(previous_epoch);
             expected_rent_collection_slot_max_epoch =
-                calculated_from_index_expected_rent_collection_slot_max_epoch
-                    .saturating_sub(slots_per_epoch);
+                if slots_per_epoch_previous_epoch == slots_per_epoch_max_epoch {
+                    // partition index remains the same
+                    calculated_from_index_expected_rent_collection_slot_max_epoch
+                        .saturating_sub(slots_per_epoch_max_epoch)
+                } else {
+                    // the newer epoch has a different # of slots, so the partition index will be different in the prior epoch
+                    partition_from_pubkey = crate::bank::Bank::partition_from_pubkey(
+                        pubkey,
+                        slots_per_epoch_previous_epoch,
+                    );
+                    first_slot_in_max_epoch
+                        .saturating_sub(slots_per_epoch_previous_epoch)
+                        .saturating_add(partition_from_pubkey)
+                };
             // since we are looking a different root, we have to call this again
             if let Some(find) = find_unskipped_slot(expected_rent_collection_slot_max_epoch) {
                 // found a root (because we have a storage) that is >= expected_rent_collection_slot.
