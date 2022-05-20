@@ -262,14 +262,7 @@ impl QuicClient {
         data: &[u8],
         connection: &NewConnection,
     ) -> Result<(), WriteError> {
-        let mut open_uni_measure = Measure::start("open_uni_measure");
         let mut send_stream = connection.connection.open_uni().await?;
-        open_uni_measure.stop();
-
-        datapoint_info!(
-            "quic-client-connection-stats",
-            ("open_uni_ms", open_uni_measure.as_ms(), i64)
-        );
 
         send_stream.write_all(data).await?;
         send_stream.finish().await?;
