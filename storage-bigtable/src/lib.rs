@@ -547,6 +547,67 @@ impl LedgerStorage {
         Ok(transaction_info.into())
     }
 
+    // Fetches and gets a vector of confirmed transactions via a multirow fetch
+    pub async fn get_confirmed_transactions(
+        &self,
+        signatures: &[Signature],
+    ) -> Result<Vec<ConfirmedTransactionWithStatusMeta>> {
+        debug!(
+            "LedgerStorage::get_confirmed_transactions request received: {:?}",
+            signatures
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        // Fetch transactions info
+        let keys = signatures.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let cells = bigtable
+            .get_bincode_cells::<TransactionInfo>("tx", &keys)
+            .await?;
+
+        // Collect by slot
+        let mut slots: HashMap<Slot, HashMap<u32, String>> = Default::default();
+        for cell in cells {
+            if let (signature, Ok(TransactionInfo { slot, index, .. })) = cell {
+                slots.entry(slot).or_default().insert(index, signature);
+            }
+        }
+
+        // Fetch blocks and extract transactions
+        let keys = slots.keys().copied().collect::<Vec<_>>();
+        let data = self
+            .get_confirmed_blocks_with_data(&keys)
+            .await?
+            .zip(std::iter::repeat(&slots))
+            .filter_map(move |((slot, block), slots)| {
+                slots.get(&slot).map(move |block_txs| {
+                    let block_time = block.block_time;
+                    block.transactions.into_iter().enumerate().filter_map(
+                        move |(index, tx_with_meta)| {
+                            block_txs.get(&(index as u32)).and_then(|signature| {
+                                if tx_with_meta.transaction_signature().to_string() != *signature {
+                                    warn!(
+                                        "Transaction info or confirmed block for {} is corrupt",
+                                        signature
+                                    );
+                                    None
+                                } else {
+                                    Some(ConfirmedTransactionWithStatusMeta {
+                                        slot,
+                                        tx_with_meta,
+                                        block_time,
+                                    })
+                                }
+                            })
+                        },
+                    )
+                })
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        Ok(data)
+    }
+
     /// Fetch a confirmed transaction
     pub async fn get_confirmed_transaction(
         &self,
