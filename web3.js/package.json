@@ -59,7 +59,7 @@
     "@babel/runtime": "^7.12.5",
     "@ethersproject/sha2": "^5.5.0",
     "@solana/buffer-layout": "^4.0.0",
-    "@solana/buffer-layout-utils": "^0.2.0",
+    "bigint-buffer": "^1.1.5",
     "bn.js": "^5.0.0",
     "borsh": "^0.7.0",
     "bs58": "^4.0.1",
