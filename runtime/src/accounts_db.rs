@@ -6546,6 +6546,15 @@ impl AccountsDb {
         });
 
         if self.filler_accounts_enabled() {
+            // simulate the time we would normally spend hashing the filler accounts
+            // this is an over approximation but at least takes a stab at simulating what the validator would spend time doing
+            let _ = AccountsHash::accumulate_account_hashes(
+                skipped_rewrites
+                    .iter()
+                    .map(|(k, v)| (*k, *v))
+                    .collect::<Vec<_>>(),
+            );
+
             // filler accounts do not get their updated hash values hashed into the delta hash
             skipped_rewrites.retain(|key, _| !self.is_filler_account(key));
         }
