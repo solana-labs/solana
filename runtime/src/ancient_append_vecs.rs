@@ -3,7 +3,6 @@
 //! 1. a slot that is older than an epoch old
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
-#![allow(dead_code)]
 use {
     crate::{
         accounts_db::FoundStoredAccount,
