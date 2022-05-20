@@ -128,8 +128,7 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(&owner.to_bytes());
-    Ok(())
+    account.set_owner(&owner.to_bytes())
 }
 
 fn allocate_and_assign(

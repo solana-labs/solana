@@ -594,7 +594,7 @@ fn process_loader_upgradeable_instruction(
                 drop(payer);
                 let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0);
+                buffer.set_lamports(0)?;
             }
 
             let mut instruction = system_instruction::create_account(
@@ -662,7 +662,7 @@ fn process_loader_upgradeable_instruction(
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: programdata_key,
             })?;
-            program.set_executable(true);
+            program.set_executable(true)?;
             drop(program);
 
             if !predrain_buffer {
@@ -673,7 +673,7 @@ fn process_loader_upgradeable_instruction(
                 drop(payer);
                 let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0);
+                buffer.set_lamports(0)?;
             }
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
@@ -844,12 +844,12 @@ fn process_loader_upgradeable_instruction(
             // Fund ProgramData to rent-exemption, spill the rest
 
             let programdata_lamports = programdata.get_lamports();
-            programdata.set_lamports(programdata_balance_required);
+            programdata.set_lamports(programdata_balance_required)?;
             drop(programdata);
 
             let mut buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-            buffer.set_lamports(0);
+            buffer.set_lamports(0)?;
             drop(buffer);
 
             let mut spill =
@@ -950,7 +950,7 @@ fn process_loader_upgradeable_instruction(
             match close_account.get_state()? {
                 UpgradeableLoaderState::Uninitialized => {
                     let close_lamports = close_account.get_lamports();
-                    close_account.set_lamports(0);
+                    close_account.set_lamports(0)?;
                     drop(close_account);
                     let mut recipient_account = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?;
@@ -1058,7 +1058,7 @@ fn common_close_account(
     let mut recipient_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
     recipient_account.checked_add_lamports(close_account.get_lamports())?;
-    close_account.set_lamports(0);
+    close_account.set_lamports(0)?;
     close_account.set_state(&UpgradeableLoaderState::Uninitialized)?;
     Ok(())
 }
@@ -1107,7 +1107,7 @@ fn process_loader_instruction(
             let mut program =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             invoke_context.update_executor(program.get_key(), executor);
-            program.set_executable(true);
+            program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
     }

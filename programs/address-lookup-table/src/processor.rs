@@ -469,7 +469,7 @@ impl Processor {
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
         lookup_table_account.set_data(&[])?;
-        lookup_table_account.set_lamports(0);
+        lookup_table_account.set_lamports(0)?;
 
         Ok(())
     }

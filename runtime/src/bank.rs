@@ -17864,14 +17864,14 @@ pub(crate) mod tests {
                             .checked_sub_lamports(amount)?;
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_lamports(new_balance);
+                            .set_lamports(new_balance)?;
                     } else {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
                             .checked_add_lamports(amount)?;
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_lamports(new_balance);
+                            .set_lamports(new_balance)?;
                     }
                     Ok(())
                 }

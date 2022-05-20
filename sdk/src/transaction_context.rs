@@ -512,8 +512,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
-    pub fn set_owner(&mut self, pubkey: &[u8]) {
+    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         self.account.copy_into_owner_from_slice(pubkey);
+        Ok(())
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -522,8 +523,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
-    pub fn set_lamports(&mut self, lamports: u64) {
+    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.account.set_lamports(lamports);
+        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -532,8 +534,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(LamportsError::ArithmeticOverflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Subtracts lamports from this account (transaction wide)
@@ -542,8 +543,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(LamportsError::ArithmeticUnderflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
@@ -599,8 +599,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
-    pub fn set_executable(&mut self, is_executable: bool) {
+    pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         self.account.set_executable(is_executable);
+        Ok(())
     }
 
     /// Returns the rent epoch of this account (transaction wide)
