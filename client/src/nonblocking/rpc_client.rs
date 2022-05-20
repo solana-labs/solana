@@ -4517,8 +4517,17 @@ impl RpcClient {
     /// Returns the stake minimum delegation, in lamports.
     pub async fn get_stake_minimum_delegation(&self) -> ClientResult<u64> {
         let instruction = solana_sdk::stake::instruction::get_minimum_delegation();
-        let transaction = Transaction::new_with_payer(&[instruction], None);
-        let response = self.simulate_transaction(&transaction).await?;
+        let transaction = Transaction::new_with_payer(&[instruction], Some(&Pubkey::default()));
+        let response = self
+            .simulate_transaction_with_config(
+                &transaction,
+                RpcSimulateTransactionConfig {
+                    sig_verify: false,
+                    replace_recent_blockhash: true,
+                    ..RpcSimulateTransactionConfig::default()
+                },
+            )
+            .await?;
         let RpcTransactionReturnData {
             program_id,
             data: (data, encoding),
