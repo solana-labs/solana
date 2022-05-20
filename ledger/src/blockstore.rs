@@ -172,14 +172,8 @@ pub struct Blockstore {
     bank_hash_cf: LedgerColumn<cf::BankHash>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
-<<<<<<< HEAD
-    pub new_shreds_signals: Vec<Sender<bool>>,
-    pub completed_slots_senders: Vec<CompletedSlotsSender>,
-=======
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
-    pub shred_timing_point_sender: Option<PohTimingSender>,
->>>>>>> 6ba4e870c (Blockstore should drop signals before validator exit (#24025))
     pub lowest_cleanup_slot: RwLock<Slot>,
     no_compaction: bool,
     column_options: LedgerColumnOptions,
@@ -635,14 +629,8 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
-<<<<<<< HEAD
-            new_shreds_signals: vec![],
-            completed_slots_senders: vec![],
-=======
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
-            shred_timing_point_sender: None,
->>>>>>> 6ba4e870c (Blockstore should drop signals before validator exit (#24025))
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
