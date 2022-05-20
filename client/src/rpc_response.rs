@@ -346,6 +346,7 @@ pub struct RpcVote {
     pub slots: Vec<Slot>,
     pub hash: String,
     pub timestamp: Option<UnixTimestamp>,
+    pub signature: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
