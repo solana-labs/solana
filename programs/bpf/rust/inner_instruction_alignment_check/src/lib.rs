@@ -2,18 +2,13 @@
 
 use solana_program::{
     account_info::AccountInfo,
+    custom_heap_default,
     entrypoint_deprecated::ProgramResult,
     instruction::{AccountMeta, Instruction},
     msg,
     program::invoke,
     pubkey::Pubkey,
 };
-
-#[no_mangle]
-fn custom_panic(info: &core::panic::PanicInfo<'_>) {
-    // Full panic reporting
-    msg!(&format!("{}", info));
-}
 
 solana_program::entrypoint_deprecated!(process_instruction);
 #[allow(clippy::unnecessary_wraps)]
@@ -38,4 +33,12 @@ fn process_instruction(
     let _ = invoke(&instruction, infos);
 
     Ok(())
+}
+
+custom_heap_default!();
+
+#[no_mangle]
+fn custom_panic(info: &core::panic::PanicInfo<'_>) {
+    // Full panic reporting
+    msg!(&format!("{}", info));
 }
