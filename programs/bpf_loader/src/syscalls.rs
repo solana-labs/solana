@@ -4466,7 +4466,7 @@ mod tests {
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(
-                size_of::<u8>() as u64,
+                size_of::<T>() as u64,
                 0,
                 0,
                 0,
@@ -4477,7 +4477,7 @@ mod tests {
             let address = result.unwrap();
             assert_ne!(address, 0);
             assert_eq!(
-                (address as *const u8 as usize).wrapping_rem(align_of::<u8>()),
+                (address as *const u8 as usize).wrapping_rem(align_of::<T>()),
                 0
             );
         }
