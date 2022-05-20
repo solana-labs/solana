@@ -6223,7 +6223,7 @@ impl AccountsDb {
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
 
-        Self::extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
+        self.extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
 
         let ret = AccountsHash::accumulate_account_hashes(hashes);
         accumulate.stop();
@@ -6246,6 +6246,7 @@ impl AccountsDb {
 
     /// add all items from 'skipped_rewrites' to 'hashes' where the pubkey doesn't already exist in 'hashes'
     fn extend_hashes_with_skipped_rewrites(
+        &self,
         hashes: &mut Vec<(Pubkey, Hash)>,
         skipped_rewrites: &Rewrites,
     ) {
@@ -6253,6 +6254,12 @@ impl AccountsDb {
         hashes.iter().for_each(|(key, _)| {
             skipped_rewrites.remove(key);
         });
+
+        if self.filler_accounts_enabled() {
+            // filler accounts do not get their updated hash values hashed into the delta hash
+            skipped_rewrites.retain(|key, _| !self.is_filler_account(key));
+        }
+
         hashes.extend(skipped_rewrites.into_iter());
     }
 
@@ -7161,7 +7168,12 @@ impl AccountsDb {
     /// The filler accounts are added to each slot in the snapshot after index generation.
     /// The accounts added in a slot are setup to have pubkeys such that rent will be collected from them before (or when?) their slot becomes an epoch old.
     /// Thus, the filler accounts are rewritten by rent and the old slot can be thrown away successfully.
-    pub fn maybe_add_filler_accounts(&self, epoch_schedule: &EpochSchedule, rent: &Rent) {
+    pub fn maybe_add_filler_accounts(
+        &self,
+        epoch_schedule: &EpochSchedule,
+        rent: &Rent,
+        rent_epoch: Epoch,
+    ) {
         if self.filler_accounts_config.count == 0 {
             return;
         }
@@ -7189,7 +7201,9 @@ impl AccountsDb {
         let space = self.filler_accounts_config.size;
         let rent_exempt_reserve = rent.minimum_balance(space);
         let lamports = rent_exempt_reserve;
-        let account = AccountSharedData::new(lamports, space, &owner);
+        let mut account = AccountSharedData::new(lamports, space, &owner);
+        // needs to be non-zero
+        account.set_rent_epoch(rent_epoch);
         let added = AtomicUsize::default();
         for pass in 0..=passes {
             self.accounts_index
@@ -14103,22 +14117,23 @@ pub mod tests {
 
     #[test]
     fn test_extend_hashes_with_skipped_rewrites() {
+        let db = AccountsDb::new_single_for_tests();
         let mut hashes = Vec::default();
         let rewrites = Rewrites::default();
-        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert!(hashes.is_empty());
         let pubkey = Pubkey::new(&[1; 32]);
         let hash = Hash::new(&[2; 32]);
         rewrites.write().unwrap().insert(pubkey, hash);
-        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert_eq!(hashes, vec![(pubkey, hash)]);
         // pubkey is already in hashes, will not be added a second time
-        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert_eq!(hashes, vec![(pubkey, hash)]);
         let pubkey2 = Pubkey::new(&[2; 32]);
         let hash2 = Hash::new(&[3; 32]);
         rewrites.write().unwrap().insert(pubkey2, hash2);
-        AccountsDb::extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
+        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
         assert_eq!(hashes, vec![(pubkey, hash), (pubkey2, hash2)]);
     }
 
