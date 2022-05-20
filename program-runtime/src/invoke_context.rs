@@ -77,13 +77,23 @@ pub trait Executor: Debug + Send + Sync {
 
 pub type Executors = HashMap<Pubkey, TransactionExecutor>;
 
+#[repr(u8)]
+#[derive(PartialEq, Debug)]
+enum TransactionExecutorStatus {
+    /// Executor was already in the cache, no update needed
+    Cached,
+    /// Executor was missing from the cache, but not updated
+    Missing,
+    /// Executor is for an updated program
+    Updated,
+}
+
 /// Tracks whether a given executor is "dirty" and needs to updated in the
 /// executors cache
 #[derive(Debug)]
 pub struct TransactionExecutor {
     executor: Arc<dyn Executor>,
-    is_miss: bool,
-    is_updated: bool,
+    status: TransactionExecutorStatus,
 }
 
 impl TransactionExecutor {
@@ -92,8 +102,7 @@ impl TransactionExecutor {
     pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            is_miss: false,
-            is_updated: false,
+            status: TransactionExecutorStatus::Cached,
         }
     }
 
@@ -102,8 +111,7 @@ impl TransactionExecutor {
     pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            is_miss: true,
-            is_updated: false,
+            status: TransactionExecutorStatus::Missing,
         }
     }
 
@@ -112,21 +120,20 @@ impl TransactionExecutor {
     pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            is_miss: false,
-            is_updated: true,
+            status: TransactionExecutorStatus::Updated,
         }
     }
 
-    pub fn is_dirty(&self, include_updates: bool) -> bool {
-        self.is_miss || (include_updates && self.is_updated)
+    pub fn is_missing(&self) -> bool {
+        self.status == TransactionExecutorStatus::Missing
+    }
+
+    pub fn is_updated(&self) -> bool {
+        self.status == TransactionExecutorStatus::Updated
     }
 
     pub fn get(&self) -> Arc<dyn Executor> {
         self.executor.clone()
-    }
-
-    pub fn clear_miss_for_test(&mut self) {
-        self.is_miss = false;
     }
 }
 

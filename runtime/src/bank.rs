@@ -4171,18 +4171,26 @@ impl Bank {
         Rc::new(RefCell::new(executors))
     }
 
-    /// Add executors back to the bank's cache if modified
-    fn update_executors(&self, allow_updates: bool, executors: Rc<RefCell<Executors>>) {
+    /// Add executors back to the bank's cache if they were missing and not updated
+    fn store_missing_executors(&self, executors: &RefCell<Executors>) {
+        self.store_executors_internal(executors, |e| e.is_missing())
+    }
+
+    /// Add updated executors back to the bank's cache
+    fn store_updated_executors(&self, executors: &RefCell<Executors>) {
+        self.store_executors_internal(executors, |e| e.is_updated())
+    }
+
+    /// Helper to write a selection of executors to the bank's cache
+    fn store_executors_internal(
+        &self,
+        executors: &RefCell<Executors>,
+        selector: impl Fn(&TransactionExecutor) -> bool,
+    ) {
         let executors = executors.borrow();
         let dirty_executors: Vec<_> = executors
             .iter()
-            .filter_map(|(key, executor)| {
-                if executor.is_dirty(allow_updates) {
-                    Some((key, executor.get()))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(key, executor)| selector(executor).then(|| (key, executor.get())))
             .collect();
 
         if !dirty_executors.is_empty() {
@@ -4270,6 +4278,14 @@ impl Bank {
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,
             process_message_time.as_us()
+        );
+
+        let mut store_missing_executors_time = Measure::start("store_missing_executors_time");
+        self.store_missing_executors(&executors);
+        store_missing_executors_time.stop();
+        saturating_add_assign!(
+            timings.execute_accessories.update_executors_us,
+            store_missing_executors_time.as_us()
         );
 
         let status = process_result
@@ -4891,16 +4907,18 @@ impl Bank {
             sanitized_txs.len()
         );
 
-        let mut update_executors_time = Measure::start("update_executors_time");
+        let mut store_updated_executors_time = Measure::start("store_updated_executors_time");
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed { details, executors } = execution_result {
-                self.update_executors(details.status.is_ok(), executors.clone());
+                if details.status.is_ok() {
+                    self.store_updated_executors(executors);
+                }
             }
         }
-        update_executors_time.stop();
+        store_updated_executors_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
-            update_executors_time.as_us()
+            store_updated_executors_time.as_us()
         );
 
         let accounts_data_len_delta = execution_results
@@ -14593,12 +14611,8 @@ pub(crate) mod tests {
         executors.insert(key3, TransactionExecutor::new_cached(executor.clone()));
         executors.insert(key4, TransactionExecutor::new_cached(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-        executors
-            .borrow_mut()
-            .get_mut(&key1)
-            .unwrap()
-            .clear_miss_for_test();
-        bank.update_executors(true, executors);
+        bank.store_missing_executors(&executors);
+        bank.store_updated_executors(&executors);
         let executors = bank.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 0);
 
@@ -14606,15 +14620,24 @@ pub(crate) mod tests {
         let mut executors = Executors::default();
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
-        executors.insert(key3, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key3, TransactionExecutor::new_updated(executor.clone()));
         executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-        bank.update_executors(true, executors);
-        let executors = bank.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 3);
-        assert!(executors.borrow().contains_key(&key1));
-        assert!(executors.borrow().contains_key(&key2));
-        assert!(executors.borrow().contains_key(&key3));
+
+        // store the new_miss
+        bank.store_missing_executors(&executors);
+        let stored_executors = bank.get_executors(accounts);
+        assert_eq!(stored_executors.borrow().len(), 2);
+        assert!(stored_executors.borrow().contains_key(&key1));
+        assert!(stored_executors.borrow().contains_key(&key2));
+
+        // store the new_updated
+        bank.store_updated_executors(&executors);
+        let stored_executors = bank.get_executors(accounts);
+        assert_eq!(stored_executors.borrow().len(), 3);
+        assert!(stored_executors.borrow().contains_key(&key1));
+        assert!(stored_executors.borrow().contains_key(&key2));
+        assert!(stored_executors.borrow().contains_key(&key3));
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
@@ -14658,7 +14681,7 @@ pub(crate) mod tests {
         let mut executors = Executors::default();
         executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-        root.update_executors(true, executors);
+        root.store_missing_executors(&executors);
         let executors = root.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 1);
 
@@ -14673,7 +14696,7 @@ pub(crate) mod tests {
         let mut executors = Executors::default();
         executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
-        fork1.update_executors(true, executors);
+        fork1.store_missing_executors(&executors);
 
         let executors = fork1.get_executors(accounts);
         assert_eq!(executors.borrow().len(), 2);
