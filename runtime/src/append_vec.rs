@@ -136,6 +136,33 @@ impl<'a> StoredAccountMeta<'a> {
     }
 }
 
+pub struct AppendVecAccountsIter<'a> {
+    append_vec: &'a AppendVec,
+    offset: usize,
+}
+
+impl<'a> AppendVecAccountsIter<'a> {
+    pub fn new(append_vec: &'a AppendVec) -> Self {
+        Self {
+            append_vec,
+            offset: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for AppendVecAccountsIter<'a> {
+    type Item = StoredAccountMeta<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
+            self.offset = next_offset;
+            Some(account)
+        } else {
+            None
+        }
+    }
+}
+
 /// A thread-safe, file-backed block of memory used to store `Account` instances. Append operations
 /// are serialized such that only one thread updates the internal `append_lock` at a time. No
 /// restrictions are placed on reading. That is, one may read items from one thread while another

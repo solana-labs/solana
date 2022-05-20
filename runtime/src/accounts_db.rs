@@ -38,7 +38,9 @@ use {
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         ancient_append_vecs::is_ancient,
-        append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
+        append_vec::{
+            AppendVec, AppendVecAccountsIter, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
+        },
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
@@ -5413,8 +5415,7 @@ impl AccountsDb {
         let mut progress = Vec::with_capacity(len);
         let mut current = Vec::with_capacity(len);
         for storage in storages {
-            let accounts = storage.accounts.accounts(0);
-            let mut iterator: std::vec::IntoIter<StoredAccountMeta<'_>> = accounts.into_iter();
+            let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
             if let Some(item) = iterator
                 .next()
                 .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
