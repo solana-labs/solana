@@ -150,28 +150,43 @@ fn pubkey_parser(pubkey: &str) -> Result<Pubkey, &'static str> {
 }
 
 /// input checks which are not covered by Clap
-fn validate_input(params: &DosClientParameters) {
+fn validate_input(params: &DosClientParameters) -> bool {
     if params.mode == Mode::Rpc
         && (params.data_type != DataType::GetAccountInfo
             && params.data_type != DataType::GetProgramAccounts)
     {
         eprintln!("unsupported data type");
-        exit(1);
+        return false;
+    }
+
+    // If (mode == tpu AND not valid_blockhash) => num_signatures must be provided
+    // Currently, it is not possible to check this using clap commands
+    // In case if mode becomes subcommand, the following will do the trick:
+    // `required_unless_present_any(&["num-instructions", "valid-blockhash"]),`
+    if params.mode == Mode::Tpu
+        && !params.transaction_params.valid_blockhash
+        && params.transaction_params.num_signatures.is_none()
+    {
+        eprintln!("The following required arguments were not provided:\n\t--num-signatures <NUM_SIGNATURES>");
+        return false;
     }
 
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
         if tp.valid_blockhash || tp.valid_signatures || tp.unique_transactions_coefficient.is_some()
         {
-            eprintln!("Arguments valid-blockhash, valid-sign, unique-transactions-coefficient are ignored if data-type != transaction");
-            exit(1);
+            eprintln!("Arguments valid-blockhash, valid-signatures, unique-transactions-coefficient are ignored if data-type != transaction");
+            return false;
         }
     }
+    true
 }
 
 pub fn build_cli_parameters() -> DosClientParameters {
     let cmd_params = DosClientParameters::parse();
-    validate_input(&cmd_params);
+    if !validate_input(&cmd_params) {
+        exit(1);
+    }
     cmd_params
 }
 
@@ -225,6 +240,45 @@ mod tests {
                 transaction_params: TransactionParams::default()
             },
         );
+    }
+
+    #[test]
+    fn test_cli_parse_dos_not_unique_request() {
+        let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
+        let params = DosClientParameters::try_parse_from(vec![
+            "solana-dos",
+            "--mode",
+            "tpu",
+            "--data-type",
+            "transaction",
+            //"--num-signatures",
+            //"2",
+        ])
+        .unwrap();
+        assert_eq!(
+            params,
+            DosClientParameters {
+                entrypoint_addr,
+                mode: Mode::Tpu,
+                data_size: 128,
+                data_type: DataType::Transaction,
+                data_input: None,
+                skip_gossip: false,
+                allow_private_addr: false,
+                num_gen_threads: 1,
+                transaction_params: TransactionParams {
+                    num_signatures: None,
+                    valid_blockhash: false,
+                    valid_signatures: false,
+                    unique_transactions_coefficient: None,
+                    transaction_type: None,
+                    num_instructions: None,
+                },
+            },
+        );
+        // At the moment, we cannot enforce presence of `num-signatures` on clap-level
+        // So we check it separately
+        assert!(!validate_input(&params));
     }
 
     #[test]
