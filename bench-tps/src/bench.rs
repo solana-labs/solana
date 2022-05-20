@@ -114,8 +114,6 @@ fn generate_chunked_transfers(
     let keypair_chunks = source_keypair_chunks.len();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut chunk_index = 0;
-    let mut last_blockhash_time = Instant::now();
-    let mut old_blockhash = *recent_blockhash.read().unwrap();
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
@@ -126,8 +124,6 @@ fn generate_chunked_transfers(
             &dest_keypair_chunks[chunk_index],
             threads,
             reclaim_lamports_back_to_source_account,
-            &mut old_blockhash,
-            &mut last_blockhash_time,
         );
 
         datapoint_info!(
@@ -365,22 +361,8 @@ fn generate_txs(
     dest: &VecDeque<&Keypair>,
     threads: usize,
     reclaim: bool,
-    old_blockhash: &mut Hash,
-    last_blockhash_time: &mut Instant,
 ) {
     let blockhash = *blockhash.read().unwrap();
-    if *old_blockhash != blockhash {
-        *old_blockhash = blockhash;
-        datapoint_info!(
-            "blockhash_stats",
-            (
-                "time_elapsed_since_blockhash_refreshed",
-                last_blockhash_time.elapsed().as_millis(),
-                i64
-            )
-        );
-        *last_blockhash_time = Instant::now();
-    }
     let tx_count = source.len();
     info!(
         "Signing transactions... {} (reclaim={}, blockhash={})",
@@ -444,6 +426,14 @@ fn poll_blockhash<T: BenchTpsClient>(
         let blockhash_updated = {
             let old_blockhash = *blockhash.read().unwrap();
             if let Some(new_blockhash) = get_new_latest_blockhash(client, &old_blockhash) {
+                datapoint_info!(
+                    "blockhash_stats",
+                    (
+                        "time_elapsed_since_blockhash_refreshed",
+                        blockhash_last_updated.elapsed().as_millis(),
+                        i64
+                    )
+                );
                 *blockhash.write().unwrap() = new_blockhash;
                 blockhash_last_updated = Instant::now();
                 true
