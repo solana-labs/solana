@@ -5705,27 +5705,33 @@ impl AccountsDb {
         )
     }
 
-    fn scan_multiple_account_storages_one_slot<F, B>(
+    fn scan_multiple_account_storages_one_slot<F, F2, B>(
         storages: &[Arc<AccountStorageEntry>],
-        scan_func: &F,
+        filter_func: &F,
+        scan_func: &F2,
         slot: Slot,
         retval: &mut B,
     ) where
-        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
+        F: Fn(&Pubkey) -> bool + Send + Sync,
+        F2: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
         let mut len = storages.len();
         if len == 1 {
             // only 1 storage, so no need to interleave between multiple storages based on write_version
-            AppendVecAccountsIter::new(&storages[0].accounts)
-                .for_each(|account| scan_func(LoadedAccount::Stored(account), retval, slot));
+            AppendVecAccountsIter::new(&storages[0].accounts).for_each(|account| {
+                if filter_func(&account.meta.pubkey) {
+                    scan_func(LoadedAccount::Stored(account), retval, slot);
+                }
+            });
         } else {
             // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
             let mut progress = Vec::with_capacity(len);
             let mut current =
                 Vec::<(StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>)>::with_capacity(len);
             for storage in storages {
-                let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
+                let mut iterator = AppendVecAccountsIter::new(&storage.accounts)
+                    .filter(|storage| filter_func(&storage.meta.pubkey));
                 if let Some(item) = iterator
                     .next()
                     .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
@@ -5756,7 +5762,7 @@ impl AccountsDb {
                     }
                     None => {
                         current.remove(min_index);
-                        progress.remove(min_index);
+                        let _ = progress.remove(min_index);
                         len -= 1;
                     }
                 }
@@ -5798,11 +5804,13 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, F2>(
+    #[allow(clippy::too_many_arguments)]
+    fn scan_account_storage_no_bank<F, F2, F3>(
         &self,
         cache_hash_data: &CacheHashData,
         config: &CalcAccountsHashConfig<'_>,
         snapshot_storages: &SortedStorages,
+        filter_func: F3,
         scan_func: F,
         after_func: F2,
         bin_range: &Range<usize>,
@@ -5812,6 +5820,7 @@ impl AccountsDb {
     where
         F: Fn(LoadedAccount, &mut BinnedHashData, Slot) + Send + Sync,
         F2: Fn(BinnedHashData) -> BinnedHashData + Send + Sync,
+        F3: Fn(&Pubkey) -> bool + Send + Sync,
     {
         let start_bin_index = bin_range.start;
 
@@ -5943,13 +5952,15 @@ impl AccountsDb {
                             {
                                 let keys = slot_cache.get_all_pubkeys();
                                 for key in keys {
-                                    if let Some(cached_account) = slot_cache.get_cloned(&key) {
-                                        let mut accessor = LoadedAccountAccessor::Cached(Some(
-                                            Cow::Owned(cached_account),
-                                        ));
-                                        let account = accessor.get_loaded_account().unwrap();
-                                        scan_func(account, &mut retval, slot);
-                                    };
+                                    if filter_func(&key) {
+                                        if let Some(cached_account) = slot_cache.get_cloned(&key) {
+                                            let mut accessor = LoadedAccountAccessor::Cached(Some(
+                                                Cow::Owned(cached_account),
+                                            ));
+                                            let account = accessor.get_loaded_account().unwrap();
+                                            scan_func(account, &mut retval, slot);
+                                        };
+                                    }
                                 }
                             }
                         }
@@ -5958,6 +5969,7 @@ impl AccountsDb {
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(
                             sub_storages,
+                            &filter_func,
                             &scan_func,
                             slot,
                             &mut retval,
@@ -6131,12 +6143,13 @@ impl AccountsDb {
             cache_hash_data,
             config,
             storage,
+            |pubkey| {
+                let pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
+                bin_range.contains(&pubkey_to_bin_index)
+            },
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 let pubkey = loaded_account.pubkey();
                 let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
-                if !bin_range.contains(&pubkey_to_bin_index) {
-                    return;
-                }
 
                 // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
                 pubkey_to_bin_index -= bin_range.start;
@@ -8726,6 +8739,7 @@ pub mod tests {
                 rent_collector: &RentCollector::default(),
             },
             &get_storage_refs(&storages),
+            |_| true,
             |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
                 calls.fetch_add(1, Ordering::Relaxed);
                 assert_eq!(loaded_account.pubkey(), &pubkey);
@@ -8790,6 +8804,7 @@ pub mod tests {
         };
         AccountsDb::scan_multiple_account_storages_one_slot(
             &storages[0],
+            &(|_| true),
             &scan_func,
             slot_expected,
             &mut accum,
@@ -8867,6 +8882,7 @@ pub mod tests {
             let mut accum = Vec::new();
             AccountsDb::scan_multiple_account_storages_one_slot(
                 &storages,
+                &(|_| true),
                 &scan_func,
                 slot_expected,
                 &mut accum,
