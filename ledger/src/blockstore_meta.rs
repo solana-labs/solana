@@ -1,7 +1,10 @@
 use {
     crate::shred::{Shred, ShredType},
     serde::{Deserialize, Deserializer, Serialize, Serializer},
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{
+        clock::{Slot, UnixTimestamp},
+        hash::Hash,
+    },
     std::{
         collections::BTreeSet,
         ops::{Range, RangeBounds},
@@ -327,6 +330,34 @@ pub struct ProgramCost {
     pub cost: u64,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct OptimisticSlotMetaV0 {
+    pub hash: Hash,
+    pub timestamp: UnixTimestamp,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub enum OptimisticSlotMetaVersioned {
+    V0(OptimisticSlotMetaV0),
+}
+
+impl OptimisticSlotMetaVersioned {
+    pub fn new(hash: Hash, timestamp: UnixTimestamp) -> Self {
+        OptimisticSlotMetaVersioned::V0(OptimisticSlotMetaV0 { hash, timestamp })
+    }
+
+    pub fn hash(&self) -> Hash {
+        match self {
+            OptimisticSlotMetaVersioned::V0(meta) => meta.hash,
+        }
+    }
+
+    pub fn timestamp(&self) -> UnixTimestamp {
+        match self {
+            OptimisticSlotMetaVersioned::V0(meta) => meta.timestamp,
+        }
+    }
+}
 #[cfg(test)]
 mod test {
     use {
