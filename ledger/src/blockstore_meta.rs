@@ -343,10 +343,7 @@ pub enum OptimisticSlotMetaVersioned {
 
 impl OptimisticSlotMetaVersioned {
     pub fn new(hash: Hash, timestamp: UnixTimestamp) -> Self {
-        OptimisticSlotMetaVersioned::Current(OptimisticSlotMeta {
-            hash,
-            timestamp,
-        })
+        OptimisticSlotMetaVersioned::Current(OptimisticSlotMeta { hash, timestamp })
     }
 
     pub fn hash(&self) -> Hash {
