@@ -170,6 +170,7 @@ pub struct Blockstore {
     block_height_cf: LedgerColumn<cf::BlockHeight>,
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
+    optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
@@ -578,6 +579,7 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
+        let optimistic_slots_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -629,6 +631,7 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
+            optimistic_slots_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             insert_shreds_lock: Mutex::<()>::default(),
@@ -935,6 +938,7 @@ impl Blockstore {
     ///
     /// [`BlockstoreRocksDbColumnFamilyMetrics`]: crate::blockstore_metrics::BlockstoreRocksDbColumnFamilyMetrics
     pub fn submit_rocksdb_cf_metrics_for_all_cfs(&self) {
+<<<<<<< HEAD
         let column_options = &self.column_options;
         self.submit_rocksdb_cf_metrics::<cf::SlotMeta>(rocksdb_metric_header!(
             "blockstore_rocksdb_cfs",
@@ -1091,6 +1095,27 @@ impl Blockstore {
                 .unwrap_or(BLOCKSTORE_METRICS_ERROR),
         };
         cf_rocksdb_metrics.report_metrics(metric_name_and_cf_tag);
+=======
+        self.meta_cf.submit_rocksdb_cf_metrics();
+        self.dead_slots_cf.submit_rocksdb_cf_metrics();
+        self.duplicate_slots_cf.submit_rocksdb_cf_metrics();
+        self.erasure_meta_cf.submit_rocksdb_cf_metrics();
+        self.orphans_cf.submit_rocksdb_cf_metrics();
+        self.index_cf.submit_rocksdb_cf_metrics();
+        self.data_shred_cf.submit_rocksdb_cf_metrics();
+        self.code_shred_cf.submit_rocksdb_cf_metrics();
+        self.transaction_status_cf.submit_rocksdb_cf_metrics();
+        self.address_signatures_cf.submit_rocksdb_cf_metrics();
+        self.transaction_memos_cf.submit_rocksdb_cf_metrics();
+        self.transaction_status_index_cf.submit_rocksdb_cf_metrics();
+        self.rewards_cf.submit_rocksdb_cf_metrics();
+        self.blocktime_cf.submit_rocksdb_cf_metrics();
+        self.perf_samples_cf.submit_rocksdb_cf_metrics();
+        self.block_height_cf.submit_rocksdb_cf_metrics();
+        self.program_costs_cf.submit_rocksdb_cf_metrics();
+        self.bank_hash_cf.submit_rocksdb_cf_metrics();
+        self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
+>>>>>>> 8caf0aabd (framework to preserve optimistic_slot in blockstore (#25362))
     }
 
     fn try_shred_recovery(
