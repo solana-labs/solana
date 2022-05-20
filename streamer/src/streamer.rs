@@ -292,9 +292,9 @@ fn recv_send(
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
-        packet_batch.packets.iter().for_each(|p| stats.record(p));
+        packet_batch.iter().for_each(|p| stats.record(p));
     }
-    let packets = packet_batch.packets.iter().filter_map(|pkt| {
+    let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta.socket_addr();
         socket_addr_space
             .check(&addr)
@@ -313,13 +313,13 @@ pub fn recv_vec_packet_batches(
     trace!("got packets");
     let mut num_packets = packet_batches
         .iter()
-        .map(|packets| packets.packets.len())
+        .map(|packets| packets.len())
         .sum::<usize>();
     while let Ok(packet_batch) = recvr.try_recv() {
         trace!("got more packets");
         num_packets += packet_batch
             .iter()
-            .map(|packets| packets.packets.len())
+            .map(|packets| packets.len())
             .sum::<usize>();
         packet_batches.extend(packet_batch);
     }
@@ -339,11 +339,11 @@ pub fn recv_packet_batches(
     let packet_batch = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
     trace!("got packets");
-    let mut num_packets = packet_batch.packets.len();
+    let mut num_packets = packet_batch.len();
     let mut packet_batches = vec![packet_batch];
     while let Ok(packet_batch) = recvr.try_recv() {
         trace!("got more packets");
-        num_packets += packet_batch.packets.len();
+        num_packets += packet_batch.len();
         packet_batches.push(packet_batch);
     }
     let recv_duration = recv_start.elapsed();
@@ -431,7 +431,7 @@ mod test {
                 continue;
             }
 
-            *num_packets -= packet_batch_res.unwrap().packets.len();
+            *num_packets -= packet_batch_res.unwrap().len();
 
             if *num_packets == 0 {
                 break;
@@ -482,7 +482,7 @@ mod test {
                     p.meta.size = PACKET_DATA_SIZE;
                     p.meta.set_socket_addr(&addr);
                 }
-                packet_batch.packets.push(p);
+                packet_batch.push(p);
             }
             s_responder.send(packet_batch).expect("send");
             t_responder

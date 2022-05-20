@@ -367,7 +367,7 @@ fn main() {
             for (packet_batch_index, packet_batch) in
                 packets_for_this_iteration.packet_batches.iter().enumerate()
             {
-                sent += packet_batch.packets.len();
+                sent += packet_batch.len();
                 trace!(
                     "Sending PacketBatch index {}, {}",
                     packet_batch_index,

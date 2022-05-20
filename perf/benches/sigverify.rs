@@ -56,8 +56,8 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
             current_packets = num_packets;
         }
         let mut batch = PacketBatch::with_capacity(len);
-        batch.packets.resize(len, Packet::default());
-        for packet in batch.packets.iter_mut() {
+        batch.resize(len, Packet::default());
+        for packet in batch.iter_mut() {
             if thread_rng().gen_ratio(1, 2) {
                 tx = simple_tx.clone();
             } else {

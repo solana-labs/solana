@@ -164,13 +164,13 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
 }
 
 pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
-    batches.iter().map(|batch| batch.packets.len()).sum()
+    batches.iter().map(|batch| batch.len()).sum()
 }
 
 pub fn count_valid_packets(batches: &[PacketBatch]) -> usize {
     batches
         .iter()
-        .map(|batch| batch.packets.iter().filter(|p| !p.meta.discard()).count())
+        .map(|batch| batch.iter().filter(|p| !p.meta.discard()).count())
         .sum()
 }
 
@@ -396,7 +396,6 @@ pub fn generate_offsets(
         .iter_mut()
         .map(|batch| {
             batch
-                .packets
                 .iter_mut()
                 .map(|packet| {
                     let packet_offsets =
@@ -499,7 +498,7 @@ impl Deduper {
     pub fn dedup_packets_and_count_discards(&self, batches: &mut [PacketBatch]) -> u64 {
         batches
             .iter_mut()
-            .flat_map(|batch| batch.packets.iter_mut().map(|p| self.dedup_packet(p)))
+            .flat_map(|batch| batch.iter_mut().map(|p| self.dedup_packet(p)))
             .sum()
     }
 }
@@ -510,28 +509,25 @@ pub fn shrink_batches(batches: &mut [PacketBatch]) -> usize {
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
     for batch_ix in 0..batches.len() {
-        for packet_ix in 0..batches[batch_ix].packets.len() {
-            if batches[batch_ix].packets[packet_ix].meta.discard() {
+        for packet_ix in 0..batches[batch_ix].len() {
+            if batches[batch_ix][packet_ix].meta.discard() {
                 continue;
             }
             last_valid_batch = batch_ix.saturating_add(1);
             let mut found_spot = false;
             while valid_batch_ix < batch_ix && !found_spot {
-                while valid_packet_ix < batches[valid_batch_ix].packets.len() {
-                    if batches[valid_batch_ix].packets[valid_packet_ix]
-                        .meta
-                        .discard()
-                    {
-                        batches[valid_batch_ix].packets[valid_packet_ix] =
-                            batches[batch_ix].packets[packet_ix].clone();
-                        batches[batch_ix].packets[packet_ix].meta.set_discard(true);
+                while valid_packet_ix < batches[valid_batch_ix].len() {
+                    if batches[valid_batch_ix][valid_packet_ix].meta.discard() {
+                        batches[valid_batch_ix][valid_packet_ix] =
+                            batches[batch_ix][packet_ix].clone();
+                        batches[batch_ix][packet_ix].meta.set_discard(true);
                         last_valid_batch = valid_batch_ix.saturating_add(1);
                         found_spot = true;
                         break;
                     }
                     valid_packet_ix = valid_packet_ix.saturating_add(1);
                 }
-                if valid_packet_ix >= batches[valid_batch_ix].packets.len() {
+                if valid_packet_ix >= batches[valid_batch_ix].len() {
                     valid_packet_ix = 0;
                     valid_batch_ix = valid_batch_ix.saturating_add(1);
                 }
@@ -547,7 +543,6 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     PAR_THREAD_POOL.install(|| {
         batches.into_par_iter().for_each(|batch| {
             batch
-                .packets
                 .par_iter_mut()
                 .for_each(|p| verify_packet(p, reject_non_vote))
         });
@@ -559,12 +554,9 @@ pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
     use rayon::prelude::*;
     let packet_count = count_packets_in_batches(batches);
     debug!("disabled ECDSA for {}", packet_count);
-    batches.into_par_iter().for_each(|batch| {
-        batch
-            .packets
-            .par_iter_mut()
-            .for_each(|p| p.meta.set_discard(false))
-    });
+    batches
+        .into_par_iter()
+        .for_each(|batch| batch.par_iter_mut().for_each(|p| p.meta.set_discard(false)));
     inc_new_counter_debug!("ed25519_verify_disabled", packet_count);
 }
 
@@ -621,7 +613,7 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
 
 pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
     for (batch, v) in batches.iter_mut().zip(r) {
-        for (pkt, f) in batch.packets.iter_mut().zip(v) {
+        for (pkt, f) in batch.iter_mut().zip(v) {
             if !pkt.meta.discard() {
                 pkt.meta.set_discard(*f == 0);
             }
@@ -672,12 +664,12 @@ pub fn ed25519_verify(
     let mut num_packets: usize = 0;
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.packets.as_ptr(),
-            num: batch.packets.len() as u32,
+            elems: batch.as_ptr(),
+            num: batch.len() as u32,
         });
-        let v = vec![0u8; batch.packets.len()];
+        let v = vec![0u8; batch.len()];
         rvs.push(v);
-        num_packets = num_packets.saturating_add(batch.packets.len());
+        num_packets = num_packets.saturating_add(batch.len());
     }
     out.resize(signature_offsets.len(), 0);
     trace!("Starting verify num packets: {}", num_packets);
@@ -743,14 +735,15 @@ mod tests {
 
     #[test]
     fn test_mark_disabled() {
-        let mut batch = PacketBatch::default();
-        batch.packets.push(Packet::default());
+        let batch_size = 1;
+        let mut batch = PacketBatch::with_capacity(batch_size);
+        batch.resize(batch_size, Packet::default());
         let mut batches: Vec<PacketBatch> = vec![batch];
         mark_disabled(&mut batches, &[vec![0]]);
-        assert!(batches[0].packets[0].meta.discard());
-        batches[0].packets[0].meta.set_discard(false);
+        assert!(batches[0][0].meta.discard());
+        batches[0][0].meta.set_discard(false);
         mark_disabled(&mut batches, &[vec![1]]);
-        assert!(!batches[0].packets[0].meta.discard());
+        assert!(!batches[0][0].meta.discard());
     }
 
     #[test]
@@ -854,7 +847,7 @@ mod tests {
         packet.meta.set_discard(false);
         let mut batches = generate_packet_batches(&packet, 1, 1);
         ed25519_verify(&mut batches);
-        assert!(batches[0].packets[0].meta.discard());
+        assert!(batches[0][0].meta.discard());
     }
 
     #[test]
@@ -890,7 +883,7 @@ mod tests {
         packet.meta.set_discard(false);
         let mut batches = generate_packet_batches(&packet, 1, 1);
         ed25519_verify(&mut batches);
-        assert!(batches[0].packets[0].meta.discard());
+        assert!(batches[0][0].meta.discard());
     }
 
     #[test]
@@ -1058,13 +1051,12 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let mut packet_batch = PacketBatch::default();
-                packet_batch.packets.resize(0, Packet::default());
                 let num_packets_per_batch = thread_rng().gen_range(1, max_packets_per_batch);
+                let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
-                    packet_batch.packets.push(packet.clone());
+                    packet_batch.push(packet.clone());
                 }
-                assert_eq!(packet_batch.packets.len(), num_packets_per_batch);
+                assert_eq!(packet_batch.len(), num_packets_per_batch);
                 packet_batch
             })
             .collect();
@@ -1081,12 +1073,11 @@ mod tests {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let mut packet_batch = PacketBatch::default();
-                packet_batch.packets.resize(0, Packet::default());
+                let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
-                    packet_batch.packets.push(packet.clone());
+                    packet_batch.push(packet.clone());
                 }
-                assert_eq!(packet_batch.packets.len(), num_packets_per_batch);
+                assert_eq!(packet_batch.len(), num_packets_per_batch);
                 packet_batch
             })
             .collect();
@@ -1113,7 +1104,7 @@ mod tests {
         let should_discard = modify_data;
         assert!(batches
             .iter()
-            .flat_map(|batch| &batch.packets)
+            .flat_map(|batch| batch.iter())
             .all(|p| p.meta.discard() == should_discard));
     }
 
@@ -1137,7 +1128,7 @@ mod tests {
         ed25519_verify(&mut batches);
         assert!(batches
             .iter()
-            .flat_map(|batch| &batch.packets)
+            .flat_map(|batch| batch.iter())
             .all(|p| p.meta.discard()));
     }
 
@@ -1169,7 +1160,7 @@ mod tests {
 
         packet.data[40] = packet.data[40].wrapping_add(8);
 
-        batches[0].packets.push(packet);
+        batches[0].push(packet);
 
         // verify packets
         ed25519_verify(&mut batches);
@@ -1180,7 +1171,7 @@ mod tests {
         ref_vec[0].push(0u8);
         assert!(batches
             .iter()
-            .flat_map(|batch| &batch.packets)
+            .flat_map(|batch| batch.iter())
             .zip(ref_vec.into_iter().flatten())
             .all(|(p, discard)| {
                 if discard == 0 {
@@ -1208,15 +1199,15 @@ mod tests {
             let num_modifications = thread_rng().gen_range(0, 5);
             for _ in 0..num_modifications {
                 let batch = thread_rng().gen_range(0, batches.len());
-                let packet = thread_rng().gen_range(0, batches[batch].packets.len());
-                let offset = thread_rng().gen_range(0, batches[batch].packets[packet].meta.size);
+                let packet = thread_rng().gen_range(0, batches[batch].len());
+                let offset = thread_rng().gen_range(0, batches[batch][packet].meta.size);
                 let add = thread_rng().gen_range(0, 255);
-                batches[batch].packets[packet].data[offset] =
-                    batches[batch].packets[packet].data[offset].wrapping_add(add);
+                batches[batch][packet].data[offset] =
+                    batches[batch][packet].data[offset].wrapping_add(add);
             }
 
             let batch_to_disable = thread_rng().gen_range(0, batches.len());
-            for p in batches[batch_to_disable].packets.iter_mut() {
+            for p in batches[batch_to_disable].iter_mut() {
                 p.meta.set_discard(true);
             }
 
@@ -1230,8 +1221,8 @@ mod tests {
             // check result
             batches
                 .iter()
-                .flat_map(|batch| &batch.packets)
-                .zip(batches_cpu.iter().flat_map(|batch| &batch.packets))
+                .flat_map(|batch| batch.iter())
+                .zip(batches_cpu.iter().flat_map(|batch| batch.iter()))
                 .for_each(|(p1, p2)| assert_eq!(p1, p2));
         }
     }
@@ -1386,26 +1377,20 @@ mod tests {
 
         let mut current_offset = 0usize;
         let mut batch = PacketBatch::default();
-        batch
-            .packets
-            .push(Packet::from_data(None, test_tx()).unwrap());
+        batch.push(Packet::from_data(None, test_tx()).unwrap());
         let tx = new_test_vote_tx(&mut rng);
-        batch.packets.push(Packet::from_data(None, tx).unwrap());
-        batch
-            .packets
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, packet)| {
-                let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
-                check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
-                if index == 1 {
-                    assert!(packet.meta.is_simple_vote_tx());
-                } else {
-                    assert!(!packet.meta.is_simple_vote_tx());
-                }
+        batch.push(Packet::from_data(None, tx).unwrap());
+        batch.iter_mut().enumerate().for_each(|(index, packet)| {
+            let packet_offsets = do_get_packet_offsets(packet, current_offset).unwrap();
+            check_for_simple_vote_transaction(packet, &packet_offsets, current_offset).ok();
+            if index == 1 {
+                assert!(packet.meta.is_simple_vote_tx());
+            } else {
+                assert!(!packet.meta.is_simple_vote_tx());
+            }
 
-                current_offset = current_offset.saturating_add(size_of::<Packet>());
-            });
+            current_offset = current_offset.saturating_add(size_of::<Packet>());
+        });
     }
 
     #[test]
@@ -1476,15 +1461,13 @@ mod tests {
                 PACKETS_PER_BATCH,
             );
             batches.iter_mut().for_each(|b| {
-                b.packets
-                    .iter_mut()
+                b.iter_mut()
                     .for_each(|p| p.meta.set_discard(thread_rng().gen()))
             });
             //find all the non discarded packets
             let mut start = vec![];
             batches.iter_mut().for_each(|b| {
-                b.packets
-                    .iter_mut()
+                b.iter_mut()
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| start.push(p.clone()))
             });
@@ -1497,8 +1480,7 @@ mod tests {
             //make sure all the non discarded packets are the same
             let mut end = vec![];
             batches.iter_mut().for_each(|b| {
-                b.packets
-                    .iter_mut()
+                b.iter_mut()
                     .filter(|p| !p.meta.discard())
                     .for_each(|p| end.push(p.clone()))
             });
@@ -1662,15 +1644,14 @@ mod tests {
             assert_eq!(batches.len(), BATCH_COUNT);
             assert_eq!(count_valid_packets(&batches), PACKET_COUNT);
             batches.iter_mut().enumerate().for_each(|(i, b)| {
-                b.packets
-                    .iter_mut()
+                b.iter_mut()
                     .enumerate()
                     .for_each(|(j, p)| p.meta.set_discard(set_discard(i, j)))
             });
             assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
             debug!("show valid packets for case {}", i);
             batches.iter_mut().enumerate().for_each(|(i, b)| {
-                b.packets.iter_mut().enumerate().for_each(|(j, p)| {
+                b.iter_mut().enumerate().for_each(|(j, p)| {
                     if !p.meta.discard() {
                         debug!("{} {}", i, j)
                     }

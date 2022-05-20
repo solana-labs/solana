@@ -252,13 +252,13 @@ impl AncestorHashesService {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let mut packet_batches = vec![response_receiver.recv_timeout(timeout)?];
-        let mut total_packets = packet_batches[0].packets.len();
+        let mut total_packets = packet_batches[0].len();
 
         let mut dropped_packets = 0;
         while let Ok(batch) = response_receiver.try_recv() {
-            total_packets += batch.packets.len();
+            total_packets += batch.len();
             if packet_threshold.should_drop(total_packets) {
-                dropped_packets += batch.packets.len();
+                dropped_packets += batch.len();
             } else {
                 packet_batches.push(batch);
             }
@@ -292,7 +292,7 @@ impl AncestorHashesService {
         duplicate_slots_reset_sender: &DuplicateSlotsResetSender,
         retryable_slots_sender: &RetryableSlotsSender,
     ) {
-        packet_batch.packets.iter().for_each(|packet| {
+        packet_batch.iter().for_each(|packet| {
             let decision = Self::verify_and_process_ancestor_response(
                 packet,
                 ancestor_hashes_request_statuses,
@@ -1116,7 +1116,7 @@ mod test {
         let mut response_packet = response_receiver
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
-        let packet = &mut response_packet.packets[0];
+        let packet = &mut response_packet[0];
         packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
@@ -1477,7 +1477,7 @@ mod test {
         let mut response_packet = response_receiver
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
-        let packet = &mut response_packet.packets[0];
+        let packet = &mut response_packet[0];
         packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
