@@ -249,7 +249,7 @@ impl SigVerifyStage {
         );
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper.dedup_packets(&mut batches) as usize;
+        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(&mut batches) as usize;
         dedup_time.stop();
         let num_unique = num_packets.saturating_sub(discard_or_dedup_fail);
 
