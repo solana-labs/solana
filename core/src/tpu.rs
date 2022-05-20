@@ -230,6 +230,7 @@ impl Tpu {
             replay_vote_sender,
             cost_model.clone(),
             connection_cache.clone(),
+            bank_forks.clone(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
