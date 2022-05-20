@@ -91,7 +91,6 @@ impl FindPacketSenderStakeStage {
                             Measure::start("apply_sender_stakes_time");
                         let ip_to_stake = staked_nodes.read().unwrap();
                         Self::apply_sender_stakes(&mut batches, &ip_to_stake);
-                        drop(ip_to_stake);
                         apply_sender_stakes_time.stop();
 
                         let mut send_batches_time = Measure::start("send_batches_time");
