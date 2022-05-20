@@ -5714,43 +5714,51 @@ impl AccountsDb {
         F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
         B: Send + Default,
     {
-        // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
         let mut len = storages.len();
-        let mut progress = Vec::with_capacity(len);
-        let mut current = Vec::with_capacity(len);
-        for storage in storages {
-            let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
-            if let Some(item) = iterator
-                .next()
-                .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
-            {
-                current.push(item);
-                progress.push(iterator);
-            }
-        }
-        while !progress.is_empty() {
-            let mut min = current[0].0;
-            let mut min_index = 0;
-            for (i, (item, _)) in current.iter().enumerate().take(len).skip(1) {
-                if item < &min {
-                    min_index = i;
-                    min = *item;
+        if len == 1 {
+            // only 1 storage, so no need to interleave between multiple storages based on write_version
+            AppendVecAccountsIter::new(&storages[0].accounts)
+                .for_each(|account| scan_func(LoadedAccount::Stored(account), retval, slot));
+        } else {
+            // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
+            let mut progress = Vec::with_capacity(len);
+            let mut current =
+                Vec::<(StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>)>::with_capacity(len);
+            for storage in storages {
+                let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
+                if let Some(item) = iterator
+                    .next()
+                    .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
+                {
+                    current.push(item);
+                    progress.push(iterator);
                 }
             }
-            let mut account = (0, None);
-            std::mem::swap(&mut account, &mut current[min_index]);
-            scan_func(LoadedAccount::Stored(account.1.unwrap()), retval, slot);
-            let next = progress[min_index]
-                .next()
-                .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)));
-            match next {
-                Some(item) => {
-                    current[min_index] = item;
+            while !progress.is_empty() {
+                let mut min = current[0].0;
+                let mut min_index = 0;
+                for (i, (item, _)) in current.iter().enumerate().take(len).skip(1) {
+                    if item < &min {
+                        min_index = i;
+                        min = *item;
+                    }
                 }
-                None => {
-                    current.remove(min_index);
-                    progress.remove(min_index);
-                    len -= 1;
+                let mut account: (StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>) =
+                    (0, None);
+                std::mem::swap(&mut account, &mut current[min_index]);
+                scan_func(LoadedAccount::Stored(account.1.unwrap()), retval, slot);
+                let next = progress[min_index].next().map(|stored_account| {
+                    (stored_account.meta.write_version, Some(stored_account))
+                });
+                match next {
+                    Some(item) => {
+                        current[min_index] = item;
+                    }
+                    None => {
+                        current.remove(min_index);
+                        progress.remove(min_index);
+                        len -= 1;
+                    }
                 }
             }
         }
