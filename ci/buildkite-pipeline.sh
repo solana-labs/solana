@@ -179,7 +179,7 @@ all_test_steps() {
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-bpf.sh"
     name: "stable-bpf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 25
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
       - "queue=solana"
