@@ -149,6 +149,11 @@ pub mod zk_token_sdk_enabled {
     solana_sdk::declare_id!("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ");
 }
 
+// TODO: temporary address for now
+pub mod curve25519_syscall_enabled {
+    solana_sdk::declare_id!("curve25519111111111111111111111111111111111");
+}
+
 pub mod versioned_tx_message_enabled {
     solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
 }

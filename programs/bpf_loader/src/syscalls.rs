@@ -181,6 +181,16 @@ pub fn register_syscalls(
         )?;
     }
 
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::curve25519_syscall_enabled::id())
+    {
+        syscall_registry.register_syscall_by_name(
+            b"sol_curve25519_point_validation",
+            SyscallCurvePointValidation::call,
+        )?;
+    }
+
     syscall_registry
         .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
@@ -288,6 +298,9 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     let is_zk_token_sdk_enabled = invoke_context
         .feature_set
         .is_active(&feature_set::zk_token_sdk_enabled::id());
+    let is_curve25519_syscall_enabled = invoke_context
+        .feature_set
+        .is_active(&feature_set::curve25519_syscall_enabled::id());
     let add_get_processed_sibling_instruction_syscall = invoke_context
         .feature_set
         .is_active(&add_get_processed_sibling_instruction_syscall::id());
@@ -323,7 +336,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         }),
         None,
     )?;
-
     vm.bind_syscall_context_object(
         Box::new(SyscallLogBpfComputeUnits {
             invoke_context: invoke_context.clone(),
@@ -421,6 +433,14 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         vm,
         is_zk_token_sdk_enabled,
         Box::new(SyscallZkTokenElgamalOpWithScalar {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
+
+    bind_feature_gated_syscall_context_object!(
+        vm,
+        is_curve25519_syscall_enabled,
+        Box::new(SyscallCurvePointValidation {
             invoke_context: invoke_context.clone(),
         }),
     );
@@ -1993,6 +2013,83 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallBlake3<'a, 'b> {
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
         *result = Ok(0);
+    }
+}
+
+// Elliptic Curve Point Validation
+//
+// Currently, only curve25519 Edwards and Ristretto representations are supported
+pub struct SyscallCurvePointValidation<'a, 'b> {
+    invoke_context: Rc<RefCell<&'a mut InvokeContext<'b>>>,
+}
+impl<'a, 'b> SyscallObject<BpfError> for SyscallCurvePointValidation<'a, 'b> {
+    fn call(
+        &mut self,
+        curve_id: u64,
+        point_addr: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
+
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let loader_id = &question_mark!(get_current_loader_key(&invoke_context), result);
+
+        match curve_id {
+            CURVE25519_EDWARDS => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_validate_point_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<edwards::PodEdwardsPoint>(
+                        memory_mapping,
+                        point_addr,
+                        loader_id,
+                    ),
+                    result
+                );
+
+                if edwards::validate_edwards(point) {
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            }
+            CURVE25519_RISTRETTO => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_validate_point_cost;
+                question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+                let point = question_mark!(
+                    translate_type::<ristretto::PodRistrettoPoint>(
+                        memory_mapping,
+                        point_addr,
+                        loader_id,
+                    ),
+                    result
+                );
+
+                if ristretto::validate_ristretto(point) {
+                    *result = Ok(0);
+                } else {
+                    *result = Ok(1);
+                }
+            }
+            _ => {
+                *result = Ok(1);
+            }
+        };
     }
 }
 
