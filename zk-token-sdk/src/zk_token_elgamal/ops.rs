@@ -1,6 +1,6 @@
 pub use target_arch::*;
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod target_arch {
     use {
         crate::{encryption::elgamal::ElGamalCiphertext, zk_token_elgamal::pod},
@@ -89,7 +89,7 @@ mod target_arch {
     }
 }
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 #[allow(unused_variables)]
 mod target_arch {
     use {super::*, crate::zk_token_elgamal::pod, bytemuck::Zeroable};

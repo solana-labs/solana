@@ -4,7 +4,7 @@ pub mod transfer_with_fee;
 pub mod withdraw;
 pub mod withdraw_withheld;
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::{
@@ -22,12 +22,12 @@ pub use {
     withdraw_withheld::WithdrawWithheldTokensData,
 };
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub trait Verifiable {
     fn verify(&self) -> Result<(), ProofError>;
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 #[derive(Debug, Copy, Clone)]
 pub enum Role {
     Source,
@@ -38,7 +38,7 @@ pub enum Role {
 /// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
 ///  - the `bit_length` low bits of `amount` interpretted as u64
 ///  - the (64 - `bit_length`) high bits of `amount` interpretted as u64
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub fn split_u64(
     amount: u64,
     lo_bit_length: usize,
@@ -57,7 +57,7 @@ pub fn split_u64(
     Ok((lo, hi))
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn combine_lo_hi_ciphertexts(
     ciphertext_lo: &ElGamalCiphertext,
     ciphertext_hi: &ElGamalCiphertext,
@@ -67,7 +67,7 @@ fn combine_lo_hi_ciphertexts(
     ciphertext_lo + &(ciphertext_hi * &Scalar::from(two_power))
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_commitments(
     comm_lo: &PedersenCommitment,
     comm_hi: &PedersenCommitment,
@@ -77,7 +77,7 @@ pub fn combine_lo_hi_commitments(
     comm_lo + comm_hi * &Scalar::from(two_power)
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_openings(
     opening_lo: &PedersenOpening,
     opening_hi: &PedersenOpening,

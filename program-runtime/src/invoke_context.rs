@@ -206,6 +206,13 @@ impl<'a> StackFrame<'a> {
     }
 }
 
+struct SyscallContext {
+    check_aligned: bool,
+    check_size: bool,
+    orig_account_lengths: Vec<usize>,
+    allocator: Rc<RefCell<dyn Alloc>>,
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     #[allow(deprecated)]
@@ -224,10 +231,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<Option<Vec<usize>>>,
-    allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
+    syscall_context: Vec<Option<SyscallContext>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -262,10 +266,7 @@ impl<'a> InvokeContext<'a> {
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
-            check_aligned: true,
-            check_size: true,
-            orig_account_lengths: Vec::new(),
-            allocators: Vec::new(),
+            syscall_context: Vec::new(),
         }
     }
 
@@ -454,8 +455,7 @@ impl<'a> InvokeContext<'a> {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
-        self.orig_account_lengths.push(None);
-        self.allocators.push(None);
+        self.syscall_context.push(None);
         self.transaction_context.push(
             program_indices,
             instruction_accounts,
@@ -467,8 +467,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.orig_account_lengths.pop();
-        self.allocators.pop();
+        self.syscall_context.pop();
         self.invoke_stack.pop();
         self.transaction_context.pop()
     }
@@ -1077,65 +1076,60 @@ impl<'a> InvokeContext<'a> {
             .get_key_of_account_at_index(index_in_transaction)
     }
 
-    /// Set the original account lengths
-    pub fn set_orig_account_lengths(
+    // Set this instruction syscall context
+    pub fn set_syscall_context(
         &mut self,
+        check_aligned: bool,
+        check_size: bool,
         orig_account_lengths: Vec<usize>,
+        allocator: Rc<RefCell<dyn Alloc>>,
     ) -> Result<(), InstructionError> {
         *self
-            .orig_account_lengths
+            .syscall_context
             .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(orig_account_lengths);
+            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
+            check_aligned,
+            check_size,
+            orig_account_lengths,
+            allocator,
+        });
         Ok(())
-    }
-
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
-        self.orig_account_lengths
-            .last()
-            .and_then(|orig_account_lengths| orig_account_lengths.as_ref())
-            .map(|orig_account_lengths| orig_account_lengths.as_slice())
-            .ok_or(InstructionError::CallDepth)
-    }
-
-    // Set should alignment be enforced during user pointer translation
-    pub fn set_check_aligned(&mut self, check_aligned: bool) {
-        self.check_aligned = check_aligned;
     }
 
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.check_aligned
-    }
-
-    // Set should type size be checked during user pointer translation
-    pub fn set_check_size(&mut self, check_size: bool) {
-        self.check_size = check_size;
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.check_aligned)
+            .unwrap_or(true)
     }
 
     // Set should type size be checked during user pointer translation
     pub fn get_check_size(&self) -> bool {
-        self.check_size
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.check_size)
+            .unwrap_or(true)
+    }
+
+    /// Get the original account lengths
+    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.orig_account_lengths.as_slice())
+            .ok_or(InstructionError::CallDepth)
     }
 
     // Get this instruction's memory allocator
     pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
-        self.allocators
+        self.syscall_context
             .last()
-            .and_then(|allocator| allocator.clone())
+            .and_then(|context| context.as_ref())
+            .map(|context| context.allocator.clone())
             .ok_or(InstructionError::CallDepth)
-    }
-
-    // Set this instruction's memory allocator
-    pub fn set_allocator(
-        &mut self,
-        allocator: Rc<RefCell<dyn Alloc>>,
-    ) -> Result<(), InstructionError> {
-        *self
-            .allocators
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(allocator);
-        Ok(())
     }
 }
 

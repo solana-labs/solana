@@ -71,6 +71,7 @@ fn main() {
             "external_spend",
             "finalize",
             "get_minimum_delegation",
+            "inner_instruction_alignment_check",
             "instruction_introspection",
             "invoke",
             "invoke_and_error",

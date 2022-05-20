@@ -140,13 +140,13 @@ impl TryFrom<&str> for Pubkey {
 }
 
 pub fn bytes_are_curve_point<T: AsRef<[u8]>>(_bytes: T) -> bool {
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         curve25519_dalek::edwards::CompressedEdwardsY::from_slice(_bytes.as_ref())
             .decompress()
             .is_some()
     }
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     unimplemented!();
 }
 
@@ -163,7 +163,7 @@ impl Pubkey {
     }
 
     #[deprecated(since = "1.3.9", note = "Please use 'Pubkey::new_unique' instead")]
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn new_rand() -> Self {
         // Consider removing Pubkey::new_rand() entirely in the v1.5 or v1.6 timeframe
         Pubkey::new(&rand::random::<[u8; 32]>())
@@ -474,7 +474,7 @@ impl Pubkey {
     pub fn try_find_program_address(seeds: &[&[u8]], program_id: &Pubkey) -> Option<(Pubkey, u8)> {
         // Perform the calculation inline, calling this from within a program is
         // not supported
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(not(target_os = "solana"))]
         {
             let mut bump_seed = [std::u8::MAX];
             for _ in 0..std::u8::MAX {
@@ -492,7 +492,7 @@ impl Pubkey {
             None
         }
         // Call via a system call to perform the calculation
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         {
             extern "C" {
                 fn sol_try_find_program_address(
@@ -578,7 +578,7 @@ impl Pubkey {
 
         // Perform the calculation inline, calling this from within a program is
         // not supported
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(not(target_os = "solana"))]
         {
             let mut hasher = crate::hash::Hasher::default();
             for seed in seeds.iter() {
@@ -594,7 +594,7 @@ impl Pubkey {
             Ok(Pubkey::new(hash.as_ref()))
         }
         // Call via a system call to perform the calculation
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         {
             extern "C" {
                 fn sol_create_program_address(
@@ -630,7 +630,7 @@ impl Pubkey {
 
     /// Log a `Pubkey` from a program
     pub fn log(&self) {
-        #[cfg(target_arch = "bpf")]
+        #[cfg(target_os = "solana")]
         {
             extern "C" {
                 fn sol_log_pubkey(pubkey_addr: *const u8);
@@ -638,7 +638,7 @@ impl Pubkey {
             unsafe { sol_log_pubkey(self.as_ref() as *const _ as *const u8) };
         }
 
-        #[cfg(not(target_arch = "bpf"))]
+        #[cfg(not(target_os = "solana"))]
         crate::program_stubs::sol_log(&self.to_string());
     }
 }

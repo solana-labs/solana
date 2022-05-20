@@ -331,34 +331,33 @@ pub struct ProgramCost {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct OptimisticSlotMeta {
+pub struct OptimisticSlotMetaV0 {
     pub hash: Hash,
     pub timestamp: UnixTimestamp,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub enum OptimisticSlotMetaVersioned {
-    Current(OptimisticSlotMeta),
+    V0(OptimisticSlotMetaV0),
 }
 
 impl OptimisticSlotMetaVersioned {
     pub fn new(hash: Hash, timestamp: UnixTimestamp) -> Self {
-        OptimisticSlotMetaVersioned::Current(OptimisticSlotMeta { hash, timestamp })
+        OptimisticSlotMetaVersioned::V0(OptimisticSlotMetaV0 { hash, timestamp })
     }
 
     pub fn hash(&self) -> Hash {
         match self {
-            OptimisticSlotMetaVersioned::Current(meta) => meta.hash,
+            OptimisticSlotMetaVersioned::V0(meta) => meta.hash,
         }
     }
 
     pub fn timestamp(&self) -> UnixTimestamp {
         match self {
-            OptimisticSlotMetaVersioned::Current(meta) => meta.timestamp,
+            OptimisticSlotMetaVersioned::V0(meta) => meta.timestamp,
         }
     }
 }
-
 #[cfg(test)]
 mod test {
     use {

@@ -481,6 +481,10 @@ impl CachedExecutors {
         let _ = self.executors.remove(pubkey);
     }
 
+    fn clear(&mut self) {
+        *self = CachedExecutors::default();
+    }
+
     fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
         const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
         #[allow(clippy::assertions_on_constants)]
@@ -605,6 +609,9 @@ pub struct TransactionExecutionDetails {
     pub durable_nonce_fee: Option<DurableNonceFee>,
     pub return_data: Option<TransactionReturnData>,
     pub executed_units: u64,
+    /// The change in accounts data len for this transaction.
+    /// NOTE: This value is valid IFF `status` is `Ok`.
+    pub accounts_data_len_delta: i64,
 }
 
 /// Type safe representation of a transaction execution attempt which
@@ -4160,6 +4167,11 @@ impl Bank {
         Arc::make_mut(&mut cache).remove(pubkey);
     }
 
+    pub fn clear_executors(&self) {
+        let mut cache = self.cached_executors.write().unwrap();
+        Arc::make_mut(&mut cache).clear();
+    }
+
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     #[allow(clippy::too_many_arguments)]
@@ -4240,9 +4252,6 @@ impl Bank {
                 )
                 .map(|_| info)
             })
-            .map(|info| {
-                self.update_accounts_data_len(info.accounts_data_len_delta);
-            })
             .map_err(|err| {
                 match err {
                     TransactionError::InvalidRentPayingAccount
@@ -4255,6 +4264,10 @@ impl Bank {
                 }
                 err
             });
+        let accounts_data_len_delta = status
+            .as_ref()
+            .map_or(0, |info| info.accounts_data_len_delta);
+        let status = status.map(|_| ());
 
         let log_messages: Option<TransactionLogMessages> =
             log_collector.and_then(|log_collector| {
@@ -4299,6 +4312,7 @@ impl Bank {
                 durable_nonce_fee,
                 return_data,
                 executed_units,
+                accounts_data_len_delta,
             },
             executors,
         }
@@ -4808,6 +4822,16 @@ impl Bank {
             timings.execute_accessories.update_executors_us,
             update_executors_time.as_us()
         );
+
+        let accounts_data_len_delta = execution_results
+            .iter()
+            .filter_map(|execution_result| {
+                execution_result
+                    .details()
+                    .map(|details| details.accounts_data_len_delta)
+            })
+            .sum();
+        self.update_accounts_data_len(accounts_data_len_delta);
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
         timings.saturating_add_in_place(
@@ -6382,7 +6406,8 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+    /// only called at startup vs steady-state runtime
+    fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
@@ -6394,6 +6419,7 @@ impl Bank {
         )
     }
 
+    /// only called at startup vs steady-state runtime
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
@@ -6511,10 +6537,15 @@ impl Bank {
         }
         shrink_all_slots_time.stop();
 
-        info!("verify_bank_hash..");
-        let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation, false);
-        verify_time.stop();
+        let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
+            info!("verify_bank_hash..");
+            let mut verify_time = Measure::start("verify_bank_hash");
+            let verify = self.verify_bank_hash(test_hash_calculation, false);
+            verify_time.stop();
+            (verify, verify_time.as_us())
+        } else {
+            (true, 0)
+        };
 
         info!("verify_hash..");
         let mut verify2_time = Measure::start("verify_hash");
@@ -6526,7 +6557,7 @@ impl Bank {
             "verify_snapshot_bank",
             ("clean_us", clean_time.as_us(), i64),
             ("shrink_all_slots_us", shrink_all_slots_time.as_us(), i64),
-            ("verify_bank_hash_us", verify_time.as_us(), i64),
+            ("verify_bank_hash_us", verify_time_us, i64),
             ("verify_hash_us", verify2_time.as_us(), i64),
         );
 
@@ -7311,7 +7342,8 @@ pub(crate) mod tests {
                 inner_instructions: None,
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
                 return_data: None,
-                executed_units: 0u64,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
             },
             executors: Rc::new(RefCell::new(Executors::default())),
         }

@@ -4573,6 +4573,7 @@ The notification will be an object with the following fields:
 - `hash: <string>` - The vote hash
 - `slots: <array>` - The slots covered by the vote, as an array of u64 integers
 - `timestamp: <i64 | null>` - The timestamp of the vote
+- `signature: <string>` - The signature of the transaction that contained this vote
 
 ```json
 {

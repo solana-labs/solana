@@ -93,7 +93,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote((Pubkey, VoteTransaction)),
+    Vote((Pubkey, VoteTransaction, Signature)),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -728,8 +728,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction) {
-        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote)));
+    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction, signature: Signature) {
+        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote, signature)));
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
@@ -814,7 +814,7 @@ impl RpcSubscriptions {
                         // These notifications are only triggered by votes observed on gossip,
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
-                        NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
+                        NotificationEntry::Vote((vote_pubkey, ref vote_info, signature)) => {
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()
                                 .get(&SubscriptionParams::Vote)
@@ -824,6 +824,7 @@ impl RpcSubscriptions {
                                     slots: vote_info.slots(),
                                     hash: bs58::encode(vote_info.hash()).into_string(),
                                     timestamp: vote_info.timestamp(),
+                                    signature: signature.to_string(),
                                 };
                                 debug!("vote notify: {:?}", vote_info);
                                 inc_new_counter_info!("rpc-subscription-notify-vote", 1);

@@ -74,36 +74,36 @@ We currently do not use the Github workflow to publish security advisories. Once
 ## Security Bug Bounties
 We offer bounties for critical security issues. Please see below for more details.
 
-Loss of Funds:
+#### Loss of Funds:
 $2,000,000 USD in locked SOL tokens (locked for 12 months)
 * Theft of funds without users signature from any account
 * Theft of funds without users interaction in system, token, stake, vote programs
 * Theft of funds that requires users signature - creating a vote program that drains the delegated stakes.
 
-Consensus/Safety Violations:
+#### Consensus/Safety Violations:
 $1,000,000 USD in locked SOL tokens (locked for 12 months)
 * Consensus safety violation
 * Tricking a validator to accept an optimistic confirmation or rooted slot without a double vote, etc.
 
-Liveness / Loss of Availability: 
+#### Liveness / Loss of Availability: 
 $400,000 USD in locked SOL tokens (locked for 12 months)
 * Whereby consensus halts and requires human intervention
 * Eclipse attacks,
 * Remote attacks that partition the network,
 
-DoS Attacks:
+#### DoS Attacks:
 $100,000 USD in locked SOL tokens (locked for 12 months)
 * Remote resource exaustion via Non-RPC protocols
 
-Supply Chain Attacks: 
+#### Supply Chain Attacks: 
 $100,000 USD in locked SOL tokens (locked for 12 months)
 * Non-social attacks against source code change management, automated testing, release build, release publication and release hosting infrastructure of the monorepo.
 
-RPC DoS/Crashes:
+#### RPC DoS/Crashes:
 $5,000 USD in locked SOL tokens (locked for 12 months)
 * RPC attacks
 
-Out of Scope:
+### Out of Scope:
 The following components are out of scope for the bounty program
 * Metrics: `/metrics` in the monorepo as well as https://metrics.solana.com
 * Explorer: `/explorer` in the monorepo as well as https://explorer.solana.com
@@ -111,13 +111,13 @@ The following components are out of scope for the bounty program
 * Bugs in dependencies. Please take them upstream!
 * Attacks that require social engineering
 
-Eligibility:
+### Eligibility:
 * The participant submitting the bug report shall follow the process outlined within this document
 * Valid exploits can be eligible even if they are not successfully executed on the cluster
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.foundation/kyc. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
-Payment of Bug Bounties:
+### Payment of Bug Bounties:
 * Bounties are currently awarded on a rolling/weekly basis and paid out within 15 days upon receipt of an invoice.
 * The SOL/USD conversion rate used for payments is the market price of SOL (denominated in USD) at the end of the day the invoice is submitted by the researcher.
 * The reference for this price is the Closing Price given by Coingecko.com on that date given here: https://www.coingecko.com/en/coins/solana/historical_data/usd#panel

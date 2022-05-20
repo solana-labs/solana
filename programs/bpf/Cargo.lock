@@ -1956,9 +1956,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.125"
+version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5916d2ae698f6de9bfb891ad7a8d65c09d232dc58cc4ac433c7da3b2fd84bc2b"
+checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "libloading"
@@ -3984,6 +3984,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-inner_instruction_alignment_check"
+version = "1.11.0"
+dependencies = [
+ "solana-program 1.11.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-instruction-introspection"
 version = "1.11.0"
 dependencies = [
@@ -5505,9 +5512,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.28"
+version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036b2de45fa94424288070fe8f4cb5fa266c203af6e5ec56a33ccf0909d9448d"
+checksum = "5aab642ccfa31bfd4389387019a6b1204ad93f9528d2ac8e1e36c8de62bdf1f8"
 dependencies = [
  "byteorder 1.4.3",
  "combine",

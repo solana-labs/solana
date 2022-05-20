@@ -37,7 +37,7 @@ use {
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     rand::rngs::OsRng,
     sha3::Sha3_512,
@@ -55,7 +55,7 @@ impl ElGamal {
     /// Generates an ElGamal keypair.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen() -> ElGamalKeypair {
         // secret scalar should be zero with negligible probability
@@ -67,7 +67,7 @@ impl ElGamal {
     }
 
     /// Generates an ElGamal keypair from a scalar input that determines the ElGamal private key.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen_with_scalar(s: &Scalar) -> ElGamalKeypair {
         assert!(s != &Scalar::zero());
@@ -84,7 +84,7 @@ impl ElGamal {
     /// corresponding ElGamal ciphertext.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn encrypt<T: Into<Scalar>>(public: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
         let (commitment, opening) = Pedersen::new(amount);
         let handle = public.decrypt_handle(&opening);
@@ -94,7 +94,7 @@ impl ElGamal {
 
     /// On input a public key, message, and Pedersen opening, the function
     /// returns the corresponding ElGamal ciphertext.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn encrypt_with<T: Into<Scalar>>(
         amount: T,
         public: &ElGamalPubkey,
@@ -109,7 +109,7 @@ impl ElGamal {
     /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
     /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
     /// of this form is a valid ciphertext under any ElGamal public key.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn encode<T: Into<Scalar>>(amount: T) -> ElGamalCiphertext {
         let commitment = Pedersen::encode(amount);
         let handle = DecryptHandle(RistrettoPoint::identity());
@@ -121,7 +121,7 @@ impl ElGamal {
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
     /// message, use `DiscreteLog::decode`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
@@ -131,7 +131,7 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message
     /// interpretted as type `u32`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
         discrete_log_instance.decode_u32()
@@ -151,7 +151,7 @@ pub struct ElGamalKeypair {
 
 impl ElGamalKeypair {
     /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana address.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
         let message = Message::new(
@@ -181,7 +181,7 @@ impl ElGamalKeypair {
     /// Generates the public and secret keys for ElGamal encryption.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(clippy::new_ret_no_self)]
     pub fn new_rand() -> Self {
         ElGamal::keygen()
@@ -285,7 +285,7 @@ impl ElGamalPubkey {
     /// Encrypts an amount under the public key.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn encrypt<T: Into<Scalar>>(&self, amount: T) -> ElGamalCiphertext {
         ElGamal::encrypt(self, amount)
     }

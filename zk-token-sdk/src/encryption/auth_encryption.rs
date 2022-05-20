@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     aes_gcm_siv::{
         aead::{Aead, NewAead},
@@ -21,13 +21,13 @@ use {
 
 struct AuthenticatedEncryption;
 impl AuthenticatedEncryption {
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(clippy::new_ret_no_self)]
     fn keygen<T: RngCore + CryptoRng>(rng: &mut T) -> AeKey {
         AeKey(rng.gen::<[u8; 16]>())
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn encrypt(key: &AeKey, balance: u64) -> AeCiphertext {
         let mut plaintext = balance.to_le_bytes();
         let nonce: Nonce = OsRng.gen::<[u8; 12]>();
@@ -45,7 +45,7 @@ impl AuthenticatedEncryption {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn decrypt(key: &AeKey, ct: &AeCiphertext) -> Option<u64> {
         let plaintext =
             Aes128GcmSiv::new(&key.0.into()).decrypt(&ct.nonce.into(), ct.ciphertext.as_ref());
