@@ -336,6 +336,32 @@ pub struct OptimisticSlotMeta {
     pub timestamp: UnixTimestamp,
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub enum OptimisticSlotMetaVersioned {
+    Current(OptimisticSlotMeta),
+}
+
+impl OptimisticSlotMetaVersioned {
+    pub fn new(hash: Hash, timestamp: UnixTimestamp) -> Self {
+        OptimisticSlotMetaVersioned::Current(OptimisticSlotMeta {
+            hash,
+            timestamp,
+        })
+    }
+
+    pub fn hash(&self) -> Hash {
+        match self {
+            OptimisticSlotMetaVersioned::Current(meta) => meta.hash,
+        }
+    }
+
+    pub fn timestamp(&self) -> UnixTimestamp {
+        match self {
+            OptimisticSlotMetaVersioned::Current(meta) => meta.timestamp,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {

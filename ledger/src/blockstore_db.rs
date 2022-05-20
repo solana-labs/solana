@@ -997,7 +997,7 @@ impl ColumnName for columns::OptimisticSlots {
     const NAME: &'static str = OPTIMISTIC_SLOTS_CF;
 }
 impl TypedColumn for columns::OptimisticSlots {
-    type Type = blockstore_meta::OptimisticSlotMeta;
+    type Type = blockstore_meta::OptimisticSlotMetaVersioned;
 }
 
 #[derive(Debug)]

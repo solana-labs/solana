@@ -68,7 +68,7 @@ pub mod blockstore_purge;
 pub use {
     crate::{
         blockstore_db::BlockstoreError,
-        blockstore_meta::{OptimisticSlotMeta, SlotMeta},
+        blockstore_meta::{OptimisticSlotMetaVersioned, SlotMeta},
     },
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
@@ -3028,10 +3028,7 @@ impl Blockstore {
         hash: &Hash,
         timestamp: UnixTimestamp,
     ) -> Result<()> {
-        let slot_data = OptimisticSlotMeta {
-            hash: *hash,
-            timestamp,
-        };
+        let slot_data = OptimisticSlotMetaVersioned::new(*hash, timestamp);
         self.optimistic_slots_cf.put(slot, &slot_data)
     }
 
@@ -3044,8 +3041,8 @@ impl Blockstore {
             .iter::<cf::OptimisticSlots>(IteratorMode::End)?
             .take(num)
             .map(|(slot, data)| {
-                let OptimisticSlotMeta { hash, timestamp } = deserialize(&data).unwrap();
-                (slot, hash, timestamp)
+                let meta: OptimisticSlotMetaVersioned = deserialize(&data).unwrap();
+                (slot, meta.hash(), meta.timestamp())
             })
             .collect())
     }
