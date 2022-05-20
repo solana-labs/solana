@@ -758,6 +758,7 @@ impl Accounts {
             .collect())
     }
 
+    /// only called at startup vs steady-state runtime
     pub fn calculate_capitalization(
         &self,
         ancestors: &Ancestors,
@@ -768,7 +769,7 @@ impl Accounts {
         rent_collector: &RentCollector,
     ) -> u64 {
         let use_index = false;
-        let is_startup = false; // there may be conditions where this is called at startup.
+        let is_startup = true;
         self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,

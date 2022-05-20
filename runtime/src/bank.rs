@@ -6397,7 +6397,8 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+    /// only called at startup vs steady-state runtime
+    fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
@@ -6409,6 +6410,7 @@ impl Bank {
         )
     }
 
+    /// only called at startup vs steady-state runtime
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
