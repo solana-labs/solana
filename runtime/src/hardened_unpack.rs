@@ -345,7 +345,7 @@ fn all_digits(v: &str) -> bool {
         return false;
     }
     for x in v.chars() {
-        if !x.is_digit(10) {
+        if !x.is_ascii_digit() {
             return false;
         }
     }
@@ -356,7 +356,7 @@ fn like_storage(v: &str) -> bool {
     let mut periods = 0;
     let mut saw_numbers = false;
     for x in v.chars() {
-        if !x.is_digit(10) {
+        if !x.is_ascii_digit() {
             if x == '.' {
                 if periods > 0 || !saw_numbers {
                     return false;
