@@ -38,6 +38,7 @@ const TRACER_KEY_BYTES: [u8; 32] = [
     155, 90, 30, 39, 116, 115, 238, 38, 126, 21, 232, 133,
 ];
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
+const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -302,25 +303,19 @@ fn do_get_packet_offsets(
 }
 
 pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
-    let unsanitized_packet_offsets = do_get_packet_offsets(packet, 0);
-    if let Ok(packet_offsets) = unsanitized_packet_offsets {
-        if !verify_packet_offsets_against_packet(&packet_offsets, packet) {
-            return false;
-        }
-
-        // Check if the first key is the tracer key
-        let mut first_pubkey_start = packet_offsets.pubkey_start as usize;
-        let first_pubkey_end = first_pubkey_start.saturating_add(size_of::<Pubkey>());
-
-        // Check for tracer pubkey
-        if &packet.data[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref() {
+    let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
+    let first_pubkey_end = first_pubkey_start.saturating_add(size_of::<Pubkey>());
+    // Check for tracer pubkey
+    if packet.meta.size > first_pubkey_start {
+        let is_tracer_packet =
+            &packet.data()[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
+        if is_tracer_packet {
             packet.meta.flags |= PacketFlags::TRACER_PACKET;
         }
+        is_tracer_packet
     } else {
-        // Should we mark these transactions as dropped, current code in `get_packet_offsets()`
-        // just returning all zeroed `PacketOffsets`
+        false
     }
-    true
 }
 
 fn get_packet_offsets(
