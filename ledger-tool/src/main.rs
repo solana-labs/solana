@@ -67,7 +67,6 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
-    solana_transaction_status::VersionedTransactionWithStatusMeta,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -150,7 +149,7 @@ fn output_entry(
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
                 let tx_signature = transaction.signatures[0];
-                let tx_with_meta = blockstore
+                let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
                     .unwrap_or_else(|err| {
                         eprintln!(
@@ -159,18 +158,15 @@ fn output_entry(
                         );
                         None
                     })
-                    .map(|meta| VersionedTransactionWithStatusMeta { transaction, meta });
+                    .map(|meta| meta.into());
 
-                if let Some(tx_with_meta) = tx_with_meta {
-                    let status = tx_with_meta.meta.into();
-                    solana_cli_output::display::println_transaction(
-                        &tx_with_meta.transaction,
-                        Some(&status),
-                        "      ",
-                        None,
-                        None,
-                    );
-                }
+                solana_cli_output::display::println_transaction(
+                    &transaction,
+                    tx_status_meta.as_ref(),
+                    "      ",
+                    None,
+                    None,
+                );
             }
         }
         LedgerOutputMethod::Json => {
