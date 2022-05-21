@@ -106,7 +106,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(&vec![0; space as usize]);
+    account.set_data(&vec![0; space as usize])?;
 
     Ok(())
 }
@@ -128,8 +128,7 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(&owner.to_bytes());
-    Ok(())
+    account.set_owner(&owner.to_bytes())
 }
 
 fn allocate_and_assign(

@@ -182,8 +182,8 @@ pub fn builtin_process_instruction(
         let mut borrowed_account =
             instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
         if borrowed_account.is_writable() {
-            borrowed_account.set_lamports(lamports);
-            borrowed_account.set_data(&data);
+            borrowed_account.set_lamports(lamports)?;
+            borrowed_account.set_data(&data)?;
         }
     }
 

@@ -512,8 +512,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
-    pub fn set_owner(&mut self, pubkey: &[u8]) {
+    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         self.account.copy_into_owner_from_slice(pubkey);
+        Ok(())
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -522,8 +523,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
-    pub fn set_lamports(&mut self, lamports: u64) {
+    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.account.set_lamports(lamports);
+        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -532,8 +534,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(LamportsError::ArithmeticOverflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Subtracts lamports from this account (transaction wide)
@@ -542,8 +543,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(LamportsError::ArithmeticUnderflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
@@ -552,24 +552,26 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a writable slice of the account data (transaction wide)
-    pub fn get_data_mut(&mut self) -> &mut [u8] {
-        self.account.data_as_mut_slice()
+    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
-    pub fn set_data(&mut self, data: &[u8]) {
+    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
         }
+        Ok(())
     }
 
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
-    pub fn set_data_length(&mut self, new_len: usize) {
+    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
         self.account.data_mut().resize(new_len, 0);
+        Ok(())
     }
 
     /// Deserializes the account data into a state
@@ -597,8 +599,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
-    pub fn set_executable(&mut self, is_executable: bool) {
+    pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         self.account.set_executable(is_executable);
+        Ok(())
     }
 
     /// Returns the rent epoch of this account (transaction wide)
