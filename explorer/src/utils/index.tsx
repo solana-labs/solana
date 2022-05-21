@@ -6,7 +6,8 @@ import {
 import { PublicKey } from "@solana/web3.js";
 
 // Switch to web3 constant when web3 updates superstruct
-export const LAMPORTS_PER_SOL = 1000000000;
+export const LAMPORTS_PER_SOL = 1_000_000_000;
+export const MICRO_LAMPORTS_PER_LAMPORT = 1_000_000;
 
 export const NUM_TICKS_PER_SECOND = 160;
 export const DEFAULT_TICKS_PER_SLOT = 64;
@@ -26,6 +27,33 @@ export function normalizeTokenAmount(
   if (typeof raw === "string") rawTokens = parseInt(raw);
   else rawTokens = raw;
   return rawTokens / Math.pow(10, decimals);
+}
+
+export function microLamportsToLamports(
+  microLamports: number | bigint
+): number {
+  if (typeof microLamports === "number") {
+    return microLamports / MICRO_LAMPORTS_PER_LAMPORT;
+  }
+
+  console.log(microLamports);
+  const microLamportsString = microLamports.toString().padStart(7, "0");
+  const splitIndex = microLamportsString.length - 6;
+  const lamportString =
+    microLamportsString.slice(0, splitIndex) +
+    "." +
+    microLamportsString.slice(splitIndex);
+  return parseFloat(lamportString);
+}
+
+export function microLamportsToLamportsString(
+  microLamports: number | bigint,
+  maximumFractionDigits: number = 6
+): string {
+  const lamports = microLamportsToLamports(microLamports);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(
+    lamports
+  );
 }
 
 export function lamportsToSol(lamports: number | BN): number {
