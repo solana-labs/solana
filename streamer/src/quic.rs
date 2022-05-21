@@ -279,9 +279,10 @@ impl ConnectionTable {
                     }
                 }
             }
-            self.table.remove(&oldest_ip.unwrap());
-            self.total_size -= 1;
-            num_pruned += 1;
+            if let Some(removed) = self.table.remove(&oldest_ip.unwrap()) {
+                self.total_size -= removed.len();
+                num_pruned += removed.len();
+            }
         }
         num_pruned
     }
@@ -872,7 +873,7 @@ mod test {
         use std::net::Ipv4Addr;
         solana_logger::setup();
         let mut table = ConnectionTable::default();
-        let num_entries = 5;
+        let mut num_entries = 5;
         let max_connections_per_ip = 10;
         let sockets: Vec<_> = (0..num_entries)
             .into_iter()
@@ -883,12 +884,17 @@ mod test {
                 .try_add_connection(socket, i as u64, max_connections_per_ip)
                 .unwrap();
         }
+        num_entries += 1;
+        table
+            .try_add_connection(&sockets[0], 5, max_connections_per_ip)
+            .unwrap();
+
         let new_size = 3;
         let pruned = table.prune_oldest(new_size);
         assert_eq!(pruned, num_entries as usize - new_size);
         for v in table.table.values() {
             for x in v {
-                assert!(x.last_update() >= (num_entries as u64 - new_size as u64));
+                assert!((x.last_update() + 1) >= (num_entries as u64 - new_size as u64));
             }
         }
         assert_eq!(table.table.len(), new_size);
@@ -896,7 +902,6 @@ mod test {
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
             table.remove_connection(socket);
         }
-        info!("{:?}", table);
         assert_eq!(table.total_size, 0);
     }
 }
