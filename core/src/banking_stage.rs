@@ -14,7 +14,7 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_client::connection_cache::send_wire_transaction_batch,
+    solana_client::connection_cache::send_wire_transaction_batch_async,
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::blockstore_processor::TransactionStatusSender,
@@ -502,23 +502,24 @@ impl BankingStage {
             .iter()
             .filter_map(|p| {
                 if !p.meta.forwarded() && data_budget.take(p.meta.size) {
-                    Some(&p.data[..p.meta.size])
+                    Some(p.data[..p.meta.size].to_vec())
                 } else {
                     None
                 }
             })
             .collect();
 
+        let packet_vec_len = packet_vec.len();
         // TODO: see https://github.com/solana-labs/solana/issues/23819
         // fix this so returns the correct number of succeeded packets
         // when there's an error sending the batch. This was left as-is for now
         // in favor of shipping Quic support, which was considered higher-priority
         if !packet_vec.is_empty() {
-            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec.len());
+            inc_new_counter_info!("banking_stage-forwarded_packets", packet_vec_len);
 
             let mut measure = Measure::start("banking_stage-forward-us");
 
-            let res = send_wire_transaction_batch(&packet_vec, tpu_forwards);
+            let res = send_wire_transaction_batch_async(packet_vec, tpu_forwards);
 
             measure.stop();
             inc_new_counter_info!(
@@ -534,7 +535,7 @@ impl BankingStage {
             }
         }
 
-        (Ok(()), packet_vec.len())
+        (Ok(()), packet_vec_len)
     }
 
     #[allow(clippy::too_many_arguments)]
