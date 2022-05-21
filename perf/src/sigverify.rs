@@ -471,10 +471,11 @@ impl Deduper {
         }
     }
 
+    // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
     fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta.discard() {
-            return 0;
+            return 1;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
         hasher.write(&packet.data[0..packet.meta.size]);
@@ -495,7 +496,7 @@ impl Deduper {
         0
     }
 
-    pub fn dedup_packets(&self, batches: &mut [PacketBatch]) -> u64 {
+    pub fn dedup_packets_and_count_discards(&self, batches: &mut [PacketBatch]) -> u64 {
         batches
             .iter_mut()
             .flat_map(|batch| batch.packets.iter_mut().map(|p| self.dedup_packet(p)))
@@ -1415,7 +1416,7 @@ mod tests {
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
         let filter = Deduper::new(1_000_000, Duration::from_millis(0));
-        let discard = filter.dedup_packets(&mut batches) as usize;
+        let discard = filter.dedup_packets_and_count_discards(&mut batches) as usize;
         assert_eq!(packet_count, discard + 1);
     }
 
@@ -1424,7 +1425,7 @@ mod tests {
         let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
 
-        let discard = filter.dedup_packets(&mut batches) as usize;
+        let discard = filter.dedup_packets_and_count_discards(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         assert_eq!(discard, 0);
         filter.reset();
@@ -1442,7 +1443,7 @@ mod tests {
         for i in 0..1000 {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets(&mut batches) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
             debug!("{} {}", i, discard);
             if filter.saturated.load(Ordering::Relaxed) {
                 break;
@@ -1458,7 +1459,7 @@ mod tests {
         for i in 0..10 {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets(&mut batches) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
             debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely
