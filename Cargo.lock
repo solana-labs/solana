@@ -164,15 +164,9 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "648ed8c8d2ce5409ccd57453d9d1b214b342a0d69376a6feda1fd6cae3299308"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -181,15 +175,9 @@ version = "0.1.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed6aa3524a2dfcf9fe180c51eae2b58738348d819517ceadf95789c51fff7600"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -305,13 +293,8 @@ dependencies = [
  "lazy_static",
  "lazycell",
  "peeking_take_while",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "regex",
  "rustc-hash",
  "shlex",
@@ -397,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "block-buffer"
-version = "0.10.0"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1d36a02058e76b040de25a4464ba1c80935655595b661505c8b39b664828b95"
+checksum = "0bf7fe51849ea569fd452f37822f606a5cabb684dc918707a0193fd4664ff324"
 dependencies = [
  "generic-array 0.14.5",
 ]
@@ -438,13 +421,8 @@ dependencies = [
  "borsh-derive-internal",
  "borsh-schema-derive-internal",
  "proc-macro-crate 0.1.5",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -453,15 +431,9 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5449c28a7b352f2d1e592a8a28bf139bc71afb0764a14f3c02500935d8c44065"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -470,15 +442,9 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdbd5696d8bfa21d53d9fe39a714a18538bad11492a42d066dbbc395fb1951c0"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -551,15 +517,9 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562e382481975bc61d11275ac5e62a19abd00b0547d99516a415336f183dcd0e"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -638,7 +598,7 @@ checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
 dependencies = [
  "camino",
  "cargo-platform",
- "semver 1.0.7",
+ "semver 1.0.9",
  "serde",
  "serde_json",
 ]
@@ -775,15 +735,9 @@ checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -864,13 +818,8 @@ version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef196d5d972878a48da7decb7686eded338b4858fbabeed513d63a7c98b2b82d"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "unicode-xid 0.2.2",
 ]
 
@@ -981,9 +930,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.5"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d82cfc11ce7f2c3faef78d8a684447b40d503d9681acebed6cb728d45940c4db"
+checksum = "0bf124c720b7686e3c2663cf54062ab0f68a88af2fb6a030e87e30bf721fcb38"
 dependencies = [
  "cfg-if 1.0.0",
  "lazy_static",
@@ -1103,17 +1052,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40eebddd2156ce1bb37b20bbe5151340a31828b1f2d22ba4141f3531710e38df"
 dependencies = [
  "convert_case",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
- "rustc_version",
- "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
  "rustc_version 0.3.3",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "syn 1.0.93",
 ]
 
 [[package]]
@@ -1157,7 +1099,7 @@ version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
 dependencies = [
- "block-buffer 0.10.0",
+ "block-buffer 0.10.2",
  "crypto-common",
  "subtle",
 ]
@@ -1263,15 +1205,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f86b50932a01e7ec5c06160492ab660fb19b6bb2a7878030dd6cd68d21df9d4d"
 dependencies = [
  "enum-ordinalize",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -1310,15 +1246,9 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8958699f9359f0b04e691a13850d48b7de329138023876d07cbd024c2c820598"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -1329,16 +1259,9 @@ checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
 dependencies = [
  "num-bigint",
  "num-traits",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
- "rustc_version",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -1588,15 +1511,9 @@ version = "0.3.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33c1e13800337f4d4d7a316bf45a567dbcb6ffe087f16424852d97e97a91f512"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -2199,15 +2116,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b939a78fa820cdfcb7ee7484466746a7377760970f6f9c6fe19f9edcc8a38d2"
 dependencies = [
  "proc-macro-crate 0.1.5",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -2420,15 +2331,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-<<<<<<< HEAD
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
-=======
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 dependencies = [
  "cfg-if 1.0.0",
 ]
@@ -2557,22 +2462,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "mio"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba272f85fa0b41fc91872be579b3bbe0f56b792aa361a380eb669469f68dafb2"
-dependencies = [
- "libc",
- "log",
- "miow",
- "ntapi",
- "winapi 0.3.9",
-]
-
-[[package]]
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 name = "miow"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2597,15 +2486,9 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a7d5f7076603ebc68de2dc6a650ec331a062a13abaa346975be747bbfa4b789"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -2704,15 +2587,9 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -2759,17 +2636,10 @@ version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b0498641e53dd6ac1a4f22547548caa6864cc4933784319cd1775271c5a46ce"
 dependencies = [
-<<<<<<< HEAD
- "proc-macro-crate 1.1.3",
+ "proc-macro-crate 1.1.0",
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro-crate 1.1.0",
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -2839,24 +2709,18 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-src"
-version = "300.0.5+3.0.2"
+version = "111.20.0+1.1.1o"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd053af511ee4439768d9b839a1cdb32eee00f52fe5f748d64c0e8f73194ba1"
+checksum = "92892c4f87d56e376e469ace79f1128fdaded07646ddf73aa0be4706ff712dec"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "openssl-sys"
-<<<<<<< HEAD
 version = "0.9.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d5fd19fb3e0a8191c1e34935718976a3e70c112ab9a24af6d7cadccd9d90bc0"
-=======
-version = "0.9.70"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6517987b3f8226b5da3661dad65ff7f300cc59fb5ea8333ca191fc65fde3edf"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 dependencies = [
  "autocfg",
  "cc",
@@ -2913,15 +2777,9 @@ checksum = "084fd65d5dd8b3772edccb5ffd1e4b7eba43897ecd0f9401e330e8c542959408"
 dependencies = [
  "Inflector",
  "proc-macro-error",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3067,15 +2925,9 @@ checksum = "99b8db626e31e5b81787b9783425769681b347011cc59471e33ea46d2ea0cf55"
 dependencies = [
  "pest",
  "pest_meta",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3127,15 +2979,9 @@ version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e8fe8163d14ce7f0cdac2e040116f22eac817edabff0be91e8aff7e9accf389"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3230,13 +3076,8 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b83ec2d0af5c5c556257ff52c9f98934e243b9fd39604bfb2a9b75ec2e97f18"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3265,15 +3106,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "version_check",
 ]
 
@@ -3283,13 +3118,8 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "version_check",
 ]
 
@@ -3304,15 +3134,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-<<<<<<< HEAD
 version = "1.0.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9027b48e9d4c9175fa2218adf3557f91c1137021739951d4932f5f8268ac48aa"
-=======
-version = "1.0.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba508cc11742c0dc5c1659771673afbab7a0efab23aa17e854cbab0837ed0b43"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 dependencies = [
  "unicode-xid 0.2.2",
 ]
@@ -3339,15 +3163,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
-=======
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bd5316aa8f5c82add416dfbc25116b84b748a21153f512917e8143640a71bbd"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 dependencies = [
  "bytes",
  "prost-derive 0.9.0",
@@ -3360,7 +3178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc03e116981ff7d8da8e5c220e374587b98d294af7ba7dd7fda761158f00086f"
 dependencies = [
  "bytes",
- "prost-derive 0.10.1",
+ "prost-derive 0.10.0",
 ]
 
 [[package]]
@@ -3399,7 +3217,7 @@ dependencies = [
  "multimap",
  "petgraph",
  "prost 0.10.3",
- "prost-types 0.10.1",
+ "prost-types 0.10.0",
  "regex",
  "tempfile",
  "which",
@@ -3407,7 +3225,6 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
@@ -3421,16 +3238,12 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.10.1"
-=======
 version = "0.10.0"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df35198f0777b75e9ff669737c6da5136b59dba33cf5a010a6d1cc4d56defc6f"
 dependencies = [
  "anyhow",
  "itertools",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
@@ -3444,11 +3257,6 @@ checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
 dependencies = [
  "bytes",
  "prost 0.9.0",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3547,15 +3355,11 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.10"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38bc8cc6a5f2e3655e0899c1b848643b2562f853f114bfec7be120678e3ace05"
+checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
-=======
- "proc-macro2 1.0.32",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -3922,7 +3726,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.7",
+ "semver 1.0.9",
 ]
 
 [[package]]
@@ -3995,6 +3799,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-pemfile"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7522c9de787ff061458fe9a829dc790a3f5b22dc571694fc5883f448b94d9a9"
+dependencies = [
+ "base64 0.13.0",
+]
+
+[[package]]
 name = "rustversion"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4058,7 +3871,6 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdbda6ac5cd1321e724fa9cee216f3a61885889b896f073b8f82322789c5250e"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
@@ -4072,11 +3884,6 @@ checksum = "b362b83898e0e69f38515b82ee15aa80636befe47c3b6d3d89a911e78fc228ce"
 dependencies = [
  "ring",
  "untrusted",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -4114,9 +3921,6 @@ dependencies = [
 
 [[package]]
 name = "semver"
-<<<<<<< HEAD
-version = "1.0.9"
-=======
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
@@ -4126,8 +3930,7 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.7"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cb243bdfdb5936c8dc3c45762a19d12ab4550cdc753bc247637d4ec35a040fd"
 dependencies = [
@@ -4177,15 +3980,9 @@ version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f26faba0c3959972377d3b2d306ee9f71faee9714294e41bb777f83f88578be"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -4241,13 +4038,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2881bccd7d60fb32dfa3d7b3136385312f8ad75e2674aab2852867a09790cae8"
 dependencies = [
  "proc-macro-error",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "rustversion",
  "syn 1.0.93",
 ]
@@ -4769,7 +4561,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
- "semver 1.0.7",
+ "semver 1.0.9",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4825,7 +4617,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "pretty-hex",
- "semver 1.0.7",
+ "semver 1.0.9",
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -4868,13 +4660,8 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rayon",
  "reqwest",
-<<<<<<< HEAD
  "rustls 0.20.6",
- "semver",
-=======
- "rustls",
- "semver 1.0.7",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "semver 1.0.9",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5018,12 +4805,8 @@ name = "solana-dos"
 version = "1.11.0"
 dependencies = [
  "bincode",
-<<<<<<< HEAD
- "clap 3.1.12",
- "itertools",
-=======
  "clap 3.1.8",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "itertools",
  "log",
  "rand 0.7.3",
  "serde",
@@ -5113,9 +4896,9 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7299c2ca50bd2d8a5b4a8043e4817892b5e700345234a31adc5b4c1208a32283"
+checksum = "be6cabe7c4a9daa4f66c841f95334a9e9bebabc92cab81726702e9ef10fa7341"
 dependencies = [
  "bs58",
  "bv",
@@ -5129,7 +4912,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
- "solana-frozen-abi-macro 1.10.10",
+ "solana-frozen-abi-macro 1.10.17",
  "thiserror",
 ]
 
@@ -5156,38 +4939,24 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d726d2fbe5b1b21cb8a81b8c3c1d1aca32bfcfd795f92536d8ff3e66e2e51df8"
+checksum = "0b583fcfb0336680016aa2c8a04078eba53d290fba56c00df483f97df967b8b6"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
- "rustc_version",
- "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
  "rustc_version 0.4.0",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "syn 1.0.93",
 ]
 
 [[package]]
 name = "solana-frozen-abi-macro"
 version = "1.11.0"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
- "rustc_version",
- "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
  "rustc_version 0.4.0",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "syn 1.0.93",
 ]
 
 [[package]]
@@ -5313,7 +5082,7 @@ dependencies = [
  "lazy_static",
  "nix",
  "reqwest",
- "semver 1.0.7",
+ "semver 1.0.9",
  "serde",
  "serde_yaml",
  "solana-clap-utils",
@@ -5482,9 +5251,9 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6aeaa4145cc77bbfab151a233b14e611a82747fd2eee611a52e07f582544d6"
+checksum = "f4508b5a41ca5a5d6a0d95496412188484492301c75024c0f5b289f1253e0eab"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -5653,9 +5422,9 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6425f7248eb69806ae5e8c193a5b7dcfc764516d2f0d354cdf80bacaf422a188"
+checksum = "1de171aad74cc5dc8b17b72bffe07c1daf27c18a7614ccfb7cbea8fbc64f562b"
 dependencies = [
  "base64 0.13.0",
  "bincode",
@@ -5686,9 +5455,9 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.2",
  "sha3 0.10.1",
- "solana-frozen-abi 1.10.10",
- "solana-frozen-abi-macro 1.10.10",
- "solana-sdk-macro 1.10.10",
+ "solana-frozen-abi 1.10.17",
+ "solana-frozen-abi-macro 1.10.17",
+ "solana-sdk-macro 1.10.17",
  "thiserror",
  "wasm-bindgen",
 ]
@@ -5805,7 +5574,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "qstring",
- "semver 1.0.7",
+ "semver 1.0.9",
  "solana-sdk 1.11.0",
  "thiserror",
  "uriparse",
@@ -5953,9 +5722,9 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ad83e1a502a53512e0e077fbaa76bf73b19e8789dc014c940077506e8fb7ac"
+checksum = "6002fadb15a463895f809e3f11f78c416c0b54a7e89ff951a8731afeeadd93ae"
 dependencies = [
  "assert_matches",
  "base64 0.13.0",
@@ -5992,11 +5761,11 @@ dependencies = [
  "serde_json",
  "sha2 0.10.2",
  "sha3 0.10.1",
- "solana-frozen-abi 1.10.10",
- "solana-frozen-abi-macro 1.10.10",
- "solana-logger 1.10.10",
- "solana-program 1.10.10",
- "solana-sdk-macro 1.10.10",
+ "solana-frozen-abi 1.10.17",
+ "solana-frozen-abi-macro 1.10.17",
+ "solana-logger 1.10.17",
+ "solana-program 1.10.17",
+ "solana-sdk-macro 1.10.17",
  "thiserror",
  "uriparse",
  "wasm-bindgen",
@@ -6056,18 +5825,13 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0e117d4d001f4f3c1e568979da52d76a75d814344c1debf9febd10b5a571993"
+checksum = "7dde2f2b735059d320dd316cf85dc6a765d7300f68ea2d596872a46412ef1e16"
 dependencies = [
  "bs58",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "rustversion",
  "syn 1.0.93",
 ]
@@ -6077,13 +5841,8 @@ name = "solana-sdk-macro"
 version = "1.11.0"
 dependencies = [
  "bs58",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "rustversion",
  "syn 1.0.93",
 ]
@@ -6154,7 +5913,7 @@ dependencies = [
  "log",
  "openssl",
  "prost 0.10.3",
- "prost-types 0.10.1",
+ "prost-types 0.10.0",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -6406,12 +6165,8 @@ name = "solana-version"
 version = "1.11.0"
 dependencies = [
  "log",
-<<<<<<< HEAD
- "rustc_version",
- "semver",
-=======
  "rustc_version 0.4.0",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
+ "semver 1.0.9",
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.11.0",
@@ -6472,9 +6227,9 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-sdk"
-version = "1.10.10"
+version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b48cc8372b23949286546f1b73c3859e06b1d42b8d2c13162484d6ca4b35cb2"
+checksum = "2ce018de0c31cc60953512b915b349333233763c65d6abec2bc517c16988ac19"
 dependencies = [
  "aes-gcm-siv",
  "arrayref",
@@ -6493,8 +6248,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3 0.9.1",
- "solana-program 1.10.10",
- "solana-sdk 1.10.10",
+ "solana-program 1.10.17",
+ "solana-sdk 1.10.17",
  "subtle",
  "thiserror",
  "zeroize",
@@ -6575,7 +6330,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b013067447a1396303ddfc294f36e3d260a32f8a16c501c295bcdc7de39b490"
 dependencies = [
  "borsh",
- "solana-program 1.10.10",
+ "solana-program 1.10.17",
  "spl-token",
 ]
 
@@ -6585,7 +6340,7 @@ version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd0dc6f70db6bacea7ff25870b016a65ba1d1b6013536f08e4fd79a8f9005325"
 dependencies = [
- "solana-program 1.10.10",
+ "solana-program 1.10.17",
 ]
 
 [[package]]
@@ -6598,7 +6353,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "solana-program 1.10.10",
+ "solana-program 1.10.17",
  "thiserror",
 ]
 
@@ -6613,8 +6368,8 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_enum",
- "solana-program 1.10.10",
- "solana-zk-token-sdk 1.10.10",
+ "solana-program 1.10.17",
+ "solana-zk-token-sdk 1.10.17",
  "spl-memo",
  "spl-token",
  "thiserror",
@@ -6706,13 +6461,8 @@ version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04066589568b72ec65f42d65a1a52436e954b168773148893c020269563decf2"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "unicode-xid 0.2.2",
 ]
 
@@ -6728,15 +6478,9 @@ version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "unicode-xid 0.2.2",
 ]
 
@@ -6824,15 +6568,9 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee42b4e559f17bce0385ebf511a7beb67d5cc33c12c96b7f4e9789919d9c10f"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -6904,15 +6642,9 @@ version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0396bc89e626244658bef819e22d0cc459e795a5ebe878e6ec336d1674a8d79a"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -7015,11 +6747,7 @@ dependencies = [
  "bytes",
  "libc",
  "memchr",
-<<<<<<< HEAD
  "mio",
-=======
- "mio 0.8.0",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "num_cpus",
  "once_cell",
  "parking_lot 0.11.2",
@@ -7045,15 +6773,9 @@ version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b557f72f448c511a979e2564e55d74e6c4432fc96ff4f6241bc6bded342643b7"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -7068,7 +6790,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-<<<<<<< HEAD
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
@@ -7081,11 +6802,8 @@ dependencies = [
 [[package]]
 name = "tokio-rustls"
 version = "0.23.3"
-=======
-version = "0.23.2"
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27d5f2b839802bd8267fa19b0530f5a08b9c08cd417976be2a65d130fe1c11b"
+checksum = "4151fda0cf2798550ad0b34bcfc9b9dcc2a9d2471c895c68f3a8818e54f2389e"
 dependencies = [
  "rustls 0.20.6",
  "tokio",
@@ -7227,7 +6945,7 @@ dependencies = [
  "percent-encoding 2.1.0",
  "pin-project",
  "prost 0.10.3",
- "prost-derive 0.10.1",
+ "prost-derive 0.10.0",
  "rustls-pemfile 1.0.0",
  "tokio",
  "tokio-rustls 0.23.3",
@@ -7259,17 +6977,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9263bf4c9bfaae7317c1c2faf7f18491d2fe476f70c414b73bf5d445b00ffa1"
 dependencies = [
  "prettyplease",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
- "prost-build 0.10.1",
+ "prost-build 0.10.0",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "prost-build",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -7342,15 +7053,9 @@ version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4f480b8f81512e825f337ad51e94c1eb5d3bbdf2b363dcd01e2b19a9ffe3f8e"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
 ]
 
 [[package]]
@@ -7663,15 +7368,9 @@ dependencies = [
  "bumpalo",
  "lazy_static",
  "log",
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "wasm-bindgen-shared",
 ]
 
@@ -7693,7 +7392,7 @@ version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17cae7ff784d7e83a2fe7611cfe766ecf034111b49deb850a3dc7699c08251f5"
 dependencies = [
- "quote 1.0.10",
+ "quote 1.0.18",
  "wasm-bindgen-macro-support",
 ]
 
@@ -7703,15 +7402,9 @@ version = "0.2.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99ec0dc7a4756fffc231aab1b9f2f578d23cd391390ab27f952ae0c9b3ece20b"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -7958,15 +7651,9 @@ version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdff2024a851a322b08f179173ae2ba620445aef1e838f0c196820eade4ae0c7"
 dependencies = [
-<<<<<<< HEAD
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
-=======
- "proc-macro2 1.0.32",
- "quote 1.0.10",
- "syn 1.0.91",
->>>>>>> parent of 506ee0014a (rbpf-cli: add coverage flag)
  "synstructure",
 ]
 
