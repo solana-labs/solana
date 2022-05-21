@@ -1905,7 +1905,7 @@ dependencies = [
  "hyper",
  "rustls 0.20.4",
  "tokio",
- "tokio-rustls 0.23.3",
+ "tokio-rustls 0.23.2",
 ]
 
 [[package]]
@@ -1985,9 +1985,9 @@ checksum = "5a9d968042a4902e08810946fc7cd5851eb75e80301342305af755ca06cb82ce"
 
 [[package]]
 name = "indexmap"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "282a6247722caba404c065016bbfa522806e51714c34f5dfc3e4a3a46fcb4223"
+checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg",
  "hashbrown",
@@ -2484,22 +2484,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "mio"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba272f85fa0b41fc91872be579b3bbe0f56b792aa361a380eb669469f68dafb2"
-dependencies = [
- "libc",
- "log",
- "miow",
- "ntapi",
- "winapi 0.3.9",
-]
-
-[[package]]
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
 name = "miow"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3186,7 +3170,6 @@ dependencies = [
 
 [[package]]
 name = "prost"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "444879275cb4fd84958b1a1d5420d15e6fcf7c235fe47f053c9c2a80aceb6001"
@@ -3197,15 +3180,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.10.1"
-=======
 version = "0.10.0"
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd5316aa8f5c82add416dfbc25116b84b748a21153f512917e8143640a71bbd"
 dependencies = [
  "bytes",
- "prost-derive 0.10.1",
+ "prost-derive 0.10.0",
 ]
 
 [[package]]
@@ -3243,8 +3223,8 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost 0.10.1",
- "prost-types 0.10.1",
+ "prost 0.10.0",
+ "prost-types 0.10.0",
  "regex",
  "tempfile",
  "which",
@@ -3252,24 +3232,20 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9cc1a3263e07e0bf68e96268f37665207b49560d98739662cdfaae215c720fe"
 dependencies = [
  "anyhow",
  "itertools",
- "proc-macro2 1.0.37",
+ "proc-macro2 1.0.32",
  "quote 1.0.10",
  "syn 1.0.91",
 ]
 
 [[package]]
 name = "prost-derive"
-version = "0.10.1"
-=======
 version = "0.10.0"
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df35198f0777b75e9ff669737c6da5136b59dba33cf5a010a6d1cc4d56defc6f"
 dependencies = [
@@ -3282,7 +3258,6 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
@@ -3293,15 +3268,12 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.10.1"
-=======
 version = "0.10.0"
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "926681c118ae6e512a3ccefd4abbe5521a14f4cc1e207356d4d00c0b7f2006fd"
 dependencies = [
  "bytes",
- "prost 0.10.1",
+ "prost 0.10.0",
 ]
 
 [[package]]
@@ -3703,7 +3675,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",
- "tokio-rustls 0.23.3",
+ "tokio-rustls 0.23.2",
  "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -4409,11 +4381,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.10.18"
 dependencies = [
-<<<<<<< HEAD
- "clap 3.1.12",
-=======
- "clap 2.33.3",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
+ "clap 3.1.6",
  "crossbeam-channel",
  "log",
  "rand 0.7.3",
@@ -4722,13 +4690,8 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rayon",
  "reqwest",
-<<<<<<< HEAD
  "rustls 0.20.4",
- "semver 1.0.7",
-=======
- "rustls",
  "semver 1.0.6",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
  "serde",
  "serde_derive",
  "serde_json",
@@ -5196,7 +5159,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
- "prost 0.10.1",
+ "prost 0.10.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -5630,13 +5593,8 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "qstring",
-<<<<<<< HEAD
- "semver 1.0.7",
- "solana-sdk 1.10.18",
-=======
  "semver 1.0.6",
- "solana-sdk 1.10.11",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
+ "solana-sdk 1.10.18",
  "thiserror",
  "uriparse",
 ]
@@ -5648,7 +5606,7 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "log",
- "prost 0.10.1",
+ "prost 0.10.0",
  "solana-rpc",
  "solana-runtime",
  "solana-sdk 1.10.18",
@@ -6017,8 +5975,8 @@ dependencies = [
  "goauth",
  "log",
  "openssl",
- "prost 0.10.1",
- "prost-types 0.10.1",
+ "prost 0.10.0",
+ "prost-types 0.10.0",
  "serde",
  "serde_derive",
  "smpl_jwt",
@@ -6039,7 +5997,7 @@ dependencies = [
  "bincode",
  "bs58",
  "enum-iterator",
- "prost 0.10.1",
+ "prost 0.10.0",
  "serde",
  "solana-account-decoder",
  "solana-sdk 1.10.18",
@@ -6090,13 +6048,8 @@ dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
-<<<<<<< HEAD
- "nix 0.23.1",
- "solana-logger 1.10.18",
-=======
  "nix",
- "solana-logger 1.10.11",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
+ "solana-logger 1.10.18",
  "solana-version",
  "sysctl",
  "unix_socket2",
@@ -6276,7 +6229,7 @@ version = "1.10.18"
 dependencies = [
  "log",
  "rustc_version 0.4.0",
- "semver 1.0.7",
+ "semver 1.0.6",
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.10.18",
@@ -6595,7 +6548,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
 dependencies = [
  "heck 0.4.0",
- "proc-macro2 1.0.37",
+ "proc-macro2 1.0.32",
  "quote 1.0.10",
  "rustversion",
  "syn 1.0.91",
@@ -6954,11 +6907,7 @@ dependencies = [
  "bytes",
  "libc",
  "memchr",
-<<<<<<< HEAD
  "mio",
-=======
- "mio 0.8.0",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
  "num_cpus",
  "once_cell",
  "parking_lot 0.11.2",
@@ -7001,7 +6950,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-<<<<<<< HEAD
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
@@ -7013,10 +6961,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.23.3"
-=======
 version = "0.23.2"
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a27d5f2b839802bd8267fa19b0530f5a08b9c08cd417976be2a65d130fe1c11b"
 dependencies = [
@@ -7062,7 +7007,7 @@ dependencies = [
  "log",
  "rustls 0.20.4",
  "tokio",
- "tokio-rustls 0.23.3",
+ "tokio-rustls 0.23.2",
  "tungstenite",
  "webpki 0.22.0",
  "webpki-roots",
@@ -7159,11 +7104,11 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project",
- "prost 0.10.1",
- "prost-derive 0.10.1",
+ "prost 0.10.0",
+ "prost-derive 0.10.0",
  "rustls-pemfile 0.3.0",
  "tokio",
- "tokio-rustls 0.23.3",
+ "tokio-rustls 0.23.2",
  "tokio-stream",
  "tokio-util 0.7.1",
  "tower",
@@ -7179,7 +7124,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9403f1bafde247186684b230dc6f38b5cd514584e8bec1dd32514be4745fa757"
 dependencies = [
- "proc-macro2 1.0.37",
+ "proc-macro2 1.0.32",
  "prost-build 0.9.0",
  "quote 1.0.10",
  "syn 1.0.91",
@@ -7192,13 +7137,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d17087af5c80e5d5fc8ba9878e60258065a0a757e35efe7a05b7904bece1943"
 dependencies = [
  "prettyplease",
-<<<<<<< HEAD
- "proc-macro2 1.0.37",
- "prost-build 0.10.1",
-=======
  "proc-macro2 1.0.32",
- "prost-build",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
+ "prost-build 0.10.0",
  "quote 1.0.10",
  "syn 1.0.91",
 ]
@@ -7344,13 +7284,8 @@ dependencies = [
  "http",
  "httparse",
  "log",
-<<<<<<< HEAD
- "rand 0.8.5",
- "rustls 0.20.4",
-=======
  "rand 0.8.4",
- "rustls",
->>>>>>> parent of 69c98236f6 (rbpf-cli: add coverage flag (#24704))
+ "rustls 0.20.4",
  "sha-1 0.10.0",
  "thiserror",
  "url 2.2.2",
