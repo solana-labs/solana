@@ -272,9 +272,9 @@ impl SigVerifyStage {
         discard_random_time.stop();
 
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let dedup_fail = deduper.dedup_packets(&mut batches) as usize;
+        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(&mut batches) as usize;
         dedup_time.stop();
-        let num_unique = num_packets.saturating_sub(dedup_fail);
+        let num_unique = num_packets.saturating_sub(discard_or_dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
@@ -331,7 +331,7 @@ impl SigVerifyStage {
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
-        stats.total_dedup += dedup_fail;
+        stats.total_dedup += discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;
