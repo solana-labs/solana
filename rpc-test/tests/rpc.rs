@@ -8,7 +8,7 @@ use {
     solana_account_decoder::UiAccount,
     solana_client::{
         client_error::{ClientErrorKind, Result as ClientResult},
-        connection_cache::ConnectionCache,
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         nonblocking::pubsub_client::PubsubClient,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
@@ -420,7 +420,10 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
     ));
-    let connection_cache = Arc::new(ConnectionCache::new(tpu_use_quic));
+    let connection_cache = Arc::new(ConnectionCache::new(
+        tpu_use_quic,
+        DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    ));
     let tpu_client = TpuClient::new_with_connection_cache(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),

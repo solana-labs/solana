@@ -2,7 +2,7 @@ use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
-    solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
+    solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
@@ -53,6 +53,7 @@ pub struct Config {
     pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
+    pub tpu_connection_pool_size: usize,
 }
 
 impl Default for Config {
@@ -79,6 +80,7 @@ impl Default for Config {
             target_node: None,
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
+            tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
         }
     }
 }
@@ -294,6 +296,13 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Submit transactions via QUIC; only affects ThinClient (default) \
                     or TpuClient sends"),
         )
+        .arg(
+            Arg::with_name("tpu_connection_pool_size")
+                .long("tpu-connection-pool-size")
+                .takes_value(true)
+                .help("Controls the connection pool size per remote address; only affects ThinClient (default) \
+                    or TpuClient sends"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -341,6 +350,13 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if matches.is_present("tpu_use_quic") {
         args.use_quic = true;
+    }
+
+    if let Some(v) = matches.value_of("tpu_connection_pool_size") {
+        args.tpu_connection_pool_size = v
+            .to_string()
+            .parse()
+            .expect("can't parse tpu_connection_pool_size");
     }
 
     if let Some(addr) = matches.value_of("entrypoint") {

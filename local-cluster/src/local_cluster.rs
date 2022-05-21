@@ -7,7 +7,9 @@ use {
     itertools::izip,
     log::*,
     solana_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_USE_QUIC},
+        connection_cache::{
+            ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+        },
         thin_client::ThinClient,
     },
     solana_core::{
@@ -80,6 +82,7 @@ pub struct ClusterConfig {
     pub poh_config: PohConfig,
     pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
     pub tpu_use_quic: bool,
+    pub tpu_connection_pool_size: usize,
 }
 
 impl Default for ClusterConfig {
@@ -100,6 +103,7 @@ impl Default for ClusterConfig {
             skip_warmup_slots: false,
             additional_accounts: vec![],
             tpu_use_quic: DEFAULT_TPU_USE_QUIC,
+            tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
         }
     }
 }
@@ -255,6 +259,7 @@ impl LocalCluster {
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
 
         let mut validators = HashMap::new();
@@ -277,7 +282,10 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
-            connection_cache: Arc::new(ConnectionCache::new(config.tpu_use_quic)),
+            connection_cache: Arc::new(ConnectionCache::new(
+                config.tpu_use_quic,
+                config.tpu_connection_pool_size,
+            )),
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
@@ -450,6 +458,7 @@ impl LocalCluster {
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -797,6 +806,7 @@ impl Cluster for LocalCluster {
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
