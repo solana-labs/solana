@@ -41,7 +41,7 @@ struct Args {
     packet_send_rate: usize,
 
     /// Number of packets per batch
-    #[clap(long, env, default_value_t = 64)]
+    #[clap(long, env, default_value_t = 128)]
     packets_per_batch: usize,
 
     /// Number of batches per message
@@ -49,11 +49,11 @@ struct Args {
     batches_per_msg: usize,
 
     /// Number of consuming threads (number of threads requesting batches from scheduler)
-    #[clap(long, env, default_value_t = 20)]
+    #[clap(long, env, default_value_t = 4)]
     num_execution_threads: usize,
 
     /// How long each transaction takes to execution in microseconds
-    #[clap(long, env, default_value_t = 20)]
+    #[clap(long, env, default_value_t = 15)]
     execution_per_tx_us: u64,
 
     /// Duration of benchmark
@@ -61,15 +61,15 @@ struct Args {
     duration: f32,
 
     /// Number of accounts to choose from when signing transactions
-    #[clap(long, env, default_value_t = 1000)]
+    #[clap(long, env, default_value_t = 100000)]
     num_accounts: usize,
 
     /// Number of read locks per tx
-    #[clap(long, env, default_value_t = 5)]
+    #[clap(long, env, default_value_t = 4)]
     num_read_locks_per_tx: usize,
 
     /// Number of write locks per tx
-    #[clap(long, env, default_value_t = 5)]
+    #[clap(long, env, default_value_t = 2)]
     num_read_write_locks_per_tx: usize,
 
     /// If true, enables state auction on accounts
@@ -261,7 +261,7 @@ fn start_execution_threads(
                         break;
                     }
 
-                    let batch = scheduler_handle.request_batch(64, &bank).unwrap();
+                    let batch = scheduler_handle.request_batch(128, &bank).unwrap();
 
                     let num_txs = batch.sanitized_transactions.len();
                     let sleep_duration = if num_txs > 0 {
@@ -348,7 +348,7 @@ fn main() {
         let mut last_log_time = Instant::now();
 
         for msg in stats_receiver {
-            // info!("msg: {}", msg);
+            info!("msg: {}", msg);
             count += msg;
 
             if last_log_time.elapsed() > Duration::from_secs(1) {

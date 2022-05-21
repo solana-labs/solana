@@ -3,6 +3,8 @@
 //! - TPU vote transactions
 //! - Gossip vote transactions
 
+use min_max_heap::MinMaxHeap;
+use std::rc::Rc;
 use {
     crate::{
         banking_stage::BatchedTransactionDetails,
@@ -366,7 +368,7 @@ impl TransactionScheduler {
 
     /// Attempts to schedule a transaction to be executed.
     fn try_schedule(
-        deserialized_packet: &DeserializedPacket,
+        deserialized_packet: &Rc<ImmutableDeserializedPacket>,
         bank: &Arc<Bank>,
         highest_wl_blocked_account_fees: &mut HashMap<Pubkey, u64>,
         highest_rl_blocked_account_fees: &mut HashMap<Pubkey, u64>,
@@ -375,14 +377,14 @@ impl TransactionScheduler {
         config: &TransactionSchedulerConfig,
     ) -> Result<SanitizedTransaction> {
         let sanitized_tx = Self::transaction_from_deserialized_packet(
-            deserialized_packet.immutable_section(),
+            deserialized_packet,
             &bank.feature_set,
             bank.vote_only_bank(),
             bank.as_ref(),
         )
         .ok_or_else(|| SchedulerError::InvalidSanitizedTransaction)?;
 
-        let priority = deserialized_packet.immutable_section().priority();
+        let priority = deserialized_packet.priority();
 
         let account_locks = sanitized_tx
             .get_account_locks(&bank.feature_set)
@@ -665,60 +667,68 @@ impl TransactionScheduler {
         bank: &Arc<Bank>,
         qos_service: &QosService,
         config: &TransactionSchedulerConfig,
-    ) -> (Vec<SanitizedTransaction>, Vec<DeserializedPacket>) {
+    ) -> Vec<SanitizedTransaction> {
         let mut sanitized_transactions = Vec::with_capacity(num_txs);
-        let mut rescheduled_packets = Vec::with_capacity(1_000);
 
         // hashmap representing the highest fee of currently write-locked and read-locked blocked accounts
         // almost a pseudo AccountLocks but fees instead of hashset/read lock count
         let mut highest_wl_blocked_account_fees = HashMap::with_capacity(10_000);
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
-        let mut lookback_count = 0;
+        let mut retryable_packets = MinMaxHeap::with_capacity(unprocessed_packets.capacity());
+        std::mem::swap(
+            &mut unprocessed_packets.packet_priority_queue,
+            &mut retryable_packets,
+        );
 
-        while let Some(deserialized_packet) = unprocessed_packets.pop_max() {
-            match Self::try_schedule(
-                &deserialized_packet,
-                bank,
-                &mut highest_wl_blocked_account_fees,
-                &mut highest_rl_blocked_account_fees,
-                scheduled_accounts,
-                qos_service,
-                config,
-            ) {
-                Ok(sanitized_tx) => {
-                    sanitized_transactions.push(sanitized_tx);
-                    if sanitized_transactions.len() >= num_txs {
-                        break;
+        let mut retryable_packets: MinMaxHeap<_> = retryable_packets
+            .drain_desc()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(idx, deserialized_packet)| {
+                // drop the rest
+                if sanitized_transactions.len() >= num_txs {
+                    return Some(deserialized_packet);
+                }
+                match Self::try_schedule(
+                    &deserialized_packet,
+                    bank,
+                    &mut highest_wl_blocked_account_fees,
+                    &mut highest_rl_blocked_account_fees,
+                    scheduled_accounts,
+                    qos_service,
+                    config,
+                ) {
+                    Ok(sanitized_tx) => {
+                        sanitized_transactions.push(sanitized_tx);
+                        return None;
+                    }
+                    Err(e) => {
+                        trace!("e: {:?}", e);
+                        match e {
+                            SchedulerError::InvalidSanitizedTransaction
+                            | SchedulerError::InvalidTransactionFormat(_)
+                            | SchedulerError::TransactionCheckFailed(_) => {
+                                // non-recoverable error, drop the packet
+                                return None;
+                            }
+                            SchedulerError::AccountInUse
+                            | SchedulerError::AccountBlocked(_)
+                            | SchedulerError::QosExceeded => {
+                                return Some(deserialized_packet);
+                            }
+                        }
                     }
                 }
-                Err(e) => {
-                    trace!("e: {:?}", e);
-                    match e {
-                        SchedulerError::InvalidSanitizedTransaction
-                        | SchedulerError::InvalidTransactionFormat(_)
-                        | SchedulerError::TransactionCheckFailed(_) => {
-                            // non-recoverable error, drop the packet
-                            continue;
-                        }
-                        SchedulerError::AccountInUse | SchedulerError::AccountBlocked(_) => {
-                            // need to reschedule
-                            // error!("e: {}", e);
-                            rescheduled_packets.push(deserialized_packet);
-                        }
-                        SchedulerError::QosExceeded => {
-                            // TODO: probably want to move this packet to a separate queue
-                        }
-                    }
-                }
-            }
-            lookback_count += 1;
-            if lookback_count >= num_txs * 20 {
-                break;
-            }
-        }
+            })
+            .collect();
 
-        (sanitized_transactions, rescheduled_packets)
+        std::mem::swap(
+            &mut retryable_packets,
+            &mut unprocessed_packets.packet_priority_queue,
+        );
+
+        sanitized_transactions
     }
 
     /// Handles scheduler requests and sends back a response over the channel
@@ -733,7 +743,7 @@ impl TransactionScheduler {
         match scheduler_request.msg {
             SchedulerMessage::RequestBatch { num_txs, bank } => {
                 trace!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
-                let (sanitized_transactions, rescheduled_packets) = Self::get_scheduled_batch(
+                let sanitized_transactions = Self::get_scheduled_batch(
                     unprocessed_packets,
                     scheduled_accounts,
                     num_txs,
@@ -742,9 +752,8 @@ impl TransactionScheduler {
                     config,
                 );
                 trace!(
-                    "sanitized_transactions num: {}, rescheduled_packets num: {}, unprocessed_packets num: {}",
+                    "sanitized_transactions num: {}, unprocessed_packets num: {}",
                     sanitized_transactions.len(),
-                    rescheduled_packets.len(),
                     unprocessed_packets.len()
                 );
 
@@ -753,11 +762,6 @@ impl TransactionScheduler {
                         sanitized_transactions,
                     }))
                     .unwrap();
-
-                // push rescheduled back on after sending so execution can start
-                for tx in rescheduled_packets {
-                    unprocessed_packets.push(tx.clone());
-                }
             }
             SchedulerMessage::Ping { id } => {
                 let _ = response_sender
