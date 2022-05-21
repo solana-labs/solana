@@ -666,26 +666,25 @@ mod tests {
     #[test]
     fn test_try_compile() {
         let mut keys = vec![];
-        keys.resize_with(8, Pubkey::new_unique);
+        keys.resize_with(7, Pubkey::new_unique);
 
         let payer = keys[0];
-        let program_id = keys[7];
+        let program_id = keys[6];
         let instructions = vec![Instruction {
             program_id,
             accounts: vec![
                 AccountMeta::new(keys[1], true),
                 AccountMeta::new_readonly(keys[2], true),
                 AccountMeta::new(keys[3], false),
-                AccountMeta::new_readonly(keys[4], false),
-                AccountMeta::new(keys[5], false),
-                AccountMeta::new_readonly(keys[6], false),
+                AccountMeta::new(keys[4], false), // loaded from lut
+                AccountMeta::new_readonly(keys[5], false), // loaded from lut
             ],
             data: vec![],
         }];
         let address_lookup_table_accounts = vec![
             AddressLookupTableAccount {
                 key: Pubkey::new_unique(),
-                addresses: vec![keys[5], keys[6]],
+                addresses: vec![keys[4], keys[5], keys[6]],
             },
             AddressLookupTableAccount {
                 key: Pubkey::new_unique(),
@@ -705,13 +704,13 @@ mod tests {
                 header: MessageHeader {
                     num_required_signatures: 3,
                     num_readonly_signed_accounts: 1,
-                    num_readonly_unsigned_accounts: 2
+                    num_readonly_unsigned_accounts: 1
                 },
                 recent_blockhash,
-                account_keys: vec![keys[0], keys[1], keys[2], keys[3], keys[4], program_id],
+                account_keys: vec![keys[0], keys[1], keys[2], keys[3], program_id],
                 instructions: vec![CompiledInstruction {
-                    program_id_index: 5,
-                    accounts: vec![1, 2, 3, 4, 6, 7],
+                    program_id_index: 4,
+                    accounts: vec![1, 2, 3, 5, 6],
                     data: vec![],
                 },],
                 address_table_lookups: vec![MessageAddressTableLookup {
