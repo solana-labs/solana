@@ -7,8 +7,15 @@ extern crate test;
 use {
     crossbeam_channel::unbounded,
     log::*,
-    rand::{thread_rng, Rng},
-    solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
+    rand::{
+        distributions::{Distribution, Uniform},
+        thread_rng, Rng,
+    },
+    solana_core::{
+        sigverify::TransactionSigVerifier,
+        sigverify_stage::{SigVerifier, SigVerifyStage},
+    },
+    solana_measure::measure::Measure,
     solana_perf::{
         packet::{to_packet_batches, PacketBatch},
         test_tx::test_tx,
@@ -179,3 +186,81 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     });
     stage.join().unwrap();
 }
+
+fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
+    let len = 10_000; // max batch size
+    let chunk_size = 1024;
+
+    let from_keypair = Keypair::new();
+    let to_keypair = Keypair::new();
+
+    let txs: Vec<_> = (0..len)
+        .map(|_| {
+            let amount = thread_rng().gen();
+            system_transaction::transfer(
+                &from_keypair,
+                &to_keypair.pubkey(),
+                amount,
+                Hash::default(),
+            )
+        })
+        .collect();
+    let mut batches = to_packet_batches(&txs, chunk_size);
+
+    let mut rng = rand::thread_rng();
+    let die = Uniform::<i32>::from(1..100);
+
+    let mut c = 0;
+    batches.iter_mut().for_each(|batch| {
+        batch.packets.iter_mut().for_each(|p| {
+            let throw = die.sample(&mut rng);
+            if throw < discard_factor {
+                p.meta.set_discard(true);
+                c += 1;
+            }
+        })
+    });
+    (batches, len - c)
+}
+
+fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32) {
+    let (batches0, num_valid_packets) = prepare_batches(discard_factor);
+    let verifier = TransactionSigVerifier::default();
+
+    bencher.iter(move || {
+        let mut batches = batches0.clone();
+        let (pre_shrink_time_us, _pre_shrink_total) =
+            SigVerifyStage::maybe_shrink_batches(&mut batches);
+
+        let mut verify_time = Measure::start("sigverify_batch_time");
+        let _batches = verifier.verify_batches(batches, num_valid_packets);
+        verify_time.stop();
+
+        info!(
+            "{}, {}, {}",
+            discard_factor,
+            pre_shrink_time_us,
+            verify_time.as_us()
+        )
+    });
+}
+
+macro_rules! GEN_SHRINK_SIGVERIFY_BENCH {
+    ($i:ident, $n:literal) => {
+        #[bench]
+        fn $i(bencher: &mut Bencher) {
+            bench_shrink_sigverify_stage_core(bencher, $n);
+        }
+    };
+}
+
+GEN_SHRINK_SIGVERIFY_BENCH!(run_0, 0);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_10, 10);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_20, 20);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_30, 30);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_40, 40);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_50, 50);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_60, 60);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_70, 70);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_80, 80);
+GEN_SHRINK_SIGVERIFY_BENCH!(run_90, 90);
