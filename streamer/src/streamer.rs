@@ -492,8 +492,8 @@ mod test {
         get_packet_batches(r_reader, &mut packets_remaining);
         assert_eq!(packets_remaining, 0);
         exit.store(true, Ordering::Relaxed);
+        assert!(stats.packet_batches_count.load(Ordering::Relaxed) >= 1);
         assert_eq!(stats.packets_count.load(Ordering::Relaxed), NUM_PACKETS);
-        assert_eq!(stats.packet_batches_count.load(Ordering::Relaxed), 1);
         assert_eq!(stats.full_packet_batches_count.load(Ordering::Relaxed), 0);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
