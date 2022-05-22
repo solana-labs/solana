@@ -682,7 +682,7 @@ impl TransactionScheduler {
         bank: &Arc<Bank>,
         qos_service: &QosService,
         config: &TransactionSchedulerConfig,
-    ) -> Vec<SanitizedTransaction> {
+    ) -> (Vec<SanitizedTransaction>, Vec<DeserializedPacket>) {
         let mut sanitized_transactions = Vec::with_capacity(num_txs);
 
         // hashmap representing the highest fee of currently write-locked and read-locked blocked accounts
@@ -690,11 +690,11 @@ impl TransactionScheduler {
         let mut highest_wl_blocked_account_fees = HashMap::with_capacity(10_000);
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
-        unprocessed_packets.retain(|deserialized_packet, _t| {
+        let mut packets_to_remove = vec![];
+        for (deserialized_packet, _) in unprocessed_packets.iter() {
             if sanitized_transactions.len() >= num_txs {
-                return true; // if fully-scheduled, retain rest of packets
+                break; // if fully-scheduled, retain rest of packets
             }
-
             match Self::try_schedule(
                 deserialized_packet.immutable_section(),
                 bank,
@@ -705,29 +705,61 @@ impl TransactionScheduler {
                 config,
             ) {
                 Ok(sanitized_tx) => {
-                    // scheduled, drop for now
                     sanitized_transactions.push(sanitized_tx);
-                    return false;
+                    packets_to_remove.push(deserialized_packet.clone());
                 }
                 Err(e) => {
                     trace!("e: {:?}", e);
                     match e {
                         SchedulerError::InvalidSanitizedTransaction
                         | SchedulerError::InvalidTransactionFormat(_)
-                        | SchedulerError::TransactionCheckFailed(_) => {
-                            return false; // non-recoverable error, drop the packet
-                        }
+                        | SchedulerError::TransactionCheckFailed(_) => {}
                         SchedulerError::AccountInUse
                         | SchedulerError::AccountBlocked(_)
-                        | SchedulerError::QosExceeded => {
-                            return true; // save these for later
-                        }
+                        | SchedulerError::QosExceeded => {}
                     }
                 }
             }
-        });
+        }
 
-        sanitized_transactions
+        // unprocessed_packets.retain(|deserialized_packet, _t| {
+        //     if sanitized_transactions.len() >= num_txs {
+        //         return true; // if fully-scheduled, retain rest of packets
+        //     }
+        //
+        //     match Self::try_schedule(
+        //         deserialized_packet.immutable_section(),
+        //         bank,
+        //         &mut highest_wl_blocked_account_fees,
+        //         &mut highest_rl_blocked_account_fees,
+        //         scheduled_accounts,
+        //         qos_service,
+        //         config,
+        //     ) {
+        //         Ok(sanitized_tx) => {
+        //             // scheduled, drop for now
+        //             sanitized_transactions.push(sanitized_tx);
+        //             return false;
+        //         }
+        //         Err(e) => {
+        //             trace!("e: {:?}", e);
+        //             match e {
+        //                 SchedulerError::InvalidSanitizedTransaction
+        //                 | SchedulerError::InvalidTransactionFormat(_)
+        //                 | SchedulerError::TransactionCheckFailed(_) => {
+        //                     return false; // non-recoverable error, drop the packet
+        //                 }
+        //                 SchedulerError::AccountInUse
+        //                 | SchedulerError::AccountBlocked(_)
+        //                 | SchedulerError::QosExceeded => {
+        //                     return true; // save these for later
+        //                 }
+        //             }
+        //         }
+        //     }
+        // });
+
+        (sanitized_transactions, packets_to_remove)
     }
 
     /// Handles scheduler requests and sends back a response over the channel
@@ -743,7 +775,7 @@ impl TransactionScheduler {
             SchedulerMessage::RequestBatch { num_txs, bank } => {
                 let start = Instant::now();
                 trace!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
-                let sanitized_transactions = Self::get_scheduled_batch(
+                let (sanitized_transactions, packets_to_remove) = Self::get_scheduled_batch(
                     unprocessed_packets,
                     scheduled_accounts,
                     num_txs,
@@ -763,6 +795,9 @@ impl TransactionScheduler {
                         sanitized_transactions,
                     }))
                     .unwrap();
+                for p in packets_to_remove {
+                    unprocessed_packets.remove(&p);
+                }
             }
             SchedulerMessage::Ping { id } => {
                 let _ = response_sender

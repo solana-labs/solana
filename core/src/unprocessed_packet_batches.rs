@@ -1,4 +1,5 @@
 use rand::{thread_rng, Rng};
+use std::time::Instant;
 use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
@@ -76,6 +77,7 @@ impl ImmutableDeserializedPacket {
 pub struct DeserializedPacket {
     immutable_section: Rc<ImmutableDeserializedPacket>,
     pub forwarded: bool,
+    pub stamp: Instant,
 }
 
 impl DeserializedPacket {
@@ -113,6 +115,7 @@ impl DeserializedPacket {
                 priority,
             }),
             forwarded: false,
+            stamp: Instant::now(),
         })
     }
 
@@ -135,11 +138,7 @@ impl Ord for DeserializedPacket {
             .cmp(&self.immutable_section().priority())
         {
             Ordering::Equal => {
-                if thread_rng().gen_bool(0.5) {
-                    Ordering::Greater
-                } else {
-                    Ordering::Less
-                }
+                other.stamp.cmp(&self.stamp)
                 // self
                 //     .immutable_section()
                 //     .sender_stake()
