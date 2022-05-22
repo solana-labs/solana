@@ -3066,15 +3066,9 @@ cosmiconfig@^7.0.0:
     yaml "^1.10.0"
 
 cross-fetch@^3.0.4:
-<<<<<<< HEAD
   version "3.1.4"
-  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-3.1.4.tgz#9723f3a3a247bf8b89039f3a380a9244e8fa2f39"
+  resolved "https://registry.npmjs.org/cross-fetch/-/cross-fetch-3.1.4.tgz"
   integrity sha512-1eAtFWdIubi6T4XPy6ei9iUFoKpUkIF971QLN8lIvvvwueI65+Nw5haMNKUwfJxabqlIIDODJKGrQ66gxC0PbQ==
-=======
-  version "3.1.5"
-  resolved "https://registry.npmjs.org/cross-fetch/-/cross-fetch-3.1.5.tgz"
-  integrity sha512-lvb1SBsI0Z7GDwmuid+mU3kWVBwTVUbe7S0H52yaaAdQOXq2YktTCZdlAcNKFzE6QtRz0snpw9bNiPeOIkkQvw==
->>>>>>> 930995207 (docs: Run browserlist db update (#25448))
   dependencies:
     node-fetch "2.6.1"
 
@@ -6111,19 +6105,10 @@ node-emoji@^1.10.0:
   dependencies:
     lodash.toarray "^4.4.0"
 
-<<<<<<< HEAD
 node-fetch@2.6.1:
   version "2.6.1"
-  resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.1.tgz#045bd323631f76ed2e2b55573394416b639a0052"
+  resolved "https://registry.npmjs.org/node-fetch/-/node-fetch-2.6.1.tgz"
   integrity sha512-V4aYg89jEoVRxRb2fJdAg8FHvI7cEyYdVAh94HH0UIK8oJxUfkjlDQN9RbMx+bEjP7+ggMiFRprSti032Oipxw==
-=======
-node-fetch@2.6.7:
-  version "2.6.7"
-  resolved "https://registry.npmjs.org/node-fetch/-/node-fetch-2.6.7.tgz"
-  integrity sha512-ZjMPFEfVx5j+y2yF35Kzx5sF7kDzxuDj6ziH4FFbOp87zKDZNx8yExJIb05OGF4Nlt9IHFIMBkRl41VdvcNdbQ==
-  dependencies:
-    whatwg-url "^5.0.0"
->>>>>>> 930995207 (docs: Run browserlist db update (#25448))
 
 node-forge@^0.10.0:
   version "0.10.0"
@@ -8534,14 +8519,6 @@ totalist@^1.0.0:
   resolved "https://registry.npmjs.org/totalist/-/totalist-1.1.0.tgz"
   integrity sha512-gduQwd1rOdDMGxFG1gEvhV88Oirdo2p+KjoYFU7k2g+i7n6AFFbDQ5kMPUsW0pNbfQsB/cwXvT1i4Bue0s9g5g==
 
-<<<<<<< HEAD
-=======
-tr46@~0.0.3:
-  version "0.0.3"
-  resolved "https://registry.npmjs.org/tr46/-/tr46-0.0.3.tgz"
-  integrity sha1-gYT9NH2snNwYWZLzpmIuFLnZq2o=
-
->>>>>>> 930995207 (docs: Run browserlist db update (#25448))
 trim-trailing-lines@^1.0.0:
   version "1.1.4"
   resolved "https://registry.npmjs.org/trim-trailing-lines/-/trim-trailing-lines-1.1.4.tgz"
@@ -8995,14 +8972,6 @@ web-namespaces@^1.0.0, web-namespaces@^1.1.2:
   resolved "https://registry.npmjs.org/web-namespaces/-/web-namespaces-1.1.4.tgz"
   integrity sha512-wYxSGajtmoP4WxfejAPIr4l0fVh+jeMXZb08wNc0tMg6xsfZXj3cECqIK0G7ZAqUq0PP8WlMDtaOGVBTAWztNw==
 
-<<<<<<< HEAD
-=======
-webidl-conversions@^3.0.0:
-  version "3.0.1"
-  resolved "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz"
-  integrity sha1-JFNCdeKnvGvnvIZhHMFq4KVlSHE=
-
->>>>>>> 930995207 (docs: Run browserlist db update (#25448))
 webpack-bundle-analyzer@^4.4.0:
   version "4.4.1"
   resolved "https://registry.npmjs.org/webpack-bundle-analyzer/-/webpack-bundle-analyzer-4.4.1.tgz"
@@ -9157,17 +9126,6 @@ websocket-extensions@>=0.1.1:
   resolved "https://registry.npmjs.org/websocket-extensions/-/websocket-extensions-0.1.4.tgz"
   integrity sha512-OqedPIGOfsDlo31UNwYbCFMSaO9m9G/0faIHj5/dZFDMFqPTcx6UwqyOy3COEaEOg/9VsGIpdqn62W5KhoKSpg==
 
-<<<<<<< HEAD
-=======
-whatwg-url@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz"
-  integrity sha1-lmRU6HZUYuN2RNNib2dCzotwll0=
-  dependencies:
-    tr46 "~0.0.3"
-    webidl-conversions "^3.0.0"
-
->>>>>>> 930995207 (docs: Run browserlist db update (#25448))
 which-boxed-primitive@^1.0.2:
   version "1.0.2"
   resolved "https://registry.npmjs.org/which-boxed-primitive/-/which-boxed-primitive-1.0.2.tgz"
