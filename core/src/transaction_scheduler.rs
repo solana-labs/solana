@@ -3,6 +3,7 @@
 //! - TPU vote transactions
 //! - Gossip vote transactions
 
+use std::iter::repeat;
 use {
     crate::{
         banking_stage::BatchedTransactionDetails,
@@ -909,19 +910,11 @@ impl TransactionScheduler {
                 .enumerate()
                 .filter_map(|(idx, p)| if !p.meta.discard() { Some(idx) } else { None })
                 .collect();
-            let start = Instant::now();
 
-            for p in unprocessed_packet_batches::deserialize_packets(&packet_batch, &packet_indexes)
-            {
-                unprocessed_packets.insert(p, rand::thread_rng().gen_range(0, 100_000));
-            }
-
-            // info!(
-            //     "packets inserted: {:?}, elapsed: {:?}, len: {}",
-            //     packet_indexes.len(),
-            //     start.elapsed(),
-            //     unprocessed_packets.len()
-            // );
+            unprocessed_packets.extend(
+                unprocessed_packet_batches::deserialize_packets(&packet_batch, &packet_indexes)
+                    .zip(repeat(1)),
+            );
         }
     }
 
