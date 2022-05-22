@@ -5,6 +5,7 @@
 
 #include <sol/assert.h>
 #include <sol/blake3.h>
+#include <sol/alt_bn128.h>
 #include <sol/cpi.h>
 #include <sol/deserialize.h>
 #include <sol/deserialize_deprecated.h>
