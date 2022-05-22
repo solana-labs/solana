@@ -398,12 +398,11 @@ impl TransactionScheduler {
         )
         .ok_or_else(|| SchedulerError::InvalidSanitizedTransaction)?;
 
-        let priority = deserialized_packet.priority();
-
         let account_locks = sanitized_tx
             .get_account_locks(&bank.feature_set)
             .map_err(|e| SchedulerError::InvalidTransactionFormat(e))?;
 
+        let priority = deserialized_packet.priority();
         trace!(
             "popped tx w/ priority: {}, readable: {:?}, writeable: {:?}",
             priority,
@@ -682,13 +681,12 @@ impl TransactionScheduler {
         qos_service: &QosService,
         config: &TransactionSchedulerConfig,
     ) -> (Vec<SanitizedTransaction>, Vec<DeserializedPacket>) {
-        let mut sanitized_transactions = Vec::with_capacity(num_txs);
-
         // hashmap representing the highest fee of currently write-locked and read-locked blocked accounts
         // almost a pseudo AccountLocks but fees instead of hashset/read lock count
         let mut highest_wl_blocked_account_fees = HashMap::with_capacity(10_000);
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
+        let mut sanitized_transactions = Vec::with_capacity(num_txs);
         let mut packets_to_remove = vec![];
         for deserialized_packet in unprocessed_packets.iter() {
             if sanitized_transactions.len() >= num_txs {

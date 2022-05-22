@@ -174,32 +174,34 @@ fn start_sending_packets(
                         }
                         let start = Instant::now();
 
-                        let packet_batches = (0..batches_per_msg).map(|_| {
-                            PacketBatch::new(
-                                (0..packets_per_batch)
-                                    .map(|_| {
-                                        let sending_kp = &keypairs
-                                            [rand::thread_rng().gen_range(0..keypairs.len())];
+                        let packet_batches = (0..batches_per_msg)
+                            .map(|_| {
+                                PacketBatch::new(
+                                    (0..packets_per_batch)
+                                        .map(|_| {
+                                            let sending_kp = &keypairs
+                                                [rand::thread_rng().gen_range(0..keypairs.len())];
 
-                                        let read_account_metas =
-                                            (0..num_read_locks_per_tx).map(|_| {
-                                                AccountMeta::new_readonly(
-                                                    keypairs[rand::thread_rng()
-                                                        .gen_range(0..keypairs.len())]
-                                                    .pubkey(),
-                                                    false,
-                                                )
-                                            });
-                                        let write_account_metas = (0..num_read_write_locks_per_tx)
-                                            .map(|_| {
-                                                AccountMeta::new(
-                                                    keypairs[rand::thread_rng()
-                                                        .gen_range(0..keypairs.len())]
-                                                    .pubkey(),
-                                                    false,
-                                                )
-                                            });
-                                        let ixs = vec![
+                                            let read_account_metas = (0..num_read_locks_per_tx)
+                                                .map(|_| {
+                                                    AccountMeta::new_readonly(
+                                                        keypairs[rand::thread_rng()
+                                                            .gen_range(0..keypairs.len())]
+                                                        .pubkey(),
+                                                        false,
+                                                    )
+                                                });
+                                            let write_account_metas =
+                                                (0..num_read_write_locks_per_tx).map(|_| {
+                                                    AccountMeta::new(
+                                                        keypairs[rand::thread_rng()
+                                                            .gen_range(0..keypairs.len())]
+                                                        .pubkey(),
+                                                        false,
+                                                    )
+                                                });
+                                            let ixs =
+                                                vec![
                                             ComputeBudgetInstruction::set_compute_unit_price(100),
                                             Instruction::new_with_bytes(
                                                 system_program::id(),
@@ -210,23 +212,22 @@ fn start_sending_packets(
                                             ),
                                         ];
 
-                                        let versioned_tx = VersionedTransaction::from(
-                                            Transaction::new_signed_with_payer(
-                                                &ixs,
-                                                Some(&sending_kp.pubkey()),
-                                                &[sending_kp],
-                                                blockhash.clone(),
-                                            ),
-                                        );
-                                        Packet::from_data(None, &versioned_tx).unwrap()
-                                    })
-                                    .collect(),
-                            )
-                        });
+                                            let versioned_tx = VersionedTransaction::from(
+                                                Transaction::new_signed_with_payer(
+                                                    &ixs,
+                                                    Some(&sending_kp.pubkey()),
+                                                    &[sending_kp],
+                                                    blockhash.clone(),
+                                                ),
+                                            );
+                                            Packet::from_data(None, &versioned_tx).unwrap()
+                                        })
+                                        .collect(),
+                                )
+                            })
+                            .collect();
 
-                        packet_batches.into_iter().for_each(|b| {
-                            tx_sender.send(vec![b]).unwrap();
-                        });
+                        tx_sender.send(packet_batches).unwrap();
 
                         let sleep_duration = loop_duration
                             .checked_sub(start.elapsed())
