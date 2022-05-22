@@ -1,3 +1,4 @@
+pub mod processor;
 pub mod with_jit;
 
 solana_sdk::declare_builtin!(
