@@ -37,7 +37,7 @@ use {
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// How many packets per second to send to the scheduler
-    #[clap(long, env, default_value_t = 100_000)]
+    #[clap(long, env, default_value_t = 200_000)]
     packet_send_rate: usize,
 
     /// Number of packets per batch
@@ -264,12 +264,9 @@ fn start_execution_threads(
                     let batch = scheduler_handle.request_batch(128, &bank).unwrap();
 
                     let num_txs = batch.sanitized_transactions.len();
-                    let sleep_duration = if num_txs > 0 {
-                        Duration::from_micros((num_txs * execution_per_tx_us as usize) as u64)
-                    } else {
-                        Duration::from_millis(1)
-                    };
-                    sleep(sleep_duration);
+                    sleep(Duration::from_micros(
+                        (num_txs * execution_per_tx_us as usize) as u64,
+                    ));
 
                     if stats_sender
                         .send(batch.sanitized_transactions.len())

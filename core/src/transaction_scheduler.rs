@@ -326,6 +326,9 @@ impl TransactionScheduler {
 
                 let mut last_log = Instant::now();
 
+                // TODO: this should only be for the scheduler requests
+                let mut blocked_requests = Vec::new();
+
                 loop {
                     if last_log.elapsed() > Duration::from_secs(1) {
                         let num_packets = unprocessed_packet_batches.len();
@@ -337,6 +340,12 @@ impl TransactionScheduler {
                             match maybe_packet_batches {
                                 Ok(packet_batches) => {
                                     Self::handle_packet_batches(&mut unprocessed_packet_batches, packet_batches);
+                                    if !blocked_requests.is_empty() && !unprocessed_packet_batches.is_empty() {
+                                        blocked_requests.into_iter().for_each(|r| {
+                                            Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, r, &qos_service, &config);
+                                        });
+                                        blocked_requests = Vec::new();
+                                    }
                                 }
                                 Err(_) => {
                                     break;
@@ -346,7 +355,12 @@ impl TransactionScheduler {
                         recv(scheduler_request_receiver) -> maybe_batch_request => {
                             match maybe_batch_request {
                                 Ok(batch_request) => {
-                                    Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, batch_request, &qos_service, &config);
+                                    // safe the request until there's more packets
+                                    if unprocessed_packet_batches.is_empty() {
+                                        blocked_requests.push(batch_request);
+                                    } else {
+                                        Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, batch_request, &qos_service, &config);
+                                    }
                                 }
                                 Err(_) => {
                                     break;
@@ -724,6 +738,7 @@ impl TransactionScheduler {
         let response_sender = scheduler_request.response_sender;
         match scheduler_request.msg {
             SchedulerMessage::RequestBatch { num_txs, bank } => {
+                let start = Instant::now();
                 trace!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
                 let sanitized_transactions = Self::get_scheduled_batch(
                     unprocessed_packets,
@@ -733,10 +748,11 @@ impl TransactionScheduler {
                     qos_service,
                     config,
                 );
-                trace!(
-                    "sanitized_transactions num: {}, unprocessed_packets num: {}",
+                info!(
+                    "sanitized_transactions num: {}, unprocessed_packets num: {}, elapsed: {:?}",
                     sanitized_transactions.len(),
-                    unprocessed_packets.len()
+                    unprocessed_packets.len(),
+                    start.elapsed()
                 );
 
                 let _ = response_sender
