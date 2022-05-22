@@ -328,7 +328,6 @@ impl TransactionScheduler {
 
                 let mut last_log = Instant::now();
 
-                // TODO: this should only be for the scheduler requests
                 let mut blocked_requests = Vec::new();
 
                 loop {
@@ -362,7 +361,7 @@ impl TransactionScheduler {
                             match maybe_batch_request {
                                 Ok(batch_request) => {
                                     // safe the request until there's more packets
-                                    if unprocessed_packet_batches.is_empty() {
+                                    if unprocessed_packet_batches.is_empty() && matches!(batch_request.msg, SchedulerMessage::RequestBatch{num_txs: _, bank: _}) {
                                         blocked_requests.push(batch_request);
                                     } else {
                                         Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, batch_request, &qos_service, &config);
@@ -373,9 +372,11 @@ impl TransactionScheduler {
                                 }
                             }
                         }
-                        // default(Duration::from_millis(100)) => {
-                        //
-                        // }
+                        default(Duration::from_millis(100)) => {
+                            if exit.load(Ordering::Relaxed) {
+                                break;
+                            }
+                        }
                     }
                 }
             })
@@ -1080,7 +1081,7 @@ mod tests {
 
     #[test]
     fn test_single_tx() {
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
@@ -1126,7 +1127,7 @@ mod tests {
     #[test]
     fn test_conflicting_transactions() {
         const BATCH_SIZE: usize = 128;
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
@@ -1164,16 +1165,6 @@ mod tests {
                 &tx2.signatures[0]
             );
 
-            // attempt to request another transaction for schedule, won't schedule bc tx2 locked account A
-            assert_eq!(
-                tx_handle
-                    .request_batch(BATCH_SIZE, &bank)
-                    .unwrap()
-                    .sanitized_transactions
-                    .len(),
-                0
-            );
-
             // make sure the tx2 is unlocked by sending it execution results of that batch
             let _ = tx_handle
                 .send_batch_execution_update(first_batch.sanitized_transactions, vec![])
@@ -1201,7 +1192,7 @@ mod tests {
     #[test]
     fn test_blocked_transactions() {
         const BATCH_SIZE: usize = 128;
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
@@ -1267,16 +1258,6 @@ mod tests {
                     .unwrap()
                     .signature(),
                 &tx1.signatures[0]
-            );
-
-            // attempt to request another transaction for schedule, won't schedule bc tx2 locked account A
-            assert_eq!(
-                tx_handle
-                    .request_batch(BATCH_SIZE, &bank)
-                    .unwrap()
-                    .sanitized_transactions
-                    .len(),
-                0
             );
 
             let _ = tx_handle
@@ -1395,16 +1376,6 @@ mod tests {
                 &tx3.signatures[0]
             );
 
-            // attempt to request another transaction for schedule, won't schedule bc tx2 locked account A
-            assert_eq!(
-                tx_handle
-                    .request_batch(BATCH_SIZE, &bank)
-                    .unwrap()
-                    .sanitized_transactions
-                    .len(),
-                0
-            );
-
             let _ = tx_handle
                 .send_batch_execution_update(first_batch.sanitized_transactions, vec![])
                 .unwrap();
@@ -1434,7 +1405,7 @@ mod tests {
     #[test]
     fn test_blocked_transactions_write_lock_released() {
         const BATCH_SIZE: usize = 128;
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
@@ -1521,16 +1492,6 @@ mod tests {
                 &tx3.signatures[0]
             );
 
-            // attempt to request another transaction for schedule, won't schedule bc tx2 locked account A
-            assert_eq!(
-                tx_handle
-                    .request_batch(BATCH_SIZE, &bank)
-                    .unwrap()
-                    .sanitized_transactions
-                    .len(),
-                0
-            );
-
             let _ = tx_handle
                 .send_batch_execution_update(first_batch.sanitized_transactions, vec![])
                 .unwrap();
@@ -1575,7 +1536,7 @@ mod tests {
     #[test]
     fn test_read_locked_blocks_write() {
         const BATCH_SIZE: usize = 128;
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
@@ -1707,7 +1668,7 @@ mod tests {
     #[test]
     fn test_read_locked_does_not_block_red() {
         const BATCH_SIZE: usize = 128;
-        solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
+        // solana_logger::setup_with_default("solana_core::transaction_scheduler=trace");
 
         let TestHarness {
             tx_sender,
