@@ -1,7 +1,6 @@
-use rand::{thread_rng, Rng};
-use std::time::Instant;
 use {
     min_max_heap::MinMaxHeap,
+    rand::{thread_rng, Rng},
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
@@ -17,6 +16,7 @@ use {
         collections::{hash_map::Entry, HashMap},
         mem::size_of,
         rc::Rc,
+        time::Instant,
     },
     thiserror::Error,
 };

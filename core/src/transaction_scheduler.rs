@@ -3,7 +3,6 @@
 //! - TPU vote transactions
 //! - Gossip vote transactions
 
-use std::iter::repeat;
 use {
     crate::{
         banking_stage::BatchedTransactionDetails,
@@ -28,6 +27,7 @@ use {
     },
     std::{
         collections::{hash_map::Entry, BTreeMap, HashMap},
+        iter::repeat,
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
