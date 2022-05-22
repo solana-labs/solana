@@ -137,7 +137,8 @@ impl Ord for DeserializedPacket {
             .cmp(&self.immutable_section().priority())
         {
             Ordering::Equal => {
-                other.stamp.cmp(&self.stamp)
+                // priority high-to-low, time low-to-high
+                self.stamp.cmp(&other.stamp)
                 // self
                 //     .immutable_section()
                 //     .sender_stake()
