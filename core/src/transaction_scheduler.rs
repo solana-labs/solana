@@ -328,7 +328,7 @@ impl TransactionScheduler {
 
                 let mut last_log = Instant::now();
 
-                let mut blocked_requests = Vec::new();
+                let mut blocked_batch_requests = Vec::new();
 
                 loop {
                     if exit.load(Ordering::Relaxed) {
@@ -344,12 +344,9 @@ impl TransactionScheduler {
                             match maybe_packet_batches {
                                 Ok(packet_batches) => {
                                     Self::handle_packet_batches(&mut unprocessed_packet_batches, packet_batches);
-                                    if !blocked_requests.is_empty() && !unprocessed_packet_batches.is_empty() {
-                                        // TODO: need to pop off and handle requests
-                                        blocked_requests.into_iter().for_each(|r| {
-                                            Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, r, &qos_service, &config);
-                                        });
-                                        blocked_requests = Vec::new();
+                                    while !blocked_batch_requests.is_empty() && !unprocessed_packet_batches.is_empty() {
+                                        let request = blocked_batch_requests.pop().unwrap();
+                                        Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, request, &qos_service, &config);
                                     }
                                 }
                                 Err(_) => {
@@ -362,7 +359,7 @@ impl TransactionScheduler {
                                 Ok(batch_request) => {
                                     // safe the request until there's more packets
                                     if unprocessed_packet_batches.is_empty() && matches!(batch_request.msg, SchedulerMessage::RequestBatch{num_txs: _, bank: _}) {
-                                        blocked_requests.push(batch_request);
+                                        blocked_batch_requests.push(batch_request);
                                     } else {
                                         Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, batch_request, &qos_service, &config);
                                     }
