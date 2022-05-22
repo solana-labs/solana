@@ -3,18 +3,14 @@
 //! - TPU vote transactions
 //! - Gossip vote transactions
 
-use min_max_heap::MinMaxHeap;
-use skiplist::OrderedSkipList;
-use std::rc::Rc;
 use {
     crate::{
         banking_stage::BatchedTransactionDetails,
         qos_service::QosService,
-        unprocessed_packet_batches::{
-            self, DeserializedPacket, ImmutableDeserializedPacket, UnprocessedPacketBatches,
-        },
+        unprocessed_packet_batches::{self, DeserializedPacket, ImmutableDeserializedPacket},
     },
     crossbeam_channel::{select, unbounded, Receiver, RecvError, Sender},
+    skiplist::OrderedSkipList,
     solana_perf::packet::PacketBatch,
     solana_runtime::{
         accounts::AccountLocks,
@@ -31,6 +27,7 @@ use {
     },
     std::{
         collections::{hash_map::Entry, HashMap},
+        rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock,

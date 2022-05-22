@@ -348,7 +348,7 @@ fn main() {
         let mut last_log_time = Instant::now();
 
         for msg in stats_receiver {
-            info!("msg: {}", msg);
+            // info!("msg: {}", msg);
             count += msg;
 
             if last_log_time.elapsed() > Duration::from_secs(1) {
