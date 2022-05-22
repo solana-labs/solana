@@ -128,15 +128,15 @@ impl PartialOrd for DeserializedPacket {
 
 impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self
+        match other
             .immutable_section()
             .priority()
-            .cmp(&other.immutable_section().priority())
+            .cmp(&self.immutable_section().priority())
         {
-            Ordering::Equal => self
+            Ordering::Equal => other
                 .immutable_section()
                 .sender_stake()
-                .cmp(&other.immutable_section().sender_stake()),
+                .cmp(&self.immutable_section().sender_stake()),
             ordering => ordering,
         }
     }
