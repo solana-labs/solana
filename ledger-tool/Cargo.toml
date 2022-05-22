@@ -11,8 +11,8 @@ documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
 bs58 = "0.4.0"
-clap = "2.33.1"
 chrono = "0.4.11"
+clap = "3.1.11"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
 dashmap = "4.0.2"
@@ -22,7 +22,7 @@ log = { version = "0.4.17" }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.81"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
+solana-clap-v3-utils = { path = "../clap-v3-utils", version = "=1.11.0" }
 solana-cli-output = { path = "../cli-output", version = "=1.11.0" }
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-entry = { path = "../entry", version = "=1.11.0" }

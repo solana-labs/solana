@@ -712,32 +712,50 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.8"
+version = "3.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c47df61d9e16dc010b55dba1952a57d8c215dbb533fd13cdd13369aac73b1c"
+checksum = "d2dbdf4bdacb33466e854ce889eee8dfd5729abf7ccd7664d0a2d60cd384440b"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
+ "clap_lex",
  "indexmap",
  "lazy_static",
- "os_str_bytes",
  "strsim 0.10.0",
  "termcolor",
  "textwrap 0.15.0",
 ]
 
 [[package]]
-name = "clap_derive"
-version = "3.1.7"
+name = "clap_complete"
+version = "3.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3aab4734e083b809aaf5794e14e756d1c798d2c69c7f7de7a09a2f5214993c1"
+checksum = "da92e6facd8d73c22745a5d3cbb59bdf8e46e3235c923e516527d8e81eec14a4"
+dependencies = [
+ "clap 3.1.18",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25320346e922cffe59c0bbc5410c8d8784509efb321488971081313cb1e1a33c"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.93",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a37c35f1112dad5e6e0b1adaff798507497a18fceeb30cceb3bae7d1427b9213"
+dependencies = [
+ "os_str_bytes",
 ]
 
 [[package]]
@@ -2754,9 +2772,6 @@ name = "os_str_bytes"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "ouroboros"
@@ -3519,7 +3534,7 @@ dependencies = [
 name = "rbpf-cli"
 version = "1.11.0"
 dependencies = [
- "clap 3.1.8",
+ "clap 3.1.18",
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
@@ -4326,7 +4341,7 @@ dependencies = [
 name = "solana-banking-bench"
 version = "1.11.0"
 dependencies = [
- "clap 3.1.8",
+ "clap 3.1.18",
  "crossbeam-channel",
  "log",
  "rand 0.7.3",
@@ -4391,7 +4406,7 @@ dependencies = [
 name = "solana-bench-streamer"
 version = "1.11.0"
 dependencies = [
- "clap 3.1.8",
+ "clap 3.1.18",
  "crossbeam-channel",
  "solana-net-utils",
  "solana-streamer",
@@ -4488,7 +4503,7 @@ version = "1.11.0"
 dependencies = [
  "bzip2",
  "cargo_metadata",
- "clap 3.1.8",
+ "clap 3.1.18",
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4501,7 +4516,7 @@ name = "solana-cargo-test-bpf"
 version = "1.11.0"
 dependencies = [
  "cargo_metadata",
- "clap 3.1.8",
+ "clap 3.1.18",
 ]
 
 [[package]]
@@ -4526,7 +4541,7 @@ name = "solana-clap-v3-utils"
 version = "1.11.0"
 dependencies = [
  "chrono",
- "clap 3.1.8",
+ "clap 3.1.18",
  "rpassword",
  "solana-perf",
  "solana-remote-wallet",
@@ -4544,7 +4559,8 @@ version = "1.11.0"
 dependencies = [
  "bincode",
  "bs58",
- "clap 2.33.3",
+ "clap 3.1.18",
+ "clap_complete",
  "console",
  "const_format",
  "criterion-stats",
@@ -4561,7 +4577,7 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-bpf-loader-program",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-cli-output",
  "solana-client",
@@ -4605,7 +4621,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "chrono",
- "clap 3.1.8",
+ "clap 3.1.18",
  "console",
  "ed25519-dalek",
  "humantime",
@@ -4636,7 +4652,7 @@ dependencies = [
  "bincode",
  "bs58",
  "bytes",
- "clap 3.1.8",
+ "clap 3.1.18",
  "crossbeam-channel",
  "futures 0.3.21",
  "futures-util",
@@ -4660,7 +4676,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-faucet",
  "solana-logger 1.11.0",
  "solana-measure",
@@ -4798,7 +4814,7 @@ name = "solana-dos"
 version = "1.11.0"
 dependencies = [
  "bincode",
- "clap 3.1.8",
+ "clap 3.1.18",
  "itertools",
  "log",
  "rand 0.7.3",
@@ -4871,12 +4887,12 @@ version = "1.11.0"
 dependencies = [
  "bincode",
  "byteorder",
- "clap 3.1.8",
+ "clap 3.1.18",
  "crossbeam-channel",
  "log",
  "serde",
  "serde_derive",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-cli-config",
  "solana-logger 1.11.0",
  "solana-metrics",
@@ -5096,7 +5112,7 @@ name = "solana-keygen"
 version = "1.11.0"
 dependencies = [
  "bs58",
- "clap 3.1.8",
+ "clap 3.1.18",
  "dirs-next",
  "num_cpus",
  "solana-clap-v3-utils",
@@ -5173,7 +5189,7 @@ dependencies = [
  "bs58",
  "bytecount",
  "chrono",
- "clap 2.33.3",
+ "clap 3.1.18",
  "crossbeam-channel",
  "csv",
  "dashmap",
@@ -5184,7 +5200,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
- "solana-clap-utils",
+ "solana-clap-v3-utils",
  "solana-cli-output",
  "solana-core",
  "solana-entry",
@@ -5236,7 +5252,7 @@ name = "solana-log-analyzer"
 version = "1.11.0"
 dependencies = [
  "byte-unit",
- "clap 3.1.8",
+ "clap 3.1.18",
  "serde",
  "serde_json",
  "solana-logger 1.11.0",
@@ -5313,7 +5329,7 @@ dependencies = [
 name = "solana-net-shaper"
 version = "1.11.0"
 dependencies = [
- "clap 3.1.8",
+ "clap 3.1.18",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -5325,7 +5341,7 @@ name = "solana-net-utils"
 version = "1.11.0"
 dependencies = [
  "bincode",
- "clap 3.1.8",
+ "clap 3.1.18",
  "crossbeam-channel",
  "log",
  "nix",
@@ -5402,7 +5418,7 @@ dependencies = [
 name = "solana-poh-bench"
 version = "1.11.0"
 dependencies = [
- "clap 3.1.8",
+ "clap 3.1.18",
  "log",
  "rand 0.7.3",
  "rayon",

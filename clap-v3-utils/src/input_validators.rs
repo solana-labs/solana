@@ -108,9 +108,7 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
 }
 
 // Return an error if string cannot be parsed as pubkey string or keypair file location
-pub fn is_pubkey_or_keypair<T>(string: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
+pub fn is_pubkey_or_keypair(string: &str) -> Result<(), String>
 {
     is_pubkey(string.as_ref()).or_else(|_| is_keypair(string))
 }
@@ -216,12 +214,9 @@ pub fn is_slot(slot: &str) -> Result<(), String>
     is_parsable_generic::<Slot, _>(slot)
 }
 
-pub fn is_pow2<T>(bins: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
+pub fn is_pow2(bins: &str) -> Result<(), String>
 {
-    bins.as_ref()
-        .parse::<usize>()
+    bins.parse::<usize>()
         .map_err(|e| format!("Unable to parse, provided: {}, err: {}", bins, e))
         .and_then(|v| {
             if !v.is_power_of_two() {

@@ -1,12 +1,10 @@
 //! The `bigtable` subcommand
 use {
     crate::ledger_path::canonicalize_ledger_path,
-    clap::{
-        value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
-    },
+    clap::{Arg, ArgMatches, Command},
     log::info,
     serde_json::json,
-    solana_clap_utils::{
+    solana_clap_v3_utils::{
         input_parsers::pubkey_of,
         input_validators::{is_slot, is_valid_pubkey},
     },
@@ -327,15 +325,16 @@ pub trait BigTableSubCommand {
     fn bigtable_subcommand(self) -> Self;
 }
 
-impl BigTableSubCommand for App<'_, '_> {
+impl BigTableSubCommand for Command<'_> {
     fn bigtable_subcommand(self) -> Self {
         self.subcommand(
-            SubCommand::with_name("bigtable")
+            Command::new("bigtable")
                 .about("Ledger data on a BigTable instance")
-                .setting(AppSettings::InferSubcommands)
-                .setting(AppSettings::SubcommandRequiredElseHelp)
+                .infer_subcommands(true)
+                .subcommand_required(true)
+                .arg_required_else_help(true)
                 .arg(
-                    Arg::with_name("rpc_bigtable_instance_name")
+                    Arg::new("rpc_bigtable_instance_name")
                         .global(true)
                         .long("rpc-bigtable-instance-name")
                         .takes_value(true)
@@ -344,10 +343,10 @@ impl BigTableSubCommand for App<'_, '_> {
                         .help("Name of the target Bigtable instance")
                 )
                 .subcommand(
-                    SubCommand::with_name("upload")
+                    Command::new("upload")
                         .about("Upload the ledger to BigTable")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
                                 .value_name("START_SLOT")
@@ -358,7 +357,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 ),
                         )
                         .arg(
-                            Arg::with_name("ending_slot")
+                            Arg::new("ending_slot")
                                 .long("ending-slot")
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
@@ -367,7 +366,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Stop uploading at this slot [default: last available slot]"),
                         )
                         .arg(
-                            Arg::with_name("force_reupload")
+                            Arg::new("force_reupload")
                                 .long("force")
                                 .takes_value(false)
                                 .help(
@@ -378,19 +377,19 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("delete-slots")
+                    Command::new("delete-slots")
                         .about("Delete ledger information from BigTable")
                         .arg(
-                                Arg::with_name("slots")
+                                Arg::new("slots")
                                     .index(1)
                                     .value_name("SLOTS")
                                     .takes_value(true)
-                                    .multiple(true)
+                                    .multiple_occurrences(true).multiple_values(true)
                                     .required(true)
                                     .help("Slots to delete"),
                                 )
                             .arg(
-                                Arg::with_name("force")
+                                Arg::new("force")
                                     .long("force")
                                     .takes_value(false)
                                     .help(
@@ -400,14 +399,14 @@ impl BigTableSubCommand for App<'_, '_> {
                             ),
                         )
                 .subcommand(
-                    SubCommand::with_name("first-available-block")
+                    Command::new("first-available-block")
                         .about("Get the first available block in the storage"),
                 )
                 .subcommand(
-                    SubCommand::with_name("blocks")
+                    Command::new("blocks")
                         .about("Get a list of slots with confirmed blocks for the given range")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .long("starting-slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
@@ -418,7 +417,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Start listing at this slot"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .long("limit")
                                 .validator(is_slot)
                                 .value_name("LIMIT")
@@ -430,11 +429,11 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("compare-blocks")
+                    Command::new("compare-blocks")
                         .about("Find the missing confirmed blocks of an owned bigtable for a given range \
                                 by comparing to a reference bigtable")
                         .arg(
-                            Arg::with_name("starting_slot")
+                            Arg::new("starting_slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
                                 .takes_value(true)
@@ -444,7 +443,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Start listing at this slot"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .validator(is_slot)
                                 .value_name("LIMIT")
                                 .takes_value(true)
@@ -454,16 +453,16 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Maximum number of slots to check"),
                         )
                         .arg(
-                            Arg::with_name("reference_credential")
+                            Arg::new("reference_credential")
                                 .long("reference-credential")
-                                .short("c")
+                                .short('c')
                                 .value_name("REFERENCE_CREDENTIAL_FILEPATH")
                                 .takes_value(true)
                                 .required(true)
                                 .help("File path for a credential to a reference bigtable"),
                         )
                         .arg(
-                            Arg::with_name("reference_instance_name")
+                            Arg::new("reference_instance_name")
                                 .long("reference-instance-name")
                                 .takes_value(true)
                                 .value_name("INSTANCE_NAME")
@@ -472,10 +471,10 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("block")
+                    Command::new("block")
                         .about("Get a confirmed block")
                         .arg(
-                            Arg::with_name("slot")
+                            Arg::new("slot")
                                 .long("slot")
                                 .validator(is_slot)
                                 .value_name("SLOT")
@@ -485,10 +484,10 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("confirm")
+                    Command::new("confirm")
                         .about("Confirm transaction by signature")
                         .arg(
-                            Arg::with_name("signature")
+                            Arg::new("signature")
                                 .long("signature")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
@@ -498,13 +497,13 @@ impl BigTableSubCommand for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("transaction-history")
+                    Command::new("transaction-history")
                         .about(
                             "Show historical transactions affecting the given address \
                              from newest to oldest",
                         )
                         .arg(
-                            Arg::with_name("address")
+                            Arg::new("address")
                                 .index(1)
                                 .value_name("ADDRESS")
                                 .required(true)
@@ -512,7 +511,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Account address"),
                         )
                         .arg(
-                            Arg::with_name("limit")
+                            Arg::new("limit")
                                 .long("limit")
                                 .takes_value(true)
                                 .value_name("LIMIT")
@@ -522,7 +521,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .help("Maximum number of transaction signatures to return"),
                         )
                         .arg(
-                            Arg::with_name("query_chunk_size")
+                            Arg::new("query_chunk_size")
                                 .long("query-chunk-size")
                                 .takes_value(true)
                                 .value_name("AMOUNT")
@@ -535,21 +534,21 @@ impl BigTableSubCommand for App<'_, '_> {
                                 ),
                         )
                         .arg(
-                            Arg::with_name("before")
+                            Arg::new("before")
                                 .long("before")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
                                 .help("Start with the first signature older than this one"),
                         )
                         .arg(
-                            Arg::with_name("until")
+                            Arg::new("until")
                                 .long("until")
                                 .value_name("TRANSACTION_SIGNATURE")
                                 .takes_value(true)
                                 .help("End with the last signature newer than this one"),
                         )
                         .arg(
-                            Arg::with_name("show_transactions")
+                            Arg::new("show_transactions")
                                 .long("show-transactions")
                                 .takes_value(false)
                                 .help("Display the full transactions"),
@@ -559,7 +558,7 @@ impl BigTableSubCommand for App<'_, '_> {
     }
 }
 
-pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
+pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches) {
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
@@ -574,22 +573,21 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     // again resulting in the default value. the arg having declared a
     // `default_value()` obviates `is_present(...)` tests since they will always
     // return true. so we consede and compare against the expected default. :/
-    let (subcommand, sub_matches) = matches.subcommand();
+    let (subcommand, sub_matches) = matches.subcommand().unwrap();
     let on_command = matches
         .value_of("rpc_bigtable_instance_name")
         .map(|v| v != solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
         .unwrap_or(false);
-    let instance_name = if on_command {
-        value_t_or_exit!(matches, "rpc_bigtable_instance_name", String)
+    let instance_name: String = if on_command {
+        matches.value_of_t_or_exit("rpc_bigtable_instance_name")
     } else {
-        let sub_matches = sub_matches.as_ref().unwrap();
-        value_t_or_exit!(sub_matches, "rpc_bigtable_instance_name", String)
+        sub_matches.value_of_t_or_exit("rpc_bigtable_instance_name")
     };
 
     let future = match (subcommand, sub_matches) {
-        ("upload", Some(arg_matches)) => {
-            let starting_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
-            let ending_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
+        ("upload", arg_matches) => {
+            let starting_slot = arg_matches.value_of_t::<Slot>("starting_slot").unwrap_or(0);
+            let ending_slot = arg_matches.value_of_t::<Slot>("ending_slot").ok();
             let force_reupload = arg_matches.is_present("force_reupload");
             let blockstore = crate::open_blockstore(
                 &canonicalize_ledger_path(ledger_path),
@@ -609,8 +607,8 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
                 config,
             ))
         }
-        ("delete-slots", Some(arg_matches)) => {
-            let slots = values_t_or_exit!(arg_matches, "slots", Slot);
+        ("delete-slots", arg_matches) => {
+            let slots = arg_matches.values_of_t_or_exit::<Slot>("slots");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: !arg_matches.is_present("force"),
                 instance_name,
@@ -618,7 +616,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             };
             runtime.block_on(delete_slots(slots, config))
         }
-        ("first-available-block", Some(_arg_matches)) => {
+        ("first-available-block", _arg_matches) => {
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: true,
                 instance_name,
@@ -626,8 +624,8 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             };
             runtime.block_on(first_available_block(config))
         }
-        ("block", Some(arg_matches)) => {
-            let slot = value_t_or_exit!(arg_matches, "slot", Slot);
+        ("block", arg_matches) => {
+            let slot: Slot = arg_matches.value_of_t_or_exit("slot");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
                 instance_name,
@@ -635,9 +633,9 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
             };
             runtime.block_on(block(slot, output_format, config))
         }
-        ("blocks", Some(arg_matches)) => {
-            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-            let limit = value_t_or_exit!(arg_matches, "limit", usize);
+        ("blocks", arg_matches) => {
+            let starting_slot: Slot = arg_matches.value_of_t_or_exit("starting_slot");
+            let limit: usize = arg_matches.value_of_t_or_exit("limit");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
                 instance_name,
@@ -646,23 +644,20 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
 
             runtime.block_on(blocks(starting_slot, limit, config))
         }
-        ("compare-blocks", Some(arg_matches)) => {
-            let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
-            let limit = value_t_or_exit!(arg_matches, "limit", usize);
+        ("compare-blocks", arg_matches) => {
+            let starting_slot: Slot = arg_matches.value_of_t_or_exit("starting_slot");
+            let limit: usize = arg_matches.value_of_t_or_exit("limit");
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
                 instance_name,
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             };
 
-            let credential_path = Some(value_t_or_exit!(
-                arg_matches,
-                "reference_credential",
-                String
-            ));
+            let credential_path =
+                Some(arg_matches.value_of_t_or_exit::<String>("reference_credential"));
 
-            let ref_instance_name =
-                value_t_or_exit!(arg_matches, "reference_instance_name", String);
+            let ref_instance_name: String =
+                arg_matches.value_of_t_or_exit("reference_instance_name");
             let ref_config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
                 credential_type: CredentialType::Filepath(credential_path),
@@ -672,7 +667,7 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
 
             runtime.block_on(compare_blocks(starting_slot, limit, config, ref_config))
         }
-        ("confirm", Some(arg_matches)) => {
+        ("confirm", arg_matches) => {
             let signature = arg_matches
                 .value_of("signature")
                 .unwrap()
@@ -686,10 +681,10 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
 
             runtime.block_on(confirm(&signature, verbose, output_format, config))
         }
-        ("transaction-history", Some(arg_matches)) => {
+        ("transaction-history", arg_matches) => {
             let address = pubkey_of(arg_matches, "address").unwrap();
-            let limit = value_t_or_exit!(arg_matches, "limit", usize);
-            let query_chunk_size = value_t_or_exit!(arg_matches, "query_chunk_size", usize);
+            let limit: usize = arg_matches.value_of_t_or_exit("limit");
+            let query_chunk_size: usize = arg_matches.value_of_t_or_exit("query_chunk_size");
             let before = arg_matches
                 .value_of("before")
                 .map(|signature| signature.parse().expect("Invalid signature"));

@@ -1,5 +1,5 @@
 use {
-    clap::{value_t, ArgMatches},
+    clap::ArgMatches,
     std::{
         fs,
         path::{Path, PathBuf},
@@ -7,11 +7,11 @@ use {
     },
 };
 
-pub fn parse_ledger_path(matches: &ArgMatches<'_>, name: &str) -> PathBuf {
-    PathBuf::from(value_t!(matches, name, String).unwrap_or_else(|_err| {
+pub fn parse_ledger_path(matches: &ArgMatches, usage: &str, name: &str) -> PathBuf {
+    PathBuf::from(matches.value_of_t::<String>(name).unwrap_or_else(|_err| {
         eprintln!(
             "Error: Missing --ledger <DIR> argument.\n\n{}",
-            matches.usage()
+            usage
         );
         exit(1);
     }))
