@@ -10,7 +10,6 @@ use {
         unprocessed_packet_batches::{self, DeserializedPacket, ImmutableDeserializedPacket},
     },
     crossbeam_channel::{select, unbounded, Receiver, RecvError, Sender},
-    rand::Rng,
     solana_perf::packet::PacketBatch,
     solana_runtime::{
         accounts::AccountLocks,
@@ -325,6 +324,7 @@ impl TransactionScheduler {
         Builder::new()
             .name(t_name.to_string())
             .spawn(move || {
+                // NOTE: the keys on the BTreeMap need to be unique
                 let mut unprocessed_packet_batches = BTreeMap::new();
 
                 let mut last_log = Instant::now();
@@ -721,44 +721,6 @@ impl TransactionScheduler {
                 }
             }
         }
-
-        // unprocessed_packets.retain(|deserialized_packet, _t| {
-        //     if sanitized_transactions.len() >= num_txs {
-        //         return true; // if fully-scheduled, retain rest of packets
-        //     }
-        //
-        //     match Self::try_schedule(
-        //         deserialized_packet.immutable_section(),
-        //         bank,
-        //         &mut highest_wl_blocked_account_fees,
-        //         &mut highest_rl_blocked_account_fees,
-        //         scheduled_accounts,
-        //         qos_service,
-        //         config,
-        //     ) {
-        //         Ok(sanitized_tx) => {
-        //             // scheduled, drop for now
-        //             sanitized_transactions.push(sanitized_tx);
-        //             return false;
-        //         }
-        //         Err(e) => {
-        //             trace!("e: {:?}", e);
-        //             match e {
-        //                 SchedulerError::InvalidSanitizedTransaction
-        //                 | SchedulerError::InvalidTransactionFormat(_)
-        //                 | SchedulerError::TransactionCheckFailed(_) => {
-        //                     return false; // non-recoverable error, drop the packet
-        //                 }
-        //                 SchedulerError::AccountInUse
-        //                 | SchedulerError::AccountBlocked(_)
-        //                 | SchedulerError::QosExceeded => {
-        //                     return true; // save these for later
-        //                 }
-        //             }
-        //         }
-        //     }
-        // });
-
         (sanitized_transactions, packets_to_remove)
     }
 
@@ -773,8 +735,8 @@ impl TransactionScheduler {
         let response_sender = scheduler_request.response_sender;
         match scheduler_request.msg {
             SchedulerMessage::RequestBatch { num_txs, bank } => {
+                debug!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
                 let start = Instant::now();
-                trace!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
                 let (sanitized_transactions, packets_to_remove) = Self::get_scheduled_batch(
                     unprocessed_packets,
                     scheduled_accounts,
@@ -783,12 +745,12 @@ impl TransactionScheduler {
                     qos_service,
                     config,
                 );
-                // info!(
-                //     "sanitized_transactions num: {}, unprocessed_packets num: {}, elapsed: {:?}",
-                //     sanitized_transactions.len(),
-                //     unprocessed_packets.len(),
-                //     start.elapsed()
-                // );
+                debug!(
+                    "sanitized_transactions num: {}, unprocessed_packets num: {}, elapsed: {:?}",
+                    sanitized_transactions.len(),
+                    unprocessed_packets.len(),
+                    start.elapsed()
+                );
 
                 let _ = response_sender
                     .send(SchedulerResponse::ScheduledBatch(ScheduledBatch {

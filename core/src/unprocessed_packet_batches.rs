@@ -1,6 +1,5 @@
 use {
     min_max_heap::MinMaxHeap,
-    rand::{thread_rng, Rng},
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
