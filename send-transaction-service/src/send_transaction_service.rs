@@ -446,7 +446,7 @@ impl SendTransactionService {
                     stats
                         .sent_transactions
                         .fetch_add(transactions.len() as u64, Ordering::Relaxed);
-                    let _result = Self::send_transactions_in_batch(
+                    Self::send_transactions_in_batch(
                         &tpu_address,
                         &mut transactions,
                         leader_info_provider.lock().unwrap().get_leader_info(),
