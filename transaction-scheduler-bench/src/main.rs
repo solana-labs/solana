@@ -49,7 +49,7 @@ struct Args {
     batches_per_msg: usize,
 
     /// Number of consuming threads (number of threads requesting batches from scheduler)
-    #[clap(long, env, default_value_t = 6)]
+    #[clap(long, env, default_value_t = 20)]
     num_execution_threads: usize,
 
     /// How long each transaction takes to execution in microseconds
