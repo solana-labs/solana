@@ -689,8 +689,11 @@ impl TransactionScheduler {
 
         let mut indices_to_remove = Vec::with_capacity(1000);
 
+        let mut highest_idx = 0;
+        let start = Instant::now();
         for (idx, deserialized_packet) in unprocessed_packets.iter().enumerate() {
             if sanitized_transactions.len() >= num_txs {
+                highest_idx = idx;
                 break; // if fully-scheduled, retain rest of packets
             }
             match Self::try_schedule(
@@ -720,6 +723,14 @@ impl TransactionScheduler {
                 }
             }
         }
+
+        let elapsed = start.elapsed();
+        info!(
+            "elapsed: {:?}, num_iters: {}, iters/s: {:?}",
+            elapsed,
+            highest_idx,
+            highest_idx as f64 / elapsed.as_secs_f64()
+        );
 
         // unprocessed_packets.retain(|deserialized_packet| {
         //     if sanitized_transactions.len() >= num_txs {
@@ -794,9 +805,8 @@ impl TransactionScheduler {
                         sanitized_transactions,
                     }))
                     .unwrap();
-
-                for (removed_count, idx) in indices_to_remove.iter().enumerate() {
-                    unprocessed_packets.remove_index(idx - removed_count);
+                for (idx, idx2) in indices_to_remove.iter().enumerate() {
+                    unprocessed_packets.remove_index(idx2 - idx);
                 }
             }
             SchedulerMessage::Ping { id } => {
