@@ -4,6 +4,7 @@
 //! - Gossip vote transactions
 
 use min_max_heap::MinMaxHeap;
+use skiplist::OrderedSkipList;
 use std::rc::Rc;
 use {
     crate::{
@@ -208,14 +209,14 @@ pub struct TransactionSchedulerConfig {
     pub enable_state_auction: bool,
 
     // max packets to hold in each thread
-    pub max_packets: usize,
+    pub backlog_size: usize,
 }
 
 impl Default for TransactionSchedulerConfig {
     fn default() -> Self {
         return TransactionSchedulerConfig {
             enable_state_auction: false,
-            max_packets: 700_000,
+            backlog_size: 700_000,
         };
     }
 }
@@ -324,7 +325,7 @@ impl TransactionScheduler {
         Builder::new()
             .name(t_name.to_string())
             .spawn(move || {
-                let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(config.max_packets);
+                let mut unprocessed_packet_batches = OrderedSkipList::with_capacity(config.backlog_size);
 
                 let mut last_log = Instant::now();
 
@@ -661,7 +662,7 @@ impl TransactionScheduler {
     }
 
     fn get_scheduled_batch(
-        unprocessed_packets: &mut UnprocessedPacketBatches,
+        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
         scheduled_accounts: &Arc<Mutex<AccountLocks>>,
         num_txs: usize,
         bank: &Arc<Bank>,
@@ -675,65 +676,49 @@ impl TransactionScheduler {
         let mut highest_wl_blocked_account_fees = HashMap::with_capacity(10_000);
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
-        let mut retryable_packets = MinMaxHeap::with_capacity(unprocessed_packets.capacity());
-        std::mem::swap(
-            &mut unprocessed_packets.packet_priority_queue,
-            &mut retryable_packets,
-        );
+        unprocessed_packets.retain(|deserialized_packet| {
+            if sanitized_transactions.len() >= num_txs {
+                return true; // if fully-scheduled, retain rest of packets
+            }
 
-        let mut retryable_packets: MinMaxHeap<_> = retryable_packets
-            .drain_desc()
-            .into_iter()
-            .enumerate()
-            .filter_map(|(idx, deserialized_packet)| {
-                // drop the rest
-                if sanitized_transactions.len() >= num_txs {
-                    return Some(deserialized_packet);
+            match Self::try_schedule(
+                deserialized_packet.immutable_section(),
+                bank,
+                &mut highest_wl_blocked_account_fees,
+                &mut highest_rl_blocked_account_fees,
+                scheduled_accounts,
+                qos_service,
+                config,
+            ) {
+                Ok(sanitized_tx) => {
+                    // scheduled, drop for now
+                    sanitized_transactions.push(sanitized_tx);
+                    return false;
                 }
-                match Self::try_schedule(
-                    &deserialized_packet,
-                    bank,
-                    &mut highest_wl_blocked_account_fees,
-                    &mut highest_rl_blocked_account_fees,
-                    scheduled_accounts,
-                    qos_service,
-                    config,
-                ) {
-                    Ok(sanitized_tx) => {
-                        sanitized_transactions.push(sanitized_tx);
-                        return None;
-                    }
-                    Err(e) => {
-                        trace!("e: {:?}", e);
-                        match e {
-                            SchedulerError::InvalidSanitizedTransaction
-                            | SchedulerError::InvalidTransactionFormat(_)
-                            | SchedulerError::TransactionCheckFailed(_) => {
-                                // non-recoverable error, drop the packet
-                                return None;
-                            }
-                            SchedulerError::AccountInUse
-                            | SchedulerError::AccountBlocked(_)
-                            | SchedulerError::QosExceeded => {
-                                return Some(deserialized_packet);
-                            }
+                Err(e) => {
+                    trace!("e: {:?}", e);
+                    match e {
+                        SchedulerError::InvalidSanitizedTransaction
+                        | SchedulerError::InvalidTransactionFormat(_)
+                        | SchedulerError::TransactionCheckFailed(_) => {
+                            return false; // non-recoverable error, drop the packet
+                        }
+                        SchedulerError::AccountInUse
+                        | SchedulerError::AccountBlocked(_)
+                        | SchedulerError::QosExceeded => {
+                            return true; // save these for later
                         }
                     }
                 }
-            })
-            .collect();
-
-        std::mem::swap(
-            &mut retryable_packets,
-            &mut unprocessed_packets.packet_priority_queue,
-        );
+            }
+        });
 
         sanitized_transactions
     }
 
     /// Handles scheduler requests and sends back a response over the channel
     fn handle_scheduler_request(
-        unprocessed_packets: &mut UnprocessedPacketBatches,
+        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
         scheduled_accounts: &Arc<Mutex<AccountLocks>>,
         scheduler_request: SchedulerRequest,
         qos_service: &QosService,
@@ -899,17 +884,17 @@ impl TransactionScheduler {
     }
 
     fn handle_packet_batches(
-        unprocessed_packets: &mut UnprocessedPacketBatches,
+        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
         packet_batches: Vec<PacketBatch>,
     ) {
         for packet_batch in packet_batches {
-            let packet_indexes: Vec<usize> = packet_batch
+            let packet_indexes: Vec<_> = packet_batch
                 .packets
                 .iter()
                 .enumerate()
                 .filter_map(|(idx, p)| if !p.meta.discard() { Some(idx) } else { None })
                 .collect();
-            unprocessed_packets.insert_batch(unprocessed_packet_batches::deserialize_packets(
+            unprocessed_packets.extend(unprocessed_packet_batches::deserialize_packets(
                 &packet_batch,
                 &packet_indexes,
             ));
@@ -987,7 +972,7 @@ mod tests {
             cost_model,
             TransactionSchedulerConfig {
                 enable_state_auction: true,
-                max_packets: 700_000,
+                backlog_size: 700_000,
             },
         );
 

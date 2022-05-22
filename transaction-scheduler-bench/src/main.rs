@@ -37,7 +37,7 @@ use {
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// How many packets per second to send to the scheduler
-    #[clap(long, env, default_value_t = 1_000_000)]
+    #[clap(long, env, default_value_t = 100_000)]
     packet_send_rate: usize,
 
     /// Number of packets per batch
@@ -45,11 +45,11 @@ struct Args {
     packets_per_batch: usize,
 
     /// Number of batches per message
-    #[clap(long, env, default_value_t = 20)]
+    #[clap(long, env, default_value_t = 4)]
     batches_per_msg: usize,
 
     /// Number of consuming threads (number of threads requesting batches from scheduler)
-    #[clap(long, env, default_value_t = 4)]
+    #[clap(long, env, default_value_t = 6)]
     num_execution_threads: usize,
 
     /// How long each transaction takes to execution in microseconds
@@ -305,7 +305,7 @@ fn main() {
 
     let scheduler_config = TransactionSchedulerConfig {
         enable_state_auction,
-        max_packets: 700_000,
+        backlog_size: 700_000,
     };
 
     let SchedulerBench {
