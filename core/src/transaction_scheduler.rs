@@ -25,8 +25,7 @@ use {
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
     std::{
-        collections::{hash_map::Entry, BTreeMap, HashMap},
-        iter::repeat,
+        collections::{hash_map::Entry, BTreeSet, HashMap},
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -137,7 +136,7 @@ pub enum SchedulerError {
 
 pub type Result<T> = std::result::Result<T, SchedulerError>;
 
-type UnprocessedPackets = BTreeMap<DeserializedPacket, usize>;
+type UnprocessedPackets = BTreeSet<DeserializedPacket>;
 
 #[derive(Clone)]
 pub struct TransactionSchedulerHandle {
@@ -324,8 +323,8 @@ impl TransactionScheduler {
         Builder::new()
             .name(t_name.to_string())
             .spawn(move || {
-                // NOTE: the keys on the BTreeMap need to be unique
-                let mut unprocessed_packet_batches = BTreeMap::new();
+                // NOTE: the keys on the BTreeSet need to be unique
+                let mut unprocessed_packet_batches = BTreeSet::new();
 
                 let mut last_log = Instant::now();
 
@@ -691,7 +690,7 @@ impl TransactionScheduler {
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
         let mut packets_to_remove = vec![];
-        for (deserialized_packet, _) in unprocessed_packets.iter() {
+        for deserialized_packet in unprocessed_packets.iter() {
             if sanitized_transactions.len() >= num_txs {
                 break; // if fully-scheduled, retain rest of packets
             }
@@ -908,10 +907,10 @@ impl TransactionScheduler {
                 .filter_map(|(idx, p)| if !p.meta.discard() { Some(idx) } else { None })
                 .collect();
 
-            unprocessed_packets.extend(
-                unprocessed_packet_batches::deserialize_packets(&packet_batch, &packet_indexes)
-                    .zip(repeat(1)),
-            );
+            unprocessed_packets.extend(unprocessed_packet_batches::deserialize_packets(
+                &packet_batch,
+                &packet_indexes,
+            ));
         }
     }
 
