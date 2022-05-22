@@ -1,3 +1,4 @@
+use rand::{thread_rng, Rng};
 use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
@@ -133,10 +134,17 @@ impl Ord for DeserializedPacket {
             .priority()
             .cmp(&self.immutable_section().priority())
         {
-            Ordering::Equal => other
-                .immutable_section()
-                .sender_stake()
-                .cmp(&self.immutable_section().sender_stake()),
+            Ordering::Equal => {
+                if thread_rng().gen_bool(0.5) {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+                // self
+                //     .immutable_section()
+                //     .sender_stake()
+                //     .cmp(&other.immutable_section().sender_stake())
+            }
             ordering => ordering,
         }
     }

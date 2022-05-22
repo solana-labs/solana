@@ -10,7 +10,7 @@ use {
         unprocessed_packet_batches::{self, DeserializedPacket, ImmutableDeserializedPacket},
     },
     crossbeam_channel::{select, unbounded, Receiver, RecvError, Sender},
-    skiplist::OrderedSkipList,
+    rand::Rng,
     solana_perf::packet::PacketBatch,
     solana_runtime::{
         accounts::AccountLocks,
@@ -26,7 +26,7 @@ use {
         transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
     },
     std::{
-        collections::{hash_map::Entry, HashMap},
+        collections::{hash_map::Entry, BTreeMap, HashMap},
         rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -136,6 +136,8 @@ pub enum SchedulerError {
 }
 
 pub type Result<T> = std::result::Result<T, SchedulerError>;
+
+type UnprocessedPackets = BTreeMap<DeserializedPacket, usize>;
 
 #[derive(Clone)]
 pub struct TransactionSchedulerHandle {
@@ -322,7 +324,7 @@ impl TransactionScheduler {
         Builder::new()
             .name(t_name.to_string())
             .spawn(move || {
-                let mut unprocessed_packet_batches = OrderedSkipList::with_capacity(config.backlog_size);
+                let mut unprocessed_packet_batches = BTreeMap::new();
 
                 let mut last_log = Instant::now();
 
@@ -330,6 +332,9 @@ impl TransactionScheduler {
                 let mut blocked_requests = Vec::new();
 
                 loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
                     if last_log.elapsed() > Duration::from_secs(1) {
                         let num_packets = unprocessed_packet_batches.len();
                         info!("num_packets: {}", num_packets);
@@ -341,6 +346,7 @@ impl TransactionScheduler {
                                 Ok(packet_batches) => {
                                     Self::handle_packet_batches(&mut unprocessed_packet_batches, packet_batches);
                                     if !blocked_requests.is_empty() && !unprocessed_packet_batches.is_empty() {
+                                        // TODO: need to pop off and handle requests
                                         blocked_requests.into_iter().for_each(|r| {
                                             Self::handle_scheduler_request(&mut unprocessed_packet_batches, &scheduled_accounts, r, &qos_service, &config);
                                         });
@@ -367,11 +373,9 @@ impl TransactionScheduler {
                                 }
                             }
                         }
-                        default(Duration::from_millis(100)) => {
-                            if exit.load(Ordering::Relaxed) {
-                                break;
-                            }
-                        }
+                        // default(Duration::from_millis(100)) => {
+                        //
+                        // }
                     }
                 }
             })
@@ -673,13 +677,13 @@ impl TransactionScheduler {
     }
 
     fn get_scheduled_batch(
-        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
+        unprocessed_packets: &mut UnprocessedPackets,
         scheduled_accounts: &Arc<Mutex<AccountLocks>>,
         num_txs: usize,
         bank: &Arc<Bank>,
         qos_service: &QosService,
         config: &TransactionSchedulerConfig,
-    ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
+    ) -> Vec<SanitizedTransaction> {
         let mut sanitized_transactions = Vec::with_capacity(num_txs);
 
         // hashmap representing the highest fee of currently write-locked and read-locked blocked accounts
@@ -687,15 +691,11 @@ impl TransactionScheduler {
         let mut highest_wl_blocked_account_fees = HashMap::with_capacity(10_000);
         let mut highest_rl_blocked_account_fees = HashMap::with_capacity(10_000);
 
-        let mut indices_to_remove = Vec::with_capacity(1000);
-
-        let mut highest_idx = 0;
-        let start = Instant::now();
-        for (idx, deserialized_packet) in unprocessed_packets.iter().enumerate() {
+        unprocessed_packets.retain(|deserialized_packet, _t| {
             if sanitized_transactions.len() >= num_txs {
-                highest_idx = idx;
-                break; // if fully-scheduled, retain rest of packets
+                return true; // if fully-scheduled, retain rest of packets
             }
+
             match Self::try_schedule(
                 deserialized_packet.immutable_section(),
                 bank,
@@ -708,73 +708,32 @@ impl TransactionScheduler {
                 Ok(sanitized_tx) => {
                     // scheduled, drop for now
                     sanitized_transactions.push(sanitized_tx);
-                    indices_to_remove.push(idx);
+                    return false;
                 }
                 Err(e) => {
                     trace!("e: {:?}", e);
                     match e {
                         SchedulerError::InvalidSanitizedTransaction
                         | SchedulerError::InvalidTransactionFormat(_)
-                        | SchedulerError::TransactionCheckFailed(_) => indices_to_remove.push(idx),
+                        | SchedulerError::TransactionCheckFailed(_) => {
+                            return false; // non-recoverable error, drop the packet
+                        }
                         SchedulerError::AccountInUse
                         | SchedulerError::AccountBlocked(_)
-                        | SchedulerError::QosExceeded => {}
+                        | SchedulerError::QosExceeded => {
+                            return true; // save these for later
+                        }
                     }
                 }
             }
-        }
+        });
 
-        let elapsed = start.elapsed();
-        info!(
-            "elapsed: {:?}, num_iters: {}, iters/s: {:?}",
-            elapsed,
-            highest_idx,
-            highest_idx as f64 / elapsed.as_secs_f64()
-        );
-
-        // unprocessed_packets.retain(|deserialized_packet| {
-        //     if sanitized_transactions.len() >= num_txs {
-        //         return true; // if fully-scheduled, retain rest of packets
-        //     }
-        //
-        //     match Self::try_schedule(
-        //         deserialized_packet.immutable_section(),
-        //         bank,
-        //         &mut highest_wl_blocked_account_fees,
-        //         &mut highest_rl_blocked_account_fees,
-        //         scheduled_accounts,
-        //         qos_service,
-        //         config,
-        //     ) {
-        //         Ok(sanitized_tx) => {
-        //             // scheduled, drop for now
-        //             sanitized_transactions.push(sanitized_tx);
-        //             return false;
-        //         }
-        //         Err(e) => {
-        //             trace!("e: {:?}", e);
-        //             match e {
-        //                 SchedulerError::InvalidSanitizedTransaction
-        //                 | SchedulerError::InvalidTransactionFormat(_)
-        //                 | SchedulerError::TransactionCheckFailed(_) => {
-        //                     return false; // non-recoverable error, drop the packet
-        //                 }
-        //                 SchedulerError::AccountInUse
-        //                 | SchedulerError::AccountBlocked(_)
-        //                 | SchedulerError::QosExceeded => {
-        //                     return true; // save these for later
-        //                 }
-        //             }
-        //         }
-        //     }
-        // });
-
-        (sanitized_transactions, indices_to_remove)
+        sanitized_transactions
     }
 
     /// Handles scheduler requests and sends back a response over the channel
     fn handle_scheduler_request(
-        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
+        unprocessed_packets: &mut UnprocessedPackets,
         scheduled_accounts: &Arc<Mutex<AccountLocks>>,
         scheduler_request: SchedulerRequest,
         qos_service: &QosService,
@@ -785,7 +744,7 @@ impl TransactionScheduler {
             SchedulerMessage::RequestBatch { num_txs, bank } => {
                 let start = Instant::now();
                 trace!("SchedulerMessage::RequestBatch num_txs: {}", num_txs);
-                let (sanitized_transactions, indices_to_remove) = Self::get_scheduled_batch(
+                let sanitized_transactions = Self::get_scheduled_batch(
                     unprocessed_packets,
                     scheduled_accounts,
                     num_txs,
@@ -793,21 +752,18 @@ impl TransactionScheduler {
                     qos_service,
                     config,
                 );
-                trace!(
-                    "sanitized_transactions num: {}, unprocessed_packets num: {}, elapsed: {:?}",
-                    sanitized_transactions.len(),
-                    unprocessed_packets.len(),
-                    start.elapsed()
-                );
+                // info!(
+                //     "sanitized_transactions num: {}, unprocessed_packets num: {}, elapsed: {:?}",
+                //     sanitized_transactions.len(),
+                //     unprocessed_packets.len(),
+                //     start.elapsed()
+                // );
 
                 let _ = response_sender
                     .send(SchedulerResponse::ScheduledBatch(ScheduledBatch {
                         sanitized_transactions,
                     }))
                     .unwrap();
-                for (idx, idx2) in indices_to_remove.iter().enumerate() {
-                    unprocessed_packets.remove_index(idx2 - idx);
-                }
             }
             SchedulerMessage::Ping { id } => {
                 let _ = response_sender
@@ -945,7 +901,7 @@ impl TransactionScheduler {
     }
 
     fn handle_packet_batches(
-        unprocessed_packets: &mut OrderedSkipList<DeserializedPacket>,
+        unprocessed_packets: &mut UnprocessedPackets,
         packet_batches: Vec<PacketBatch>,
     ) {
         for packet_batch in packet_batches {
@@ -955,10 +911,19 @@ impl TransactionScheduler {
                 .enumerate()
                 .filter_map(|(idx, p)| if !p.meta.discard() { Some(idx) } else { None })
                 .collect();
-            unprocessed_packets.extend(unprocessed_packet_batches::deserialize_packets(
-                &packet_batch,
-                &packet_indexes,
-            ));
+            let start = Instant::now();
+
+            for p in unprocessed_packet_batches::deserialize_packets(&packet_batch, &packet_indexes)
+            {
+                unprocessed_packets.insert(p, rand::thread_rng().gen_range(0, 100_000));
+            }
+
+            // info!(
+            //     "packets inserted: {:?}, elapsed: {:?}, len: {}",
+            //     packet_indexes.len(),
+            //     start.elapsed(),
+            //     unprocessed_packets.len()
+            // );
         }
     }
 
