@@ -447,7 +447,7 @@ fn poll_blockhash<T: BenchTpsClient>(
             let balance = client.get_balance(id).unwrap_or(0);
             metrics_submit_lamport_balance(balance);
             datapoint_info!(
-                "poll_blockhash_stats",
+                "blockhash_stats",
                 (
                     "time_elapsed_since_last_blockhash_update",
                     blockhash_last_updated.elapsed().as_millis(),
