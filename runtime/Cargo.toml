@@ -1,6 +1,6 @@
 [package]
 name = "solana-runtime"
-version = "1.9.23"
+version = "1.9.24"
 description = "Solana runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -36,21 +36,21 @@ rayon = "1.5.1"
 regex = "1.5.4"
 serde = { version = "1.0.130", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.9.23" }
-solana-bloom = { path = "../bloom", version = "=1.9.23" }
-solana-config-program = { path = "../programs/config", version = "=1.9.23" }
-solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.9.23" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.9.23" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.9.23" }
-solana-logger = { path = "../logger", version = "=1.9.23" }
-solana-measure = { path = "../measure", version = "=1.9.23" }
-solana-metrics = { path = "../metrics", version = "=1.9.23" }
-solana-bucket-map = { path = "../bucket_map", version = "=1.9.23" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.9.23" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.23" }
-solana-sdk = { path = "../sdk", version = "=1.9.23" }
-solana-stake-program = { path = "../programs/stake", version = "=1.9.23" }
-solana-vote-program = { path = "../programs/vote", version = "=1.9.23" }
+solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.9.24" }
+solana-bloom = { path = "../bloom", version = "=1.9.24" }
+solana-config-program = { path = "../programs/config", version = "=1.9.24" }
+solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.9.24" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.9.24" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.9.24" }
+solana-logger = { path = "../logger", version = "=1.9.24" }
+solana-measure = { path = "../measure", version = "=1.9.24" }
+solana-metrics = { path = "../metrics", version = "=1.9.24" }
+solana-bucket-map = { path = "../bucket_map", version = "=1.9.24" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.9.24" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.9.24" }
+solana-sdk = { path = "../sdk", version = "=1.9.24" }
+solana-stake-program = { path = "../programs/stake", version = "=1.9.24" }
+solana-vote-program = { path = "../programs/vote", version = "=1.9.24" }
 symlink = "0.1.0"
 tar = "0.4.37"
 tempfile = "3.2.0"
