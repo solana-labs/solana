@@ -5,9 +5,12 @@ use {
         banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
         result::{Error, Result},
     },
-    crossbeam_channel::{unbounded, RecvTimeoutError},
+    crossbeam_channel::{unbounded, RecvTimeoutError, Sender},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
-    solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
+    solana_perf::{
+        packet::{PacketBatch, PacketBatchRecycler},
+        recycler::Recycler,
+    },
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{
         clock::DEFAULT_TICKS_PER_SLOT,
@@ -29,6 +32,7 @@ use {
 
 pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
+    pub forward_sender: Sender<PacketBatch>,
 }
 
 impl FetchStage {
@@ -240,6 +244,7 @@ impl FetchStage {
             .into_iter()
             .flatten()
             .collect(),
+            forward_sender,
         }
     }
 

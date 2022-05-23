@@ -53,6 +53,7 @@ pub struct TpuSockets {
     pub vote: Vec<UdpSocket>,
     pub broadcast: Vec<UdpSocket>,
     pub transactions_quic: UdpSocket,
+    pub transactions_forwards_quic: UdpSocket,
 }
 
 pub struct Tpu {
@@ -63,6 +64,7 @@ pub struct Tpu {
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
+    tpu_forwards_quic_t: thread::JoinHandle<()>,
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
@@ -100,6 +102,7 @@ impl Tpu {
             vote: tpu_vote_sockets,
             broadcast: broadcast_sockets,
             transactions_quic: transactions_quic_sockets,
+            transactions_forwards_quic: transactions_forwards_quic_sockets,
         } = sockets;
 
         let (packet_sender, packet_receiver) = unbounded();
@@ -150,6 +153,19 @@ impl Tpu {
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
             packet_sender,
+            exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_IP,
+            staked_nodes.clone(),
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+        )
+        .unwrap();
+
+        let tpu_forwards_quic_t = spawn_server(
+            transactions_forwards_quic_sockets,
+            keypair,
+            cluster_info.my_contact_info().tpu.ip(),
+            fetch_stage.forward_sender.clone(),
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
             staked_nodes,
@@ -228,6 +244,7 @@ impl Tpu {
             cluster_info_vote_listener,
             broadcast_stage,
             tpu_quic_t,
+            tpu_forwards_quic_t,
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
@@ -262,6 +279,7 @@ impl Tpu {
             self.staked_nodes_updater_service.join(),
         ];
         self.tpu_quic_t.join()?;
+        self.tpu_forwards_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
