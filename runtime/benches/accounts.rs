@@ -114,15 +114,8 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             0,
             &ancestors,
             total_lamports,
-<<<<<<< HEAD
-            test_hash_calculation
-=======
             test_hash_calculation,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
             false,
-            false,
->>>>>>> 41f30a238 (stop logging misleading bank hash mismatch (#25427))
         ))
     });
 }

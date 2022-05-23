@@ -1346,12 +1346,7 @@ fn load_frozen_forks(
 
             if slot >= dev_halt_at_slot {
                 bank.force_flush_accounts_cache();
-<<<<<<< HEAD
-                let _ = bank.verify_bank_hash(false);
-=======
-                let can_cached_slot_be_unflushed = true;
-                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed, true);
->>>>>>> 41f30a238 (stop logging misleading bank hash mismatch (#25427))
+                let _ = bank.verify_bank_hash(false, true);
                 break;
             }
         }
