@@ -35,7 +35,7 @@ impl ShredSigVerifier {
     fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
         batches
             .iter()
-            .flat_map(|batch| batch.packets.iter().filter_map(Shred::get_slot_from_packet))
+            .flat_map(|batch| batch.iter().filter_map(Shred::get_slot_from_packet))
             .collect()
     }
 }
@@ -92,13 +92,25 @@ pub mod tests {
             0,
             0xc0de,
         );
-        let mut batches = [PacketBatch::default(), PacketBatch::default()];
+        let mut batches: Vec<_> = (0..2)
+            .map(|_| {
+                let mut batch = PacketBatch::with_capacity(1);
+                batch.resize(1, Packet::default());
+                batch
+            })
+            .collect();
 
         let keypair = Keypair::new();
+<<<<<<< HEAD
         Shredder::sign_shred(&keypair, &mut shred);
         batches[0].packets.resize(1, Packet::default());
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();
+=======
+        shred.sign(&keypair);
+        batches[0][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][0].meta.size = shred.payload().len();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
 
         let mut shred = Shred::new_from_data(
             0xc0de_dead,
@@ -111,10 +123,16 @@ pub mod tests {
             0,
             0xc0de,
         );
+<<<<<<< HEAD
         Shredder::sign_shred(&keypair, &mut shred);
         batches[1].packets.resize(1, Packet::default());
         batches[1].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[1].packets[0].meta.size = shred.payload.len();
+=======
+        shred.sign(&keypair);
+        batches[1][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[1][0].meta.size = shred.payload().len();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
 
         let expected: HashSet<u64> = [0xc0de_dead, 0xdead_c0de].iter().cloned().collect();
         assert_eq!(ShredSigVerifier::read_slots(&batches), expected);
@@ -131,8 +149,10 @@ pub mod tests {
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let verifier = ShredSigVerifier::new(bf, cache);
 
-        let mut batches = vec![PacketBatch::default()];
-        batches[0].packets.resize(2, Packet::default());
+        let batch_size = 2;
+        let mut batch = PacketBatch::with_capacity(batch_size);
+        batch.resize(batch_size, Packet::default());
+        let mut batches = vec![batch];
 
         let mut shred = Shred::new_from_data(
             0,
@@ -145,9 +165,15 @@ pub mod tests {
             0,
             0xc0de,
         );
+<<<<<<< HEAD
         Shredder::sign_shred(&leader_keypair, &mut shred);
         batches[0].packets[0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[0].meta.size = shred.payload.len();
+=======
+        shred.sign(&leader_keypair);
+        batches[0][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][0].meta.size = shred.payload().len();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
 
         let mut shred = Shred::new_from_data(
             0,
@@ -161,13 +187,19 @@ pub mod tests {
             0xc0de,
         );
         let wrong_keypair = Keypair::new();
+<<<<<<< HEAD
         Shredder::sign_shred(&wrong_keypair, &mut shred);
         batches[0].packets[1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0].packets[1].meta.size = shred.payload.len();
+=======
+        shred.sign(&wrong_keypair);
+        batches[0][1].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][1].meta.size = shred.payload().len();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
 
         let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
         let rv = verifier.verify_batches(batches, num_packets);
-        assert!(!rv[0].packets[0].meta.discard());
-        assert!(rv[0].packets[1].meta.discard());
+        assert!(!rv[0][0].meta.discard());
+        assert!(rv[0][1].meta.discard());
     }
 }

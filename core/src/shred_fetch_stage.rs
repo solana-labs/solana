@@ -4,11 +4,15 @@ use {
     crate::packet_hasher::PacketHasher,
     lru::LruCache,
     solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats},
+<<<<<<< HEAD
     solana_perf::{
         cuda_runtime::PinnedVec,
         packet::{Packet, PacketBatchRecycler, PacketFlags},
         recycler::Recycler,
     },
+=======
+    solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
     solana_streamer::streamer::{
@@ -99,8 +103,8 @@ impl ShredFetchStage {
                     slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 }
             }
-            stats.shred_count += packet_batch.packets.len();
-            packet_batch.packets.iter_mut().for_each(|packet| {
+            stats.shred_count += packet_batch.len();
+            packet_batch.iter_mut().for_each(|packet| {
                 Self::process_packet(
                     packet,
                     &mut shreds_received,
@@ -135,8 +139,13 @@ impl ShredFetchStage {
     fn packet_modifier<F>(
         sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
+<<<<<<< HEAD
         sender: PacketBatchSender,
         recycler: Recycler<PinnedVec<Packet>>,
+=======
+        sender: Sender<Vec<PacketBatch>>,
+        recycler: PacketBatchRecycler,
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         name: &'static str,
         modify: F,
@@ -176,7 +185,7 @@ impl ShredFetchStage {
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let recycler: PacketBatchRecycler = Recycler::warmed(100, 1024);
+        let recycler = PacketBatchRecycler::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
             sockets,

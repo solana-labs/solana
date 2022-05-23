@@ -271,11 +271,15 @@ fn main() {
                 .chunks(chunk_len / num_threads)
                 .enumerate()
             {
+<<<<<<< HEAD
                 let mut byte = 0;
                 let index = config.get_transactions_index(start + i);
                 if index < transactions.len() {
                     byte = bytes_as_usize(transactions[index].signatures[0].as_ref());
                 }
+=======
+                sent += packet_batch.len();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
                 trace!(
                     "sending... {}..{} {} v.len: {} sig: {} transactions.len: {} index: {}",
                     start + i,

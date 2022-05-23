@@ -327,13 +327,20 @@ impl ServeRepair {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut total_packets = reqs_v[0].packets.len();
+        let mut total_packets = reqs_v[0].len();
 
         let mut dropped_packets = 0;
         while let Ok(more) = requests_receiver.try_recv() {
+<<<<<<< HEAD
             total_packets += more.packets.len();
             if total_packets < *max_packets {
                 // Drop the rest in the channel in case of dos
+=======
+            total_packets += more.len();
+            if packet_threshold.should_drop(total_packets) {
+                dropped_packets += more.len();
+            } else {
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
                 reqs_v.push(more);
             } else {
                 dropped_packets += more.packets.len();
@@ -438,6 +445,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
     ) {
+<<<<<<< HEAD
         packet_batch.packets.iter().for_each(|packet| {
             if let Ok(request) = packet.deserialize_slice(..) {
                 stats.processed += 1;
@@ -447,6 +455,21 @@ impl ServeRepair {
                     let _ignore_disconnect = response_sender.send(rsp);
                 }
             }
+=======
+        // iter over the packets
+        packet_batch.iter().for_each(|packet| {
+            let from_addr = packet.meta.socket_addr();
+            limited_deserialize(&packet.data[..packet.meta.size])
+                .into_iter()
+                .for_each(|request| {
+                    stats.processed += 1;
+                    let rsp =
+                        Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                    if let Some(rsp) = rsp {
+                        let _ignore_disconnect = response_sender.send(rsp);
+                    }
+                });
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
         });
     }
 
@@ -698,11 +721,16 @@ impl ServeRepair {
                     nonce,
                 );
                 if let Some(packet) = packet {
-                    res.packets.push(packet);
+                    res.push(packet);
                 } else {
                     break;
                 }
+<<<<<<< HEAD
                 if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+=======
+
+                if meta.parent_slot.is_some() && res.len() < max_responses {
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
                     slot = meta.parent_slot.unwrap();
                 } else {
                     break;
@@ -808,10 +836,9 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::HighestShred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
 
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
@@ -894,9 +921,8 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::Shred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
@@ -1056,7 +1082,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1125,7 +1150,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1172,8 +1196,7 @@ mod tests {
                 slot + num_slots,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet
@@ -1190,8 +1213,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet
@@ -1215,8 +1237,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet

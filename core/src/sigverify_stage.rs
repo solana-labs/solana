@@ -225,7 +225,7 @@ impl SigVerifyStage {
         let mut addrs = batches
             .iter_mut()
             .rev()
-            .flat_map(|batch| batch.packets.iter_mut().rev())
+            .flat_map(|batch| batch.iter_mut().rev())
             .filter(|packet| !packet.meta.discard())
             .map(|packet| (packet.meta.addr, packet))
             .into_group_map();
@@ -420,7 +420,6 @@ mod tests {
             .iter()
             .map(|batch| {
                 batch
-                    .packets
                     .iter()
                     .map(|p| if p.meta.discard() { 0 } else { 1 })
                     .sum::<usize>()
@@ -431,18 +430,19 @@ mod tests {
     #[test]
     fn test_packet_discard() {
         solana_logger::setup();
-        let mut batch = PacketBatch::default();
-        batch.packets.resize(10, Packet::default());
-        batch.packets[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
-        batch.packets[3].meta.set_discard(true);
-        batch.packets[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
+        let batch_size = 10;
+        let mut batch = PacketBatch::with_capacity(batch_size);
+        batch.resize(batch_size, Packet::default());
+        batch[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
+        batch[3].meta.set_discard(true);
+        batch[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
         let mut batches = vec![batch];
         let max = 3;
         SigVerifyStage::discard_excess_packets(&mut batches, max);
         assert_eq!(count_non_discard(&batches), max);
-        assert!(!batches[0].packets[0].meta.discard());
-        assert!(batches[0].packets[3].meta.discard());
-        assert!(!batches[0].packets[4].meta.discard());
+        assert!(!batches[0][0].meta.discard());
+        assert!(batches[0][3].meta.discard());
+        assert!(!batches[0][4].meta.discard());
     }
     fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
         let len = 4096;
@@ -477,8 +477,13 @@ mod tests {
         let mut sent_len = 0;
         for _ in 0..batches.len() {
             if let Some(batch) = batches.pop() {
+<<<<<<< HEAD
                 sent_len += batch.packets.len();
                 packet_s.send(batch).unwrap();
+=======
+                sent_len += batch.len();
+                packet_s.send(vec![batch]).unwrap();
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
             }
         }
         let mut received = 0;
@@ -486,7 +491,7 @@ mod tests {
         loop {
             if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
-                    received += v.packets.len();
+                    received += v.len();
                     batches.push(v);
                 }
                 if use_same_tx || received >= sent_len {

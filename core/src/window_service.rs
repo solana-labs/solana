@@ -356,8 +356,8 @@ where
     F: Fn(&Shred, Arc<Bank>, /*last root:*/ Slot) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
-    let mut packets = verified_receiver.recv_timeout(timer)?;
-    packets.extend(verified_receiver.try_iter().flatten());
+    let mut packet_batches = verified_receiver.recv_timeout(timer)?;
+    packet_batches.extend(verified_receiver.try_iter().flatten());
     let now = Instant::now();
     let last_root = blockstore.last_root();
     let working_bank = bank_forks.read().unwrap().working_bank();
@@ -387,9 +387,9 @@ where
         }
     };
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
-        packets
+        packet_batches
             .par_iter()
-            .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
+            .flat_map_iter(|packet_batch| packet_batch.iter().filter_map(handle_packet))
             .unzip()
     });
     // Exclude repair packets from retransmit.
@@ -409,9 +409,22 @@ where
     }
     insert_shred_sender.send((shreds, repair_infos))?;
 
+<<<<<<< HEAD
     stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
     for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
         *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
+=======
+    stats.num_packets += packet_batches
+        .iter()
+        .map(|packet_batch| packet_batch.len())
+        .sum::<usize>();
+    for packet in packet_batches
+        .iter()
+        .flat_map(|packet_batch| packet_batch.iter())
+    {
+        let addr = packet.meta.socket_addr();
+        *stats.addrs.entry(addr).or_default() += 1;
+>>>>>>> ec7ca411d (Make PacketBatch packets vector non-public (#25413))
     }
     stats.elapsed += now.elapsed();
     Ok(())
