@@ -2186,7 +2186,7 @@ fn main() {
             }
             ("verify", arg_matches) => {
                 let mut accounts_index_config = AccountsIndexConfig::default();
-                if let Some(bins) = arg_matches.value_of_t::<usize>("accounts_index_bins").ok() {
+                if let Ok(bins) = arg_matches.value_of_t::<usize>("accounts_index_bins") {
                     accounts_index_config.bins = Some(bins);
                 }
 
@@ -2200,9 +2200,8 @@ fn main() {
                     false,
                 );
 
-                accounts_index_config.index_limit_mb = if let Some(limit) = arg_matches
-                    .value_of_t::<usize>("accounts_index_memory_limit_mb")
-                    .ok()
+                accounts_index_config.index_limit_mb = if let Ok(limit) =
+                    arg_matches.value_of_t::<usize>("accounts_index_memory_limit_mb")
                 {
                     IndexLimitMb::Limit(limit)
                 } else if arg_matches.is_present("disable_accounts_disk_index") {
@@ -2846,7 +2845,8 @@ fn main() {
                             let raw_warp_epoch: String =
                                 arg_matches.value_of_t("warp_epoch").unwrap();
                             let warp_epoch: Epoch = if raw_warp_epoch.starts_with('+') {
-                                base_bank.epoch() + arg_matches.value_of_t::<u64>("warp_epoch").unwrap()
+                                base_bank.epoch()
+                                    + arg_matches.value_of_t::<u64>("warp_epoch").unwrap()
                             } else {
                                 arg_matches.value_of_t("warp_epoch").unwrap()
                             };

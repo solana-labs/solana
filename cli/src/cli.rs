@@ -1899,7 +1899,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
+                command: CliCommand::ResolveSigner(Some(keypair_file)),
                 signers: vec![],
             }
         );

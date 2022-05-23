@@ -460,7 +460,7 @@ impl ClusterQuerySubCommands for Command<'_> {
                         .value_name("DATA_LENGTH_OR_MONIKER")
                         .required(true)
                         .validator(|s| {
-                            RentLengthValue::from_str(&s)
+                            RentLengthValue::from_str(s)
                                 .map(|_| ())
                                 .map_err(|e| e.to_string())
                         })

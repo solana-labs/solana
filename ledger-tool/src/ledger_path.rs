@@ -9,10 +9,7 @@ use {
 
 pub fn parse_ledger_path(matches: &ArgMatches, usage: &str, name: &str) -> PathBuf {
     PathBuf::from(matches.value_of_t::<String>(name).unwrap_or_else(|_err| {
-        eprintln!(
-            "Error: Missing --ledger <DIR> argument.\n\n{}",
-            usage
-        );
+        eprintln!("Error: Missing --ledger <DIR> argument.\n\n{}", usage);
         exit(1);
     }))
 }

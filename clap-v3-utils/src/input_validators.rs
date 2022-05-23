@@ -62,8 +62,7 @@ pub fn is_pubkey(string: &str) -> Result<(), String> {
 }
 
 // Return an error if a hash cannot be parsed.
-pub fn is_hash(string: &str) -> Result<(), String>
-{
+pub fn is_hash(string: &str) -> Result<(), String> {
     is_parsable_generic::<Hash, _>(string)
 }
 
@@ -108,15 +107,13 @@ pub fn is_prompt_signer_source(string: &str) -> Result<(), String> {
 }
 
 // Return an error if string cannot be parsed as pubkey string or keypair file location
-pub fn is_pubkey_or_keypair(string: &str) -> Result<(), String>
-{
-    is_pubkey(string.as_ref()).or_else(|_| is_keypair(string))
+pub fn is_pubkey_or_keypair(string: &str) -> Result<(), String> {
+    is_pubkey(string).or_else(|_| is_keypair(string))
 }
 
 // Return an error if string cannot be parsed as a pubkey string, or a valid Signer that can
 // produce a pubkey()
-pub fn is_valid_pubkey(string: &str) -> Result<(), String>
-{
+pub fn is_valid_pubkey(string: &str) -> Result<(), String> {
     match parse_signer_source(string)
         .map_err(|err| format!("{}", err))?
         .kind
@@ -134,17 +131,13 @@ pub fn is_valid_pubkey(string: &str) -> Result<(), String>
 // when paired with an offline `--signer` argument to provide a Presigner (pubkey + signature).
 // Clap validators can't check multiple fields at once, so the verification that a `--signer` is
 // also provided and correct happens in parsing, not in validation.
-pub fn is_valid_signer(string: &str) -> Result<(), String>
-{
+pub fn is_valid_signer(string: &str) -> Result<(), String> {
     is_valid_pubkey(string)
 }
 
 // Return an error if string cannot be parsed as pubkey=signature string
-pub fn is_pubkey_sig<T>(string: T) -> Result<(), String>
-where
-    T: AsRef<str> + Display,
-{
-    let mut signer = string.as_ref().split('=');
+pub fn is_pubkey_sig(string: &str) -> Result<(), String> {
+    let mut signer = string.split('=');
     match Pubkey::from_str(
         signer
             .next()
@@ -165,8 +158,7 @@ where
 }
 
 // Return an error if a url cannot be parsed.
-pub fn is_url(string: &str) -> Result<(), String>
-{
+pub fn is_url(string: &str) -> Result<(), String> {
     match url::Url::parse(string) {
         Ok(url) => {
             if url.has_host() {
@@ -179,8 +171,7 @@ pub fn is_url(string: &str) -> Result<(), String>
     }
 }
 
-pub fn is_url_or_moniker(string: &str) -> Result<(), String>
-{
+pub fn is_url_or_moniker(string: &str) -> Result<(), String> {
     match url::Url::parse(&normalize_to_url_if_moniker(string)) {
         Ok(url) => {
             if url.has_host() {
@@ -204,18 +195,15 @@ pub fn normalize_to_url_if_moniker<T: AsRef<str>>(url_or_moniker: T) -> String {
     .to_string()
 }
 
-pub fn is_epoch(epoch: &str) -> Result<(), String>
-{
+pub fn is_epoch(epoch: &str) -> Result<(), String> {
     is_parsable_generic::<Epoch, _>(epoch)
 }
 
-pub fn is_slot(slot: &str) -> Result<(), String>
-{
+pub fn is_slot(slot: &str) -> Result<(), String> {
     is_parsable_generic::<Slot, _>(slot)
 }
 
-pub fn is_pow2(bins: &str) -> Result<(), String>
-{
+pub fn is_pow2(bins: &str) -> Result<(), String> {
     bins.parse::<usize>()
         .map_err(|e| format!("Unable to parse, provided: {}, err: {}", bins, e))
         .and_then(|v| {
@@ -227,13 +215,11 @@ pub fn is_pow2(bins: &str) -> Result<(), String>
         })
 }
 
-pub fn is_port(port: &str) -> Result<(), String>
-{
+pub fn is_port(port: &str) -> Result<(), String> {
     is_parsable_generic::<u16, _>(port)
 }
 
-pub fn is_valid_percentage(percentage: &str) -> Result<(), String>
-{
+pub fn is_valid_percentage(percentage: &str) -> Result<(), String> {
     percentage
         .parse::<u8>()
         .map_err(|e| {
@@ -254,8 +240,7 @@ pub fn is_valid_percentage(percentage: &str) -> Result<(), String>
         })
 }
 
-pub fn is_amount(amount: &str) -> Result<(), String>
-{
+pub fn is_amount(amount: &str) -> Result<(), String> {
     if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() {
         Ok(())
     } else {
@@ -266,12 +251,8 @@ pub fn is_amount(amount: &str) -> Result<(), String>
     }
 }
 
-pub fn is_amount_or_all(amount: &str) -> Result<(), String>
-{
-    if amount.parse::<u64>().is_ok()
-        || amount.parse::<f64>().is_ok()
-        || amount == "ALL"
-    {
+pub fn is_amount_or_all(amount: &str) -> Result<(), String> {
+    if amount.parse::<u64>().is_ok() || amount.parse::<f64>().is_ok() || amount == "ALL" {
         Ok(())
     } else {
         Err(format!(
@@ -281,8 +262,7 @@ pub fn is_amount_or_all(amount: &str) -> Result<(), String>
     }
 }
 
-pub fn is_rfc3339_datetime(value: &str) -> Result<(), String>
-{
+pub fn is_rfc3339_datetime(value: &str) -> Result<(), String> {
     DateTime::parse_from_rfc3339(value)
         .map(|_| ())
         .map_err(|e| format!("{}", e))
@@ -318,8 +298,7 @@ where
         .map(|_| ())
 }
 
-pub fn is_derived_address_seed(value: &str) -> Result<(), String>
-{
+pub fn is_derived_address_seed(value: &str) -> Result<(), String> {
     if value.len() > MAX_SEED_LEN {
         Err(format!(
             "Address seed must not be longer than {} bytes",

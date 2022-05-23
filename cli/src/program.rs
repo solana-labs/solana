@@ -15,8 +15,7 @@ use {
         self,
         input_parsers::*,
         input_validators::*,
-        keypair::*,
-        keypair::{parse_signer_source, SignerSourceKind},
+        keypair::{parse_signer_source, SignerSourceKind, *},
     },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -463,10 +462,7 @@ pub fn parse_program_subcommand(
             };
 
             let path = matches.value_of("program_id");
-            let program_pubkey = if path.is_none() {
-                pubkey_of_signer(matches, "program_id", wallet_manager)?
-            } else {
-                let path = path.unwrap();
+            let program_pubkey = if let Some(path) = path {
                 let signed_source = parse_signer_source(path).expect("todo");
                 let program_pubkey = if let SignerSourceKind::Pubkey(_) = signed_source.kind {
                     pubkey_of_signer(matches, "program_id", wallet_manager)?
@@ -482,6 +478,8 @@ pub fn parse_program_subcommand(
                     program_pubkey
                 };
                 program_pubkey
+            } else {
+                pubkey_of_signer(matches, "program_id", wallet_manager)?
             };
 
             let upgrade_authority_pubkey =

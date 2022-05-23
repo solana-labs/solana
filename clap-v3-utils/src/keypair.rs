@@ -439,9 +439,7 @@ pub enum SignerSourceError {
     IoError(#[from] std::io::Error),
 }
 
-pub fn parse_signer_source<S: AsRef<str>>(
-    source: S,
-) -> Result<SignerSource, SignerSourceError> {
+pub fn parse_signer_source<S: AsRef<str>>(source: S) -> Result<SignerSource, SignerSourceError> {
     let source = source.as_ref();
     let source = {
         #[cfg(target_family = "windows")]

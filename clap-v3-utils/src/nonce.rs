@@ -24,7 +24,7 @@ fn nonce_arg<'a>() -> Arg<'a> {
         .takes_value(true)
         .value_name("PUBKEY")
         .requires(BLOCKHASH_ARG.name)
-        .validator(|s| is_valid_pubkey(s))
+        .validator(is_valid_pubkey)
         .help(NONCE_ARG.help)
 }
 
@@ -33,7 +33,7 @@ pub fn nonce_authority_arg<'a>() -> Arg<'a> {
         .long(NONCE_AUTHORITY_ARG.long)
         .takes_value(true)
         .value_name("KEYPAIR")
-        .validator(|s| is_valid_signer(s))
+        .validator(is_valid_signer)
         .help(NONCE_AUTHORITY_ARG.help)
 }
 

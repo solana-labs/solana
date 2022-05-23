@@ -32,7 +32,7 @@ pub fn blockhash_arg<'a>() -> Arg<'a> {
         .long(BLOCKHASH_ARG.long)
         .takes_value(true)
         .value_name("BLOCKHASH")
-        .validator(|s| is_hash(s))
+        .validator(is_hash)
         .help(BLOCKHASH_ARG.help)
 }
 
@@ -49,7 +49,7 @@ fn signer_arg<'a>() -> Arg<'a> {
         .long(SIGNER_ARG.long)
         .takes_value(true)
         .value_name("PUBKEY=SIGNATURE")
-        .validator(|s| is_pubkey_sig(s))
+        .validator(is_pubkey_sig)
         .requires(BLOCKHASH_ARG.name)
         .multiple_occurrences(true)
         .multiple_values(true)

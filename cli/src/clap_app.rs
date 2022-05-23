@@ -8,7 +8,7 @@ use {
     solana_cli_config::CONFIG_FILE,
 };
 
-pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'ab str) -> Command<'ab> {
+pub fn get_clap_app<'ab>(name: &str, about: &'ab str, version: &'ab str) -> Command<'ab> {
     Command::new(name)
         .about(about)
         .version(version)
