@@ -129,7 +129,7 @@ pub const MAX_ACCOUNTS_DATA_SIZE_EXCEEDED: u64 = to_builtin!(19);
 pub const ACTIVE_VOTE_ACCOUNT_CLOSE: u64 = to_builtin!(20);
 // Warning: Any new program errors added here must also be:
 // - Added to the below conversions
-// - Added as an equivilent to InstructionError
+// - Added as an equivalent to InstructionError
 // - Be featureized in the BPF loader to return `InstructionError::InvalidError`
 //   until the feature is activated
 
