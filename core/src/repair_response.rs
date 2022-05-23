@@ -33,7 +33,7 @@ pub fn repair_response_packet_from_bytes(
     if packet.meta.size > packet.data.len() {
         return None;
     }
-    packet.meta.set_addr(dest);
+    packet.meta.set_socket_addr(dest);
     packet.data[..bytes.len()].copy_from_slice(&bytes);
     let mut wr = io::Cursor::new(&mut packet.data[bytes.len()..]);
     bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");

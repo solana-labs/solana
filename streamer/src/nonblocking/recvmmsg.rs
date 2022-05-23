@@ -28,7 +28,7 @@ pub async fn recv_mmsg(
             }
             Ok((nrecv, from)) => {
                 p.meta.size = nrecv;
-                p.meta.set_addr(&from);
+                p.meta.set_socket_addr(&from);
             }
         }
         i += 1;
@@ -68,7 +68,7 @@ mod tests {
         assert_eq!(sent, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
+            assert_eq!(packet.meta.socket_addr(), saddr);
         }
     }
 
@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
+            assert_eq!(packet.meta.socket_addr(), saddr);
         }
 
         packets
@@ -104,7 +104,7 @@ mod tests {
         assert_eq!(sent - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
+            assert_eq!(packet.meta.socket_addr(), saddr);
         }
     }
 
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
+            assert_eq!(packet.meta.socket_addr(), saddr);
         }
 
         packets
@@ -175,11 +175,11 @@ mod tests {
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(sent1) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr1);
+            assert_eq!(packet.meta.socket_addr(), saddr1);
         }
         for packet in packets.iter().skip(sent1).take(recv - sent1) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr2);
+            assert_eq!(packet.meta.socket_addr(), saddr2);
         }
 
         packets
@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr2);
+            assert_eq!(packet.meta.socket_addr(), saddr2);
         }
     }
 }

@@ -321,7 +321,7 @@ impl AncestorHashesService {
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
-        let from_addr = packet.meta.addr();
+        let from_addr = packet.meta.socket_addr();
         limited_deserialize(&packet.data[..packet.meta.size.saturating_sub(SIZE_OF_NONCE)])
             .ok()
             .and_then(|ancestor_hashes_response| {
@@ -1117,7 +1117,7 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet.packets[0];
-        packet.meta.set_addr(&responder_info.serve_repair);
+        packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1478,7 +1478,7 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet.packets[0];
-        packet.meta.set_addr(&responder_info.serve_repair);
+        packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
