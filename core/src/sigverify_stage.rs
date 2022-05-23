@@ -24,7 +24,13 @@ use {
     thiserror::Error,
 };
 
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+// Try to target 50ms, rough timings from mainnet machines
+//
+// 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
+const MAX_DEDUP_BATCH: usize = 165_000;
+
+// 50ms/(25us/packet) = 2000 packets
+const MAX_SIGVERIFY_BATCH: usize = 2_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError {
@@ -62,8 +68,10 @@ struct SigVerifierStats {
     total_excess_fail: usize,
     total_valid_packets: usize,
     total_shrinks: usize,
+    total_discard_random: usize,
     total_dedup_time_us: usize,
     total_discard_time_us: usize,
+    total_discard_random_time_us: usize,
     total_verify_time_us: usize,
     total_shrink_time_us: usize,
 }
@@ -175,9 +183,15 @@ impl SigVerifierStats {
             ("total_dedup", self.total_dedup, i64),
             ("total_excess_fail", self.total_excess_fail, i64),
             ("total_valid_packets", self.total_valid_packets, i64),
+            ("total_discard_random", self.total_discard_random, i64),
             ("total_shrinks", self.total_shrinks, i64),
             ("total_dedup_time_us", self.total_dedup_time_us, i64),
             ("total_discard_time_us", self.total_discard_time_us, i64),
+            (
+                "total_discard_random_time_us",
+                self.total_discard_random_time_us,
+                i64
+            ),
             ("total_verify_time_us", self.total_verify_time_us, i64),
             ("total_shrink_time_us", self.total_shrink_time_us, i64),
         );
@@ -248,10 +262,19 @@ impl SigVerifyStage {
             num_packets,
         );
 
+        let mut discard_random_time = Measure::start("sigverify_discard_random_time");
+        let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
+            &mut batches,
+            MAX_DEDUP_BATCH,
+            num_packets,
+        );
+        let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
+        discard_random_time.stop();
+
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(&mut batches) as usize;
         dedup_time.stop();
-        let num_unique = num_packets.saturating_sub(discard_or_dedup_fail);
+        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
@@ -270,7 +293,7 @@ impl SigVerifyStage {
         let num_valid_packets = count_valid_packets(&batches);
         let start_len = batches.len();
         const MAX_EMPTY_BATCH_RATIO: usize = 4;
-        if num_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
+        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
             let valid = shrink_batches(&mut batches);
             batches.truncate(valid);
         }
@@ -310,6 +333,8 @@ impl SigVerifyStage {
         stats.total_packets += num_packets;
         stats.total_dedup += discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
+        stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
+        stats.total_discard_random += num_discarded_randomly;
         stats.total_excess_fail += excess_fail;
         stats.total_shrinks += total_shrinks;
         stats.total_dedup_time_us += dedup_time.as_us() as usize;
