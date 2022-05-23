@@ -3011,7 +3011,8 @@ fn main() {
                                         if detail.skipped_reasons.is_empty() {
                                             detail.skipped_reasons = format!("{:?}", skipped_reason);
                                         } else {
-                                            detail.skipped_reasons += &format!("/{:?}", skipped_reason);
+                                            use std::fmt::Write;
+                                            let _ = write!(&mut detail.skipped_reasons, "/{:?}", skipped_reason);
                                         }
                                     }
                                 }
