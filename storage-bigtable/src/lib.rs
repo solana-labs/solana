@@ -297,7 +297,7 @@ impl From<Reward> for StoredConfirmedBlockReward {
 }
 
 // A serialized `TransactionInfo` is stored in the `tx` table
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct TransactionInfo {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -306,7 +306,7 @@ struct TransactionInfo {
 }
 
 // Part of a serialized `TransactionInfo` which is stored in the `tx` table
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct UploadedTransaction {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -340,7 +340,7 @@ impl From<TransactionInfo> for TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct LegacyTransactionByAddrInfo {
     pub signature: Signature,          // The transaction signature
     pub err: Option<TransactionError>, // None if the transaction executed successfully

@@ -8,7 +8,7 @@ use {
     },
 };
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct ProgramTiming {
     pub accumulated_us: u64,
     pub accumulated_units: u64,
@@ -153,7 +153,7 @@ impl ExecuteAccessoryTimings {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct ExecuteDetailsTimings {
     pub serialize_us: u64,
     pub create_vm_us: u64,

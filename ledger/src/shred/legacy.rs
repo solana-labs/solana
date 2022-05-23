@@ -23,14 +23,14 @@ const DATA_SHRED_SIZE_RANGE: RangeInclusive<usize> =
 const_assert_eq!(ENCODED_PAYLOAD_SIZE, 1139);
 const ENCODED_PAYLOAD_SIZE: usize = SHRED_PAYLOAD_SIZE - SIZE_OF_CODING_SHRED_HEADERS;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShredData {
     common_header: ShredCommonHeader,
     data_header: DataShredHeader,
     payload: Vec<u8>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShredCode {
     common_header: ShredCommonHeader,
     coding_header: CodingShredHeader,

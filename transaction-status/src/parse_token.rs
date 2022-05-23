@@ -553,7 +553,7 @@ pub fn parse_token(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAuthorityType {
     MintTokens,
@@ -579,7 +579,7 @@ impl From<AuthorityType> for UiAuthorityType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiExtensionType {
     Uninitialized,

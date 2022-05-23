@@ -27,7 +27,7 @@ pub(crate) const MAX_DUPLICATE_SHREDS: DuplicateShredIndex = 512;
 pub trait LeaderScheduleFn: FnOnce(Slot) -> Option<Pubkey> {}
 impl<F> LeaderScheduleFn for F where F: FnOnce(Slot) -> Option<Pubkey> {}
 
-#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, AbiExample, Deserialize, Serialize)]
 pub struct DuplicateShred {
     pub(crate) from: Pubkey,
     pub(crate) wallclock: u64,

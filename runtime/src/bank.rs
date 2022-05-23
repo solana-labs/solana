@@ -190,7 +190,7 @@ pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RentDebit {
     rent_collected: u64,
     post_balance: u64,
@@ -210,7 +210,7 @@ impl RentDebit {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
     fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
@@ -765,7 +765,7 @@ pub fn inner_instructions_list_from_instruction_trace(
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
 
-#[derive(Serialize, Deserialize, AbiExample, AbiEnumVisitor, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, AbiExample, AbiEnumVisitor, Debug, PartialEq, Eq)]
 pub enum TransactionLogCollectorFilter {
     All,
     AllWithVotes,
@@ -785,7 +785,7 @@ pub struct TransactionLogCollectorConfig {
     pub filter: TransactionLogCollectorFilter,
 }
 
-#[derive(AbiExample, Clone, Debug, PartialEq)]
+#[derive(AbiExample, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionLogInfo {
     pub signature: Signature,
     pub result: Result<()>,
@@ -829,7 +829,7 @@ pub trait NonceInfo {
 }
 
 /// Holds limited nonce info available during transaction checks
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NoncePartial {
     address: Pubkey,
     account: AccountSharedData,
@@ -855,7 +855,7 @@ impl NonceInfo for NoncePartial {
 }
 
 /// Holds fee subtracted nonce info
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NonceFull {
     address: Pubkey,
     account: AccountSharedData,
@@ -1101,7 +1101,7 @@ impl PartialEq for Bank {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
 pub enum RewardType {
     Fee,
     Rent,
@@ -1138,7 +1138,7 @@ pub trait DropCallback: fmt::Debug {
     fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
     pub lamports: i64,          // Reward amount
@@ -17873,7 +17873,7 @@ pub(crate) mod tests {
                         .try_borrow_instruction_account(transaction_context, 1)?
                         .get_lamports();
                     let diff_balance = (new_balance as i64).saturating_sub(current_balance as i64);
-                    let amount = diff_balance.abs() as u64;
+                    let amount = diff_balance.unsigned_abs();
                     if diff_balance.is_positive() {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?

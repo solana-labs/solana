@@ -62,7 +62,7 @@ use {
 pub const MAX_SIGNERS: usize = 16;
 
 /// Error definitions
-#[derive(Debug, ThisError, PartialEq)]
+#[derive(Debug, ThisError, PartialEq, Eq)]
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),

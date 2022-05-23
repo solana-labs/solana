@@ -25,7 +25,7 @@ use crate::{
 crate::declare_id!("BPFLoaderUpgradeab1e11111111111111111111111");
 
 /// Upgradeable loader account states
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, AbiExample)]
 pub enum UpgradeableLoaderState {
     /// Account is not initialized.
     Uninitialized,

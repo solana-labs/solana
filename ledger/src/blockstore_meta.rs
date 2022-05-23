@@ -65,7 +65,7 @@ mod serde_compat {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 /// Index recording presence/absence of shreds
 pub struct Index {
     pub slot: Slot,
@@ -73,7 +73,7 @@ pub struct Index {
     coding: ShredIndex,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ShredIndex {
     /// Map representing presence/absence of shreds
     index: BTreeSet<u64>,
@@ -107,14 +107,14 @@ pub struct DuplicateSlotProof {
     pub shred2: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ErasureMetaStatus {
     CanRecover,
     DataFull,
     StillNeed(usize),
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum FrozenHashVersioned {
     Current(FrozenHashStatus),
 }
@@ -135,7 +135,7 @@ impl FrozenHashVersioned {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct FrozenHashStatus {
     pub frozen_hash: Hash,
     pub is_duplicate_confirmed: bool,
@@ -307,36 +307,36 @@ impl DuplicateSlotProof {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TransactionStatusIndexMeta {
     pub max_slot: Slot,
     pub frozen: bool,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AddressSignatureMeta {
     pub writeable: bool,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PerfSample {
     pub num_transactions: u64,
     pub num_slots: u64,
     pub sample_period_secs: u16,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ProgramCost {
     pub cost: u64,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OptimisticSlotMetaV0 {
     pub hash: Hash,
     pub timestamp: UnixTimestamp,
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum OptimisticSlotMetaVersioned {
     V0(OptimisticSlotMetaV0),
 }

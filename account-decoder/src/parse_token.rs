@@ -179,7 +179,7 @@ pub struct UiTokenAccount {
     pub extensions: Vec<UiExtension>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum UiAccountState {
     Uninitialized,
@@ -260,7 +260,7 @@ pub fn token_amount_to_ui_amount(amount: u64, decimals: u8) -> UiTokenAmount {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMint {
     pub mint_authority: Option<String>,
@@ -272,7 +272,7 @@ pub struct UiMint {
     pub extensions: Vec<UiExtension>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMultisig {
     pub num_required_signers: u8,

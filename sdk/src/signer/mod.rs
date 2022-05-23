@@ -15,7 +15,7 @@ pub mod null_signer;
 pub mod presigner;
 pub mod signers;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum SignerError {
     #[error("keypair-pubkey mismatch")]
     KeypairPubkeyMismatch,

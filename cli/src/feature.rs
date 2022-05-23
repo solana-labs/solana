@@ -25,14 +25,14 @@ use {
 
 const DEFAULT_MAX_ACTIVE_DISPLAY_AGE_SLOTS: Slot = 15_000_000; // ~90days
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ForceActivation {
     No,
     Almost,
     Yes,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FeatureCliCommand {
     Status {
         features: Vec<Pubkey>,

@@ -68,7 +68,7 @@ solana_sdk::declare_builtin!(
 );
 
 /// Errors returned by functions the BPF Loader registers with the VM
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum BpfError {
     #[error("{0}")]
     VerifierError(#[from] VerifierError),

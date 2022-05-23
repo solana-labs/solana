@@ -65,7 +65,7 @@ fn check_txs(
     no_bank
 }
 
-#[derive(ArgEnum, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, PartialEq, Eq)]
 enum WriteLockContention {
     /// No transactions lock the same accounts.
     None,

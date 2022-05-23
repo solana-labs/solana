@@ -9,7 +9,7 @@ use {
 
 const SOL_SYMBOL: &str = "◎";
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum TokenType {
     Sol,
     SplToken,

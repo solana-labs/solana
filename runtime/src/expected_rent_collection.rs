@@ -16,7 +16,7 @@ use {
     std::sync::atomic::Ordering,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ExpectedRentCollection {
     partition_from_pubkey: PartitionIndex,
     epoch_of_max_storage_slot: Epoch,

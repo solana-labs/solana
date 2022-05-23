@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 pub use target_arch::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodEdwardsPoint(pub [u8; 32]);
 

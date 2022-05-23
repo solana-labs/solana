@@ -77,7 +77,7 @@ impl PacketOffsets {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PacketError {
     InvalidLen,
     InvalidPubkeyLen,

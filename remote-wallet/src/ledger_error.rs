@@ -1,6 +1,6 @@
 use {num_derive::FromPrimitive, thiserror::Error};
 
-#[derive(Error, Debug, Clone, FromPrimitive, PartialEq)]
+#[derive(Error, Debug, Clone, FromPrimitive, PartialEq, Eq)]
 pub enum LedgerError {
     #[error("Solana app not open on Ledger device")]
     NoAppResponse = 0x6700,

@@ -17,6 +17,7 @@ crate::declare_id!("ComputeBudget111111111111111111111111111111");
     Debug,
     Deserialize,
     PartialEq,
+    Eq,
     Serialize,
 )]
 pub enum ComputeBudgetInstruction {

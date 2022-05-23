@@ -6,7 +6,7 @@ use {
     },
 };
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "extension", content = "state")]
 pub enum UiExtension {
     Uninitialized,
@@ -53,7 +53,7 @@ pub fn parse_extension<S: BaseState>(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTransferFee {
     pub epoch: u64,
@@ -71,7 +71,7 @@ impl From<extension::transfer_fee::TransferFee> for UiTransferFee {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTransferFeeConfig {
     pub transfer_fee_config_authority: Option<String>,
@@ -100,7 +100,7 @@ impl From<extension::transfer_fee::TransferFeeConfig> for UiTransferFeeConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTransferFeeAmount {
     pub withheld_amount: u64,
@@ -114,7 +114,7 @@ impl From<extension::transfer_fee::TransferFeeAmount> for UiTransferFeeAmount {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMintCloseAuthority {
     pub close_authority: Option<String>,
@@ -129,7 +129,7 @@ impl From<extension::mint_close_authority::MintCloseAuthority> for UiMintCloseAu
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiDefaultAccountState {
     pub account_state: UiAccountState,
@@ -146,7 +146,7 @@ impl From<extension::default_account_state::DefaultAccountState> for UiDefaultAc
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMemoTransfer {
     pub require_incoming_transfer_memos: bool,

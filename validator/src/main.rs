@@ -93,7 +93,7 @@ use {
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Operation {
     Initialize,
     Run,

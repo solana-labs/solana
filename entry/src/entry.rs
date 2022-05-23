@@ -318,7 +318,7 @@ pub struct VerifyRecyclers {
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum EntryVerificationStatus {
     Failure,
     Success,

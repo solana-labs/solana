@@ -69,7 +69,7 @@ pub mod programs;
 extern crate solana_bpf_loader_program;
 
 /// Errors from the program test environment
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
     /// The chosen warp slot is not in the future, so warp is not performed
     #[error("Warp slot not in the future")]

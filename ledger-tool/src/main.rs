@@ -89,7 +89,7 @@ use {
 mod bigtable;
 mod ledger_path;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
     Print,
     Json,

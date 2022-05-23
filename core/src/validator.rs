@@ -251,7 +251,7 @@ impl ValidatorConfig {
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over
 // the admin RPC channel to help them to follow the general progress of node startup without
 // having to watch log messages.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ValidatorStartProgress {
     Initializing, // Catch all, default state
     SearchingForRpcService,
@@ -1820,7 +1820,7 @@ fn initialize_rpc_transaction_history_services(
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum ValidatorError {
     BadExpectedBankHash,
     NotEnoughLedgerData,

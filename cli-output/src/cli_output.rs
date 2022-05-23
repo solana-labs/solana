@@ -52,7 +52,7 @@ static CHECK_MARK: Emoji = Emoji("✅ ", "");
 static CROSS_MARK: Emoji = Emoji("❌ ", "");
 static WARNING: Emoji = Emoji("⚠️", "!");
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum OutputFormat {
     Display,
     Json,
@@ -347,7 +347,7 @@ pub struct CliValidatorsStakeByVersion {
     pub delinquent_active_stake: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CliValidatorsSortOrder {
     Delinquent,
     Commission,
@@ -1207,7 +1207,7 @@ impl fmt::Display for CliStakeState {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 pub enum CliStakeType {
     Stake,
     RewardsPool,
@@ -1604,7 +1604,7 @@ impl fmt::Display for CliInflation {
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliSignOnlyData {
     pub blockhash: String,

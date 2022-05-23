@@ -174,7 +174,7 @@ mod tests {
         )
     }
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct MyConfig {
         pub item: u64,
     }
