@@ -227,7 +227,11 @@ fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32)
     let (batches0, num_valid_packets) = prepare_batches(discard_factor);
     let verifier = TransactionSigVerifier::default();
 
-    bencher.iter(move || {
+    let mut c = 0;
+    let mut total_shrink_time = 0;
+    let mut total_verify_time = 0;
+
+    bencher.iter(|| {
         let mut batches = batches0.clone();
         let (pre_shrink_time_us, _pre_shrink_total) =
             SigVerifyStage::maybe_shrink_batches(&mut batches);
@@ -236,13 +240,17 @@ fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32)
         let _batches = verifier.verify_batches(batches, num_valid_packets);
         verify_time.stop();
 
-        info!(
-            "{}, {}, {}",
-            discard_factor,
-            pre_shrink_time_us,
-            verify_time.as_us()
-        )
+        c += 1;
+        total_shrink_time += pre_shrink_time_us;
+        total_verify_time += verify_time.as_us();
     });
+
+    error!(
+        "bsv, {}, {}, {}",
+        discard_factor,
+        (total_shrink_time as f64) / (c as f64),
+        (total_verify_time as f64) / (c as f64),
+    );
 }
 
 macro_rules! GEN_SHRINK_SIGVERIFY_BENCH {
