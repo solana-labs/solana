@@ -3463,11 +3463,7 @@ fn main() {
             ("latest-optimistic-slots", Some(arg_matches)) => {
                 let blockstore =
                     open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
-                let num_slots = if let Some(num_slots) = arg_matches.value_of("num_slots") {
-                    usize::from_str(num_slots).expect("Number of slots must be a number")
-                } else {
-                    usize::from_str(DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT).unwrap()
-                };
+                let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let slots = blockstore
                     .get_latest_optimistic_slots(num_slots)
                     .expect("Failed to get latest optimistic slots");
