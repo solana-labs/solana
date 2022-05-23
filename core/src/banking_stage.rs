@@ -2120,7 +2120,6 @@ impl BankingStage {
                 .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
-                // Passing `None` for bank for now will make all packet weights 0
                 unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
             );
 
