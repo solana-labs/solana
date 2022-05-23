@@ -279,7 +279,7 @@ pub struct EntrySigVerificationState {
     gpu_verify_duration_us: u64,
 }
 
-impl<'a> EntrySigVerificationState {
+impl EntrySigVerificationState {
     pub fn entries(&mut self) -> Option<Vec<EntryType>> {
         self.entries.take()
     }
