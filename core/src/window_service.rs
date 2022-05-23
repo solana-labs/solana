@@ -374,7 +374,7 @@ where
         }
         if packet.meta.repair() {
             let repair_info = RepairMeta {
-                _from_addr: packet.meta.addr(),
+                _from_addr: packet.meta.socket_addr(),
                 // If can't parse the nonce, dump the packet.
                 nonce: repair_response::nonce(&packet.data)?,
             };
@@ -408,7 +408,8 @@ where
 
     stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
     for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
-        *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
+        let addr = packet.meta.socket_addr();
+        *stats.addrs.entry(addr).or_default() += 1;
     }
     stats.elapsed += now.elapsed();
     Ok(())

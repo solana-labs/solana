@@ -432,7 +432,7 @@ impl ServeRepair {
     ) {
         // iter over the packets
         packet_batch.packets.iter().for_each(|packet| {
-            let from_addr = packet.meta.addr();
+            let from_addr = packet.meta.socket_addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
                 .for_each(|request| {
