@@ -5899,12 +5899,13 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(&self, test_hash_calculation: bool) -> bool {
+    pub fn verify_bank_hash(&self, test_hash_calculation: bool, ignore_mismatch: bool) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
             self.capitalization(),
             test_hash_calculation,
+            ignore_mismatch,
         )
     }
 
@@ -6105,7 +6106,7 @@ impl Bank {
 
         info!("verify_bank_hash..");
         let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation);
+        let mut verify = self.verify_bank_hash(test_hash_calculation, false);
         verify_time.stop();
         self.rc
             .accounts
@@ -9199,17 +9200,17 @@ pub(crate) mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_bank_hash(true));
+        assert!(bank0.verify_bank_hash(true, false));
 
         // Squash and then verify hash_internal value
         bank0.freeze();
         bank0.squash();
-        assert!(bank0.verify_bank_hash(true));
+        assert!(bank0.verify_bank_hash(true, false));
 
         bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
-        assert!(bank1.verify_bank_hash(true));
+        assert!(bank1.verify_bank_hash(true, false));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -9217,7 +9218,7 @@ pub(crate) mod tests {
         bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false, false, None);
 
-        assert!(bank1.verify_bank_hash(true));
+        assert!(bank1.verify_bank_hash(true, false));
     }
 
     #[test]
@@ -10278,7 +10279,7 @@ pub(crate) mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
     }
 
     #[test]
@@ -10302,19 +10303,19 @@ pub(crate) mod tests {
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
         bank3.update_accounts_hash();
-        assert!(bank3.verify_bank_hash(true));
+        assert!(bank3.verify_bank_hash(true, false));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true));
-        assert!(bank3.verify_bank_hash(true));
+        assert!(bank2.verify_bank_hash(true, false));
+        assert!(bank3.verify_bank_hash(true, false));
     }
 
     #[test]

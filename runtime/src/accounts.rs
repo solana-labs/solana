@@ -781,12 +781,14 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        ignore_mismatch: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
             slot,
             ancestors,
             total_lamports,
             test_hash_calculation,
+            ignore_mismatch,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false

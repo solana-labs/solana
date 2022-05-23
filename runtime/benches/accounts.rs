@@ -114,7 +114,8 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             0,
             &ancestors,
             total_lamports,
-            test_hash_calculation
+            test_hash_calculation,
+            false,
         ))
     });
 }

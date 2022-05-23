@@ -5812,6 +5812,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+        ignore_mismatch: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -5840,19 +5841,23 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.snapshot_hash {
-                Ok(())
-            } else {
-                warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.snapshot_hash
-                );
-                Err(MismatchedBankHash)
-            }
+        if ignore_mismatch {
+            Ok(())
         } else {
-            Err(MissingBankHash)
+            let bank_hashes = self.bank_hashes.read().unwrap();
+            if let Some(found_hash_info) = bank_hashes.get(&slot) {
+                if calculated_hash == found_hash_info.snapshot_hash {
+                    Ok(())
+                } else {
+                    warn!(
+                        "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
+                        slot, calculated_hash, found_hash_info.snapshot_hash
+                    );
+                    Err(MismatchedBankHash)
+                }
+            } else {
+                Err(MissingBankHash)
+            }
         }
     }
 
@@ -9672,7 +9677,7 @@ pub mod tests {
         assert_load_account(&accounts, current_slot, dummy_pubkey, dummy_lamport);
 
         accounts
-            .verify_bank_hash_and_lamports(4, &Ancestors::default(), 1222, true)
+            .verify_bank_hash_and_lamports(4, &Ancestors::default(), 1222, true, false)
             .unwrap();
     }
 
@@ -10024,13 +10029,13 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true, false),
             Ok(_)
         );
 
         db.bank_hashes.write().unwrap().remove(&some_slot).unwrap();
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true, false),
             Err(MissingBankHash)
         );
 
@@ -10045,7 +10050,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, bank_hash_info);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true, false),
             Err(MismatchedBankHash)
         );
     }
@@ -10066,7 +10071,7 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true, false),
             Ok(_)
         );
 
@@ -10080,12 +10085,12 @@ pub mod tests {
         );
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 2, true, false),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, false),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -10105,7 +10110,7 @@ pub mod tests {
         db.add_root(some_slot);
         db.update_accounts_hash_test(some_slot, &ancestors);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 0, true, false),
             Ok(_)
         );
     }
@@ -10135,7 +10140,7 @@ pub mod tests {
         db.store_accounts_unfrozen((some_slot, accounts), Some(&[&some_hash]), false);
         db.add_root(some_slot);
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 1, true, false),
             Err(MismatchedBankHash)
         );
     }
@@ -10741,12 +10746,12 @@ pub mod tests {
             let no_ancestors = Ancestors::default();
             accounts.update_accounts_hash(current_slot, &no_ancestors);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true, false)
                 .unwrap();
 
             let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
             accounts
-                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true)
+                .verify_bank_hash_and_lamports(current_slot, &no_ancestors, 22300, true, false)
                 .unwrap();
 
             // repeating should be no-op
