@@ -177,7 +177,7 @@ fn recv_send(
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     let packets = packet_batch.packets.iter().filter_map(|pkt| {
-        let addr = pkt.meta.addr();
+        let addr = pkt.meta.socket_addr();
         socket_addr_space
             .check(&addr)
             .then(|| (&pkt.data[..pkt.meta.size], addr))
@@ -321,7 +321,7 @@ mod test {
                 {
                     p.data[0] = i as u8;
                     p.meta.size = PACKET_DATA_SIZE;
-                    p.meta.set_addr(&addr);
+                    p.meta.set_socket_addr(&addr);
                 }
                 packet_batch.packets.push(p);
             }

@@ -25,7 +25,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     packet_batch.packets.resize(10, Packet::default());
     for w in packet_batch.packets.iter_mut() {
         w.meta.size = PACKET_DATA_SIZE;
-        w.meta.set_addr(addr);
+        w.meta.set_socket_addr(addr);
     }
     let packet_batch = Arc::new(packet_batch);
     spawn(move || loop {
@@ -34,7 +34,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         }
         let mut num = 0;
         for p in &packet_batch.packets {
-            let a = p.meta.addr();
+            let a = p.meta.socket_addr();
             assert!(p.meta.size <= PACKET_DATA_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
             num += 1;

@@ -439,6 +439,7 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
     ) {
         packet_batch.packets.iter().for_each(|packet| {
+<<<<<<< HEAD
             if let Ok(request) = packet.deserialize_slice(..) {
                 stats.processed += 1;
                 let from_addr = packet.meta.addr();
@@ -447,6 +448,19 @@ impl ServeRepair {
                     let _ignore_disconnect = response_sender.send(rsp);
                 }
             }
+=======
+            let from_addr = packet.meta.socket_addr();
+            limited_deserialize(&packet.data[..packet.meta.size])
+                .into_iter()
+                .for_each(|request| {
+                    stats.processed += 1;
+                    let rsp =
+                        Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                    if let Some(rsp) = rsp {
+                        let _ignore_disconnect = response_sender.send(rsp);
+                    }
+                });
+>>>>>>> c248fb3f5 (renames Packet Meta::{,set_}addr methods to {,set_}socket_addr (#25478))
         });
     }
 

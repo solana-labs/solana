@@ -1927,7 +1927,7 @@ impl ClusterInfo {
             }
             check
         };
-        // Because pull-responses are sent back to packet.meta.addr() of
+        // Because pull-responses are sent back to packet.meta.socket_addr() of
         // incoming pull-requests, pings are also sent to request.from_addr (as
         // opposed to caller.gossip address).
         move |request| {
@@ -2489,8 +2489,13 @@ impl ClusterInfo {
         let verify_packet = |packet: Packet| {
             let protocol: Protocol = packet.deserialize_slice(..).ok()?;
             protocol.sanitize().ok()?;
+<<<<<<< HEAD
             let protocol = protocol.par_verify()?;
             Some((packet.meta.addr(), protocol))
+=======
+            let protocol = protocol.par_verify(&self.stats)?;
+            Some((packet.meta.socket_addr(), protocol))
+>>>>>>> c248fb3f5 (renames Packet Meta::{,set_}addr methods to {,set_}socket_addr (#25478))
         };
         let packets: Vec<_> = {
             let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
@@ -3248,7 +3253,7 @@ mod tests {
             remote_nodes.into_iter(),
             pongs.into_iter()
         ) {
-            assert_eq!(packet.meta.addr(), socket);
+            assert_eq!(packet.meta.socket_addr(), socket);
             let bytes = serialize(&pong).unwrap();
             match packet.deserialize_slice(..).unwrap() {
                 Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),

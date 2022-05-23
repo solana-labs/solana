@@ -158,7 +158,12 @@ fn handle_chunk(
                 if maybe_batch.is_none() {
                     let mut batch = PacketBatch::with_capacity(1);
                     let mut packet = Packet::default();
+<<<<<<< HEAD
                     packet.meta.set_addr(remote_addr);
+=======
+                    packet.meta.set_socket_addr(remote_addr);
+                    packet.meta.sender_stake = stake;
+>>>>>>> c248fb3f5 (renames Packet Meta::{,set_}addr methods to {,set_}socket_addr (#25478))
                     batch.packets.push(packet);
                     *maybe_batch = Some(batch);
                 }

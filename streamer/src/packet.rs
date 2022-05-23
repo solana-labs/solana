@@ -65,7 +65,7 @@ pub fn send_to(
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
     for p in &batch.packets {
-        let addr = p.meta.addr();
+        let addr = p.meta.socket_addr();
         if socket_addr_space.check(&addr) {
             socket.send_to(&p.data[..p.meta.size], &addr)?;
         }
@@ -91,7 +91,7 @@ mod tests {
         let packets = vec![Packet::default()];
         let mut packet_batch = PacketBatch::new(packets);
         packet_batch.set_addr(&send_addr);
-        assert_eq!(packet_batch.packets[0].meta.addr(), send_addr);
+        assert_eq!(packet_batch.packets[0].meta.socket_addr(), send_addr);
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         batch.packets.resize(10, Packet::default());
 
         for m in batch.packets.iter_mut() {
-            m.meta.set_addr(&addr);
+            m.meta.set_socket_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
         send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
@@ -121,7 +121,7 @@ mod tests {
 
         for m in &batch.packets {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(m.meta.addr(), saddr);
+            assert_eq!(m.meta.socket_addr(), saddr);
         }
     }
 
@@ -163,7 +163,7 @@ mod tests {
             let mut batch = PacketBatch::default();
             batch.packets.resize(1, Packet::default());
             for m in batch.packets.iter_mut() {
-                m.meta.set_addr(&addr);
+                m.meta.set_socket_addr(&addr);
                 m.meta.size = 1;
             }
             send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
