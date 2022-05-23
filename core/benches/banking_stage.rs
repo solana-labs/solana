@@ -254,7 +254,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     v.len(),
                 );
                 for xv in v {
-                    sent += xv.packets.len();
+                    sent += xv.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
             }

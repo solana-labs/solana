@@ -11,7 +11,7 @@ pub fn discard_batches_randomly(
     while total_packets > max_packets {
         let index = thread_rng().gen_range(0, batches.len());
         let removed = batches.swap_remove(index);
-        total_packets = total_packets.saturating_sub(removed.packets.len());
+        total_packets = total_packets.saturating_sub(removed.len());
     }
     total_packets
 }
@@ -24,7 +24,7 @@ mod tests {
     fn test_batch_discard_random() {
         solana_logger::setup();
         let mut batch = PacketBatch::default();
-        batch.packets.resize(1, Packet::default());
+        batch.resize(1, Packet::default());
         let num_batches = 100;
         let mut batches = vec![batch; num_batches];
         let max = 5;
