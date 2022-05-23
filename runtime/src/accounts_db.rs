@@ -1586,6 +1586,7 @@ impl AccountsDb {
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .thread_name(|i| format!("solana-db-accounts-{}", i))
+                .stack_size(8 * 1024 * 1024)
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
