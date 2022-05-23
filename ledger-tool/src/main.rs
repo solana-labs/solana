@@ -2202,9 +2202,9 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
-                    skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
-                    skip_initial_hash_calc: matches
+                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
                 });
@@ -2227,7 +2227,7 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig {
-                        bpf_jit: !matches.is_present("no_bpf_jit"),
+                        bpf_jit: !arg_matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
                     },
                     ..ProcessOptions::default()
