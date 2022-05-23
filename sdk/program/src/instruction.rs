@@ -320,7 +320,7 @@ pub enum InstructionError {
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
 #[wasm_bindgen]
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Instruction {
     /// Pubkey of the program that executes this instruction.
     #[wasm_bindgen(skip)]
@@ -529,7 +529,7 @@ pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key.
     pub pubkey: Pubkey,
@@ -755,7 +755,7 @@ pub fn get_stack_height() -> usize {
 
 #[test]
 fn test_account_meta_layout() {
-    #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
     struct AccountMetaRust {
         pub pubkey: Pubkey,
         pub is_signer: bool,

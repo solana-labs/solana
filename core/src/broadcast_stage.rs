@@ -64,7 +64,7 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum BroadcastStageType {
     Standard,
     FailEntryVerification,

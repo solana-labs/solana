@@ -61,14 +61,14 @@ pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
 }
 
 /// A wrapper enum for consistency across programs
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum VoteAccountType {
     Vote(UiVoteState),
 }
 
 /// A duplicate representation of VoteState for pretty JSON serialization
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiVoteState {
     node_pubkey: String,
@@ -82,7 +82,7 @@ pub struct UiVoteState {
     last_timestamp: BlockTimestamp,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct UiLockout {
     slot: Slot,
@@ -98,14 +98,14 @@ impl From<&Lockout> for UiLockout {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct UiAuthorizedVoters {
     epoch: Epoch,
     authorized_voter: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct UiPriorVoters {
     authorized_pubkey: String,
@@ -113,7 +113,7 @@ struct UiPriorVoters {
     target_epoch: Epoch,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct UiEpochCredits {
     epoch: Epoch,

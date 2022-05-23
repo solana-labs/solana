@@ -42,5 +42,8 @@ solana-logger = { path = "../logger", version = "=1.11.0" }
 [[bench]]
 name = "sigverify"
 
+[[bench]]
+name = "discard"
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

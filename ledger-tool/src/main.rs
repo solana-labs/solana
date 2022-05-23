@@ -68,7 +68,6 @@ use {
         transaction::{MessageHash, SanitizedTransaction, SimpleAddressLoader},
     },
     solana_stake_program::stake_state::{self, PointValue},
-    solana_transaction_status::VersionedTransactionWithStatusMeta,
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -92,7 +91,7 @@ use {
 mod bigtable;
 mod ledger_path;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
     Print,
     Json,
@@ -152,7 +151,7 @@ fn output_entry(
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
                 let tx_signature = transaction.signatures[0];
-                let tx_with_meta = blockstore
+                let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
                     .unwrap_or_else(|err| {
                         eprintln!(
@@ -161,18 +160,15 @@ fn output_entry(
                         );
                         None
                     })
-                    .map(|meta| VersionedTransactionWithStatusMeta { transaction, meta });
+                    .map(|meta| meta.into());
 
-                if let Some(tx_with_meta) = tx_with_meta {
-                    let status = tx_with_meta.meta.into();
-                    solana_cli_output::display::println_transaction(
-                        &tx_with_meta.transaction,
-                        Some(&status),
-                        "      ",
-                        None,
-                        None,
-                    );
-                }
+                solana_cli_output::display::println_transaction(
+                    &transaction,
+                    tx_status_meta.as_ref(),
+                    "      ",
+                    None,
+                    None,
+                );
             }
         }
         LedgerOutputMethod::Json => {
@@ -2224,9 +2220,9 @@ fn main() {
                     index: Some(accounts_index_config),
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
-                    skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
-                    skip_initial_hash_calc: matches
+                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
                 });
@@ -2249,7 +2245,7 @@ fn main() {
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
                     runtime_config: RuntimeConfig {
-                        bpf_jit: !matches.is_present("no_bpf_jit"),
+                        bpf_jit: !arg_matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
                     },
                     ..ProcessOptions::default()
@@ -3033,7 +3029,8 @@ fn main() {
                                         if detail.skipped_reasons.is_empty() {
                                             detail.skipped_reasons = format!("{:?}", skipped_reason);
                                         } else {
-                                            detail.skipped_reasons += &format!("/{:?}", skipped_reason);
+                                            use std::fmt::Write;
+                                            let _ = write!(&mut detail.skipped_reasons, "/{:?}", skipped_reason);
                                         }
                                     }
                                 }

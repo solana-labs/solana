@@ -350,7 +350,7 @@ pub fn deserialize_packets<'a>(
     packet_indexes: &'a [usize],
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone()).ok()
+        DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
     })
 }
 

@@ -15,7 +15,7 @@ use {
 };
 
 /// Precompile errors
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum PrecompileError {
     #[error("public key is not valid")]
     InvalidPublicKey,

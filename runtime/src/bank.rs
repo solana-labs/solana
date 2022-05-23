@@ -190,7 +190,7 @@ pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RentDebit {
     rent_collected: u64,
     post_balance: u64,
@@ -210,7 +210,7 @@ impl RentDebit {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
     fn get_account_rent_debit(&self, address: &Pubkey) -> u64 {
@@ -765,7 +765,7 @@ pub fn inner_instructions_list_from_instruction_trace(
 /// A list of log messages emitted during a transaction
 pub type TransactionLogMessages = Vec<String>;
 
-#[derive(Serialize, Deserialize, AbiExample, AbiEnumVisitor, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, AbiExample, AbiEnumVisitor, Debug, PartialEq, Eq)]
 pub enum TransactionLogCollectorFilter {
     All,
     AllWithVotes,
@@ -785,7 +785,7 @@ pub struct TransactionLogCollectorConfig {
     pub filter: TransactionLogCollectorFilter,
 }
 
-#[derive(AbiExample, Clone, Debug, PartialEq)]
+#[derive(AbiExample, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionLogInfo {
     pub signature: Signature,
     pub result: Result<()>,
@@ -829,7 +829,7 @@ pub trait NonceInfo {
 }
 
 /// Holds limited nonce info available during transaction checks
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NoncePartial {
     address: Pubkey,
     account: AccountSharedData,
@@ -855,7 +855,7 @@ impl NonceInfo for NoncePartial {
 }
 
 /// Holds fee subtracted nonce info
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NonceFull {
     address: Pubkey,
     account: AccountSharedData,
@@ -1101,7 +1101,7 @@ impl PartialEq for Bank {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
 pub enum RewardType {
     Fee,
     Rent,
@@ -1138,7 +1138,7 @@ pub trait DropCallback: fmt::Debug {
     fn clone_box(&self) -> Box<dyn DropCallback + Send + Sync>;
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, Clone, Copy)]
 pub struct RewardInfo {
     pub reward_type: RewardType,
     pub lamports: i64,          // Reward amount
@@ -6330,6 +6330,7 @@ impl Bank {
         &self,
         test_hash_calculation: bool,
         can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
     ) -> bool {
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
@@ -6339,6 +6340,7 @@ impl Bank {
             self.epoch_schedule(),
             &self.rent_collector,
             can_cached_slot_be_unflushed,
+            ignore_mismatch,
         )
     }
 
@@ -6540,7 +6542,7 @@ impl Bank {
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");
-            let verify = self.verify_bank_hash(test_hash_calculation, false);
+            let verify = self.verify_bank_hash(test_hash_calculation, false, false);
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
@@ -9641,17 +9643,17 @@ pub(crate) mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()).unwrap().lamports(), 10);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_bank_hash(true, false));
+        assert!(bank0.verify_bank_hash(true, false, false));
 
         // Squash and then verify hash_internal value
         bank0.freeze();
         bank0.squash();
-        assert!(bank0.verify_bank_hash(true, false));
+        assert!(bank0.verify_bank_hash(true, false, false));
 
         bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
-        assert!(bank1.verify_bank_hash(true, false));
+        assert!(bank1.verify_bank_hash(true, false, false));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -9659,7 +9661,7 @@ pub(crate) mod tests {
         bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false, false, None);
 
-        assert!(bank1.verify_bank_hash(true, false));
+        assert!(bank1.verify_bank_hash(true, false, false));
     }
 
     #[test]
@@ -10721,7 +10723,7 @@ pub(crate) mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false));
+        assert!(bank2.verify_bank_hash(true, false, false));
     }
 
     #[test]
@@ -10745,19 +10747,19 @@ pub(crate) mod tests {
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false));
+        assert!(bank2.verify_bank_hash(true, false, false));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(true, false));
+        assert!(bank2.verify_bank_hash(true, false, false));
         bank3.update_accounts_hash();
-        assert!(bank3.verify_bank_hash(true, false));
+        assert!(bank3.verify_bank_hash(true, false, false));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(10, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false));
-        assert!(bank3.verify_bank_hash(true, false));
+        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank3.verify_bank_hash(true, false, false));
     }
 
     #[test]
@@ -16246,7 +16248,7 @@ pub(crate) mod tests {
             let instruction_context = transaction_context.get_current_instruction_context()?;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 1)?
-                .set_data(&[0; 40]);
+                .set_data(&[0; 40])?;
             Ok(())
         }
 
@@ -17866,28 +17868,28 @@ pub(crate) mod tests {
                     // Set data length
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
-                        .set_data_length(new_size);
+                        .set_data_length(new_size)?;
 
                     // set balance
                     let current_balance = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?
                         .get_lamports();
                     let diff_balance = (new_balance as i64).saturating_sub(current_balance as i64);
-                    let amount = diff_balance.abs() as u64;
+                    let amount = diff_balance.unsigned_abs();
                     if diff_balance.is_positive() {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
                             .checked_sub_lamports(amount)?;
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_lamports(new_balance);
+                            .set_lamports(new_balance)?;
                     } else {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?
                             .checked_add_lamports(amount)?;
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_lamports(new_balance);
+                            .set_lamports(new_balance)?;
                     }
                     Ok(())
                 }

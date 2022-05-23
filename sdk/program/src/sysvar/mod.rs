@@ -163,7 +163,7 @@ mod tests {
     };
 
     #[repr(C)]
-    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
     struct TestSysvar {
         something: Pubkey,
     }

@@ -39,7 +39,7 @@ pub type EpochSlotsIndex = u8;
 pub const MAX_EPOCH_SLOTS: EpochSlotsIndex = 255;
 
 /// CrdsValue that is replicated across the cluster
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct CrdsValue {
     pub signature: Signature,
     pub data: CrdsData,
@@ -79,7 +79,7 @@ impl Signable for CrdsValue {
 /// * Merge Strategy - Latest wallclock is picked
 /// * LowestSlot index is deprecated
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample, AbiEnumVisitor)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 pub enum CrdsData {
     ContactInfo(ContactInfo),
     Vote(VoteIndex, Vote),
@@ -161,7 +161,7 @@ impl CrdsData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct SnapshotHashes {
     pub from: Pubkey,
     pub hashes: Vec<(Slot, Hash)>,
@@ -207,7 +207,7 @@ impl SnapshotHashes {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct IncrementalSnapshotHashes {
     pub from: Pubkey,
     pub base: (Slot, Hash),
@@ -233,7 +233,7 @@ impl Sanitize for IncrementalSnapshotHashes {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct LowestSlot {
     pub from: Pubkey,
     root: Slot, //deprecated
@@ -287,7 +287,7 @@ impl Sanitize for LowestSlot {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, AbiExample, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, AbiExample, Serialize)]
 pub struct Vote {
     pub(crate) from: Pubkey,
     transaction: Transaction,
@@ -354,7 +354,7 @@ impl<'de> Deserialize<'de> for Vote {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct LegacyVersion {
     pub from: Pubkey,
     pub wallclock: u64,
@@ -369,7 +369,7 @@ impl Sanitize for LegacyVersion {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Version {
     pub from: Pubkey,
     pub wallclock: u64,
@@ -409,7 +409,7 @@ impl Version {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, AbiExample, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, AbiExample, Deserialize, Serialize)]
 pub struct NodeInstance {
     from: Pubkey,
     wallclock: u64,

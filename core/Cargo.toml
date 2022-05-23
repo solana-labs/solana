@@ -75,7 +75,7 @@ solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.11.0" }
 solana-version = { path = "../version", version = "=1.11.0" }
 static_assertions = "1.1.0"
-systemstat = "0.1.10"
+systemstat = "0.1.11"
 
 [target."cfg(unix)".dependencies]
 sysctl = "0.4.4"

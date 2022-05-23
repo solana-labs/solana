@@ -6,7 +6,7 @@ use {
     solana_vote_program::vote_state::{Vote, VoteStateUpdate},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum VoteTransaction {
     Vote(Vote),
     VoteStateUpdate(VoteStateUpdate),

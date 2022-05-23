@@ -52,7 +52,7 @@ const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
 
 const DEFAULT_FAUCET_SOL: f64 = 1_000_000.;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 enum Output {
     None,
     Log,

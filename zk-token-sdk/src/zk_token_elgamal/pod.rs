@@ -1,7 +1,7 @@
 pub use bytemuck::{Pod, Zeroable};
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodU16([u8; 2]);
 impl From<u16> for PodU16 {
@@ -15,7 +15,7 @@ impl From<PodU16> for u16 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodU64([u8; 8]);
 impl From<u64> for PodU64 {
@@ -29,15 +29,15 @@ impl From<PodU64> for u64 {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Scalar(pub [u8; 32]);
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalCiphertext(pub [u8; 64]);
 
@@ -53,7 +53,7 @@ impl Default for ElGamalCiphertext {
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
 
@@ -63,7 +63,7 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
@@ -73,7 +73,7 @@ impl fmt::Debug for PedersenCommitment {
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DecryptHandle(pub [u8; 32]);
 
@@ -169,7 +169,7 @@ unsafe impl Zeroable for RangeProof256 {}
 unsafe impl Pod for RangeProof256 {}
 
 /// Serialization for AeCiphertext
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct AeCiphertext(pub [u8; 36]);
 

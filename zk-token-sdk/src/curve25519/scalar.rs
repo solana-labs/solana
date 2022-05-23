@@ -1,6 +1,6 @@
 pub use bytemuck::{Pod, Zeroable};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodScalar(pub [u8; 32]);
 

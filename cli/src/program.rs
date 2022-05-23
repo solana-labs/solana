@@ -54,7 +54,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ProgramCliCommand {
     Deploy {
         program_location: Option<String>,

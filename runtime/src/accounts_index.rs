@@ -124,7 +124,7 @@ pub trait IndexValue:
 {
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },

@@ -141,7 +141,7 @@ impl ElGamal {
 /// A (twisted) ElGamal encryption keypair.
 ///
 /// The instances of the secret key are zeroized on drop.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Zeroize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Zeroize)]
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
     pub public: ElGamalPubkey,

@@ -24,7 +24,7 @@ pub struct MerkleTree {
     nodes: Vec<Hash>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ProofEntry<'a>(&'a Hash, Option<&'a Hash>, Option<&'a Hash>);
 
 impl<'a> ProofEntry<'a> {
@@ -38,7 +38,7 @@ impl<'a> ProofEntry<'a> {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Proof<'a>(Vec<ProofEntry<'a>>);
 
 impl<'a> Proof<'a> {

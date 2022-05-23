@@ -10,7 +10,7 @@ use {
 };
 
 /// Information required to download and apply a given update
-#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateManifest {
     pub timestamp_secs: u64, // When the release was deployed in seconds since UNIX EPOCH
     pub download_url: String, // Download URL to the release tar.bz2
@@ -18,7 +18,7 @@ pub struct UpdateManifest {
 }
 
 /// Data of an Update Manifest program Account.
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
 pub struct SignedUpdateManifest {
     pub manifest: UpdateManifest,
     pub manifest_signature: Signature,

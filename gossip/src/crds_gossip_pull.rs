@@ -56,7 +56,7 @@ const PULL_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 pub const FALSE_RATE: f64 = 0.1f64;
 pub const KEYS: f64 = 8f64;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct CrdsFilter {
     pub filter: Bloom<Hash>,
     mask: u64,

@@ -208,7 +208,7 @@ impl Processor {
         let mut lookup_table_meta = lookup_table.meta;
         lookup_table_meta.authority = None;
         AddressLookupTable::overwrite_meta_data(
-            lookup_table_account.get_data_mut(),
+            lookup_table_account.get_data_mut()?,
             lookup_table_meta,
         )?;
 
@@ -301,12 +301,12 @@ impl Processor {
         )?;
 
         {
-            let mut table_data = lookup_table_account.get_data_mut().to_vec();
+            let mut table_data = lookup_table_account.get_data_mut()?.to_vec();
             AddressLookupTable::overwrite_meta_data(&mut table_data, lookup_table_meta)?;
             for new_address in new_addresses {
                 table_data.extend_from_slice(new_address.as_ref());
             }
-            lookup_table_account.set_data(&table_data);
+            lookup_table_account.set_data(&table_data)?;
         }
         drop(lookup_table_account);
 
@@ -380,7 +380,7 @@ impl Processor {
         lookup_table_meta.deactivation_slot = clock.slot;
 
         AddressLookupTable::overwrite_meta_data(
-            lookup_table_account.get_data_mut(),
+            lookup_table_account.get_data_mut()?,
             lookup_table_meta,
         )?;
 
@@ -468,8 +468,8 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        lookup_table_account.set_data(&[]);
-        lookup_table_account.set_lamports(0);
+        lookup_table_account.set_data(&[])?;
+        lookup_table_account.set_lamports(0)?;
 
         Ok(())
     }

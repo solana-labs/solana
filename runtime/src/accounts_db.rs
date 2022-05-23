@@ -47,7 +47,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
-        expected_rent_collection::ExpectedRentCollection,
+        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -266,7 +266,7 @@ struct GenerateIndexTimings {
     pub accounts_data_len_dedup_time_us: u64,
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 struct StorageSizeAndCount {
     pub stored_size: usize,
     pub count: usize,
@@ -407,7 +407,7 @@ impl Versioned for (u64, AccountInfo) {
 // Slower fallback code path will be taken if the fast path has failed over the retry
 // threshold, regardless of these hints. Also, load cannot fail not-deterministically
 // even under very rare circumstances, unlike previously did allow.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadHint {
     // Caller hints that it's loading transactions for a block which is
     // descended from the current root, and at the tip of its fork.
@@ -870,7 +870,7 @@ pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBu
     Ok((temp_dirs, paths))
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, AbiExample)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashStats {
     pub num_updated_accounts: u64,
     pub num_removed_accounts: u64,
@@ -906,7 +906,7 @@ impl BankHashStats {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, AbiExample)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
     pub hash: Hash,
     pub snapshot_hash: Hash,
@@ -5544,6 +5544,8 @@ impl AccountsDb {
         let total_lamports = Mutex::<u64>::new(0);
         let stats = HashStats::default();
 
+        let max_slot_info = SlotInfoInEpoch::new(max_slot, config.epoch_schedule);
+
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -5588,7 +5590,7 @@ impl AccountsDb {
                                                 config.epoch_schedule,
                                                 config.rent_collector,
                                                 &stats,
-                                                max_slot,
+                                                &max_slot_info,
                                                 find_unskipped_slot,
                                                 self.filler_account_suffix.as_ref(),
                                             );
@@ -6127,6 +6129,9 @@ impl AccountsDb {
 
         let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
 
+        let max_slot_info =
+            SlotInfoInEpoch::new(storage.max_slot_inclusive(), config.epoch_schedule);
+
         let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
@@ -6158,7 +6163,7 @@ impl AccountsDb {
                     config.epoch_schedule,
                     config.rent_collector,
                     stats,
-                    storage.max_slot_inclusive(),
+                    &max_slot_info,
                     find_unskipped_slot,
                     filler_account_suffix,
                 );
@@ -6372,6 +6377,7 @@ impl AccountsDb {
             epoch_schedule,
             rent_collector,
             can_cached_slot_be_unflushed,
+            false,
         )
     }
 
@@ -6385,6 +6391,7 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -6415,19 +6422,23 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.snapshot_hash {
-                Ok(())
-            } else {
-                warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.snapshot_hash
-                );
-                Err(MismatchedBankHash)
-            }
+        if ignore_mismatch {
+            Ok(())
         } else {
-            Err(MissingBankHash)
+            let bank_hashes = self.bank_hashes.read().unwrap();
+            if let Some(found_hash_info) = bank_hashes.get(&slot) {
+                if calculated_hash == found_hash_info.snapshot_hash {
+                    Ok(())
+                } else {
+                    warn!(
+                        "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
+                        slot, calculated_hash, found_hash_info.snapshot_hash
+                    );
+                    Err(MismatchedBankHash)
+                }
+            } else {
+                Err(MissingBankHash)
+            }
         }
     }
 

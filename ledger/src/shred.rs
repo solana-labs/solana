@@ -173,7 +173,7 @@ pub enum ShredType {
 }
 
 /// A common header that is present in data and code shred headers
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct ShredCommonHeader {
     signature: Signature,
     shred_type: ShredType,
@@ -184,7 +184,7 @@ struct ShredCommonHeader {
 }
 
 /// The data shred header has parent offset and flags
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct DataShredHeader {
     parent_offset: u16,
     flags: ShredFlags,
@@ -192,14 +192,14 @@ struct DataShredHeader {
 }
 
 /// The coding shred header has FEC information
-#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct CodingShredHeader {
     num_data_shreds: u16,
     num_coding_shreds: u16,
     position: u16,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Shred {
     ShredCode(ShredCode),
     ShredData(ShredData),

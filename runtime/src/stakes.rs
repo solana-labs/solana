@@ -36,7 +36,7 @@ pub enum Error {
     StakeAccountNotFound(Pubkey),
 }
 
-#[derive(Debug, Clone, PartialEq, ToPrimitive)]
+#[derive(Debug, Clone, PartialEq, Eq, ToPrimitive)]
 pub enum InvalidCacheEntryReason {
     Missing,
     BadState,

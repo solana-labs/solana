@@ -159,7 +159,7 @@ pub async fn upload_confirmed_blocks(
         let (sender, receiver) = bounded(config.block_read_ahead_depth);
 
         let (slot_sender, slot_receiver) = unbounded();
-        let _ = blocks_to_upload
+        blocks_to_upload
             .into_iter()
             .for_each(|b| slot_sender.send(b).unwrap());
         drop(slot_sender);

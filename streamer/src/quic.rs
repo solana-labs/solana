@@ -178,9 +178,9 @@ fn handle_chunk(
                 if maybe_batch.is_none() {
                     let mut batch = PacketBatch::with_capacity(1);
                     let mut packet = Packet::default();
-                    packet.meta.set_addr(remote_addr);
+                    packet.meta.set_socket_addr(remote_addr);
                     packet.meta.sender_stake = stake;
-                    batch.packets.push(packet);
+                    batch.push(packet);
                     *maybe_batch = Some(batch);
                     stats
                         .total_packets_allocated
@@ -189,15 +189,15 @@ fn handle_chunk(
 
                 if let Some(batch) = maybe_batch.as_mut() {
                     let end = chunk.offset as usize + chunk.bytes.len();
-                    batch.packets[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
-                    batch.packets[0].meta.size = std::cmp::max(batch.packets[0].meta.size, end);
+                    batch[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
+                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                 }
             } else {
                 trace!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
-                    let len = batch.packets[0].meta.size;
+                    let len = batch[0].meta.size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
                             .total_packet_batch_send_err
@@ -279,9 +279,10 @@ impl ConnectionTable {
                     }
                 }
             }
-            self.table.remove(&oldest_ip.unwrap());
-            self.total_size -= 1;
-            num_pruned += 1;
+            if let Some(removed) = self.table.remove(&oldest_ip.unwrap()) {
+                self.total_size -= removed.len();
+                num_pruned += removed.len();
+            }
         }
         num_pruned
     }
@@ -777,7 +778,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 10 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets == num_expected_packets {
@@ -785,7 +786,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, 1);
             }
         }
@@ -849,7 +850,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets > num_expected_packets {
@@ -857,7 +858,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, num_bytes);
             }
         }
@@ -872,7 +873,7 @@ mod test {
         use std::net::Ipv4Addr;
         solana_logger::setup();
         let mut table = ConnectionTable::default();
-        let num_entries = 5;
+        let mut num_entries = 5;
         let max_connections_per_ip = 10;
         let sockets: Vec<_> = (0..num_entries)
             .into_iter()
@@ -883,12 +884,17 @@ mod test {
                 .try_add_connection(socket, i as u64, max_connections_per_ip)
                 .unwrap();
         }
+        num_entries += 1;
+        table
+            .try_add_connection(&sockets[0], 5, max_connections_per_ip)
+            .unwrap();
+
         let new_size = 3;
         let pruned = table.prune_oldest(new_size);
         assert_eq!(pruned, num_entries as usize - new_size);
         for v in table.table.values() {
             for x in v {
-                assert!(x.last_update() >= (num_entries as u64 - new_size as u64));
+                assert!((x.last_update() + 1) >= (num_entries as u64 - new_size as u64));
             }
         }
         assert_eq!(table.table.len(), new_size);
@@ -896,7 +902,6 @@ mod test {
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
             table.remove_connection(socket);
         }
-        info!("{:?}", table);
         assert_eq!(table.total_size, 0);
     }
 }

@@ -279,7 +279,7 @@ pub struct EntrySigVerificationState {
     gpu_verify_duration_us: u64,
 }
 
-impl<'a> EntrySigVerificationState {
+impl EntrySigVerificationState {
     pub fn entries(&mut self) -> Option<Vec<EntryType>> {
         self.entries.take()
     }
@@ -318,7 +318,7 @@ pub struct VerifyRecyclers {
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum EntryVerificationStatus {
     Failure,
     Success,
@@ -517,20 +517,16 @@ pub fn start_verify_transactions(
                     // uninitialized anyway, so the initilization would simply write junk into
                     // the vector anyway.
                     unsafe {
-                        packet_batch.packets.set_len(vec_size);
+                        packet_batch.set_len(vec_size);
                     }
                     let entry_tx_iter = slice
                         .into_par_iter()
                         .map(|tx| tx.to_versioned_transaction());
 
-                    let res = packet_batch
-                        .packets
-                        .par_iter_mut()
-                        .zip(entry_tx_iter)
-                        .all(|pair| {
-                            pair.0.meta = Meta::default();
-                            Packet::populate_packet(pair.0, None, &pair.1).is_ok()
-                        });
+                    let res = packet_batch.par_iter_mut().zip(entry_tx_iter).all(|pair| {
+                        pair.0.meta = Meta::default();
+                        Packet::populate_packet(pair.0, None, &pair.1).is_ok()
+                    });
                     if res {
                         Ok(packet_batch)
                     } else {
@@ -552,7 +548,7 @@ pub fn start_verify_transactions(
                 );
                 let verified = packet_batches
                     .iter()
-                    .all(|batch| batch.packets.iter().all(|p| !p.meta.discard()));
+                    .all(|batch| batch.iter().all(|p| !p.meta.discard()));
                 verify_time.stop();
                 (verified, verify_time.as_us())
             });

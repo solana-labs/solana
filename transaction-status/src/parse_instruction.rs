@@ -69,7 +69,7 @@ pub enum ParseInstructionError {
     SerdeJsonError(#[from] serde_json::error::Error),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstruction {
     pub program: String,
@@ -77,7 +77,7 @@ pub struct ParsedInstruction {
     pub parsed: Value,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstructionEnum {
     #[serde(rename = "type")]
@@ -86,7 +86,7 @@ pub struct ParsedInstructionEnum {
     pub info: Value,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableProgram {
     SplAssociatedTokenAccount,

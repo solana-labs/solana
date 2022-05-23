@@ -46,7 +46,7 @@ pub type StoredMetaWriteVersion = u64;
 /// Meta contains enough context to recover the index from storage itself
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StoredMeta {
     /// global write version
     pub write_version: StoredMetaWriteVersion,
@@ -91,7 +91,7 @@ impl<'a, T: ReadableAccount> From<Option<&'a T>> for AccountMeta {
 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct StoredAccountMeta<'a> {
     pub meta: &'a StoredMeta,
     /// account data

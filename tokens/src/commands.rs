@@ -53,14 +53,14 @@ use {
     },
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Allocation {
     pub recipient: String,
     pub amount: u64,
     pub lockup_date: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FundingSource {
     FeePayer,
     SplTokenAccount,

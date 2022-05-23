@@ -69,7 +69,7 @@ pub mod programs;
 extern crate solana_bpf_loader_program;
 
 /// Errors from the program test environment
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
     /// The chosen warp slot is not in the future, so warp is not performed
     #[error("Warp slot not in the future")]
@@ -182,8 +182,8 @@ pub fn builtin_process_instruction(
         let mut borrowed_account =
             instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
         if borrowed_account.is_writable() {
-            borrowed_account.set_lamports(lamports);
-            borrowed_account.set_data(&data);
+            borrowed_account.set_lamports(lamports)?;
+            borrowed_account.set_data(&data)?;
         }
     }
 
