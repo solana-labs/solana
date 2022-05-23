@@ -20,6 +20,7 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 pub struct InstructionAccount {
     pub index_in_transaction: usize,
     pub index_in_caller: usize,
+    pub index_in_callee: usize,
     pub is_signer: bool,
     pub is_writable: bool,
 }

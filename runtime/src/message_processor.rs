@@ -119,19 +119,26 @@ impl MessageProcessor {
                 );
             }
 
-            let instruction_accounts = instruction
-                .accounts
-                .iter()
-                .map(|index_in_transaction| {
-                    let index_in_transaction = *index_in_transaction as usize;
-                    InstructionAccount {
-                        index_in_transaction,
-                        index_in_caller: program_indices.len().saturating_add(index_in_transaction),
-                        is_signer: message.is_signer(index_in_transaction),
-                        is_writable: message.is_writable(index_in_transaction),
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut instruction_accounts = Vec::with_capacity(instruction.accounts.len());
+            for (index_in_instruction, index_in_transaction) in
+                instruction.accounts.iter().enumerate()
+            {
+                let index_in_callee = instruction
+                    .accounts
+                    .get(0..index_in_instruction)
+                    .ok_or(TransactionError::InvalidAccountIndex)?
+                    .iter()
+                    .position(|account_index| account_index == index_in_transaction)
+                    .unwrap_or(index_in_instruction);
+                let index_in_transaction = *index_in_transaction as usize;
+                instruction_accounts.push(InstructionAccount {
+                    index_in_transaction,
+                    index_in_caller: program_indices.len().saturating_add(index_in_transaction),
+                    index_in_callee,
+                    is_signer: message.is_signer(index_in_transaction),
+                    is_writable: message.is_writable(index_in_transaction),
+                });
+            }
 
             let result = if is_precompile
                 && invoke_context

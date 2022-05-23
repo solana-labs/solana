@@ -744,7 +744,7 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
-        for account_meta in instruction.accounts.iter() {
+        for (index_in_instruction, account_meta) in instruction.accounts.iter().enumerate() {
             let index_in_transaction = self
                 .transaction_context
                 .find_index_of_account(&account_meta.pubkey)
@@ -784,6 +784,7 @@ impl<'a> InvokeContext<'a> {
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
                     index_in_caller,
+                    index_in_callee: index_in_instruction,
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
@@ -1258,11 +1259,13 @@ pub fn visit_each_account_once<E>(
     'root: for (index, instruction_account) in instruction_accounts.iter().enumerate() {
         match instruction_accounts.get(..index) {
             Some(range) => {
-                for before in range.iter() {
+                for (before_index, before) in range.iter().enumerate() {
                     if before.index_in_transaction == instruction_account.index_in_transaction {
+                        debug_assert_eq!(before_index, instruction_account.index_in_callee);
                         continue 'root; // skip dups
                     }
                 }
+                debug_assert_eq!(index, instruction_account.index_in_callee);
                 work(index, instruction_account)?;
             }
             None => return Err(inner_error),
