@@ -1,3 +1,36 @@
+//! This file defines a set of macros for reporting metrics.
+//!
+//! To report a metric, simply calling one of the following datapoint macros
+//! with a suitable message level:
+//!
+//! - datapoint_error!
+//! - datapoint_warn!
+//! - datapoint_trace!
+//! - datapoint_info!
+//! - datapoint_debug!
+//!
+//! The matric macro consists of the following three main parts:
+//!  - name: the name of the metric.
+//!
+//!  - fields (optional): fields are the main content of a metric sample. The
+//!    macro supports four different types of fields: bool, i64, f64, and String.
+//!    Here're their syntax:
+//!
+//!    - ("field-name", "field-value", bool)
+//!    - ("field-name", "field-value", i64)
+//!    - ("field-name", "field-value", f64)
+//!    - ("field-name", "field-value", String)
+//!
+//! Example:
+//!
+//! datapoint_debug!(
+//!     "name-of-the-metric",
+//!     ("some-bool", false, bool),
+//!     ("some-int", 100, i64),
+//!     ("some-float", 1.05, f64),
+//!     ("some-string", "field-value", String),
+//! );
+//!
 use std::{fmt, time::SystemTime};
 
 #[derive(Clone, Debug)]

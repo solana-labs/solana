@@ -3,7 +3,6 @@
 //! 1. a slot that is older than an epoch old
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
-#![allow(dead_code)]
 use {
     crate::{
         accounts_db::FoundStoredAccount,
@@ -14,7 +13,7 @@ use {
 
 /// a set of accounts need to be stored.
 /// If there are too many to fit in 'Primary', the rest are put in 'Overflow'
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum StorageSelector {
     Primary,
     Overflow,

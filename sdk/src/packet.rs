@@ -17,11 +17,11 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 bitflags! {
     #[repr(C)]
     pub struct PacketFlags: u8 {
-        const DISCARD        = 0b00000001;
-        const FORWARDED      = 0b00000010;
-        const REPAIR         = 0b00000100;
-        const SIMPLE_VOTE_TX = 0b00001000;
-        const TRACER_TX      = 0b00010000;
+        const DISCARD        = 0b0000_0001;
+        const FORWARDED      = 0b0000_0010;
+        const REPAIR         = 0b0000_0100;
+        const SIMPLE_VOTE_TX = 0b0000_1000;
+        const TRACER_TX      = 0b0001_0000;
     }
 }
 
@@ -63,7 +63,7 @@ impl Packet {
         let len = wr.position() as usize;
         packet.meta.size = len;
         if let Some(dest) = dest {
-            packet.meta.set_addr(dest);
+            packet.meta.set_socket_addr(dest);
         }
         Ok(())
     }
@@ -75,7 +75,7 @@ impl fmt::Debug for Packet {
             f,
             "Packet {{ size: {:?}, addr: {:?} }}",
             self.meta.size,
-            self.meta.addr()
+            self.meta.socket_addr()
         )
     }
 }
@@ -99,11 +99,11 @@ impl PartialEq for Packet {
 }
 
 impl Meta {
-    pub fn addr(&self) -> SocketAddr {
+    pub fn socket_addr(&self) -> SocketAddr {
         SocketAddr::new(self.addr, self.port)
     }
 
-    pub fn set_addr(&mut self, socket_addr: &SocketAddr) {
+    pub fn set_socket_addr(&mut self, socket_addr: &SocketAddr) {
         self.addr = socket_addr.ip();
         self.port = socket_addr.port();
     }

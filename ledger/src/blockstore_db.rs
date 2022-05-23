@@ -104,6 +104,8 @@ const PERF_SAMPLES_CF: &str = "perf_samples";
 const BLOCK_HEIGHT_CF: &str = "block_height";
 /// Column family for ProgramCosts
 const PROGRAM_COSTS_CF: &str = "program_costs";
+/// Column family for optimistic slots
+const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
 
 // 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
 const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
@@ -222,6 +224,10 @@ pub mod columns {
     /// The program costs column
     pub struct ProgramCosts;
 
+    #[derive(Debug)]
+    /// The optimistic slot column
+    pub struct OptimisticSlots;
+
     // When adding a new column ...
     // - Add struct below and implement `Column` and `ColumnName` traits
     // - Add descriptor in Rocks::cf_descriptors() and name in Rocks::columns()
@@ -230,7 +236,7 @@ pub mod columns {
     // - Account for column in `analyze_storage()` in ledger-tool/src/main.rs
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AccessType {
     /// Primary (read/write) access; only one process can have Primary access.
     Primary,
@@ -453,6 +459,7 @@ impl Rocks {
             new_cf_descriptor::<PerfSamples>(options, oldest_slot),
             new_cf_descriptor::<BlockHeight>(options, oldest_slot),
             new_cf_descriptor::<ProgramCosts>(options, oldest_slot),
+            new_cf_descriptor::<OptimisticSlots>(options, oldest_slot),
         ]
     }
 
@@ -479,6 +486,7 @@ impl Rocks {
             PerfSamples::NAME,
             BlockHeight::NAME,
             ProgramCosts::NAME,
+            OptimisticSlots::NAME,
         ]
     }
 
@@ -534,17 +542,20 @@ impl Rocks {
     }
 
     fn write(&self, batch: RWriteBatch) -> Result<()> {
-        let is_perf_enabled = maybe_enable_rocksdb_perf(
+        let op_start_instant = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_batch_perf_status.op_count,
+            &self.write_batch_perf_status,
         );
         let result = self.db.write(batch);
-        if is_perf_enabled {
-            report_rocksdb_write_perf(rocksdb_metric_header!(
-                "blockstore_rocksdb_write_perf,op=write_batch",
-                "write_batch",
-                self.column_options
-            ));
+        if let Some(op_start_instant) = op_start_instant {
+            report_rocksdb_write_perf(
+                &op_start_instant.elapsed(),
+                rocksdb_metric_header!(
+                    "blockstore_rocksdb_write_perf,op=write_batch",
+                    "write_batch",
+                    self.column_options
+                ),
+            );
         }
         match result {
             Ok(_) => Ok(()),
@@ -984,6 +995,14 @@ impl TypedColumn for columns::ErasureMeta {
     type Type = blockstore_meta::ErasureMeta;
 }
 
+impl SlotColumn for columns::OptimisticSlots {}
+impl ColumnName for columns::OptimisticSlots {
+    const NAME: &'static str = OPTIMISTIC_SLOTS_CF;
+}
+impl TypedColumn for columns::OptimisticSlots {
+    type Type = blockstore_meta::OptimisticSlotMetaVersioned;
+}
+
 #[derive(Debug)]
 pub struct Database {
     backend: Arc<Rocks>,
@@ -1302,11 +1321,14 @@ where
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
-        if is_perf_enabled {
-            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_read_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_get_perf_metric_header(&self.column_options),
+            );
         }
         result
     }
@@ -1380,11 +1402,14 @@ where
     pub fn put_bytes(&self, key: C::Index, value: &[u8]) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), value);
-        if is_perf_enabled {
-            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_write_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_put_perf_metric_header(&self.column_options),
+            );
         }
         result
     }
@@ -1407,7 +1432,7 @@ where
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
             let value = deserialize(&serialized_value)?;
@@ -1415,8 +1440,11 @@ where
             result = Ok(Some(value))
         }
 
-        if is_perf_enabled {
-            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_read_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_get_perf_metric_header(&self.column_options),
+            );
         }
         result
     }
@@ -1424,7 +1452,7 @@ where
     pub fn put(&self, key: C::Index, value: &C::Type) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let serialized_value = serialize(value)?;
 
@@ -1432,8 +1460,11 @@ where
             .backend
             .put_cf(self.handle(), &C::key(key), &serialized_value);
 
-        if is_perf_enabled {
-            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_write_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_put_perf_metric_header(&self.column_options),
+            );
         }
         result
     }
@@ -1441,11 +1472,14 @@ where
     pub fn delete(&self, key: C::Index) -> Result<()> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.delete_cf(self.handle(), &C::key(key));
-        if is_perf_enabled {
-            report_rocksdb_write_perf(C::rocksdb_delete_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_write_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_delete_perf_metric_header(&self.column_options),
+            );
         }
         result
     }
@@ -1461,11 +1495,14 @@ where
     ) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
-        if is_perf_enabled {
-            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_read_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_get_perf_metric_header(&self.column_options),
+            );
         }
 
         if let Some(serialized_value) = result? {
@@ -1482,11 +1519,14 @@ where
     pub fn get_protobuf(&self, key: C::Index) -> Result<Option<C::Type>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.read_perf_status.op_count,
+            &self.read_perf_status,
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
-        if is_perf_enabled {
-            report_rocksdb_read_perf(C::rocksdb_get_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_read_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_get_perf_metric_header(&self.column_options),
+            );
         }
 
         if let Some(serialized_value) = result? {
@@ -1502,11 +1542,14 @@ where
 
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
-            &self.write_perf_status.op_count,
+            &self.write_perf_status,
         );
         let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
-        if is_perf_enabled {
-            report_rocksdb_write_perf(C::rocksdb_put_perf_metric_header(&self.column_options));
+        if let Some(op_start_instant) = is_perf_enabled {
+            report_rocksdb_write_perf(
+                &op_start_instant.elapsed(),
+                C::rocksdb_put_perf_metric_header(&self.column_options),
+            );
         }
 
         result

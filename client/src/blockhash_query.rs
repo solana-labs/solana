@@ -12,7 +12,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Source {
     Cluster,
     NonceAccount(Pubkey),
@@ -107,7 +107,7 @@ impl Source {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BlockhashQuery {
     None(Hash),
     FeeCalculator(Source, Hash),

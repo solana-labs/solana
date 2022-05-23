@@ -51,6 +51,7 @@ use {
         cmp,
         collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet},
         convert::TryInto,
+        fmt::Write,
         fs,
         io::{Error as IoError, ErrorKind},
         path::{Path, PathBuf},
@@ -162,6 +163,7 @@ pub struct Blockstore {
     block_height_cf: LedgerColumn<cf::BlockHeight>,
     program_costs_cf: LedgerColumn<cf::ProgramCosts>,
     bank_hash_cf: LedgerColumn<cf::BankHash>,
+    optimistic_slots_cf: LedgerColumn<cf::OptimisticSlots>,
     last_root: RwLock<Slot>,
     insert_shreds_lock: Mutex<()>,
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
@@ -384,6 +386,7 @@ impl Blockstore {
         let block_height_cf = db.column();
         let program_costs_cf = db.column();
         let bank_hash_cf = db.column();
+        let optimistic_slots_cf = db.column();
 
         let db = Arc::new(db);
 
@@ -435,6 +438,7 @@ impl Blockstore {
             block_height_cf,
             program_costs_cf,
             bank_hash_cf,
+            optimistic_slots_cf,
             new_shreds_signals: Mutex::default(),
             completed_slots_senders: Mutex::default(),
             optimistic_distribution_slot_sender: Mutex::default(),
@@ -765,6 +769,7 @@ impl Blockstore {
         self.block_height_cf.submit_rocksdb_cf_metrics();
         self.program_costs_cf.submit_rocksdb_cf_metrics();
         self.bank_hash_cf.submit_rocksdb_cf_metrics();
+        self.optimistic_slots_cf.submit_rocksdb_cf_metrics();
     }
 
     fn try_shred_recovery(
@@ -1870,10 +1875,8 @@ impl Blockstore {
 
             let upper_index = cmp::min(current_index, end_index);
             // the tick that will be used to figure out the timeout for this hole
-            let reference_tick = u64::from(Shred::reference_tick_from_data(
-                db_iterator.value().expect("couldn't read value"),
-            ));
-
+            let data = db_iterator.value().expect("couldn't read value");
+            let reference_tick = u64::from(Shred::reference_tick_from_data(data).unwrap());
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 // The higher index holes have not timed out yet
                 break 'outer;
@@ -3887,27 +3890,33 @@ pub fn create_new_ledger(
                 ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_ARCHIVE)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!(
+                let _ = write!(
+                    &mut error_messages,
                     "/failed to stash problematic {}: {}",
                     DEFAULT_GENESIS_ARCHIVE, e
-                )
+                );
             });
             fs::rename(
                 &ledger_path.join(DEFAULT_GENESIS_FILE),
                 ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_FILE)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!(
+                let _ = write!(
+                    &mut error_messages,
                     "/failed to stash problematic {}: {}",
                     DEFAULT_GENESIS_FILE, e
-                )
+                );
             });
             fs::rename(
                 &ledger_path.join(blockstore_dir),
                 ledger_path.join(format!("{}.failed", blockstore_dir)),
             )
             .unwrap_or_else(|e| {
-                error_messages += &format!("/failed to stash problematic {}: {}", blockstore_dir, e)
+                let _ = write!(
+                    &mut error_messages,
+                    "/failed to stash problematic {}: {}",
+                    blockstore_dir, e
+                );
             });
 
             return Err(BlockstoreError::Io(IoError::new(

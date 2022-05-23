@@ -113,7 +113,7 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, AbiExample)]
 pub enum StakeAuthorize {
     Staker,
     Withdrawer,
@@ -125,6 +125,7 @@ pub enum StakeAuthorize {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,
@@ -159,6 +160,7 @@ impl Lockup {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,
@@ -238,6 +240,7 @@ impl Authorized {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,

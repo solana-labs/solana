@@ -3,6 +3,7 @@ mod tests {
     use {
         crossbeam_channel::unbounded,
         solana_client::{
+            connection_cache::ConnectionCacheStats,
             quic_client::QuicTpuConnection,
             tpu_connection::{ClientStats, TpuConnection},
         },
@@ -44,7 +45,8 @@ mod tests {
         let addr = s.local_addr().unwrap().ip();
         let port = s.local_addr().unwrap().port() - QUIC_PORT_OFFSET;
         let tpu_addr = SocketAddr::new(addr, port);
-        let client = QuicTpuConnection::new(tpu_addr);
+        let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
+        let client = QuicTpuConnection::new(tpu_addr, connection_cache_stats);
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
@@ -62,7 +64,7 @@ mod tests {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets >= num_expected_packets {
@@ -70,7 +72,7 @@ mod tests {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in &batch {
                 assert_eq!(p.meta.size, num_bytes);
             }
         }

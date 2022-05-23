@@ -293,7 +293,7 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
  * A strategy for confirming transactions that uses the last valid
  * block height for a given blockhash to check for transaction expiration.
  */
-export type BlockheightBasedTransactionConfimationStrategy = {
+export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
 
@@ -2842,7 +2842,7 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy: BlockheightBasedTransactionConfimationStrategy,
+    strategy: BlockheightBasedTransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
@@ -2856,7 +2856,7 @@ export class Connection {
   // eslint-disable-next-line no-dupe-class-members
   async confirmTransaction(
     strategy:
-      | BlockheightBasedTransactionConfimationStrategy
+      | BlockheightBasedTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
@@ -2865,7 +2865,8 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config = strategy as BlockheightBasedTransactionConfimationStrategy;
+      const config =
+        strategy as BlockheightBasedTransactionConfirmationStrategy;
       rawSignature = config.signature;
     }
 
@@ -2942,7 +2943,8 @@ export class Connection {
           timeoutMs,
         );
       } else {
-        let config = strategy as BlockheightBasedTransactionConfimationStrategy;
+        let config =
+          strategy as BlockheightBasedTransactionConfirmationStrategy;
         (async () => {
           let currentBlockHeight = await checkBlockHeight();
           if (done) return;

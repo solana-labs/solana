@@ -206,6 +206,13 @@ impl<'a> StackFrame<'a> {
     }
 }
 
+struct SyscallContext {
+    check_aligned: bool,
+    check_size: bool,
+    orig_account_lengths: Vec<usize>,
+    allocator: Rc<RefCell<dyn Alloc>>,
+}
+
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
     #[allow(deprecated)]
@@ -224,10 +231,7 @@ pub struct InvokeContext<'a> {
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
-    check_aligned: bool,
-    check_size: bool,
-    orig_account_lengths: Vec<Option<Vec<usize>>>,
-    allocators: Vec<Option<Rc<RefCell<dyn Alloc>>>>,
+    syscall_context: Vec<Option<SyscallContext>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -255,17 +259,14 @@ impl<'a> InvokeContext<'a> {
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
-            compute_meter: ComputeMeter::new_ref(compute_budget.max_units),
+            compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(initial_accounts_data_len),
             executors,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
             lamports_per_signature,
-            check_aligned: true,
-            check_size: true,
-            orig_account_lengths: Vec::new(),
-            allocators: Vec::new(),
+            syscall_context: Vec::new(),
         }
     }
 
@@ -351,7 +352,7 @@ impl<'a> InvokeContext<'a> {
                 && program_id == Some(&crate::neon_evm_program::id())
             {
                 // Bump the compute budget for neon_evm
-                compute_budget.max_units = compute_budget.max_units.max(500_000);
+                compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
             }
             if !self.feature_set.is_active(&requestable_heap_size::id())
                 && self.feature_set.is_active(&neon_evm_compute_budget::id())
@@ -363,7 +364,8 @@ impl<'a> InvokeContext<'a> {
             self.current_compute_budget = compute_budget;
 
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter = ComputeMeter::new_ref(self.current_compute_budget.max_units);
+                self.compute_meter =
+                    ComputeMeter::new_ref(self.current_compute_budget.compute_unit_limit);
             }
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
@@ -453,8 +455,7 @@ impl<'a> InvokeContext<'a> {
                 std::mem::transmute(keyed_accounts.as_slice())
             }),
         ));
-        self.orig_account_lengths.push(None);
-        self.allocators.push(None);
+        self.syscall_context.push(None);
         self.transaction_context.push(
             program_indices,
             instruction_accounts,
@@ -466,8 +467,7 @@ impl<'a> InvokeContext<'a> {
 
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
-        self.orig_account_lengths.pop();
-        self.allocators.pop();
+        self.syscall_context.pop();
         self.invoke_stack.pop();
         self.transaction_context.pop()
     }
@@ -1076,65 +1076,60 @@ impl<'a> InvokeContext<'a> {
             .get_key_of_account_at_index(index_in_transaction)
     }
 
-    /// Set the original account lengths
-    pub fn set_orig_account_lengths(
+    // Set this instruction syscall context
+    pub fn set_syscall_context(
         &mut self,
+        check_aligned: bool,
+        check_size: bool,
         orig_account_lengths: Vec<usize>,
+        allocator: Rc<RefCell<dyn Alloc>>,
     ) -> Result<(), InstructionError> {
         *self
-            .orig_account_lengths
+            .syscall_context
             .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(orig_account_lengths);
+            .ok_or(InstructionError::CallDepth)? = Some(SyscallContext {
+            check_aligned,
+            check_size,
+            orig_account_lengths,
+            allocator,
+        });
         Ok(())
-    }
-
-    /// Get the original account lengths
-    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
-        self.orig_account_lengths
-            .last()
-            .and_then(|orig_account_lengths| orig_account_lengths.as_ref())
-            .map(|orig_account_lengths| orig_account_lengths.as_slice())
-            .ok_or(InstructionError::CallDepth)
-    }
-
-    // Set should alignment be enforced during user pointer translation
-    pub fn set_check_aligned(&mut self, check_aligned: bool) {
-        self.check_aligned = check_aligned;
     }
 
     // Should alignment be enforced during user pointer translation
     pub fn get_check_aligned(&self) -> bool {
-        self.check_aligned
-    }
-
-    // Set should type size be checked during user pointer translation
-    pub fn set_check_size(&mut self, check_size: bool) {
-        self.check_size = check_size;
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.check_aligned)
+            .unwrap_or(true)
     }
 
     // Set should type size be checked during user pointer translation
     pub fn get_check_size(&self) -> bool {
-        self.check_size
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.check_size)
+            .unwrap_or(true)
+    }
+
+    /// Get the original account lengths
+    pub fn get_orig_account_lengths(&self) -> Result<&[usize], InstructionError> {
+        self.syscall_context
+            .last()
+            .and_then(|context| context.as_ref())
+            .map(|context| context.orig_account_lengths.as_slice())
+            .ok_or(InstructionError::CallDepth)
     }
 
     // Get this instruction's memory allocator
     pub fn get_allocator(&self) -> Result<Rc<RefCell<dyn Alloc>>, InstructionError> {
-        self.allocators
+        self.syscall_context
             .last()
-            .and_then(|allocator| allocator.clone())
+            .and_then(|context| context.as_ref())
+            .map(|context| context.allocator.clone())
             .ok_or(InstructionError::CallDepth)
-    }
-
-    // Set this instruction's memory allocator
-    pub fn set_allocator(
-        &mut self,
-        allocator: Rc<RefCell<dyn Alloc>>,
-    ) -> Result<(), InstructionError> {
-        *self
-            .allocators
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)? = Some(allocator);
-        Ok(())
     }
 }
 
@@ -1409,13 +1404,16 @@ mod tests {
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ModifyNotOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ModifyReadonly => instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data(&[1]),
+                    .set_data(&[1])
+                    .unwrap(),
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1429,7 +1427,8 @@ mod tests {
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len]),
+                    .set_data(&vec![0; new_len])
+                    .unwrap(),
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
@@ -1760,20 +1759,21 @@ mod tests {
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.feature_set = Arc::new(feature_set);
-        invoke_context.compute_budget = ComputeBudget::new(compute_budget::DEFAULT_UNITS);
+        invoke_context.compute_budget =
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         );
         invoke_context.pop().unwrap();
 
         invoke_context.push(&[], &[1], &[]).unwrap();
         let expected_compute_budget = ComputeBudget {
-            max_units: 500_000,
+            compute_unit_limit: 500_000,
             heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ..ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         };
         assert_eq!(
             *invoke_context.get_compute_budget(),
@@ -1784,7 +1784,7 @@ mod tests {
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_UNITS)
+            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         );
         invoke_context.pop().unwrap();
     }

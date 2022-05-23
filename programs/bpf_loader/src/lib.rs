@@ -42,9 +42,10 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
-            do_support_realloc, error_on_syscall_bpf_function_hash_collisions,
-            reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
+            disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
+            disable_deprecated_loader, do_support_realloc,
+            error_on_syscall_bpf_function_hash_collisions, reduce_required_deploy_balance,
+            reject_callx_r10, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -67,7 +68,7 @@ solana_sdk::declare_builtin!(
 );
 
 /// Errors returned by functions the BPF Loader registers with the VM
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum BpfError {
     #[error("{0}")]
     VerifierError(#[from] VerifierError),
@@ -109,9 +110,11 @@ pub fn create_executor(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
+    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let register_syscall_result = syscalls::register_syscalls(invoke_context);
+    let register_syscall_result =
+        syscalls::register_syscalls(invoke_context, disable_deploy_of_alloc_free_syscall);
     register_syscalls_time.stop();
     invoke_context.timings.create_executor_register_syscalls_us = invoke_context
         .timings
@@ -222,7 +225,7 @@ fn write_program_data(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let mut program =
         instruction_context.try_borrow_account(transaction_context, program_account_index)?;
-    let data = program.get_data_mut();
+    let data = program.get_data_mut()?;
     let write_offset = program_data_offset.saturating_add(bytes.len());
     if data.len() < write_offset {
         ic_msg!(
@@ -249,6 +252,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
 pub fn create_vm<'a, 'b>(
     program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
     parameter_bytes: &mut [u8],
+    orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
@@ -267,7 +271,7 @@ pub fn create_vm<'a, 'b>(
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap)?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;
     Ok(vm)
 }
 
@@ -382,7 +386,9 @@ fn process_instruction_common(
                     program_data_offset,
                     invoke_context,
                     use_jit,
-                    false,
+                    false, /* reject_deployment_of_broken_elfs */
+                    // allow _sol_alloc_free syscall for execution
+                    false, /* disable_sol_alloc_free_syscall */
                 )?;
                 let transaction_context = &invoke_context.transaction_context;
                 let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -594,7 +600,7 @@ fn process_loader_upgradeable_instruction(
                 drop(payer);
                 let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0);
+                buffer.set_lamports(0)?;
             }
 
             let mut instruction = system_instruction::create_account(
@@ -626,6 +632,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -641,7 +650,7 @@ fn process_loader_upgradeable_instruction(
                     upgrade_authority_address: authority_key,
                 })?;
                 let dst_slice = programdata
-                    .get_data_mut()
+                    .get_data_mut()?
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
@@ -662,7 +671,7 @@ fn process_loader_upgradeable_instruction(
             program.set_state(&UpgradeableLoaderState::Program {
                 programdata_address: programdata_key,
             })?;
-            program.set_executable(true);
+            program.set_executable(true)?;
             drop(program);
 
             if !predrain_buffer {
@@ -673,7 +682,7 @@ fn process_loader_upgradeable_instruction(
                 drop(payer);
                 let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0);
+                buffer.set_lamports(0)?;
             }
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
@@ -805,6 +814,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -821,7 +833,7 @@ fn process_loader_upgradeable_instruction(
                     upgrade_authority_address: authority_key,
                 })?;
                 let dst_slice = programdata
-                    .get_data_mut()
+                    .get_data_mut()?
                     .get_mut(
                         programdata_data_offset
                             ..programdata_data_offset.saturating_add(buffer_data_len),
@@ -836,7 +848,7 @@ fn process_loader_upgradeable_instruction(
                 dst_slice.copy_from_slice(src_slice);
             }
             programdata
-                .get_data_mut()
+                .get_data_mut()?
                 .get_mut(programdata_data_offset.saturating_add(buffer_data_len)..)
                 .ok_or(InstructionError::AccountDataTooSmall)?
                 .fill(0);
@@ -844,12 +856,12 @@ fn process_loader_upgradeable_instruction(
             // Fund ProgramData to rent-exemption, spill the rest
 
             let programdata_lamports = programdata.get_lamports();
-            programdata.set_lamports(programdata_balance_required);
+            programdata.set_lamports(programdata_balance_required)?;
             drop(programdata);
 
             let mut buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-            buffer.set_lamports(0);
+            buffer.set_lamports(0)?;
             drop(buffer);
 
             let mut spill =
@@ -950,7 +962,7 @@ fn process_loader_upgradeable_instruction(
             match close_account.get_state()? {
                 UpgradeableLoaderState::Uninitialized => {
                     let close_lamports = close_account.get_lamports();
-                    close_account.set_lamports(0);
+                    close_account.set_lamports(0)?;
                     drop(close_account);
                     let mut recipient_account = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?;
@@ -1058,7 +1070,7 @@ fn common_close_account(
     let mut recipient_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
     recipient_account.checked_add_lamports(close_account.get_lamports())?;
-    close_account.set_lamports(0);
+    close_account.set_lamports(0)?;
     close_account.set_state(&UpgradeableLoaderState::Uninitialized)?;
     Ok(())
 }
@@ -1100,14 +1112,22 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let executor =
-                create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
+            let executor = create_executor(
+                first_instruction_account,
+                0,
+                invoke_context,
+                use_jit,
+                true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
+            )?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             invoke_context.update_executor(program.get_key(), executor);
-            program.set_executable(true);
+            program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
     }
@@ -1165,13 +1185,14 @@ impl Executor for BpfExecutor {
         let (mut parameter_bytes, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context)?;
         serialize_time.stop();
-        invoke_context.set_orig_account_lengths(account_lengths)?;
+
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
             let mut vm = match create_vm(
                 &self.executable,
                 parameter_bytes.as_slice_mut(),
+                account_lengths,
                 invoke_context,
             ) {
                 Ok(info) => info,

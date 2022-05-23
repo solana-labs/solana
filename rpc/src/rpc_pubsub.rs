@@ -412,12 +412,17 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
         pubkey_str: String,
         config: Option<RpcAccountInfoConfig>,
     ) -> Result<SubscriptionId> {
-        let config = config.unwrap_or_default();
+        let RpcAccountInfoConfig {
+            encoding,
+            data_slice,
+            commitment,
+            min_context_slot: _, // ignored
+        } = config.unwrap_or_default();
         let params = AccountSubscriptionParams {
             pubkey: param::<Pubkey>(&pubkey_str, "pubkey")?,
-            commitment: config.commitment.unwrap_or_default(),
-            data_slice: config.data_slice,
-            encoding: config.encoding.unwrap_or(UiAccountEncoding::Binary),
+            commitment: commitment.unwrap_or_default(),
+            data_slice,
+            encoding: encoding.unwrap_or(UiAccountEncoding::Binary),
         };
         self.subscribe(SubscriptionParams::Account(params))
     }
@@ -865,6 +870,7 @@ mod tests {
                 commitment: Some(CommitmentConfig::processed()),
                 encoding: Some(encoding),
                 data_slice: None,
+                min_context_slot: None,
             }),
         )
         .unwrap();
@@ -992,6 +998,7 @@ mod tests {
                 commitment: Some(CommitmentConfig::processed()),
                 encoding: Some(UiAccountEncoding::JsonParsed),
                 data_slice: None,
+                min_context_slot: None,
             }),
         )
         .unwrap();
@@ -1129,6 +1136,7 @@ mod tests {
                 commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
+                min_context_slot: None,
             }),
         )
         .unwrap();
@@ -1181,6 +1189,7 @@ mod tests {
                 commitment: Some(CommitmentConfig::finalized()),
                 encoding: None,
                 data_slice: None,
+                min_context_slot: None,
             }),
         )
         .unwrap();
@@ -1331,12 +1340,16 @@ mod tests {
             hash: Hash::default(),
             timestamp: None,
         };
-        subscriptions.notify_vote(Pubkey::default(), VoteTransaction::from(vote));
+        subscriptions.notify_vote(
+            Pubkey::default(),
+            VoteTransaction::from(vote),
+            Signature::default(),
+        );
 
         let response = receiver.recv();
         assert_eq!(
             response,
-            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"votePubkey":"11111111111111111111111111111111","slots":[1,2],"hash":"11111111111111111111111111111111","timestamp":null},"subscription":0}}"#
+            r#"{"jsonrpc":"2.0","method":"voteNotification","params":{"result":{"votePubkey":"11111111111111111111111111111111","slots":[1,2],"hash":"11111111111111111111111111111111","timestamp":null,"signature":"1111111111111111111111111111111111111111111111111111111111111111"},"subscription":0}}"#
         );
     }
 

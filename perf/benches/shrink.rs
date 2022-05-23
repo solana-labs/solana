@@ -26,8 +26,7 @@ fn do_bench_shrink_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>)
     bencher.iter(|| {
         let _ans = sigverify::shrink_batches(&mut batches);
         batches.iter_mut().for_each(|b| {
-            b.packets
-                .iter_mut()
+            b.iter_mut()
                 .for_each(|p| p.meta.set_discard(thread_rng().gen()))
         });
     });
@@ -75,8 +74,7 @@ fn bench_shrink_count_packets(bencher: &mut Bencher) {
         PACKETS_PER_BATCH,
     );
     batches.iter_mut().for_each(|b| {
-        b.packets
-            .iter_mut()
+        b.iter_mut()
             .for_each(|p| p.meta.set_discard(thread_rng().gen()))
     });
 

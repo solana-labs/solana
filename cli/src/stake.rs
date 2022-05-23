@@ -103,7 +103,7 @@ pub(crate) struct StakeAuthorization {
     authority_pubkey: Option<Pubkey>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct StakeAuthorizationIndexed {
     pub authorization_type: StakeAuthorize,
     pub new_authority_pubkey: Pubkey,

@@ -1,4 +1,5 @@
 use {
+    crate::connection_cache::ConnectionCacheStats,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
@@ -21,10 +22,11 @@ pub struct ClientStats {
     pub tx_streams_blocked_uni: MovingStat,
     pub tx_data_blocked: MovingStat,
     pub tx_acks: MovingStat,
+    pub make_connection_ms: AtomicU64,
 }
 
 pub trait TpuConnection {
-    fn new(tpu_addr: SocketAddr) -> Self;
+    fn new(tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self;
 
     fn tpu_addr(&self) -> &SocketAddr;
 

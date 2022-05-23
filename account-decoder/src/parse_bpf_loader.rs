@@ -60,7 +60,7 @@ pub fn parse_bpf_upgradeable_loader(
     Ok(parsed_account)
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum BpfUpgradeableLoaderAccountType {
     Uninitialized,
@@ -69,20 +69,20 @@ pub enum BpfUpgradeableLoaderAccountType {
     ProgramData(UiProgramData),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiBuffer {
     pub authority: Option<String>,
     pub data: UiAccountData,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiProgram {
     pub program_data: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiProgramData {
     pub slot: u64,

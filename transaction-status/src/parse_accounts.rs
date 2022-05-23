@@ -1,6 +1,6 @@
 use solana_sdk::message::{v0::LoadedMessage, Message};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedAccount {
     pub pubkey: String,

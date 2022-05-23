@@ -9,7 +9,7 @@ use {
     std::collections::{HashMap, HashSet},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Visit {
     Visited(Slot),
     Unvisited(Slot),

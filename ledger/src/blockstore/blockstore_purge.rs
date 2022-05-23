@@ -211,6 +211,10 @@ impl Blockstore {
             & self
                 .db
                 .delete_range_cf::<cf::BlockHeight>(&mut write_batch, from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
         let mut w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
@@ -327,6 +331,10 @@ impl Blockstore {
                 .unwrap_or(false)
             && self
                 .block_height_cf
+                .compact_range(from_slot, to_slot)
+                .unwrap_or(false)
+            && self
+                .optimistic_slots_cf
                 .compact_range(from_slot, to_slot)
                 .unwrap_or(false);
         compact_timer.stop();

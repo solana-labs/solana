@@ -33,7 +33,7 @@ solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.1
 solana-cli-output = { path = "../../cli-output", version = "=1.11.0" }
 solana-logger = { path = "../../logger", version = "=1.11.0" }
 solana-measure = { path = "../../measure", version = "=1.11.0" }
-solana_rbpf = "=0.2.28"
+solana_rbpf = "=0.2.29"
 solana-runtime = { path = "../../runtime", version = "=1.11.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.11.0" }
 solana-sdk = { path = "../../sdk", version = "=1.11.0" }
@@ -59,6 +59,7 @@ members = [
     "rust/external_spend",
     "rust/get_minimum_delegation",
     "rust/finalize",
+    "rust/inner_instruction_alignment_check",
     "rust/instruction_introspection",
     "rust/invoke",
     "rust/invoke_and_error",

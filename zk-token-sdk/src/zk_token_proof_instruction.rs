@@ -7,7 +7,7 @@ use {
     solana_program::instruction::Instruction,
 };
 
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofInstruction {
     /// Verify a `CloseAccountData` struct

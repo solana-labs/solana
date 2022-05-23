@@ -113,7 +113,7 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
-    max_compute_units: Option<u64>,
+    compute_unit_limit: Option<u64>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -141,7 +141,7 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
-            max_compute_units: Option::<u64>::default(),
+            compute_unit_limit: Option::<u64>::default(),
         }
     }
 }
@@ -239,9 +239,14 @@ impl TestValidatorGenesis {
         self
     }
 
-    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
-        self.max_compute_units = Some(max_compute_units);
+    pub fn compute_unit_limit(&mut self, compute_unit_limit: u64) -> &mut Self {
+        self.compute_unit_limit = Some(compute_unit_limit);
         self
+    }
+
+    #[deprecated(note = "Please use `compute_unit_limit` instead")]
+    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
+        self.compute_unit_limit(max_compute_units)
     }
 
     /// Add an account to the test environment
@@ -686,10 +691,12 @@ impl TestValidator {
 
         let runtime_config = RuntimeConfig {
             bpf_jit: !config.no_bpf_jit,
-            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
-                max_units,
-                ..ComputeBudget::default()
-            }),
+            compute_budget: config
+                .compute_unit_limit
+                .map(|compute_unit_limit| ComputeBudget {
+                    compute_unit_limit,
+                    ..ComputeBudget::default()
+                }),
         };
 
         let mut validator_config = ValidatorConfig {

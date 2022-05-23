@@ -45,7 +45,7 @@ use {
 type SlotHash = (Slot, Hash);
 
 /// the number of slots to respond with when responding to `Orphan` requests
-pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 10;
+pub const MAX_ORPHAN_REPAIR_RESPONSES: usize = 11;
 // Number of slots to cache their respective repair peers and sampling weights.
 pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
@@ -81,7 +81,7 @@ impl RequestResponse for ShredRepairType {
     type Response = Shred;
     fn num_expected_responses(&self) -> u32 {
         match self {
-            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES + 1) as u32, // run_orphan uses <= MAX_ORPHAN_REPAIR_RESPONSES
+            ShredRepairType::Orphan(_) => (MAX_ORPHAN_REPAIR_RESPONSES) as u32,
             ShredRepairType::HighestShred(_, _) => 1,
             ShredRepairType::Shred(_, _) => 1,
         }
@@ -327,13 +327,13 @@ impl ServeRepair {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut total_packets = reqs_v[0].packets.len();
+        let mut total_packets = reqs_v[0].len();
 
         let mut dropped_packets = 0;
         while let Ok(more) = requests_receiver.try_recv() {
-            total_packets += more.packets.len();
+            total_packets += more.len();
             if packet_threshold.should_drop(total_packets) {
-                dropped_packets += more.packets.len();
+                dropped_packets += more.len();
             } else {
                 reqs_v.push(more);
             }
@@ -431,8 +431,8 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
     ) {
         // iter over the packets
-        packet_batch.packets.iter().for_each(|packet| {
-            let from_addr = packet.meta.addr();
+        packet_batch.iter().for_each(|packet| {
+            let from_addr = packet.meta.socket_addr();
             limited_deserialize(&packet.data[..packet.meta.size])
                 .into_iter()
                 .for_each(|request| {
@@ -684,7 +684,8 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<PacketBatch> {
-        let mut res = PacketBatch::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res =
+            PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -699,11 +700,12 @@ impl ServeRepair {
                     nonce,
                 );
                 if let Some(packet) = packet {
-                    res.packets.push(packet);
+                    res.push(packet);
                 } else {
                     break;
                 }
-                if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+
+                if meta.parent_slot.is_some() && res.len() < max_responses {
                     slot = meta.parent_slot.unwrap();
                 } else {
                     break;
@@ -809,10 +811,9 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::HighestShred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
 
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|b| {
                     assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
@@ -895,9 +896,8 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::Shred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|b| {
                     assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
@@ -1057,7 +1057,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1127,7 +1126,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1178,8 +1176,7 @@ mod tests {
                 slot + num_slots,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
@@ -1194,8 +1191,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
@@ -1217,8 +1213,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);

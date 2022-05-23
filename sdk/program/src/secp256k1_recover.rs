@@ -74,7 +74,7 @@ pub fn secp256k1_recover(
     recovery_id: u8,
     signature: &[u8],
 ) -> Result<Secp256k1Pubkey, Secp256k1RecoverError> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
         extern "C" {
             fn sol_secp256k1_recover(
@@ -101,7 +101,7 @@ pub fn secp256k1_recover(
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         let message = libsecp256k1::Message::parse_slice(hash)
             .map_err(|_| Secp256k1RecoverError::InvalidHash)?;

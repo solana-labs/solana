@@ -9,7 +9,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum RentState {
     /// account.lamports == 0
     Uninitialized,

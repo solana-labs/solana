@@ -2,7 +2,7 @@ use {
     crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
@@ -35,7 +35,7 @@ pub struct CloseAccountData {
     pub proof: CloseAccountProof, // 64 bytes
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl CloseAccountData {
     pub fn new(
         keypair: &ElGamalKeypair,
@@ -56,7 +56,7 @@ impl CloseAccountData {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl Verifiable for CloseAccountData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = CloseAccountProof::transcript_new(&self.pubkey, &self.ciphertext);
@@ -77,7 +77,7 @@ pub struct CloseAccountProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl CloseAccountProof {
     fn transcript_new(
         pubkey: &pod::ElGamalPubkey,

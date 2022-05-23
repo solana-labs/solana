@@ -9,13 +9,13 @@ use {
     },
 };
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum ExplicitRelease {
     Semver(String),
     Channel(String),
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
 pub struct Config {
     pub json_rpc_url: String,
     pub update_manifest_pubkey: Pubkey,
