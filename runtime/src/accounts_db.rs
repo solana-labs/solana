@@ -266,7 +266,7 @@ struct GenerateIndexTimings {
     pub accounts_data_len_dedup_time_us: u64,
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 struct StorageSizeAndCount {
     pub stored_size: usize,
     pub count: usize,
@@ -407,7 +407,7 @@ impl Versioned for (u64, AccountInfo) {
 // Slower fallback code path will be taken if the fast path has failed over the retry
 // threshold, regardless of these hints. Also, load cannot fail not-deterministically
 // even under very rare circumstances, unlike previously did allow.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadHint {
     // Caller hints that it's loading transactions for a block which is
     // descended from the current root, and at the tip of its fork.
@@ -870,7 +870,7 @@ pub fn get_temp_accounts_paths(count: u32) -> IoResult<(Vec<TempDir>, Vec<PathBu
     Ok((temp_dirs, paths))
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, AbiExample)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashStats {
     pub num_updated_accounts: u64,
     pub num_removed_accounts: u64,
@@ -906,7 +906,7 @@ impl BankHashStats {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, AbiExample)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
     pub hash: Hash,
     pub snapshot_hash: Hash,

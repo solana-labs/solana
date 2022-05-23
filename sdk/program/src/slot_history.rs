@@ -11,7 +11,7 @@ pub use crate::clock::Slot;
 use bv::{BitVec, BitsMut};
 
 #[repr(C)]
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SlotHistory {
     pub bits: BitVec<u64>,
     pub next_slot: Slot,
@@ -41,7 +41,7 @@ impl std::fmt::Debug for SlotHistory {
 
 pub const MAX_ENTRIES: u64 = 1024 * 1024; // 1 million slots is about 5 days
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum Check {
     Future,
     TooOld,

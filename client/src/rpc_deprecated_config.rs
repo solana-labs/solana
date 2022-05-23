@@ -11,7 +11,7 @@ use {
     since = "1.7.0",
     note = "Please use RpcSignaturesForAddressConfig instead"
 )]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcGetConfirmedSignaturesForAddress2Config {
     pub before: Option<String>, // Signature as base-58 string
@@ -22,7 +22,7 @@ pub struct RpcGetConfirmedSignaturesForAddress2Config {
 }
 
 #[deprecated(since = "1.7.0", note = "Please use RpcBlockConfig instead")]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedBlockConfig {
     pub encoding: Option<UiTransactionEncoding>,
@@ -77,7 +77,7 @@ impl From<RpcConfirmedBlockConfig> for RpcBlockConfig {
 }
 
 #[deprecated(since = "1.7.0", note = "Please use RpcTransactionConfig instead")]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcConfirmedTransactionConfig {
     pub encoding: Option<UiTransactionEncoding>,
@@ -105,7 +105,7 @@ impl From<RpcConfirmedTransactionConfig> for RpcTransactionConfig {
 }
 
 #[deprecated(since = "1.7.0", note = "Please use RpcBlocksConfigWrapper instead")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcConfirmedBlocksConfigWrapper {
     EndSlotOnly(Option<Slot>),

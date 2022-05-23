@@ -57,7 +57,7 @@ pub enum ParseAccountError {
     SerdeJsonError(#[from] serde_json::error::Error),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedAccount {
     pub program: String,

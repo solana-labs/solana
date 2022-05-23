@@ -119,7 +119,7 @@ mod tests {
         std::{collections::HashMap, mem::size_of},
     };
 
-    #[derive(PartialEq, Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema)]
+    #[derive(PartialEq, Eq, Clone, Debug, BorshSerialize, BorshDeserialize, BorshSchema)]
     enum TestEnum {
         NoValue,
         Number(u32),
@@ -148,12 +148,12 @@ mod tests {
         pub r#bool: bool,
     }
 
-    #[derive(Debug, PartialEq, BorshSerialize, BorshDeserialize, BorshSchema)]
+    #[derive(Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, BorshSchema)]
     struct Child {
         pub data: [u8; 64],
     }
 
-    #[derive(Debug, PartialEq, BorshSerialize, BorshDeserialize, BorshSchema)]
+    #[derive(Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, BorshSchema)]
     struct Parent {
         pub data: Vec<Child>,
     }
@@ -269,7 +269,7 @@ mod tests {
         );
     }
 
-    #[derive(Debug, PartialEq, BorshSerialize, BorshDeserialize, BorshSchema)]
+    #[derive(Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, BorshSchema)]
     struct StructWithHashMap {
         data: HashMap<String, TestEnum>,
     }

@@ -2099,7 +2099,7 @@ impl fmt::Display for CliRentCalculation {
 impl QuietDisplay for CliRentCalculation {}
 impl VerboseDisplay for CliRentCalculation {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RentLengthValue {
     Nonce,
     Stake,

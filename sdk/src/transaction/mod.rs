@@ -138,7 +138,7 @@ mod versioned;
 
 pub use {error::*, sanitized::*, versioned::*};
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TransactionVerificationMode {
     HashOnly,
     HashAndVerifyPrecompiles,

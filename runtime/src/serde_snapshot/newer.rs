@@ -15,7 +15,7 @@ use {
 
 type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize, Serialize, AbiExample)]
 struct UnusedAccounts {
     unused1: HashSet<Pubkey>,
     unused2: HashSet<Pubkey>,
@@ -181,7 +181,7 @@ impl<'a> From<crate::bank::BankFieldsToSerialize<'a>> for SerializableVersionedB
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl<'a> solana_frozen_abi::abi_example::IgnoreAsHelper for SerializableVersionedBank<'a> {}
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub(super) struct Context {}
 
 impl<'a> TypeContext<'a> for Context {

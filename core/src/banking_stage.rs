@@ -103,7 +103,7 @@ struct RecordTransactionsSummary {
     result: Result<(), PohRecorderError>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommitTransactionDetails {
     Committed { compute_units: u64 },
     NotCommitted,

@@ -236,7 +236,7 @@ pub mod columns {
     // - Account for column in `analyze_storage()` in ledger-tool/src/main.rs
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AccessType {
     /// Primary (read/write) access; only one process can have Primary access.
     Primary,

@@ -25,7 +25,7 @@ lazy_static! {
 }
 
 /// The Solana CLI configuration.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Config {
     /// The RPC address of a Solana validator node.
     ///

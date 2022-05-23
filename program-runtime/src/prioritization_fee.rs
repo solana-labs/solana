@@ -8,7 +8,7 @@ pub enum PrioritizationFeeType {
     Deprecated(u64),
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct PrioritizationFeeDetails {
     fee: u64,
     priority: u64,

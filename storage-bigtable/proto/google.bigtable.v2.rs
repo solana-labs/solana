@@ -1,6 +1,6 @@
 /// Specifies the complete (requested) contents of a single row of a table.
 /// Rows which exceed 256MiB in size cannot be read in full.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct Row {
     /// The unique key which identifies this row within its table. This is the same
     /// key that's used to identify the row in, for example, a MutateRowRequest.
@@ -14,7 +14,7 @@ pub struct Row {
 }
 /// Specifies (some of) the contents of a single row/column family intersection
 /// of a table.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct Family {
     /// The unique key which identifies this family within its row. This is the
     /// same key that's used to identify the family in, for example, a RowFilter
@@ -30,7 +30,7 @@ pub struct Family {
 }
 /// Specifies (some of) the contents of a single row/column intersection of a
 /// table.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct Column {
     /// The unique key which identifies this column within its family. This is the
     /// same key that's used to identify the column in, for example, a RowFilter
@@ -44,7 +44,7 @@ pub struct Column {
     pub cells: ::prost::alloc::vec::Vec<Cell>,
 }
 /// Specifies (some of) the contents of a single row/column/timestamp of a table.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct Cell {
     /// The cell's stored timestamp, which also uniquely identifies it within
     /// its column.
@@ -64,7 +64,7 @@ pub struct Cell {
     pub labels: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Specifies a contiguous range of rows.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct RowRange {
     /// The row key at which to start the range.
     /// If neither field is set, interpreted as the empty string, inclusive.
@@ -79,7 +79,7 @@ pub struct RowRange {
 pub mod row_range {
     /// The row key at which to start the range.
     /// If neither field is set, interpreted as the empty string, inclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum StartKey {
         /// Used when giving an inclusive lower bound for the range.
         #[prost(bytes, tag="1")]
@@ -90,7 +90,7 @@ pub mod row_range {
     }
     /// The row key at which to end the range.
     /// If neither field is set, interpreted as the infinite row key, exclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum EndKey {
         /// Used when giving an exclusive upper bound for the range.
         #[prost(bytes, tag="3")]
@@ -101,7 +101,7 @@ pub mod row_range {
     }
 }
 /// Specifies a non-contiguous set of rows.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct RowSet {
     /// Single rows included in the set.
     #[prost(bytes="vec", repeated, tag="1")]
@@ -114,7 +114,7 @@ pub struct RowSet {
 /// The range spans from &lt;column_family&gt;:&lt;start_qualifier&gt; to
 /// &lt;column_family&gt;:&lt;end_qualifier&gt;, where both bounds can be either
 /// inclusive or exclusive.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ColumnRange {
     /// The name of the column family within which this range falls.
     #[prost(string, tag="1")]
@@ -132,7 +132,7 @@ pub struct ColumnRange {
 pub mod column_range {
     /// The column qualifier at which to start the range (within `column_family`).
     /// If neither field is set, interpreted as the empty string, inclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum StartQualifier {
         /// Used when giving an inclusive lower bound for the range.
         #[prost(bytes, tag="2")]
@@ -143,7 +143,7 @@ pub mod column_range {
     }
     /// The column qualifier at which to end the range (within `column_family`).
     /// If neither field is set, interpreted as the infinite string, exclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum EndQualifier {
         /// Used when giving an inclusive upper bound for the range.
         #[prost(bytes, tag="4")]
@@ -154,7 +154,7 @@ pub mod column_range {
     }
 }
 /// Specified a contiguous range of microsecond timestamps.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct TimestampRange {
     /// Inclusive lower bound. If left empty, interpreted as 0.
     #[prost(int64, tag="1")]
@@ -164,7 +164,7 @@ pub struct TimestampRange {
     pub end_timestamp_micros: i64,
 }
 /// Specifies a contiguous range of raw byte values.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ValueRange {
     /// The value at which to start the range.
     /// If neither field is set, interpreted as the empty string, inclusive.
@@ -179,7 +179,7 @@ pub struct ValueRange {
 pub mod value_range {
     /// The value at which to start the range.
     /// If neither field is set, interpreted as the empty string, inclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum StartValue {
         /// Used when giving an inclusive lower bound for the range.
         #[prost(bytes, tag="1")]
@@ -190,7 +190,7 @@ pub mod value_range {
     }
     /// The value at which to end the range.
     /// If neither field is set, interpreted as the infinite string, exclusive.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum EndValue {
         /// Used when giving an inclusive upper bound for the range.
         #[prost(bytes, tag="3")]
@@ -475,7 +475,7 @@ pub mod row_filter {
     }
 }
 /// Specifies a particular change to be made to the contents of a row.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct Mutation {
     /// Which of the possible Mutation types to apply.
     #[prost(oneof="mutation::Mutation", tags="1, 2, 3, 4")]
@@ -484,7 +484,7 @@ pub struct Mutation {
 /// Nested message and enum types in `Mutation`.
 pub mod mutation {
     /// A Mutation which sets the value of the specified cell.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct SetCell {
         /// The name of the family into which new data should be written.
         /// Must match `\[-_.a-zA-Z0-9\]+`
@@ -507,7 +507,7 @@ pub mod mutation {
     }
     /// A Mutation which deletes cells from the specified column, optionally
     /// restricting the deletions to a given timestamp range.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct DeleteFromColumn {
         /// The name of the family from which cells should be deleted.
         /// Must match `\[-_.a-zA-Z0-9\]+`
@@ -522,7 +522,7 @@ pub mod mutation {
         pub time_range: ::core::option::Option<super::TimestampRange>,
     }
     /// A Mutation which deletes all cells from the specified column family.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct DeleteFromFamily {
         /// The name of the family from which cells should be deleted.
         /// Must match `\[-_.a-zA-Z0-9\]+`
@@ -530,11 +530,11 @@ pub mod mutation {
         pub family_name: ::prost::alloc::string::String,
     }
     /// A Mutation which deletes all cells from the containing row.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct DeleteFromRow {
     }
     /// Which of the possible Mutation types to apply.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum Mutation {
         /// Set a cell's value.
         #[prost(message, tag="1")]
@@ -552,7 +552,7 @@ pub mod mutation {
 }
 /// Specifies an atomic read/modify/write operation on the latest value of the
 /// specified column.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ReadModifyWriteRule {
     /// The name of the family to which the read/modify/write should be applied.
     /// Must match `\[-_.a-zA-Z0-9\]+`
@@ -572,7 +572,7 @@ pub struct ReadModifyWriteRule {
 pub mod read_modify_write_rule {
     /// The rule used to determine the column's new latest value from its current
     /// latest value.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
     pub enum Rule {
         /// Rule specifying that `append_value` be appended to the existing value.
         /// If the targeted cell is unset, it will be treated as containing the
@@ -612,7 +612,7 @@ pub struct ReadRowsRequest {
     pub rows_limit: i64,
 }
 /// Response message for Bigtable.ReadRows.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ReadRowsResponse {
     /// A collection of a row's contents as part of the read request.
     #[prost(message, repeated, tag="1")]
@@ -631,7 +631,7 @@ pub struct ReadRowsResponse {
 pub mod read_rows_response {
     /// Specifies a piece of a row's contents returned as part of the read
     /// response stream.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct CellChunk {
         /// The row key for this chunk of data.  If the row key is empty,
         /// this CellChunk is a continuation of the same row as the previous
@@ -689,7 +689,7 @@ pub mod read_rows_response {
     /// Nested message and enum types in `CellChunk`.
     pub mod cell_chunk {
         /// Signals to the client concerning previous CellChunks received.
-        #[derive(Clone, PartialEq, ::prost::Oneof)]
+        #[derive(Clone, PartialEq, Eq, ::prost::Oneof)]
         pub enum RowStatus {
             /// Indicates that the client should drop all previous chunks for
             /// `row_key`, as it will be re-read from the beginning.
@@ -703,7 +703,7 @@ pub mod read_rows_response {
     }
 }
 /// Request message for Bigtable.SampleRowKeys.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct SampleRowKeysRequest {
     /// Required. The unique name of the table from which to sample row keys.
     /// Values are of the form
@@ -716,7 +716,7 @@ pub struct SampleRowKeysRequest {
     pub app_profile_id: ::prost::alloc::string::String,
 }
 /// Response message for Bigtable.SampleRowKeys.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct SampleRowKeysResponse {
     /// Sorted streamed sequence of sample row keys in the table. The table might
     /// have contents before the first row key in the list and after the last one,
@@ -735,7 +735,7 @@ pub struct SampleRowKeysResponse {
     pub offset_bytes: i64,
 }
 /// Request message for Bigtable.MutateRow.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct MutateRowRequest {
     /// Required. The unique name of the table to which the mutation should be applied.
     /// Values are of the form
@@ -756,11 +756,11 @@ pub struct MutateRowRequest {
     pub mutations: ::prost::alloc::vec::Vec<Mutation>,
 }
 /// Response message for Bigtable.MutateRow.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct MutateRowResponse {
 }
 /// Request message for BigtableService.MutateRows.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct MutateRowsRequest {
     /// Required. The unique name of the table to which the mutations should be applied.
     #[prost(string, tag="1")]
@@ -780,7 +780,7 @@ pub struct MutateRowsRequest {
 /// Nested message and enum types in `MutateRowsRequest`.
 pub mod mutate_rows_request {
     /// A mutation for a given row.
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, Eq, ::prost::Message)]
     pub struct Entry {
         /// The key of the row to which the `mutations` should be applied.
         #[prost(bytes="vec", tag="1")]
@@ -855,7 +855,7 @@ pub struct CheckAndMutateRowRequest {
     pub false_mutations: ::prost::alloc::vec::Vec<Mutation>,
 }
 /// Response message for Bigtable.CheckAndMutateRow.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct CheckAndMutateRowResponse {
     /// Whether or not the request's `predicate_filter` yielded any results for
     /// the specified row.
@@ -863,7 +863,7 @@ pub struct CheckAndMutateRowResponse {
     pub predicate_matched: bool,
 }
 /// Request message for Bigtable.ReadModifyWriteRow.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ReadModifyWriteRowRequest {
     /// Required. The unique name of the table to which the read/modify/write rules should be
     /// applied.
@@ -885,7 +885,7 @@ pub struct ReadModifyWriteRowRequest {
     pub rules: ::prost::alloc::vec::Vec<ReadModifyWriteRule>,
 }
 /// Response message for Bigtable.ReadModifyWriteRow.
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, ::prost::Message)]
 pub struct ReadModifyWriteRowResponse {
     /// A Row containing the new contents of all cells modified by the request.
     #[prost(message, optional, tag="1")]

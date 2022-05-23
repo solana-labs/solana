@@ -18,7 +18,7 @@ use {
 };
 
 /// Reasons the stake might have had an error
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum StakeError {
     #[error("not enough credits to redeem")]
     NoCreditsToRedeem,
@@ -65,7 +65,7 @@ impl<E> DecodeError<E> for StakeError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StakeInstruction {
     /// Initialize a stake with lockup and authorization information
     ///
@@ -260,20 +260,20 @@ pub enum StakeInstruction {
     DeactivateDelinquent,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub struct LockupArgs {
     pub unix_timestamp: Option<UnixTimestamp>,
     pub epoch: Option<Epoch>,
     pub custodian: Option<Pubkey>,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub struct LockupCheckedArgs {
     pub unix_timestamp: Option<UnixTimestamp>,
     pub epoch: Option<Epoch>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct AuthorizeWithSeedArgs {
     pub new_authorized_pubkey: Pubkey,
     pub stake_authorize: StakeAuthorize,
@@ -281,7 +281,7 @@ pub struct AuthorizeWithSeedArgs {
     pub authority_owner: Pubkey,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct AuthorizeCheckedWithSeedArgs {
     pub stake_authorize: StakeAuthorize,
     pub authority_seed: String,

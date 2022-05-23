@@ -199,7 +199,7 @@ impl<T> From<RpcNotificationResponse<T>> for RpcResponse<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct RpcNotificationContext {
     slot: Slot,
 }

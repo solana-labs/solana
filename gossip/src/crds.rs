@@ -77,7 +77,7 @@ pub struct Crds {
     stats: Mutex<CrdsStats>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum CrdsError {
     InsertFailed,
     UnknownStakes,
@@ -106,7 +106,7 @@ pub(crate) struct CrdsStats {
 }
 
 /// This structure stores some local metadata associated with the CrdsValue
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct VersionedCrdsValue {
     /// Ordinal index indicating insert order.
     ordinal: u64,

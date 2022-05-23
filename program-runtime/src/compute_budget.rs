@@ -22,7 +22,7 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ComputeBudget {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeBudget {
     /// Number of compute units that a transaction or individual instruction is
     /// allowed to consume. Compute units are consumed by program execution,

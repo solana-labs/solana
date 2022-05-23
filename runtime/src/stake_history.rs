@@ -6,7 +6,7 @@ use std::{
 };
 
 /// The SDK's stake history with clone-on-write semantics
-#[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct StakeHistory(Arc<StakeHistoryInner>);
 
 impl Deref for StakeHistory {

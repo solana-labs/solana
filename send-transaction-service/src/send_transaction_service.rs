@@ -91,7 +91,7 @@ impl TransactionInfo {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 struct ProcessTransactionsResult {
     rooted: u64,
     expired: u64,

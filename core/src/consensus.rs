@@ -39,7 +39,7 @@ use {
     thiserror::Error,
 };
 
-#[derive(PartialEq, Clone, Debug, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Debug, AbiExample)]
 pub enum SwitchForkDecision {
     SwitchProof(Hash),
     SameFork,

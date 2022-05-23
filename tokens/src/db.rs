@@ -7,7 +7,7 @@ use {
     std::{cmp::Ordering, fs, io, path::Path},
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TransactionInfo {
     pub recipient: Pubkey,
     pub amount: u64,
@@ -18,7 +18,7 @@ pub struct TransactionInfo {
     pub lockup_date: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 struct SignedTransactionInfo {
     recipient: String,
     amount: u64,

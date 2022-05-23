@@ -5,7 +5,7 @@ use {
     std::{net::SocketAddr, process::exit, str::FromStr},
 };
 
-#[derive(Parser, Debug, PartialEq)]
+#[derive(Parser, Debug, PartialEq, Eq)]
 #[clap(name = crate_name!(),
     version = crate_version!(),
     about = crate_description!(),
@@ -52,7 +52,7 @@ pub struct DosClientParameters {
     pub transaction_params: TransactionParams,
 }
 
-#[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 #[clap(rename_all = "kebab-case")]
 pub struct TransactionParams {
     #[clap(
@@ -119,7 +119,7 @@ pub enum DataType {
     Transaction,
 }
 
-#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum TransactionType {
     Transfer,
     AccountCreation,

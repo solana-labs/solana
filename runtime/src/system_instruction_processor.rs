@@ -26,7 +26,7 @@ use {
 
 // represents an address that may or may not have been generated
 //  from a seed
-#[derive(PartialEq, Default, Debug)]
+#[derive(PartialEq, Eq, Default, Debug)]
 struct Address {
     address: Pubkey,
     base: Option<Pubkey>,

@@ -36,7 +36,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AncestorHashesReplayUpdate {
     Dead(Slot),
     DeadDuplicateConfirmed(Slot),

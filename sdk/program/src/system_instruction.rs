@@ -16,7 +16,7 @@ use {
     thiserror::Error,
 };
 
-#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Serialize, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
     #[error("an account with the same address already exists")]
     AccountAlreadyInUse,
@@ -44,7 +44,7 @@ impl<T> DecodeError<T> for SystemError {
     }
 }
 
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum NonceError {
     #[error("recent blockhash list is empty")]
     NoRecentBlockhashes,
@@ -62,7 +62,7 @@ impl<E> DecodeError<E> for NonceError {
     }
 }
 
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 enum NonceErrorAdapter {
     #[error("recent blockhash list is empty")]
     NoRecentBlockhashes,
@@ -143,7 +143,7 @@ pub fn instruction_to_nonce_error(
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
 #[frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 pub enum SystemInstruction {
     /// Create a new account
     ///

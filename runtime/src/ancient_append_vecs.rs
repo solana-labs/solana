@@ -13,7 +13,7 @@ use {
 
 /// a set of accounts need to be stored.
 /// If there are too many to fit in 'Primary', the rest are put in 'Overflow'
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum StorageSelector {
     Primary,
     Overflow,
