@@ -160,7 +160,7 @@ impl FindPacketSenderStakeStage {
         PAR_THREAD_POOL.install(|| {
             batches
                 .into_par_iter()
-                .flat_map(|batch| batch.packets.par_iter_mut())
+                .flat_map(|batch| batch.par_iter_mut())
                 .for_each(|packet| {
                     packet.meta.sender_stake = ip_to_stake
                         .get(&packet.meta.addr)

@@ -27,11 +27,11 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) 
     trace!("receiving on {}", socket.local_addr().unwrap());
     let start = Instant::now();
     loop {
-        batch.packets.resize(
+        batch.resize(
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
             Packet::default(),
         );
-        match recv_mmsg(socket, &mut batch.packets[i..]) {
+        match recv_mmsg(socket, &mut batch[i..]) {
             Err(_) if i > 0 => {
                 if start.elapsed().as_millis() as u64 > max_wait_ms {
                     break;
@@ -55,7 +55,7 @@ pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) 
             }
         }
     }
-    batch.packets.truncate(i);
+    batch.truncate(i);
     inc_new_counter_debug!("packets-recv_count", i);
     Ok(i)
 }
@@ -65,7 +65,7 @@ pub fn send_to(
     socket: &UdpSocket,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
-    for p in &batch.packets {
+    for p in batch.iter() {
         let addr = p.meta.socket_addr();
         if socket_addr_space.check(&addr) {
             socket.send_to(&p.data[..p.meta.size], &addr)?;
@@ -92,7 +92,7 @@ mod tests {
         let packets = vec![Packet::default()];
         let mut packet_batch = PacketBatch::new(packets);
         packet_batch.set_addr(&send_addr);
-        assert_eq!(packet_batch.packets[0].meta.socket_addr(), send_addr);
+        assert_eq!(packet_batch[0].meta.socket_addr(), send_addr);
     }
 
     #[test]
@@ -102,25 +102,23 @@ mod tests {
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = send_socket.local_addr().unwrap();
-        let mut batch = PacketBatch::default();
 
-        batch.packets.resize(10, Packet::default());
+        let packet_batch_size = 10;
+        let mut batch = PacketBatch::with_capacity(packet_batch_size);
+        batch.resize(packet_batch_size, Packet::default());
 
-        for m in batch.packets.iter_mut() {
+        for m in batch.iter_mut() {
             m.meta.set_socket_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
         send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
-        batch
-            .packets
-            .iter_mut()
-            .for_each(|pkt| pkt.meta = Meta::default());
+        batch.iter_mut().for_each(|pkt| pkt.meta = Meta::default());
         let recvd = recv_from(&mut batch, &recv_socket, 1).unwrap();
 
-        assert_eq!(recvd, batch.packets.len());
+        assert_eq!(recvd, batch.len());
 
-        for m in &batch.packets {
+        for m in batch.iter() {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.socket_addr(), saddr);
         }
@@ -155,17 +153,18 @@ mod tests {
         let recv_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = recv_socket.local_addr().unwrap();
         let send_socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let mut batch = PacketBatch::default();
-        batch.packets.resize(PACKETS_PER_BATCH, Packet::default());
+        let mut batch = PacketBatch::with_capacity(PACKETS_PER_BATCH);
+        batch.resize(PACKETS_PER_BATCH, Packet::default());
 
         // Should only get PACKETS_PER_BATCH packets per iteration even
         // if a lot more were sent, and regardless of packet size
         for _ in 0..2 * PACKETS_PER_BATCH {
-            let mut batch = PacketBatch::default();
-            batch.packets.resize(1, Packet::default());
-            for m in batch.packets.iter_mut() {
-                m.meta.set_socket_addr(&addr);
-                m.meta.size = 1;
+            let batch_size = 1;
+            let mut batch = PacketBatch::with_capacity(batch_size);
+            batch.resize(batch_size, Packet::default());
+            for p in batch.iter_mut() {
+                p.meta.set_socket_addr(&addr);
+                p.meta.size = 1;
             }
             send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
         }
@@ -174,6 +173,6 @@ mod tests {
 
         // Check we only got PACKETS_PER_BATCH packets
         assert_eq!(recvd, PACKETS_PER_BATCH);
-        assert_eq!(batch.packets.capacity(), PACKETS_PER_BATCH);
+        assert_eq!(batch.capacity(), PACKETS_PER_BATCH);
     }
 }

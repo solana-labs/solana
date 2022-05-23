@@ -88,7 +88,6 @@ fn verify_shreds_cpu(
             .into_par_iter()
             .map(|batch| {
                 batch
-                    .packets
                     .par_iter()
                     .map(|p| verify_shred_cpu(p, slot_leaders).unwrap_or(0))
                     .collect()
@@ -114,7 +113,6 @@ fn slot_key_data_for_gpu<
             .into_par_iter()
             .map(|batch| {
                 batch
-                    .packets
                     .iter()
                     .map(|packet| {
                         let slot_start = size_of::<Signature>() + size_of::<ShredType>();
@@ -200,7 +198,7 @@ fn shred_gpu_offsets(
     let mut v_sig_lens = vec![];
     for batch in batches.iter() {
         let mut sig_lens = Vec::new();
-        for packet in batch.packets.iter() {
+        for packet in batch.iter() {
             let sig_start = pubkeys_end;
             let sig_end = sig_start + size_of::<Signature>();
             let msg_start = sig_end;
@@ -258,13 +256,13 @@ pub fn verify_shreds_gpu(
 
     for batch in batches {
         elems.push(perf_libs::Elems {
-            elems: batch.packets.as_ptr(),
-            num: batch.packets.len() as u32,
+            elems: batch.as_ptr(),
+            num: batch.len() as u32,
         });
         let mut v = Vec::new();
-        v.resize(batch.packets.len(), 0);
+        v.resize(batch.len(), 0);
         rvs.push(v);
-        num_packets += batch.packets.len();
+        num_packets += batch.len();
     }
     out.resize(signature_offsets.len(), 0);
 
@@ -327,7 +325,7 @@ pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [PacketBatch]) {
     debug!("CPU SHRED ECDSA for {}", packet_count);
     SIGVERIFY_THREAD_POOL.install(|| {
         batches.par_iter_mut().for_each(|batch| {
-            batch.packets[..]
+            batch[..]
                 .par_iter_mut()
                 .for_each(|p| sign_shred_cpu(keypair, p));
         });
@@ -395,12 +393,12 @@ pub fn sign_shreds_gpu(
 
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.packets.as_ptr(),
-            num: batch.packets.len() as u32,
+            elems: batch.as_ptr(),
+            num: batch.len() as u32,
         });
         let mut v = Vec::new();
-        v.resize(batch.packets.len(), 0);
-        num_packets += batch.packets.len();
+        v.resize(batch.len(), 0);
+        num_packets += batch.len();
     }
 
     trace!("Starting verify num packets: {}", num_packets);
@@ -427,7 +425,7 @@ pub fn sign_shreds_gpu(
     }
     trace!("done sign");
     let mut sizes: Vec<usize> = vec![0];
-    sizes.extend(batches.iter().map(|b| b.packets.len()));
+    sizes.extend(batches.iter().map(|b| b.len()));
     for i in 0..sizes.len() {
         if i == 0 {
             continue;
@@ -440,7 +438,7 @@ pub fn sign_shreds_gpu(
             .enumerate()
             .for_each(|(batch_ix, batch)| {
                 let num_packets = sizes[batch_ix];
-                batch.packets[..]
+                batch[..]
                     .par_iter_mut()
                     .enumerate()
                     .for_each(|(packet_ix, packet)| {
@@ -523,9 +521,9 @@ pub mod tests {
         );
         let keypair = Keypair::new();
         shred.sign(&keypair);
-        batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0].packets[0].meta.size = shred.payload().len();
+        batches[0].resize(1, Packet::default());
+        batches[0][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][0].meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -550,7 +548,7 @@ pub mod tests {
             .iter()
             .cloned()
             .collect();
-        batches[0].packets[0].meta.size = 0;
+        batches[0][0].meta.size = 0;
         let rv = verify_shreds_cpu(&batches, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
     }
@@ -577,9 +575,9 @@ pub mod tests {
         );
         let keypair = Keypair::new();
         shred.sign(&keypair);
-        batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0].packets[0].meta.size = shred.payload().len();
+        batches[0].resize(1, Packet::default());
+        batches[0][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][0].meta.size = shred.payload().len();
 
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
@@ -606,7 +604,7 @@ pub mod tests {
         let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
-        batches[0].packets[0].meta.size = 0;
+        batches[0][0].meta.size = 0;
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
             (slot, keypair.pubkey().to_bytes()),
@@ -627,11 +625,12 @@ pub mod tests {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
-        let mut packet_batch = PacketBatch::default();
         let num_packets = 32;
         let num_batches = 100;
-        packet_batch.packets.resize(num_packets, Packet::default());
-        for (i, p) in packet_batch.packets.iter_mut().enumerate() {
+        let mut packet_batch = PacketBatch::with_capacity(num_packets);
+        packet_batch.resize(num_packets, Packet::default());
+
+        for (i, p) in packet_batch.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
                 slot,
                 0xc0de,
@@ -687,9 +686,10 @@ pub mod tests {
             0,
             0xc0de,
         );
-        batches[0].packets.resize(1, Packet::default());
-        batches[0].packets[0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0].packets[0].meta.size = shred.payload().len();
+        batches[0].resize(1, Packet::default());
+        batches[0][0].data[0..shred.payload().len()].copy_from_slice(shred.payload());
+        batches[0][0].meta.size = shred.payload().len();
+
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
             (std::u64::MAX, Pubkey::default().to_bytes()),
