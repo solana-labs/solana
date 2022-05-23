@@ -1104,9 +1104,19 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
             (secs as u64).saturating_mul(1000).checked_div(slots)
         })
         .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+    let epoch_expected_start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
+    let first_block_in_epoch = rpc_client
+        .get_blocks_with_limit(epoch_expected_start_slot, 1)
+        .ok()
+        .and_then(|slot_vec| slot_vec.get(0).cloned())
+        .unwrap_or(epoch_expected_start_slot);
     let start_block_time = rpc_client
-        .get_block_time(epoch_info.absolute_slot - epoch_info.slot_index)
-        .ok();
+        .get_block_time(first_block_in_epoch)
+        .ok()
+        .map(|time| {
+            time + (((first_block_in_epoch - epoch_expected_start_slot) * average_slot_time_ms)
+                / 1000) as i64
+        });
     let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
     let epoch_info = CliEpochInfo {
         epoch_info,
