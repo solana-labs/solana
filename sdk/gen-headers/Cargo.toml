@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 log = { version = "0.4.17", features = ["std"] }
-regex = "1.5.4"
+regex = "1.5.6"
 
 [[bin]]
 name = "gen-headers"
