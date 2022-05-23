@@ -43,5 +43,8 @@ matches = "0.1.9"
 [[bench]]
 name = "sigverify"
 
+[[bench]]
+name = "discard"
+
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
