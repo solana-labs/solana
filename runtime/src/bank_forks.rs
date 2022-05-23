@@ -307,7 +307,7 @@ impl BankForks {
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
         }
         let new_tx_count = root_bank.transaction_count();
-        let accounts_data_len = root_bank.load_accounts_data_len() as i64;
+        let accounts_data_len = root_bank.load_accounts_data_size() as i64;
         let mut prune_time = Measure::start("set_root::prune");
         let (removed_banks, prune_slots_ms, prune_remove_ms) =
             self.prune_non_rooted(root, highest_confirmed_root);
