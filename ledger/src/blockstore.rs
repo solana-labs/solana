@@ -1859,7 +1859,7 @@ impl Blockstore {
             let upper_index = cmp::min(current_index, end_index);
             // the tick that will be used to figure out the timeout for this hole
             let data = db_iterator.value().expect("couldn't read value");
-            let reference_tick = u64::from(Shred::reference_tick_from_data(data).unwrap());
+            let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 // The higher index holes have not timed out yet
                 break 'outer;

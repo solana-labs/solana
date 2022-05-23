@@ -56,7 +56,7 @@ use {
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::Packet,
+    solana_perf::packet::{deserialize_from_with_limit, Packet},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
@@ -317,7 +317,7 @@ impl Shred {
     }
 
     pub fn new_from_serialized_shred(shred: Vec<u8>) -> Result<Self, Error> {
-        Ok(match Self::shred_type_from_payload(&shred)? {
+        Ok(match layout::get_shred_type(&shred)? {
             ShredType::Code => Self::from(ShredCode::from_payload(shred)?),
             ShredType::Data => Self::from(ShredData::from_payload(shred)?),
         })
@@ -383,7 +383,7 @@ impl Shred {
 
     // Possibly zero pads bytes stored in blockstore.
     pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
-        match Self::shred_type_from_payload(&shred)? {
+        match layout::get_shred_type(&shred)? {
             ShredType::Code => ShredCode::resize_stored_shred(shred),
             ShredType::Data => ShredData::resize_stored_shred(shred),
         }
@@ -441,16 +441,6 @@ impl Shred {
         self.common_header().shred_type
     }
 
-    fn shred_type_from_payload(shred: &[u8]) -> Result<ShredType, Error> {
-        match shred.get(OFFSET_OF_SHRED_TYPE) {
-            None => Err(Error::InvalidPayloadSize(shred.len())),
-            Some(shred_type) => match ShredType::try_from(*shred_type) {
-                Err(_) => Err(Error::InvalidShredType),
-                Ok(shred_type) => Ok(shred_type),
-            },
-        }
-    }
-
     pub fn is_data(&self) -> bool {
         self.shred_type() == ShredType::Data
     }
@@ -488,25 +478,6 @@ impl Shred {
         }
     }
 
-    // Get slot from a shred packet with partial deserialize
-    pub fn get_slot_from_packet(p: &Packet) -> Option<Slot> {
-        let slot_start = OFFSET_OF_SHRED_SLOT;
-        let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
-        p.deserialize_slice(slot_start..slot_end).ok()
-    }
-
-    pub(crate) fn reference_tick_from_data(data: &[u8]) -> Result<u8, Error> {
-        const SHRED_FLAGS_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + std::mem::size_of::<u16>();
-        if Self::shred_type_from_payload(data)? != ShredType::Data {
-            return Err(Error::InvalidShredType);
-        }
-        let flags = match data.get(SHRED_FLAGS_OFFSET) {
-            None => return Err(Error::InvalidPayloadSize(data.len())),
-            Some(flags) => flags,
-        };
-        Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
-    }
-
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         let message = self.signed_payload();
         self.signature().verify(pubkey.as_ref(), message)
@@ -535,6 +506,73 @@ impl Shred {
     }
 }
 
+// Helper methods to extract pieces of the shred from the payload
+// without deserializing the entire payload.
+pub mod layout {
+    use {super::*, std::ops::Range};
+
+    fn get_shred_size(packet: &Packet) -> usize {
+        if packet.meta.repair() {
+            packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+        } else {
+            packet.meta.size
+        }
+    }
+
+    pub fn get_shred(packet: &Packet) -> &[u8] {
+        &packet.data()[..get_shred_size(packet)]
+    }
+
+    pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
+        Some(Signature::new(shred.get(..SIZE_OF_SIGNATURE)?))
+    }
+
+    pub(crate) const fn get_signature_range() -> Range<usize> {
+        0..SIZE_OF_SIGNATURE
+    }
+
+    pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
+        match shred.get(OFFSET_OF_SHRED_TYPE) {
+            None => Err(Error::InvalidPayloadSize(shred.len())),
+            Some(shred_type) => match ShredType::try_from(*shred_type) {
+                Err(_) => Err(Error::InvalidShredType),
+                Ok(shred_type) => Ok(shred_type),
+            },
+        }
+    }
+
+    pub fn get_slot(shred: &[u8]) -> Option<Slot> {
+        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_SLOT..)?).ok()
+    }
+
+    pub(super) fn get_index(shred: &[u8]) -> Option<u32> {
+        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_INDEX..)?).ok()
+    }
+
+    // Returns chunk of the payload which is signed.
+    pub(crate) fn get_signed_message(shred: &[u8]) -> Option<&[u8]> {
+        shred.get(SIZE_OF_SIGNATURE..)
+    }
+
+    // Returns slice range of the packet payload which is signed.
+    pub(crate) fn get_signed_message_range(packet: &Packet) -> Range<usize> {
+        SIZE_OF_SIGNATURE..get_shred_size(packet)
+    }
+
+    pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
+        const SIZE_OF_PARENT_OFFSET: usize = std::mem::size_of::<u16>();
+        const OFFSET_OF_SHRED_FLAGS: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_PARENT_OFFSET;
+        if get_shred_type(shred)? != ShredType::Data {
+            return Err(Error::InvalidShredType);
+        }
+        let flags = match shred.get(OFFSET_OF_SHRED_FLAGS) {
+            None => return Err(Error::InvalidPayloadSize(shred.len())),
+            Some(flags) => flags,
+        };
+        Ok(flags & ShredFlags::SHRED_TICK_REFERENCE_MASK.bits())
+    }
+}
+
 impl From<ShredCode> for Shred {
     fn from(shred: ShredCode) -> Self {
         Self::ShredCode(shred)
@@ -549,50 +587,39 @@ impl From<ShredData> for Shred {
 
 // Get slot, index, and type from a packet with partial deserialize
 pub fn get_shred_slot_index_type(
-    p: &Packet,
+    packet: &Packet,
     stats: &mut ShredFetchStats,
 ) -> Option<(Slot, u32, ShredType)> {
-    let index_start = OFFSET_OF_SHRED_INDEX;
-    let index_end = index_start + SIZE_OF_SHRED_INDEX;
-    let slot_start = OFFSET_OF_SHRED_SLOT;
-    let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
-
-    debug_assert!(index_end > slot_end);
-    debug_assert!(index_end > OFFSET_OF_SHRED_TYPE);
-
-    if index_end > p.meta.size {
+    let shred = layout::get_shred(packet);
+    if OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX > shred.len() {
         stats.index_overrun += 1;
         return None;
     }
-
-    let index = match p.deserialize_slice(index_start..index_end) {
-        Ok(x) => x,
-        Err(_e) => {
-            stats.index_bad_deserialize += 1;
-            return None;
-        }
-    };
-
-    if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
-        stats.index_out_of_bounds += 1;
-        return None;
-    }
-
-    let slot = match p.deserialize_slice(slot_start..slot_end) {
-        Ok(x) => x,
-        Err(_e) => {
-            stats.slot_bad_deserialize += 1;
-            return None;
-        }
-    };
-
-    let shred_type = match ShredType::try_from(p.data()[OFFSET_OF_SHRED_TYPE]) {
+    let shred_type = match layout::get_shred_type(shred) {
+        Ok(shred_type) => shred_type,
         Err(_) => {
             stats.bad_shred_type += 1;
             return None;
         }
-        Ok(shred_type) => shred_type,
     };
+    let slot = match layout::get_slot(shred) {
+        Some(slot) => slot,
+        None => {
+            stats.slot_bad_deserialize += 1;
+            return None;
+        }
+    };
+    let index = match layout::get_index(shred) {
+        Some(index) => index,
+        None => {
+            stats.index_bad_deserialize += 1;
+            return None;
+        }
+    };
+    if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
+        stats.index_out_of_bounds += 1;
+        return None;
+    }
     Some((slot, index, shred_type))
 }
 
@@ -924,9 +951,9 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(packet.data()).unwrap()
+            layout::get_reference_tick(packet.data()).unwrap()
         );
-        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
@@ -965,9 +992,9 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            Shred::reference_tick_from_data(packet.data()).unwrap()
+            layout::get_reference_tick(packet.data()).unwrap()
         );
-        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
@@ -1011,7 +1038,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(Shred::get_slot_from_packet(&packet), Some(shred.slot()));
+        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
@@ -1050,7 +1077,7 @@ mod tests {
             assert_eq!(shred.last_in_slot(), is_last_in_slot);
             assert_eq!(shred.reference_tick(), reference_tick.min(63u8));
             assert_eq!(
-                Shred::reference_tick_from_data(shred.payload()).unwrap(),
+                layout::get_reference_tick(shred.payload()).unwrap(),
                 reference_tick.min(63u8),
             );
         }
