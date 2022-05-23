@@ -1,6 +1,6 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import crossFetch from 'cross-fetch';
+import fetch from 'isomorphic-unfetch';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
 import {
@@ -955,11 +955,11 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
-  customFetch?: typeof crossFetch,
+  customFetch?: typeof fetch,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
-  const fetch = customFetch ? customFetch : crossFetch;
+  const _fetch = customFetch ? customFetch : fetch;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
@@ -982,7 +982,7 @@ function createRpcClient(
           }
         },
       );
-      return await fetch(...modifiedFetchArgs);
+      return await _fetch(...modifiedFetchArgs);
     };
   }
 
@@ -1008,7 +1008,7 @@ function createRpcClient(
         if (fetchWithMiddleware) {
           res = await fetchWithMiddleware(url, options);
         } else {
-          res = await fetch(url, options);
+          res = await _fetch(url, options);
         }
 
         if (res.status !== 429 /* Too many requests */) {
@@ -2182,7 +2182,7 @@ export type ConnectionConfig = {
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional custom fetch function */
-  fetch?: typeof crossFetch;
+  fetch?: typeof fetch;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
   /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */

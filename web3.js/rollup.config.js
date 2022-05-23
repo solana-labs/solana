@@ -63,7 +63,7 @@ function generateConfig(configType, format) {
       'crypto-hash',
       'jayson/lib/client/browser',
       'js-sha3',
-      'cross-fetch',
+      'isomorphic-unfetch',
       'rpc-websockets',
       'secp256k1',
       'superstruct',
