@@ -5812,6 +5812,36 @@ impl AccountsDb {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+<<<<<<< HEAD
+=======
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        can_cached_slot_be_unflushed: bool,
+    ) -> Result<(), BankHashVerificationError> {
+        self.verify_bank_hash_and_lamports_new(
+            slot,
+            ancestors,
+            total_lamports,
+            test_hash_calculation,
+            epoch_schedule,
+            rent_collector,
+            can_cached_slot_be_unflushed,
+            false,
+        )
+    }
+
+    /// Only called from startup or test code.
+    pub fn verify_bank_hash_and_lamports_new(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        total_lamports: u64,
+        test_hash_calculation: bool,
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
+>>>>>>> 41f30a238 (stop logging misleading bank hash mismatch (#25427))
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -5840,19 +5870,23 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.snapshot_hash {
-                Ok(())
-            } else {
-                warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.snapshot_hash
-                );
-                Err(MismatchedBankHash)
-            }
+        if ignore_mismatch {
+            Ok(())
         } else {
-            Err(MissingBankHash)
+            let bank_hashes = self.bank_hashes.read().unwrap();
+            if let Some(found_hash_info) = bank_hashes.get(&slot) {
+                if calculated_hash == found_hash_info.snapshot_hash {
+                    Ok(())
+                } else {
+                    warn!(
+                        "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
+                        slot, calculated_hash, found_hash_info.snapshot_hash
+                    );
+                    Err(MismatchedBankHash)
+                }
+            } else {
+                Err(MissingBankHash)
+            }
         }
     }
 

@@ -781,12 +781,26 @@ impl Accounts {
         ancestors: &Ancestors,
         total_lamports: u64,
         test_hash_calculation: bool,
+<<<<<<< HEAD
+=======
+        epoch_schedule: &EpochSchedule,
+        rent_collector: &RentCollector,
+        can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
+>>>>>>> 41f30a238 (stop logging misleading bank hash mismatch (#25427))
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports(
             slot,
             ancestors,
             total_lamports,
             test_hash_calculation,
+<<<<<<< HEAD
+=======
+            epoch_schedule,
+            rent_collector,
+            can_cached_slot_be_unflushed,
+            ignore_mismatch,
+>>>>>>> 41f30a238 (stop logging misleading bank hash mismatch (#25427))
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
