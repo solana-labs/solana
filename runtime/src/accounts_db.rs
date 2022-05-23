@@ -47,7 +47,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
-        expected_rent_collection::ExpectedRentCollection,
+        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -5544,6 +5544,8 @@ impl AccountsDb {
         let total_lamports = Mutex::<u64>::new(0);
         let stats = HashStats::default();
 
+        let max_slot_info = SlotInfoInEpoch::new(max_slot, config.epoch_schedule);
+
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -5588,7 +5590,7 @@ impl AccountsDb {
                                                 config.epoch_schedule,
                                                 config.rent_collector,
                                                 &stats,
-                                                max_slot,
+                                                &max_slot_info,
                                                 find_unskipped_slot,
                                                 self.filler_account_suffix.as_ref(),
                                             );
@@ -6127,6 +6129,9 @@ impl AccountsDb {
 
         let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
 
+        let max_slot_info =
+            SlotInfoInEpoch::new(storage.max_slot_inclusive(), config.epoch_schedule);
+
         let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
@@ -6158,7 +6163,7 @@ impl AccountsDb {
                     config.epoch_schedule,
                     config.rent_collector,
                     stats,
-                    storage.max_slot_inclusive(),
+                    &max_slot_info,
                     find_unskipped_slot,
                     filler_account_suffix,
                 );
