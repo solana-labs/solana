@@ -168,7 +168,7 @@ mod test {
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
         let blockstore_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(&blockstore_path.path()).unwrap();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
         optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(
             vec![(snapshot_start_slot - 1, bank_hash)],
             &blockstore,
@@ -197,7 +197,7 @@ mod test {
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
         let bad_bank_hash = Hash::new(&[42u8; 32]);
         let blockstore_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(&blockstore_path.path()).unwrap();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
         let optimistic_slots = vec![(1, bad_bank_hash), (3, Hash::default())];
         optimistic_confirmation_verifier
             .add_new_optimistic_confirmed_slots(optimistic_slots, &blockstore);
@@ -221,7 +221,7 @@ mod test {
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
         let blockstore_path = get_tmp_ledger_path_auto_delete!();
-        let blockstore = Blockstore::open(&blockstore_path.path()).unwrap();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
         let mut vote_simulator = setup_forks();
         let optimistic_slots: Vec<_> = vec![1, 3, 5]
             .into_iter()
