@@ -384,6 +384,28 @@ impl InstructionContext {
         }
     }
 
+    /// Returns `Some(index_in_instruction)` if this is a duplicate
+    /// and `None` if it is the first account with this key
+    pub fn is_duplicate(
+        &self,
+        index_in_instruction: usize,
+    ) -> Result<Option<usize>, InstructionError> {
+        if index_in_instruction < self.program_accounts.len()
+            || index_in_instruction >= self.get_number_of_accounts()
+        {
+            Err(InstructionError::NotEnoughAccountKeys)
+        } else {
+            let index_in_instruction =
+                index_in_instruction.saturating_sub(self.program_accounts.len());
+            let index_in_callee = self.instruction_accounts[index_in_instruction].index_in_callee;
+            Ok(if index_in_callee == index_in_instruction {
+                None
+            } else {
+                Some(index_in_callee)
+            })
+        }
+    }
+
     /// Gets the key of the last program account of this Instruction
     pub fn get_program_key<'a, 'b: 'a>(
         &'a self,
