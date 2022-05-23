@@ -16,12 +16,24 @@ use {
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+/// Contains account meta data which varies between instruction.
+///
+/// It also contains indices to other structures for faster lookup.
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
+    /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: usize,
+    /// Points to the first occurrence in the parent `InstructionContext`
+    ///
+    /// This includes the program accounts.
     pub index_in_caller: usize,
+    /// Points to the first occurrence in the current `InstructionContext`
+    ///
+    /// This excludes the program accounts.
     pub index_in_callee: usize,
+    /// Is this account supposed to sign
     pub is_signer: bool,
+    /// Is this account allowed to become writable
     pub is_writable: bool,
 }
 
