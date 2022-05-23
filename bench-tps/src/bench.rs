@@ -426,14 +426,6 @@ fn poll_blockhash<T: BenchTpsClient>(
         let blockhash_updated = {
             let old_blockhash = *blockhash.read().unwrap();
             if let Some(new_blockhash) = get_new_latest_blockhash(client, &old_blockhash) {
-                datapoint_info!(
-                    "blockhash_stats",
-                    (
-                        "time_elapsed_since_blockhash_refreshed",
-                        blockhash_last_updated.elapsed().as_millis(),
-                        i64
-                    )
-                );
                 *blockhash.write().unwrap() = new_blockhash;
                 blockhash_last_updated = Instant::now();
                 true
