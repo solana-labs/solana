@@ -1346,7 +1346,7 @@ fn load_frozen_forks(
             if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
                 let can_cached_slot_be_unflushed = true;
-                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed);
+                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed, true);
                 break;
             }
         }

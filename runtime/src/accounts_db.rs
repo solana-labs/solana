@@ -6372,6 +6372,7 @@ impl AccountsDb {
             epoch_schedule,
             rent_collector,
             can_cached_slot_be_unflushed,
+            false,
         )
     }
 
@@ -6385,6 +6386,7 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -6415,19 +6417,23 @@ impl AccountsDb {
             return Err(MismatchedTotalLamports(calculated_lamports, total_lamports));
         }
 
-        let bank_hashes = self.bank_hashes.read().unwrap();
-        if let Some(found_hash_info) = bank_hashes.get(&slot) {
-            if calculated_hash == found_hash_info.snapshot_hash {
-                Ok(())
-            } else {
-                warn!(
-                    "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                    slot, calculated_hash, found_hash_info.snapshot_hash
-                );
-                Err(MismatchedBankHash)
-            }
+        if ignore_mismatch {
+            Ok(())
         } else {
-            Err(MissingBankHash)
+            let bank_hashes = self.bank_hashes.read().unwrap();
+            if let Some(found_hash_info) = bank_hashes.get(&slot) {
+                if calculated_hash == found_hash_info.snapshot_hash {
+                    Ok(())
+                } else {
+                    warn!(
+                        "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
+                        slot, calculated_hash, found_hash_info.snapshot_hash
+                    );
+                    Err(MismatchedBankHash)
+                }
+            } else {
+                Err(MissingBankHash)
+            }
         }
     }
 
