@@ -150,6 +150,7 @@ impl Tpu {
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
             packet_sender,
+            fetch_stage.forward_sender.clone(),
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
             staked_nodes,

@@ -8,7 +8,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
-        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
+        quic::{QUIC_FORWARDED_PACKET, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
         signature::Keypair,
         timing,
     },
@@ -153,6 +153,7 @@ fn handle_chunk(
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
+    forward_sender: &Sender<PacketBatch>,
     stats: Arc<StreamStats>,
     stake: u64,
 ) -> bool {
@@ -196,9 +197,23 @@ fn handle_chunk(
             } else {
                 trace!("chunk is none");
                 // done receiving chunks
-                if let Some(batch) = maybe_batch.take() {
+                if let Some(mut batch) = maybe_batch.take() {
+                    let quic_flag = *batch[0]
+                        .data()
+                        .last()
+                        .expect("Unable to read value of QUIC flag");
+                    // Drop the last byte containing flag that indicates if the packet was forwarded
+                    batch[0].meta.size -= 1;
                     let len = batch[0].meta.size;
-                    if let Err(e) = packet_sender.send(batch) {
+                    let sender = if quic_flag == QUIC_FORWARDED_PACKET {
+                        stats
+                            .total_forwards_received
+                            .fetch_add(1, Ordering::Relaxed);
+                        forward_sender
+                    } else {
+                        packet_sender
+                    };
+                    if let Err(e) = sender.send(batch) {
                         stats
                             .total_packet_batch_send_err
                             .fetch_add(1, Ordering::Relaxed);
@@ -336,6 +351,7 @@ struct StreamStats {
     total_invalid_chunk_size: AtomicUsize,
     total_packets_allocated: AtomicUsize,
     total_chunks_received: AtomicUsize,
+    total_forwards_received: AtomicUsize,
     total_packet_batch_send_err: AtomicUsize,
     total_packet_batches_sent: AtomicUsize,
     total_packet_batches_none: AtomicUsize,
@@ -410,6 +426,11 @@ impl StreamStats {
                 i64
             ),
             (
+                "forwarded_packets_received",
+                self.total_forwards_received.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "packet_batches_sent",
                 self.total_packet_batches_sent.swap(0, Ordering::Relaxed),
                 i64
@@ -431,6 +452,7 @@ impl StreamStats {
 fn handle_connection(
     mut uni_streams: IncomingUniStreams,
     packet_sender: Sender<PacketBatch>,
+    forward_sender: Sender<PacketBatch>,
     remote_addr: SocketAddr,
     last_update: Arc<AtomicU64>,
     connection_table: Arc<Mutex<ConnectionTable>>,
@@ -458,6 +480,7 @@ fn handle_connection(
                                 &mut maybe_batch,
                                 &remote_addr,
                                 &packet_sender,
+                                &forward_sender,
                                 stats.clone(),
                                 stake,
                             ) {
@@ -486,11 +509,13 @@ fn handle_connection(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
+    forward_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
     staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
@@ -570,11 +595,13 @@ pub fn spawn_server(
                         {
                             drop(connection_table_l);
                             let packet_sender = packet_sender.clone();
+                            let forward_sender = forward_sender.clone();
                             let stats = stats.clone();
                             let connection_table1 = connection_table.clone();
                             handle_connection(
                                 uni_streams,
                                 packet_sender,
+                                forward_sender,
                                 remote_addr,
                                 last_update,
                                 connection_table1,
@@ -743,6 +770,7 @@ mod test {
             s,
             &keypair,
             ip,
+            sender.clone(),
             sender,
             exit.clone(),
             2,
@@ -764,9 +792,9 @@ mod test {
             let handle = runtime.spawn(async move {
                 let mut s1 = c1.connection.open_uni().await.unwrap();
                 let mut s2 = c2.connection.open_uni().await.unwrap();
-                s1.write_all(&[0u8]).await.unwrap();
+                s1.write_all(&[0u8, 0u8]).await.unwrap();
                 s1.finish().await.unwrap();
-                s2.write_all(&[0u8]).await.unwrap();
+                s2.write_all(&[0u8, 0u8]).await.unwrap();
                 s2.finish().await.unwrap();
             });
             runtime.block_on(handle).unwrap();
@@ -813,6 +841,7 @@ mod test {
             s,
             &keypair,
             ip,
+            sender.clone(),
             sender,
             exit.clone(),
             1,
@@ -859,7 +888,8 @@ mod test {
         }
         for batch in all_packets {
             for p in batch.iter() {
-                assert_eq!(p.meta.size, num_bytes);
+                // The last byte is consumed by the receiver as forwarding flag.
+                assert_eq!(p.meta.size, num_bytes - 1);
             }
         }
         assert_eq!(total_packets, num_expected_packets);

@@ -210,7 +210,7 @@ impl ThinClient {
                 if num_confirmed == 0 {
                     let conn = get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
-                    conn.send_wire_transaction(&wire_transaction)?;
+                    conn.send_wire_transaction_async(wire_transaction.clone())?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(

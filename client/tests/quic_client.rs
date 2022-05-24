@@ -32,6 +32,7 @@ mod tests {
             s.try_clone().unwrap(),
             &keypair,
             ip,
+            sender.clone(),
             sender,
             exit.clone(),
             1,

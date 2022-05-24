@@ -6,3 +6,6 @@ pub const QUIC_MAX_CONCURRENT_STREAMS: usize = 2048;
 
 pub const QUIC_MAX_TIMEOUT_MS: u32 = 2_000;
 pub const QUIC_KEEP_ALIVE_MS: u64 = 1_000;
+
+pub const QUIC_FORWARDED_PACKET: u8 = 0b0000_0010;
+pub const QUIC_NOT_FORWARDED_PACKET: u8 = 0;

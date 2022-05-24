@@ -19,7 +19,8 @@ use {
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
         quic::{
-            QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS, QUIC_PORT_OFFSET,
+            QUIC_FORWARDED_PACKET, QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS,
+            QUIC_MAX_TIMEOUT_MS, QUIC_NOT_FORWARDED_PACKET, QUIC_PORT_OFFSET,
         },
         transport::Result as TransportResult,
     },
@@ -178,28 +179,12 @@ impl TpuConnection for QuicTpuConnection {
         &self.client.addr
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
-    where
-        T: AsRef<[u8]>,
-    {
-        let stats = ClientStats::default();
-        let len = buffers.len();
-        let _guard = RUNTIME.enter();
-        let send_batch = self
-            .client
-            .send_batch(buffers, &stats, self.connection_stats.clone());
-        let res = RUNTIME.block_on(send_batch);
-        self.connection_stats
-            .add_client_stats(&stats, len, res.is_ok());
-        res?;
-        Ok(())
-    }
-
-    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    fn send_wire_transaction_async(&self, mut wire_transaction: Vec<u8>) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         let connection_stats = self.connection_stats.clone();
+        wire_transaction.push(QUIC_NOT_FORWARDED_PACKET);
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
             let send_buffer =
@@ -215,12 +200,45 @@ impl TpuConnection for QuicTpuConnection {
         Ok(())
     }
 
-    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+    fn send_wire_transaction_batch_async(&self, mut buffers: Vec<Vec<u8>>) -> TransportResult<()> {
         let stats = Arc::new(ClientStats::default());
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         let connection_stats = self.connection_stats.clone();
         let len = buffers.len();
+
+        buffers.iter_mut().for_each(|p| {
+            p.push(QUIC_NOT_FORWARDED_PACKET);
+        });
+
+        //drop and detach the task
+        let _ = RUNTIME.spawn(async move {
+            let send_batch = client.send_batch(&buffers, &stats, connection_stats.clone());
+            if let Err(e) = send_batch.await {
+                warn!("Failed to send transaction batch async to {:?}", e);
+                datapoint_warn!("send-wire-batch-async", ("failure", 1, i64),);
+                connection_stats.add_client_stats(&stats, len, false);
+            } else {
+                connection_stats.add_client_stats(&stats, len, true);
+            }
+        });
+        Ok(())
+    }
+
+    fn forward_wire_transaction_batch_async(
+        &self,
+        mut buffers: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        let stats = Arc::new(ClientStats::default());
+        let _guard = RUNTIME.enter();
+        let client = self.client.clone();
+        let connection_stats = self.connection_stats.clone();
+        let len = buffers.len();
+
+        buffers.iter_mut().for_each(|p| {
+            p.push(QUIC_FORWARDED_PACKET);
+        });
+
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
             let send_batch = client.send_batch(&buffers, &stats, connection_stats.clone());

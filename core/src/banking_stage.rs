@@ -17,7 +17,10 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_client::{connection_cache::get_connection, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::{get_connection, get_use_quic},
+        tpu_connection::TpuConnection,
+    },
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::blockstore_processor::TransactionStatusSender,
@@ -489,7 +492,9 @@ impl BankingStage {
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets(
-        tpu_forwards: &std::net::SocketAddr,
+        vote_tx: bool,
+        forwarding_addr: &std::net::SocketAddr,
+        tpu: &SocketAddr,
         packets: Vec<&Packet>,
         data_budget: &DataBudget,
     ) -> (std::result::Result<(), TransportError>, usize) {
@@ -525,8 +530,17 @@ impl BankingStage {
 
             let mut measure = Measure::start("banking_stage-forward-us");
 
-            let conn = get_connection(tpu_forwards);
-            let res = conn.send_wire_transaction_batch_async(packet_vec);
+            let connection = if vote_tx || !get_use_quic() {
+                // If it's a vote transaction or we are not using QUIC, let's use the given forwarding address
+                // The forwarding address (vote_port for votes, or tpu_forward port for other transactions) does
+                // not run a QUIC streamer service. It can only receive UDP packets.
+                get_connection(forwarding_addr)
+            } else {
+                // If the transaction will be forwarded using QUIC, it must be sent to the TPU port of the
+                // receiver
+                get_connection(tpu)
+            };
+            let res = connection.forward_wire_transaction_batch_async(packet_vec);
 
             measure.stop();
             inc_new_counter_info!(
@@ -946,19 +960,30 @@ impl BankingStage {
         data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
-        let addr = match forward_option {
+        let (vote_tx, forwarding_addr, tpu_addr) = match forward_option {
             ForwardOption::NotForward => {
                 if !hold {
                     buffered_packet_batches.clear();
                 }
                 return;
             }
-            ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(cluster_info, poh_recorder)
-            }
-            ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
+            ForwardOption::ForwardTransaction => (
+                false,
+                next_leader_tpu_forwards(cluster_info, poh_recorder),
+                next_leader_tpu(cluster_info, poh_recorder),
+            ),
+            ForwardOption::ForwardTpuVote => (
+                true,
+                next_leader_tpu_vote(cluster_info, poh_recorder),
+                next_leader_tpu(cluster_info, poh_recorder),
+            ),
         };
-        let addr = match addr {
+        let forward_addr = match forwarding_addr {
+            Some(addr) => addr,
+            None => return,
+        };
+
+        let tpu_addr = match tpu_addr {
             Some(addr) => addr,
             None => return,
         };
@@ -966,8 +991,13 @@ impl BankingStage {
         let forwardable_packets =
             Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
         let forwardable_packets_len = forwardable_packets.len();
-        let (_forward_result, sucessful_forwarded_packets_count) =
-            Self::forward_buffered_packets(&addr, forwardable_packets, data_budget);
+        let (_forward_result, sucessful_forwarded_packets_count) = Self::forward_buffered_packets(
+            vote_tx,
+            &forward_addr,
+            &tpu_addr,
+            forwardable_packets,
+            data_budget,
+        );
         let failed_forwarded_packets_count =
             forwardable_packets_len.saturating_sub(sucessful_forwarded_packets_count);
 

@@ -35,14 +35,7 @@ pub trait TpuConnection {
     ) -> TransportResult<()> {
         let wire_transaction =
             bincode::serialize(transaction).expect("serialize Transaction in send_batch");
-        self.send_wire_transaction(&wire_transaction)
-    }
-
-    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
-    where
-        T: AsRef<[u8]>,
-    {
-        self.send_wire_transaction_batch(&[wire_transaction])
+        self.send_wire_transaction_async(wire_transaction)
     }
 
     fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()>;
@@ -56,12 +49,12 @@ pub trait TpuConnection {
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .collect::<Vec<_>>();
 
-        self.send_wire_transaction_batch(&buffers)
+        self.send_wire_transaction_batch_async(buffers)
     }
 
-    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
-    where
-        T: AsRef<[u8]>;
-
     fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>;
+
+    fn forward_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+        self.send_wire_transaction_batch_async(buffers)
+    }
 }

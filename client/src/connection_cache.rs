@@ -235,6 +235,10 @@ impl ConnectionMap {
     pub fn set_use_quic(&mut self, use_quic: bool) {
         self.use_quic = use_quic;
     }
+
+    pub fn get_use_quic(&self) -> bool {
+        self.use_quic
+    }
 }
 
 lazy_static! {
@@ -244,6 +248,11 @@ lazy_static! {
 pub fn set_use_quic(use_quic: bool) {
     let mut map = (*CONNECTION_MAP).write().unwrap();
     map.set_use_quic(use_quic);
+}
+
+pub fn get_use_quic() -> bool {
+    let map = (*CONNECTION_MAP).read().unwrap();
+    map.get_use_quic()
 }
 
 struct GetConnectionResult {
