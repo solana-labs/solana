@@ -95,6 +95,7 @@ fn create_inputs() -> TransactionContext {
             |(index_in_instruction, index_in_transaction)| InstructionAccount {
                 index_in_caller: 1usize.saturating_add(index_in_instruction),
                 index_in_transaction,
+                index_in_callee: index_in_instruction,
                 is_signer: false,
                 is_writable: index_in_instruction >= 4,
             },

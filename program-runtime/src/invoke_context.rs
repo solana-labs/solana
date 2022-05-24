@@ -744,7 +744,7 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
-        for account_meta in instruction.accounts.iter() {
+        for (index_in_instruction, account_meta) in instruction.accounts.iter().enumerate() {
             let index_in_transaction = self
                 .transaction_context
                 .find_index_of_account(&account_meta.pubkey)
@@ -784,6 +784,7 @@ impl<'a> InvokeContext<'a> {
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
                     index_in_caller,
+                    index_in_callee: index_in_instruction,
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
@@ -1140,24 +1141,32 @@ pub struct MockInvokeContextPreparation {
 
 pub fn prepare_mock_invoke_context(
     transaction_accounts: Vec<TransactionAccount>,
-    instruction_accounts: Vec<AccountMeta>,
+    instruction_account_metas: Vec<AccountMeta>,
     program_indices: &[usize],
 ) -> MockInvokeContextPreparation {
-    let instruction_accounts = instruction_accounts
-        .iter()
-        .map(|account_meta| {
-            let index_in_transaction = transaction_accounts
-                .iter()
-                .position(|(key, _account)| *key == account_meta.pubkey)
-                .unwrap_or(transaction_accounts.len());
-            InstructionAccount {
-                index_in_transaction,
-                index_in_caller: program_indices.len().saturating_add(index_in_transaction),
-                is_signer: account_meta.is_signer,
-                is_writable: account_meta.is_writable,
-            }
-        })
-        .collect();
+    let mut instruction_accounts: Vec<InstructionAccount> =
+        Vec::with_capacity(instruction_account_metas.len());
+    for (index_in_instruction, account_meta) in instruction_account_metas.iter().enumerate() {
+        let index_in_transaction = transaction_accounts
+            .iter()
+            .position(|(key, _account)| *key == account_meta.pubkey)
+            .unwrap_or(transaction_accounts.len());
+        let index_in_callee = instruction_accounts
+            .get(0..index_in_instruction)
+            .unwrap()
+            .iter()
+            .position(|instruction_account| {
+                instruction_account.index_in_transaction == index_in_transaction
+            })
+            .unwrap_or(index_in_instruction);
+        instruction_accounts.push(InstructionAccount {
+            index_in_transaction,
+            index_in_caller: program_indices.len().saturating_add(index_in_transaction),
+            index_in_callee,
+            is_signer: account_meta.is_signer,
+            is_writable: account_meta.is_writable,
+        });
+    }
     MockInvokeContextPreparation {
         transaction_accounts,
         instruction_accounts,
@@ -1258,11 +1267,13 @@ pub fn visit_each_account_once<E>(
     'root: for (index, instruction_account) in instruction_accounts.iter().enumerate() {
         match instruction_accounts.get(..index) {
             Some(range) => {
-                for before in range.iter() {
+                for (before_index, before) in range.iter().enumerate() {
                     if before.index_in_transaction == instruction_account.index_in_transaction {
+                        debug_assert_eq!(before_index, instruction_account.index_in_callee);
                         continue 'root; // skip dups
                     }
                 }
+                debug_assert_eq!(index, instruction_account.index_in_callee);
                 work(index, instruction_account)?;
             }
             None => return Err(inner_error),
@@ -1320,24 +1331,28 @@ mod tests {
                 InstructionAccount {
                     index_in_transaction: 7,
                     index_in_caller: 0,
+                    index_in_callee: 0,
                     is_signer: false,
                     is_writable: false,
                 },
                 InstructionAccount {
                     index_in_transaction: 3,
                     index_in_caller: 1,
+                    index_in_callee: 1,
                     is_signer: false,
                     is_writable: false,
                 },
                 InstructionAccount {
                     index_in_transaction: 9,
                     index_in_caller: 2,
+                    index_in_callee: 2,
                     is_signer: false,
                     is_writable: false,
                 },
                 InstructionAccount {
                     index_in_transaction: 3,
                     index_in_caller: 1,
+                    index_in_callee: 1,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -1451,6 +1466,7 @@ mod tests {
             instruction_accounts.push(InstructionAccount {
                 index_in_transaction: index,
                 index_in_caller: 1 + index,
+                index_in_callee: instruction_accounts.len(),
                 is_signer: false,
                 is_writable: true,
             });
@@ -1463,6 +1479,7 @@ mod tests {
             instruction_accounts.push(InstructionAccount {
                 index_in_transaction: index,
                 index_in_caller: 1 + index,
+                index_in_callee: index,
                 is_signer: false,
                 is_writable: false,
             });
@@ -1491,12 +1508,14 @@ mod tests {
                 InstructionAccount {
                     index_in_transaction: not_owned_index,
                     index_in_caller: 1 + not_owned_index,
+                    index_in_callee: 0,
                     is_signer: false,
                     is_writable: true,
                 },
                 InstructionAccount {
                     index_in_transaction: owned_index,
                     index_in_caller: 1 + owned_index,
+                    index_in_callee: 1,
                     is_signer: false,
                     is_writable: true,
                 },
@@ -1611,11 +1630,12 @@ mod tests {
             AccountMeta::new_readonly(accounts.get(2).unwrap().0, false),
         ];
         let instruction_accounts = (0..4)
-            .map(|index_in_transaction| InstructionAccount {
-                index_in_transaction,
-                index_in_caller: 1 + index_in_transaction,
+            .map(|index_in_instruction| InstructionAccount {
+                index_in_transaction: index_in_instruction,
+                index_in_caller: 1 + index_in_instruction,
+                index_in_callee: index_in_instruction,
                 is_signer: false,
-                is_writable: index_in_transaction < 2,
+                is_writable: index_in_instruction < 2,
             })
             .collect::<Vec<_>>();
         let mut transaction_context = TransactionContext::new(accounts, 2, 8);
@@ -1826,12 +1846,14 @@ mod tests {
             InstructionAccount {
                 index_in_transaction: 0,
                 index_in_caller: 1,
+                index_in_callee: 0,
                 is_signer: false,
                 is_writable: true,
             },
             InstructionAccount {
                 index_in_transaction: 1,
                 index_in_caller: 2,
+                index_in_callee: 1,
                 is_signer: false,
                 is_writable: false,
             },

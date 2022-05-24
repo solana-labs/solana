@@ -20,12 +20,16 @@ pub fn is_duplicate(
     index_in_instruction: usize,
 ) -> Option<usize> {
     let index_in_transaction = instruction_context.get_index_in_transaction(index_in_instruction);
-    (instruction_context.get_number_of_program_accounts()..index_in_instruction).position(
-        |index_in_instruction| {
+    let old_approach = (instruction_context.get_number_of_program_accounts()..index_in_instruction)
+        .position(|index_in_instruction| {
             instruction_context.get_index_in_transaction(index_in_instruction)
                 == index_in_transaction
-        },
-    )
+        });
+    let result = instruction_context
+        .is_duplicate(index_in_instruction)
+        .unwrap_or(None);
+    debug_assert_eq!(result, old_approach);
+    old_approach
 }
 
 pub fn serialize_parameters(

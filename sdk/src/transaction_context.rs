@@ -16,11 +16,24 @@ use {
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+/// Contains account meta data which varies between instruction.
+///
+/// It also contains indices to other structures for faster lookup.
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
+    /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: usize,
+    /// Points to the first occurrence in the parent `InstructionContext`
+    ///
+    /// This includes the program accounts.
     pub index_in_caller: usize,
+    /// Points to the first occurrence in the current `InstructionContext`
+    ///
+    /// This excludes the program accounts.
+    pub index_in_callee: usize,
+    /// Is this account supposed to sign
     pub is_signer: bool,
+    /// Is this account allowed to become writable
     pub is_writable: bool,
 }
 
@@ -368,6 +381,28 @@ impl InstructionContext {
             .index_in_transaction)
         } else {
             Err(InstructionError::NotEnoughAccountKeys)
+        }
+    }
+
+    /// Returns `Some(index_in_instruction)` if this is a duplicate
+    /// and `None` if it is the first account with this key
+    pub fn is_duplicate(
+        &self,
+        index_in_instruction: usize,
+    ) -> Result<Option<usize>, InstructionError> {
+        if index_in_instruction < self.program_accounts.len()
+            || index_in_instruction >= self.get_number_of_accounts()
+        {
+            Err(InstructionError::NotEnoughAccountKeys)
+        } else {
+            let index_in_instruction =
+                index_in_instruction.saturating_sub(self.program_accounts.len());
+            let index_in_callee = self.instruction_accounts[index_in_instruction].index_in_callee;
+            Ok(if index_in_callee == index_in_instruction {
+                None
+            } else {
+                Some(index_in_callee)
+            })
         }
     }
 
