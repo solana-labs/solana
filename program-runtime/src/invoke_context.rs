@@ -481,6 +481,9 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Verify the results of an instruction
+    ///
+    /// Note: `instruction_accounts` must be the same as passed to `InvokeContext::push()`,
+    /// so that they match the order of `pre_accounts`.
     fn verify(
         &mut self,
         instruction_accounts: &[InstructionAccount],
@@ -573,6 +576,9 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Verify and update PreAccount state based on program execution
+    ///
+    /// Note: `instruction_accounts` must be the same as passed to `InvokeContext::push()`,
+    /// so that they match the order of `pre_accounts`.
     fn verify_and_update(
         &mut self,
         instruction_accounts: &[InstructionAccount],
