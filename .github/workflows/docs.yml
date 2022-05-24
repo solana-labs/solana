@@ -1,0 +1,66 @@
+name: docs
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+  pull_request:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+
+jobs:
+  docs-build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        id: check
+        run: |
+          source ci/env.sh
+          echo "::set-output name=tag::$CI_TAG"
+          eval "$(ci/channel-info.sh)"
+          echo "::set-output name=channel::$CHANNEL"
+
+      - name: Get specific changed files
+        id: changed-files-specific
+        uses: tj-actions/changed-files@v19
+        with:
+          files: |
+            docs/**
+
+      - name: Pre Build
+        id: prebuild
+        run: |
+          echo "::set-output name=need_to_build::${{
+            steps.check.outputs.tag != ''
+            ||
+            (
+              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
+              &&
+              steps.changed-files-specific.outputs.any_change != ''
+            )
+          }}"
+        shell: bash
+
+      - name: Setup Node
+        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14
+
+      - name: Build
+        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
+        working-directory: docs
+        run: |
+          npm install
+          ./build.sh
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
