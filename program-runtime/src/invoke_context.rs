@@ -976,34 +976,26 @@ impl<'a> InvokeContext<'a> {
     /// Calls the instruction's program entrypoint method
     fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
-        let borrowed_root_account = instruction_context
-            .try_borrow_account(self.transaction_context, 0)
-            .map_err(|_| InstructionError::UnsupportedProgramId)?;
-        let root_id = borrowed_root_account.get_key();
-        let owner_id = borrowed_root_account.get_owner();
-        if solana_sdk::native_loader::check_id(owner_id) {
-            for entry in self.builtin_programs {
-                if entry.program_id == *root_id {
-                    drop(borrowed_root_account);
-                    // Call the builtin program
-                    return (entry.process_instruction)(
-                        1, // root_id to be skipped
-                        self,
-                    );
-                }
+
+        let (first_instruction_account, builtin_id) = {
+            let borrowed_root_account = instruction_context
+                .try_borrow_account(self.transaction_context, 0)
+                .map_err(|_| InstructionError::UnsupportedProgramId)?;
+            let root_id = borrowed_root_account.get_key();
+            let owner_id = borrowed_root_account.get_owner();
+            if solana_sdk::native_loader::check_id(owner_id) {
+                (1, *root_id)
+            } else {
+                (0, *owner_id)
             }
-        } else {
-            for entry in self.builtin_programs {
-                if entry.program_id == *owner_id {
-                    drop(borrowed_root_account);
-                    // Call the program via a builtin loader
-                    return (entry.process_instruction)(
-                        0, // no root_id was provided
-                        self,
-                    );
-                }
+        };
+
+        for entry in self.builtin_programs {
+            if entry.program_id == builtin_id {
+                return (entry.process_instruction)(first_instruction_account, self);
             }
         }
+
         Err(InstructionError::UnsupportedProgramId)
     }
 
