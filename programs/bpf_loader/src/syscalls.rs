@@ -3,7 +3,7 @@ use {
     crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{visit_each_account_once, ComputeMeter, InvokeContext},
+        invoke_context::{ComputeMeter, InvokeContext},
         stable_log,
         timings::ExecuteTimings,
     },
@@ -2964,9 +2964,10 @@ where
         ))?;
     accounts.push((*program_account_index, None));
 
-    visit_each_account_once::<EbpfError<BpfError>>(
-        instruction_accounts,
-        &mut |_index: usize, instruction_account: &InstructionAccount| {
+    for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
+        if index_in_instruction != instruction_account.index_in_callee {
+            continue; // Skip duplicate account
+        }
             let account = invoke_context
                 .transaction_context
                 .get_account_at_index(instruction_account.index_in_transaction)
@@ -3034,10 +3035,7 @@ where
                     SyscallError::InstructionError(InstructionError::MissingAccount).into(),
                 );
             }
-            Ok(())
-        },
-        SyscallError::InstructionError(InstructionError::NotEnoughAccountKeys).into(),
-    )?;
+    }
 
     Ok(accounts)
 }

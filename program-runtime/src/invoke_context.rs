@@ -370,8 +370,13 @@ impl<'a> InvokeContext<'a> {
             }
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
-            let mut work = |_index_in_instruction: usize,
-                            instruction_account: &InstructionAccount| {
+
+            for (index_in_instruction, instruction_account) in
+                instruction_accounts.iter().enumerate()
+            {
+                if index_in_instruction != instruction_account.index_in_callee {
+                    continue; // Skip duplicate account
+                }
                 if instruction_account.index_in_transaction
                     < self.transaction_context.get_number_of_accounts()
                 {
@@ -386,15 +391,10 @@ impl<'a> InvokeContext<'a> {
                         )?,
                         account,
                     ));
-                    return Ok(());
+                    continue;
                 }
-                Err(InstructionError::MissingAccount)
-            };
-            visit_each_account_once(
-                instruction_accounts,
-                &mut work,
-                InstructionError::NotEnoughAccountKeys,
-            )?;
+                return Err(InstructionError::MissingAccount);
+            }
         } else {
             let contains = (0..self
                 .transaction_context
@@ -507,7 +507,10 @@ impl<'a> InvokeContext<'a> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut pre_account_index = 0;
-        let mut work = |_index_in_instruction: usize, instruction_account: &InstructionAccount| {
+        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
+            if index_in_instruction != instruction_account.index_in_callee {
+                continue; // Skip duplicate account
+            }
             {
                 // Verify account has no outstanding references
                 let _ = self
@@ -560,14 +563,7 @@ impl<'a> InvokeContext<'a> {
                 self.accounts_data_meter
                     .adjust_delta_unchecked(data_len_delta);
             }
-
-            Ok(())
-        };
-        visit_each_account_once(
-            instruction_accounts,
-            &mut work,
-            InstructionError::NotEnoughAccountKeys,
-        )?;
+        }
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
@@ -592,7 +588,12 @@ impl<'a> InvokeContext<'a> {
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        let mut work = |_index_in_instruction: usize, instruction_account: &InstructionAccount| {
+        'outer_loop: for (index_in_instruction, instruction_account) in
+            instruction_accounts.iter().enumerate()
+        {
+            if index_in_instruction != instruction_account.index_in_callee {
+                continue; // Skip duplicate account
+            }
             if instruction_account.index_in_transaction
                 < transaction_context.get_number_of_accounts()
             {
@@ -659,17 +660,11 @@ impl<'a> InvokeContext<'a> {
                                 .adjust_delta_unchecked(data_len_delta);
                         }
 
-                        return Ok(());
+                        continue 'outer_loop;
                     }
                 }
             }
-            Err(InstructionError::MissingAccount)
-        };
-        visit_each_account_once(
-            instruction_accounts,
-            &mut work,
-            InstructionError::NotEnoughAccountKeys,
-        )?;
+        }
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {
