@@ -29,7 +29,9 @@ In response to an email to security@solana.com, a member of the solana-labs/admi
 Create a new draft security advisory for the incident at https://github.com/solana-labs/solana/security/advisories
 Add the reporter's github user and the solana-labs/security-incident-response group to the draft security advisory
 Create a private fork of the repository (grey button towards the bottom of the page)
-Respond to the reporter by email, sharing a link to the draft security advisory
+Respond to the reporter by email, sharing a link to the draft security advisory.
+
+If the advisory is the result of an audit finding, follow the same process as above but add the auditor's github user(s) and begin the title with "[Audit]".
 
 ### 2. Triage
 Within the draft security advisory, discuss and determine the severity of the issue. If necessary, members of the solana-labs/security-incident-response group may add other github users to the advisory to assist.
