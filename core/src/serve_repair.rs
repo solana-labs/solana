@@ -25,7 +25,7 @@ use {
         shred::{Nonce, Shred, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{limited_deserialize, PacketBatch, PacketBatchRecycler},
+    solana_perf::packet::{PacketBatch, PacketBatchRecycler},
     solana_sdk::{
         clock::Slot, hash::Hash, packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::duration_as_ms,
     },
@@ -432,17 +432,14 @@ impl ServeRepair {
     ) {
         // iter over the packets
         packet_batch.iter().for_each(|packet| {
-            let from_addr = packet.meta.socket_addr();
-            limited_deserialize(&packet.data[..packet.meta.size])
-                .into_iter()
-                .for_each(|request| {
-                    stats.processed += 1;
-                    let rsp =
-                        Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                    if let Some(rsp) = rsp {
-                        let _ignore_disconnect = response_sender.send(rsp);
-                    }
-                });
+            if let Ok(request) = packet.deserialize_slice(..) {
+                stats.processed += 1;
+                let from_addr = packet.meta.socket_addr();
+                let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                if let Some(rsp) = rsp {
+                    let _ignore_disconnect = response_sender.send(rsp);
+                }
+            }
         });
     }
 
@@ -815,9 +812,9 @@ mod tests {
 
             let rv: Vec<Shred> = rv
                 .into_iter()
-                .filter_map(|b| {
-                    assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                .filter_map(|p| {
+                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
                 })
                 .collect();
             assert!(!rv.is_empty());
@@ -899,9 +896,9 @@ mod tests {
             verify_responses(&request, rv.iter());
             let rv: Vec<Shred> = rv
                 .into_iter()
-                .filter_map(|b| {
-                    assert_eq!(repair_response::nonce(&b.data[..]).unwrap(), nonce);
-                    Shred::new_from_serialized_shred(b.data.to_vec()).ok()
+                .filter_map(|p| {
+                    assert_eq!(repair_response::nonce(p).unwrap(), nonce);
+                    Shred::new_from_serialized_shred(p.data.to_vec()).ok()
                 })
                 .collect();
             assert_eq!(rv[0].index(), 1);
@@ -1148,7 +1145,9 @@ mod tests {
     #[test]
     fn test_run_ancestor_hashes() {
         fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponseVersion {
-            limited_deserialize(&packet.data[..packet.meta.size - SIZE_OF_NONCE]).unwrap()
+            packet
+                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
+                .unwrap()
         }
 
         solana_logger::setup();

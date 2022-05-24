@@ -1,6 +1,6 @@
 use {
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
+    solana_perf::packet::{Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         hash::Hash,
@@ -91,8 +91,7 @@ impl DeserializedPacket {
         packet: Packet,
         priority: Option<u64>,
     ) -> Result<Self, DeserializedPacketError> {
-        let versioned_transaction: VersionedTransaction =
-            limited_deserialize(&packet.data[0..packet.meta.size])?;
+        let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
         let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
         let message_bytes = packet_message(&packet)?;
         let message_hash = Message::hash_raw_message(message_bytes);

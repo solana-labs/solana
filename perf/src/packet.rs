@@ -229,17 +229,6 @@ pub fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch
     to_packet_batches(items, NUM_PACKETS)
 }
 
-pub fn limited_deserialize<T>(data: &[u8]) -> bincode::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    bincode::options()
-        .with_limit(PACKET_DATA_SIZE as u64)
-        .with_fixint_encoding()
-        .allow_trailing_bytes()
-        .deserialize_from(data)
-}
-
 pub fn deserialize_from_with_limit<R, T>(reader: R) -> bincode::Result<T>
 where
     R: Read,
