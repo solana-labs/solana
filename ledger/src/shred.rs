@@ -56,7 +56,7 @@ use {
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::{limited_deserialize, Packet},
+    solana_perf::packet::Packet,
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
@@ -478,9 +478,10 @@ impl Shred {
     }
 
     // Get slot from a shred packet with partial deserialize
-    pub fn get_slot_from_packet(packet: &Packet) -> Option<Slot> {
-        let buffer = packet.data.get(OFFSET_OF_SHRED_SLOT..)?;
-        limited_deserialize(buffer).ok()
+    pub fn get_slot_from_packet(p: &Packet) -> Option<Slot> {
+        let slot_start = OFFSET_OF_SHRED_SLOT;
+        let slot_end = slot_start + SIZE_OF_SHRED_SLOT;
+        p.deserialize_slice(slot_start..slot_end).ok()
     }
 
     pub(crate) fn reference_tick_from_data(data: &[u8]) -> Result<u8, Error> {
@@ -553,7 +554,7 @@ pub fn get_shred_slot_index_type(
         return None;
     }
 
-    let index = match limited_deserialize::<u32>(&p.data[index_start..index_end]) {
+    let index = match p.deserialize_slice(index_start..index_end) {
         Ok(x) => x,
         Err(_e) => {
             stats.index_bad_deserialize += 1;
@@ -566,7 +567,7 @@ pub fn get_shred_slot_index_type(
         return None;
     }
 
-    let slot = match limited_deserialize::<Slot>(&p.data[slot_start..slot_end]) {
+    let slot = match p.deserialize_slice(slot_start..slot_end) {
         Ok(x) => x,
         Err(_e) => {
             stats.slot_bad_deserialize += 1;

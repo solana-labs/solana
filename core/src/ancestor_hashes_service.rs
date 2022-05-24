@@ -14,7 +14,7 @@ use {
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_ledger::{blockstore::Blockstore, shred::SIZE_OF_NONCE},
     solana_perf::{
-        packet::{limited_deserialize, Packet, PacketBatch},
+        packet::{Packet, PacketBatch},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
@@ -322,55 +322,54 @@ impl AncestorHashesService {
         blockstore: &Blockstore,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
         let from_addr = packet.meta.socket_addr();
-        limited_deserialize(&packet.data[..packet.meta.size.saturating_sub(SIZE_OF_NONCE)])
-            .ok()
-            .and_then(|ancestor_hashes_response| {
-                // Verify the response
-                let request_slot = repair_response::nonce(&packet.data[..packet.meta.size])
-                    .and_then(|nonce| {
-                        outstanding_requests.write().unwrap().register_response(
-                            nonce,
-                            &ancestor_hashes_response,
-                            timestamp(),
-                            // If the response is valid, return the slot the request
-                            // was for
-                            |ancestor_hashes_request| ancestor_hashes_request.0,
-                        )
-                    });
+        let ancestor_hashes_response = packet
+            .deserialize_slice(..packet.meta.size.saturating_sub(SIZE_OF_NONCE))
+            .ok()?;
 
-                if request_slot.is_none() {
-                    stats.invalid_packets += 1;
-                    return None;
-                }
+        // Verify the response
+        let request_slot = repair_response::nonce(packet).and_then(|nonce| {
+            outstanding_requests.write().unwrap().register_response(
+                nonce,
+                &ancestor_hashes_response,
+                timestamp(),
+                // If the response is valid, return the slot the request
+                // was for
+                |ancestor_hashes_request| ancestor_hashes_request.0,
+            )
+        });
 
-                // If was a valid response, there must be a valid `request_slot`
-                let request_slot = request_slot.unwrap();
-                stats.processed += 1;
+        if request_slot.is_none() {
+            stats.invalid_packets += 1;
+            return None;
+        }
 
-                if let Occupied(mut ancestor_hashes_status_ref) =
-                    ancestor_hashes_request_statuses.entry(request_slot)
-                {
-                    let decision = ancestor_hashes_status_ref.get_mut().add_response(
-                        &from_addr,
-                        ancestor_hashes_response.into_slot_hashes(),
-                        blockstore,
-                    );
-                    if decision.is_some() {
-                        // Once a request is completed, remove it from the map so that new
-                        // requests for the same slot can be made again if necessary. It's
-                        // important to hold the `write` lock here via
-                        // `ancestor_hashes_status_ref` so that we don't race with deletion +
-                        // insertion from the `t_ancestor_requests` thread, which may
-                        // 1) Remove expired statuses from `ancestor_hashes_request_statuses`
-                        // 2) Insert another new one via `manage_ancestor_requests()`.
-                        // In which case we wouldn't want to delete the newly inserted entry here.
-                        ancestor_hashes_status_ref.remove();
-                    }
-                    decision.map(|decision| (request_slot, decision))
-                } else {
-                    None
-                }
-            })
+        // If was a valid response, there must be a valid `request_slot`
+        let request_slot = request_slot.unwrap();
+        stats.processed += 1;
+
+        if let Occupied(mut ancestor_hashes_status_ref) =
+            ancestor_hashes_request_statuses.entry(request_slot)
+        {
+            let decision = ancestor_hashes_status_ref.get_mut().add_response(
+                &from_addr,
+                ancestor_hashes_response.into_slot_hashes(),
+                blockstore,
+            );
+            if decision.is_some() {
+                // Once a request is completed, remove it from the map so that new
+                // requests for the same slot can be made again if necessary. It's
+                // important to hold the `write` lock here via
+                // `ancestor_hashes_status_ref` so that we don't race with deletion +
+                // insertion from the `t_ancestor_requests` thread, which may
+                // 1) Remove expired statuses from `ancestor_hashes_request_statuses`
+                // 2) Insert another new one via `manage_ancestor_requests()`.
+                // In which case we wouldn't want to delete the newly inserted entry here.
+                ancestor_hashes_status_ref.remove();
+            }
+            decision.map(|decision| (request_slot, decision))
+        } else {
+            None
+        }
     }
 
     fn handle_ancestor_request_decision(

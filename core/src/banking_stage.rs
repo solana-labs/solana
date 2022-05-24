@@ -2179,7 +2179,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::{limited_deserialize, to_packet_batches, PacketFlags},
+        solana_perf::packet::{to_packet_batches, PacketFlags},
         solana_poh::{
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
@@ -4185,7 +4185,7 @@ mod tests {
                 for (i, expected_id) in expected_ids.iter().enumerate() {
                     assert_eq!(packets[i].meta.size, 215);
                     let recv_transaction: VersionedTransaction =
-                        limited_deserialize(&packets[i].data[0..packets[i].meta.size]).unwrap();
+                        packets[i].deserialize_slice(..).unwrap();
                     assert_eq!(
                         recv_transaction.message.recent_blockhash(),
                         expected_id,

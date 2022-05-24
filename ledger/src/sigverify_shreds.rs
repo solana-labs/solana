@@ -12,7 +12,7 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         cuda_runtime::PinnedVec,
-        packet::{limited_deserialize, Packet, PacketBatch},
+        packet::{Packet, PacketBatch},
         perf_libs,
         recycler_cache::RecyclerCache,
         sigverify::{self, count_packets_in_batches, TxOffset},
@@ -54,10 +54,7 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
         return Some(0);
     }
     trace!("slot start and end {} {}", slot_start, slot_end);
-    if packet.meta.size < slot_end {
-        return Some(0);
-    }
-    let slot: u64 = limited_deserialize(&packet.data[slot_start..slot_end]).ok()?;
+    let slot: u64 = packet.deserialize_slice(slot_start..slot_end).ok()?;
     let msg_end = if packet.meta.repair() {
         packet.meta.size.saturating_sub(SIZE_OF_NONCE)
     } else {
@@ -115,16 +112,17 @@ fn slot_key_data_for_gpu<
                 batch
                     .iter()
                     .map(|packet| {
-                        let slot_start = size_of::<Signature>() + size_of::<ShredType>();
-                        let slot_end = slot_start + size_of::<u64>();
-                        if packet.meta.size < slot_end || packet.meta.discard() {
-                            return std::u64::MAX;
+                        if packet.meta.discard() {
+                            return Slot::MAX;
                         }
-                        let slot: Option<u64> =
-                            limited_deserialize(&packet.data[slot_start..slot_end]).ok();
+
+                        let slot_start = size_of::<Signature>() + size_of::<ShredType>();
+                        let slot_end = slot_start + size_of::<Slot>();
+                        let slot: Option<Slot> =
+                            packet.deserialize_slice(slot_start..slot_end).ok();
                         match slot {
                             Some(slot) if slot_keys.get(&slot).is_some() => slot,
-                            _ => std::u64::MAX,
+                            _ => Slot::MAX,
                         }
                     })
                     .collect()

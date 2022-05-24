@@ -3,7 +3,6 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, SIZE_OF_NONCE},
     },
-    solana_perf::packet::limited_deserialize,
     solana_sdk::{clock::Slot, packet::Packet},
     std::{io, net::SocketAddr},
 };
@@ -40,12 +39,9 @@ pub fn repair_response_packet_from_bytes(
     Some(packet)
 }
 
-pub fn nonce(buf: &[u8]) -> Option<Nonce> {
-    if buf.len() < SIZE_OF_NONCE {
-        None
-    } else {
-        limited_deserialize(&buf[buf.len() - SIZE_OF_NONCE..]).ok()
-    }
+pub fn nonce(packet: &Packet) -> Option<Nonce> {
+    let nonce_start = packet.meta.size.checked_sub(SIZE_OF_NONCE)?;
+    packet.deserialize_slice(nonce_start..).ok()
 }
 
 #[cfg(test)]
