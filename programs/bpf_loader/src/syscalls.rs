@@ -3009,22 +3009,16 @@ where
                     let orig_data_lens = invoke_context
                         .get_orig_account_lengths()
                         .map_err(SyscallError::InstructionError)?;
-                    if instruction_account.index_in_caller < orig_data_lens.len() {
-                        caller_account.original_data_len = *orig_data_lens
-                            .get(instruction_account.index_in_caller)
-                            .ok_or(SyscallError::InvalidLength)?;
-                    } else {
-                        ic_msg!(
-                            invoke_context,
-                            "Internal error: index mismatch for account {}",
-                            account_key
-                        );
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::MissingAccount,
-                        )
-                        .into());
-                    }
-
+                    caller_account.original_data_len = *orig_data_lens
+                        .get(instruction_account.index_in_caller)
+                        .ok_or_else(|| {
+                            ic_msg!(
+                                invoke_context,
+                                "Internal error: index mismatch for account {}",
+                                account_key
+                            );
+                            SyscallError::InstructionError(InstructionError::MissingAccount)
+                        })?;
                     Some(caller_account)
                 } else {
                     None
