@@ -281,7 +281,7 @@ impl RollingBitField {
                 }
             }
         }
-        return None;
+        None
     }
 
     pub fn get_all(&self) -> Vec<u64> {

@@ -1910,6 +1910,7 @@ impl AccountsDb {
                 .store(accounts_per_slot, Ordering::Release);
             self.filler_account_slots_remaining
                 .store(slots_per_epoch, Ordering::Release);
+            info!("filler_accounts: per slot: {}, slots remaining: {}", accounts_per_slot, slots_per_epoch);
         }
     }
 
@@ -5315,8 +5316,16 @@ impl AccountsDb {
         let mut filler_accounts = 0;
         if self.filler_account_suffix.is_some() {
             let slots_remaining = self.filler_account_slots_remaining.load(Ordering::Relaxed);
+            if slot%100 == 0 {
+            info!("filler_accounts: filler slots_remaining: {}", slots_remaining);
+            }
             if slots_remaining > 0 {
-                if let Some(prior_root) = self.get_prior_root(slot) {
+                let pr = self.get_prior_root(slot);
+                if slot%100 == 0 {
+                    info!("filler_accounts: filler prior_root: {:?}", pr);
+                    }
+        
+                if let Some(prior_root) = pr {
                     let filler_account_slots = std::cmp::min(slot - prior_root, slots_remaining);
                     self.filler_account_slots_remaining
                         .fetch_sub(filler_account_slots, Ordering::Relaxed);
@@ -5325,9 +5334,13 @@ impl AccountsDb {
                     filler_accounts = filler_account_slots * filler_accounts_per_slot;
 
                     // keep space for filler accounts
-                    total_size += (filler_accounts as u64)
-                        * ((self.filler_accounts_config.size + STORE_META_OVERHEAD) as u64);
-                }
+                    let addl_size = (filler_accounts as u64)
+                    * ((self.filler_accounts_config.size + STORE_META_OVERHEAD) as u64);
+                    total_size += addl_size;
+                        if slot%100 == 0 {
+                            info!("filler_accounts: size: {}, slots: {}, accts: {}", addl_size, filler_account_slots, filler_accounts);
+                            }
+                        }
             }
         }
 
