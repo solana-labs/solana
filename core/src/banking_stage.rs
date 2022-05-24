@@ -8,9 +8,12 @@ use {
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
         qos_service::QosService,
+        sigverify::TransactionTracerPacketStats,
         unprocessed_packet_batches::{self, *},
     },
-    crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
+    crossbeam_channel::{
+        Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    },
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
@@ -87,6 +90,9 @@ const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING
 const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
+pub type BankingPacketBatch = (Vec<PacketBatch>, Option<TransactionTracerPacketStats>);
+pub type BankingPacketSender = CrossbeamSender<BankingPacketBatch>;
+pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -381,9 +387,9 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: BankingPacketReceiver,
+        tpu_verified_vote_receiver: BankingPacketReceiver,
+        verified_vote_receiver: BankingPacketReceiver,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
@@ -405,9 +411,9 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
-        verified_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        tpu_verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
-        verified_vote_receiver: CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: BankingPacketReceiver,
+        tpu_verified_vote_receiver: BankingPacketReceiver,
+        verified_vote_receiver: BankingPacketReceiver,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -989,7 +995,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: &BankingPacketReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1984,14 +1990,15 @@ impl BankingStage {
     }
 
     fn receive_until(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: &BankingPacketReceiver,
         recv_timeout: Duration,
         packet_count_upperbound: usize,
     ) -> Result<Vec<PacketBatch>, RecvTimeoutError> {
         let start = Instant::now();
-        let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
+        let (mut packet_batches, _tracer_packet_stats_option) =
+            verified_receiver.recv_timeout(recv_timeout)?;
         let mut num_packets_received: usize = packet_batches.iter().map(|batch| batch.len()).sum();
-        while let Ok(packet_batch) = verified_receiver.try_recv() {
+        while let Ok((packet_batch, _tracer_packet_stats_option)) = verified_receiver.try_recv() {
             trace!("got more packet batches in banking stage");
             let (packets_received, packet_count_overflowed) = num_packets_received
                 .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
@@ -2013,7 +2020,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     fn receive_and_buffer_packets(
-        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        verified_receiver: &BankingPacketReceiver,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
@@ -2414,7 +2421,7 @@ mod tests {
                 .collect();
             let packet_batches = convert_from_old_verified(packet_batches);
             verified_sender // no_ver, anf, tx
-                .send(packet_batches)
+                .send((packet_batches, None))
                 .unwrap();
 
             drop(verified_sender);
@@ -2486,7 +2493,7 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
+        verified_sender.send((packet_batches, None)).unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
@@ -2497,7 +2504,7 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send(packet_batches).unwrap();
+        verified_sender.send((packet_batches, None)).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();

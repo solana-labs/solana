@@ -1,6 +1,11 @@
 #![allow(clippy::implicit_hasher)]
+
 use {
-    crate::{sigverify, sigverify_stage::SigVerifier},
+    crate::{
+        sigverify,
+        sigverify_stage::{SigVerifier, SigVerifyServiceError},
+    },
+    crossbeam_channel::Sender,
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred::Shred,
         sigverify_shreds::verify_shreds_gpu,
@@ -18,18 +23,21 @@ pub struct ShredSigVerifier {
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_cache: RecyclerCache,
+    packet_sender: Sender<Vec<PacketBatch>>,
 }
 
 impl ShredSigVerifier {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
+        packet_sender: Sender<Vec<PacketBatch>>,
     ) -> Self {
         sigverify::init();
         Self {
             bank_forks,
             leader_schedule_cache,
             recycler_cache: RecyclerCache::warmed(),
+            packet_sender,
         }
     }
     fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
@@ -41,6 +49,16 @@ impl ShredSigVerifier {
 }
 
 impl SigVerifier for ShredSigVerifier {
+    type SendType = Vec<PacketBatch>;
+
+    fn send_packets(
+        &mut self,
+        packet_batches: Vec<PacketBatch>,
+    ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
+        self.packet_sender.send(packet_batches)?;
+        Ok(())
+    }
+
     fn verify_batches(
         &self,
         mut batches: Vec<PacketBatch>,
@@ -69,6 +87,7 @@ impl SigVerifier for ShredSigVerifier {
 pub mod tests {
     use {
         super::*,
+        crossbeam_channel::unbounded,
         solana_ledger::{
             genesis_utils::create_genesis_config_with_leader,
             shred::{Shred, ShredFlags},
@@ -131,7 +150,8 @@ pub mod tests {
         );
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
-        let verifier = ShredSigVerifier::new(bf, cache);
+        let (sender, receiver) = unbounded();
+        let mut verifier = ShredSigVerifier::new(bf, cache, sender);
 
         let batch_size = 2;
         let mut batch = PacketBatch::with_capacity(batch_size);
@@ -171,5 +191,16 @@ pub mod tests {
         let rv = verifier.verify_batches(batches, num_packets);
         assert!(!rv[0][0].meta.discard());
         assert!(rv[0][1].meta.discard());
+
+        verifier.send_packets(rv.clone()).unwrap();
+        let received_packets = receiver.recv().unwrap();
+        assert_eq!(received_packets.len(), rv.len());
+        for (received_packet_batch, original_packet_batch) in received_packets.iter().zip(rv.iter())
+        {
+            assert_eq!(
+                received_packet_batch.iter().collect::<Vec<_>>(),
+                original_packet_batch.iter().collect::<Vec<_>>()
+            );
+        }
     }
 }
