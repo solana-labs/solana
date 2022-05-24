@@ -67,7 +67,10 @@ use {
 };
 pub mod blockstore_purge;
 pub use {
-    crate::{blockstore_db::BlockstoreError, blockstore_meta::SlotMeta},
+    crate::{
+        blockstore_db::BlockstoreError,
+        blockstore_meta::{OptimisticSlotMetaVersioned, SlotMeta},
+    },
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
@@ -3016,6 +3019,31 @@ impl Blockstore {
             .unwrap()
             .map(|versioned| versioned.is_duplicate_confirmed())
             .unwrap_or(false)
+    }
+
+    pub fn insert_optimistic_slot(
+        &self,
+        slot: Slot,
+        hash: &Hash,
+        timestamp: UnixTimestamp,
+    ) -> Result<()> {
+        let slot_data = OptimisticSlotMetaVersioned::new(*hash, timestamp);
+        self.optimistic_slots_cf.put(slot, &slot_data)
+    }
+
+    pub fn get_latest_optimistic_slots(
+        &self,
+        num: usize,
+    ) -> Result<Vec<(Slot, Hash, UnixTimestamp)>> {
+        Ok(self
+            .db
+            .iter::<cf::OptimisticSlots>(IteratorMode::End)?
+            .take(num)
+            .map(|(slot, data)| {
+                let meta: OptimisticSlotMetaVersioned = deserialize(&data).unwrap();
+                (slot, meta.hash(), meta.timestamp())
+            })
+            .collect())
     }
 
     pub fn set_duplicate_confirmed_slots_and_hashes(

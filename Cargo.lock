@@ -5172,6 +5172,7 @@ dependencies = [
  "assert_cmd",
  "bs58",
  "bytecount",
+ "chrono",
  "clap 2.33.3",
  "crossbeam-channel",
  "csv",

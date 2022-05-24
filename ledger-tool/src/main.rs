@@ -1,6 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{bigtable::*, ledger_path::*},
+    chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
         AppSettings, Arg, ArgMatches, SubCommand,
@@ -83,6 +84,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
+        time::{Duration, UNIX_EPOCH},
     },
 };
 
@@ -714,6 +716,7 @@ fn analyze_storage(database: &Database) {
     analyze_column::<PerfSamples>(database, "PerfSamples");
     analyze_column::<BlockHeight>(database, "BlockHeight");
     analyze_column::<ProgramCosts>(database, "ProgramCosts");
+    analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
 }
 
 fn open_blockstore(
@@ -950,6 +953,7 @@ fn main() {
     }
 
     const DEFAULT_ROOT_COUNT: &str = "1";
+    const DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT: &str = "1";
     const DEFAULT_MAX_SLOTS_ROOT_REPAIR: &str = "2000";
     solana_logger::setup_with_default("solana=info");
 
@@ -1744,6 +1748,20 @@ fn main() {
                     .required(false)
                     .help("Number of roots in the output"),
             )
+        )
+        .subcommand(
+            SubCommand::with_name("latest-optimistic-slots")
+                .about("Output up to the most recent <num-slots> optimistic \
+                        slots with their hashes and timestamps.")
+                .arg(
+                    Arg::with_name("num_slots")
+                        .long("num-slots")
+                        .value_name("NUM")
+                        .takes_value(true)
+                        .default_value(DEFAULT_LATEST_OPTIMISTIC_SLOTS_COUNT)
+                        .required(false)
+                        .help("Number of slots in the output"),
+                )
         )
         .subcommand(
             SubCommand::with_name("repair-roots")
@@ -3438,6 +3456,26 @@ fn main() {
                                 .expect("failed to write");
                         }
                     });
+            }
+            ("latest-optimistic-slots", Some(arg_matches)) => {
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
+                let slots = blockstore
+                    .get_latest_optimistic_slots(num_slots)
+                    .expect("Failed to get latest optimistic slots");
+                println!("{:>20} {:>44} {:>32}", "Slot", "Hash", "Timestamp");
+                for (slot, hash, timestamp) in slots.iter() {
+                    let time_str = {
+                        let secs: u64 = (timestamp / 1_000) as u64;
+                        let nanos: u32 = ((timestamp % 1_000) * 1_000_000) as u32;
+                        let t = UNIX_EPOCH + Duration::new(secs, nanos);
+                        let datetime: DateTime<Utc> = t.into();
+                        datetime.to_rfc3339()
+                    };
+                    let hash_str = format!("{}", hash);
+                    println!("{:>20} {:>44} {:>32}", slot, &hash_str, &time_str);
+                }
             }
             ("repair-roots", Some(arg_matches)) => {
                 let blockstore =
