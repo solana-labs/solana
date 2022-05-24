@@ -24,6 +24,7 @@ pull_request_rules:
       - "#approved-reviews-by=0"
       - "#commented-reviews-by=0"
       - "#changes-requested-reviews-by=0"
+      - "#review-requested=0"
     actions:
       request_reviews:
         teams:
@@ -34,10 +35,11 @@ pull_request_rules:
         - status-success=buildkite/solana
         - status-success=ci-gate
         - label=automerge
+        - label!=no-automerge
         - author≠@dont-squash-my-commits
         - or:
-          # only require travis success if docs files changed
-          - status-success=Travis CI - Pull Request
+          # only require docs checks if docs files changed
+          - status-success=docs-build
           - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
@@ -57,10 +59,14 @@ pull_request_rules:
     conditions:
       - and:
         - status-success=buildkite/solana
-        - status-success=Travis CI - Pull Request
         - status-success=ci-gate
         - label=automerge
+        - label!=no-automerge
         - author=@dont-squash-my-commits
+        - or:
+          # only require docs checks if docs files changed
+          - status-success=docs-build
+          - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -94,6 +100,7 @@ pull_request_rules:
       - head~=^mergify/bp/
       - "#status-failure=0"
       - "-merged"
+      - label!=no-automerge
     actions:
       label:
         add:
