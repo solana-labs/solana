@@ -12,7 +12,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
-        blockstore_db::{AccessType, BlockstoreOptions},
+        blockstore_options::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{

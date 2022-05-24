@@ -1597,7 +1597,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_db::{AccessType, BlockstoreOptions},
+            blockstore_options::{AccessType, BlockstoreOptions},
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },

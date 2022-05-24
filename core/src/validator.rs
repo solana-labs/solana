@@ -41,7 +41,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
-        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
+        blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,

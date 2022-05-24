@@ -24,9 +24,9 @@ use {
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{
-            self, AccessType, BlockstoreOptions, BlockstoreRecoveryMode, Database,
-            LedgerColumnOptions,
+        blockstore_db::{self, Database},
+        blockstore_options::{
+            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
         },
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,

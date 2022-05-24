@@ -1,6 +1,7 @@
 use {
-    crate::blockstore_db::{
-        columns, BlockstoreCompressionType, LedgerColumnOptions, ShredStorageType,
+    crate::{
+        blockstore_db::columns,
+        blockstore_options::{LedgerColumnOptions, ShredStorageType},
     },
     rocksdb::{
         perf::{set_perf_stats, PerfMetric, PerfStatsLevel},
@@ -32,25 +33,25 @@ macro_rules! rocksdb_metric_header {
 
     (@compression_type $metric_name:literal, $cf_name:literal, $column_options:expr, $storage_type:literal) => {
         match $column_options.compression_type {
-            BlockstoreCompressionType::None => rocksdb_metric_header!(@all_fields
+            $crate::blockstore_options::BlockstoreCompressionType::None => rocksdb_metric_header!(@all_fields
                 $metric_name,
                 $cf_name,
                 $storage_type,
                 "None"
             ),
-            BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@all_fields
+            $crate::blockstore_options::BlockstoreCompressionType::Snappy => rocksdb_metric_header!(@all_fields
                 $metric_name,
                 $cf_name,
                 $storage_type,
                 "Snappy"
             ),
-            BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@all_fields
+            $crate::blockstore_options::BlockstoreCompressionType::Lz4 => rocksdb_metric_header!(@all_fields
                 $metric_name,
                 $cf_name,
                 $storage_type,
                 "Lz4"
             ),
-            BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@all_fields
+            $crate::blockstore_options::BlockstoreCompressionType::Zlib => rocksdb_metric_header!(@all_fields
                 $metric_name,
                 $cf_name,
                 $storage_type,

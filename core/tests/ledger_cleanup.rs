@@ -9,7 +9,7 @@ mod tests {
         solana_core::ledger_cleanup_service::LedgerCleanupService,
         solana_ledger::{
             blockstore::{make_many_slot_shreds, Blockstore},
-            blockstore_db::{
+            blockstore_options::{
                 BlockstoreOptions, BlockstoreRocksFifoOptions, LedgerColumnOptions,
                 ShredStorageType,
             },
