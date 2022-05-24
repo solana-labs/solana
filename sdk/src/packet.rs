@@ -17,11 +17,19 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 bitflags! {
     #[repr(C)]
     pub struct PacketFlags: u8 {
+<<<<<<< HEAD
         const DISCARD        = 0b00000001;
         const FORWARDED      = 0b00000010;
         const REPAIR         = 0b00000100;
         const SIMPLE_VOTE_TX = 0b00001000;
         const TRACER_TX      = 0b00010000;
+=======
+        const DISCARD        = 0b0000_0001;
+        const FORWARDED      = 0b0000_0010;
+        const REPAIR         = 0b0000_0100;
+        const SIMPLE_VOTE_TX = 0b0000_1000;
+        const TRACER_PACKET  = 0b0001_0000;
+>>>>>>> 9651cdad9 (Refactor Sigverify trait (#25359))
     }
 }
 
@@ -147,8 +155,8 @@ impl Meta {
     }
 
     #[inline]
-    pub fn is_tracer_tx(&self) -> bool {
-        self.flags.contains(PacketFlags::TRACER_TX)
+    pub fn is_tracer_packet(&self) -> bool {
+        self.flags.contains(PacketFlags::TRACER_PACKET)
     }
 }
 

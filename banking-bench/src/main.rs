@@ -286,10 +286,16 @@ fn main() {
                     transactions.len(),
                     index,
                 );
+<<<<<<< HEAD
                 for xv in v {
                     sent += xv.packets.len();
                 }
                 verified_sender.send(v.to_vec()).unwrap();
+=======
+                verified_sender
+                    .send((vec![packet_batch.clone()], None))
+                    .unwrap();
+>>>>>>> 9651cdad9 (Refactor Sigverify trait (#25359))
             }
             let start_tx_index = config.get_transactions_index(start);
             let end_tx_index = config.get_transactions_index(start + chunk_len);

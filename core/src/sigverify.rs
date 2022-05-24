@@ -8,30 +8,45 @@ pub use solana_perf::sigverify::{
     count_packets_in_batches, ed25519_verify_cpu, ed25519_verify_disabled, init, TxOffset,
 };
 use {
-    crate::sigverify_stage::SigVerifier,
+    crate::{
+        banking_stage::BankingPacketBatch,
+        sigverify_stage::{SigVerifier, SigVerifyServiceError},
+    },
+    crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
+    solana_sdk::packet::Packet,
 };
+
+#[derive(Debug, Default, Clone)]
+pub struct TransactionTracerPacketStats {
+    pub total_removed_before_sigverify_stage: usize,
+    pub total_tracer_packets_received_in_sigverify_stage: usize,
+    pub total_tracer_packets_deduped: usize,
+    pub total_excess_tracer_packets: usize,
+    pub total_tracker_packets_passed_sigverify: usize,
+}
 
 #[derive(Clone)]
 pub struct TransactionSigVerifier {
+    packet_sender: Sender<<Self as SigVerifier>::SendType>,
+    tracer_packet_stats: TransactionTracerPacketStats,
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
 }
 
 impl TransactionSigVerifier {
-    pub fn new_reject_non_vote() -> Self {
-        TransactionSigVerifier {
-            reject_non_vote: true,
-            ..TransactionSigVerifier::default()
-        }
+    pub fn new_reject_non_vote(packet_sender: Sender<<Self as SigVerifier>::SendType>) -> Self {
+        let mut new_self = Self::new(packet_sender);
+        new_self.reject_non_vote = true;
+        new_self
     }
-}
 
-impl Default for TransactionSigVerifier {
-    fn default() -> Self {
+    pub fn new(packet_sender: Sender<<Self as SigVerifier>::SendType>) -> Self {
         init();
         Self {
+            packet_sender,
+            tracer_packet_stats: TransactionTracerPacketStats::default(),
             recycler: Recycler::warmed(50, 4096),
             recycler_out: Recycler::warmed(50, 4096),
             reject_non_vote: false,
@@ -40,6 +55,58 @@ impl Default for TransactionSigVerifier {
 }
 
 impl SigVerifier for TransactionSigVerifier {
+    type SendType = BankingPacketBatch;
+
+    #[inline(always)]
+    fn process_received_packet(
+        &mut self,
+        packet: &mut Packet,
+        removed_before_sigverify_stage: bool,
+        is_dup: bool,
+    ) {
+        if packet.meta.is_tracer_packet() {
+            if removed_before_sigverify_stage {
+                self.tracer_packet_stats
+                    .total_removed_before_sigverify_stage += 1;
+            } else {
+                self.tracer_packet_stats
+                    .total_tracer_packets_received_in_sigverify_stage += 1;
+                if is_dup {
+                    self.tracer_packet_stats.total_tracer_packets_deduped += 1;
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn process_excess_packet(&mut self, packet: &Packet) {
+        if packet.meta.is_tracer_packet() {
+            self.tracer_packet_stats.total_excess_tracer_packets += 1;
+        }
+    }
+
+    #[inline(always)]
+    fn process_passed_sigverify_packet(&mut self, packet: &Packet) {
+        if packet.meta.is_tracer_packet() {
+            self.tracer_packet_stats
+                .total_tracker_packets_passed_sigverify += 1;
+        }
+    }
+
+    fn send_packets(
+        &mut self,
+        packet_batches: Vec<PacketBatch>,
+    ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
+        let mut tracer_packet_stats_to_send = TransactionTracerPacketStats::default();
+        std::mem::swap(
+            &mut tracer_packet_stats_to_send,
+            &mut self.tracer_packet_stats,
+        );
+        self.packet_sender
+            .send((packet_batches, Some(tracer_packet_stats_to_send)))?;
+        Ok(())
+    }
+
     fn verify_batches(
         &self,
         mut batches: Vec<PacketBatch>,

@@ -109,17 +109,27 @@ impl Tpu {
         .unwrap();
 
         let sigverify_stage = {
+<<<<<<< HEAD
             let verifier = TransactionSigVerifier::default();
             SigVerifyStage::new(packet_receiver, verified_sender, verifier, "tpu-verifier")
+=======
+            let verifier = TransactionSigVerifier::new(verified_sender);
+            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
+>>>>>>> 9651cdad9 (Refactor Sigverify trait (#25359))
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
 
         let vote_sigverify_stage = {
-            let verifier = TransactionSigVerifier::new_reject_non_vote();
+            let verifier =
+                TransactionSigVerifier::new_reject_non_vote(verified_tpu_vote_packets_sender);
             SigVerifyStage::new(
+<<<<<<< HEAD
                 vote_packet_receiver,
                 verified_tpu_vote_packets_sender,
+=======
+                vote_find_packet_sender_stake_receiver,
+>>>>>>> 9651cdad9 (Refactor Sigverify trait (#25359))
                 verifier,
                 "tpu-vote-verifier",
             )

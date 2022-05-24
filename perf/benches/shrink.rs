@@ -81,6 +81,6 @@ fn bench_shrink_count_packets(bencher: &mut Bencher) {
     });
 
     bencher.iter(|| {
-        let _ = sigverify::count_valid_packets(&batches);
+        let _ = sigverify::count_valid_packets(&batches, |_| ());
     });
 }
