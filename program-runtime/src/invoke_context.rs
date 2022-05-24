@@ -736,7 +736,8 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<(Vec<InstructionAccount>, Vec<usize>), InstructionError> {
         // Finds the index of each account in the instruction by its pubkey.
         // Then normalizes / unifies the privileges of duplicate accounts.
-        // Note: This works like visit_each_account_once() and is an O(n^2) algorithm too.
+        // Note: This is an O(n^2) algorithm,
+        // but performed on a very small slice and requires no heap allocations.
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
@@ -1260,32 +1261,6 @@ pub fn mock_process_instruction(
     transaction_accounts
 }
 
-/// Visit each unique instruction account index once
-pub fn visit_each_account_once<E>(
-    instruction_accounts: &[InstructionAccount],
-    work: &mut dyn FnMut(usize, &InstructionAccount) -> Result<(), E>,
-    inner_error: E,
-) -> Result<(), E> {
-    // Note: This is an O(n^2) algorithm,
-    // but performed on a very small slice and requires no heap allocations
-    'root: for (index, instruction_account) in instruction_accounts.iter().enumerate() {
-        match instruction_accounts.get(..index) {
-            Some(range) => {
-                for (before_index, before) in range.iter().enumerate() {
-                    if before.index_in_transaction == instruction_account.index_in_transaction {
-                        debug_assert_eq!(before_index, instruction_account.index_in_callee);
-                        continue 'root; // skip dups
-                    }
-                }
-                debug_assert_eq!(index, instruction_account.index_in_callee);
-                work(index, instruction_account)?;
-            }
-            None => return Err(inner_error),
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -1309,59 +1284,6 @@ mod tests {
         Resize {
             new_len: usize,
         },
-    }
-
-    #[test]
-    fn test_visit_each_account_once() {
-        let do_work = |accounts: &[InstructionAccount]| -> (usize, usize, usize) {
-            let mut unique_entries = 0;
-            let mut index_sum_a = 0;
-            let mut index_sum_b = 0;
-            let mut work = |index_in_instruction: usize, entry: &InstructionAccount| {
-                unique_entries += 1;
-                index_sum_a += index_in_instruction;
-                index_sum_b += entry.index_in_transaction;
-                Ok(())
-            };
-            visit_each_account_once(accounts, &mut work, InstructionError::NotEnoughAccountKeys)
-                .unwrap();
-
-            (unique_entries, index_sum_a, index_sum_b)
-        };
-
-        assert_eq!(
-            (3, 3, 19),
-            do_work(&[
-                InstructionAccount {
-                    index_in_transaction: 7,
-                    index_in_caller: 0,
-                    index_in_callee: 0,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                InstructionAccount {
-                    index_in_transaction: 3,
-                    index_in_caller: 1,
-                    index_in_callee: 1,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                InstructionAccount {
-                    index_in_transaction: 9,
-                    index_in_caller: 2,
-                    index_in_callee: 2,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                InstructionAccount {
-                    index_in_transaction: 3,
-                    index_in_caller: 1,
-                    index_in_callee: 1,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ])
-        );
     }
 
     #[test]
