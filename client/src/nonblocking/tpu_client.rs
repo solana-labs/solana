@@ -273,6 +273,11 @@ impl TpuClient {
         self.leader_tpu_service.join().await;
     }
 }
+impl Drop for TpuClient {
+    fn drop(&mut self) {
+        self.exit.store(true, Ordering::Relaxed);
+    }
+}
 
 /// Service that tracks upcoming leaders and maintains an up-to-date mapping
 /// of leader id to TPU socket address.
