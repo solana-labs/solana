@@ -25,7 +25,7 @@ pub struct InstructionAccount {
     pub index_in_transaction: usize,
     /// Points to the first occurrence in the parent `InstructionContext`
     ///
-    /// This includes the program accounts.
+    /// This excludes the program accounts.
     pub index_in_caller: usize,
     /// Points to the first occurrence in the current `InstructionContext`
     ///

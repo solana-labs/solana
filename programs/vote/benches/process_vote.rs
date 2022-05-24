@@ -83,7 +83,7 @@ fn create_accounts() -> (
     let mut instruction_accounts = (0..4)
         .map(|index_in_instruction| InstructionAccount {
             index_in_transaction: 1usize.saturating_add(index_in_instruction),
-            index_in_caller: 1usize.saturating_add(index_in_instruction),
+            index_in_caller: index_in_instruction,
             index_in_callee: index_in_instruction,
             is_signer: false,
             is_writable: false,

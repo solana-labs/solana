@@ -601,7 +601,7 @@ impl<'a> InvokeContext<'a> {
                     .get_account_at_index(instruction_account.index_in_transaction)?;
                 let is_writable = if before_instruction_context_push {
                     instruction_context
-                        .try_borrow_account(
+                        .try_borrow_instruction_account(
                             self.transaction_context,
                             instruction_account.index_in_caller,
                         )?
@@ -772,6 +772,9 @@ impl<'a> InvokeContext<'a> {
             } else {
                 let index_in_caller = instruction_context
                     .find_index_of_account(self.transaction_context, &account_meta.pubkey)
+                    .map(|index| {
+                        index.saturating_sub(instruction_context.get_number_of_program_accounts())
+                    })
                     .ok_or_else(|| {
                         ic_msg!(
                             self,
@@ -791,7 +794,7 @@ impl<'a> InvokeContext<'a> {
             }
         }
         for instruction_account in deduplicated_instruction_accounts.iter() {
-            let borrowed_account = instruction_context.try_borrow_account(
+            let borrowed_account = instruction_context.try_borrow_instruction_account(
                 self.transaction_context,
                 instruction_account.index_in_caller,
             )?;
@@ -1142,7 +1145,7 @@ pub struct MockInvokeContextPreparation {
 pub fn prepare_mock_invoke_context(
     transaction_accounts: Vec<TransactionAccount>,
     instruction_account_metas: Vec<AccountMeta>,
-    program_indices: &[usize],
+    _program_indices: &[usize],
 ) -> MockInvokeContextPreparation {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
@@ -1161,7 +1164,7 @@ pub fn prepare_mock_invoke_context(
             .unwrap_or(index_in_instruction);
         instruction_accounts.push(InstructionAccount {
             index_in_transaction,
-            index_in_caller: program_indices.len().saturating_add(index_in_transaction),
+            index_in_caller: index_in_transaction,
             index_in_callee,
             is_signer: account_meta.is_signer,
             is_writable: account_meta.is_writable,
@@ -1465,7 +1468,7 @@ mod tests {
             ));
             instruction_accounts.push(InstructionAccount {
                 index_in_transaction: index,
-                index_in_caller: 1 + index,
+                index_in_caller: index,
                 index_in_callee: instruction_accounts.len(),
                 is_signer: false,
                 is_writable: true,
@@ -1478,7 +1481,7 @@ mod tests {
             ));
             instruction_accounts.push(InstructionAccount {
                 index_in_transaction: index,
-                index_in_caller: 1 + index,
+                index_in_caller: index,
                 index_in_callee: index,
                 is_signer: false,
                 is_writable: false,
@@ -1507,14 +1510,14 @@ mod tests {
             let instruction_accounts = vec![
                 InstructionAccount {
                     index_in_transaction: not_owned_index,
-                    index_in_caller: 1 + not_owned_index,
+                    index_in_caller: not_owned_index,
                     index_in_callee: 0,
                     is_signer: false,
                     is_writable: true,
                 },
                 InstructionAccount {
                     index_in_transaction: owned_index,
-                    index_in_caller: 1 + owned_index,
+                    index_in_caller: owned_index,
                     index_in_callee: 1,
                     is_signer: false,
                     is_writable: true,
@@ -1632,7 +1635,7 @@ mod tests {
         let instruction_accounts = (0..4)
             .map(|index_in_instruction| InstructionAccount {
                 index_in_transaction: index_in_instruction,
-                index_in_caller: 1 + index_in_instruction,
+                index_in_caller: index_in_instruction,
                 index_in_callee: index_in_instruction,
                 is_signer: false,
                 is_writable: index_in_instruction < 2,
@@ -1845,14 +1848,14 @@ mod tests {
         let instruction_accounts = [
             InstructionAccount {
                 index_in_transaction: 0,
-                index_in_caller: 1,
+                index_in_caller: 0,
                 index_in_callee: 0,
                 is_signer: false,
                 is_writable: true,
             },
             InstructionAccount {
                 index_in_transaction: 1,
-                index_in_caller: 2,
+                index_in_caller: 1,
                 index_in_callee: 1,
                 is_signer: false,
                 is_writable: false,

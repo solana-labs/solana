@@ -2955,10 +2955,6 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
-    let instruction_context = invoke_context
-        .transaction_context
-        .get_current_instruction_context()
-        .map_err(SyscallError::InstructionError)?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
 
     let program_account_index = program_indices
@@ -3010,15 +3006,12 @@ where
                     account.set_rent_epoch(caller_account.rent_epoch);
                 }
                 let caller_account = if instruction_account.is_writable {
-                    let orig_data_len_index = instruction_account
-                        .index_in_caller
-                        .saturating_sub(instruction_context.get_number_of_program_accounts());
                     let orig_data_lens = invoke_context
                         .get_orig_account_lengths()
                         .map_err(SyscallError::InstructionError)?;
-                    if orig_data_len_index < orig_data_lens.len() {
+                    if instruction_account.index_in_caller < orig_data_lens.len() {
                         caller_account.original_data_len = *orig_data_lens
-                            .get(orig_data_len_index)
+                            .get(instruction_account.index_in_caller)
                             .ok_or(SyscallError::InvalidLength)?;
                     } else {
                         ic_msg!(
