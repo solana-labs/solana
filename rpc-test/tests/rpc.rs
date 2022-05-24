@@ -8,6 +8,7 @@ use {
     solana_account_decoder::UiAccount,
     solana_client::{
         client_error::{ClientErrorKind, Result as ClientResult},
+        connection_cache::ConnectionCache,
         nonblocking::pubsub_client::PubsubClient,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
@@ -30,7 +31,7 @@ use {
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::Arc,
+        sync::{Arc, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -410,8 +411,7 @@ fn test_rpc_subscriptions() {
     }
 }
 
-#[test]
-fn test_tpu_send_transaction() {
+fn run_tpu_send_transaction(tpu_use_quic: bool) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let test_validator =
@@ -420,11 +420,12 @@ fn test_tpu_send_transaction() {
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
     ));
-
+    let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(tpu_use_quic)));
     let tpu_client = TpuClient::new(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),
+        connection_cache,
     )
     .unwrap();
 
@@ -443,6 +444,16 @@ fn test_tpu_send_transaction() {
             return;
         }
     }
+}
+
+#[test]
+fn test_tpu_send_transaction() {
+    run_tpu_send_transaction(/*tpu_use_quic*/ false)
+}
+
+#[test]
+fn test_tpu_send_transaction_with_quic() {
+    run_tpu_send_transaction(true)
 }
 
 #[test]

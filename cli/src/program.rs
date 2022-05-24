@@ -19,6 +19,7 @@ use {
     },
     solana_client::{
         client_error::ClientErrorKind,
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -54,7 +55,7 @@ use {
         mem::size_of,
         path::PathBuf,
         str::FromStr,
-        sync::Arc,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -2223,10 +2224,13 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
+            let connection_cache =
+                Arc::new(RwLock::new(ConnectionCache::new(false /* use_quic */)));
             let tpu_client = TpuClient::new(
                 rpc_client.clone(),
                 &config.websocket_url,
                 TpuClientConfig::default(),
+                connection_cache,
             )?;
             let transaction_errors = tpu_client
                 .send_and_confirm_messages_with_spinner(

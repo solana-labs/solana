@@ -6,8 +6,9 @@ use {
         cli::Config,
     },
     solana_client::{
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
-        thin_client::create_client,
+        thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_core::validator::ValidatorConfig,
@@ -21,9 +22,13 @@ use {
         commitment_config::CommitmentConfig,
         signature::{Keypair, Signer},
     },
+    solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    std::{sync::Arc, time::Duration},
+    std::{
+        sync::{Arc, RwLock},
+        time::Duration,
+    },
 };
 
 fn test_bench_tps_local_cluster(config: Config) {
@@ -58,9 +63,10 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-    let client = Arc::new(create_client(
+    let client = Arc::new(ThinClient::new(
         cluster.entry_point_info.rpc,
         cluster.entry_point_info.tpu,
+        cluster.connection_cache.clone(),
     ));
 
     let lamports_per_account = 100;
@@ -96,9 +102,17 @@ fn test_bench_tps_test_validator(config: Config) {
         CommitmentConfig::processed(),
     ));
     let websocket_url = test_validator.rpc_pubsub_url();
+    let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
 
-    let client =
-        Arc::new(TpuClient::new(rpc_client, &websocket_url, TpuClientConfig::default()).unwrap());
+    let client = Arc::new(
+        TpuClient::new(
+            rpc_client,
+            &websocket_url,
+            TpuClientConfig::default(),
+            connection_cache,
+        )
+        .unwrap(),
+    );
 
     let lamports_per_account = 100;
 

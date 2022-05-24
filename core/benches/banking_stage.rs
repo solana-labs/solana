@@ -8,6 +8,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
@@ -35,6 +36,7 @@ use {
         timing::{duration_as_us, timestamp},
         transaction::{Transaction, VersionedTransaction},
     },
+    solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_streamer::socket::SocketAddrSpace,
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
@@ -230,6 +232,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
+            Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC))),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

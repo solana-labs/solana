@@ -5,7 +5,6 @@ use {
         udp_client::UdpTpuConnection,
     },
     indexmap::map::IndexMap,
-    lazy_static::lazy_static,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     solana_sdk::timing::AtomicInterval,
@@ -210,15 +209,31 @@ impl ConnectionCacheStats {
     }
 }
 
-struct ConnectionMap {
+pub struct ConnectionCache {
     map: IndexMap<SocketAddr, Arc<Connection>>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     use_quic: bool,
 }
 
-impl ConnectionMap {
-    pub fn new() -> Self {
+impl ConnectionCache {
+    pub fn new(use_quic: bool) -> Self {
+        Self {
+            use_quic,
+            ..Self::default()
+        }
+    }
+
+    pub fn set_use_quic(&mut self, use_quic: bool) {
+        self.use_quic = use_quic;
+    }
+
+    pub fn get_use_quic(&self) -> bool {
+        self.use_quic
+    }
+}
+impl Default for ConnectionCache {
+    fn default() -> Self {
         Self {
             map: IndexMap::with_capacity(MAX_CONNECTIONS),
             stats: Arc::new(ConnectionCacheStats::default()),
@@ -226,19 +241,6 @@ impl ConnectionMap {
             use_quic: false,
         }
     }
-
-    pub fn set_use_quic(&mut self, use_quic: bool) {
-        self.use_quic = use_quic;
-    }
-}
-
-lazy_static! {
-    static ref CONNECTION_MAP: RwLock<ConnectionMap> = RwLock::new(ConnectionMap::new());
-}
-
-pub fn set_use_quic(use_quic: bool) {
-    let mut map = (*CONNECTION_MAP).write().unwrap();
-    map.set_use_quic(use_quic);
 }
 
 struct GetConnectionResult {
@@ -252,9 +254,12 @@ struct GetConnectionResult {
     eviction_timing_ms: u64,
 }
 
-fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
+fn get_or_add_connection(
+    connection_cache: &RwLock<ConnectionCache>,
+    addr: &SocketAddr,
+) -> GetConnectionResult {
     let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
-    let map = (*CONNECTION_MAP).read().unwrap();
+    let map = connection_cache.read().unwrap();
     get_connection_map_lock_measure.stop();
 
     let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
@@ -272,7 +277,7 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
                 drop(map);
                 let mut get_connection_map_lock_measure =
                     Measure::start("get_connection_map_lock_measure");
-                let mut map = (*CONNECTION_MAP).write().unwrap();
+                let mut map = connection_cache.write().unwrap();
                 get_connection_map_lock_measure.stop();
 
                 lock_timing_ms =
@@ -329,9 +334,10 @@ fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
     }
 }
 
-// TODO: see https://github.com/solana-labs/solana/issues/23661
-// remove lazy_static and optimize and refactor this
-pub fn get_connection(addr: &SocketAddr) -> Arc<Connection> {
+pub fn get_connection(
+    connection_cache: &RwLock<ConnectionCache>,
+    addr: &SocketAddr,
+) -> Arc<Connection> {
     let mut get_connection_measure = Measure::start("get_connection_measure");
     let GetConnectionResult {
         connection,
@@ -342,7 +348,7 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<Connection> {
         connection_cache_stats,
         num_evictions,
         eviction_timing_ms,
-    } = get_or_add_connection(addr);
+    } = get_or_add_connection(connection_cache, addr);
 
     if report_stats {
         connection_cache_stats.report();
@@ -385,12 +391,12 @@ pub fn get_connection(addr: &SocketAddr) -> Arc<Connection> {
 mod tests {
     use {
         crate::{
-            connection_cache::{get_connection, CONNECTION_MAP, MAX_CONNECTIONS},
+            connection_cache::{get_connection, ConnectionCache, MAX_CONNECTIONS},
             tpu_connection::TpuConnection,
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        std::net::SocketAddr,
+        std::{net::SocketAddr, sync::RwLock},
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -419,16 +425,17 @@ mod tests {
         // we can actually connect to those addresses - TPUConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
+        let connection_cache = RwLock::new(ConnectionCache::default());
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
-                get_connection(&addr);
+                get_connection(&connection_cache, &addr);
                 addr
             })
             .collect::<Vec<_>>();
         {
-            let map = (*CONNECTION_MAP).read().unwrap();
+            let map = connection_cache.read().unwrap();
             assert!(map.map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
                 let conn = map.map.get(a).expect("Address not found");
@@ -437,9 +444,9 @@ mod tests {
         }
 
         let addr = get_addr(&mut rng);
-        get_connection(&addr);
+        get_connection(&connection_cache, &addr);
 
-        let map = (*CONNECTION_MAP).read().unwrap();
+        let map = connection_cache.read().unwrap();
         assert!(map.map.len() == MAX_CONNECTIONS);
         let _conn = map.map.get(&addr).expect("Address not found");
     }

@@ -26,6 +26,7 @@ use {
         warm_quic_cache_service::WarmQuicCacheService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -132,7 +133,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
-        use_quic: bool,
+        connection_cache: &Arc<RwLock<ConnectionCache>>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -229,8 +230,9 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if use_quic {
+        let warm_quic_cache_service = if connection_cache.read().unwrap().get_use_quic() {
             Some(WarmQuicCacheService::new(
+                connection_cache.clone(),
                 cluster_info.clone(),
                 poh_recorder.clone(),
                 exit.clone(),
@@ -354,6 +356,7 @@ pub mod tests {
         solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
+        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
         solana_streamer::socket::SocketAddrSpace,
         std::sync::atomic::{AtomicU64, Ordering},
     };
@@ -451,7 +454,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
-            false, // use_quic
+            &Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC))),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

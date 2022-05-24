@@ -25,6 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -744,6 +745,8 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(use_quic)));
+
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
             json_rpc_service,
@@ -788,6 +791,7 @@ impl Validator {
                 config.send_transaction_service_config.clone(),
                 max_slots.clone(),
                 leader_schedule_cache.clone(),
+                connection_cache.clone(),
                 max_complete_transaction_status_slot,
             )
             .unwrap_or_else(|s| {
@@ -969,7 +973,7 @@ impl Validator {
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
-            use_quic,
+            &connection_cache,
         );
 
         let tpu = Tpu::new(
@@ -1001,6 +1005,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &connection_cache,
             &identity_keypair,
         );
 

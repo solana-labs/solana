@@ -3,13 +3,16 @@
 
 use {
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::get_connection, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::{get_connection, ConnectionCache},
+        tpu_connection::TpuConnection,
+    },
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
@@ -26,6 +29,7 @@ const CACHE_JITTER_SLOT: i64 = 20;
 
 impl WarmQuicCacheService {
     pub fn new(
+        connection_cache: Arc<RwLock<ConnectionCache>>,
         cluster_info: Arc<ClusterInfo>,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         exit: Arc<AtomicBool>,
@@ -48,7 +52,7 @@ impl WarmQuicCacheService {
                             if let Some(addr) = cluster_info
                                 .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
                             {
-                                let conn = get_connection(&addr);
+                                let conn = get_connection(&connection_cache, &addr);
                                 if let Err(err) = conn.send_wire_transaction(&[0u8]) {
                                     warn!(
                                         "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
