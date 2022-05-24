@@ -373,7 +373,9 @@ fn main() {
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender.send(vec![packet_batch.clone()]).unwrap();
+                verified_sender
+                    .send((vec![packet_batch.clone()], None))
+                    .unwrap();
             }
 
             for tx in &packets_for_this_iteration.transactions {
