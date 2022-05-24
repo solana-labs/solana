@@ -7,6 +7,7 @@ use {
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
+        stable_log,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
@@ -43,6 +44,29 @@ use {
 
 pub type ProcessInstructionWithContext =
     fn(usize, &mut InvokeContext) -> Result<(), InstructionError>;
+
+fn process_instruction_with_program_logging(
+    process_instruction: ProcessInstructionWithContext,
+    first_instruction_account: usize,
+    invoke_context: &mut InvokeContext,
+) -> Result<(), InstructionError> {
+    let logger = invoke_context.get_log_collector();
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
+    stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
+
+    let result = process_instruction(first_instruction_account, invoke_context);
+
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let program_id = instruction_context.get_program_key(transaction_context)?;
+    match &result {
+        Ok(()) => stable_log::program_success(&logger, program_id),
+        Err(err) => stable_log::program_failure(&logger, program_id, err),
+    }
+    result
+}
 
 #[derive(Clone)]
 pub struct BuiltinProgram {
@@ -992,7 +1016,16 @@ impl<'a> InvokeContext<'a> {
 
         for entry in self.builtin_programs {
             if entry.program_id == builtin_id {
-                return (entry.process_instruction)(first_instruction_account, self);
+                let program_id = instruction_context.get_program_id(self.transaction_context);
+                if builtin_id == program_id {
+                    return process_instruction_with_program_logging(
+                        entry.process_instruction,
+                        first_instruction_account,
+                        self,
+                    );
+                } else {
+                    return (entry.process_instruction)(first_instruction_account, self);
+                }
             }
         }
 
