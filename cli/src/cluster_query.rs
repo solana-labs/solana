@@ -1094,27 +1094,49 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
-    let average_slot_time_ms = rpc_client
-        .get_recent_performance_samples(Some(60))
-        .ok()
-        .and_then(|samples| {
-            let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
-                (slots + sample.num_slots, secs + sample.sample_period_secs)
-            });
-            (secs as u64).saturating_mul(1000).checked_div(slots)
-        })
-        .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
-    let start_block_time = rpc_client
-        .get_block_time(epoch_info.absolute_slot - epoch_info.slot_index)
-        .ok();
-    let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
-    let epoch_info = CliEpochInfo {
+    let mut cli_epoch_info = CliEpochInfo {
         epoch_info,
-        average_slot_time_ms,
-        start_block_time,
-        current_block_time,
+        average_slot_time_ms: 0,
+        start_block_time: None,
+        current_block_time: None,
     };
-    Ok(config.output_format.formatted_string(&epoch_info))
+    match config.output_format {
+        OutputFormat::Json | OutputFormat::JsonCompact => {}
+        _ => {
+            let epoch_info = cli_epoch_info.epoch_info.clone();
+            let average_slot_time_ms = rpc_client
+                .get_recent_performance_samples(Some(60))
+                .ok()
+                .and_then(|samples| {
+                    let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
+                        (slots + sample.num_slots, secs + sample.sample_period_secs)
+                    });
+                    (secs as u64).saturating_mul(1000).checked_div(slots)
+                })
+                .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+            let epoch_expected_start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
+            let first_block_in_epoch = rpc_client
+                .get_blocks_with_limit(epoch_expected_start_slot, 1)
+                .ok()
+                .and_then(|slot_vec| slot_vec.get(0).cloned())
+                .unwrap_or(epoch_expected_start_slot);
+            let start_block_time =
+                rpc_client
+                    .get_block_time(first_block_in_epoch)
+                    .ok()
+                    .map(|time| {
+                        time + (((first_block_in_epoch - epoch_expected_start_slot)
+                            * average_slot_time_ms)
+                            / 1000) as i64
+                    });
+            let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
+
+            cli_epoch_info.average_slot_time_ms = average_slot_time_ms;
+            cli_epoch_info.start_block_time = start_block_time;
+            cli_epoch_info.current_block_time = current_block_time;
+        }
+    }
+    Ok(config.output_format.formatted_string(&cli_epoch_info))
 }
 
 pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
