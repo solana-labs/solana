@@ -5,10 +5,8 @@ on:
     branches:
       - master
       - v[0-9]+.[0-9]+
-    paths:
-      - "docs/**"
     tags:
-      - "*"
+      - v[0-9]+.[0-9]+.[0-9]+
   pull_request:
     branches:
       - master
@@ -24,9 +22,12 @@ jobs:
           fetch-depth: 0
 
       - name: Check
+        id: check
         run: |
           source ci/env.sh
-          ci/channel_restriction.sh edge beta
+          echo "::set-output name=tag::$CI_TAG"
+          eval "$(ci/channel-info.sh)"
+          echo "::set-output name=channel::$CHANNEL"
 
       - name: Get specific changed files
         id: changed-files-specific
@@ -35,14 +36,28 @@ jobs:
           files: |
             docs/**
 
+      - name: Pre Build
+        id: prebuild
+        run: |
+          echo "::set-output name=need_to_build::${{
+            steps.check.outputs.tag != ''
+            ||
+            (
+              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
+              &&
+              steps.changed-files-specific.outputs.any_change != ''
+            )
+          }}"
+        shell: bash
+
       - name: Setup Node
-        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         uses: actions/setup-node@v3
         with:
           node-version: 14
 
       - name: Build
-        if: steps.changed-files-specific.outputs.any_changed == 'true'
+        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         working-directory: docs
         run: |
           npm install
