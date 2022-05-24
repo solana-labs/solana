@@ -7735,7 +7735,6 @@ impl AccountsDb {
                 key.as_mut()
                     [rent_prefix_bytes..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
                     .copy_from_slice(&my_id_bytes);
-                assert!(subrange.contains(&key));
                 key
             })
             .collect()
