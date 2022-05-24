@@ -976,29 +976,29 @@ impl<'a> InvokeContext<'a> {
     /// Calls the instruction's program entrypoint method
     fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
-        let borrowed_root_account = instruction_context
-            .try_borrow_account(self.transaction_context, 0)
+        let borrowed_program_account = instruction_context
+            .try_borrow_program_account(self.transaction_context)
             .map_err(|_| InstructionError::UnsupportedProgramId)?;
-        let root_id = borrowed_root_account.get_key();
-        let owner_id = borrowed_root_account.get_owner();
-        if solana_sdk::native_loader::check_id(owner_id) {
+        let program_id = borrowed_program_account.get_key();
+        let loader_id = borrowed_program_account.get_owner();
+        if solana_sdk::native_loader::check_id(loader_id) {
             for entry in self.builtin_programs {
-                if entry.program_id == *root_id {
-                    drop(borrowed_root_account);
+                if entry.program_id == *program_id {
+                    drop(borrowed_program_account);
                     // Call the builtin program
                     return (entry.process_instruction)(
-                        1, // root_id to be skipped
+                        1, // loader_id to be skipped
                         self,
                     );
                 }
             }
         } else {
             for entry in self.builtin_programs {
-                if entry.program_id == *owner_id {
-                    drop(borrowed_root_account);
+                if entry.program_id == *loader_id {
+                    drop(borrowed_program_account);
                     // Call the program via a builtin loader
                     return (entry.process_instruction)(
-                        0, // no root_id was provided
+                        0, // don't skip loader_id
                         self,
                     );
                 }
