@@ -13,7 +13,6 @@ const N: usize = 1_000_000;
 // test bench_reset2 ... bench:     274,007 ns/iter (+/- 129,552)
 
 #[bench]
-#[allow(clippy::unit_arg)]
 fn bench_reset1(bencher: &mut Bencher) {
     solana_logger::setup();
 
@@ -21,14 +20,16 @@ fn bench_reset1(bencher: &mut Bencher) {
     v.resize_with(N, AtomicU64::default);
 
     bencher.iter(|| {
-        test::black_box(for i in &v {
-            i.store(0, Ordering::Relaxed);
+        test::black_box({
+            for i in &v {
+                i.store(0, Ordering::Relaxed);
+            }
+            0
         });
     });
 }
 
 #[bench]
-#[allow(clippy::unit_arg)]
 fn bench_reset2(bencher: &mut Bencher) {
     solana_logger::setup();
 
@@ -39,6 +40,7 @@ fn bench_reset2(bencher: &mut Bencher) {
         test::black_box({
             v.clear();
             v.resize_with(N, AtomicU64::default);
+            0
         });
     });
 }
