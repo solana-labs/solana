@@ -5,16 +5,14 @@ use solana_frozen_abi::abi_example::AbiExample;
 use solana_sdk::AutoTraitBreakSendSync;
 use {
     crate::system_instruction_processor,
-    solana_program_runtime::{
-        invoke_context::{InvokeContext, ProcessInstructionWithContext},
-        stable_log,
-    },
+    solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
     solana_sdk::{
         feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
     },
     std::fmt,
 };
 
+<<<<<<< HEAD
 fn process_instruction_with_program_logging(
     process_instruction: ProcessInstructionWithContext,
     first_instruction_account: usize,
@@ -54,6 +52,8 @@ macro_rules! with_program_logging {
     };
 }
 
+=======
+>>>>>>> 26a02f6f5 (Add invoke logging to builtin programs that don't have it yet (#25230))
 #[derive(Clone)]
 pub struct Builtin {
     pub name: String,
@@ -191,22 +191,22 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
-            with_program_logging!(system_instruction_processor::process_instruction),
+            system_instruction_processor::process_instruction,
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
-            with_program_logging!(solana_vote_program::vote_processor::process_instruction),
+            solana_vote_program::vote_processor::process_instruction,
         ),
         Builtin::new(
             "stake_program",
             stake::program::id(),
-            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
+            solana_stake_program::stake_instruction::process_instruction,
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
-            with_program_logging!(solana_config_program::config_processor::process_instruction),
+            solana_config_program::config_processor::process_instruction,
         ),
     ]
 }
@@ -261,7 +261,7 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             builtin: Builtin::new(
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
-                with_program_logging!(solana_zk_token_proof_program::process_instruction),
+                solana_zk_token_proof_program::process_instruction,
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         }),

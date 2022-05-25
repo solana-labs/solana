@@ -6,6 +6,7 @@ use {
         log_collector::LogCollector,
         native_loader::NativeLoader,
         pre_account::PreAccount,
+        stable_log,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
@@ -940,6 +941,7 @@ impl<'a> InvokeContext<'a> {
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
+<<<<<<< HEAD
         let borrowed_root_account = instruction_context
             .try_borrow_account(self.transaction_context, 0)
             .map_err(|_| InstructionError::UnsupportedProgramId)?;
@@ -973,9 +975,41 @@ impl<'a> InvokeContext<'a> {
                         instruction_data,
                         self,
                     );
+=======
+
+        let (first_instruction_account, builtin_id) = {
+            let borrowed_root_account = instruction_context
+                .try_borrow_account(self.transaction_context, 0)
+                .map_err(|_| InstructionError::UnsupportedProgramId)?;
+            let owner_id = borrowed_root_account.get_owner();
+            if solana_sdk::native_loader::check_id(owner_id) {
+                (1, *borrowed_root_account.get_key())
+            } else {
+                (0, *owner_id)
+            }
+        };
+
+        for entry in self.builtin_programs {
+            if entry.program_id == builtin_id {
+                let program_id = instruction_context.get_program_id(self.transaction_context);
+                if builtin_id == program_id {
+                    let logger = self.get_log_collector();
+                    stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+                    return (entry.process_instruction)(first_instruction_account, self)
+                        .map(|()| {
+                            stable_log::program_success(&logger, &program_id);
+                        })
+                        .map_err(|err| {
+                            stable_log::program_failure(&logger, &program_id, &err);
+                            err
+                        });
+                } else {
+                    return (entry.process_instruction)(first_instruction_account, self);
+>>>>>>> 26a02f6f5 (Add invoke logging to builtin programs that don't have it yet (#25230))
                 }
             }
         }
+
         Err(InstructionError::UnsupportedProgramId)
     }
 
