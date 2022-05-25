@@ -22,7 +22,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
-        match socket.recv_from(&mut p.data) {
+        match socket.recv_from(p.buffer_mut()) {
             Err(_) if i > 0 => {
                 break;
             }
@@ -84,9 +84,10 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
     for (packet, hdr, iov, addr) in
         izip!(packets.iter_mut(), &mut hdrs, &mut iovs, &mut addrs).take(count)
     {
+        let buffer = packet.buffer_mut();
         *iov = iovec {
-            iov_base: packet.data.as_mut_ptr() as *mut libc::c_void,
-            iov_len: packet.data.len(),
+            iov_base: buffer.as_mut_ptr() as *mut libc::c_void,
+            iov_len: buffer.len(),
         };
         hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
         hdr.msg_hdr.msg_namelen = SOCKADDR_STORAGE_SIZE as socklen_t;

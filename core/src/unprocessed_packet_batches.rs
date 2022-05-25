@@ -356,14 +356,11 @@ pub fn deserialize_packets<'a>(
 /// Read the transaction message from packet data
 pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
     let (sig_len, sig_size) =
-        decode_shortu16_len(&packet.data).map_err(DeserializedPacketError::ShortVecError)?;
+        decode_shortu16_len(packet.data()).map_err(DeserializedPacketError::ShortVecError)?;
     sig_len
         .checked_mul(size_of::<Signature>())
         .and_then(|v| v.checked_add(sig_size))
-        .map(|msg_start| {
-            let msg_end = packet.meta.size;
-            &packet.data[msg_start..msg_end]
-        })
+        .and_then(|msg_start| packet.data().get(msg_start..))
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 

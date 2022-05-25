@@ -23,7 +23,7 @@ use {
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -363,11 +363,7 @@ where
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
             return None;
         }
-        // shred fetch stage should be sending packets
-        // with sufficiently large buffers. Needed to ensure
-        // call to `new_from_serialized_shred` is safe.
-        assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
-        let serialized_shred = packet.data.to_vec();
+        let serialized_shred = packet.data().to_vec();
         let shred = Shred::new_from_serialized_shred(serialized_shred).ok()?;
         if !shred_filter(&shred, working_bank.clone(), last_root) {
             return None;
