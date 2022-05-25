@@ -473,24 +473,6 @@ pub fn start_verify_transactions(
     let entries = verify_transactions(entries, Arc::new(verify_func));
     match entries {
         Ok(entries) => {
-            let num_transactions: usize = entries
-                .iter()
-                .map(|entry: &EntryType| -> usize {
-                    match entry {
-                        EntryType::Transactions(transactions) => transactions.len(),
-                        EntryType::Tick(_) => 0,
-                    }
-                })
-                .sum();
-
-            if num_transactions == 0 {
-                return Ok(EntrySigVerificationState {
-                    verification_status: EntryVerificationStatus::Success,
-                    entries: Some(entries),
-                    device_verification_data: DeviceSigVerificationData::Cpu(),
-                    gpu_verify_duration_us: 0,
-                });
-            }
             let entry_txs: Vec<&SanitizedTransaction> = entries
                 .iter()
                 .filter_map(|entry_type| match entry_type {
@@ -499,6 +481,16 @@ pub fn start_verify_transactions(
                 })
                 .flatten()
                 .collect::<Vec<_>>();
+
+            if entry_txs.is_empty() {
+                return Ok(EntrySigVerificationState {
+                    verification_status: EntryVerificationStatus::Success,
+                    entries: Some(entries),
+                    device_verification_data: DeviceSigVerificationData::Cpu(),
+                    gpu_verify_duration_us: 0,
+                });
+            }
+
             let total_packets = AtomicUsize::new(0);
             let mut packet_batches = entry_txs
                 .par_iter()
@@ -511,7 +503,7 @@ pub fn start_verify_transactions(
                         vec_size,
                         "entry-sig-verify",
                     );
-                    // We use set_len here instead of resize(num_transactions, Packet::default()), to save
+                    // We use set_len here instead of resize(vec_size, Packet::default()), to save
                     // memory bandwidth and avoid writing a large amount of data that will be overwritten
                     // soon afterwards. As well, Packet::default() actually leaves the packet data
                     // uninitialized anyway, so the initilization would simply write junk into
