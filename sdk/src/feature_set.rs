@@ -315,6 +315,10 @@ pub mod default_units_per_instruction {
     solana_sdk::declare_id!("J2QdYx8crLbTVK8nur1jeLsmc3krDbfjoxoea2V1Uy5Q");
 }
 
+pub mod add_shred_type_to_shred_seed {
+    solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -388,6 +392,7 @@ lazy_static! {
         (fixed_memcpy_nonoverlapping_check::id(), "use correct check for nonoverlapping regions in memcpy syscall"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
+        (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
