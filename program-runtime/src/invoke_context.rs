@@ -45,29 +45,6 @@ use {
 pub type ProcessInstructionWithContext =
     fn(usize, &mut InvokeContext) -> Result<(), InstructionError>;
 
-fn process_instruction_with_program_logging(
-    process_instruction: ProcessInstructionWithContext,
-    first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    let logger = invoke_context.get_log_collector();
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
-
-    let result = process_instruction(first_instruction_account, invoke_context);
-
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    match &result {
-        Ok(()) => stable_log::program_success(&logger, program_id),
-        Err(err) => stable_log::program_failure(&logger, program_id, err),
-    }
-    result
-}
-
 #[derive(Clone)]
 pub struct BuiltinProgram {
     pub program_id: Pubkey,
@@ -1005,10 +982,9 @@ impl<'a> InvokeContext<'a> {
             let borrowed_root_account = instruction_context
                 .try_borrow_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
-            let root_id = borrowed_root_account.get_key();
             let owner_id = borrowed_root_account.get_owner();
             if solana_sdk::native_loader::check_id(owner_id) {
-                (1, *root_id)
+                (1, *borrowed_root_account.get_key())
             } else {
                 (0, *owner_id)
             }
@@ -1018,11 +994,16 @@ impl<'a> InvokeContext<'a> {
             if entry.program_id == builtin_id {
                 let program_id = instruction_context.get_program_id(self.transaction_context);
                 if builtin_id == program_id {
-                    return process_instruction_with_program_logging(
-                        entry.process_instruction,
-                        first_instruction_account,
-                        self,
-                    );
+                    let logger = self.get_log_collector();
+                    stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+                    return (entry.process_instruction)(first_instruction_account, self)
+                        .map(|()| {
+                            stable_log::program_success(&logger, &program_id);
+                        })
+                        .map_err(|err| {
+                            stable_log::program_failure(&logger, &program_id, &err);
+                            err
+                        });
                 } else {
                     return (entry.process_instruction)(first_instruction_account, self);
                 }
