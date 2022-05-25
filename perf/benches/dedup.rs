@@ -26,7 +26,7 @@ fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) 
     // verify packets
     let mut deduper = sigverify::Deduper::new(1_000_000, Duration::from_millis(2_000));
     bencher.iter(|| {
-        let _ans = deduper.dedup_packets(&mut batches);
+        let _ans = deduper.dedup_packets_and_count_discards(&mut batches);
         deduper.reset();
         batches
             .iter_mut()
