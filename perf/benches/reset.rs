@@ -7,11 +7,13 @@ use {
     test::Bencher,
 };
 
-const N: usize = 1000_000;
+const N: usize = 1_000_000;
 
 // test bench_reset1 ... bench:     436,240 ns/iter (+/- 176,714)
 // test bench_reset2 ... bench:     274,007 ns/iter (+/- 129,552)
+
 #[bench]
+#[allow(clippy::unit_arg)]
 fn bench_reset1(bencher: &mut Bencher) {
     solana_logger::setup();
 
@@ -26,6 +28,7 @@ fn bench_reset1(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[allow(clippy::unit_arg)]
 fn bench_reset2(bencher: &mut Bencher) {
     solana_logger::setup();
 
