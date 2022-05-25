@@ -19,7 +19,7 @@ pub async fn recv_mmsg(
     let mut i = 0;
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
-        match socket.try_recv_from(&mut p.data) {
+        match socket.try_recv_from(p.buffer_mut()) {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 break;
             }

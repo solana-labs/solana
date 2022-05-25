@@ -28,13 +28,14 @@ pub fn repair_response_packet_from_bytes(
     nonce: Nonce,
 ) -> Option<Packet> {
     let mut packet = Packet::default();
-    packet.meta.size = bytes.len() + SIZE_OF_NONCE;
-    if packet.meta.size > packet.data.len() {
+    let size = bytes.len() + SIZE_OF_NONCE;
+    if size > packet.buffer_mut().len() {
         return None;
     }
+    packet.meta.size = size;
     packet.meta.set_socket_addr(dest);
-    packet.data[..bytes.len()].copy_from_slice(&bytes);
-    let mut wr = io::Cursor::new(&mut packet.data[bytes.len()..]);
+    packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
+    let mut wr = io::Cursor::new(&mut packet.buffer_mut()[bytes.len()..]);
     bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
     Some(packet)
 }

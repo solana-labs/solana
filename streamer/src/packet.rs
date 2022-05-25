@@ -67,7 +67,7 @@ pub fn send_to(
     for p in batch.iter() {
         let addr = p.meta.socket_addr();
         if socket_addr_space.check(&addr) {
-            socket.send_to(&p.data[..p.meta.size], &addr)?;
+            socket.send_to(p.data(), &addr)?;
         }
     }
     Ok(())
@@ -135,14 +135,14 @@ mod tests {
         let mut p2 = Packet::default();
 
         p1.meta.size = 1;
-        p1.data[0] = 0;
+        p1.buffer_mut()[0] = 0;
 
         p2.meta.size = 1;
-        p2.data[0] = 0;
+        p2.buffer_mut()[0] = 0;
 
         assert!(p1 == p2);
 
-        p2.data[0] = 4;
+        p2.buffer_mut()[0] = 4;
         assert!(p1 != p2);
     }
 

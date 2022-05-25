@@ -189,7 +189,7 @@ fn handle_chunk(
 
                 if let Some(batch) = maybe_batch.as_mut() {
                     let end = chunk.offset as usize + chunk.bytes.len();
-                    batch[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
+                    batch[0].buffer_mut()[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
                     batch[0].meta.size = std::cmp::max(batch[0].meta.size, end);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                 }
