@@ -1,8 +1,7 @@
-name: increment cargo version
+name: increment-cargo-version
 
-# on:
-#   release:
-#     types: [published]
+on:
+  workflow_dispatch:
 
 jobs:
   check_compilation:
