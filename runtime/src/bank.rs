@@ -159,8 +159,8 @@ use {
         rc::Rc,
         sync::{
             atomic::{
-                AtomicBool, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed, Release},
+                AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
+                Ordering::{AcqRel, Acquire, Relaxed},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -1062,7 +1062,9 @@ impl PartialEq for Bank {
             cost_tracker: _,
             rewrites_skipped_this_slot: _,
             sysvar_cache: _,
-            accounts_data_len: _,
+            accounts_data_size_initial: _,
+            accounts_data_size_delta_on_chain: _,
+            accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
@@ -1331,9 +1333,12 @@ pub struct Bank {
     /// (Pubkey, account Hash) for each account that would have been rewritten in rent collection for this slot
     pub rewrites_skipped_this_slot: Rewrites,
 
-    /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
-    /// maximum size.
-    accounts_data_len: AtomicU64,
+    /// The initial accounts data size at the start of this Bank, before processing any transactions/etc
+    accounts_data_size_initial: u64,
+    /// The change to accounts data size in this Bank, due on-chain events (i.e. transactions)
+    accounts_data_size_delta_on_chain: AtomicI64,
+    /// The change to accounts data size in this Bank, due to off-chain events (i.e. rent collection)
+    accounts_data_size_delta_off_chain: AtomicI64,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -1441,7 +1446,7 @@ impl Bank {
     }
 
     fn default_with_accounts(accounts: Accounts) -> Self {
-        let bank = Self {
+        let mut bank = Self {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
@@ -1497,19 +1502,21 @@ impl Bank {
             vote_only_bank: false,
             cost_tracker: RwLock::<CostTracker>::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
-            accounts_data_len: AtomicU64::default(),
+            accounts_data_size_initial: 0,
+            accounts_data_size_delta_on_chain: AtomicI64::new(0),
+            accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
         };
 
-        let accounts_data_len = bank.get_total_accounts_stats().unwrap().data_len as u64;
-        if accounts_data_len != 0 {
-            bank.store_accounts_data_len(accounts_data_len);
-
-            let cost_tracker = CostTracker::new_with_account_data_size_limit(
-                bank.feature_set
-                    .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
-            );
+        let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
+        bank.accounts_data_size_initial = accounts_data_size_initial;
+        if bank
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_len::id())
+        {
+            let cost_tracker = CostTracker::new_with_account_data_size_limit(Some(
+                MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_size_initial),
+            ));
             *bank.write_cost_tracker().unwrap() = cost_tracker;
         }
 
@@ -1767,7 +1774,7 @@ impl Bank {
         let (feature_set, feature_set_time) =
             Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
 
-        let accounts_data_len = parent.load_accounts_data_len();
+        let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc,
@@ -1835,10 +1842,12 @@ impl Bank {
             cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
                 feature_set
                     .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
+                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_size_initial)),
             )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
-            accounts_data_len: AtomicU64::new(accounts_data_len),
+            accounts_data_size_initial,
+            accounts_data_size_delta_on_chain: AtomicI64::new(0),
+            accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
         };
 
@@ -2101,7 +2110,7 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
-        accounts_data_len: u64,
+        accounts_data_size_initial: u64,
     ) -> Self {
         let now = Instant::now();
         let ancestors = Ancestors::from(&fields.ancestors);
@@ -2184,10 +2193,12 @@ impl Bank {
             cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
                 feature_set
                     .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_len)),
+                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_size_initial)),
             )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
-            accounts_data_len: AtomicU64::new(accounts_data_len),
+            accounts_data_size_initial,
+            accounts_data_size_delta_on_chain: AtomicI64::new(0),
+            accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
         };
         bank.finish_init(
@@ -2240,7 +2251,7 @@ impl Bank {
             ),
             (
                 "accounts_data_len-from-generate_index",
-                accounts_data_len as i64,
+                accounts_data_size_initial as i64,
                 i64
             ),
             (
@@ -2288,7 +2299,7 @@ impl Bank {
             stakes: &self.stakes_cache,
             epoch_stakes: &self.epoch_stakes,
             is_delta: self.is_delta.load(Relaxed),
-            accounts_data_len: self.load_accounts_data_len(),
+            accounts_data_len: self.load_accounts_data_size(),
         }
     }
 
@@ -4237,7 +4248,7 @@ impl Bank {
             &*self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
-            self.load_accounts_data_len(),
+            self.load_accounts_data_size(),
             &mut executed_units,
         );
         process_message_time.stop();
@@ -4573,21 +4584,10 @@ impl Bank {
         }
     }
 
-    /// Load the accounts data len
-    pub(crate) fn load_accounts_data_len(&self) -> u64 {
-        self.accounts_data_len.load(Acquire)
-    }
-
-    /// Store a new value to the accounts data len
-    fn store_accounts_data_len(&self, accounts_data_len: u64) {
-        self.accounts_data_len.store(accounts_data_len, Release)
-    }
-
-    /// Update the accounts data len by adding `delta`.  Since `delta` is signed, negative values
-    /// are allowed as the means to subtract from `accounts_data_len`.  The arithmetic saturates.
-    fn update_accounts_data_len(&self, delta: i64) {
-        /// Mixed integer ops currently not stable, so copying the impl.
-        /// Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
+    /// Load the accounts data size, in bytes
+    pub fn load_accounts_data_size(&self) -> u64 {
+        // Mixed integer ops currently not stable, so copying the impl.
+        // Copied from: https://github.com/a1phyr/rust/blob/47edde1086412b36e9efd6098b191ec15a2a760a/library/core/src/num/uint_macros.rs#L1039-L1048
         fn saturating_add_signed(lhs: u64, rhs: i64) -> u64 {
             let (res, overflow) = lhs.overflowing_add(rhs as u64);
             if overflow == (rhs < 0) {
@@ -4598,9 +4598,58 @@ impl Bank {
                 u64::MIN
             }
         }
-        self.accounts_data_len
-            .fetch_update(AcqRel, Acquire, |x| Some(saturating_add_signed(x, delta)))
-            // SAFETY: unwrap() is safe here since our update fn always returns `Some`
+        saturating_add_signed(
+            self.accounts_data_size_initial,
+            self.load_accounts_data_size_delta(),
+        )
+    }
+
+    /// Load the change in accounts data size in this Bank, in bytes
+    pub fn load_accounts_data_size_delta(&self) -> i64 {
+        let delta_on_chain = self.load_accounts_data_size_delta_on_chain();
+        let delta_off_chain = self.load_accounts_data_size_delta_off_chain();
+        delta_on_chain.saturating_add(delta_off_chain)
+    }
+
+    /// Load the change in accounts data size in this Bank, in bytes, from on-chain events
+    /// i.e. transactions
+    pub fn load_accounts_data_size_delta_on_chain(&self) -> i64 {
+        self.accounts_data_size_delta_on_chain.load(Acquire)
+    }
+
+    /// Load the change in accounts data size in this Bank, in bytes, from off-chain events
+    /// i.e. rent collection
+    pub fn load_accounts_data_size_delta_off_chain(&self) -> i64 {
+        self.accounts_data_size_delta_off_chain.load(Acquire)
+    }
+
+    /// Update the accounts data size delta from on-chain events by adding `amount`.
+    /// The arithmetic saturates.
+    fn update_accounts_data_size_delta_on_chain(&self, amount: i64) {
+        if amount == 0 {
+            return;
+        }
+
+        self.accounts_data_size_delta_on_chain
+            .fetch_update(AcqRel, Acquire, |accounts_data_size_delta_on_chain| {
+                Some(accounts_data_size_delta_on_chain.saturating_add(amount))
+            })
+            // SAFETY: unwrap() is safe since our update fn always returns `Some`
+            .unwrap();
+    }
+
+    /// Update the accounts data size delta from off-chain events by adding `amount`.
+    /// The arithmetic saturates.
+    fn update_accounts_data_size_delta_off_chain(&self, amount: i64) {
+        if amount == 0 {
+            return;
+        }
+
+        self.accounts_data_size_delta_off_chain
+            .fetch_update(AcqRel, Acquire, |accounts_data_size_delta_off_chain| {
+                Some(accounts_data_size_delta_off_chain.saturating_add(amount))
+            })
+            // SAFETY: unwrap() is safe since our update fn always returns `Some`
             .unwrap();
     }
 
@@ -4842,7 +4891,7 @@ impl Bank {
                     .map(|details| details.accounts_data_len_delta)
             })
             .sum();
-        self.update_accounts_data_len(accounts_data_len_delta);
+        self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
 
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
         timings.saturating_add_in_place(
@@ -5174,9 +5223,9 @@ impl Bank {
             .write()
             .unwrap()
             .extend(rent_debits.into_unordered_rewards_iter());
-        if total_collected.account_data_len_reclaimed > 0 {
-            self.update_accounts_data_len(-(total_collected.account_data_len_reclaimed as i64));
-        }
+        self.update_accounts_data_size_delta_off_chain(
+            -(total_collected.account_data_len_reclaimed as i64),
+        );
 
         self.rc
             .accounts
@@ -6993,7 +7042,7 @@ impl Bank {
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
-            self.store_accounts_data_len(ACCOUNTS_DATA_LEN);
+            self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
         }
     }
 
@@ -7340,7 +7389,7 @@ pub(crate) mod tests {
                 MAX_LOCKOUT_HISTORY,
             },
         },
-        std::{result, thread::Builder, time::Duration},
+        std::{result, sync::atomic::Ordering::Release, thread::Builder, time::Duration},
         test_utils::goto_end_of_slot,
     };
 
@@ -8289,16 +8338,19 @@ pub(crate) mod tests {
         genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
+        let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
 
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let account_balance = 1;
-        let data_len = 12345; // use non-zero data len to also test accounts_data_len
-        let mut account =
-            AccountSharedData::new(account_balance, data_len, &solana_sdk::pubkey::new_rand());
+        let data_size = 12345_u64; // use non-zero data size to also test accounts_data_size
+        let mut account = AccountSharedData::new(
+            account_balance,
+            data_size as usize,
+            &solana_sdk::pubkey::new_rand(),
+        );
         account.set_executable(true);
         bank.store_account(&account_pubkey, &account);
-        bank.store_accounts_data_len(data_len as u64);
+        bank.accounts_data_size_initial = data_size;
 
         let transfer_lamports = 1;
         let tx = system_transaction::transfer(
@@ -8313,7 +8365,7 @@ pub(crate) mod tests {
             Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
-        assert_eq!(bank.load_accounts_data_len(), data_len as u64);
+        assert_eq!(bank.load_accounts_data_size(), data_size);
     }
 
     #[test]
@@ -9323,8 +9375,8 @@ pub(crate) mod tests {
         let bank1_without_zero = Arc::new(new_from_parent(&genesis_bank2));
 
         let zero_lamports = 0;
-        let data_len = 12345; // use non-zero data len to also test accounts_data_len
-        let account = AccountSharedData::new(zero_lamports, data_len, &Pubkey::default());
+        let data_size = 12345; // use non-zero data size to also test accounts_data_size
+        let account = AccountSharedData::new(zero_lamports, data_size, &Pubkey::default());
         bank1_with_zero.store_account(&zero_lamport_pubkey, &account);
         bank1_without_zero.store_account(&zero_lamport_pubkey, &account);
 
@@ -16968,7 +17020,7 @@ pub(crate) mod tests {
             );
 
             let result = bank.process_transaction(&txn);
-            assert!(bank.load_accounts_data_len() <= MAX_ACCOUNTS_DATA_LEN);
+            assert!(bank.load_accounts_data_size() <= MAX_ACCOUNTS_DATA_LEN);
             if result.is_err() {
                 break result;
             }
@@ -17711,37 +17763,46 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_update_accounts_data_len() {
+    fn test_update_accounts_data_size() {
         let (genesis_config, _mint_keypair) = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
 
         // Test: Subtraction saturates at 0
         {
-            let data_len = 567_i64;
-            bank.store_accounts_data_len(data_len as u64);
-            bank.update_accounts_data_len(-(data_len + 1));
-            assert_eq!(bank.load_accounts_data_len(), 0);
+            let bank = Bank::new_for_tests(&genesis_config);
+            let data_size = 567;
+            bank.accounts_data_size_delta_on_chain
+                .store(data_size, Release);
+            bank.update_accounts_data_size_delta_on_chain(-(data_size + 1));
+            assert_eq!(bank.load_accounts_data_size(), 0);
         }
 
         // Test: Addition saturates at u64::MAX
         {
-            let data_len_remaining = 567;
-            bank.store_accounts_data_len(u64::MAX - data_len_remaining);
-            bank.update_accounts_data_len((data_len_remaining + 1) as i64);
-            assert_eq!(bank.load_accounts_data_len(), u64::MAX);
+            let mut bank = Bank::new_for_tests(&genesis_config);
+            let data_size_remaining = 567;
+            bank.accounts_data_size_initial = u64::MAX - data_size_remaining;
+            bank.accounts_data_size_delta_off_chain
+                .store((data_size_remaining + 1) as i64, Release);
+            assert_eq!(bank.load_accounts_data_size(), u64::MAX);
         }
 
         // Test: Updates work as expected
         {
-            // Set the accounts data len to be in the middle, then perform a bunch of small
+            // Set the accounts data size to be in the middle, then perform a bunch of small
             // updates, checking the results after each one.
-            bank.store_accounts_data_len(u32::MAX as u64);
+            let mut bank = Bank::new_for_tests(&genesis_config);
+            bank.accounts_data_size_initial = u32::MAX as u64;
             let mut rng = rand::thread_rng();
             for _ in 0..100 {
-                let initial = bank.load_accounts_data_len() as i64;
-                let delta = rng.gen_range(-500, 500);
-                bank.update_accounts_data_len(delta);
-                assert_eq!(bank.load_accounts_data_len() as i64, initial + delta);
+                let initial = bank.load_accounts_data_size() as i64;
+                let delta1 = rng.gen_range(-500, 500);
+                bank.update_accounts_data_size_delta_on_chain(delta1);
+                let delta2 = rng.gen_range(-500, 500);
+                bank.update_accounts_data_size_delta_off_chain(delta2);
+                assert_eq!(
+                    bank.load_accounts_data_size() as i64,
+                    initial.saturating_add(delta1).saturating_add(delta2),
+                );
             }
         }
     }
