@@ -433,7 +433,7 @@ impl ServeRepair {
         packet_batch.iter().for_each(|packet| {
             if let Ok(request) = packet.deserialize_slice(..) {
                 stats.processed += 1;
-                let from_addr = packet.meta.addr();
+                let from_addr = packet.meta.socket_addr();
                 let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
                 if let Some(rsp) = rsp {
                     let _ignore_disconnect = response_sender.send(rsp);
