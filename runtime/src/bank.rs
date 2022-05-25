@@ -151,13 +151,8 @@ use {
         rc::Rc,
         sync::{
             atomic::{
-<<<<<<< HEAD
-                AtomicBool, AtomicU64,
-                Ordering::{AcqRel, Acquire, Relaxed, Release},
-=======
-                AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
+                AtomicBool, AtomicI64, AtomicU64,
                 Ordering::{AcqRel, Acquire, Relaxed},
->>>>>>> 0dd3c6bf1 (Split up accounts data size field (#25495))
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -992,7 +987,6 @@ impl PartialEq for Bank {
         if ptr::eq(self, other) {
             return true;
         }
-<<<<<<< HEAD
         *self.blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && self.ancestors == other.ancestors
             && *self.hash.read().unwrap() == *other.hash.read().unwrap()
@@ -1023,102 +1017,6 @@ impl PartialEq for Bank {
             && *self.stakes_cache.stakes() == *other.stakes_cache.stakes()
             && self.epoch_stakes == other.epoch_stakes
             && self.is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
-=======
-        let Self {
-            rc: _,
-            src: _,
-            blockhash_queue,
-            ancestors,
-            hash,
-            parent_hash,
-            parent_slot,
-            hard_forks,
-            transaction_count,
-            transaction_error_count: _,
-            transaction_entries_count: _,
-            transactions_per_entry_max: _,
-            tick_height,
-            signature_count,
-            capitalization,
-            max_tick_height,
-            hashes_per_tick,
-            ticks_per_slot,
-            ns_per_slot,
-            genesis_creation_time,
-            slots_per_year,
-            slot,
-            bank_id: _,
-            epoch,
-            block_height,
-            collector_id,
-            collector_fees,
-            fee_calculator,
-            fee_rate_governor,
-            collected_rent,
-            rent_collector,
-            epoch_schedule,
-            inflation,
-            stakes_cache,
-            epoch_stakes,
-            is_delta,
-            // TODO: Confirm if all these fields are intentionally ignored!
-            builtin_programs: _,
-            compute_budget: _,
-            builtin_feature_transitions: _,
-            rewards: _,
-            cluster_type: _,
-            lazy_rent_collection: _,
-            rewards_pool_pubkeys: _,
-            cached_executors: _,
-            transaction_debug_keys: _,
-            transaction_log_collector_config: _,
-            transaction_log_collector: _,
-            feature_set: _,
-            drop_callback: _,
-            freeze_started: _,
-            vote_only_bank: _,
-            cost_tracker: _,
-            rewrites_skipped_this_slot: _,
-            sysvar_cache: _,
-            accounts_data_size_initial: _,
-            accounts_data_size_delta_on_chain: _,
-            accounts_data_size_delta_off_chain: _,
-            fee_structure: _,
-            // Ignore new fields explicitly if they do not impact PartialEq.
-            // Adding ".." will remove compile-time checks that if a new field
-            // is added to the struct, this ParitalEq is accordingly updated.
-        } = self;
-        *blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
-            && ancestors == &other.ancestors
-            && *hash.read().unwrap() == *other.hash.read().unwrap()
-            && parent_hash == &other.parent_hash
-            && parent_slot == &other.parent_slot
-            && *hard_forks.read().unwrap() == *other.hard_forks.read().unwrap()
-            && transaction_count.load(Relaxed) == other.transaction_count.load(Relaxed)
-            && tick_height.load(Relaxed) == other.tick_height.load(Relaxed)
-            && signature_count.load(Relaxed) == other.signature_count.load(Relaxed)
-            && capitalization.load(Relaxed) == other.capitalization.load(Relaxed)
-            && max_tick_height == &other.max_tick_height
-            && hashes_per_tick == &other.hashes_per_tick
-            && ticks_per_slot == &other.ticks_per_slot
-            && ns_per_slot == &other.ns_per_slot
-            && genesis_creation_time == &other.genesis_creation_time
-            && slots_per_year == &other.slots_per_year
-            && slot == &other.slot
-            && epoch == &other.epoch
-            && block_height == &other.block_height
-            && collector_id == &other.collector_id
-            && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
-            && fee_calculator == &other.fee_calculator
-            && fee_rate_governor == &other.fee_rate_governor
-            && collected_rent.load(Relaxed) == other.collected_rent.load(Relaxed)
-            && rent_collector == &other.rent_collector
-            && epoch_schedule == &other.epoch_schedule
-            && *inflation.read().unwrap() == *other.inflation.read().unwrap()
-            && *stakes_cache.stakes() == *other.stakes_cache.stakes()
-            && epoch_stakes == &other.epoch_stakes
-            && is_delta.load(Relaxed) == other.is_delta.load(Relaxed)
->>>>>>> 0dd3c6bf1 (Split up accounts data size field (#25495))
     }
 }
 
@@ -1348,21 +1246,12 @@ pub struct Bank {
 
     sysvar_cache: RwLock<SysvarCache>,
 
-<<<<<<< HEAD
-    /// Current size of the accounts data.  Used when processing messages to enforce a limit on its
-    /// maximum size.
-    accounts_data_len: AtomicU64,
-=======
-    /// (Pubkey, account Hash) for each account that would have been rewritten in rent collection for this slot
-    pub rewrites_skipped_this_slot: Rewrites,
-
     /// The initial accounts data size at the start of this Bank, before processing any transactions/etc
     accounts_data_size_initial: u64,
     /// The change to accounts data size in this Bank, due on-chain events (i.e. transactions)
     accounts_data_size_delta_on_chain: AtomicI64,
     /// The change to accounts data size in this Bank, due to off-chain events (i.e. rent collection)
     accounts_data_size_delta_off_chain: AtomicI64,
->>>>>>> 0dd3c6bf1 (Split up accounts data size field (#25495))
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -1457,12 +1346,7 @@ impl Bank {
     }
 
     fn default_with_accounts(accounts: Accounts) -> Self {
-<<<<<<< HEAD
-        let bank = Self {
-=======
         let mut bank = Self {
-            rewrites_skipped_this_slot: Rewrites::default(),
->>>>>>> 0dd3c6bf1 (Split up accounts data size field (#25495))
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -7049,12 +6933,7 @@ pub(crate) mod tests {
                 MAX_LOCKOUT_HISTORY,
             },
         },
-<<<<<<< HEAD
-        std::{result, thread::Builder, time::Duration},
-=======
         std::{result, sync::atomic::Ordering::Release, thread::Builder, time::Duration},
-        test_utils::goto_end_of_slot,
->>>>>>> 0dd3c6bf1 (Split up accounts data size field (#25495))
     };
 
     fn new_sanitized_message(
