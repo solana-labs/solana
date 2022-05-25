@@ -180,7 +180,7 @@ fn handle_chunk(
                     let mut packet = Packet::default();
                     packet.meta.set_addr(remote_addr);
                     packet.meta.sender_stake = stake;
-                    batch.packets.push(packet);
+                    batch.push(packet);
                     *maybe_batch = Some(batch);
                     stats
                         .total_packets_allocated
@@ -189,15 +189,15 @@ fn handle_chunk(
 
                 if let Some(batch) = maybe_batch.as_mut() {
                     let end = chunk.offset as usize + chunk.bytes.len();
-                    batch.packets[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
-                    batch.packets[0].meta.size = std::cmp::max(batch.packets[0].meta.size, end);
+                    batch[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
+                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                 }
             } else {
                 trace!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
-                    let len = batch.packets[0].meta.size;
+                    let len = batch[0].meta.size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
                             .total_packet_batch_send_err
@@ -794,7 +794,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 10 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets == num_expected_packets {
@@ -802,7 +802,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, 1);
             }
         }
@@ -866,7 +866,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets > num_expected_packets {
@@ -874,7 +874,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, num_bytes);
             }
         }

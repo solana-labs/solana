@@ -303,8 +303,8 @@ impl ClusterInfoVoteListener {
             .zip(packet_batches)
             .filter(|(_, packet_batch)| {
                 // to_packet_batches() above splits into 1 packet long batches
-                assert_eq!(packet_batch.packets.len(), 1);
-                !packet_batch.packets[0].meta.discard()
+                assert_eq!(packet_batch.len(), 1);
+                !packet_batch[0].meta.discard()
             })
             .filter_map(|(tx, packet_batch)| {
                 let (vote_account_key, vote, ..) = vote_parser::parse_vote_transaction(&tx)?;
@@ -1515,7 +1515,7 @@ mod tests {
     fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
+            .map(|vote_metadata| vote_metadata.packet_batch.len())
             .sum();
         assert_eq!(num_packets, ref_value);
     }

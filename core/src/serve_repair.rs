@@ -327,13 +327,13 @@ impl ServeRepair {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut total_packets = reqs_v[0].packets.len();
+        let mut total_packets = reqs_v[0].len();
 
         let mut dropped_packets = 0;
         while let Ok(more) = requests_receiver.try_recv() {
-            total_packets += more.packets.len();
+            total_packets += more.len();
             if packet_threshold.should_drop(total_packets) {
-                dropped_packets += more.packets.len();
+                dropped_packets += more.len();
             } else {
                 reqs_v.push(more);
             }
@@ -430,7 +430,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
     ) {
-        packet_batch.packets.iter().for_each(|packet| {
+        packet_batch.iter().for_each(|packet| {
             if let Ok(request) = packet.deserialize_slice(..) {
                 stats.processed += 1;
                 let from_addr = packet.meta.addr();
@@ -695,11 +695,12 @@ impl ServeRepair {
                     nonce,
                 );
                 if let Some(packet) = packet {
-                    res.packets.push(packet);
+                    res.push(packet);
                 } else {
                     break;
                 }
-                if meta.parent_slot.is_some() && res.packets.len() <= max_responses {
+
+                if meta.parent_slot.is_some() && res.len() <= max_responses {
                     slot = meta.parent_slot.unwrap();
                 } else {
                     break;
@@ -805,10 +806,9 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::HighestShred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
 
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
@@ -891,9 +891,8 @@ mod tests {
             )
             .expect("packets");
             let request = ShredRepairType::Shred(slot, index);
-            verify_responses(&request, rv.packets.iter());
+            verify_responses(&request, rv.iter());
             let rv: Vec<Shred> = rv
-                .packets
                 .into_iter()
                 .filter_map(|p| {
                     assert_eq!(repair_response::nonce(p).unwrap(), nonce);
@@ -1053,7 +1052,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1122,7 +1120,6 @@ mod tests {
                 nonce,
             )
             .expect("run_orphan packets")
-            .packets
             .iter()
             .cloned()
             .collect();
@@ -1169,8 +1166,7 @@ mod tests {
                 slot + num_slots,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet
@@ -1187,8 +1183,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet
@@ -1212,8 +1207,7 @@ mod tests {
                 slot + num_slots - 1,
                 nonce,
             )
-            .expect("run_ancestor_hashes packets")
-            .packets;
+            .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response: AncestorHashesResponseVersion = packet

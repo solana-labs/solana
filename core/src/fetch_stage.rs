@@ -97,12 +97,12 @@ impl FetchStage {
         };
 
         let mut packet_batch = recvr.recv()?;
-        let mut num_packets = packet_batch.packets.len();
-        packet_batch.packets.iter_mut().for_each(mark_forwarded);
+        let mut num_packets = packet_batch.len();
+        packet_batch.iter_mut().for_each(mark_forwarded);
         let mut packet_batches = vec![packet_batch];
         while let Ok(mut packet_batch) = recvr.try_recv() {
-            packet_batch.packets.iter_mut().for_each(mark_forwarded);
-            num_packets += packet_batch.packets.len();
+            packet_batch.iter_mut().for_each(mark_forwarded);
+            num_packets += packet_batch.len();
             packet_batches.push(packet_batch);
             // Read at most 1K transactions in a loop
             if num_packets > 1024 {

@@ -64,7 +64,7 @@ mod tests {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets >= num_expected_packets {
@@ -72,7 +72,7 @@ mod tests {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in &batch {
                 assert_eq!(p.meta.size, num_bytes);
             }
         }

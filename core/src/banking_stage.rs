@@ -21,7 +21,6 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
     solana_perf::{
-        cuda_runtime::PinnedVec,
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
         perf_libs,
@@ -1995,7 +1994,7 @@ impl BankingStage {
         original_unprocessed_packets_len.saturating_sub(unprocessed_packets.len())
     }
 
-    fn generate_packet_indexes(vers: &PinnedVec<Packet>) -> Vec<usize> {
+    fn generate_packet_indexes(vers: &PacketBatch) -> Vec<usize> {
         vers.iter()
             .enumerate()
             .filter(|(_, pkt)| !pkt.meta.discard())
@@ -2010,12 +2009,11 @@ impl BankingStage {
     ) -> Result<Vec<PacketBatch>, RecvTimeoutError> {
         let start = Instant::now();
         let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
-        let mut num_packets_received: usize =
-            packet_batches.iter().map(|batch| batch.packets.len()).sum();
+        let mut num_packets_received: usize = packet_batches.iter().map(|batch| batch.len()).sum();
         while let Ok(packet_batch) = verified_receiver.try_recv() {
             trace!("got more packet batches in banking stage");
             let (packets_received, packet_count_overflowed) = num_packets_received
-                .overflowing_add(packet_batch.iter().map(|batch| batch.packets.len()).sum());
+                .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
             packet_batches.extend(packet_batch);
 
             // Spend any leftover receive time budget to greedily receive more packet batches,
@@ -2051,7 +2049,7 @@ impl BankingStage {
         recv_time.stop();
 
         let packet_batches_len = packet_batches.len();
-        let packet_count: usize = packet_batches.iter().map(|x| x.packets.len()).sum();
+        let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timestamp(),
@@ -2065,14 +2063,11 @@ impl BankingStage {
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
         for packet_batch in packet_batch_iter {
-            let packet_indexes = Self::generate_packet_indexes(&packet_batch.packets);
+            let packet_indexes = Self::generate_packet_indexes(&packet_batch);
             // Track all the packets incoming from sigverify, both valid and invalid
             slot_metrics_tracker.increment_total_new_valid_packets(packet_indexes.len() as u64);
             slot_metrics_tracker.increment_newly_failed_sigverify_count(
-                packet_batch
-                    .packets
-                    .len()
-                    .saturating_sub(packet_indexes.len()) as u64,
+                packet_batch.len().saturating_sub(packet_indexes.len()) as u64,
             );
 
             Self::push_unprocessed(
@@ -2376,8 +2371,7 @@ mod tests {
         mut with_vers: Vec<(PacketBatch, Vec<u8>)>,
     ) -> Vec<PacketBatch> {
         with_vers.iter_mut().for_each(|(b, v)| {
-            b.packets
-                .iter_mut()
+            b.iter_mut()
                 .zip(v)
                 .for_each(|(p, f)| p.meta.set_discard(*f == 0))
         });
