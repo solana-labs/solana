@@ -59,11 +59,8 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::Packet,
-<<<<<<< HEAD
     solana_rayon_threadlimit::get_thread_count,
-=======
     solana_runtime::bank::Bank,
->>>>>>> cafa85bfb (includes shred-type when computing turbine broadcast seed (#25556))
     solana_sdk::{
         clock::Slot,
         feature_set,
@@ -616,7 +613,7 @@ impl Shred {
         if add_shred_type_to_shred_seed(self.slot(), root_bank) {
             hashv(&[
                 &self.slot().to_le_bytes(),
-                &u8::from(self.shred_type()).to_le_bytes(),
+                &(self.shred_type() as u8).to_le_bytes(),
                 &self.index().to_le_bytes(),
                 &leader_pubkey.to_bytes(),
             ])
