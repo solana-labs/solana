@@ -1104,6 +1104,13 @@ fn main() {
         .takes_value(true)
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
+    let debug_key_arg = Arg::with_name("debug_key")
+        .long("debug-key")
+        .validator(is_pubkey)
+        .value_name("ADDRESS")
+        .multiple(true)
+        .takes_value(true)
+        .help("Log when transactions are processed that reference the given key(s).");
 
     let default_max_full_snapshot_archives_to_retain =
         &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
@@ -1410,6 +1417,7 @@ fn main() {
             .arg(&no_bpf_jit_arg)
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&debug_key_arg)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -2227,10 +2235,14 @@ fn main() {
                     ..AccountsDbConfig::default()
                 });
 
+                let debug_keys = pubkeys_of(arg_matches, "debug_key")
+                    .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                    debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
