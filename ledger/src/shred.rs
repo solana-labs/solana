@@ -509,7 +509,7 @@ pub mod layout {
     use {super::*, std::ops::Range};
 
     fn get_shred_size(packet: &Packet) -> Option<usize> {
-        let size = packet.data().len();
+        let size = packet.data(..)?.len();
         if packet.meta.repair() {
             size.checked_sub(SIZE_OF_NONCE)
         } else {
@@ -519,7 +519,7 @@ pub mod layout {
 
     pub fn get_shred(packet: &Packet) -> Option<&[u8]> {
         let size = get_shred_size(packet)?;
-        let shred = packet.data().get(..size)?;
+        let shred = packet.data(..size)?;
         // Should at least have a signature.
         (size >= SIZE_OF_SIGNATURE).then(|| shred)
     }
@@ -826,7 +826,7 @@ mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data().to_vec());
+        let shred_res = Shred::new_from_serialized_shred(packet.data(..).unwrap().to_vec());
         assert_matches!(
             shred.parent(),
             Err(Error::InvalidParentOffset {
@@ -1029,9 +1029,12 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            layout::get_reference_tick(packet.data()).unwrap()
+            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
         );
-        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
+        assert_eq!(
+            layout::get_slot(packet.data(..).unwrap()),
+            Some(shred.slot())
+        );
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
@@ -1070,9 +1073,12 @@ mod tests {
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
         assert_eq!(
             shred.reference_tick(),
-            layout::get_reference_tick(packet.data()).unwrap()
+            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
         );
-        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
+        assert_eq!(
+            layout::get_slot(packet.data(..).unwrap()),
+            Some(shred.slot())
+        );
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
@@ -1116,7 +1122,10 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(layout::get_slot(packet.data()), Some(shred.slot()));
+        assert_eq!(
+            layout::get_slot(packet.data(..).unwrap()),
+            Some(shred.slot())
+        );
         assert_eq!(
             get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
             Some((shred.slot(), shred.index(), shred.shred_type()))
