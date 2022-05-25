@@ -1,6 +1,7 @@
 use {
     bzip2::bufread::BzDecoder,
     clap::{crate_description, crate_name, crate_version, Arg},
+    log::*,
     regex::Regex,
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
@@ -19,9 +20,9 @@ use {
 
 struct Config<'a> {
     cargo_args: Option<Vec<&'a str>>,
-    bpf_out_dir: Option<PathBuf>,
-    bpf_sdk: PathBuf,
-    bpf_tools_version: &'a str,
+    sbf_out_dir: Option<PathBuf>,
+    sbf_sdk: PathBuf,
+    sbf_tools_version: &'a str,
     dump: bool,
     features: Vec<String>,
     generate_child_script_on_failure: bool,
@@ -36,15 +37,15 @@ impl Default for Config<'_> {
     fn default() -> Self {
         Self {
             cargo_args: None,
-            bpf_sdk: env::current_exe()
+            sbf_sdk: env::current_exe()
                 .expect("Unable to get current executable")
                 .parent()
                 .expect("Unable to get parent directory")
                 .to_path_buf()
                 .join("sdk")
                 .join("bpf"),
-            bpf_out_dir: None,
-            bpf_tools_version: "(unknown)",
+            sbf_out_dir: None,
+            sbf_tools_version: "(unknown)",
             dump: false,
             features: vec![],
             generate_child_script_on_failure: false,
@@ -63,18 +64,18 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("cargo-build-bpf child: {}", program.display());
+    let mut msg = format!("cargo-build-sbf child: {}", program.display());
     for arg in args.iter() {
-        print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
+        msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
     }
-    println!();
+    info!("{}", msg);
 
     let child = Command::new(program)
         .args(&args)
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_else(|err| {
-            eprintln!("Failed to execute {}: {}", program.display(), err);
+            error!("Failed to execute {}: {}", program.display(), err);
             exit(1);
         });
 
@@ -83,9 +84,9 @@ where
         if !generate_child_script_on_failure {
             exit(1);
         }
-        eprintln!("cargo-build-bpf exited on command execution failure");
+        error!("cargo-build-sbf exited on command execution failure");
         let script_name = format!(
-            "cargo-build-bpf-child-script-{}.sh",
+            "cargo-build-sbf-child-script-{}.sh",
             program.file_name().unwrap().to_str().unwrap(),
         );
         let file = File::create(&script_name).unwrap();
@@ -99,7 +100,7 @@ where
         }
         writeln!(out).unwrap();
         out.flush().unwrap();
-        eprintln!(
+        error!(
             "To rerun the failed command for debugging use {}",
             script_name,
         );
@@ -123,7 +124,7 @@ fn install_if_missing(
 ) -> Result<(), String> {
     // Check whether the target path is an empty directory. This can
     // happen if package download failed on previous run of
-    // cargo-build-bpf.  Remove the target_path directory in this
+    // cargo-build-sbf.  Remove the target_path directory in this
     // case.
     if target_path.is_dir()
         && target_path
@@ -149,7 +150,7 @@ fn install_if_missing(
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
-        url.push_str(config.bpf_tools_version);
+        url.push_str(config.sbf_tools_version);
         url.push('/');
         url.push_str(download_file_name);
         let download_file_path = target_path.join(download_file_name);
@@ -166,8 +167,8 @@ fn install_if_missing(
         fs::remove_file(download_file_path).map_err(|err| err.to_string())?;
     }
     // Make a symbolic link source_path -> target_path in the
-    // sdk/bpf/dependencies directory if no valid link found.
-    let source_base = config.bpf_sdk.join("dependencies");
+    // sdk/sbf/dependencies directory if no valid link found.
+    let source_base = config.sbf_sdk.join("dependencies");
     if !source_base.exists() {
         fs::create_dir_all(&source_base).map_err(|err| err.to_string())?;
     }
@@ -293,7 +294,7 @@ fn postprocess_dump(program_dump: &Path) {
 // Check whether the built .so file contains undefined symbols that are
 // not known to the runtime and warn about them if any.
 fn check_undefined_symbols(config: &Config, program: &Path) {
-    let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
+    let syscalls_txt = config.sbf_sdk.join("syscalls.txt");
     let file = match File::open(syscalls_txt) {
         Ok(x) => x,
         _ => return,
@@ -308,9 +309,9 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
             .unwrap();
     let readelf = config
-        .bpf_sdk
+        .sbf_sdk
         .join("dependencies")
-        .join("bpf-tools")
+        .join("sbf-tools")
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");
@@ -322,7 +323,7 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         config.generate_child_script_on_failure,
     );
     if config.verbose {
-        println!("{}", output);
+        debug!("{}", output);
     }
     let mut unresolved_symbols: Vec<String> = Vec::new();
     for line in output.lines() {
@@ -336,20 +337,20 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
         }
     }
     if !unresolved_symbols.is_empty() {
-        println!(
-            "Warning: the following functions are undefined and not known syscalls {:?}.",
+        warn!(
+            "The following functions are undefined and not known syscalls {:?}.",
             unresolved_symbols
         );
-        println!("         Calling them will trigger a run-time error.");
+        warn!("         Calling them will trigger a run-time error.");
     }
 }
 
-// check whether custom BPF toolchain is linked, and link it if it is not.
-fn link_bpf_toolchain(config: &Config) {
+// check whether custom SBF toolchain is linked, and link it if it is not.
+fn link_sbf_toolchain(config: &Config) {
     let toolchain_path = config
-        .bpf_sdk
+        .sbf_sdk
         .join("dependencies")
-        .join("bpf-tools")
+        .join("sbf-tools")
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
@@ -359,23 +360,23 @@ fn link_bpf_toolchain(config: &Config) {
         config.generate_child_script_on_failure,
     );
     if config.verbose {
-        println!("{}", rustup_output);
+        debug!("{}", rustup_output);
     }
     let mut do_link = true;
     for line in rustup_output.lines() {
-        if line.starts_with("bpf") {
+        if line.starts_with("sbf") {
             let mut it = line.split_whitespace();
             let _ = it.next();
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
-                let rustup_args = vec!["toolchain", "uninstall", "bpf"];
+                let rustup_args = vec!["toolchain", "uninstall", "sbf"];
                 let output = spawn(
                     &rustup,
                     &rustup_args,
                     config.generate_child_script_on_failure,
                 );
                 if config.verbose {
-                    println!("{}", output);
+                    debug!("{}", output);
                 }
             } else {
                 do_link = false;
@@ -384,19 +385,19 @@ fn link_bpf_toolchain(config: &Config) {
         }
     }
     if do_link {
-        let rustup_args = vec!["toolchain", "link", "bpf", toolchain_path.to_str().unwrap()];
+        let rustup_args = vec!["toolchain", "link", "sbf", toolchain_path.to_str().unwrap()];
         let output = spawn(
             &rustup,
             &rustup_args,
             config.generate_child_script_on_failure,
         );
         if config.verbose {
-            println!("{}", output);
+            debug!("{}", output);
         }
     }
 }
 
-fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
+fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
     let program_name = {
         let cdylib_targets = package
             .targets
@@ -412,7 +413,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         match cdylib_targets.len() {
             0 => {
-                println!(
+                warn!(
                     "Note: {} crate does not contain a cdylib target",
                     package.name
                 );
@@ -420,7 +421,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             }
             1 => Some(cdylib_targets[0].replace('-', "_")),
             _ => {
-                eprintln!(
+                error!(
                     "{} crate contains multiple cdylib targets: {:?}",
                     package.name, cdylib_targets
                 );
@@ -431,61 +432,59 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let legacy_program_feature_present = package.name == "solana-sdk";
     let root_package_dir = &package.manifest_path.parent().unwrap_or_else(|| {
-        eprintln!("Unable to get directory of {}", package.manifest_path);
+        error!("Unable to get directory of {}", package.manifest_path);
         exit(1);
     });
 
-    let bpf_out_dir = config
-        .bpf_out_dir
+    let sbf_out_dir = config
+        .sbf_out_dir
         .as_ref()
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory
-        .join("bpfel-unknown-unknown")
-        .join("release");
+    let target_build_directory = target_directory.join("sbf-solana-solana").join("release");
 
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
-        eprintln!(
+        error!(
             "Unable to set current directory to {}: {}",
             root_package_dir, err
         );
         exit(1);
     });
 
-    println!("BPF SDK: {}", config.bpf_sdk.display());
+    info!("SBF SDK: {}", config.sbf_sdk.display());
     if config.no_default_features {
-        println!("No default features");
+        info!("No default features");
     }
     if !config.features.is_empty() {
-        println!("Features: {}", config.features.join(" "));
+        info!("Features: {}", config.features.join(" "));
     }
     if legacy_program_feature_present {
-        println!("Legacy program feature detected");
+        info!("Legacy program feature detected");
     }
-    let bpf_tools_download_file_name = if cfg!(target_os = "windows") {
-        "solana-bpf-tools-windows.tar.bz2"
+    let sbf_tools_download_file_name = if cfg!(target_os = "windows") {
+        "solana-sbf-tools-windows.tar.bz2"
     } else if cfg!(target_os = "macos") {
-        "solana-bpf-tools-osx.tar.bz2"
+        "solana-sbf-tools-osx.tar.bz2"
     } else {
-        "solana-bpf-tools-linux.tar.bz2"
+        "solana-sbf-tools-linux.tar.bz2"
     };
 
     let home_dir = PathBuf::from(env::var("HOME").unwrap_or_else(|err| {
-        eprintln!("Can't get home directory path: {}", err);
+        error!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let package = "bpf-tools";
+    let package = "sbf-tools";
     let target_path = home_dir
         .join(".cache")
         .join("solana")
-        .join(config.bpf_tools_version)
+        .join(config.sbf_tools_version)
         .join(package);
     install_if_missing(
         config,
         package,
         "https://github.com/solana-labs/bpf-tools/releases/download",
-        bpf_tools_download_file_name,
+        sbf_tools_download_file_name,
         &target_path,
     )
     .unwrap_or_else(|err| {
@@ -493,22 +492,22 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         // installation, and it should be removed.
         let target_path_parent = target_path.parent().expect("Invalid package path");
         fs::remove_dir_all(&target_path_parent).unwrap_or_else(|err| {
-            eprintln!(
+            error!(
                 "Failed to remove {} while recovering from installation failure: {}",
                 target_path_parent.to_string_lossy(),
                 err,
             );
             exit(1);
         });
-        eprintln!("Failed to install bpf-tools: {}", err);
+        error!("Failed to install sbf-tools: {}", err);
         exit(1);
     });
-    link_bpf_toolchain(config);
+    link_sbf_toolchain(config);
 
     let llvm_bin = config
-        .bpf_sdk
+        .sbf_sdk
         .join("dependencies")
-        .join("bpf-tools")
+        .join("sbf-tools")
         .join("llvm")
         .join("bin");
     env::set_var("CC", llvm_bin.join("clang"));
@@ -517,7 +516,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
 
     if config.verbose {
-        println!(
+        debug!(
             "RUSTFLAGS={}",
             env::var("RUSTFLAGS").ok().as_deref().unwrap_or("")
         );
@@ -525,10 +524,10 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
-        "+bpf",
+        "+sbf",
         "build",
         "--target",
-        "bpfel-unknown-unknown",
+        "sbf-solana-solana",
         "--release",
     ];
     if config.no_default_features {
@@ -562,18 +561,18 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         config.generate_child_script_on_failure,
     );
     if config.verbose {
-        println!("{}", output);
+        debug!("{}", output);
     }
 
     if let Some(program_name) = program_name {
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
-        let program_dump = bpf_out_dir.join(&format!("{}-dump.txt", program_name));
-        let program_so = bpf_out_dir.join(&format!("{}.so", program_name));
-        let program_keypair = bpf_out_dir.join(&format!("{}-keypair.json", program_name));
+        let program_dump = sbf_out_dir.join(&format!("{}-dump.txt", program_name));
+        let program_so = sbf_out_dir.join(&format!("{}.so", program_name));
+        let program_keypair = sbf_out_dir.join(&format!("{}-keypair.json", program_name));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
             let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {
-                eprintln!(
+                error!(
                     "Unable to get file metadata for {}: {}",
                     prerequisite_file.display(),
                     err
@@ -592,7 +591,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         if !program_keypair.exists() {
             write_keypair_file(&Keypair::new(), &program_keypair).unwrap_or_else(|err| {
-                eprintln!(
+                error!(
                     "Unable to get create {}: {}",
                     program_keypair.display(),
                     err
@@ -614,21 +613,21 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             );
             #[cfg(not(windows))]
             let output = spawn(
-                &config.bpf_sdk.join("scripts").join("strip.sh"),
+                &config.sbf_sdk.join("scripts").join("strip.sh"),
                 &[&program_unstripped_so, &program_so],
                 config.generate_child_script_on_failure,
             );
             if config.verbose {
-                println!("{}", output);
+                debug!("{}", output);
             }
         }
 
         if config.dump && file_older_or_missing(&program_unstripped_so, &program_dump) {
-            let dump_script = config.bpf_sdk.join("scripts").join("dump.sh");
+            let dump_script = config.sbf_sdk.join("scripts").join("dump.sh");
             #[cfg(windows)]
             {
-                eprintln!("Using Bash scripts from within a program is not supported on Windows, skipping `--dump`.");
-                eprintln!(
+                error!("Using Bash scripts from within a program is not supported on Windows, skipping `--dump`.");
+                error!(
                     "Please run \"{} {} {}\" from a Bash-supporting shell, then re-run this command to see the processed program dump.",
                     &dump_script.display(),
                     &program_unstripped_so.display(),
@@ -642,7 +641,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
                     config.generate_child_script_on_failure,
                 );
                 if config.verbose {
-                    println!("{}", output);
+                    debug!("{}", output);
                 }
             }
             postprocess_dump(&program_dump);
@@ -650,17 +649,16 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
         check_undefined_symbols(config, &program_so);
 
-        println!();
-        println!("To deploy this program:");
-        println!("  $ solana program deploy {}", program_so.display());
-        println!("The program address will default to this keypair (override with --program-id):");
-        println!("  {}", program_keypair.display());
+        info!("To deploy this program:");
+        info!("  $ solana program deploy {}", program_so.display());
+        info!("The program address will default to this keypair (override with --program-id):");
+        info!("  {}", program_keypair.display());
     } else if config.dump {
-        println!("Note: --dump is only available for crates with a cdylib target");
+        warn!("Note: --dump is only available for crates with a cdylib target");
     }
 }
 
-fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
+fn build_sbf(config: Config, manifest_path: Option<PathBuf>) {
     let mut metadata_command = cargo_metadata::MetadataCommand::new();
     if let Some(manifest_path) = manifest_path {
         metadata_command.manifest_path(manifest_path);
@@ -670,18 +668,18 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
     }
 
     let metadata = metadata_command.exec().unwrap_or_else(|err| {
-        eprintln!("Failed to obtain package metadata: {}", err);
+        error!("Failed to obtain package metadata: {}", err);
         exit(1);
     });
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
+            build_sbf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
 
-    let all_bpf_packages = metadata
+    let all_sbf_packages = metadata
         .packages
         .iter()
         .filter(|package| {
@@ -696,47 +694,47 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         })
         .collect::<Vec<_>>();
 
-    for package in all_bpf_packages {
-        build_bpf_package(&config, metadata.target_directory.as_ref(), package);
+    for package in all_sbf_packages {
+        build_sbf_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 
 fn main() {
     let default_config = Config::default();
-    let default_bpf_sdk = format!("{}", default_config.bpf_sdk.display());
+    let default_sbf_sdk = format!("{}", default_config.sbf_sdk.display());
 
     let mut args = env::args().collect::<Vec<_>>();
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
     if let Some(arg1) = args.get(1) {
-        if arg1 == "build-bpf" {
+        if arg1 == "build-sbf" {
             args.remove(1);
         }
     }
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let bpf_tools_version = "v1.27";
-    let version = format!("{}\nbpf-tools {}", crate_version!(), bpf_tools_version);
+    let sbf_tools_version = "v1.27";
+    let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
         .version(version.as_str())
         .arg(
-            Arg::new("bpf_out_dir")
-                .env("BPF_OUT_PATH")
-                .long("bpf-out-dir")
+            Arg::new("sbf_out_dir")
+                .env("SBF_OUT_PATH")
+                .long("sbf-out-dir")
                 .value_name("DIRECTORY")
                 .takes_value(true)
-                .help("Place final BPF build artifacts in this directory"),
+                .help("Place final SBF build artifacts in this directory"),
         )
         .arg(
-            Arg::new("bpf_sdk")
-                .env("BPF_SDK_PATH")
-                .long("bpf-sdk")
+            Arg::new("sbf_sdk")
+                .env("SBF_SDK_PATH")
+                .long("sbf-sdk")
                 .value_name("PATH")
                 .takes_value(true)
-                .default_value(&default_bpf_sdk)
-                .help("Path to the Solana BPF SDK"),
+                .default_value(&default_sbf_sdk)
+                .help("Path to the Solana SBF SDK"),
         )
         .arg(
             Arg::new("cargo_args")
@@ -797,7 +795,7 @@ fn main() {
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
-                .help("Build all BPF packages in the workspace"),
+                .help("Build all SBF packages in the workspace"),
         )
         .arg(
             Arg::new("jobs")
@@ -810,31 +808,31 @@ fn main() {
         )
         .get_matches_from(args);
 
-    let bpf_sdk: PathBuf = matches.value_of_t_or_exit("bpf_sdk");
-    let bpf_out_dir: Option<PathBuf> = matches.value_of_t("bpf_out_dir").ok();
+    let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
+    let sbf_out_dir: Option<PathBuf> = matches.value_of_t("sbf_out_dir").ok();
 
     let config = Config {
         cargo_args: matches
             .values_of("cargo_args")
             .map(|vals| vals.collect::<Vec<_>>()),
-        bpf_sdk: fs::canonicalize(&bpf_sdk).unwrap_or_else(|err| {
-            eprintln!(
-                "BPF SDK path does not exist: {}: {}",
-                bpf_sdk.display(),
+        sbf_sdk: fs::canonicalize(&sbf_sdk).unwrap_or_else(|err| {
+            error!(
+                "SBF SDK path does not exist: {}: {}",
+                sbf_sdk.display(),
                 err
             );
             exit(1);
         }),
-        bpf_out_dir: bpf_out_dir.map(|bpf_out_dir| {
-            if bpf_out_dir.is_absolute() {
-                bpf_out_dir
+        sbf_out_dir: sbf_out_dir.map(|sbf_out_dir| {
+            if sbf_out_dir.is_absolute() {
+                sbf_out_dir
             } else {
                 env::current_dir()
                     .expect("Unable to get current working directory")
-                    .join(bpf_out_dir)
+                    .join(sbf_out_dir)
             }
         }),
-        bpf_tools_version,
+        sbf_tools_version,
         dump: matches.is_present("dump"),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
@@ -845,5 +843,5 @@ fn main() {
         jobs: matches.value_of_t("jobs").ok(),
     };
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
-    build_bpf(config, manifest_path);
+    build_sbf(config, manifest_path);
 }

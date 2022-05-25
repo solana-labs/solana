@@ -1,5 +1,5 @@
 [package]
-name = "solana-cargo-test-sbf"
+name = "solana-cargo-test-bpf"
 version = "1.11.0"
 description = "Execute all unit and integration tests after building with the Solana SBF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
@@ -14,5 +14,5 @@ cargo_metadata = "0.14.2"
 clap = { version = "3.1.5", features = ["cargo"] }
 
 [[bin]]
-name = "cargo-test-sbf"
+name = "cargo-test-bpf"
 path = "src/main.rs"

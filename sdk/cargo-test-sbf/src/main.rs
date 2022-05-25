@@ -11,10 +11,10 @@ use {
 };
 
 struct Config {
-    bpf_sdk: Option<String>,
-    bpf_out_dir: Option<String>,
+    sbf_sdk: Option<String>,
+    sbf_out_dir: Option<String>,
     cargo: PathBuf,
-    cargo_build_bpf: PathBuf,
+    cargo_build_sbf: PathBuf,
     extra_cargo_test_args: Vec<String>,
     features: Vec<String>,
     generate_child_script_on_failure: bool,
@@ -30,10 +30,10 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            bpf_sdk: None,
-            bpf_out_dir: None,
+            sbf_sdk: None,
+            sbf_out_dir: None,
             cargo: PathBuf::from("cargo"),
-            cargo_build_bpf: PathBuf::from("cargo-build-bpf"),
+            cargo_build_sbf: PathBuf::from("cargo-build-sbf"),
             extra_cargo_test_args: vec![],
             features: vec![],
             generate_child_script_on_failure: false,
@@ -54,7 +54,7 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("cargo-test-bpf child: {}", program.display());
+    print!("cargo-test-sbf child: {}", program.display());
     for arg in args.iter() {
         print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
     }
@@ -73,9 +73,9 @@ where
         if !generate_child_script_on_failure {
             exit(1);
         }
-        eprintln!("cargo-test-bpf exited on command execution failure");
+        eprintln!("cargo-test-sbf exited on command execution failure");
         let script_name = format!(
-            "cargo-test-bpf-child-script-{}.sh",
+            "cargo-test-sbf-child-script-{}.sh",
             program.file_name().unwrap().to_str().unwrap(),
         );
         let file = File::create(&script_name).unwrap();
@@ -97,11 +97,9 @@ where
     }
 }
 
-fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
-    let set_test_bpf_feature = package.features.contains_key("test-bpf");
-
-    let bpf_out_dir = config
-        .bpf_out_dir
+fn test_sbf_package(config: &Config, target_directory: &Path, package: &cargo_metadata::Package) {
+    let sbf_out_dir = config
+        .sbf_out_dir
         .as_ref()
         .cloned()
         .unwrap_or_else(|| format!("{}", target_directory.join("deploy").display()));
@@ -123,22 +121,22 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         cargo_args.push(jobs);
     }
 
-    let mut build_bpf_args = cargo_args.clone();
-    if let Some(bpf_sdk) = config.bpf_sdk.as_ref() {
-        build_bpf_args.push("--bpf-sdk");
-        build_bpf_args.push(bpf_sdk);
+    let mut build_sbf_args = cargo_args.clone();
+    if let Some(sbf_sdk) = config.sbf_sdk.as_ref() {
+        build_sbf_args.push("--sbf-sdk");
+        build_sbf_args.push(sbf_sdk);
     }
-    build_bpf_args.push("--bpf-out-dir");
-    build_bpf_args.push(&bpf_out_dir);
+    build_sbf_args.push("--sbf-out-dir");
+    build_sbf_args.push(&sbf_out_dir);
 
     spawn(
-        &config.cargo_build_bpf,
-        &build_bpf_args,
+        &config.cargo_build_sbf,
+        &build_sbf_args,
         config.generate_child_script_on_failure,
     );
 
-    // Pass --bpf-out-dir along to the solana-program-test crate
-    env::set_var("BPF_OUT_DIR", bpf_out_dir);
+    // Pass --sbf-out-dir along to the solana-program-test crate
+    env::set_var("SBF_OUT_DIR", sbf_out_dir);
 
     cargo_args.insert(0, "test");
 
@@ -151,9 +149,13 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
         cargo_args.push("--no-run");
     }
 
-    // If the program crate declares the "test-bpf" feature, pass it along to the tests so they can
-    // distinguish between `cargo test` and `cargo test-bpf`
-    if set_test_bpf_feature {
+    // If the program crate declares the "test-sbf" feature, pass it along to the tests so they can
+    // distinguish between `cargo test` and `cargo test-sbf`
+    if package.features.contains_key("test-sbf") {
+        cargo_args.push("--features");
+        cargo_args.push("test-sbf");
+    }
+    if package.features.contains_key("test-bpf") {
         cargo_args.push("--features");
         cargo_args.push("test-bpf");
     }
@@ -167,7 +169,7 @@ fn test_bpf_package(config: &Config, target_directory: &Path, package: &cargo_me
     );
 }
 
-fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
+fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
     let mut metadata_command = cargo_metadata::MetadataCommand::new();
     if let Some(manifest_path) = manifest_path.as_ref() {
         metadata_command.manifest_path(manifest_path);
@@ -183,12 +185,12 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            test_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
+            test_sbf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
 
-    let all_bpf_packages = metadata
+    let all_sbf_packages = metadata
         .packages
         .iter()
         .filter(|package| {
@@ -203,8 +205,8 @@ fn test_bpf(config: Config, manifest_path: Option<PathBuf>) {
         })
         .collect::<Vec<_>>();
 
-    for package in all_bpf_packages {
-        test_bpf_package(&config, metadata.target_directory.as_ref(), package);
+    for package in all_sbf_packages {
+        test_sbf_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 
@@ -213,7 +215,7 @@ fn main() {
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
     if let Some(arg1) = args.get(1) {
-        if arg1 == "test-bpf" {
+        if arg1 == "test-sbf" {
             args.remove(1);
         }
     }
@@ -226,11 +228,11 @@ fn main() {
         .version(crate_version!())
         .trailing_var_arg(true)
         .arg(
-            Arg::new("bpf_sdk")
-                .long("bpf-sdk")
+            Arg::new("sbf_sdk")
+                .long("sbf-sdk")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Path to the Solana BPF SDK"),
+                .help("Path to the Solana SBF SDK"),
         )
         .arg(
             Arg::new("features")
@@ -262,11 +264,11 @@ fn main() {
                 .help("Path to Cargo.toml"),
         )
         .arg(
-            Arg::new("bpf_out_dir")
-                .long("bpf-out-dir")
+            Arg::new("sbf_out_dir")
+                .long("sbf-out-dir")
                 .value_name("DIRECTORY")
                 .takes_value(true)
-                .help("Place final BPF build artifacts in this directory"),
+                .help("Place final SBF build artifacts in this directory"),
         )
         .arg(
             Arg::new("no_run")
@@ -298,7 +300,7 @@ fn main() {
                 .long("workspace")
                 .takes_value(false)
                 .alias("all")
-                .help("Test all BPF packages in the workspace"),
+                .help("Test all SBF packages in the workspace"),
         )
         .arg(
             Arg::new("jobs")
@@ -320,8 +322,8 @@ fn main() {
         .get_matches_from(args);
 
     let mut config = Config {
-        bpf_sdk: matches.value_of_t("bpf_sdk").ok(),
-        bpf_out_dir: matches.value_of_t("bpf_out_dir").ok(),
+        sbf_sdk: matches.value_of_t("sbf_sdk").ok(),
+        sbf_out_dir: matches.value_of_t("sbf_out_dir").ok(),
         extra_cargo_test_args: matches
             .values_of_t("extra_cargo_test_args")
             .ok()
@@ -338,22 +340,22 @@ fn main() {
         ..Config::default()
     };
 
-    if let Ok(cargo_build_bpf) = env::var("CARGO_BUILD_BPF") {
-        config.cargo_build_bpf = PathBuf::from(cargo_build_bpf);
+    if let Ok(cargo_build_sbf) = env::var("CARGO_BUILD_SBF") {
+        config.cargo_build_sbf = PathBuf::from(cargo_build_sbf);
     }
-    if let Ok(cargo_build_bpf) = env::var("CARGO") {
-        config.cargo = PathBuf::from(cargo_build_bpf);
+    if let Ok(cargo_build_sbf) = env::var("CARGO") {
+        config.cargo = PathBuf::from(cargo_build_sbf);
     }
 
     // clap.rs swallows "--" in the case when the user provides it as the first `extra_cargo_test_args`
     //
-    // For example, this command-line "cargo-test-bpf -- --nocapture" results in `extra_cargo_test_args` only
+    // For example, this command-line "cargo-test-sbf -- --nocapture" results in `extra_cargo_test_args` only
     // containing "--nocapture".  This is a problem because `cargo test` will never see the `--`.
     //
-    // Whereas "cargo-test-bpf testname --  --nocapture" correctly produces a `extra_cargo_test_args`
+    // Whereas "cargo-test-sbf testname --  --nocapture" correctly produces a `extra_cargo_test_args`
     // with "testname -- --nocapture".
     //
-    // So if the original cargo-test-bpf arguments contain "--" but `extra_cargo_test_args` does
+    // So if the original cargo-test-sbf arguments contain "--" but `extra_cargo_test_args` does
     // not, then prepend "--".
     //
     if args_contain_dashash && !config.extra_cargo_test_args.contains(&em_dash) {
@@ -361,5 +363,5 @@ fn main() {
     }
 
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
-    test_bpf(config, manifest_path);
+    test_sbf(config, manifest_path);
 }

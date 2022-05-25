@@ -401,6 +401,8 @@ fn default_shared_object_dirs() -> Vec<PathBuf> {
     let mut search_path = vec![];
     if let Ok(bpf_out_dir) = std::env::var("BPF_OUT_DIR") {
         search_path.push(PathBuf::from(bpf_out_dir));
+    } else if let Ok(bpf_out_dir) = std::env::var("SBF_OUT_DIR") {
+        search_path.push(PathBuf::from(bpf_out_dir));
     }
     search_path.push(PathBuf::from("tests/fixtures"));
     if let Ok(dir) = std::env::current_dir() {
@@ -450,7 +452,8 @@ impl Default for ProgramTest {
              solana_runtime::system_instruction_processor=trace,\
              solana_program_test=info",
         );
-        let prefer_bpf = std::env::var("BPF_OUT_DIR").is_ok();
+        let prefer_bpf =
+            std::env::var("BPF_OUT_DIR").is_ok() || std::env::var("SBF_OUT_DIR").is_ok();
 
         Self {
             accounts: vec![],
