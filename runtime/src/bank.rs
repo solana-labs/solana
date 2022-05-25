@@ -4653,6 +4653,12 @@ impl Bank {
             .unwrap();
     }
 
+    /// Set the initial accounts data size
+    /// NOTE: This fn is *ONLY FOR TESTS*
+    pub fn set_accounts_data_size_initial_for_tests(&mut self, amount: u64) {
+        self.accounts_data_size_initial = amount;
+    }
+
     fn get_num_signatures_in_message(message: &SanitizedMessage) -> u64 {
         let mut num_signatures = u64::from(message.header().num_required_signatures);
         // This next part is really calculating the number of pre-processor
