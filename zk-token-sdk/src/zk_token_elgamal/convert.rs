@@ -10,9 +10,6 @@ impl From<(pod::PedersenCommitment, pod::DecryptHandle)> for pod::ElGamalCiphert
     }
 }
 
-<<<<<<< HEAD
-#[cfg(not(target_arch = "bpf"))]
-=======
 impl From<pod::ElGamalCiphertext> for (pod::PedersenCommitment, pod::DecryptHandle) {
     fn from(ciphertext: pod::ElGamalCiphertext) -> Self {
         let commitment: [u8; 32] = ciphertext.0[..32].try_into().unwrap();
@@ -49,8 +46,7 @@ impl From<PodRistrettoPoint> for pod::DecryptHandle {
     }
 }
 
-#[cfg(not(target_os = "solana"))]
->>>>>>> d33cb2fa5 (zk-token-sdk: implement convert traits for elgamal ciphertexts and ristretto points (#25549))
+#[cfg(not(target_arch = "bpf"))]
 mod target_arch {
     use {
         super::pod,
