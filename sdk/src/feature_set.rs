@@ -408,6 +408,10 @@ pub mod include_account_index_in_rent_error {
     solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
 }
 
+pub mod add_shred_type_to_shred_seed {
+    solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -503,6 +507,7 @@ lazy_static! {
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
+        (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
