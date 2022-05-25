@@ -217,7 +217,7 @@ The public key of the [account](#account) containing a [program](#program).
 
 ## proof of history (PoH)
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each of which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
 
 ## public key (pubkey)
 
