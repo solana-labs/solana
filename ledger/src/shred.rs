@@ -59,9 +59,14 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::Packet,
+<<<<<<< HEAD
     solana_rayon_threadlimit::get_thread_count,
+=======
+    solana_runtime::bank::Bank,
+>>>>>>> cafa85bfb (includes shred-type when computing turbine broadcast seed (#25556))
     solana_sdk::{
         clock::Slot,
+        feature_set,
         hash::{hashv, Hash},
         packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
@@ -606,12 +611,21 @@ impl Shred {
         self.common_header.signature
     }
 
-    pub fn seed(&self, leader_pubkey: Pubkey) -> [u8; 32] {
-        hashv(&[
-            &self.slot().to_le_bytes(),
-            &self.index().to_le_bytes(),
-            &leader_pubkey.to_bytes(),
-        ])
+    pub fn seed(&self, leader_pubkey: Pubkey, root_bank: &Bank) -> [u8; 32] {
+        if add_shred_type_to_shred_seed(self.slot(), root_bank) {
+            hashv(&[
+                &self.slot().to_le_bytes(),
+                &u8::from(self.shred_type()).to_le_bytes(),
+                &self.index().to_le_bytes(),
+                &leader_pubkey.to_bytes(),
+            ])
+        } else {
+            hashv(&[
+                &self.slot().to_le_bytes(),
+                &self.index().to_le_bytes(),
+                &leader_pubkey.to_bytes(),
+            ])
+        }
         .to_bytes()
     }
 
@@ -1198,6 +1212,21 @@ pub fn verify_test_data_shred(
         assert!(shred.data_complete());
     } else {
         assert!(!shred.data_complete());
+    }
+}
+
+fn add_shred_type_to_shred_seed(shred_slot: Slot, bank: &Bank) -> bool {
+    let feature_slot = bank
+        .feature_set
+        .activated_slot(&feature_set::add_shred_type_to_shred_seed::id());
+    match feature_slot {
+        None => false,
+        Some(feature_slot) => {
+            let epoch_schedule = bank.epoch_schedule();
+            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
+            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
+            feature_epoch < shred_epoch
+        }
     }
 }
 
