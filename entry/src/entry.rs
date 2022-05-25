@@ -501,7 +501,7 @@ pub fn start_verify_transactions(
                     // We use set_len here instead of resize(vec_size, Packet::default()), to save
                     // memory bandwidth and avoid writing a large amount of data that will be overwritten
                     // soon afterwards. As well, Packet::default() actually leaves the packet data
-                    // uninitialized anyway, so the initilization would simply write junk into
+                    // uninitialized, so the initialization would simply write junk into
                     // the vector anyway.
                     unsafe {
                         packet_batch.set_len(vec_size);
