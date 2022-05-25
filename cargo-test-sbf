@@ -2,13 +2,13 @@
 
 here=$(dirname "$0")
 
-maybe_bpf_sdk="--bpf-sdk $here/sdk/bpf"
+maybe_sbf_sdk="--sbf-sdk $here/sdk/bpf"
 for a in "$@"; do
-  if [[ $a = --bpf-sdk ]]; then
-    maybe_bpf_sdk=
+  if [[ $a = --sbf-sdk ]]; then
+    maybe_sbf_sdk=
   fi
 done
 
-export CARGO_BUILD_BPF="$here"/cargo-build-bpf
+export CARGO_BUILD_SBF="$here"/cargo-build-sbf
 set -x
-exec "$here"/cargo run --manifest-path "$here"/sdk/cargo-test-bpf/Cargo.toml -- $maybe_bpf_sdk "$@"
+exec "$here"/cargo run --manifest-path "$here"/sdk/cargo-test-sbf/Cargo.toml -- $maybe_sbf_sdk "$@"
