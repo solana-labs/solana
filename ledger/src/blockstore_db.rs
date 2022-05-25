@@ -580,6 +580,14 @@ impl Rocks {
             Err(e) => Err(BlockstoreError::RocksDb(e)),
         }
     }
+
+    fn drop_cf(path: &Path, cf_name: &str) -> Result<()> {
+        let mut options = Options::default();
+        options.set_disable_auto_compactions(true);
+        let mut db = DB::open(&options, path)?;
+        db.drop_cf(cf_name)?;
+        Ok(())
+    }
 }
 
 pub trait Column {
@@ -1223,6 +1231,10 @@ impl Database {
         Rocks::destroy(path)?;
 
         Ok(())
+    }
+
+    pub fn drop_cf(path: &Path, cf_name: &str) -> Result<()> {
+        Rocks::drop_cf(path, cf_name)
     }
 
     pub fn get<C>(&self, key: C::Index) -> Result<Option<C::Type>>

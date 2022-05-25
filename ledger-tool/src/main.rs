@@ -1772,6 +1772,19 @@ fn main() {
                 )
         )
         .subcommand(
+            SubCommand::with_name("drop-cf")
+                .about("Drop column family.")
+                .arg(
+                    Arg::with_name("cf_name")
+                        .long("cf-name")
+                        .value_name("COLUMN FAMILY")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Column family name to drop")
+                )
+
+        )
+        .subcommand(
             SubCommand::with_name("repair-roots")
                 .about("Traverses the AncestorIterator backward from a last known root \
                         to restore missing roots to the Root column")
@@ -3404,6 +3417,16 @@ fn main() {
                         info!("Purging dead slot {}", dead_slot);
                         purge_from_blockstore(dead_slot, dead_slot);
                     }
+                }
+            }
+            ("drop-cf", Some(arg_matches)) => {
+                let cf_name = value_t_or_exit!(arg_matches, "cf_name", String);
+                if let Err(e) = Blockstore::drop_cf(&ledger_path, &cf_name) {
+                    eprintln!(
+                        "Failed to drop column family from {:?}: {:?}",
+                        &ledger_path, &e
+                    );
+                    exit(1);
                 }
             }
             ("list-roots", Some(arg_matches)) => {

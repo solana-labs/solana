@@ -3270,6 +3270,12 @@ impl Blockstore {
         );
         Ok(())
     }
+
+    pub fn drop_cf(ledger_path: &Path, cf_name: &str) -> Result<()> {
+        let blockstore_path =
+            ledger_path.join(Self::blockstore_directory(&ShredStorageType::RocksLevel));
+        Database::drop_cf(&blockstore_path, cf_name)
+    }
 }
 
 // Update the `completed_data_indexes` with a new shred `new_shred_index`. If a
