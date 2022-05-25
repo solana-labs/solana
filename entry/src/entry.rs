@@ -35,10 +35,7 @@ use {
     std::{
         cmp,
         ffi::OsStr,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc, Mutex, Once,
-        },
+        sync::{Arc, Mutex, Once},
         thread::{self, JoinHandle},
         time::Instant,
     },
@@ -491,13 +488,11 @@ pub fn start_verify_transactions(
                 });
             }
 
-            let total_packets = AtomicUsize::new(0);
             let mut packet_batches = entry_txs
                 .par_iter()
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
-                    total_packets.fetch_add(vec_size, Ordering::Relaxed);
                     let mut packet_batch = PacketBatch::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
@@ -529,6 +524,7 @@ pub fn start_verify_transactions(
 
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
+            let num_packets = entry_txs.len();
             let gpu_verify_thread = thread::spawn(move || {
                 let mut verify_time = Measure::start("sigverify");
                 sigverify::ed25519_verify(
@@ -536,7 +532,7 @@ pub fn start_verify_transactions(
                     &tx_offset_recycler,
                     &out_recycler,
                     false,
-                    total_packets.load(Ordering::Relaxed),
+                    num_packets,
                 );
                 let verified = packet_batches
                     .iter()
