@@ -133,7 +133,7 @@ impl MessageProcessor {
                 let index_in_transaction = *index_in_transaction as usize;
                 instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
-                    index_in_caller: program_indices.len().saturating_add(index_in_transaction),
+                    index_in_caller: index_in_transaction,
                     index_in_callee,
                     is_signer: message.is_signer(index_in_transaction),
                     is_writable: message.is_writable(index_in_transaction),
