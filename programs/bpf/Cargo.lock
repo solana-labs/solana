@@ -4811,19 +4811,10 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
-<<<<<<< HEAD
  "log 0.4.14",
- "num-derive",
- "num-traits",
- "num_cpus",
- "prost 0.10.1",
-=======
- "log",
- "lru",
  "num_cpus",
  "num_enum",
- "prost",
->>>>>>> 92ad76773 (simplifies Serialize/Deserialize implementations for ShredType (#24601))
+ "prost 0.10.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
