@@ -1,6 +1,8 @@
+#![cfg(target_os = "solana")]
+
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, msg, program::invoke,
-    program_error::ProgramError, pubkey::Pubkey, system_instruction,
+    program_error::ProgramError, pubkey::Pubkey, syscalls::sol_invoke_signed_c, system_instruction,
 };
 
 #[derive(Debug)]
@@ -51,16 +53,6 @@ struct SolSignerSeedC {
 struct SolSignerSeedsC {
     addr: u64,
     len: u64,
-}
-
-extern "C" {
-    fn sol_invoke_signed_c(
-        instruction_addr: *const SolInstruction,
-        account_infos_addr: *const SolAccountInfo,
-        account_infos_len: u64,
-        signers_seeds_addr: *const SolSignerSeedsC,
-        signers_seeds_len: u64,
-    ) -> u64;
 }
 
 const READONLY_ACCOUNTS: &[SolAccountInfo] = &[
@@ -143,10 +135,10 @@ fn process_instruction(
                 check!(
                     0,
                     sol_invoke_signed_c(
-                        &instruction as *const _,
-                        READONLY_ACCOUNTS.as_ptr(),
+                        &instruction as *const _ as *const _,
+                        READONLY_ACCOUNTS.as_ptr() as *const _,
                         READONLY_ACCOUNTS.len() as u64,
-                        std::ptr::null::<SolSignerSeedsC>(),
+                        std::ptr::null(),
                         0,
                     )
                 );
@@ -178,10 +170,10 @@ fn process_instruction(
                 check!(
                     0,
                     sol_invoke_signed_c(
-                        &instruction as *const _,
-                        new_accounts.as_ptr(),
+                        &instruction as *const _ as *const _,
+                        new_accounts.as_ptr() as *const _,
                         new_accounts.len() as u64,
-                        std::ptr::null::<SolSignerSeedsC>(),
+                        std::ptr::null(),
                         0,
                     )
                 );
