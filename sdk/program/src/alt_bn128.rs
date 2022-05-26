@@ -559,7 +559,6 @@ fn alt_bn128_addition_test() {
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
 
     test_cases.iter().for_each(|test| {
-        println!("Running test {}", &test.name);
         let input = array_bytes::hex2bytes_unchecked(&test.input);
         let result = alt_bn128_addition(&input);
         assert!(result.is_ok());
@@ -698,7 +697,6 @@ fn alt_bn128_multiplication_test() {
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
 
     test_cases.iter().for_each(|test| {
-        println!("Running test {}", &test.name);
         let input = array_bytes::hex2bytes_unchecked(&test.input);
         let result = alt_bn128_multiplication(&input);
         assert!(result.is_ok());
@@ -813,7 +811,6 @@ fn alt_bn128_pairing_test() {
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
 
     test_cases.iter().for_each(|test| {
-        println!("Running test {}", &test.name);
         let input = array_bytes::hex2bytes_unchecked(&test.input);
         let result = alt_bn128_pairing(&input);
         assert!(result.is_ok());
