@@ -485,17 +485,23 @@ impl Deduper {
         }
     }
 
+    /// Compute hash from packet data, returns (hash, bin_pos).
+    fn compute_hash(&self, packet: &Packet) -> (u64, usize) {
+        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
+        hasher.write(packet.data());
+        let h = hasher.finish();
+        let len = self.filter.len();
+        let pos = (usize::try_from(h).unwrap()).wrapping_rem(len);
+        (h, pos)
+    }
+
     // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
     fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
         if packet.meta.discard() {
             return 1;
         }
-        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(packet.data());
-        let hash = hasher.finish();
-        let len = self.filter.len();
-        let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
+        let (hash, pos) = self.compute_hash(packet);
         // saturate each position with or
         let prev = self.filter[pos].fetch_or(hash, Ordering::Relaxed);
         if prev == u64::MAX {
