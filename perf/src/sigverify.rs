@@ -124,6 +124,12 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
     let packet_offsets = get_packet_offsets(packet, 0, reject_non_vote);
     let mut sig_start = packet_offsets.sig_start as usize;
     let mut pubkey_start = packet_offsets.pubkey_start as usize;
+    let mut pubkey_end = pubkey_start.saturating_add(size_of::<Pubkey>());
+    println!(
+        "pubkey: {:?}, pubkey_start: {}",
+        Pubkey::new(&packet.data[pubkey_start..pubkey_end]).to_string(),
+        pubkey_start
+    );
     let msg_start = packet_offsets.msg_start as usize;
 
     if packet_offsets.sig_len == 0 {

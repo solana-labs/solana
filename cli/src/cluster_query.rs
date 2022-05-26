@@ -1387,6 +1387,7 @@ pub fn process_ping(
     print_timestamp: bool,
     compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
+    println!("fee_payer {}", &config.signers[0].pubkey());
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
         let _ = signal_sender.send(());
