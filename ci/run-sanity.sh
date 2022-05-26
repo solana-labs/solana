@@ -22,11 +22,13 @@ while [[ ! -f config/run/init-completed ]]; do
 done
 
 snapshot_slot=1
+latest_slot=0
 
 # wait a bit longer than snapshot_slot
-while [[ $($solana_cli --url http://localhost:8899 slot --commitment processed) -le $((snapshot_slot + 1)) ]]; do
+while [[ $latest_slot -le $((snapshot_slot + 1)) ]]; do
   sleep 1
   echo "Checking slot"
+  latest_slot=$($solana_cli --url http://localhost:8899 slot --commitment processed)
 done
 
 $solana_validator --ledger config/ledger exit --force || true
@@ -35,4 +37,6 @@ wait $pid
 
 $solana_ledger_tool create-snapshot --ledger config/ledger "$snapshot_slot" config/snapshot-ledger
 cp config/ledger/genesis.tar.bz2 config/snapshot-ledger
+$solana_ledger_tool copy --ledger config/ledger \
+  --target-db config/snapshot-ledger --starting-slot "$snapshot_slot" --ending-slot "$latest_slot"
 $solana_ledger_tool verify --ledger config/snapshot-ledger
