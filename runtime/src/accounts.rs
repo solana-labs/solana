@@ -252,7 +252,7 @@ impl Accounts {
         } else {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut feepayer_loaded = false;
+            let mut validated_fee_payer = false;
             let mut tx_rent: TransactionRent = 0;
             let account_keys = message.account_keys();
             let mut accounts = Vec::with_capacity(account_keys.len());
@@ -263,6 +263,7 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 } else {
+                    #[allow(clippy::collapsible_else_if)]
                     if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
@@ -293,6 +294,23 @@ impl Accounts {
                                 })
                                 .unwrap_or_default()
                         };
+
+                        if !validated_fee_payer {
+                            if i != 0 {
+                                warn!("Payer index should be 0! {:?}", tx);
+                            }
+
+                            Self::validate_fee_payer(
+                                &mut accounts,
+                                i,
+                                error_counters,
+                                rent_collector,
+                                feature_set,
+                                fee,
+                            )?;
+
+                            validated_fee_payer = true;
+                        }
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
@@ -326,25 +344,6 @@ impl Accounts {
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        // check fee payer balance and bail out loading rest of accounts early if
-                        // balance too low
-                        if !feepayer_loaded {
-                            if i != 0 {
-                                warn!("Payer index should be 0! {:?}", tx);
-                            }
-
-                            Self::check_fee_payer_balance(
-                                &mut accounts,
-                                i,
-                                error_counters,
-                                rent_collector,
-                                feature_set,
-                                fee,
-                            )?;
-
-                            feepayer_loaded = true;
-                        }
-
                         tx_rent += rent;
                         rent_debits.insert(key, rent, account.lamports());
 
@@ -361,7 +360,7 @@ impl Accounts {
             // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
-            if feepayer_loaded {
+            if validated_fee_payer {
                 let program_indices = message
                     .instructions()
                     .iter()
@@ -388,7 +387,7 @@ impl Accounts {
         }
     }
 
-    fn check_fee_payer_balance(
+    fn validate_fee_payer(
         accounts: &mut [(Pubkey, AccountSharedData)],
         payer_index: usize,
         error_counters: &mut TransactionErrorMetrics,
