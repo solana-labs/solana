@@ -1,6 +1,7 @@
 use {
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
+    itertools::Itertools,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     quinn::{Endpoint, EndpointConfig, IdleTimeout, IncomingUniStreams, ServerConfig, VarInt},
@@ -266,24 +267,30 @@ struct ConnectionTable {
 // Return number pruned
 impl ConnectionTable {
     fn prune_oldest(&mut self, max_size: usize) -> usize {
+        if self.total_size <= max_size {
+            return 0;
+        }
+
         let mut num_pruned = 0;
-        while self.total_size > max_size {
-            let mut oldest = std::u64::MAX;
-            let mut oldest_ip = None;
-            for (ip, connections) in self.table.iter() {
-                for entry in connections {
-                    let last_update = entry.last_update();
-                    if last_update < oldest {
-                        oldest = last_update;
-                        oldest_ip = Some(*ip);
-                    }
-                }
+
+        let r = self.table.iter().map(|e| {
+            (
+                e.1.iter().map(|x| x.last_update()).min(), // update_time
+                e.0.to_owned(),                            // ip
+            )
+        });
+
+        for v in r.sorted_by(|x, y| x.partial_cmp(y).unwrap()) {
+            if self.total_size <= max_size {
+                break;
             }
-            if let Some(removed) = self.table.remove(&oldest_ip.unwrap()) {
+
+            if let Some(removed) = self.table.remove(&v.1) {
                 self.total_size -= removed.len();
                 num_pruned += removed.len();
             }
         }
+
         num_pruned
     }
 
