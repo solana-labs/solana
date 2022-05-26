@@ -15,6 +15,7 @@ import { pickClusterParams, useQuery } from "utils/url";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
 import { parseProgramLogs } from "utils/program-logs";
+import { SolBalance } from "utils";
 
 const PAGE_SIZE = 25;
 
@@ -33,10 +34,11 @@ const useQueryAccountFilter = (query: URLSearchParams): PublicKey | null => {
   return null;
 };
 
-type SortMode = "index" | "compute";
+type SortMode = "index" | "compute" | "fee";
 const useQuerySort = (query: URLSearchParams): SortMode => {
   const sort = query.get("sort");
   if (sort === "compute") return "compute";
+  if (sort === "fee") return "fee";
   return "index";
 };
 
@@ -151,6 +153,8 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
 
     if (sortMode === "compute" && showComputeUnits) {
       filteredTxs.sort((a, b) => b.computeUnits! - a.computeUnits!);
+    } else if (sortMode === "fee") {
+      filteredTxs.sort((a, b) => (b.meta?.fee || 0) - (a.meta?.fee || 0));
     }
 
     return [filteredTxs, showComputeUnits];
@@ -217,9 +221,18 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                 </th>
                 <th className="text-muted">Result</th>
                 <th className="text-muted">Transaction Signature</th>
+                <th
+                  className="text-muted text-end c-pointer"
+                  onClick={() => {
+                    query.set("sort", "fee");
+                    history.push(pickClusterParams(location, query));
+                  }}
+                >
+                  Fee
+                </th>
                 {showComputeUnits && (
                   <th
-                    className="text-muted c-pointer"
+                    className="text-muted text-end c-pointer"
                     onClick={() => {
                       query.set("sort", "compute");
                       history.push(pickClusterParams(location, query));
@@ -267,6 +280,15 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                     </td>
 
                     <td>{signature}</td>
+
+                    <td className="text-end">
+                      {tx.meta !== null ? (
+                        <SolBalance lamports={-tx.meta.fee} />
+                      ) : (
+                        "Unknown"
+                      )}
+                    </td>
+
                     {showComputeUnits && (
                       <td className="text-end">
                         {tx.logTruncated && ">"}
