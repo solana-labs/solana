@@ -1922,7 +1922,7 @@ mod tests {
         assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);
     }
 
-    fn slots_to_lockouts(votes: &Vec<Slot>) -> VecDeque<Lockout> {
+    fn slots_to_lockouts(votes: &[Slot]) -> VecDeque<Lockout> {
         let mut lockouts = VecDeque::<Lockout>::from(
             votes
                 .iter()
@@ -1944,6 +1944,8 @@ mod tests {
 
     // Test vote credit updates before and after "one credit per slot" feature is enabled
     #[test]
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::field_reassign_with_default)]
     fn test_vote_state_update_increment_credits() {
         // Each element of test data is:
         // (vote_state_votes: Vec<Slot>,
@@ -2111,7 +2113,7 @@ mod tests {
             assert_eq!(
                 vote_state.process_new_vote_state(
                     vote_state_update_votes.clone(),
-                    vote_state_update_root.clone(),
+                    vote_state_update_root,
                     None,
                     100,
                     slot_hashes.as_slice(),
