@@ -844,12 +844,9 @@ pub mod tests {
 
                             let parallel_reader = reader_ct > 2;
                             let handle = if parallel_reader {
-                                let mut threads = 8;
                                 // Avoid to create more than the number of threads available in the
                                 // current rayon threadpool. Deadlock could happen otherwise.
-                                if threads > rayon::current_num_threads() {
-                                    threads = rayon::current_num_threads();
-                                }
+                                let threads = std::cmp::min(8, rayon::current_num_threads());
                                 Some({
                                     let parallel = (0..threads)
                                         .into_iter()
