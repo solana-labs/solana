@@ -378,22 +378,20 @@ impl<'a> InvokeContext<'a> {
                     continue; // Skip duplicate account
                 }
                 if instruction_account.index_in_transaction
-                    < self.transaction_context.get_number_of_accounts()
+                    >= self.transaction_context.get_number_of_accounts()
                 {
-                    let account = self
-                        .transaction_context
-                        .get_account_at_index(instruction_account.index_in_transaction)?
-                        .borrow()
-                        .clone();
-                    self.pre_accounts.push(PreAccount::new(
-                        self.transaction_context.get_key_of_account_at_index(
-                            instruction_account.index_in_transaction,
-                        )?,
-                        account,
-                    ));
-                    continue;
+                    return Err(InstructionError::MissingAccount);
                 }
-                return Err(InstructionError::MissingAccount);
+                let account = self
+                    .transaction_context
+                    .get_account_at_index(instruction_account.index_in_transaction)?
+                    .borrow()
+                    .clone();
+                self.pre_accounts.push(PreAccount::new(
+                    self.transaction_context
+                        .get_key_of_account_at_index(instruction_account.index_in_transaction)?,
+                    account,
+                ));
             }
         } else {
             let contains = (0..self
@@ -594,9 +592,7 @@ impl<'a> InvokeContext<'a> {
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        'outer_loop: for (index_in_instruction, instruction_account) in
-            instruction_accounts.iter().enumerate()
-        {
+        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
             if index_in_instruction != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
@@ -666,7 +662,7 @@ impl<'a> InvokeContext<'a> {
                                 .adjust_delta_unchecked(data_len_delta);
                         }
 
-                        continue 'outer_loop;
+                        break;
                     }
                 }
             }
