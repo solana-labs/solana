@@ -3218,6 +3218,7 @@ checksum = "c53a5ade47760e8cc4986bdc5e72daeffaaaee64cbc374f9cfe0a00c1cd87b1f"
 dependencies = [
  "serde",
  "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
