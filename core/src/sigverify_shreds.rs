@@ -7,8 +7,7 @@ use {
     },
     crossbeam_channel::Sender,
     solana_ledger::{
-        leader_schedule_cache::LeaderScheduleCache, shred::Shred,
-        sigverify_shreds::verify_shreds_gpu,
+        leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_runtime::bank_forks::BankForks,
@@ -43,7 +42,9 @@ impl ShredSigVerifier {
     fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
         batches
             .iter()
-            .flat_map(|batch| batch.iter().filter_map(Shred::get_slot_from_packet))
+            .flat_map(PacketBatch::iter)
+            .map(shred::layout::get_shred)
+            .filter_map(shred::layout::get_slot)
             .collect()
     }
 }
