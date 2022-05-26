@@ -4083,15 +4083,15 @@ mod tests {
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
         assert!(pings.is_empty());
         assert_eq!(pulls.len(), 2 * MIN_NUM_BLOOM_FILTERS);
-        assert!(pulls
-            .iter()
-            .take(MIN_NUM_BLOOM_FILTERS)
-            .all(|(addr, _)| *addr == other_node.gossip));
-        assert!(pulls
-            .iter()
-            .skip(MIN_NUM_BLOOM_FILTERS)
-            .all(|(addr, _)| *addr == entrypoint.gossip));
-
+        for node in [&other_node, &entrypoint] {
+            assert_eq!(
+                pulls
+                    .iter()
+                    .filter(|(addr, _)| *addr == node.gossip)
+                    .count(),
+                MIN_NUM_BLOOM_FILTERS
+            );
+        }
         // Pull request 3:  `other_node` is present and `entrypoint` was just pulled from.  There should
         // only be one pull request to `other_node`
         let (pings, pulls) = cluster_info.new_pull_requests(&thread_pool, None, &stakes);
