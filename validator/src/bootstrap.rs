@@ -1107,8 +1107,8 @@ mod with_incremental_snapshots {
     ///
     /// The result is a vector of peers with snapshot hashes that:
     /// 1. match a snapshot hash from the known validators
-    /// 2. have the highest full snapshot slot
-    /// 3. have the highest incremental snapshot slot
+    /// 2. have the highest incremental snapshot slot
+    /// 3. if highest incremental snapshot slot is none then have the highest full snapshot slot
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
@@ -1123,10 +1123,13 @@ mod with_incremental_snapshots {
                 &mut peer_snapshot_hashes,
             );
         }
-        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
         );
+        if !peer_snapshot_hashes.is_empty() && peer_snapshot_hashes[0].snapshot_hash.incr.is_none()
+        {
+            retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
+        }
 
         peer_snapshot_hashes
     }
@@ -1422,12 +1425,22 @@ mod with_incremental_snapshots {
 
         // It is a programmer bug if the assert fires!  By the time this function is called, the
         // only remaining `incremental_snapshot_hashes` should all be the same.
-        assert!(
-            peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
-                peer_snapshot_hash.snapshot_hash == final_peer_snapshot_hash.snapshot_hash
-            }),
-            "To safely pick a peer at random, all the snapshot hashes must be the same"
-        );
+        if final_peer_snapshot_hash.snapshot_hash.incr.is_some() {
+            assert!(
+                peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
+                    peer_snapshot_hash.snapshot_hash.incr == final_peer_snapshot_hash.snapshot_hash.incr
+                }),
+                "To safely pick a peer at random, all the incremental snapshot hashes must be the same"
+            );
+        } else {
+            assert!(
+                peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
+                    peer_snapshot_hash.snapshot_hash.full
+                        == final_peer_snapshot_hash.snapshot_hash.full
+                }),
+                "To safely pick a peer at random, all the full snapshot hashes must be the same"
+            );
+        }
 
         trace!("final peer snapshot hash: {:?}", final_peer_snapshot_hash);
         final_peer_snapshot_hash.clone()
