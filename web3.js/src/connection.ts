@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import crossFetch from 'cross-fetch';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
 import {
@@ -28,6 +27,7 @@ import RpcClient from 'jayson/lib/client/browser';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError} from './errors';
+import fetchImpl, {Response} from './fetch-impl';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -959,7 +959,7 @@ function createRpcClient(
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
-  const fetch = customFetch ? customFetch : crossFetch;
+  const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
@@ -2160,7 +2160,10 @@ export type ConfirmedSignatureInfo = {
  */
 export type HttpHeaders = {[header: string]: string};
 
-export type FetchFn = typeof crossFetch;
+/**
+ * The type of the JavaScript `fetch()` API
+ */
+export type FetchFn = typeof fetchImpl;
 
 /**
  * A callback used to augment the outgoing HTTP request
