@@ -81,6 +81,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5d78ce20460b82d3fa150275ed9d55e21064fc7951177baacf86a145c4a4b1f"
 
 [[package]]
+name = "array-bytes"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ad284aeb45c13f2fb4f084de4a420ebf447423bdf9386c0540ce33cb3ef4b8c"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -376,6 +382,17 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+
+[[package]]
+name = "bn-plus"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f90037d4bc5a0f87267ee77f0b9c9035a3edbeafc6552109d765283133cf36ca"
+dependencies = [
+ "byteorder 1.4.3",
+ "rand 0.3.23",
+ "rustc-serialize",
+]
 
 [[package]]
 name = "borsh"
@@ -1065,6 +1082,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "elastic-array-plus"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "562cc8504a01eb20c10fb154abd7c4baeb9beba2329cf85838ee2bd48a468b18"
+
+[[package]]
 name = "elf"
 version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1168,6 +1191,37 @@ dependencies = [
  "tonic 0.6.2",
  "tonic-build 0.6.2",
  "tower-service",
+]
+
+[[package]]
+name = "etcommon-bigint"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8375b615f02fc1ea1aea0a323e11c1084c841bd530a6dc57b9e1da80a502abd"
+dependencies = [
+ "byteorder 1.4.3",
+ "etcommon-hexutil",
+ "etcommon-rlp",
+ "libc",
+ "rand 0.3.23",
+]
+
+[[package]]
+name = "etcommon-hexutil"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b4d1933bf88b806ba2d9189880b1b4ef205e42df9573b65716f2a50818024c"
+
+[[package]]
+name = "etcommon-rlp"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c978ef454cd97da44a3a15d55cc312313be04b9692e39fa4cd3c00401f39bcb"
+dependencies = [
+ "byteorder 1.4.3",
+ "elastic-array-plus",
+ "etcommon-hexutil",
+ "lazy_static",
 ]
 
 [[package]]
@@ -3089,6 +3143,29 @@ dependencies = [
 
 [[package]]
 name = "rand"
+version = "0.3.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64ac302d8f83c0c1974bf758f6b041c6c8ada916fbb44a609158ca8b064cc76c"
+dependencies = [
+ "libc",
+ "rand 0.4.6",
+]
+
+[[package]]
+name = "rand"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552840b97013b1a26992c11eac34bdd778e464601a4c2054b5f0bff7c6761293"
+dependencies = [
+ "fuchsia-cprng",
+ "libc",
+ "rand_core 0.3.1",
+ "rdrand",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "rand"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d71dacdc3c88c1fde3885a3be3fbab9f35724e6ce99467f7d9c5026132184ca"
@@ -3494,6 +3571,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-serialize"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
 
 [[package]]
 name = "rustc_version"
@@ -4056,6 +4139,7 @@ name = "solana-bpf-loader-program"
 version = "1.9.22"
 dependencies = [
  "bincode",
+ "bn-plus",
  "byteorder 1.4.3",
  "libsecp256k1",
  "log 0.4.14",
@@ -5007,10 +5091,12 @@ dependencies = [
 name = "solana-program"
 version = "1.9.22"
 dependencies = [
+ "array-bytes",
  "base64 0.13.0",
  "bincode",
  "bitflags",
  "blake3",
+ "bn-plus",
  "borsh",
  "borsh-derive",
  "bs58",
@@ -5019,6 +5105,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
+ "etcommon-bigint",
  "getrandom 0.1.16",
  "itertools",
  "js-sys",
@@ -5040,6 +5127,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.9.22",
  "solana-logger 1.9.22",
  "solana-sdk-macro 1.9.22",
+ "static_assertions",
  "thiserror",
  "wasm-bindgen",
 ]
