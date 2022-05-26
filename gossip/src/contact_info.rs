@@ -12,7 +12,9 @@ use {
 };
 
 /// Structure representing a node on the network
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize)]
+#[derive(
+    Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, AbiExample, Deserialize, Serialize,
+)]
 pub struct ContactInfo {
     pub id: Pubkey,
     /// gossip address

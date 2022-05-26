@@ -1324,7 +1324,7 @@ impl ClusterInfo {
     fn append_entrypoint_to_pulls(
         &self,
         thread_pool: &ThreadPool,
-        pulls: &mut Vec<(ContactInfo, Vec<CrdsFilter>)>,
+        pulls: &mut HashMap<ContactInfo, Vec<CrdsFilter>>,
     ) {
         const THROTTLE_DELAY: u64 = CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2;
         let entrypoint = {
@@ -1349,17 +1349,16 @@ impl ClusterInfo {
             }
             entrypoint.clone()
         };
-        let filters = match pulls.first() {
-            Some((_, filters)) => filters.clone(),
-            None => {
-                let _st = ScopedTimer::from(&self.stats.entrypoint2);
-                self.gossip
-                    .pull
-                    .build_crds_filters(thread_pool, &self.gossip.crds, MAX_BLOOM_SIZE)
-            }
+        let filters = if pulls.is_empty() {
+            let _st = ScopedTimer::from(&self.stats.entrypoint2);
+            self.gossip
+                .pull
+                .build_crds_filters(thread_pool, &self.gossip.crds, MAX_BLOOM_SIZE)
+        } else {
+            pulls.values().flatten().cloned().collect()
         };
         self.stats.pull_from_entrypoint_count.add_relaxed(1);
-        pulls.push((entrypoint, filters));
+        pulls.insert(entrypoint, filters);
     }
 
     /// Splits an input feed of serializable data into chunks where the sum of
@@ -1424,30 +1423,29 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         let mut pings = Vec::new();
-        let mut pulls: Vec<_> = {
+        let mut pulls = {
             let _st = ScopedTimer::from(&self.stats.new_pull_requests);
-            match self.gossip.new_pull_request(
-                thread_pool,
-                self.keypair().deref(),
-                self.my_shred_version(),
-                now,
-                gossip_validators,
-                stakes,
-                MAX_BLOOM_SIZE,
-                &self.ping_cache,
-                &mut pings,
-                &self.socket_addr_space,
-            ) {
-                Err(_) => Vec::default(),
-                Ok((peer, filters)) => vec![(peer, filters)],
-            }
+            self.gossip
+                .new_pull_request(
+                    thread_pool,
+                    self.keypair().deref(),
+                    self.my_shred_version(),
+                    now,
+                    gossip_validators,
+                    stakes,
+                    MAX_BLOOM_SIZE,
+                    &self.ping_cache,
+                    &mut pings,
+                    &self.socket_addr_space,
+                )
+                .unwrap_or_default()
         };
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
-        let num_requests = pulls.iter().map(|(_, filters)| filters.len() as u64).sum();
+        let num_requests = pulls.values().map(Vec::len).sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
         {
             let _st = ScopedTimer::from(&self.stats.mark_pull_request);
-            for (peer, _) in &pulls {
+            for peer in pulls.keys() {
                 self.gossip.mark_pull_request_creation_time(peer.id, now);
             }
         }
