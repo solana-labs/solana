@@ -161,10 +161,8 @@ impl QuicTpuConnection {
     pub fn base_stats(&self) -> Arc<ClientStats> {
         self.client.stats.clone()
     }
-}
 
-impl TpuConnection for QuicTpuConnection {
-    fn new(tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self {
+    pub fn new(tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self {
         let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
         let client = Arc::new(QuicClient::new(tpu_addr));
 
@@ -173,76 +171,65 @@ impl TpuConnection for QuicTpuConnection {
             connection_stats,
         }
     }
+}
 
+impl TpuConnection for QuicTpuConnection {
     fn tpu_addr(&self) -> &SocketAddr {
         &self.client.addr
     }
 
-    fn send_wire_transaction<T>(
-        &self,
-        wire_transaction: T,
-        stats: &ClientStats,
-    ) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
     where
         T: AsRef<[u8]>,
     {
-        let _guard = RUNTIME.enter();
-        let send_buffer =
-            self.client
-                .send_buffer(wire_transaction, stats, self.connection_stats.clone());
-        RUNTIME.block_on(send_buffer)?;
-        Ok(())
-    }
-
-    fn send_wire_transaction_batch<T>(
-        &self,
-        buffers: &[T],
-        stats: &ClientStats,
-    ) -> TransportResult<()>
-    where
-        T: AsRef<[u8]>,
-    {
+        let stats = ClientStats::default();
+        let len = buffers.len();
         let _guard = RUNTIME.enter();
         let send_batch = self
             .client
-            .send_batch(buffers, stats, self.connection_stats.clone());
-        RUNTIME.block_on(send_batch)?;
+            .send_batch(buffers, &stats, self.connection_stats.clone());
+        let res = RUNTIME.block_on(send_batch);
+        self.connection_stats
+            .add_client_stats(&stats, len, res.is_ok());
+        res?;
         Ok(())
     }
 
-    fn send_wire_transaction_async(
-        &self,
-        wire_transaction: Vec<u8>,
-        stats: Arc<ClientStats>,
-    ) -> TransportResult<()> {
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+        let stats = Arc::new(ClientStats::default());
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         let connection_stats = self.connection_stats.clone();
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
-            let send_buffer = client.send_buffer(wire_transaction, &stats, connection_stats);
+            let send_buffer =
+                client.send_buffer(wire_transaction, &stats, connection_stats.clone());
             if let Err(e) = send_buffer.await {
                 warn!("Failed to send transaction async to {:?}", e);
                 datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+                connection_stats.add_client_stats(&stats, 1, false);
+            } else {
+                connection_stats.add_client_stats(&stats, 1, true);
             }
         });
         Ok(())
     }
 
-    fn send_wire_transaction_batch_async(
-        &self,
-        buffers: Vec<Vec<u8>>,
-        stats: Arc<ClientStats>,
-    ) -> TransportResult<()> {
+    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+        let stats = Arc::new(ClientStats::default());
         let _guard = RUNTIME.enter();
         let client = self.client.clone();
         let connection_stats = self.connection_stats.clone();
+        let len = buffers.len();
         //drop and detach the task
         let _ = RUNTIME.spawn(async move {
-            let send_batch = client.send_batch(&buffers, &stats, connection_stats);
+            let send_batch = client.send_batch(&buffers, &stats, connection_stats.clone());
             if let Err(e) = send_batch.await {
                 warn!("Failed to send transaction batch async to {:?}", e);
                 datapoint_warn!("send-wire-batch-async", ("failure", 1, i64),);
+                connection_stats.add_client_stats(&stats, len, false);
+            } else {
+                connection_stats.add_client_stats(&stats, len, true);
             }
         });
         Ok(())

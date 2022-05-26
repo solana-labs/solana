@@ -2,7 +2,7 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::connection_cache,
+    solana_client::{connection_cache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -693,7 +693,8 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
     ) -> Result<(), TransportError> {
-        connection_cache::send_wire_transaction_async(wire_transaction.to_vec(), tpu_address)
+        let conn = connection_cache::get_connection(tpu_address);
+        conn.send_wire_transaction_async(wire_transaction.to_vec())
     }
 
     fn send_transactions_with_metrics(
@@ -701,7 +702,8 @@ impl SendTransactionService {
         wire_transactions: &[&[u8]],
     ) -> Result<(), TransportError> {
         let wire_transactions = wire_transactions.iter().map(|t| t.to_vec()).collect();
-        connection_cache::send_wire_transaction_batch_async(wire_transactions, tpu_address)
+        let conn = connection_cache::get_connection(tpu_address);
+        conn.send_wire_transaction_batch_async(wire_transactions)
     }
 
     fn send_transactions(
