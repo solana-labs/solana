@@ -5153,6 +5153,29 @@ impl Bank {
         self.collect_rent_eagerly(true);
     }
 
+    pub fn get_rent_collection_accounts_between_slots(
+        &self,
+        starting_slot: Slot,
+        ending_slot: Slot,
+    ) -> HashSet<Pubkey> {
+        let partitions = if !self.use_fixed_collection_cycle() {
+            self.variable_cycle_partitions_between_slots(starting_slot, ending_slot)
+        } else {
+            self.fixed_cycle_partitions_between_slots(starting_slot, ending_slot)
+        };
+
+        partitions
+            .into_iter()
+            .flat_map(|partition| {
+                let subrange = Self::pubkey_range_from_partition(partition);
+                self.accounts()
+                    .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    .into_iter()
+                    .map(|(pubkey, ..)| pubkey)
+            })
+            .collect()
+    }
+
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;

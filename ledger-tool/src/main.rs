@@ -932,8 +932,15 @@ fn minimize_bank_for_snapshot(
         .get_accounts_used_in_range(snapshot_slot, ending_slot)
         .unwrap();
 
-    for (pubkey, _) in bank.vote_accounts().iter() {
+    let rent_collected_accounts =
+        bank.get_rent_collection_accounts_between_slots(snapshot_slot, ending_slot);
+    minimized_account_set.extend(rent_collected_accounts);
+
+    for (pubkey, (_stake, account)) in bank.vote_accounts().iter() {
         minimized_account_set.insert(*pubkey);
+        if let Ok(vote_state) = account.vote_state().as_ref() {
+            minimized_account_set.insert(vote_state.node_pubkey);
+        }
     }
 
     for (pubkey, _) in bank
