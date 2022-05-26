@@ -3253,8 +3253,9 @@ impl AccountsDb {
         &self,
         snapshot_slot: Slot,
         minimized_account_set: &HashSet<Pubkey>,
-        minimized_slot_set: &HashSet<Slot>,
     ) {
+        let minimized_slot_set = self.get_minimized_slot_set(minimized_account_set);
+
         let mut dead_slots = Vec::new();
         let mut dead_storages = Vec::new();
         for storages in self.get_snapshot_storages(snapshot_slot, None, None).0 {
@@ -3275,6 +3276,22 @@ impl AccountsDb {
             true,
         );
         self.drop_or_recycle_stores(dead_storages);
+    }
+
+    fn get_minimized_slot_set(&self, minimized_account_set: &HashSet<Pubkey>) -> HashSet<Slot> {
+        let mut minimized_slot_set = HashSet::new();
+        minimized_slot_set.par_extend(minimized_account_set.par_iter().flat_map(|pubkey| {
+            if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                read_entry
+                    .slot_list()
+                    .iter()
+                    .map(|(slot, _)| *slot)
+                    .collect()
+            } else {
+                HashSet::new()
+            }
+        }));
+        minimized_slot_set
     }
 
     fn filter_storages(
