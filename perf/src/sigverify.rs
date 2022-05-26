@@ -488,7 +488,7 @@ impl Deduper {
     /// Compute hash from packet data, returns (hash, bin_pos).
     fn compute_hash(&self, packet: &Packet) -> (u64, usize) {
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(&packet.data[0..packet.meta.size]);
+        hasher.write(packet.data());
         let h = hasher.finish();
         let len = self.filter.len();
         let pos = (usize::try_from(h).unwrap()).wrapping_rem(len);
