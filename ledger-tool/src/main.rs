@@ -985,32 +985,25 @@ fn minimize_bank_for_snapshot(
         .collect();
     minimized_account_set.extend(owner_accounts.into_iter());
 
-    let program_data_accounts: HashSet<_> = minimized_account_set
+    let programdata_accounts: HashSet<_> = minimized_account_set
         .iter()
         .filter_map(|pubkey| {
-            if let Some(account) = bank.get_account(pubkey) {
-                if account.executable() {
-                    if bpf_loader_upgradeable::check_id(account.owner()) {
-                        if let Ok(UpgradeableLoaderState::Program {
-                            programdata_address,
-                        }) = account.state()
-                        {
-                            Some(programdata_address)
-                        } else {
-                            None
-                        }
+            bank.get_account(pubkey)
+                .filter(|account| account.executable())
+                .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
+                .and_then(|account| {
+                    if let Ok(UpgradeableLoaderState::Program {
+                        programdata_address,
+                    }) = account.state()
+                    {
+                        Some(programdata_address)
                     } else {
                         None
                     }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+                })
         })
         .collect();
-    minimized_account_set.extend(program_data_accounts.into_iter());
+    minimized_account_set.extend(programdata_accounts);
 
     info!(
         "Generated minimized account set with {} accounts for slots {}..={}",
