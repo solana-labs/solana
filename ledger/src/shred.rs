@@ -606,7 +606,7 @@ impl Shred {
         if add_shred_type_to_shred_seed(self.slot(), root_bank) {
             hashv(&[
                 &self.slot().to_le_bytes(),
-                &(self.shred_type() as u8).to_le_bytes(),
+                &u8::from(self.shred_type()).to_le_bytes(),
                 &self.index().to_le_bytes(),
                 &leader_pubkey.to_bytes(),
             ])
@@ -2072,6 +2072,7 @@ pub mod tests {
         assert_matches!(bincode::deserialize::<ShredType>(&[1u8]), Err(_));
         // data shred
         assert_eq!(ShredType::Data as u8, 0b1010_0101);
+        assert_eq!(u8::from(ShredType::Data), 0b1010_0101);
         assert_eq!(ShredType::try_from(0b1010_0101), Ok(ShredType::Data));
         let buf = bincode::serialize(&ShredType::Data).unwrap();
         assert_eq!(buf, vec![0b1010_0101]);
@@ -2081,6 +2082,7 @@ pub mod tests {
         );
         // coding shred
         assert_eq!(ShredType::Code as u8, 0b0101_1010);
+        assert_eq!(u8::from(ShredType::Code), 0b0101_1010);
         assert_eq!(ShredType::try_from(0b0101_1010), Ok(ShredType::Code));
         let buf = bincode::serialize(&ShredType::Code).unwrap();
         assert_eq!(buf, vec![0b0101_1010]);

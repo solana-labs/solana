@@ -4665,12 +4665,8 @@ dependencies = [
  "log",
  "lru",
  "num_cpus",
-<<<<<<< HEAD
- "prost 0.10.1",
-=======
  "num_enum",
- "prost",
->>>>>>> 92ad76773 (simplifies Serialize/Deserialize implementations for ShredType (#24601))
+ "prost 0.10.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
