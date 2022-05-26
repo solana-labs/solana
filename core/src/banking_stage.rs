@@ -17,7 +17,7 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_client::connection_cache::send_wire_transaction_batch_async,
+    solana_client::{connection_cache::get_connection, tpu_connection::TpuConnection},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::blockstore_processor::TransactionStatusSender,
@@ -525,7 +525,8 @@ impl BankingStage {
 
             let mut measure = Measure::start("banking_stage-forward-us");
 
-            let res = send_wire_transaction_batch_async(packet_vec, tpu_forwards);
+            let conn = get_connection(tpu_forwards);
+            let res = conn.send_wire_transaction_batch_async(packet_vec);
 
             measure.stop();
             inc_new_counter_info!(
