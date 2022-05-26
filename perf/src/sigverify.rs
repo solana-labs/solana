@@ -152,13 +152,6 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
             return;
         }
 
-        // Check for tracer pubkey
-        if !packet.meta.is_tracer_packet()
-            && &packet.data()[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
-        {
-            packet.meta.flags |= PacketFlags::TRACER_PACKET;
-        }
-
         pubkey_start = pubkey_end;
         sig_start = sig_end;
     }
@@ -306,6 +299,28 @@ fn do_get_packet_offsets(
         u32::try_from(pubkey_start)?,
         u32::try_from(pubkey_len)?,
     ))
+}
+
+pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
+    let unsanitized_packet_offsets = do_get_packet_offsets(packet, 0);
+    if let Ok(packet_offsets) = unsanitized_packet_offsets {
+        if !verify_packet_offsets_against_packet(&packet_offsets, packet) {
+            return false;
+        }
+
+        // Check if the first key is the tracer key
+        let mut first_pubkey_start = packet_offsets.pubkey_start as usize;
+        let first_pubkey_end = first_pubkey_start.saturating_add(size_of::<Pubkey>());
+
+        // Check for tracer pubkey
+        if &packet.data[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref() {
+            packet.meta.flags |= PacketFlags::TRACER_PACKET;
+        }
+    } else {
+        // Should we mark these transactions as dropped, current code in `get_packet_offsets()`
+        // just returning all zeroed `PacketOffsets`
+    }
+    true
 }
 
 fn get_packet_offsets(
