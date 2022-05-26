@@ -1,6 +1,5 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    lazy_static::lazy_static,
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing::timestamp,
@@ -148,7 +147,7 @@ impl FindPacketSenderStakeStage {
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
         batches
-            .into_iter()
+            .iter_mut()
             .flat_map(|batch| batch.iter_mut())
             .for_each(|packet| {
                 packet.meta.sender_stake = ip_to_stake
