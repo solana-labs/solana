@@ -1012,19 +1012,27 @@ fn minimize_bank_for_snapshot(
         ending_slot
     );
 
-    let mut minimized_slot_set = HashSet::new();
-    minimized_account_set.iter().for_each(|pubkey| {
-        if let Some(read_entry) = bank
-            .accounts()
-            .accounts_db
-            .accounts_index
-            .get_account_read_entry(pubkey)
-        {
-            for (slot, _) in read_entry.slot_list() {
-                minimized_slot_set.insert(*slot);
+    fn slot_storages_contain_needed_account(
+        storages: &Vec<Arc<AccountStorageEntry>>,
+        minimized_account_set: &HashSet<Pubkey>,
+    ) -> bool {
+        for storage in storages {
+            for account in storage.all_accounts() {
+                if minimized_account_set.contains(&account.meta.pubkey) {
+                    return true;
+                }
             }
         }
-    });
+
+        false
+    }
+
+    let mut minimized_slot_set = HashSet::new();
+    for storages in bank.get_snapshot_storages(None) {
+        if slot_storages_contain_needed_account(&storages, &minimized_account_set) {
+            minimized_slot_set.insert(storages.first().unwrap().slot());
+        }
+    }
 
     bank.accounts().accounts_db.minimize_accounts_db(
         snapshot_slot,
@@ -1041,6 +1049,7 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_runtime::accounts_db::AccountStorageEntry;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
