@@ -52,10 +52,9 @@
 use {
     crate::{blockstore::MAX_DATA_SHREDS_PER_SLOT, erasure::Session},
     bincode::config::Options,
-    num_derive::FromPrimitive,
-    num_traits::FromPrimitive,
+    num_enum::{IntoPrimitive, TryFromPrimitive},
     rayon::{prelude::*, ThreadPool},
-    serde::{Deserialize, Deserializer, Serialize, Serializer},
+    serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_perf::packet::Packet,
@@ -165,7 +164,21 @@ pub enum ShredError {
 pub type Result<T> = std::result::Result<T, ShredError>;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, FromPrimitive, Hash, PartialEq, AbiEnumVisitor, AbiExample)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    AbiEnumVisitor,
+    AbiExample,
+    Deserialize,
+    IntoPrimitive,
+    Serialize,
+    TryFromPrimitive,
+)]
+#[serde(into = "u8", try_from = "u8")]
 pub enum ShredType {
     Data = 0b1010_0101,
     Code = 0b0101_1010,
@@ -174,26 +187,6 @@ pub enum ShredType {
 impl Default for ShredType {
     fn default() -> Self {
         ShredType::Data
-    }
-}
-
-impl Serialize for ShredType {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        (*self as u8).serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for ShredType {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let shred_type = u8::deserialize(deserializer)?;
-        Self::from_u8(shred_type)
-            .ok_or_else(|| serde::de::Error::custom(ShredError::InvalidShredType))
     }
 }
 
@@ -613,7 +606,7 @@ impl Shred {
         if add_shred_type_to_shred_seed(self.slot(), root_bank) {
             hashv(&[
                 &self.slot().to_le_bytes(),
-                &(self.shred_type() as u8).to_le_bytes(),
+                &u8::from(self.shred_type()).to_le_bytes(),
                 &self.index().to_le_bytes(),
                 &leader_pubkey.to_bytes(),
             ])
@@ -1155,12 +1148,12 @@ pub fn get_shred_slot_index_type(
         }
     };
 
-    let shred_type = match ShredType::from_u8(p.data[OFFSET_OF_SHRED_TYPE]) {
-        None => {
+    let shred_type = match ShredType::try_from(p.data[OFFSET_OF_SHRED_TYPE]) {
+        Err(_) => {
             stats.bad_shred_type += 1;
             return None;
         }
-        Some(shred_type) => shred_type,
+        Ok(shred_type) => shred_type,
     };
     Some((slot, index, shred_type))
 }
@@ -2073,12 +2066,14 @@ pub mod tests {
     #[test]
     fn test_shred_type_compat() {
         assert_eq!(std::mem::size_of::<ShredType>(), std::mem::size_of::<u8>());
-        assert_eq!(ShredType::from_u8(0), None);
-        assert_eq!(ShredType::from_u8(1), None);
+        assert_matches!(ShredType::try_from(0u8), Err(_));
+        assert_matches!(ShredType::try_from(1u8), Err(_));
         assert_matches!(bincode::deserialize::<ShredType>(&[0u8]), Err(_));
+        assert_matches!(bincode::deserialize::<ShredType>(&[1u8]), Err(_));
         // data shred
         assert_eq!(ShredType::Data as u8, 0b1010_0101);
-        assert_eq!(ShredType::from_u8(0b1010_0101), Some(ShredType::Data));
+        assert_eq!(u8::from(ShredType::Data), 0b1010_0101);
+        assert_eq!(ShredType::try_from(0b1010_0101), Ok(ShredType::Data));
         let buf = bincode::serialize(&ShredType::Data).unwrap();
         assert_eq!(buf, vec![0b1010_0101]);
         assert_matches!(
@@ -2087,7 +2082,8 @@ pub mod tests {
         );
         // coding shred
         assert_eq!(ShredType::Code as u8, 0b0101_1010);
-        assert_eq!(ShredType::from_u8(0b0101_1010), Some(ShredType::Code));
+        assert_eq!(u8::from(ShredType::Code), 0b0101_1010);
+        assert_eq!(ShredType::try_from(0b0101_1010), Ok(ShredType::Code));
         let buf = bincode::serialize(&ShredType::Code).unwrap();
         assert_eq!(buf, vec![0b0101_1010]);
         assert_matches!(
