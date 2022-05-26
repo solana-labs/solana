@@ -412,6 +412,10 @@ pub mod add_shred_type_to_shred_seed {
     solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
 }
 
+pub mod vote_state_update_award_one_credit_per_slot {
+    solana_sdk::declare_id!("B9y9J9XtJ2gZ6zVc6AMNQ3QWFGoFxDQhJQi9wb4WbkeU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
