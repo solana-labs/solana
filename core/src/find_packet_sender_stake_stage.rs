@@ -1,10 +1,7 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    lazy_static::lazy_static,
-    rayon::{prelude::*, ThreadPool},
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
-    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::timing::timestamp,
     solana_streamer::streamer::{self, StreamerError},
     std::{
@@ -15,18 +12,10 @@ use {
     },
 };
 
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
-        .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
-        .build()
-        .unwrap();
-}
-
-// Try to target 50ms, rough timings from mainnet machines
+// Try to target 50ms, rough timings from a testnet validator
 //
-// 50ms/(1us/packet) = 50k packets
-const MAX_FINDPACKETSENDERSTAKE_BATCH: usize = 50_000;
+// 50ms/(200ns/packet) = 250k packets
+const MAX_FINDPACKETSENDERSTAKE_BATCH: usize = 250_000;
 
 pub type FindPacketSenderStakeSender = Sender<Vec<PacketBatch>>;
 pub type FindPacketSenderStakeReceiver = Receiver<Vec<PacketBatch>>;
@@ -157,17 +146,15 @@ impl FindPacketSenderStakeStage {
     }
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
-        PAR_THREAD_POOL.install(|| {
-            batches
-                .into_par_iter()
-                .flat_map(|batch| batch.par_iter_mut())
-                .for_each(|packet| {
-                    packet.meta.sender_stake = ip_to_stake
-                        .get(&packet.meta.addr)
-                        .copied()
-                        .unwrap_or_default();
-                });
-        });
+        batches
+            .iter_mut()
+            .flat_map(|batch| batch.iter_mut())
+            .for_each(|packet| {
+                packet.meta.sender_stake = ip_to_stake
+                    .get(&packet.meta.addr)
+                    .copied()
+                    .unwrap_or_default();
+            });
     }
 
     pub fn join(self) -> thread::Result<()> {
