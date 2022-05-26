@@ -955,7 +955,7 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
-  customFetch?: typeof crossFetch,
+  customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
@@ -965,17 +965,15 @@ function createRpcClient(
     agentManager = new AgentManager(useHttps);
   }
 
-  let fetchWithMiddleware:
-    | ((url: string, options: any) => Promise<Response>)
-    | undefined;
+  let fetchWithMiddleware: FetchFn | undefined;
 
   if (fetchMiddleware) {
-    fetchWithMiddleware = async (url: string, options: any) => {
-      const modifiedFetchArgs = await new Promise<[string, any]>(
+    fetchWithMiddleware = async (info, init) => {
+      const modifiedFetchArgs = await new Promise<Parameters<FetchFn>>(
         (resolve, reject) => {
           try {
-            fetchMiddleware(url, options, (modifiedUrl, modifiedOptions) =>
-              resolve([modifiedUrl, modifiedOptions]),
+            fetchMiddleware(info, init, (modifiedInfo, modifiedInit) =>
+              resolve([modifiedInfo, modifiedInit]),
             );
           } catch (error) {
             reject(error);
@@ -2162,13 +2160,15 @@ export type ConfirmedSignatureInfo = {
  */
 export type HttpHeaders = {[header: string]: string};
 
+export type FetchFn = typeof crossFetch;
+
 /**
  * A callback used to augment the outgoing HTTP request
  */
 export type FetchMiddleware = (
-  url: string,
-  options: any,
-  fetch: (modifiedUrl: string, modifiedOptions: any) => void,
+  info: Parameters<FetchFn>[0],
+  init: Parameters<FetchFn>[1],
+  fetch: (...a: Parameters<FetchFn>) => void,
 ) => void;
 
 /**
@@ -2182,7 +2182,7 @@ export type ConnectionConfig = {
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional custom fetch function */
-  fetch?: typeof crossFetch;
+  fetch?: FetchFn;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
   /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
