@@ -3,7 +3,7 @@ use {
     crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{visit_each_account_once, ComputeMeter, InvokeContext},
+        invoke_context::{ComputeMeter, InvokeContext},
         stable_log,
         timings::ExecuteTimings,
     },
@@ -2964,80 +2964,75 @@ where
         ))?;
     accounts.push((*program_account_index, None));
 
-    visit_each_account_once::<EbpfError<BpfError>>(
-        instruction_accounts,
-        &mut |_index: usize, instruction_account: &InstructionAccount| {
-            let account = invoke_context
-                .transaction_context
-                .get_account_at_index(instruction_account.index_in_transaction)
-                .map_err(SyscallError::InstructionError)?;
-            let account_key = invoke_context
-                .transaction_context
-                .get_key_of_account_at_index(instruction_account.index_in_transaction)
-                .map_err(SyscallError::InstructionError)?;
-            if account.borrow().executable() {
-                // Use the known account
-                if invoke_context
-                    .feature_set
-                    .is_active(&executables_incur_cpi_data_cost::id())
-                {
-                    invoke_context
-                        .get_compute_meter()
-                        .consume((account.borrow().data().len() as u64).saturating_div(
-                            invoke_context.get_compute_budget().cpi_bytes_per_unit,
-                        ))?;
-                }
-                accounts.push((instruction_account.index_in_transaction, None));
-            } else if let Some(caller_account_index) =
-                account_info_keys.iter().position(|key| *key == account_key)
+    for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
+        if index_in_instruction != instruction_account.index_in_callee {
+            continue; // Skip duplicate account
+        }
+        let account = invoke_context
+            .transaction_context
+            .get_account_at_index(instruction_account.index_in_transaction)
+            .map_err(SyscallError::InstructionError)?;
+        let account_key = invoke_context
+            .transaction_context
+            .get_key_of_account_at_index(instruction_account.index_in_transaction)
+            .map_err(SyscallError::InstructionError)?;
+        if account.borrow().executable() {
+            // Use the known account
+            if invoke_context
+                .feature_set
+                .is_active(&executables_incur_cpi_data_cost::id())
             {
-                let mut caller_account = do_translate(
-                    account_infos
-                        .get(caller_account_index)
-                        .ok_or(SyscallError::InvalidLength)?,
-                    invoke_context,
+                invoke_context.get_compute_meter().consume(
+                    (account.borrow().data().len() as u64)
+                        .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
                 )?;
-                {
-                    let mut account = account.borrow_mut();
-                    account.copy_into_owner_from_slice(caller_account.owner.as_ref());
-                    account.set_data_from_slice(caller_account.data);
-                    account.set_lamports(*caller_account.lamports);
-                    account.set_executable(caller_account.executable);
-                    account.set_rent_epoch(caller_account.rent_epoch);
-                }
-                let caller_account = if instruction_account.is_writable {
-                    let orig_data_lens = invoke_context
-                        .get_orig_account_lengths()
-                        .map_err(SyscallError::InstructionError)?;
-                    caller_account.original_data_len = *orig_data_lens
-                        .get(instruction_account.index_in_caller)
-                        .ok_or_else(|| {
-                            ic_msg!(
-                                invoke_context,
-                                "Internal error: index mismatch for account {}",
-                                account_key
-                            );
-                            SyscallError::InstructionError(InstructionError::MissingAccount)
-                        })?;
-                    Some(caller_account)
-                } else {
-                    None
-                };
-                accounts.push((instruction_account.index_in_transaction, caller_account));
-            } else {
-                ic_msg!(
-                    invoke_context,
-                    "Instruction references an unknown account {}",
-                    account_key
-                );
-                return Err(
-                    SyscallError::InstructionError(InstructionError::MissingAccount).into(),
-                );
             }
-            Ok(())
-        },
-        SyscallError::InstructionError(InstructionError::NotEnoughAccountKeys).into(),
-    )?;
+            accounts.push((instruction_account.index_in_transaction, None));
+        } else if let Some(caller_account_index) =
+            account_info_keys.iter().position(|key| *key == account_key)
+        {
+            let mut caller_account = do_translate(
+                account_infos
+                    .get(caller_account_index)
+                    .ok_or(SyscallError::InvalidLength)?,
+                invoke_context,
+            )?;
+            {
+                let mut account = account.borrow_mut();
+                account.copy_into_owner_from_slice(caller_account.owner.as_ref());
+                account.set_data_from_slice(caller_account.data);
+                account.set_lamports(*caller_account.lamports);
+                account.set_executable(caller_account.executable);
+                account.set_rent_epoch(caller_account.rent_epoch);
+            }
+            let caller_account = if instruction_account.is_writable {
+                let orig_data_lens = invoke_context
+                    .get_orig_account_lengths()
+                    .map_err(SyscallError::InstructionError)?;
+                caller_account.original_data_len = *orig_data_lens
+                    .get(instruction_account.index_in_caller)
+                    .ok_or_else(|| {
+                        ic_msg!(
+                            invoke_context,
+                            "Internal error: index mismatch for account {}",
+                            account_key
+                        );
+                        SyscallError::InstructionError(InstructionError::MissingAccount)
+                    })?;
+                Some(caller_account)
+            } else {
+                None
+            };
+            accounts.push((instruction_account.index_in_transaction, caller_account));
+        } else {
+            ic_msg!(
+                invoke_context,
+                "Instruction references an unknown account {}",
+                account_key
+            );
+            return Err(SyscallError::InstructionError(InstructionError::MissingAccount).into());
+        }
+    }
 
     Ok(accounts)
 }
