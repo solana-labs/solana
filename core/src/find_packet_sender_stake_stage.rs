@@ -1,15 +1,10 @@
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-<<<<<<< HEAD
-    rayon::{prelude::*, ThreadPool},
-=======
->>>>>>> 0efb7478c (FindPacketSenderStake: Remove parallelism to improve performance (#25562))
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing::timestamp,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        cell::RefCell,
         collections::HashMap,
         net::IpAddr,
         sync::{Arc, RwLock},
@@ -17,17 +12,7 @@ use {
     },
 };
 
-<<<<<<< HEAD
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
-                    .build()
-                    .unwrap()));
-
-// Try to target 50ms, rough timings from mainnet machines
-=======
 // Try to target 50ms, rough timings from a testnet validator
->>>>>>> 0efb7478c (FindPacketSenderStake: Remove parallelism to improve performance (#25562))
 //
 // 50ms/(200ns/packet) = 250k packets
 const MAX_FINDPACKETSENDERSTAKE_BATCH: usize = 250_000;
@@ -161,21 +146,6 @@ impl FindPacketSenderStakeStage {
     }
 
     fn apply_sender_stakes(batches: &mut [PacketBatch], ip_to_stake: &HashMap<IpAddr, u64>) {
-<<<<<<< HEAD
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .flat_map(|batch| batch.par_iter_mut())
-                    .for_each(|packet| {
-                        packet.meta.sender_stake = ip_to_stake
-                            .get(&packet.meta.addr)
-                            .copied()
-                            .unwrap_or_default();
-                    });
-            })
-        });
-=======
         batches
             .iter_mut()
             .flat_map(|batch| batch.iter_mut())
@@ -185,7 +155,6 @@ impl FindPacketSenderStakeStage {
                     .copied()
                     .unwrap_or_default();
             });
->>>>>>> 0efb7478c (FindPacketSenderStake: Remove parallelism to improve performance (#25562))
     }
 
     pub fn join(self) -> thread::Result<()> {
