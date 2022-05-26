@@ -51,7 +51,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     info!("total packets: {}", total);
 
     bencher.iter(move || {
-        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        SigVerifyStage::discard_excess_packets(&mut batches, 10_000, |_| ());
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for p in batch.iter_mut() {
@@ -98,7 +98,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         }
     }
     bencher.iter(move || {
-        SigVerifyStage::discard_excess_packets(&mut batches, 10_000);
+        SigVerifyStage::discard_excess_packets(&mut batches, 10_000, |_| ());
         let mut num_packets = 0;
         for batch in batches.iter_mut() {
             for packet in batch.iter_mut() {
@@ -142,8 +142,8 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     trace!("start");
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
-    let verifier = TransactionSigVerifier::default();
-    let stage = SigVerifyStage::new(packet_r, verified_s, verifier, "bench");
+    let verifier = TransactionSigVerifier::new(verified_s);
+    let stage = SigVerifyStage::new(packet_r, verifier, "bench");
 
     let use_same_tx = true;
     bencher.iter(move || {
@@ -165,7 +165,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         let mut received = 0;
         trace!("sent: {}", sent_len);
         loop {
-            if let Ok(mut verifieds) = verified_r.recv_timeout(Duration::from_millis(10)) {
+            if let Ok((mut verifieds, _)) = verified_r.recv_timeout(Duration::from_millis(10)) {
                 while let Some(v) = verifieds.pop() {
                     received += v.len();
                     batches.push(v);

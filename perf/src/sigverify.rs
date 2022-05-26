@@ -22,6 +22,7 @@ use {
         hash::Hash,
         message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
         pubkey::Pubkey,
+        saturating_add_assign,
         short_vec::decode_shortu16_len,
         signature::Signature,
     },
@@ -155,10 +156,10 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
         }
 
         // Check for tracer pubkey
-        if !packet.meta.is_tracer_tx()
+        if !packet.meta.is_tracer_packet()
             && &packet.data[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
         {
-            packet.meta.flags |= PacketFlags::TRACER_TX;
+            packet.meta.flags |= PacketFlags::TRACER_PACKET;
         }
 
         pubkey_start = pubkey_end;
@@ -170,10 +171,24 @@ pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
     batches.iter().map(|batch| batch.len()).sum()
 }
 
-pub fn count_valid_packets(batches: &[PacketBatch]) -> usize {
+pub fn count_valid_packets(
+    batches: &[PacketBatch],
+    mut process_valid_packet: impl FnMut(&Packet),
+) -> usize {
     batches
         .iter()
-        .map(|batch| batch.iter().filter(|p| !p.meta.discard()).count())
+        .map(|batch| {
+            batch
+                .iter()
+                .filter(|p| {
+                    let should_keep = !p.meta.discard();
+                    if should_keep {
+                        process_valid_packet(p);
+                    }
+                    should_keep
+                })
+                .count()
+        })
         .sum()
 }
 
@@ -498,11 +513,23 @@ impl Deduper {
         0
     }
 
-    pub fn dedup_packets_and_count_discards(&self, batches: &mut [PacketBatch]) -> u64 {
-        batches
-            .iter_mut()
-            .flat_map(|batch| batch.iter_mut().map(|p| self.dedup_packet(p)))
-            .sum()
+    pub fn dedup_packets_and_count_discards(
+        &self,
+        batches: &mut [PacketBatch],
+        mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
+    ) -> u64 {
+        let mut num_removed: u64 = 0;
+        batches.iter_mut().for_each(|batch| {
+            batch.iter_mut().for_each(|p| {
+                let removed_before_sigverify = p.meta.discard();
+                let is_duplicate = self.dedup_packet(p);
+                if is_duplicate == 1 {
+                    saturating_add_assign!(num_removed, 1);
+                }
+                process_received_packet(p, removed_before_sigverify, is_duplicate == 1);
+            })
+        });
+        num_removed
     }
 }
 
@@ -1415,7 +1442,14 @@ mod tests {
             to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 128);
         let packet_count = sigverify::count_packets_in_batches(&batches);
         let filter = Deduper::new(1_000_000, Duration::from_millis(0));
-        let discard = filter.dedup_packets_and_count_discards(&mut batches) as usize;
+        let mut num_deduped = 0;
+        let discard = filter.dedup_packets_and_count_discards(
+            &mut batches,
+            |_deduped_packet, _removed_before_sigverify_stage, _is_dup| {
+                num_deduped += 1;
+            },
+        ) as usize;
+        assert_eq!(num_deduped, discard + 1);
         assert_eq!(packet_count, discard + 1);
     }
 
@@ -1423,8 +1457,7 @@ mod tests {
     fn test_dedup_diff() {
         let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-
-        let discard = filter.dedup_packets_and_count_discards(&mut batches) as usize;
+        let discard = filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         assert_eq!(discard, 0);
         filter.reset();
@@ -1442,7 +1475,7 @@ mod tests {
         for i in 0..1000 {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
             debug!("{} {}", i, discard);
             if filter.saturated.load(Ordering::Relaxed) {
                 break;
@@ -1458,7 +1491,7 @@ mod tests {
         for i in 0..10 {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
             debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely
@@ -1487,7 +1520,7 @@ mod tests {
             });
             start.sort_by_key(|p| p.data);
 
-            let packet_count = count_valid_packets(&batches);
+            let packet_count = count_valid_packets(&batches, |_| ());
             let res = shrink_batches(&mut batches);
             batches.truncate(res);
 
@@ -1499,7 +1532,7 @@ mod tests {
                     .for_each(|p| end.push(p.clone()))
             });
             end.sort_by_key(|p| p.data);
-            let packet_count2 = count_valid_packets(&batches);
+            let packet_count2 = count_valid_packets(&batches, |_| ());
             assert_eq!(packet_count, packet_count2);
             assert_eq!(start, end);
         }
@@ -1656,14 +1689,14 @@ mod tests {
                 PACKETS_PER_BATCH,
             );
             assert_eq!(batches.len(), BATCH_COUNT);
-            assert_eq!(count_valid_packets(&batches), PACKET_COUNT);
+            assert_eq!(count_valid_packets(&batches, |_| ()), PACKET_COUNT);
             batches.iter_mut().enumerate().for_each(|(i, b)| {
                 b.iter_mut()
                     .enumerate()
                     .for_each(|(j, p)| p.meta.set_discard(set_discard(i, j)))
             });
-            assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
-            println!("show valid packets for case {}", i);
+            assert_eq!(count_valid_packets(&batches, |_| ()), *expect_valid_packets);
+            debug!("show valid packets for case {}", i);
             batches.iter_mut().enumerate().for_each(|(i, b)| {
                 b.iter_mut().enumerate().for_each(|(j, p)| {
                     if !p.meta.discard() {
@@ -1676,7 +1709,7 @@ mod tests {
             println!("shrunk batch test {} count: {}", i, shrunken_batch_count);
             assert_eq!(shrunken_batch_count, *expect_batch_count);
             batches.truncate(shrunken_batch_count);
-            assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
+            assert_eq!(count_valid_packets(&batches, |_| ()), *expect_valid_packets);
         }
     }
 }
