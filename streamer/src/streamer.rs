@@ -279,7 +279,7 @@ impl StreamerSendStats {
     fn record(&mut self, pkt: &Packet) {
         let ent = self.host_map.entry(pkt.meta.addr).or_default();
         ent.count += 1;
-        ent.bytes += pkt.data.len() as u64;
+        ent.bytes += pkt.data().len() as u64;
     }
 }
 
@@ -296,9 +296,7 @@ fn recv_send(
     }
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta.socket_addr();
-        socket_addr_space
-            .check(&addr)
-            .then(|| (&pkt.data[..pkt.meta.size], addr))
+        socket_addr_space.check(&addr).then(|| (pkt.data(), addr))
     });
     batch_send(sock, &packets.collect::<Vec<_>>())?;
     Ok(())
@@ -478,7 +476,7 @@ mod test {
             for i in 0..NUM_PACKETS {
                 let mut p = Packet::default();
                 {
-                    p.data[0] = i as u8;
+                    p.buffer_mut()[0] = i as u8;
                     p.meta.size = PACKET_DATA_SIZE;
                     p.meta.set_socket_addr(&addr);
                 }

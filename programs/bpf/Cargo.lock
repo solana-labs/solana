@@ -2948,9 +2948,9 @@ dependencies = [
 
 [[package]]
 name = "quinn"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d147472bc9a09f13b06c044787b6683cdffa02e2865b7f0fb53d67c49ed2988e"
+checksum = "d7542006acd6e057ff632307d219954c44048f818898da03113d6c0086bfddd9"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2967,9 +2967,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "359c5eb33845f3ee05c229e65f87cdbc503eea394964b8f1330833d460b4ff3e"
+checksum = "3a13a5c0a674c1ce7150c9df7bc4a1e46c2fbbe7c710f56c0dc78b1a810e779e"
 dependencies = [
  "bytes",
  "fxhash",

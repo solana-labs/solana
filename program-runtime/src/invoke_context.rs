@@ -7,6 +7,7 @@ use {
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
+        stable_log,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
@@ -980,34 +981,39 @@ impl<'a> InvokeContext<'a> {
     /// Calls the instruction's program entrypoint method
     fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
-        let borrowed_root_account = instruction_context
-            .try_borrow_account(self.transaction_context, 0)
-            .map_err(|_| InstructionError::UnsupportedProgramId)?;
-        let root_id = borrowed_root_account.get_key();
-        let owner_id = borrowed_root_account.get_owner();
-        if solana_sdk::native_loader::check_id(owner_id) {
-            for entry in self.builtin_programs {
-                if entry.program_id == *root_id {
-                    drop(borrowed_root_account);
-                    // Call the builtin program
-                    return (entry.process_instruction)(
-                        1, // root_id to be skipped
-                        self,
-                    );
-                }
+
+        let (first_instruction_account, builtin_id) = {
+            let borrowed_root_account = instruction_context
+                .try_borrow_account(self.transaction_context, 0)
+                .map_err(|_| InstructionError::UnsupportedProgramId)?;
+            let owner_id = borrowed_root_account.get_owner();
+            if solana_sdk::native_loader::check_id(owner_id) {
+                (1, *borrowed_root_account.get_key())
+            } else {
+                (0, *owner_id)
             }
-        } else {
-            for entry in self.builtin_programs {
-                if entry.program_id == *owner_id {
-                    drop(borrowed_root_account);
-                    // Call the program via a builtin loader
-                    return (entry.process_instruction)(
-                        0, // no root_id was provided
-                        self,
-                    );
+        };
+
+        for entry in self.builtin_programs {
+            if entry.program_id == builtin_id {
+                let program_id = instruction_context.get_program_id(self.transaction_context);
+                if builtin_id == program_id {
+                    let logger = self.get_log_collector();
+                    stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
+                    return (entry.process_instruction)(first_instruction_account, self)
+                        .map(|()| {
+                            stable_log::program_success(&logger, &program_id);
+                        })
+                        .map_err(|err| {
+                            stable_log::program_failure(&logger, &program_id, &err);
+                            err
+                        });
+                } else {
+                    return (entry.process_instruction)(first_instruction_account, self);
                 }
             }
         }
+
         Err(InstructionError::UnsupportedProgramId)
     }
 
