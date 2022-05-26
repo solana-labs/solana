@@ -15,23 +15,11 @@ use {
     },
 };
 
-<<<<<<< HEAD
-const IP_TO_STAKE_REFRESH_DURATION: Duration = Duration::from_secs(5);
-
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
                     .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
                     .build()
                     .unwrap()));
-=======
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
-        .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
-        .build()
-        .unwrap();
-}
->>>>>>> 2fdc85017 (Use Shared IP to Stake Map (#25377))
 
 pub type FindPacketSenderStakeSender = Sender<Vec<PacketBatch>>;
 pub type FindPacketSenderStakeReceiver = Receiver<Vec<PacketBatch>>;
