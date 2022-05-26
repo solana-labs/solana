@@ -476,9 +476,9 @@ impl Deduper {
         //false positive rate is 1/1000 at that point
         let saturated = self.saturated.load(Ordering::Relaxed);
         if saturated || now.duration_since(self.age) > self.max_age {
-            for i in &self.filter {
-                i.store(0, Ordering::Relaxed);
-            }
+            let len = self.filter.len();
+            self.filter.clear();
+            self.filter.resize_with(len, AtomicU64::default);
             self.seed = thread_rng().gen();
             self.age = now;
             self.saturated.store(false, Ordering::Relaxed);
