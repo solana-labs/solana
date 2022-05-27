@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"] }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
-tarpc = { version = "0.28.0", features = ["full"] }
+tarpc = { version = "0.29.0", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]

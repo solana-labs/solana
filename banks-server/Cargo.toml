@@ -17,7 +17,7 @@ solana-banks-interface = { path = "../banks-interface", version = "=1.11.0" }
 solana-runtime = { path = "../runtime", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.0" }
-tarpc = { version = "0.28.0", features = ["full"] }
+tarpc = { version = "0.29.0", features = ["full"] }
 tokio = { version = "~1.14.1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 tokio-stream = "0.1"
