@@ -10,7 +10,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -148,10 +148,59 @@ impl MessageProcessor {
                 time.as_us()
             );
 
+<<<<<<< HEAD
             result.map_err(|err| {
                 instruction_trace.append(invoke_context.get_instruction_trace_mut());
                 TransactionError::InstructionError(instruction_index as u8, err)
             })?;
+=======
+            let result = if is_precompile
+                && invoke_context
+                    .feature_set
+                    .is_active(&record_instruction_in_transaction_context_push::id())
+            {
+                invoke_context
+                    .transaction_context
+                    .push(
+                        program_indices,
+                        &instruction_accounts,
+                        &instruction.data,
+                        true,
+                    )
+                    .and_then(|_| invoke_context.transaction_context.pop())
+            } else {
+                let mut time = Measure::start("execute_instruction");
+                let mut compute_units_consumed = 0;
+                let result = invoke_context.process_instruction(
+                    &instruction.data,
+                    &instruction_accounts,
+                    program_indices,
+                    &mut compute_units_consumed,
+                    timings,
+                );
+                time.stop();
+                *accumulated_consumed_units =
+                    accumulated_consumed_units.saturating_add(compute_units_consumed);
+                timings.details.accumulate_program(
+                    program_id,
+                    time.as_us(),
+                    compute_units_consumed,
+                    result.is_err(),
+                );
+                invoke_context.timings = {
+                    timings.details.accumulate(&invoke_context.timings);
+                    ExecuteDetailsTimings::default()
+                };
+                saturating_add_assign!(
+                    timings.execute_accessories.process_instructions.total_us,
+                    time.as_us()
+                );
+                result
+            };
+
+            result
+                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
+>>>>>>> ce14c63bf (fix: stop double counting execution timings (#25605))
         }
         instruction_trace.append(invoke_context.get_instruction_trace_mut());
         Ok(ProcessedMessageInfo {
