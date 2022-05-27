@@ -177,6 +177,7 @@ cloud_Initialize() {
 #                       [enableGpu] [machineType] [zone]
 #                       [bootDiskSize] [startupScript] [address]
 #                       [bootDiskType] [additionalDiskSize] [preemptible]
+#                       [imageName]
 #
 # Creates one more identical instances.
 #
@@ -197,6 +198,7 @@ cloud_Initialize() {
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
 # preemptible   - Optionally request a preemptible instance ("true")
+# imageName     - Optional disk image for the instances
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns

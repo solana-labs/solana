@@ -134,6 +134,7 @@ cloud_Initialize() {
 #                       [enableGpu] [machineType] [zone]
 #                       [bootDiskSize] [startupScript] [address]
 #                       [bootDiskType] [additionalDiskSize] [preemptible]
+#                       [imageName]
 #
 # Creates one more identical instances.
 #
@@ -154,6 +155,7 @@ cloud_Initialize() {
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
 # preemptible   - Optionally request a preemptible instance ("true")
+# imageName     - Optional disk image for the instances
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
@@ -171,15 +173,10 @@ cloud_CreateInstances() {
   declare optionalAdditionalDiskSize="${11}"
   declare optionalPreemptible="${12}"
   #declare sshPrivateKey="${13}"  # unused
+  declare optionalImageName="${14}"
 
-  if $enableGpu; then
-    # Custom Ubuntu 20.04 LTS image with CUDA 10.2 installed
-    #
-    # Unfortunately this image is not public.  When this becomes an issue, use
-    # the stock Ubuntu 20.04 image and programmatically install CUDA after the
-    # instance boots
-    #
-    imageName="ubuntu-2004-focal-v20201211-with-cuda-10-2 --image-project principal-lane-200702"
+  if [[ -n $optionalImageName ]]; then
+    imageName=$optionalImageName
   else
     # Upstream Ubuntu 20.04 LTS image
     imageName="ubuntu-2004-focal-v20220419 --image-project ubuntu-os-cloud"
