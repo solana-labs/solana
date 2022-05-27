@@ -762,7 +762,6 @@ impl VoteState {
         new_root: Option<Slot>,
         timestamp: Option<i64>,
         epoch: Epoch,
-        slot_hashes: &[(Slot, Hash)],
         feature_set: Option<&FeatureSet>,
     ) -> Result<(), VoteError> {
         assert!(!new_state.is_empty());
@@ -826,8 +825,6 @@ impl VoteState {
         // For those slots at and before the new root within the current vote state lockouts, and which are in
         // slot history, award 1 credit each.  Start with 1 credit for the new root.
         let mut finalized_slot_count = 1_u64;
-        // Create a new slot hashes set only if needed
-        let mut slot_hashes_set: Option<HashSet<Slot>> = None;
 
         for current_vote in &self.votes {
             // Find the first vote in the current vote state for a slot greater
@@ -836,15 +833,7 @@ impl VoteState {
                 if current_vote.slot <= new_root {
                     current_vote_state_index += 1;
                     if current_vote.slot != new_root {
-                        let slot_hashes_set = slot_hashes_set.get_or_insert_with(|| {
-                            slot_hashes
-                                .iter()
-                                .map(|(slot, _)| *slot)
-                                .collect::<HashSet<Slot>>()
-                        });
-                        if slot_hashes_set.contains(&current_vote.slot) {
-                            finalized_slot_count += 1;
-                        }
+                        finalized_slot_count += 1;
                     }
                     continue;
                 }
@@ -1425,7 +1414,6 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
         vote_state_update.root,
         vote_state_update.timestamp,
         clock.epoch,
-        slot_hashes,
         Some(feature_set),
     )?;
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))
@@ -1952,18 +1940,9 @@ mod tests {
         //  vote_state_root: Option<Slot>,
         //  vote_state_update_votes: Vec<Slot>,
         //  vote_state_update_root: Option<Slot>,
-        //  slot_hashes: Vec<Slot>,
         //  per_transaction_expected_credits: u64,
         //  per_slot_expected_credits: u64)
-        let test_data: Vec<(
-            Vec<Slot>,
-            Option<Slot>,
-            Vec<Slot>,
-            Option<Slot>,
-            Vec<Slot>,
-            u64,
-            u64,
-        )> = vec![
+        let test_data: Vec<(Vec<Slot>, Option<Slot>, Vec<Slot>, Option<Slot>, u64, u64)> = vec![
             // First slot finalized
             (
                 vec![
@@ -1976,7 +1955,6 @@ mod tests {
                     23, 24, 25, 26, 27, 28, 29, 30,
                 ],
                 Some(0),
-                vec![],
                 1,
                 1,
             ),
@@ -1992,7 +1970,6 @@ mod tests {
                     24, 25, 26, 27, 28, 29, 30, 31, 32,
                 ],
                 Some(1),
-                vec![0],
                 1,
                 1,
             ),
@@ -2008,7 +1985,6 @@ mod tests {
                     24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
                 ],
                 Some(2),
-                vec![0, 1],
                 1,
                 2,
             ),
@@ -2024,7 +2000,6 @@ mod tests {
                     25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
                 ],
                 Some(3),
-                vec![0, 1, 2],
                 1,
                 3,
             ),
@@ -2040,10 +2015,6 @@ mod tests {
                     52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
                 ],
                 Some(30),
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 28, 29, 30,
-                ],
                 1,
                 30,
             ),
@@ -2059,29 +2030,8 @@ mod tests {
                     53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
                 ],
                 Some(31),
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-                ],
                 1,
                 31,
-            ),
-            // Slots that expired and shouldn't count as credits
-            // What's being simulated here is:
-            // - Original vote state was 1, 2, 3, 4
-            // - Much later, vote state is updated to 9, 10, 11
-            // - But in the intervening time, 2, 3, and 4, which had been voted on, expired, and don't end up in
-            //   slot_hashes (and 6 and 7 were never voted on)
-            //   -> So 2, 3, and 4 should not count for credits
-            //   -> Instead only slots 1 and 8 should be counted
-            (
-                vec![1, 2, 3, 4],
-                Some(0),
-                vec![9, 10, 11],
-                Some(8),
-                vec![1, 6, 7, 8],
-                1,
-                2,
             ),
         ];
 
@@ -2096,13 +2046,8 @@ mod tests {
             let vote_state_root = data.1;
             let vote_state_update_votes = slots_to_lockouts(&data.2);
             let vote_state_update_root = data.3;
-            let slot_hashes = data
-                .4
-                .iter()
-                .map(|slot| (*slot, Hash::new_unique()))
-                .collect::<Vec<(Slot, Hash)>>();
-            let per_transaction_expected_credits = data.5;
-            let per_slot_expected_credits = data.6;
+            let per_transaction_expected_credits = data.4;
+            let per_slot_expected_credits = data.5;
 
             let mut vote_state = VoteState::default();
 
@@ -2116,7 +2061,6 @@ mod tests {
                     vote_state_update_root,
                     None,
                     100,
-                    slot_hashes.as_slice(),
                     None,
                 ),
                 Ok(())
@@ -2139,7 +2083,6 @@ mod tests {
                     vote_state_update_root,
                     None,
                     100,
-                    slot_hashes.as_slice(),
                     Some(&per_slot_feature_set),
                 ),
                 Ok(())
@@ -2503,7 +2446,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::TooManyVotes)
@@ -2532,7 +2474,6 @@ mod tests {
                 lesser_root,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::RootRollBack)
@@ -2546,7 +2487,6 @@ mod tests {
                 none_root,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::RootRollBack)
@@ -2575,7 +2515,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::ZeroConfirmations)
@@ -2599,7 +2538,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::ZeroConfirmations)
@@ -2618,14 +2556,7 @@ mod tests {
         .collect();
 
         vote_state1
-            .process_new_vote_state(
-                good_votes,
-                None,
-                None,
-                vote_state1.current_epoch(),
-                [].as_slice(),
-                None,
-            )
+            .process_new_vote_state(good_votes, None, None, vote_state1.current_epoch(), None)
             .unwrap();
 
         let mut vote_state1 = VoteState::default();
@@ -2641,7 +2572,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::ConfirmationTooLarge)
@@ -2671,7 +2601,6 @@ mod tests {
                 Some(root_slot),
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::SlotSmallerThanRoot)
@@ -2695,7 +2624,6 @@ mod tests {
                 Some(root_slot),
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::SlotSmallerThanRoot)
@@ -2724,7 +2652,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::SlotsNotOrdered)
@@ -2748,7 +2675,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::SlotsNotOrdered)
@@ -2777,7 +2703,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::ConfirmationsNotOrdered)
@@ -2801,7 +2726,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::ConfirmationsNotOrdered)
@@ -2832,7 +2756,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             ),
             Err(VoteError::NewVoteStateLockoutMismatch)
@@ -2855,14 +2778,7 @@ mod tests {
         .into_iter()
         .collect();
         vote_state1
-            .process_new_vote_state(
-                votes,
-                None,
-                None,
-                vote_state1.current_epoch(),
-                [].as_slice(),
-                None,
-            )
+            .process_new_vote_state(votes, None, None, vote_state1.current_epoch(), None)
             .unwrap();
 
         let votes: VecDeque<Lockout> = vec![
@@ -2890,7 +2806,6 @@ mod tests {
                 None,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::ConfirmationRollBack)
@@ -2923,7 +2838,6 @@ mod tests {
                     vote_state2.root_slot,
                     None,
                     vote_state2.current_epoch(),
-                    [].as_slice(),
                     None,
                 )
                 .unwrap();
@@ -2982,7 +2896,6 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None,
             )
             .unwrap();
@@ -3024,7 +2937,6 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::LockoutConflict)
@@ -3066,7 +2978,6 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::LockoutConflict)
@@ -3112,7 +3023,6 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
-                [].as_slice(),
                 None,
             )
             .unwrap();
@@ -3154,7 +3064,6 @@ mod tests {
                 root,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None
             ),
             Err(VoteError::LockoutConflict)
@@ -3179,7 +3088,6 @@ mod tests {
                 root,
                 None,
                 vote_state1.current_epoch(),
-                [].as_slice(),
                 None,
             )
             .unwrap();
