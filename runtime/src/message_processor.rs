@@ -10,7 +10,7 @@ use {
         },
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -142,7 +142,10 @@ impl MessageProcessor {
                 compute_units_consumed,
                 result.is_err(),
             );
-            timings.details.accumulate(&invoke_context.timings);
+            invoke_context.timings = {
+                timings.details.accumulate(&invoke_context.timings);
+                ExecuteDetailsTimings::default()
+            };
             saturating_add_assign!(
                 timings.execute_accessories.process_instructions.total_us,
                 time.as_us()
