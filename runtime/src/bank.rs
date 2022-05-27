@@ -76,7 +76,7 @@ use {
     log::*,
     rand::Rng,
     rayon::{
-        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelExtend, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure},
@@ -97,6 +97,7 @@ use {
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
             INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -5151,6 +5152,60 @@ impl Bank {
     /// after deserialize, populate rewrites with accounts that would normally have had their data rewritten in this slot due to rent collection (but didn't)
     pub fn prepare_rewrites_for_hash(&self) {
         self.collect_rent_eagerly(true);
+    }
+
+    pub fn minimize_bank_for_snapshot(&self, mut minimized_account_set: HashSet<Pubkey>) {
+        self.add_owner_accounts(&mut minimized_account_set);
+        self.add_programdata_accounts(&mut minimized_account_set);
+        self.accounts()
+            .accounts_db
+            .minimize_accounts_db(self.slot(), &minimized_account_set);
+    }
+
+    fn add_owner_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
+        let owner_accounts: HashSet<_> = self
+            .accounts()
+            .accounts_db
+            .thread_pool_clean
+            .install(|| {
+                minimized_account_set
+                    .par_iter()
+                    .filter_map(|pubkey| self.get_account(pubkey))
+                    .map(|account| *account.owner())
+            })
+            .collect();
+        self.accounts().accounts_db.thread_pool_clean.install(|| {
+            minimized_account_set.par_extend(owner_accounts);
+        });
+    }
+
+    fn add_programdata_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
+        let programdata_accounts: HashSet<_> = self
+            .accounts()
+            .accounts_db
+            .thread_pool_clean
+            .install(|| {
+                minimized_account_set.par_iter().filter_map(|pubkey| {
+                    self.get_account(pubkey)
+                        .filter(|account| account.executable())
+                        .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
+                        .and_then(|account| {
+                            if let Ok(UpgradeableLoaderState::Program {
+                                programdata_address,
+                            }) = account.state()
+                            {
+                                Some(programdata_address)
+                            } else {
+                                None
+                            }
+                        })
+                })
+            })
+            .collect();
+        self.accounts()
+            .accounts_db
+            .thread_pool_clean
+            .install(|| minimized_account_set.par_extend(programdata_accounts));
     }
 
     pub fn get_rent_collection_accounts_between_slots(

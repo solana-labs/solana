@@ -3249,7 +3249,7 @@ impl AccountsDb {
         total_accounts_after_shrink
     }
 
-    pub fn minimize_accounts_db(
+    pub(crate) fn minimize_accounts_db(
         &self,
         snapshot_slot: Slot,
         minimized_account_set: &HashSet<Pubkey>,
@@ -3280,17 +3280,19 @@ impl AccountsDb {
 
     fn get_minimized_slot_set(&self, minimized_account_set: &HashSet<Pubkey>) -> HashSet<Slot> {
         let mut minimized_slot_set = HashSet::new();
-        minimized_slot_set.par_extend(minimized_account_set.par_iter().flat_map(|pubkey| {
-            if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                read_entry
-                    .slot_list()
-                    .iter()
-                    .map(|(slot, _)| *slot)
-                    .collect()
-            } else {
-                HashSet::new()
-            }
-        }));
+        self.thread_pool_clean.install(|| {
+            minimized_slot_set.par_extend(minimized_account_set.par_iter().flat_map(|pubkey| {
+                if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
+                    read_entry
+                        .slot_list()
+                        .iter()
+                        .map(|(slot, _)| *slot)
+                        .collect()
+                } else {
+                    HashSet::new()
+                }
+            }));
+        });
         minimized_slot_set
     }
 

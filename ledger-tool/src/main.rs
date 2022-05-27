@@ -53,7 +53,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{Epoch, Slot},
         feature::{self, Feature},
         feature_set,
@@ -978,33 +977,6 @@ fn minimize_bank_for_snapshot(
     minimized_account_set.insert(solana_sdk::secp256k1_program::id());
     minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
 
-    // Add account owners and program data to the set
-    let owner_accounts: HashSet<_> = minimized_account_set
-        .iter()
-        .filter_map(|pubkey| bank.get_account(pubkey).map(|account| *account.owner()))
-        .collect();
-    minimized_account_set.extend(owner_accounts.into_iter());
-
-    let programdata_accounts: HashSet<_> = minimized_account_set
-        .iter()
-        .filter_map(|pubkey| {
-            bank.get_account(pubkey)
-                .filter(|account| account.executable())
-                .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
-                .and_then(|account| {
-                    if let Ok(UpgradeableLoaderState::Program {
-                        programdata_address,
-                    }) = account.state()
-                    {
-                        Some(programdata_address)
-                    } else {
-                        None
-                    }
-                })
-        })
-        .collect();
-    minimized_account_set.extend(programdata_accounts);
-
     info!(
         "Generated minimized account set with {} accounts for slots {}..={}",
         minimized_account_set.len(),
@@ -1012,9 +984,7 @@ fn minimize_bank_for_snapshot(
         ending_slot
     );
 
-    bank.accounts()
-        .accounts_db
-        .minimize_accounts_db(snapshot_slot, &minimized_account_set);
+    bank.minimize_bank_for_snapshot(minimized_account_set);
     bank.force_flush_accounts_cache();
     bank.set_capitalization();
 }
