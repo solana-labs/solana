@@ -255,13 +255,17 @@ impl SigVerifyStage {
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_packets = count_packets_in_batches(packet_batches);
         let num_discarded_packets = count_discarded_packets(packet_batches);
-        let pre_packet_batches_len = packet_batches.len();
-        let discarded_packet_rate = (num_discarded_packets as f64) / (num_packets as f64);
-        if discarded_packet_rate >= MAX_DISCARDED_PACKET_RATE {
-            shrink_batches(packet_batches);
-        }
-        let post_packet_batches_len = packet_batches.len();
-        let shrink_total = pre_packet_batches_len.saturating_sub(post_packet_batches_len);
+        let shrink_total = if num_packets > 0 {
+            let pre_packet_batches_len = packet_batches.len();
+            let discarded_packet_rate = (num_discarded_packets as f64) / (num_packets as f64);
+            if discarded_packet_rate >= MAX_DISCARDED_PACKET_RATE {
+                shrink_batches(packet_batches);
+            }
+            let post_packet_batches_len = packet_batches.len();
+            pre_packet_batches_len.saturating_sub(post_packet_batches_len)
+        } else {
+            0
+        };
         shrink_time.stop();
         (shrink_time.as_us(), shrink_total)
     }
