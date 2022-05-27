@@ -271,7 +271,7 @@ impl Accounts {
                                 .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                         )
                     } else {
-                        let (account, rent) = if let Some(account_override) =
+                        let (mut account, rent) = if let Some(account_override) =
                             account_overrides.and_then(|overrides| overrides.get(key))
                         {
                             (account_override.clone(), 0)
@@ -301,7 +301,8 @@ impl Accounts {
                             }
 
                             Self::validate_fee_payer(
-                                &mut accounts,
+                                key,
+                                &mut account,
                                 i,
                                 error_counters,
                                 rent_collector,
@@ -388,14 +389,14 @@ impl Accounts {
     }
 
     fn validate_fee_payer(
-        accounts: &mut [(Pubkey, AccountSharedData)],
+        payer_address: &Pubkey,
+        payer_account: &mut AccountSharedData,
         payer_index: usize,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         fee: u64,
     ) -> Result<()> {
-        let (ref payer_address, ref mut payer_account) = accounts[payer_index];
         if payer_account.lamports() == 0 {
             error_counters.account_not_found += 1;
             return Err(TransactionError::AccountNotFound);
