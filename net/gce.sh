@@ -70,6 +70,7 @@ failOnValidatorBootupFailure=true
 preemptible=true
 evalInfo=false
 tmpfsAccounts=false
+profile=false
 defaultCustomMemoryGB="$(cloud_DefaultCustomMemoryGB)"
 customMemoryGB="$defaultCustomMemoryGB"
 
@@ -165,6 +166,7 @@ $(
    --client-machine-type [type]
                     - custom client machine type
    --tmpfs-accounts - Put accounts directory on a swap-backed tmpfs volume
+   --profile        - Requested nodes will be used for profiling.
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -245,6 +247,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --custom-memory-gb ]]; then
       customMemoryGB=$2
       shift 2
+    elif [[ $1 == --profile ]]; then
+      profile=true
+      shift
     else
       usage "Unknown long option: $1"
     fi
@@ -322,6 +327,9 @@ gce)
       echo -e '\nWarning: At least 100GB of system RAM is recommending with `--tmpfs-accounts` (see `--custom-memory-gb`)\n'
     fi
   fi
+  if [[ "$profile" = "true" && "$enableGpu" == "true" ]]; then
+    usage "--profile not supported for gpu nodes"
+  fi
   cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   gpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   ;;
@@ -334,6 +342,9 @@ ec2|azure|colo)
   fi
   if [[ "$customMemoryGB" != "$defaultCustomMemoryGB" ]]; then
     usage "--custom-memory-gb only supported on cloud provider: gce"
+  fi
+  if [[ "$profile" = "true" ]]; then
+    usage "--profile only supported on cloud provider: gce"
   fi
   ;;
 *)
@@ -696,7 +707,7 @@ create_error_cleanup() {
 case $command in
 delete)
   delete
-  ;;
+ ;;
 
 create)
   [[ -n $additionalValidatorCount ]] || usage "Need number of nodes"
@@ -819,6 +830,10 @@ $(
     cat mount-additional-disk.sh
   fi
 
+  if [[ -n $profile ]]; then
+    cat install-perf.sh
+  fi
+
   if [[ $selfDestructHours -gt 0 ]]; then
     cat <<EOSD
 
@@ -895,13 +910,18 @@ EOF
     cloud_Initialize "$prefix" "$zone"
   done
 
+  # use up-to-date kernel version for profiling
+  if $profile; then
+    imageName="ubuntu-2004-focal-v20220419 --image-project ubuntu-os-cloud"
+  fi
+
   if $externalNodes; then
     echo "Bootstrap validator is already configured"
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-validator" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
-      "$maybePreemptible" "$sshPrivateKey"
+      "$maybePreemptible" "$sshPrivateKey" "$imageName"
   fi
 
   if [[ $additionalValidatorCount -gt 0 ]]; then
@@ -922,7 +942,7 @@ EOF
       cloud_CreateInstances "$prefix" "$prefix-$zone-validator" "$numNodesPerZone" \
         "$enableGpu" "$validatorMachineType" "$zone" "$validatorBootDiskSizeInGb" \
         "$startupScript" "" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
-        "$preemptible" "$sshPrivateKey" &
+        "$preemptible" "$sshPrivateKey" "$imageName" &
     done
 
     wait
@@ -931,13 +951,13 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
+      "$startupScript" "" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey" "$imageName"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey" "$imageName"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
