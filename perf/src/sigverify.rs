@@ -1717,16 +1717,10 @@ mod tests {
                     }
                 })
             });
-<<<<<<< HEAD
-            println!("done show valid packets for case {}", i);
-            let shrunken_batch_count = shrink_batches(&mut batches);
-            println!("shrunk batch test {} count: {}", i, shrunken_batch_count);
-=======
             debug!("done show valid packets for case {}", i);
             shrink_batches(&mut batches);
             let shrunken_batch_count = batches.len();
             debug!("shrunk batch test {} count: {}", i, shrunken_batch_count);
->>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
             assert_eq!(shrunken_batch_count, *expect_batch_count);
             assert_eq!(count_valid_packets(&batches, |_| ()), *expect_valid_packets);
         }
