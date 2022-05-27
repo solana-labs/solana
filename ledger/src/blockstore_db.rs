@@ -9,7 +9,6 @@ use {
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
         },
-        rocksdb_metric_header,
     },
     bincode::{deserialize, serialize},
     byteorder::{BigEndian, ByteOrder},
@@ -492,12 +491,10 @@ impl Rocks {
         let result = self.db.write(batch);
         if let Some(op_start_instant) = op_start_instant {
             report_rocksdb_write_perf(
+                "write_batch", // We use write_batch as cf_name for write batch.
+                "write_batch", // op_name
                 &op_start_instant.elapsed(),
-                rocksdb_metric_header!(
-                    "blockstore_rocksdb_write_perf,op=write_batch",
-                    "write_batch",
-                    self.column_options
-                ),
+                &self.column_options,
             );
         }
         match result {
@@ -1144,10 +1141,7 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(
-                &op_start_instant.elapsed(),
-                C::rocksdb_get_perf_metric_header(&self.column_options),
-            );
+            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
         }
         result
     }
@@ -1226,8 +1220,10 @@ where
         let result = self.backend.put_cf(self.handle(), &C::key(key), value);
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
+                C::NAME,
+                "put",
                 &op_start_instant.elapsed(),
-                C::rocksdb_put_perf_metric_header(&self.column_options),
+                &self.column_options,
             );
         }
         result
@@ -1260,10 +1256,7 @@ where
         }
 
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(
-                &op_start_instant.elapsed(),
-                C::rocksdb_get_perf_metric_header(&self.column_options),
-            );
+            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
         }
         result
     }
@@ -1281,8 +1274,10 @@ where
 
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
+                C::NAME,
+                "put",
                 &op_start_instant.elapsed(),
-                C::rocksdb_put_perf_metric_header(&self.column_options),
+                &self.column_options,
             );
         }
         result
@@ -1296,8 +1291,10 @@ where
         let result = self.backend.delete_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
+                C::NAME,
+                "delete",
                 &op_start_instant.elapsed(),
-                C::rocksdb_delete_perf_metric_header(&self.column_options),
+                &self.column_options,
             );
         }
         result
@@ -1318,10 +1315,7 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(
-                &op_start_instant.elapsed(),
-                C::rocksdb_get_perf_metric_header(&self.column_options),
-            );
+            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
         }
 
         if let Some(serialized_value) = result? {
@@ -1342,10 +1336,7 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(
-                &op_start_instant.elapsed(),
-                C::rocksdb_get_perf_metric_header(&self.column_options),
-            );
+            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
         }
 
         if let Some(serialized_value) = result? {
@@ -1366,8 +1357,10 @@ where
         let result = self.backend.put_cf(self.handle(), &C::key(key), &buf);
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
+                C::NAME,
+                "put",
                 &op_start_instant.elapsed(),
-                C::rocksdb_put_perf_metric_header(&self.column_options),
+                &self.column_options,
             );
         }
 
