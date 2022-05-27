@@ -174,6 +174,13 @@ pub fn count_valid_packets(batches: &[PacketBatch]) -> usize {
         .sum()
 }
 
+pub fn count_discarded_packets(batches: &[PacketBatch]) -> usize {
+    batches
+        .iter()
+        .map(|batch| batch.iter().filter(|p| p.meta.discard()).count())
+        .sum()
+}
+
 // internal function to be unit-tested; should be used only by get_packet_offsets
 fn do_get_packet_offsets(
     packet: &Packet,
@@ -504,7 +511,11 @@ impl Deduper {
 }
 
 //inplace shrink a batch of packets
+<<<<<<< HEAD
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
+=======
+pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
+>>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
@@ -537,7 +548,7 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) -> usize {
             }
         }
     }
-    last_valid_batch
+    batches.truncate(last_valid_batch);
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
@@ -1502,9 +1513,14 @@ mod tests {
             });
             start.sort_by_key(|p| p.data);
 
+<<<<<<< HEAD
             let packet_count = count_valid_packets(&batches);
             let res = shrink_batches(&mut batches);
             batches.truncate(res);
+=======
+            let packet_count = count_valid_packets(&batches, |_| ());
+            shrink_batches(&mut batches);
+>>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
 
             //make sure all the non discarded packets are the same
             let mut end = vec![];
@@ -1528,14 +1544,27 @@ mod tests {
 
         // No batches
         // truncate of 1 on len 0 is a noop
+<<<<<<< HEAD
         assert_eq!(shrink_batches(&mut vec![]), 0);
         // One empty batch
         assert_eq!(shrink_batches(&mut vec![PacketBatch::with_capacity(0)]), 0);
+=======
+        shrink_batches(&mut Vec::new());
+        // One empty batch
+        {
+            let mut batches = vec![PacketBatch::with_capacity(0)];
+            shrink_batches(&mut batches);
+            assert_eq!(batches.len(), 0);
+        }
+>>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
         // Many empty batches
-        let mut batches = (0..BATCH_COUNT)
-            .map(|_| PacketBatch::with_capacity(0))
-            .collect::<Vec<_>>();
-        assert_eq!(shrink_batches(&mut batches), 0);
+        {
+            let mut batches = (0..BATCH_COUNT)
+                .map(|_| PacketBatch::with_capacity(0))
+                .collect::<Vec<_>>();
+            shrink_batches(&mut batches);
+            assert_eq!(batches.len(), 0);
+        }
     }
 
     #[test]
@@ -1688,12 +1717,21 @@ mod tests {
                     }
                 })
             });
+<<<<<<< HEAD
             println!("done show valid packets for case {}", i);
             let shrunken_batch_count = shrink_batches(&mut batches);
             println!("shrunk batch test {} count: {}", i, shrunken_batch_count);
             assert_eq!(shrunken_batch_count, *expect_batch_count);
             batches.truncate(shrunken_batch_count);
             assert_eq!(count_valid_packets(&batches), *expect_valid_packets);
+=======
+            debug!("done show valid packets for case {}", i);
+            shrink_batches(&mut batches);
+            let shrunken_batch_count = batches.len();
+            debug!("shrunk batch test {} count: {}", i, shrunken_batch_count);
+            assert_eq!(shrunken_batch_count, *expect_batch_count);
+            assert_eq!(count_valid_packets(&batches, |_| ()), *expect_valid_packets);
+>>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
         }
     }
 }
