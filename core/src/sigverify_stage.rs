@@ -11,18 +11,10 @@ use {
     crossbeam_channel::{SendError, Sender as CrossbeamSender},
     itertools::Itertools,
     solana_measure::measure::Measure,
-<<<<<<< HEAD
-    solana_perf::packet::PacketBatch,
-    solana_perf::sigverify::{count_valid_packets, shrink_batches, Deduper},
-=======
     solana_perf::{
-        packet::{Packet, PacketBatch},
-        sigverify::{
-            count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
-            Deduper,
-        },
+        packet::PacketBatch,
+        sigverify::{count_discarded_packets, count_packets_in_batches, shrink_batches, Deduper},
     },
->>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
     solana_sdk::timing,
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerError},
     std::{
@@ -318,30 +310,10 @@ impl SigVerifyStage {
 
         let mut verify_time = Measure::start("sigverify_batch_time");
         let mut batches = verifier.verify_batches(batches, num_valid_packets);
-<<<<<<< HEAD
-        verify_time.stop();
-
-        let mut shrink_time = Measure::start("sigverify_shrink_time");
-        let num_valid_packets = count_valid_packets(&batches);
-        let start_len = batches.len();
-        const MAX_EMPTY_BATCH_RATIO: usize = 4;
-        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
-            let valid = shrink_batches(&mut batches);
-            batches.truncate(valid);
-        }
-        let total_shrinks = start_len.saturating_sub(batches.len());
-        shrink_time.stop();
-=======
-        count_valid_packets(
-            &batches,
-            #[inline(always)]
-            |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
-        );
         verify_time.stop();
 
         // Post-shrink packet batches if many packets are discarded from sigverify
         let (post_shrink_time_us, post_shrink_total) = Self::maybe_shrink_batches(&mut batches);
->>>>>>> e4409a87f (Add pre shrink pass before sigverify batch (#25136))
 
         sendr.send(batches)?;
 
@@ -454,8 +426,8 @@ mod tests {
     use crate::sigverify::TransactionSigVerifier;
     use crate::sigverify_stage::timing::duration_as_ms;
     use crossbeam_channel::unbounded;
-    use solana_perf::packet::to_packet_batches;
     use solana_perf::test_tx::test_tx;
+    use solana_perf::{packet::to_packet_batches, sigverify::count_packets_in_batches};
     use std::sync::mpsc::channel;
     use {super::*, solana_perf::packet::Packet};
 
@@ -490,7 +462,7 @@ mod tests {
     }
     fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
         let len = 4096;
-        let chunk_size = 1024;
+        let chunk_size = 128;
         if use_same_tx {
             let tx = test_tx();
             to_packet_batches(&vec![tx; len], chunk_size)
@@ -545,9 +517,7 @@ mod tests {
 
     #[test]
     fn test_maybe_shrink_batches() {
-        let packets_per_batch = 128;
-        let total_packets = 4096;
-        let mut batches = gen_batches(true, packets_per_batch, total_packets);
+        let mut batches = gen_batches(true);
         let num_generated_batches = batches.len();
         let num_packets = count_packets_in_batches(&batches);
         assert_eq!(SigVerifyStage::maybe_shrink_batches(&mut batches).1, 0);
@@ -556,7 +526,7 @@ mod tests {
         {
             let mut index = 0;
             batches.iter_mut().for_each(|batch| {
-                batch.iter_mut().for_each(|p| {
+                batch.packets.iter_mut().for_each(|p| {
                     if ((index + 1) as f64 / num_packets as f64) < MAX_DISCARDED_PACKET_RATE {
                         p.meta.set_discard(true);
                     }
@@ -568,7 +538,9 @@ mod tests {
         assert_eq!(SigVerifyStage::maybe_shrink_batches(&mut batches).1, 0);
 
         // discard one more to exceed shrink threshold
-        batches.last_mut().unwrap()[0].meta.set_discard(true);
+        batches.last_mut().unwrap().packets[0]
+            .meta
+            .set_discard(true);
 
         let expected_num_shrunk_batches =
             1.max((num_generated_batches as f64 * MAX_DISCARDED_PACKET_RATE) as usize);
