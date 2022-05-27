@@ -425,7 +425,7 @@ impl CachedExecutors {
         let mut new_executors: Vec<_> = executors
             .iter()
             .filter_map(|(key, executor)| {
-                if let Some(mut entry) = self.executors.remove(key) {
+                if let Some(mut entry) = self.remove(key) {
                     self.stats.replacements.fetch_add(1, Relaxed);
                     entry.executor = executor.clone();
                     let _ = self.executors.insert(**key, entry);
@@ -457,7 +457,7 @@ impl CachedExecutors {
                     .map(|least| *least.0)
                     .collect::<Vec<_>>();
                 for least_key in least_keys.drain(..) {
-                    let _ = self.executors.remove(&least_key);
+                    let _ = self.remove(&least_key);
                     self.stats
                         .evictions
                         .entry(least_key)
@@ -477,8 +477,8 @@ impl CachedExecutors {
         }
     }
 
-    fn remove(&mut self, pubkey: &Pubkey) {
-        let _ = self.executors.remove(pubkey);
+    fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
+        self.executors.remove(pubkey)
     }
 
     fn clear(&mut self) {
@@ -4181,7 +4181,7 @@ impl Bank {
     /// Remove an executor from the bank's cache
     fn remove_executor(&self, pubkey: &Pubkey) {
         let mut cache = self.cached_executors.write().unwrap();
-        Arc::make_mut(&mut cache).remove(pubkey);
+        let _ = Arc::make_mut(&mut cache).remove(pubkey);
     }
 
     pub fn clear_executors(&self) {
