@@ -87,6 +87,9 @@ pub fn serialize_points(points: &Vec<DataPoint>, host_id: &str) -> String {
         for (name, value) in &point.fields {
             len += name.len() + value.len() + EXTRA_LEN;
         }
+        for (name, value) in &point.tags {
+            len += name.len() + value.len() + EXTRA_LEN;
+        }
         len += point.name.len();
         len += TIMESTAMP_LEN;
         len += host_id.len() + HOST_ID_LEN;
@@ -94,6 +97,9 @@ pub fn serialize_points(points: &Vec<DataPoint>, host_id: &str) -> String {
     let mut line = String::with_capacity(len);
     for point in points {
         let _ = write!(line, "{},host_id={}", &point.name, host_id);
+        for (name, value) in point.tags.iter() {
+            let _ = write!(line, ",{}={}", name, value);
+        }
 
         let mut first = true;
         for (name, value) in point.fields.iter() {
