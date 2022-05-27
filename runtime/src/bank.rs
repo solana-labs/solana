@@ -326,7 +326,7 @@ mod executor_cache {
     }
 }
 
-const MAX_CACHED_EXECUTORS: usize = 100; // 10 MB assuming programs are around 100k
+const MAX_CACHED_EXECUTORS: usize = 256;
 #[derive(Debug)]
 struct CachedExecutorsEntry {
     prev_epoch_count: u64,
