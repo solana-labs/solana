@@ -179,7 +179,7 @@ all_test_steps() {
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-bpf.sh"
     name: "stable-bpf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
       - "queue=sol-private"
@@ -206,7 +206,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
       - "queue=sol-private"
@@ -234,7 +234,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 45
     agents:
       - "queue=sol-private"
 EOF
@@ -264,7 +264,7 @@ EOF
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
       ; then
-    command_step bench "ci/test-bench.sh" 30
+    command_step bench "ci/test-bench.sh" 45
   else
     annotate --style info --context test-bench \
       "Bench skipped as no .rs files were modified"
@@ -272,15 +272,15 @@ EOF
 
   command_step "local-cluster" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    40
+    50
 
   command_step "local-cluster-flakey" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
-    10
+    20
 
   command_step "local-cluster-slow" \
     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow.sh" \
-    40
+    50
 }
 
 pull_or_push_steps() {
