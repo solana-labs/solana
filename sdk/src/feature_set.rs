@@ -412,6 +412,10 @@ pub mod add_shred_type_to_shred_seed {
     solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
 }
 
+pub mod disable_timestamp_bounding {
+    solana_sdk::declare_id!("BrsvrB9o9294NN9En2HbC1a44TN4a8e8dMNpHFmPX9fy");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -508,6 +512,7 @@ lazy_static! {
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
+        (disable_timestamp_bounding::id(), "disable bank timestamp bounding according to MaxAllowableDrift #25627"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

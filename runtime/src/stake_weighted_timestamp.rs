@@ -63,6 +63,7 @@ where
             break;
         }
     }
+    // This block can be removed when the `disable_timestamp_bounding` feature is active
     // Bound estimate by `max_allowable_drift` since the start of the epoch
     if let Some((epoch_start_slot, epoch_start_timestamp)) = epoch_start_timestamp {
         let poh_estimate_offset =
