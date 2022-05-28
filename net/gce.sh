@@ -846,6 +846,8 @@ gce_self_destruct_motd
 
 # Add self-destruct countdown to terminal prompt
 export PS1='\[\e]0;\u@\h: \w\a\]${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]$(/solana-scratch/gce-self-destruct-ps1.sh):\[\033[01;34m\]\w\[\033[00m\]\$ '
+export TERM=xterm
+
 EOS
 EOSD
     cat <<EOSD
