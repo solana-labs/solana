@@ -166,7 +166,7 @@ all_test_steps() {
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-bpf.sh"
     name: "stable-bpf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
       - "queue=sol-private"
@@ -193,7 +193,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
       - "queue=sol-private"
@@ -221,7 +221,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 45
     agents:
       - "queue=sol-private"
 EOF
@@ -248,7 +248,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-anchor-projects.sh"
     name: "downstream-anchor-projects"
-    timeout_in_minutes: 10
+    timeout_in_minutes: 20
     agents:
       - "queue=sol-private"
 EOF
