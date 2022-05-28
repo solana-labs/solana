@@ -179,7 +179,7 @@ all_test_steps() {
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-bpf.sh"
     name: "stable-bpf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
       - "queue=sol-private"
@@ -206,7 +206,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "log-*.txt"
     agents:
       - "queue=sol-private"
@@ -234,7 +234,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
     agents:
       - "queue=sol-private"
 EOF
@@ -264,7 +264,7 @@ EOF
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
       ; then
-    command_step bench "ci/test-bench.sh" 30
+    command_step bench "ci/test-bench.sh" 40
   else
     annotate --style info --context test-bench \
       "Bench skipped as no .rs files were modified"
