@@ -2017,7 +2017,7 @@ impl Bank {
 
         datapoint_info!(
             "bank-new_from_parent-heights",
-            ("slot_height", slot, i64),
+            ("slot", slot, i64),
             ("block_height", new.block_height, i64),
             ("parent_slot", parent.slot(), i64),
             ("bank_rc_creation_us", bank_rc_time.as_us(), i64),
