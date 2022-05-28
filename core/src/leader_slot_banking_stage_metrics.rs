@@ -131,10 +131,10 @@ impl LeaderSlotPacketCountMetrics {
         Self { ..Self::default() }
     }
 
-    fn report(&self, id: u32, slot: Slot) {
+    fn report(&self, id: &str, slot: Slot) {
         datapoint_info!(
             "banking_stage-leader_slot_packet_counts",
-            ("id", id as i64, i64),
+            "id" => id,
             ("slot", slot as i64, i64),
             (
                 "total_new_valid_packets",
@@ -240,7 +240,7 @@ pub(crate) struct LeaderSlotMetrics {
     // banking_stage creates one QosService instance per working threads, that is uniquely
     // identified by id. This field allows to categorize metrics for gossip votes, TPU votes
     // and other transactions.
-    id: u32,
+    id: String,
 
     // aggregate metrics per slot
     slot: Slot,
@@ -256,7 +256,7 @@ pub(crate) struct LeaderSlotMetrics {
 }
 
 impl LeaderSlotMetrics {
-    pub(crate) fn new(id: u32, slot: Slot, bank_creation_time: &Instant) -> Self {
+    pub(crate) fn new(id: String, slot: Slot, bank_creation_time: &Instant) -> Self {
         Self {
             id,
             slot,
@@ -270,9 +270,9 @@ impl LeaderSlotMetrics {
     pub(crate) fn report(&mut self) {
         self.is_reported = true;
 
-        self.timing_metrics.report(self.id, self.slot);
-        self.transaction_error_metrics.report(self.id, self.slot);
-        self.packet_count_metrics.report(self.id, self.slot);
+        self.timing_metrics.report(&self.id, self.slot);
+        self.transaction_error_metrics.report(&self.id, self.slot);
+        self.packet_count_metrics.report(&self.id, self.slot);
     }
 
     /// Returns `Some(self.slot)` if the metrics have been reported, otherwise returns None
@@ -290,11 +290,11 @@ pub struct LeaderSlotMetricsTracker {
     // Only `Some` if BankingStage detects it's time to construct our leader slot,
     // otherwise `None`
     leader_slot_metrics: Option<LeaderSlotMetrics>,
-    id: u32,
+    id: String,
 }
 
 impl LeaderSlotMetricsTracker {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: String) -> Self {
         Self {
             leader_slot_metrics: None,
             id,
@@ -321,7 +321,7 @@ impl LeaderSlotMetricsTracker {
             (None, Some(bank_start)) => {
                 // Our leader slot has begain, time to create a new slot tracker
                 self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
-                    self.id,
+                    self.id.clone(),
                     bank_start.working_bank.slot(),
                     &bank_start.bank_creation_time,
                 ));
@@ -335,7 +335,7 @@ impl LeaderSlotMetricsTracker {
                     // Ensure tests catch that `report()` method was called
                     let reported_slot = leader_slot_metrics.reported_slot();
                     self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
-                        self.id,
+                        self.id.clone(),
                         bank_start.working_bank.slot(),
                         &bank_start.bank_creation_time,
                     ));
@@ -775,7 +775,7 @@ mod tests {
             bank_creation_time: Arc::new(Instant::now()),
         };
 
-        let banking_stage_thread_id = 0;
+        let banking_stage_thread_id = String::from("0");
         let leader_slot_metrics_tracker = LeaderSlotMetricsTracker::new(banking_stage_thread_id);
 
         TestSlotBoundaryComponents {

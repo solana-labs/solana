@@ -95,8 +95,11 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
-                &mut LeaderSlotMetricsTracker::new(0),
+                &QosService::new(
+                    Arc::new(RwLock::new(CostModel::default())),
+                    String::from("1"),
+                ),
+                &mut LeaderSlotMetricsTracker::new(String::from("0")),
                 10,
             );
         });

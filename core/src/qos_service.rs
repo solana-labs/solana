@@ -63,7 +63,7 @@ impl Drop for QosService {
 }
 
 impl QosService {
-    pub fn new(cost_model: Arc<RwLock<CostModel>>, id: u32) -> Self {
+    pub fn new(cost_model: Arc<RwLock<CostModel>>, id: String) -> Self {
         let (report_sender, report_receiver) = unbounded();
         let running_flag = Arc::new(AtomicBool::new(true));
         let metrics = Arc::new(QosServiceMetrics::new(id));
@@ -354,7 +354,7 @@ struct QosServiceMetrics {
     /// banking_stage creates one QosService instance per working threads, that is uniquely
     /// identified by id. This field allows to categorize metrics for gossip votes, TPU votes
     /// and other transactions.
-    id: u32,
+    id: String,
 
     /// aggregate metrics per slot
     slot: AtomicU64,
@@ -424,7 +424,7 @@ struct QosServiceMetricsErrors {
 }
 
 impl QosServiceMetrics {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: String) -> Self {
         QosServiceMetrics {
             id,
             ..QosServiceMetrics::default()
@@ -435,7 +435,7 @@ impl QosServiceMetrics {
         if bank_slot != self.slot.load(Ordering::Relaxed) {
             datapoint_info!(
                 "qos-service-stats",
-                ("id", self.id as i64, i64),
+                "id" => &self.id,
                 ("bank_slot", bank_slot as i64, i64),
                 (
                     "compute_cost_time",
@@ -503,7 +503,7 @@ impl QosServiceMetrics {
             );
             datapoint_info!(
                 "qos-service-errors",
-                ("id", self.id as i64, i64),
+                "id" => &self.id,
                 ("bank_slot", bank_slot as i64, i64),
                 (
                     "retried_txs_per_block_limit_count",
@@ -583,7 +583,7 @@ mod tests {
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), vote_tx, transfer_tx];
 
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let qos_service = QosService::new(cost_model.clone(), 1);
+        let qos_service = QosService::new(cost_model.clone(), String::from("1"));
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // verify the size of txs_costs and its contents
@@ -632,7 +632,7 @@ mod tests {
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
-        let qos_service = QosService::new(cost_model, 1);
+        let qos_service = QosService::new(cost_model, String::from("1"));
         let txs_costs = qos_service.compute_transaction_costs(txs.iter());
 
         // set cost tracker limit to fit 1 transfer tx and 1 vote tx
@@ -672,7 +672,10 @@ mod tests {
 
         // assert all tx_costs should be applied to cost_tracker if all execution_results are all committed
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(
+                Arc::new(RwLock::new(CostModel::default())),
+                String::from("1"),
+            );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
@@ -725,7 +728,10 @@ mod tests {
 
         // assert all tx_costs should be removed from cost_tracker if all execution_results are all Not Committed
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(
+                Arc::new(RwLock::new(CostModel::default())),
+                String::from("1"),
+            );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
@@ -765,7 +771,10 @@ mod tests {
 
         // assert only commited tx_costs are applied cost_tracker
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(
+                Arc::new(RwLock::new(CostModel::default())),
+                String::from("1"),
+            );
             let txs_costs = qos_service.compute_transaction_costs(txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
