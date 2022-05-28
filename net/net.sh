@@ -53,6 +53,7 @@ Operate a configured testnet
    -r / --skip-setup                  - Reuse existing node/ledger configuration from a
                                         previous |start| (ie, don't run ./multinode-demo/setup.sh).
    -d / --debug                       - Build/deploy the testnet with debug binaries
+   -p / --profile                     - Build/deploy the testnet with release binaries containing frame pointers and debug symbols
    $CLIENT_OPTIONS
    --client-delay-start
                                       - Number of seconds to wait after validators have finished starting before starting client programs
@@ -193,9 +194,13 @@ build() {
       buildVariant=--debug
     fi
 
+    if $profileBuild; then
+      PROFILER_FLAGS="RUSTFLAGS='-C force-frame-pointers=y -g'"
+    fi
+
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf $buildVariant --validator-only
+      $PROFILER_FLAGS scripts/cargo-install-all.sh farf $buildVariant --validator-only
     "
   )
 
@@ -783,6 +788,7 @@ maybeAllowPrivateAddr=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
 debugBuild=false
+profileBuild=false
 doBuild=true
 gpuMode=auto
 netemPartition=""
@@ -869,6 +875,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --debug ]]; then
       debugBuild=true
       shift 1
+    elif [[ $1 = --profile ]]; then
+      profileBuild=true
+      shift 1
     elif [[ $1 = --partition ]]; then
       netemPartition=$2
       shift 2
@@ -930,7 +939,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
+while getopts "h?T:t:o:f:rc:Fn:i:d:p" opt "${shortArgs[@]}"; do
   case $opt in
   h | \?)
     usage
@@ -1008,6 +1017,9 @@ while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
     ;;
   d)
     debugBuild=true
+    ;;
+  p)
+    profileBuild=true
     ;;
   *)
     usage "Error: unhandled option: $opt"
