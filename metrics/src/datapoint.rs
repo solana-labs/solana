@@ -46,7 +46,7 @@ pub struct DataPoint {
     pub name: &'static str,
     pub timestamp: SystemTime,
     /// tags are eligible for group-by operations.
-    pub tags: Vec<(&'static str, &'static str)>,
+    pub tags: Vec<(&'static str, String)>,
     pub fields: Vec<(&'static str, String)>,
 }
 
@@ -60,8 +60,8 @@ impl DataPoint {
         }
     }
 
-    pub fn add_tag(&mut self, name: &'static str, value: &'static str) -> &mut Self {
-        self.tags.push((name, value));
+    pub fn add_tag(&mut self, name: &'static str, value: &str) -> &mut Self {
+        self.tags.push((name, value.to_string()));
         self
     }
 
@@ -321,8 +321,8 @@ mod test {
         );
         assert_eq!(point.fields[2], ("f64", "12.34".to_string()));
         assert_eq!(point.fields[3], ("bool", "true".to_string()));
-        assert_eq!(point.tags[0], ("tag1", "tag-value-1"));
-        assert_eq!(point.tags[1], ("tag2", "tag-value-2"));
-        assert_eq!(point.tags[2], ("tag3", "tag-value-3"));
+        assert_eq!(point.tags[0], ("tag1", "tag-value-1".to_string()));
+        assert_eq!(point.tags[1], ("tag2", "tag-value-2".to_string()));
+        assert_eq!(point.tags[2], ("tag3", "tag-value-3".to_string()));
     }
 }
