@@ -770,7 +770,7 @@ impl Blockstore {
         let mut start = Measure::start("Blockstore lock");
         let _lock = self.insert_shreds_lock.lock().unwrap();
         start.stop();
-        metrics.insert_lock_elapsed += start.as_us();
+        metrics.insert_lock_elapsed_us += start.as_us();
 
         let db = &*self.db;
         let mut write_batch = db.batch()?;
@@ -782,7 +782,7 @@ impl Blockstore {
 
         metrics.num_shreds += shreds.len();
         let mut start = Measure::start("Shred insertion");
-        let mut index_meta_time = 0;
+        let mut index_meta_time_us = 0;
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
         let mut inserted_indices = Vec::new();
         for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
@@ -800,7 +800,7 @@ impl Blockstore {
                         &mut slot_meta_working_set,
                         &mut write_batch,
                         &mut just_inserted_shreds,
-                        &mut index_meta_time,
+                        &mut index_meta_time_us,
                         is_trusted,
                         handle_duplicate,
                         leader_schedule,
@@ -828,7 +828,7 @@ impl Blockstore {
                         &mut index_working_set,
                         &mut write_batch,
                         &mut just_inserted_shreds,
-                        &mut index_meta_time,
+                        &mut index_meta_time_us,
                         handle_duplicate,
                         is_trusted,
                         shred_source,
@@ -839,7 +839,7 @@ impl Blockstore {
         }
         start.stop();
 
-        metrics.insert_shreds_elapsed += start.as_us();
+        metrics.insert_shreds_elapsed_us += start.as_us();
         let mut start = Measure::start("Shred recovery");
         if let Some(leader_schedule_cache) = leader_schedule {
             let recovered_data_shreds = Self::try_shred_recovery(
@@ -866,7 +866,7 @@ impl Blockstore {
                         &mut slot_meta_working_set,
                         &mut write_batch,
                         &mut just_inserted_shreds,
-                        &mut index_meta_time,
+                        &mut index_meta_time_us,
                         is_trusted,
                         &handle_duplicate,
                         leader_schedule,
@@ -902,14 +902,14 @@ impl Blockstore {
             }
         }
         start.stop();
-        metrics.shred_recovery_elapsed += start.as_us();
+        metrics.shred_recovery_elapsed_us += start.as_us();
 
         let mut start = Measure::start("Shred recovery");
         // Handle chaining for the members of the slot_meta_working_set that were inserted into,
         // drop the others
         handle_chaining(&self.db, &mut write_batch, &mut slot_meta_working_set)?;
         start.stop();
-        metrics.chaining_elapsed += start.as_us();
+        metrics.chaining_elapsed_us += start.as_us();
 
         let mut start = Measure::start("Commit Working Sets");
         let (should_signal, newly_completed_slots) = commit_slot_meta_working_set(
@@ -928,12 +928,12 @@ impl Blockstore {
             }
         }
         start.stop();
-        metrics.commit_working_sets_elapsed += start.as_us();
+        metrics.commit_working_sets_elapsed_us += start.as_us();
 
         let mut start = Measure::start("Write Batch");
         self.db.write(write_batch)?;
         start.stop();
-        metrics.write_batch_elapsed += start.as_us();
+        metrics.write_batch_elapsed_us += start.as_us();
 
         send_signals(
             &self.new_shreds_signals.lock().unwrap(),
@@ -944,8 +944,8 @@ impl Blockstore {
 
         total_start.stop();
 
-        metrics.total_elapsed += total_start.as_us();
-        metrics.index_meta_time += index_meta_time;
+        metrics.total_elapsed_us += total_start.as_us();
+        metrics.index_meta_time_us += index_meta_time_us;
 
         Ok((newly_completed_data_sets, inserted_indices))
     }
@@ -1028,7 +1028,7 @@ impl Blockstore {
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_received_shreds: &mut HashMap<ShredId, Shred>,
-        index_meta_time: &mut u64,
+        index_meta_time_us: &mut u64,
         handle_duplicate: &F,
         is_trusted: bool,
         shred_source: ShredSource,
@@ -1041,7 +1041,7 @@ impl Blockstore {
         let shred_index = u64::from(shred.index());
 
         let index_meta_working_set_entry =
-            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time);
+            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time_us);
 
         let index_meta = &mut index_meta_working_set_entry.index;
 
@@ -1186,7 +1186,7 @@ impl Blockstore {
     ///     be committed atomically.
     /// - `just_inserted_data_shreds`: a (slot, shred index within the slot)
     ///     to shred map which maintains which data shreds have been inserted.
-    /// - `index_meta_time`: the time spent on loading or creating the
+    /// - `index_meta_time_us`: the time spent on loading or creating the
     ///     index meta entry from the db.
     /// - `is_trusted`: if false, this function will check whether the
     ///     input shred is duplicate.
@@ -1203,7 +1203,7 @@ impl Blockstore {
         slot_meta_working_set: &mut HashMap<u64, SlotMetaWorkingSetEntry>,
         write_batch: &mut WriteBatch,
         just_inserted_shreds: &mut HashMap<ShredId, Shred>,
-        index_meta_time: &mut u64,
+        index_meta_time_us: &mut u64,
         is_trusted: bool,
         handle_duplicate: &F,
         leader_schedule: Option<&LeaderScheduleCache>,
@@ -1216,7 +1216,7 @@ impl Blockstore {
         let shred_index = u64::from(shred.index());
 
         let index_meta_working_set_entry =
-            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time);
+            get_index_meta_entry(&self.db, slot, index_working_set, index_meta_time_us);
 
         let index_meta = &mut index_meta_working_set_entry.index;
         let slot_meta_entry = get_slot_meta_entry(
@@ -3239,7 +3239,7 @@ fn get_index_meta_entry<'a>(
     db: &Database,
     slot: Slot,
     index_working_set: &'a mut HashMap<u64, IndexMetaWorkingSetEntry>,
-    index_meta_time: &mut u64,
+    index_meta_time_us: &mut u64,
 ) -> &'a mut IndexMetaWorkingSetEntry {
     let index_cf = db.column::<cf::Index>();
     let mut total_start = Measure::start("Total elapsed");
@@ -3254,7 +3254,7 @@ fn get_index_meta_entry<'a>(
         }
     });
     total_start.stop();
-    *index_meta_time += total_start.as_us();
+    *index_meta_time_us += total_start.as_us();
     res
 }
 
@@ -5887,14 +5887,14 @@ pub mod tests {
         let mut index_working_set = HashMap::new();
         let mut just_received_shreds = HashMap::new();
         let mut write_batch = blockstore.db.batch().unwrap();
-        let mut index_meta_time = 0;
+        let mut index_meta_time_us = 0;
         assert!(blockstore.check_insert_coding_shred(
             coding_shred.clone(),
             &mut erasure_metas,
             &mut index_working_set,
             &mut write_batch,
             &mut just_received_shreds,
-            &mut index_meta_time,
+            &mut index_meta_time_us,
             &|_shred| {
                 panic!("no dupes");
             },
@@ -5912,7 +5912,7 @@ pub mod tests {
             &mut index_working_set,
             &mut write_batch,
             &mut just_received_shreds,
-            &mut index_meta_time,
+            &mut index_meta_time_us,
             &|_shred| {
                 counter.fetch_add(1, Ordering::Relaxed);
             },
