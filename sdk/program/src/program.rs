@@ -47,7 +47,7 @@ use crate::{
 ///
 /// These two fields are stored in [`RefCell`]s to enforce the aliasing
 /// discipline for mutated values required by the Rust language. Prior to
-/// invoking the runtime this routine will test that each `RefCell` is
+/// invoking the runtime, this routine will test that each `RefCell` is
 /// borrowable as required by the callee and return an error if not.
 ///
 /// The CPU cost of these runtime checks can be avoided with the unsafe
