@@ -327,7 +327,7 @@ gce)
       echo -e '\nWarning: At least 100GB of system RAM is recommending with `--tmpfs-accounts` (see `--custom-memory-gb`)\n'
     fi
   fi
-  if [[ "$profile" = "true" && "$enableGpu" == "true" ]]; then
+  if [[ "$profile" = "true" && "$enableGpu" = "true" ]]; then
     usage "--profile not supported for gpu nodes"
   fi
   cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
@@ -830,7 +830,7 @@ $(
     cat mount-additional-disk.sh
   fi
 
-  if [[ -n $profile ]]; then
+  if [[ "$profile" = "true" ]]; then
     cat install-perf.sh
   fi
 
