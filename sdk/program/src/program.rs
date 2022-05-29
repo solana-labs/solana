@@ -154,7 +154,7 @@ pub fn invoke_unchecked(instruction: &Instruction, account_infos: &[AccountInfo]
 /// Invoke a cross-program instruction with program signatures.
 ///
 /// This function is like [`invoke`] with the additional ability to virtually
-/// sign an invocation on behalf of a [program derived addresses][pda] (PDAs)
+/// sign an invocation on behalf of one or more [program derived addresses][pda] (PDAs)
 /// controlled by the calling program, allowing the callee to mutate them, or
 /// otherwise confirm that a PDA program key has authorized the actions of the
 /// callee.
