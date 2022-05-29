@@ -1,7 +1,7 @@
 //! Cross-program invocation.
 //!
 //! Solana programs may call other programs, termed [_cross-program
-//! invocation_][cpi] (CPI), with the [`invoke`] and [`invoke_signed`]
+//! invocations_][cpi] (CPI), with the [`invoke`] and [`invoke_signed`]
 //! functions.
 //!
 //! [`invoke`]: invoke
