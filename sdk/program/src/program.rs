@@ -328,7 +328,7 @@ pub const MAX_RETURN_DATA: usize = 1024;
 /// from cross-program invoked programs back to their caller.
 ///
 /// The maximum size of return data is [`MAX_RETURN_DATA`]. Return data is
-/// retreived by the caller with [`get_return_data`].
+/// retrieved by the caller with [`get_return_data`].
 pub fn set_return_data(data: &[u8]) {
     #[cfg(target_arch = "bpf")]
     {
