@@ -910,18 +910,13 @@ EOF
     cloud_Initialize "$prefix" "$zone"
   done
 
-  # use up-to-date kernel version for profiling
-  if $profile; then
-    imageName="ubuntu-2004-focal-v20220419 --image-project ubuntu-os-cloud"
-  fi
-
   if $externalNodes; then
     echo "Bootstrap validator is already configured"
   else
     cloud_CreateInstances "$prefix" "$prefix-bootstrap-validator" 1 \
       "$enableGpu" "$bootstrapLeaderMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
       "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
-      "$maybePreemptible" "$sshPrivateKey" "$imageName"
+      "$maybePreemptible" "$sshPrivateKey"
   fi
 
   if [[ $additionalValidatorCount -gt 0 ]]; then
@@ -942,7 +937,7 @@ EOF
       cloud_CreateInstances "$prefix" "$prefix-$zone-validator" "$numNodesPerZone" \
         "$enableGpu" "$validatorMachineType" "$zone" "$validatorBootDiskSizeInGb" \
         "$startupScript" "" "$bootDiskType" "$validatorAdditionalDiskSizeInGb" \
-        "$preemptible" "$sshPrivateKey" "$imageName" &
+        "$preemptible" "$sshPrivateKey" &
     done
 
     wait
@@ -951,13 +946,13 @@ EOF
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$enableGpu" "$clientMachineType" "${zones[0]}" "$clientBootDiskSizeInGb" \
-      "$startupScript" "" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey" "$imageName"
+      "$startupScript" "" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
   if $blockstreamer; then
     cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
       "$enableGpu" "$blockstreamerMachineType" "${zones[0]}" "$validatorBootDiskSizeInGb" \
-      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey" "$imageName"
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType" "" "$maybePreemptible" "$sshPrivateKey"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
