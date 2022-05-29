@@ -766,7 +766,6 @@ fn load_bank_forks(
             "snapshot.ledger-tool"
         });
 
-    let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
@@ -774,18 +773,6 @@ fn load_bank_forks(
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         let incremental_snapshot_archives_dir =
             incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
-
-        if let Some(full_snapshot_slot) =
-            snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
-        {
-            let incremental_snapshot_slot =
-                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &incremental_snapshot_archives_dir,
-                    full_snapshot_slot,
-                )
-                .unwrap_or_default();
-            starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
-        }
 
         Some(SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
@@ -798,20 +785,20 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        for slot in starting_slot..=halt_slot {
-            if let Ok(Some(slot_meta)) = blockstore.meta(slot) {
-                if !slot_meta.is_full() {
-                    eprintln!("Unable to process from slot {} to {} due to blockstore slot {} not being full",
-                        starting_slot, halt_slot, slot);
-                    exit(1);
-                }
-            } else {
+        if let Ok(Some(slot_meta)) = blockstore.meta(halt_slot) {
+            if !slot_meta.is_full() {
                 eprintln!(
-                    "Unable to process from slot {} to {} due to blockstore missing slot {}",
-                    starting_slot, halt_slot, slot
+                    "Unable to load bank forks at slot {} due to blockstore slot {} not being full",
+                    halt_slot, halt_slot
                 );
                 exit(1);
             }
+        } else {
+            eprintln!(
+                "Unable to load bank forks at slot {} due to blockstore missing slot {}",
+                halt_slot, halt_slot
+            );
+            exit(1);
         }
     }
 
