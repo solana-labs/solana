@@ -5744,13 +5744,15 @@ impl AccountsDb {
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
-        txn_signatures: &[Signature],
+        txn_signatures: &[&Signature],
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
             assert_eq!(hashes.len(), len);
             hashes
         });
+
+        assert_eq!(txn_signatures.len(), len);
 
         accounts_and_meta_to_store
             .iter().zip(txn_signatures.iter())
@@ -5794,7 +5796,7 @@ impl AccountsDb {
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
@@ -5825,7 +5827,12 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
-            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, txn_signatures)
+            self.write_accounts_to_cache(
+                slot,
+                hashes,
+                &accounts_and_meta_to_store,
+                txn_signatures.unwrap(), // signatures MUST be not None
+            )
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
@@ -7330,7 +7337,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) {
         self.store(slot, accounts, self.caching_enabled, txn_signatures);
     }
@@ -7341,7 +7348,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         accounts: &[(&Pubkey, &AccountSharedData)],
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) {
         self.store(slot, accounts, false, txn_signatures);
     }
@@ -7350,7 +7357,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         is_cached_store: bool,
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
@@ -7507,7 +7514,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[&Hash]>,
         is_cached_store: bool,
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) {
         // This path comes from a store to a non-frozen slot.
         // If a store is dead here, then a newer update for
@@ -7547,7 +7554,7 @@ impl AccountsDb {
             write_version_producer,
             is_cached_store,
             reset_accounts,
-            &[], // Will not be used because is_cached_store = false
+            None, // Will not be used because is_cached_store = false
         )
     }
 
@@ -7559,7 +7566,7 @@ impl AccountsDb {
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
         reset_accounts: bool,
-        txn_signatures: &[Signature],
+        txn_signatures: Option<&[&Signature]>,
     ) -> StoreAccountsTiming {
         let storage_finder = Box::new(move |slot, size| {
             storage

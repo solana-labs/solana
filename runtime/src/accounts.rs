@@ -1041,7 +1041,7 @@ impl Accounts {
         self.accounts_db.store_uncached(
             slot,
             &[(pubkey, account)],
-            &[Signature::default()]
+            None
         );
     }
 
@@ -1049,7 +1049,7 @@ impl Accounts {
         self.accounts_db.store_cached(
             slot,
             &[(pubkey, account)],
-            &[Signature::default()]
+            None
         );
     }
 
@@ -1219,7 +1219,7 @@ impl Accounts {
             lamports_per_signature,
             leave_nonce_on_success,
         );
-        self.accounts_db.store_cached(slot, &accounts_to_store, &txn_signatures);
+        self.accounts_db.store_cached(slot, &accounts_to_store, Some(&txn_signatures));
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -1237,7 +1237,7 @@ impl Accounts {
         blockhash: &Hash,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
-    ) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<Signature>) {
+    ) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<&'a Signature>) {
         let mut accounts = Vec::with_capacity(load_results.len());
         let mut signatures = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
@@ -1308,7 +1308,7 @@ impl Accounts {
 
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
-                        signatures.push(tx.signature().clone());
+                        signatures.push(tx.signature());
                     }
                 }
             }
