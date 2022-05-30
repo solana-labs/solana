@@ -1045,11 +1045,10 @@ impl Accounts {
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        let signature = Signature::default();
         self.accounts_db.store_cached(
             slot,
             &[(pubkey, account)],
-            Some(&[&signature]),
+            None,
         );
     }
 
