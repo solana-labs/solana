@@ -2270,6 +2270,14 @@ mod tests {
                 .unwrap(),
             (44, Hash::default(), ArchiveFormat::Tar)
         );
+        assert_eq!(
+            parse_full_snapshot_archive_filename(&format!(
+                "snapshot-45-{}.tar.lz4",
+                Hash::default()
+            ))
+            .unwrap(),
+            (45, Hash::default(), ArchiveFormat::TarLz4)
+        );
 
         assert!(parse_full_snapshot_archive_filename("invalid").is_err());
         assert!(
@@ -2337,6 +2345,14 @@ mod tests {
             ))
             .unwrap(),
             (44, 345, Hash::default(), ArchiveFormat::Tar)
+        );
+        assert_eq!(
+            parse_incremental_snapshot_archive_filename(&format!(
+                "incremental-snapshot-45-456-{}.tar.lz4",
+                Hash::default()
+            ))
+            .unwrap(),
+            (45, 456, Hash::default(), ArchiveFormat::TarLz4)
         );
 
         assert!(parse_incremental_snapshot_archive_filename("invalid").is_err());
