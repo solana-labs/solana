@@ -43,7 +43,7 @@ impl ShredSigVerifier {
         batches
             .iter()
             .flat_map(PacketBatch::iter)
-            .map(shred::layout::get_shred)
+            .filter_map(shred::layout::get_shred)
             .filter_map(shred::layout::get_slot)
             .collect()
     }

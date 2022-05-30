@@ -38,7 +38,10 @@ pub fn verify_shred_cpu(
     if packet.meta.discard() {
         return false;
     }
-    let shred = shred::layout::get_shred(packet);
+    let shred = match shred::layout::get_shred(packet) {
+        None => return false,
+        Some(shred) => shred,
+    };
     let slot = match shred::layout::get_slot(shred) {
         None => return false,
         Some(slot) => slot,
@@ -53,10 +56,11 @@ pub fn verify_shred_cpu(
         Some(signature) => signature,
     };
     trace!("signature {}", signature);
-    let message = match shred::layout::get_signed_message(shred) {
-        None => return false,
-        Some(message) => message,
-    };
+    let message =
+        match shred::layout::get_signed_message_range(shred).and_then(|slice| shred.get(slice)) {
+            None => return false,
+            Some(message) => message,
+        };
     signature.verify(pubkey, message)
 }
 
@@ -101,7 +105,7 @@ where
                         return Slot::MAX;
                     }
                     let shred = shred::layout::get_shred(packet);
-                    match shred::layout::get_slot(shred) {
+                    match shred.and_then(shred::layout::get_slot) {
                         Some(slot) if slot_keys.contains_key(&slot) => slot,
                         _ => Slot::MAX,
                     }
@@ -177,8 +181,11 @@ fn shred_gpu_offsets(
             let sig = shred::layout::get_signature_range();
             let sig = add_offset(sig, pubkeys_end);
             debug_assert_eq!(sig.end - sig.start, std::mem::size_of::<Signature>());
-            let msg = shred::layout::get_signed_message_range(packet);
-            let msg = add_offset(msg, pubkeys_end);
+            let shred = shred::layout::get_shred(packet);
+            // Signature may verify for an empty message but the packet will be
+            // discarded during deserialization.
+            let msg = shred.and_then(shred::layout::get_signed_message_range);
+            let msg = add_offset(msg.unwrap_or_default(), pubkeys_end);
             signature_offsets.push(sig.start as u32);
             msg_start_offsets.push(msg.start as u32);
             let msg_size = msg.end.saturating_sub(msg.start);
@@ -267,7 +274,9 @@ pub fn verify_shreds_gpu(
 
 fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
     let sig = shred::layout::get_signature_range();
-    let msg = shred::layout::get_signed_message_range(packet);
+    let msg = shred::layout::get_shred(packet)
+        .and_then(shred::layout::get_signed_message_range)
+        .unwrap();
     assert!(
         packet.meta.size >= sig.end,
         "packet is not large enough for a signature"
@@ -414,7 +423,7 @@ pub fn sign_shreds_gpu(
 mod tests {
     use {
         super::*,
-        crate::shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
+        crate::shred::{Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
         solana_sdk::signature::{Keypair, Signer},
     };
 
@@ -589,7 +598,7 @@ mod tests {
                 slot,
                 0xc0de,
                 i as u16,
-                &[5; SIZE_OF_DATA_SHRED_PAYLOAD],
+                &[5; LEGACY_SHRED_DATA_CAPACITY],
                 ShredFlags::LAST_SHRED_IN_SLOT,
                 1,
                 2,

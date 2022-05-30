@@ -1,7 +1,6 @@
 use {
     crate::shred::{
-        Error, ProcessShredsStats, Shred, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        SIZE_OF_DATA_SHRED_PAYLOAD,
+        Error, ProcessShredsStats, Shred, ShredData, ShredFlags, MAX_DATA_SHREDS_PER_FEC_BLOCK,
     },
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
@@ -110,9 +109,9 @@ impl Shredder {
         serialize_time.stop();
 
         let mut gen_data_time = Measure::start("shred_gen_data_time");
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
+        let data_buffer_size = ShredData::capacity().unwrap();
         // Integer division to ensure we have enough shreds to fit all the data
-        let num_shreds = (serialized_shreds.len() + payload_capacity - 1) / payload_capacity;
+        let num_shreds = (serialized_shreds.len() + data_buffer_size - 1) / data_buffer_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
         // 1) Generate data shreds
         let make_data_shred = |shred_index: u32, data| {
@@ -141,7 +140,7 @@ impl Shredder {
         };
         let data_shreds: Vec<Shred> = PAR_THREAD_POOL.install(|| {
             serialized_shreds
-                .par_chunks(payload_capacity)
+                .par_chunks(data_buffer_size)
                 .enumerate()
                 .map(|(i, shred_data)| {
                     let shred_index = next_shred_index + i as u32;
@@ -299,7 +298,7 @@ impl Shredder {
         let mut shards = vec![None; fec_set_size];
         for shred in shreds {
             let index = match shred.erasure_shard_index() {
-                Some(index) if index < fec_set_size => index,
+                Ok(index) if index < fec_set_size => index,
                 _ => return Err(Error::from(InvalidIndex)),
             };
             shards[index] = Some(shred.erasure_shard()?);
@@ -317,8 +316,8 @@ impl Shredder {
                 shred.slot() == slot
                     && shred.is_data()
                     && match shred.erasure_shard_index() {
-                        Some(index) => index < num_data_shreds,
-                        None => false,
+                        Ok(index) => index < num_data_shreds,
+                        Err(_) => false,
                     }
             })
             .collect();
@@ -342,7 +341,8 @@ impl Shredder {
             // For backward compatibility. This is needed when the data shred
             // payload is None, so that deserializing to Vec<Entry> results in
             // an empty vector.
-            Ok(vec![0u8; SIZE_OF_DATA_SHRED_PAYLOAD])
+            let data_buffer_size = ShredData::capacity().unwrap();
+            Ok(vec![0u8; data_buffer_size])
         } else {
             Ok(data)
         }
@@ -403,13 +403,13 @@ mod tests {
             })
             .collect();
 
-        let size = serialized_size(&entries).unwrap();
+        let size = serialized_size(&entries).unwrap() as usize;
         // Integer division to ensure we have enough shreds to fit all the data
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD as u64;
-        let num_expected_data_shreds = (size + payload_capacity - 1) / payload_capacity;
+        let data_buffer_size = ShredData::capacity().unwrap();
+        let num_expected_data_shreds = (size + data_buffer_size - 1) / data_buffer_size;
         let num_expected_coding_shreds = (2 * MAX_DATA_SHREDS_PER_FEC_BLOCK as usize)
-            .saturating_sub(num_expected_data_shreds as usize)
-            .max(num_expected_data_shreds as usize);
+            .saturating_sub(num_expected_data_shreds)
+            .max(num_expected_data_shreds);
         let start_index = 0;
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,
@@ -419,14 +419,14 @@ mod tests {
             start_index, // next_code_index
         );
         let next_index = data_shreds.last().unwrap().index() + 1;
-        assert_eq!(next_index as u64, num_expected_data_shreds);
+        assert_eq!(next_index as usize, num_expected_data_shreds);
 
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
         for shred in data_shreds.iter() {
             assert_eq!(shred.shred_type(), ShredType::Data);
             let index = shred.index();
-            let is_last = index as u64 == num_expected_data_shreds - 1;
+            let is_last = index as usize == num_expected_data_shreds - 1;
             verify_test_data_shred(
                 shred,
                 index,
@@ -457,7 +457,7 @@ mod tests {
             assert!(coding_shred_indexes.contains(&i));
         }
 
-        assert_eq!(data_shred_indexes.len() as u64, num_expected_data_shreds);
+        assert_eq!(data_shred_indexes.len(), num_expected_data_shreds);
         assert_eq!(coding_shred_indexes.len(), num_expected_coding_shreds);
 
         // Test reassembly
@@ -575,8 +575,8 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
         // Create enough entries to make > 1 shred
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
-        let num_entries = max_ticks_per_n_shreds(1, Some(payload_capacity)) + 1;
+        let data_buffer_size = ShredData::capacity().unwrap();
+        let num_entries = max_ticks_per_n_shreds(1, Some(data_buffer_size)) + 1;
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();
@@ -624,9 +624,9 @@ mod tests {
         let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
 
         let num_data_shreds: usize = 5;
-        let payload_capacity = SIZE_OF_DATA_SHRED_PAYLOAD;
+        let data_buffer_size = ShredData::capacity().unwrap();
         let num_entries =
-            max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(payload_capacity));
+            max_entries_per_n_shred(&entry, num_data_shreds as u64, Some(data_buffer_size));
         let entries: Vec<_> = (0..num_entries)
             .map(|_| {
                 let keypair0 = Keypair::new();

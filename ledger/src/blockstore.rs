@@ -14,7 +14,10 @@ use {
         },
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
-        shred::{self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredType, Shredder},
+        shred::{
+            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredData, ShredId, ShredType,
+            Shredder,
+        },
         slot_stats::{ShredSource, SlotsStats},
     },
     bincode::deserialize,
@@ -1556,7 +1559,7 @@ impl Blockstore {
 
     pub fn get_data_shred(&self, slot: Slot, index: u64) -> Result<Option<Vec<u8>>> {
         let shred = self.data_shred_cf.get_bytes((slot, index))?;
-        let shred = shred.map(Shred::resize_stored_shred).transpose();
+        let shred = shred.map(ShredData::resize_stored_shred).transpose();
         shred.map_err(|err| {
             let err = format!("Invalid stored shred: {}", err);
             let err = Box::new(bincode::ErrorKind::Custom(err));

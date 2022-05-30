@@ -49,8 +49,13 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
+pub(crate) use shred_data::ShredData;
+pub use {
+    self::stats::{ProcessShredsStats, ShredFetchStats},
+    crate::shredder::Shredder,
+};
 use {
-    self::traits::{Shred as _, ShredCode as _, ShredData as _},
+    self::{shred_code::ShredCode, traits::Shred as _},
     crate::blockstore::MAX_DATA_SHREDS_PER_SLOT,
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
@@ -62,7 +67,6 @@ use {
         clock::Slot,
         feature_set,
         hash::{hashv, Hash},
-        packet::PACKET_DATA_SIZE,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
@@ -70,51 +74,37 @@ use {
     std::fmt::Debug,
     thiserror::Error,
 };
-pub use {
-    self::{
-        legacy::{ShredCode, ShredData},
-        stats::{ProcessShredsStats, ShredFetchStats},
-    },
-    crate::shredder::Shredder,
-};
 
+mod common;
 mod legacy;
+mod shred_code;
+mod shred_data;
 mod stats;
 mod traits;
 
 pub type Nonce = u32;
+pub const SIZE_OF_NONCE: usize = 4;
 
 /// The following constants are computed by hand, and hardcoded.
 /// `test_shred_constants` ensures that the values are correct.
 /// Constants are used over lazy_static for performance reasons.
 const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
-const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
-const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
+const SIZE_OF_DATA_SHRED_HEADERS: usize = 88;
+const SIZE_OF_CODING_SHRED_HEADERS: usize = 89;
 const SIZE_OF_SIGNATURE: usize = 64;
 const SIZE_OF_SHRED_VARIANT: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
-pub const SIZE_OF_NONCE: usize = 4;
-const_assert_eq!(SIZE_OF_CODING_SHRED_HEADERS, 89);
-const SIZE_OF_CODING_SHRED_HEADERS: usize =
-    SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_CODING_SHRED_HEADER;
-// Maximum size of data that a data-shred may contain (excluding headers).
-const_assert_eq!(SIZE_OF_DATA_SHRED_PAYLOAD, 1051);
-pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
-    - SIZE_OF_COMMON_SHRED_HEADER
-    - SIZE_OF_DATA_SHRED_HEADER
-    - SIZE_OF_CODING_SHRED_HEADERS
-    - SIZE_OF_NONCE;
-const_assert_eq!(SHRED_DATA_OFFSET, 88);
-const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
 
 const OFFSET_OF_SHRED_VARIANT: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_VARIANT;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
-const_assert_eq!(SHRED_PAYLOAD_SIZE, 1228);
-const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
 
 pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
+
+// For legacy tests and benchmarks.
+const_assert_eq!(LEGACY_SHRED_DATA_CAPACITY, 1051);
+pub const LEGACY_SHRED_DATA_CAPACITY: usize = legacy::ShredData::CAPACITY;
 
 // LAST_SHRED_IN_SLOT also implies DATA_COMPLETE_SHRED.
 // So it cannot be LAST_SHRED_IN_SLOT if not also DATA_COMPLETE_SHRED.
@@ -278,14 +268,14 @@ macro_rules! dispatch {
 impl Shred {
     dispatch!(fn common_header(&self) -> &ShredCommonHeader);
     dispatch!(fn set_signature(&mut self, signature: Signature));
-    dispatch!(fn signed_payload(&self) -> &[u8]);
+    dispatch!(fn signed_message(&self) -> &[u8]);
 
     // Returns the portion of the shred's payload which is erasure coded.
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     // Like Shred::erasure_shard but returning a slice.
     dispatch!(pub(crate) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
     // Returns the shard index within the erasure coding set.
-    dispatch!(pub(crate) fn erasure_shard_index(&self) -> Option<usize>);
+    dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
 
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
@@ -329,11 +319,11 @@ impl Shred {
         Ok(match layout::get_shred_variant(&shred)? {
             ShredVariant::LegacyCode => {
                 let shred = legacy::ShredCode::from_payload(shred)?;
-                Self::from(shred)
+                Self::from(ShredCode::from(shred))
             }
             ShredVariant::LegacyData => {
                 let shred = legacy::ShredData::from_payload(shred)?;
-                Self::from(shred)
+                Self::from(ShredData::from(shred))
             }
         })
     }
@@ -396,14 +386,6 @@ impl Shred {
         }
     }
 
-    // Possibly zero pads bytes stored in blockstore.
-    pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
-        match layout::get_shred_type(&shred)? {
-            ShredType::Code => ShredCode::resize_stored_shred(shred),
-            ShredType::Data => ShredData::resize_stored_shred(shred),
-        }
-    }
-
     pub fn fec_set_index(&self) -> u32 {
         self.common_header().fec_set_index
     }
@@ -429,7 +411,7 @@ impl Shred {
     }
 
     pub fn sign(&mut self, keypair: &Keypair) {
-        let signature = keypair.sign_message(self.signed_payload());
+        let signature = keypair.sign_message(self.signed_message());
         self.set_signature(signature);
     }
 
@@ -494,7 +476,7 @@ impl Shred {
     }
 
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
-        let message = self.signed_payload();
+        let message = self.signed_message();
         self.signature().verify(pubkey.as_ref(), message)
     }
 
@@ -526,16 +508,20 @@ impl Shred {
 pub mod layout {
     use {super::*, std::ops::Range};
 
-    fn get_shred_size(packet: &Packet) -> usize {
+    fn get_shred_size(packet: &Packet) -> Option<usize> {
+        let size = packet.data().len();
         if packet.meta.repair() {
-            packet.meta.size.saturating_sub(SIZE_OF_NONCE)
+            size.checked_sub(SIZE_OF_NONCE)
         } else {
-            packet.meta.size
+            Some(size)
         }
     }
 
-    pub fn get_shred(packet: &Packet) -> &[u8] {
-        &packet.data()[..get_shred_size(packet)]
+    pub fn get_shred(packet: &Packet) -> Option<&[u8]> {
+        let size = get_shred_size(packet)?;
+        let shred = packet.data().get(..size)?;
+        // Should at least have a signature.
+        (size >= SIZE_OF_SIGNATURE).then(|| shred)
     }
 
     pub(crate) fn get_signature(shred: &[u8]) -> Option<Signature> {
@@ -567,14 +553,12 @@ pub mod layout {
         deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_INDEX..)?).ok()
     }
 
-    // Returns chunk of the payload which is signed.
-    pub(crate) fn get_signed_message(shred: &[u8]) -> Option<&[u8]> {
-        shred.get(SIZE_OF_SIGNATURE..)
-    }
-
-    // Returns slice range of the packet payload which is signed.
-    pub(crate) fn get_signed_message_range(packet: &Packet) -> Range<usize> {
-        SIZE_OF_SIGNATURE..get_shred_size(packet)
+    // Returns slice range of the shred payload which is signed.
+    pub(crate) fn get_signed_message_range(shred: &[u8]) -> Option<Range<usize>> {
+        let range = match get_shred_variant(shred).ok()? {
+            ShredVariant::LegacyCode | ShredVariant::LegacyData => legacy::SIGNED_MESSAGE_RANGE,
+        };
+        (shred.len() <= range.end).then(|| range)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
@@ -640,7 +624,13 @@ pub fn get_shred_slot_index_type(
     packet: &Packet,
     stats: &mut ShredFetchStats,
 ) -> Option<(Slot, u32, ShredType)> {
-    let shred = layout::get_shred(packet);
+    let shred = match layout::get_shred(packet) {
+        None => {
+            stats.index_overrun += 1;
+            return None;
+        }
+        Some(shred) => shred,
+    };
     if OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX > shred.len() {
         stats.index_overrun += 1;
         return None;
@@ -683,7 +673,8 @@ pub fn max_entries_per_n_shred(
     num_shreds: u64,
     shred_data_size: Option<usize>,
 ) -> u64 {
-    let shred_data_size = shred_data_size.unwrap_or(SIZE_OF_DATA_SHRED_PAYLOAD) as u64;
+    let data_buffer_size = ShredData::capacity().unwrap();
+    let shred_data_size = shred_data_size.unwrap_or(data_buffer_size) as u64;
     let vec_size = bincode::serialized_size(&vec![entry]).unwrap();
     let entry_size = bincode::serialized_size(entry).unwrap();
     let count_size = vec_size - entry_size;
@@ -702,7 +693,6 @@ pub fn verify_test_data_shred(
     is_last_data: bool,
 ) {
     shred.sanitize().unwrap();
-    assert_eq!(shred.payload().len(), SHRED_PAYLOAD_SIZE);
     assert!(shred.is_data());
     assert_eq!(shred.index(), index);
     assert_eq!(shred.slot(), slot);
@@ -775,11 +765,11 @@ mod tests {
             serialized_size(&common_header).unwrap() as usize
         );
         assert_eq!(
-            SIZE_OF_CODING_SHRED_HEADER,
+            SIZE_OF_CODING_SHRED_HEADERS - SIZE_OF_COMMON_SHRED_HEADER,
             serialized_size(&coding_shred_header).unwrap() as usize
         );
         assert_eq!(
-            SIZE_OF_DATA_SHRED_HEADER,
+            SIZE_OF_DATA_SHRED_HEADERS - SIZE_OF_COMMON_SHRED_HEADER,
             serialized_size(&data_shred_header).unwrap() as usize
         );
         let data_shred_header_with_size = DataShredHeader {
@@ -787,7 +777,7 @@ mod tests {
             ..data_shred_header
         };
         assert_eq!(
-            SIZE_OF_DATA_SHRED_HEADER,
+            SIZE_OF_DATA_SHRED_HEADERS - SIZE_OF_COMMON_SHRED_HEADER,
             serialized_size(&data_shred_header_with_size).unwrap() as usize
         );
         assert_eq!(
@@ -1011,7 +1001,7 @@ mod tests {
             let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
             ChaChaRng::from_seed(seed)
         };
-        let mut data = [0u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+        let mut data = [0u8; legacy::ShredData::CAPACITY];
         rng.fill(&mut data[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_data(
@@ -1029,7 +1019,7 @@ mod tests {
         assert_matches!(shred.sanitize(), Ok(()));
         let mut payload = bs58_decode(PAYLOAD);
         payload.extend({
-            let skip = payload.len() - SHRED_DATA_OFFSET;
+            let skip = payload.len() - SIZE_OF_DATA_SHRED_HEADERS;
             data.iter().skip(skip).copied()
         });
         let mut packet = Packet::default();
@@ -1100,7 +1090,7 @@ mod tests {
             let seed = <[u8; 32]>::try_from(bs58_decode(SEED)).unwrap();
             ChaChaRng::from_seed(seed)
         };
-        let mut parity_shard = vec![0u8; /*ENCODED_PAYLOAD_SIZE:*/ 1139];
+        let mut parity_shard = vec![0u8; legacy::SIZE_OF_ERASURE_ENCODED_SLICE];
         rng.fill(&mut parity_shard[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_parity_shard(
