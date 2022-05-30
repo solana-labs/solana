@@ -19,8 +19,15 @@ describe('Transaction', () => {
   describe('compileMessage', () => {
     it('accountKeys are ordered', () => {
       const payer = Keypair.generate();
-      const account2 = Keypair.generate();
-      const account3 = Keypair.generate();
+      const accountRegular2 = new PublicKey(2);
+      const accountRegular3 = new PublicKey(3);
+      const accountWritable4 = new PublicKey(4);
+      const accountWritable5 = new PublicKey(5);
+      const accountSigner6 = new PublicKey(6);
+      const accountSigner7 = new PublicKey(7);
+      const accountWritableSigner8 = new PublicKey(8);
+      const accountWritableSigner9 = new PublicKey(9);
+
       const recentBlockhash = Keypair.generate().publicKey.toBase58();
       const programId = Keypair.generate().publicKey;
       const transaction = new Transaction({
@@ -28,40 +35,20 @@ describe('Transaction', () => {
         lastValidBlockHeight: 9999,
       }).add({
         keys: [
-          {pubkey: account3.publicKey, isSigner: true, isWritable: false},
+          // Regular accounts
+          {pubkey: accountRegular3, isSigner: false, isWritable: false},
+          {pubkey: accountRegular2, isSigner: false, isWritable: false},
+          // Writable accounts
+          {pubkey: accountWritable5, isSigner: false, isWritable: true},
+          {pubkey: accountWritable4, isSigner: false, isWritable: true},
+          // Signers
+          {pubkey: accountSigner7, isSigner: true, isWritable: false},
+          {pubkey: accountSigner6, isSigner: true, isWritable: false},
+          // Writable Signers
+          {pubkey: accountWritableSigner9, isSigner: true, isWritable: true},
+          {pubkey: accountWritableSigner8, isSigner: true, isWritable: true},
+          // Payer.
           {pubkey: payer.publicKey, isSigner: true, isWritable: true},
-          {pubkey: account2.publicKey, isSigner: true, isWritable: true},
-        ],
-        programId,
-      });
-
-      transaction.setSigners(
-        payer.publicKey,
-        account2.publicKey,
-        account3.publicKey,
-      );
-
-      const message = transaction.compileMessage();
-      expect(message.accountKeys[0]).to.eql(payer.publicKey);
-      expect(message.accountKeys[1]).to.eql(account2.publicKey);
-      expect(message.accountKeys[2]).to.eql(account3.publicKey);
-    });
-
-    it('accountKeys are sorted & deduplicated correctly', () => {
-      const payer = Keypair.generate();
-      const account2 = new PublicKey(2);
-      const account3 = new PublicKey(1);
-      const recentBlockhash = Keypair.generate().publicKey.toBase58();
-      const programId = Keypair.generate().publicKey;
-      const transaction = new Transaction({
-        blockhash: recentBlockhash,
-        lastValidBlockHeight: 9999,
-      }).add({
-        keys: [
-          {pubkey: account3, isSigner: true, isWritable: false},
-          {pubkey: payer.publicKey, isSigner: true, isWritable: true},
-          {pubkey: account2, isSigner: false, isWritable: true},
-          {pubkey: account2, isSigner: true, isWritable: false},
         ],
         programId,
       });
@@ -69,9 +56,69 @@ describe('Transaction', () => {
       transaction.feePayer = payer.publicKey;
 
       const message = transaction.compileMessage();
-      expect(message.accountKeys[0]).to.eql(payer.publicKey);
-      expect(message.accountKeys[1].toBase58()).to.eql(account2.toBase58());
-      expect(message.accountKeys[2].toBase58()).to.eql(account3.toBase58());
+      // Payer comes first.
+      expect(message.accountKeys[0].equals(payer.publicKey)).to.be.true;
+      // Writable signers come next, in pubkey order.
+      expect(message.accountKeys[1].equals(accountWritableSigner8)).to.be.true;
+      expect(message.accountKeys[2].equals(accountWritableSigner9)).to.be.true;
+      // Signers come next, in pubkey order.
+      expect(message.accountKeys[3].equals(accountSigner6)).to.be.true;
+      expect(message.accountKeys[4].equals(accountSigner7)).to.be.true;
+      // Writable accounts come next, in pubkey order.
+      expect(message.accountKeys[5].equals(accountWritable4)).to.be.true;
+      expect(message.accountKeys[6].equals(accountWritable5)).to.be.true;
+      // Everything else afterward, in pubkey order.
+      expect(message.accountKeys[7].equals(accountRegular2)).to.be.true;
+      expect(message.accountKeys[8].equals(accountRegular3)).to.be.true;
+      expect(message.accountKeys[9].equals(programId)).to.be.true;
+    });
+
+    it('accountKeys collapses signedness and writability of duplicate accounts', () => {
+      const payer = Keypair.generate();
+      const account2 = new PublicKey(2);
+      const account3 = new PublicKey(3);
+      const account4 = new PublicKey(4);
+      const account5 = new PublicKey(5);
+
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
+        keys: [
+          // Should sort last.
+          {pubkey: account5, isSigner: false, isWritable: false},
+          {pubkey: account5, isSigner: false, isWritable: false},
+          // Should be considered writeable.
+          {pubkey: account4, isSigner: false, isWritable: false},
+          {pubkey: account4, isSigner: false, isWritable: true},
+          // Should be considered a signer.
+          {pubkey: account3, isSigner: false, isWritable: false},
+          {pubkey: account3, isSigner: true, isWritable: false},
+          // Should be considered a writable signer.
+          {pubkey: account2, isSigner: false, isWritable: true},
+          {pubkey: account2, isSigner: true, isWritable: false},
+          // Payer.
+          {pubkey: payer.publicKey, isSigner: true, isWritable: true},
+        ],
+        programId,
+      });
+
+      transaction.feePayer = payer.publicKey;
+
+      const message = transaction.compileMessage();
+      // Payer comes first.
+      expect(message.accountKeys[0].equals(payer.publicKey)).to.be.true;
+      // Writable signer comes first.
+      expect(message.accountKeys[1].equals(account2)).to.be.true;
+      // Signer comes next.
+      expect(message.accountKeys[2].equals(account3)).to.be.true;
+      // Writable account comes next.
+      expect(message.accountKeys[3].equals(account4)).to.be.true;
+      // Regular accounts come last.
+      expect(message.accountKeys[4].equals(account5)).to.be.true;
+      expect(message.accountKeys[5].equals(programId)).to.be.true;
     });
 
     it('payer is first account meta', () => {
