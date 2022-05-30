@@ -8,11 +8,31 @@ use {
     solana_metrics::{
         counter::CounterPoint,
         datapoint::DataPoint,
-        metrics::{test_mocks::MockMetricsWriter, MetricsAgent},
+        metrics::{serialize_points, test_mocks::MockMetricsWriter, MetricsAgent},
     },
     std::{sync::Arc, time::Duration},
     test::Bencher,
 };
+
+#[bench]
+fn bench_write_points(bencher: &mut Bencher) {
+    let points = (0..10)
+        .into_iter()
+        .map(|_| {
+            DataPoint::new("measurement")
+                .add_field_i64("i", 0)
+                .add_field_i64("abc123", 2)
+                .add_field_i64("this-is-my-very-long-field-name", 3)
+                .clone()
+        })
+        .collect();
+    let host_id = "benchmark-host-id";
+    bencher.iter(|| {
+        for _ in 0..10 {
+            test::black_box(serialize_points(&points, host_id));
+        }
+    })
+}
 
 #[bench]
 fn bench_datapoint_submission(bencher: &mut Bencher) {
