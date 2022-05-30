@@ -5827,14 +5827,23 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
-            const DEFAULT_SIG: Signature = Signature::default();
-            let txn_signatures = txn_signatures.unwrap_or(&[&DEFAULT_SIG, accounts_and_meta_to_store.len()]);
-            self.write_accounts_to_cache(
-                slot,
-                hashes,
-                &accounts_and_meta_to_store,
-                txn_signatures,
-            )
+            if txn_signatures.is_some() {
+                self.write_accounts_to_cache(
+                    slot,
+                    hashes,
+                    &accounts_and_meta_to_store,
+                    txn_signatures.unwrap(),
+                )
+            } else {
+                let default_sig = Signature::default();
+                let txn_signatures = vec![&default_sig; accounts_and_meta_to_store.len()];
+                self.write_accounts_to_cache(
+                    slot,
+                    hashes,
+                    &accounts_and_meta_to_store,
+                    &txn_signatures,
+                )
+            }
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
