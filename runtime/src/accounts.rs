@@ -1038,18 +1038,11 @@ impl Accounts {
     /// WARNING: This noncached version is only to be used for tests/benchmarking
     /// as bypassing the cache in general is not supported
     pub fn store_slow_uncached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_uncached(
-            slot,
-            &[(pubkey, account)],
-        );
+        self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(
-            slot,
-            &[(pubkey, account)],
-            None,
-        );
+        self.accounts_db.store_cached(slot, &[(pubkey, account)], None);
     }
 
     fn lock_account(
