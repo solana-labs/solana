@@ -1,7 +1,7 @@
 use {
     crate::shred::{
         traits::{Shred, ShredCode as _, ShredData as _},
-        CodingShredHeader, DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType,
+        CodingShredHeader, DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredVariant,
         MAX_DATA_SHREDS_PER_FEC_BLOCK, MAX_DATA_SHREDS_PER_SLOT, SHRED_DATA_OFFSET,
         SHRED_PAYLOAD_SIZE, SIZE_OF_CODING_SHRED_HEADERS, SIZE_OF_COMMON_SHRED_HEADER,
         SIZE_OF_DATA_SHRED_HEADER, SIZE_OF_DATA_SHRED_PAYLOAD, SIZE_OF_SIGNATURE,
@@ -78,8 +78,8 @@ impl Shred for ShredData {
     fn from_payload(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut cursor = Cursor::new(&payload[..]);
         let common_header: ShredCommonHeader = deserialize_from_with_limit(&mut cursor)?;
-        if common_header.shred_type != ShredType::Data {
-            return Err(Error::InvalidShredType);
+        if common_header.shred_variant != ShredVariant::LegacyData {
+            return Err(Error::InvalidShredVariant);
         }
         let data_header = deserialize_from_with_limit(&mut cursor)?;
         // see: https://github.com/solana-labs/solana/pull/16602
@@ -163,8 +163,8 @@ impl Shred for ShredCode {
     fn from_payload(mut payload: Vec<u8>) -> Result<Self, Error> {
         let mut cursor = Cursor::new(&payload[..]);
         let common_header: ShredCommonHeader = deserialize_from_with_limit(&mut cursor)?;
-        if common_header.shred_type != ShredType::Code {
-            return Err(Error::InvalidShredType);
+        if common_header.shred_variant != ShredVariant::LegacyCode {
+            return Err(Error::InvalidShredVariant);
         }
         let coding_header = deserialize_from_with_limit(&mut cursor)?;
         // see: https://github.com/solana-labs/solana/pull/10109
@@ -295,7 +295,7 @@ impl ShredData {
         let mut payload = vec![0; SHRED_PAYLOAD_SIZE];
         let common_header = ShredCommonHeader {
             signature: Signature::default(),
-            shred_type: ShredType::Data,
+            shred_variant: ShredVariant::LegacyData,
             slot,
             index,
             version,
@@ -343,7 +343,7 @@ impl ShredCode {
     ) -> Self {
         let common_header = ShredCommonHeader {
             signature: Signature::default(),
-            shred_type: ShredType::Code,
+            shred_variant: ShredVariant::LegacyCode,
             index,
             slot,
             version,
