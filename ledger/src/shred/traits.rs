@@ -1,9 +1,13 @@
 use {
-    crate::shred::{CodingShredHeader, DataShredHeader, Error, ShredCommonHeader, ShredFlags},
+    crate::shred::{CodingShredHeader, DataShredHeader, Error, ShredCommonHeader},
     solana_sdk::{clock::Slot, signature::Signature},
 };
 
 pub(super) trait Shred: Sized {
+    // Total size of payload including headers, merkle
+    // branches (if any), zero paddings, etc.
+    const SIZE_OF_PAYLOAD: usize;
+
     fn from_payload(shred: Vec<u8>) -> Result<Self, Error>;
     fn common_header(&self) -> &ShredCommonHeader;
     fn sanitize(&self) -> Result<(), Error>;
@@ -14,17 +18,14 @@ pub(super) trait Shred: Sized {
     fn into_payload(self) -> Vec<u8>;
 
     // Returns the shard index within the erasure coding set.
-    fn erasure_shard_index(&self) -> Option<usize>;
+    fn erasure_shard_index(&self) -> Result<usize, Error>;
     // Returns the portion of the shred's payload which is erasure coded.
     fn erasure_shard(self) -> Result<Vec<u8>, Error>;
     // Like Shred::erasure_shard but returning a slice.
     fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>;
 
     // Portion of the payload which is signed.
-    fn signed_payload(&self) -> &[u8];
-
-    // Possibly zero pads bytes stored in blockstore.
-    fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error>;
+    fn signed_message(&self) -> &[u8];
 
     // Only for tests.
     fn set_index(&mut self, index: u32);
@@ -52,25 +53,6 @@ pub(super) trait ShredData: Shred {
 
     fn data(&self) -> Result<&[u8], Error>;
 
-    // Possibly trimmed payload;
-    // Should only be used when storing shreds to blockstore.
-    fn bytes_to_store(&self) -> &[u8];
-
-    fn last_in_slot(&self) -> bool {
-        let flags = self.data_header().flags;
-        flags.contains(ShredFlags::LAST_SHRED_IN_SLOT)
-    }
-
-    fn data_complete(&self) -> bool {
-        let flags = self.data_header().flags;
-        flags.contains(ShredFlags::DATA_COMPLETE_SHRED)
-    }
-
-    fn reference_tick(&self) -> u8 {
-        let flags = self.data_header().flags;
-        (flags & ShredFlags::SHRED_TICK_REFERENCE_MASK).bits()
-    }
-
     // Only for tests.
     fn set_last_in_slot(&mut self);
 }
@@ -81,13 +63,5 @@ pub(super) trait ShredCode: Shred {
     fn first_coding_index(&self) -> Option<u32> {
         let position = u32::from(self.coding_header().position);
         self.common_header().index.checked_sub(position)
-    }
-
-    fn num_data_shreds(&self) -> u16 {
-        self.coding_header().num_data_shreds
-    }
-
-    fn num_coding_shreds(&self) -> u16 {
-        self.coding_header().num_coding_shreds
     }
 }

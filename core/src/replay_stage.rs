@@ -3180,7 +3180,7 @@ pub(crate) mod tests {
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
             get_tmp_ledger_path,
-            shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
+            shred::{Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -3779,7 +3779,7 @@ pub(crate) mod tests {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, bank| {
-            let gibberish = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+            let gibberish = [0xa5u8; LEGACY_SHRED_DATA_CAPACITY];
             let parent_offset = bank.slot() - bank.parent_slot();
             let shred = Shred::new_from_data(
                 bank.slot(),
