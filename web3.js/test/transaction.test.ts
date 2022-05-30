@@ -47,6 +47,33 @@ describe('Transaction', () => {
       expect(message.accountKeys[2]).to.eql(account3.publicKey);
     });
 
+    it('accountKeys are sorted & deduplicated correctly', () => {
+      const payer = Keypair.generate();
+      const account2 = new PublicKey(2);
+      const account3 = new PublicKey(1);
+      const recentBlockhash = Keypair.generate().publicKey.toBase58();
+      const programId = Keypair.generate().publicKey;
+      const transaction = new Transaction({
+        blockhash: recentBlockhash,
+        lastValidBlockHeight: 9999,
+      }).add({
+        keys: [
+          {pubkey: account3, isSigner: true, isWritable: false},
+          {pubkey: payer.publicKey, isSigner: true, isWritable: true},
+          {pubkey: account2, isSigner: false, isWritable: true},
+          {pubkey: account2, isSigner: true, isWritable: false},
+        ],
+        programId,
+      });
+
+      transaction.feePayer = payer.publicKey;
+
+      const message = transaction.compileMessage();
+      expect(message.accountKeys[0]).to.eql(payer.publicKey);
+      expect(message.accountKeys[1].toBase58()).to.eql(account2.toBase58());
+      expect(message.accountKeys[2].toBase58()).to.eql(account3.toBase58());
+    });
+
     it('payer is first account meta', () => {
       const payer = Keypair.generate();
       const other = Keypair.generate();
