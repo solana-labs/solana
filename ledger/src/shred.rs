@@ -91,7 +91,7 @@ const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 const SIZE_OF_DATA_SHRED_HEADER: usize = 5;
 const SIZE_OF_CODING_SHRED_HEADER: usize = 6;
 const SIZE_OF_SIGNATURE: usize = 64;
-const SIZE_OF_SHRED_TYPE: usize = 1;
+const SIZE_OF_SHRED_VARIANT: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
 pub const SIZE_OF_NONCE: usize = 4;
@@ -108,8 +108,8 @@ pub const SIZE_OF_DATA_SHRED_PAYLOAD: usize = PACKET_DATA_SIZE
 const_assert_eq!(SHRED_DATA_OFFSET, 88);
 const SHRED_DATA_OFFSET: usize = SIZE_OF_COMMON_SHRED_HEADER + SIZE_OF_DATA_SHRED_HEADER;
 
-const OFFSET_OF_SHRED_TYPE: usize = SIZE_OF_SIGNATURE;
-const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_TYPE;
+const OFFSET_OF_SHRED_VARIANT: usize = SIZE_OF_SIGNATURE;
+const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_VARIANT;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 const_assert_eq!(SHRED_PAYLOAD_SIZE, 1228);
 const SHRED_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
@@ -151,6 +151,8 @@ pub enum Error {
     InvalidShredFlags(u8),
     #[error("Invalid shred type")]
     InvalidShredType,
+    #[error("Invalid shred variant")]
+    InvalidShredVariant,
 }
 
 #[repr(u8)]
@@ -174,11 +176,18 @@ pub enum ShredType {
     Code = 0b0101_1010,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Deserialize, Serialize)]
+#[serde(into = "u8", try_from = "u8")]
+enum ShredVariant {
+    LegacyCode, // 0b0101_1010
+    LegacyData, // 0b1010_0101
+}
+
 /// A common header that is present in data and code shred headers
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct ShredCommonHeader {
     signature: Signature,
-    shred_type: ShredType,
+    shred_variant: ShredVariant,
     slot: Slot,
     index: u32,
     version: u16,
@@ -317,9 +326,15 @@ impl Shred {
     }
 
     pub fn new_from_serialized_shred(shred: Vec<u8>) -> Result<Self, Error> {
-        Ok(match layout::get_shred_type(&shred)? {
-            ShredType::Code => Self::from(ShredCode::from_payload(shred)?),
-            ShredType::Data => Self::from(ShredData::from_payload(shred)?),
+        Ok(match layout::get_shred_variant(&shred)? {
+            ShredVariant::LegacyCode => {
+                let shred = legacy::ShredCode::from_payload(shred)?;
+                Self::from(shred)
+            }
+            ShredVariant::LegacyData => {
+                let shred = legacy::ShredData::from_payload(shred)?;
+                Self::from(shred)
+            }
         })
     }
 
@@ -438,7 +453,7 @@ impl Shred {
 
     #[inline]
     pub fn shred_type(&self) -> ShredType {
-        self.common_header().shred_type
+        ShredType::from(self.common_header().shred_variant)
     }
 
     pub fn is_data(&self) -> bool {
@@ -531,14 +546,17 @@ pub mod layout {
         0..SIZE_OF_SIGNATURE
     }
 
+    pub(super) fn get_shred_variant(shred: &[u8]) -> Result<ShredVariant, Error> {
+        let shred_variant = match shred.get(OFFSET_OF_SHRED_VARIANT) {
+            None => return Err(Error::InvalidPayloadSize(shred.len())),
+            Some(shred_variant) => *shred_variant,
+        };
+        ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
+    }
+
     pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
-        match shred.get(OFFSET_OF_SHRED_TYPE) {
-            None => Err(Error::InvalidPayloadSize(shred.len())),
-            Some(shred_type) => match ShredType::try_from(*shred_type) {
-                Err(_) => Err(Error::InvalidShredType),
-                Ok(shred_type) => Ok(shred_type),
-            },
-        }
+        let shred_variant = get_shred_variant(shred)?;
+        Ok(ShredType::from(shred_variant))
     }
 
     pub fn get_slot(shred: &[u8]) -> Option<Slot> {
@@ -582,6 +600,38 @@ impl From<ShredCode> for Shred {
 impl From<ShredData> for Shred {
     fn from(shred: ShredData) -> Self {
         Self::ShredData(shred)
+    }
+}
+
+impl From<ShredVariant> for ShredType {
+    #[inline]
+    fn from(shred_variant: ShredVariant) -> Self {
+        match shred_variant {
+            ShredVariant::LegacyCode => ShredType::Code,
+            ShredVariant::LegacyData => ShredType::Data,
+        }
+    }
+}
+
+impl From<ShredVariant> for u8 {
+    fn from(shred_variant: ShredVariant) -> u8 {
+        match shred_variant {
+            ShredVariant::LegacyCode => u8::from(ShredType::Code),
+            ShredVariant::LegacyData => u8::from(ShredType::Data),
+        }
+    }
+}
+
+impl TryFrom<u8> for ShredVariant {
+    type Error = Error;
+    fn try_from(shred_variant: u8) -> Result<Self, Self::Error> {
+        if shred_variant == u8::from(ShredType::Code) {
+            Ok(ShredVariant::LegacyCode)
+        } else if shred_variant == u8::from(ShredType::Data) {
+            Ok(ShredVariant::LegacyData)
+        } else {
+            Err(Error::InvalidShredVariant)
+        }
     }
 }
 
@@ -704,7 +754,7 @@ mod tests {
     fn test_shred_constants() {
         let common_header = ShredCommonHeader {
             signature: Signature::default(),
-            shred_type: ShredType::Code,
+            shred_variant: ShredVariant::LegacyCode,
             slot: Slot::MAX,
             index: u32::MAX,
             version: u16::MAX,
@@ -745,8 +795,8 @@ mod tests {
             bincode::serialized_size(&Signature::default()).unwrap() as usize
         );
         assert_eq!(
-            SIZE_OF_SHRED_TYPE,
-            bincode::serialized_size(&ShredType::Code).unwrap() as usize
+            SIZE_OF_SHRED_VARIANT,
+            bincode::serialized_size(&ShredVariant::LegacyCode).unwrap() as usize
         );
         assert_eq!(
             SIZE_OF_SHRED_SLOT,
@@ -814,7 +864,7 @@ mod tests {
         assert_eq!(Some((1, 3, ShredType::Data)), ret);
         assert_eq!(stats, ShredFetchStats::default());
 
-        packet.meta.size = OFFSET_OF_SHRED_TYPE;
+        packet.meta.size = OFFSET_OF_SHRED_VARIANT;
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(stats.index_overrun, 1);
 
@@ -878,7 +928,7 @@ mod tests {
             200, // version
         );
         shred.copy_to_packet(&mut packet);
-        packet.buffer_mut()[OFFSET_OF_SHRED_TYPE] = u8::MAX;
+        packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
 
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.bad_shred_type);
@@ -894,6 +944,7 @@ mod tests {
         assert_matches!(bincode::deserialize::<ShredType>(&[1u8]), Err(_));
         // data shred
         assert_eq!(ShredType::Data as u8, 0b1010_0101);
+        assert_eq!(u8::from(ShredType::Data), 0b1010_0101);
         assert_eq!(ShredType::try_from(0b1010_0101), Ok(ShredType::Data));
         let buf = bincode::serialize(&ShredType::Data).unwrap();
         assert_eq!(buf, vec![0b1010_0101]);
@@ -903,12 +954,49 @@ mod tests {
         );
         // coding shred
         assert_eq!(ShredType::Code as u8, 0b0101_1010);
+        assert_eq!(u8::from(ShredType::Code), 0b0101_1010);
         assert_eq!(ShredType::try_from(0b0101_1010), Ok(ShredType::Code));
         let buf = bincode::serialize(&ShredType::Code).unwrap();
         assert_eq!(buf, vec![0b0101_1010]);
         assert_matches!(
             bincode::deserialize::<ShredType>(&[0b0101_1010]),
             Ok(ShredType::Code)
+        );
+    }
+
+    #[test]
+    fn test_shred_variant_compat() {
+        assert_matches!(ShredVariant::try_from(0u8), Err(_));
+        assert_matches!(ShredVariant::try_from(1u8), Err(_));
+        assert_matches!(ShredVariant::try_from(0b0101_0000), Err(_));
+        assert_matches!(ShredVariant::try_from(0b1010_0000), Err(_));
+        assert_matches!(bincode::deserialize::<ShredVariant>(&[0b0101_0000]), Err(_));
+        assert_matches!(bincode::deserialize::<ShredVariant>(&[0b1010_0000]), Err(_));
+        // Legacy coding shred.
+        assert_eq!(u8::from(ShredVariant::LegacyCode), 0b0101_1010);
+        assert_eq!(ShredType::from(ShredVariant::LegacyCode), ShredType::Code);
+        assert_matches!(
+            ShredVariant::try_from(0b0101_1010),
+            Ok(ShredVariant::LegacyCode)
+        );
+        let buf = bincode::serialize(&ShredVariant::LegacyCode).unwrap();
+        assert_eq!(buf, vec![0b0101_1010]);
+        assert_matches!(
+            bincode::deserialize::<ShredVariant>(&[0b0101_1010]),
+            Ok(ShredVariant::LegacyCode)
+        );
+        // Legacy data shred.
+        assert_eq!(u8::from(ShredVariant::LegacyData), 0b1010_0101);
+        assert_eq!(ShredType::from(ShredVariant::LegacyData), ShredType::Data);
+        assert_matches!(
+            ShredVariant::try_from(0b1010_0101),
+            Ok(ShredVariant::LegacyData)
+        );
+        let buf = bincode::serialize(&ShredVariant::LegacyData).unwrap();
+        assert_eq!(buf, vec![0b1010_0101]);
+        assert_matches!(
+            bincode::deserialize::<ShredVariant>(&[0b1010_0101]),
+            Ok(ShredVariant::LegacyData)
         );
     }
 
