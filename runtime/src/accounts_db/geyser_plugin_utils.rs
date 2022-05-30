@@ -223,11 +223,11 @@ pub mod tests {
         let account1 =
             AccountSharedData::new(account1_lamports, 1, AccountSharedData::default().owner());
         let slot0 = 0;
-        accounts.store_uncached(slot0, &[(&key1, &account1)], &[Signature::default()]);
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
 
         account1_lamports = 2;
         let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
-        accounts.store_uncached(slot0, &[(&key1, &account1)], &[Signature::default()]);
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
         let notifier = GeyserTestPlugin::default();
 
         let key2 = solana_sdk::pubkey::new_rand();
@@ -235,7 +235,7 @@ pub mod tests {
         let account2 =
             AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
 
-        accounts.store_uncached(slot0, &[(&key2, &account2)], &[Signature::default()]);
+        accounts.store_uncached(slot0, &[(&key2, &account2)]);
 
         let notifier = Arc::new(RwLock::new(notifier));
         accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
@@ -274,25 +274,25 @@ pub mod tests {
         let account1 =
             AccountSharedData::new(account1_lamports, 1, AccountSharedData::default().owner());
         let slot0 = 0;
-        accounts.store_uncached(slot0, &[(&key1, &account1)], &[Signature::default()]);
+        accounts.store_uncached(slot0, &[(&key1, &account1)]);
 
         let key2 = solana_sdk::pubkey::new_rand();
         let account2_lamports: u64 = 200;
         let account2 =
             AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
-        accounts.store_uncached(slot0, &[(&key2, &account2)], &[Signature::default()]);
+        accounts.store_uncached(slot0, &[(&key2, &account2)]);
 
         account1_lamports = 2;
         let slot1 = 1;
         let account1 = AccountSharedData::new(account1_lamports, 1, account1.owner());
-        accounts.store_uncached(slot1, &[(&key1, &account1)], &[Signature::default()]);
+        accounts.store_uncached(slot1, &[(&key1, &account1)]);
         let notifier = GeyserTestPlugin::default();
 
         let key3 = solana_sdk::pubkey::new_rand();
         let account3_lamports: u64 = 300;
         let account3 =
             AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
-        accounts.store_uncached(slot1, &[(&key3, &account3)], &[Signature::default()]);
+        accounts.store_uncached(slot1, &[(&key3, &account3)]);
 
         let notifier = Arc::new(RwLock::new(notifier));
         accounts.set_geyser_plugin_notifer(Some(notifier.clone()));
@@ -344,24 +344,28 @@ pub mod tests {
         let account1 =
             AccountSharedData::new(account1_lamports1, 1, AccountSharedData::default().owner());
         let slot0 = 0;
-        accounts.store_cached(slot0, &[(&key1, &account1)], &[Signature::default()]);
+        let txn_signature1 = Signature::default();
+        accounts.store_cached(slot0, &[(&key1, &account1)], Some(&[&txn_signature1]));
 
         let key2 = solana_sdk::pubkey::new_rand();
         let account2_lamports: u64 = 200;
         let account2 =
             AccountSharedData::new(account2_lamports, 1, AccountSharedData::default().owner());
-        accounts.store_cached(slot0, &[(&key2, &account2)], &[Signature::default()]);
+        let txn_signature2 = Signature::default();
+        accounts.store_cached(slot0, &[(&key2, &account2)], Some(&[&txn_signature2]));
 
         let account1_lamports2 = 2;
         let slot1 = 1;
         let account1 = AccountSharedData::new(account1_lamports2, 1, account1.owner());
-        accounts.store_cached(slot1, &[(&key1, &account1)], &[Signature::default()]);
+        let txn_signature1 = Signature::default();
+        accounts.store_cached(slot1, &[(&key1, &account1)], Some(&[&txn_signature1]));
 
         let key3 = solana_sdk::pubkey::new_rand();
         let account3_lamports: u64 = 300;
         let account3 =
             AccountSharedData::new(account3_lamports, 1, AccountSharedData::default().owner());
-        accounts.store_cached(slot1, &[(&key3, &account3)], &[Signature::default()]);
+        let txn_signature3 = Signature::default();
+        accounts.store_cached(slot1, &[(&key3, &account3)], Some(&[&txn_signature3]));
 
         let notifier = notifier.write().unwrap();
         assert_eq!(notifier.accounts_notified.get(&key1).unwrap().len(), 2);
