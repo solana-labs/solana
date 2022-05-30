@@ -59,6 +59,7 @@ use {
         },
     },
 };
+use solana_sdk::signature::Signature;
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
@@ -1037,11 +1038,19 @@ impl Accounts {
     /// WARNING: This noncached version is only to be used for tests/benchmarking
     /// as bypassing the cache in general is not supported
     pub fn store_slow_uncached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
+        self.accounts_db.store_uncached(
+            slot,
+            &[(pubkey, account)],
+            &[Signature::default()]
+        );
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(slot, &[(pubkey, account)]);
+        self.accounts_db.store_cached(
+            slot,
+            &[(pubkey, account)],
+            &[Signature::default()]
+        );
     }
 
     fn lock_account(
@@ -1201,7 +1210,7 @@ impl Accounts {
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
     ) {
-        let accounts_to_store = self.collect_accounts_to_store(
+        let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
             res,
             loaded,
@@ -1210,7 +1219,7 @@ impl Accounts {
             lamports_per_signature,
             leave_nonce_on_success,
         );
-        self.accounts_db.store_cached(slot, &accounts_to_store);
+        self.accounts_db.store_cached(slot, &accounts_to_store, &txn_signatures);
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -1228,8 +1237,9 @@ impl Accounts {
         blockhash: &Hash,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
-    ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
+    ) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<Signature>) {
         let mut accounts = Vec::with_capacity(load_results.len());
+        let mut signatures = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
             if tx_load_result.is_err() {
                 // Don't store any accounts if tx failed to load
@@ -1298,11 +1308,12 @@ impl Accounts {
 
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
+                        signatures.push(tx.signature().clone());
                     }
                 }
             }
         }
-        accounts
+        (accounts, signatures)
     }
 }
 
@@ -3020,7 +3031,7 @@ mod tests {
         }
         let txs = vec![tx0, tx1];
         let execution_results = vec![new_execution_result(Ok(()), None); 2];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, txn_signatures) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
@@ -3490,7 +3501,7 @@ mod tests {
             )),
             nonce.as_ref(),
         )];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, txn_signatures) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
@@ -3599,7 +3610,7 @@ mod tests {
             )),
             nonce.as_ref(),
         )];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, txn_signatures) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
