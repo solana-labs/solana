@@ -5739,23 +5739,24 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache(
+    fn write_accounts_to_cache<'a, I>(
         &self,
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
-        txn_signatures: &[&Signature],
-    ) -> Vec<AccountInfo> {
+        txn_iter: I,
+    ) -> Vec<AccountInfo>
+    where
+        I: std::iter::Iterator<Item=&'a &'a Signature>
+    {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
             assert_eq!(hashes.len(), len);
             hashes
         });
 
-        assert_eq!(txn_signatures.len(), len);
-
         accounts_and_meta_to_store
-            .iter().zip(txn_signatures.iter())
+            .iter().zip(txn_iter)
             .enumerate()
             .map(|(i, ((meta, account), signature))| {
                 let hash = hashes.map(|hashes| hashes[i].borrow());
@@ -5769,7 +5770,7 @@ impl AccountsDb {
                     account.lamports(),
                 );
 
-                self.notify_account_at_accounts_update(slot, meta, &account, signature);
+                self.notify_account_at_accounts_update(slot, meta, &account, *signature);
 
                 let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg
@@ -5832,16 +5833,15 @@ impl AccountsDb {
                     slot,
                     hashes,
                     &accounts_and_meta_to_store,
-                    txn_signatures.unwrap(),
+                    txn_signatures.unwrap().iter(),
                 )
             } else {
                 let default_sig = Signature::default();
-                let txn_signatures = vec![&default_sig; accounts_and_meta_to_store.len()];
                 self.write_accounts_to_cache(
                     slot,
                     hashes,
                     &accounts_and_meta_to_store,
-                    &txn_signatures,
+                    std::iter::repeat(&&default_sig),
                 )
             }
         } else {
