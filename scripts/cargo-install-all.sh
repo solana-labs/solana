@@ -96,6 +96,7 @@ else
   BINS=(
     solana
     solana-bench-tps
+    solana-dos
     solana-faucet
     solana-gossip
     solana-install
@@ -115,7 +116,6 @@ else
       cargo-build-sbf
       cargo-test-bpf
       cargo-test-sbf
-      solana-dos
       solana-install-init
       solana-stake-accounts
       solana-test-validator

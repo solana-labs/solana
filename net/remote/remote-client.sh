@@ -9,7 +9,7 @@ clientToRun="$3"
 if [[ -n $4 ]]; then
   export RUST_LOG="$4"
 fi
-benchTpsExtraArgs="$5"
+clientExtraArgs="$5"
 clientIndex="$6"
 
 missing() {
@@ -51,8 +51,16 @@ solana-bench-tps)
       --duration 7500 \
       --sustained \
       --threads $threadCount \
-      $benchTpsExtraArgs \
+      $clientExtraArgs \
       --read-client-keys ./client-accounts.yml \
+  "
+  ;;
+solana-dos)
+  clientCommand="\
+    solana-dos \
+      --entrypoint $entrypointIp:8001 \
+      --allow-private-addr \
+      $clientExtraArgs \
   "
   ;;
 idle)

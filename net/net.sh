@@ -20,12 +20,16 @@ usage() {
                                      Valid client types are:
                                          idle
                                          bench-tps
+                                         dos-tool
                                      User can optionally provide extraArgs that are transparently
                                      supplied to the client program as command line parameters.
-                                     For example,
+                                     Example 1:
                                          -c bench-tps=2="--tx_count 25000"
                                      This will start 2 bench-tps clients, and supply "--tx_count 25000"
                                      to the bench-tps client.
+                                     Example 2:
+                                         -c bench-tps=1="" -c dos-tool=1=""
+                                     This will start 1 bench-tps client and one dos client.
 EOM
 )
   cat <<EOF
@@ -403,6 +407,7 @@ startClient() {
   declare ipAddress=$1
   declare clientToRun="$2"
   declare clientIndex="$3"
+  declare clientExtraArgs="$4"
 
   initLogDir
   declare logFile="$netLogDir/client-$clientToRun-$ipAddress.log"
@@ -414,7 +419,7 @@ startClient() {
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \
-      $clientToRun \"$RUST_LOG\" \"$benchTpsExtraArgs\" $clientIndex"
+      $clientToRun \"$RUST_LOG\" \"$clientExtraArgs\" $clientIndex"
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -423,9 +428,13 @@ startClient() {
 }
 
 startClients() {
+  numNotIdleClients=$((numBenchTpsClients + numDosClients))
+
   for ((i=0; i < "$numClients" && i < "$numClientsRequested"; i++)) do
     if [[ $i -lt "$numBenchTpsClients" ]]; then
-      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i"
+      startClient "${clientIpList[$i]}" "solana-bench-tps" "$i" "$benchTpsExtraArgs"
+    elif [[ $i -ge "$numBenchTpsClients" && $i -lt "$numNotIdleClients" ]]; then
+      startClient "${clientIpList[$i]}" "solana-dos" "$i" "$dosExtraArgs"
     else
       startClient "${clientIpList[$i]}" "idle"
     fi
@@ -771,6 +780,8 @@ nodeAddress=
 numIdleClients=0
 numBenchTpsClients=0
 benchTpsExtraArgs=
+numDosClients=0
+dosExtraArgs=
 failOnValidatorBootupFailure=true
 genesisOptions=
 numValidatorsRequested=
@@ -1000,6 +1011,10 @@ while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
           numBenchTpsClients=$numClients
           benchTpsExtraArgs=$extraArgs
         ;;
+        dos)
+          numDosClients=$numClients
+          dosExtraArgs=$extraArgs
+        ;;
         *)
           echo "Unknown client type: $clientType"
           exit 1
@@ -1032,7 +1047,7 @@ if [[ -n $numValidatorsRequested ]]; then
 fi
 
 numClients=${#clientIpList[@]}
-numClientsRequested=$((numBenchTpsClients + numIdleClients))
+numClientsRequested=$((numBenchTpsClients + numDosClients + numIdleClients))
 if [[ "$numClientsRequested" -eq 0 ]]; then
   numBenchTpsClients=$numClients
   numClientsRequested=$numClients
