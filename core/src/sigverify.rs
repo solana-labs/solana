@@ -64,6 +64,7 @@ impl SigVerifier for TransactionSigVerifier {
         removed_before_sigverify_stage: bool,
         is_dup: bool,
     ) {
+        sigverify::check_for_tracer_packet(packet);
         if packet.meta.is_tracer_packet() {
             if removed_before_sigverify_stage {
                 self.tracer_packet_stats
