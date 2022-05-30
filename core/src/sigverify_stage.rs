@@ -328,7 +328,7 @@ impl SigVerifyStage {
         let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
-        let mut num_valid_packets = num_unique;
+        let mut num_packets_to_verify = num_unique;
         if num_unique > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(
                 &mut batches,
@@ -336,7 +336,7 @@ impl SigVerifyStage {
                 #[inline(always)]
                 |excess_packet| verifier.process_excess_packet(excess_packet),
             );
-            num_valid_packets = MAX_SIGVERIFY_BATCH;
+            num_packets_to_verify = MAX_SIGVERIFY_BATCH;
         }
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
@@ -345,8 +345,8 @@ impl SigVerifyStage {
         let (pre_shrink_time_us, pre_shrink_total) = Self::maybe_shrink_batches(&mut batches);
 
         let mut verify_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_valid_packets);
-        count_valid_packets(
+        let mut batches = verifier.verify_batches(batches, num_packets_to_verify);
+        let num_valid_packets = count_valid_packets(
             &batches,
             #[inline(always)]
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
