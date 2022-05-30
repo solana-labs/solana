@@ -6926,19 +6926,34 @@ pub mod tests {
     #[test]
     fn test_get_block_time() {
         let rpc = RpcHandler::start();
-        rpc.add_roots_to_blockstore(vec![1, 2, 3, 4, 5, 6, 7]);
+        let mut bank = rpc.working_bank();
+        let base_timestamp = bank.unix_timestamp_from_genesis();
 
-        let base_timestamp = rpc
-            .bank_forks
-            .read()
-            .unwrap()
-            .get(0)
-            .unwrap()
-            .unix_timestamp_from_genesis();
-        rpc.block_commitment_cache
-            .write()
-            .unwrap()
-            .set_highest_confirmed_root(7);
+        bank.freeze();
+        let instructions = [vote_instruction::vote(
+            &rpc.leader_vote_keypair.pubkey(),
+            &rpc.leader_vote_keypair.pubkey(),
+            Vote {
+                slots: vec![bank.slot()],
+                hash: bank.hash(),
+                timestamp: Some(base_timestamp),
+            },
+        )];
+        bank = rpc.advance_bank_to_confirmed_slot(1);
+
+        let transaction = Transaction::new_signed_with_payer(
+            &instructions,
+            Some(&rpc.mint_keypair.pubkey()),
+            &[&rpc.mint_keypair, &rpc.leader_vote_keypair],
+            bank.last_blockhash(),
+        );
+
+        bank.process_transaction(&transaction)
+            .expect("process transaction");
+
+        for x in 2..8 {
+            rpc.advance_bank_to_confirmed_slot(x);
+        }
 
         let slot_duration = slot_duration_from_slots_per_year(rpc.working_bank().slots_per_year());
 
