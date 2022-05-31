@@ -6615,6 +6615,7 @@ impl AccountsDb {
 
             self.calculate_accounts_hash_without_index(config, &storages, timings)
         } else {
+            error!("with index");
             self.calculate_accounts_hash(slot, config)
         }
     }
