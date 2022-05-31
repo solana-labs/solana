@@ -4,7 +4,7 @@ use {
         blockstore_meta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
-            BlockstoreRocksDbColumnFamilyMetrics, ColumnMetrics, PerfSamplingStatus,
+            BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus,
         },
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
@@ -953,7 +953,7 @@ pub struct Database {
 #[derive(Debug)]
 pub struct LedgerColumn<C>
 where
-    C: Column + ColumnName + ColumnMetrics,
+    C: Column + ColumnName,
 {
     backend: Arc<Rocks>,
     column: PhantomData<C>,
@@ -962,7 +962,7 @@ where
     write_perf_status: PerfSamplingStatus,
 }
 
-impl<C: Column + ColumnName + ColumnMetrics> LedgerColumn<C> {
+impl<C: Column + ColumnName> LedgerColumn<C> {
     pub fn submit_rocksdb_cf_metrics(&self) {
         let cf_rocksdb_metrics = BlockstoreRocksDbColumnFamilyMetrics {
             total_sst_files_size: self
@@ -1014,7 +1014,7 @@ impl<C: Column + ColumnName + ColumnMetrics> LedgerColumn<C> {
                 .get_int_property(RocksProperties::BACKGROUND_ERRORS)
                 .unwrap_or(BLOCKSTORE_METRICS_ERROR),
         };
-        C::report_cf_metrics(cf_rocksdb_metrics, &self.column_options);
+        cf_rocksdb_metrics.report_metrics(C::NAME, &self.column_options);
     }
 }
 
@@ -1076,7 +1076,7 @@ impl Database {
 
     pub fn column<C>(&self) -> LedgerColumn<C>
     where
-        C: Column + ColumnName + ColumnMetrics,
+        C: Column + ColumnName,
     {
         LedgerColumn {
             backend: Arc::clone(&self.backend),
@@ -1132,7 +1132,7 @@ impl Database {
 
 impl<C> LedgerColumn<C>
 where
-    C: Column + ColumnName + ColumnMetrics,
+    C: Column + ColumnName,
 {
     pub fn get_bytes(&self, key: C::Index) -> Result<Option<Vec<u8>>> {
         let is_perf_enabled = maybe_enable_rocksdb_perf(
@@ -1241,7 +1241,7 @@ where
 
 impl<C> LedgerColumn<C>
 where
-    C: TypedColumn + ColumnName + ColumnMetrics,
+    C: TypedColumn + ColumnName,
 {
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
         let mut result = Ok(None);
@@ -1303,7 +1303,7 @@ where
 
 impl<C> LedgerColumn<C>
 where
-    C: ProtobufColumn + ColumnName + ColumnMetrics,
+    C: ProtobufColumn + ColumnName,
 {
     pub fn get_protobuf_or_bincode<T: DeserializeOwned + Into<C::Type>>(
         &self,
