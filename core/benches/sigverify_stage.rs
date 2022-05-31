@@ -187,14 +187,13 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     stage.join().unwrap();
 }
 
-fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
-    let len = 10_000; // max batch size
+fn prepare_batches(discard_factor: i32, total_packets: usize) -> (Vec<PacketBatch>, usize) {
     let chunk_size = 1024;
 
     let from_keypair = Keypair::new();
     let to_keypair = Keypair::new();
 
-    let txs: Vec<_> = (0..len)
+    let txs: Vec<_> = (0..total_packets)
         .map(|_| {
             let amount = thread_rng().gen();
             system_transaction::transfer(
@@ -220,11 +219,12 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
             }
         })
     });
-    (batches, len - c)
+    (batches, total_packets - c)
 }
 
 fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32) {
-    let (batches0, num_valid_packets) = prepare_batches(discard_factor);
+    let num_packets_in_batches = 10_000; // max batch size
+    let (batches0, num_valid_packets) = prepare_batches(discard_factor, num_packets_in_batches);
     let (_verified_s, _verified_r) = unbounded();
     let verifier = TransactionSigVerifier::new(_verified_s);
 
@@ -234,8 +234,11 @@ fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32)
 
     bencher.iter(|| {
         let mut batches = batches0.clone();
-        let (pre_shrink_time_us, _pre_shrink_total) =
-            SigVerifyStage::maybe_shrink_batches(&mut batches);
+        let (pre_shrink_time_us, _pre_shrink_total) = SigVerifyStage::maybe_shrink_batches(
+            &mut batches,
+            num_packets_in_batches,
+            num_valid_packets,
+        );
 
         let mut verify_time = Measure::start("sigverify_batch_time");
         let _batches = verifier.verify_batches(batches, num_valid_packets);

@@ -183,13 +183,6 @@ pub fn count_valid_packets(
         .sum()
 }
 
-pub fn count_discarded_packets(batches: &[PacketBatch]) -> usize {
-    batches
-        .iter()
-        .map(|batch| batch.iter().filter(|p| p.meta.discard()).count())
-        .sum()
-}
-
 // internal function to be unit-tested; should be used only by get_packet_offsets
 fn do_get_packet_offsets(
     packet: &Packet,
@@ -555,27 +548,24 @@ impl Deduper {
     }
 }
 
-//inplace shrink a batch of packets
+// in-place shrink a batch of packets
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
-    let mut last_valid_batch = 0;
+    let mut shrunk_batches_len = 0;
     for batch_ix in 0..batches.len() {
         for packet_ix in 0..batches[batch_ix].len() {
             if batches[batch_ix][packet_ix].meta.discard() {
                 continue;
             }
-            last_valid_batch = batch_ix.saturating_add(1);
-            let mut found_spot = false;
-            while valid_batch_ix < batch_ix && !found_spot {
+
+            'outer: while valid_batch_ix < batch_ix {
                 while valid_packet_ix < batches[valid_batch_ix].len() {
                     if batches[valid_batch_ix][valid_packet_ix].meta.discard() {
                         batches[valid_batch_ix][valid_packet_ix] =
                             batches[batch_ix][packet_ix].clone();
                         batches[batch_ix][packet_ix].meta.set_discard(true);
-                        last_valid_batch = valid_batch_ix.saturating_add(1);
-                        found_spot = true;
-                        break;
+                        break 'outer;
                     }
                     valid_packet_ix = valid_packet_ix.saturating_add(1);
                 }
@@ -584,9 +574,11 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
                     valid_batch_ix = valid_batch_ix.saturating_add(1);
                 }
             }
+
+            shrunk_batches_len = valid_batch_ix.saturating_add(1);
         }
     }
-    batches.truncate(last_valid_batch);
+    batches.truncate(shrunk_batches_len);
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
