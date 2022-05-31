@@ -5739,16 +5739,13 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache<'a, I>(
+    fn write_accounts_to_cache<'a>(
         &self,
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
-        txn_iter: I,
-    ) -> Vec<AccountInfo>
-    where
-        I: std::iter::Iterator<Item=&'a &'a Signature>
-    {
+        txn_signatures_iter: Box<dyn std::iter::Iterator<Item=&&Signature> + 'a>,
+    ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
             assert_eq!(hashes.len(), len);
@@ -5756,7 +5753,7 @@ impl AccountsDb {
         });
 
         accounts_and_meta_to_store
-            .iter().zip(txn_iter)
+            .iter().zip(txn_signatures_iter)
             .enumerate()
             .map(|(i, ((meta, account), signature))| {
                 let hash = hashes.map(|hashes| hashes[i].borrow());
@@ -5797,7 +5794,7 @@ impl AccountsDb {
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
-        txn_signatures: Option<&[&Signature]>,
+        txn_signatures: Option<&'a[&'a Signature]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
@@ -5828,22 +5825,23 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
-            if txn_signatures.is_some() {
-                self.write_accounts_to_cache(
-                    slot,
-                    hashes,
-                    &accounts_and_meta_to_store,
-                    txn_signatures.unwrap().iter(),
-                )
-            } else {
-                let default_sig = Signature::default();
-                self.write_accounts_to_cache(
-                    slot,
-                    hashes,
-                    &accounts_and_meta_to_store,
-                    std::iter::repeat(&&default_sig),
-                )
-            }
+            let default_sig = Signature::default();
+            let default_sig_ref = &&default_sig;
+            let iter: Box<dyn std::iter::Iterator<Item=&&Signature>> = match txn_signatures {
+                Some(txn_signatures) => {
+                    assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
+                    Box::new(txn_signatures.iter())
+                },
+                None => Box::new(std::iter::repeat(default_sig_ref)
+                    .take(accounts_and_meta_to_store.len())),
+            };
+
+            self.write_accounts_to_cache(
+                slot,
+                hashes,
+                &accounts_and_meta_to_store,
+                iter,
+            )
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
