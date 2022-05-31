@@ -611,6 +611,7 @@ where
     let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
     let slots = RwLock::new(Vec::with_capacity(snapshot_storages.len()));
+    let total = AtomicU64::default();
     info!("measure remap");
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
@@ -658,6 +659,7 @@ where
                     std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
                 }
 
+                let mut m = Measure::start("remap");
                 reconstruct_single_storage(
                     slot,
                     &remapped_append_vec_path,
@@ -665,11 +667,14 @@ where
                     remapped_append_vec_id,
                     &mut new_slot_storage,
                 )?;
+                m.stop();
+                total.fetch_add(m.as_us(), Ordering::Relaxed);
             }
             Ok((*slot, new_slot_storage))
         })
         .collect::<Result<HashMap<Slot, _>, Error>>()?;
     measure_remap.stop();
+    error!("took: {}us", total.fetch(Ordering::Relaxed));
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized

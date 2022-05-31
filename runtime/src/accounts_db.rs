@@ -6591,9 +6591,14 @@ impl AccountsDb {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();
+            error!("maps: {}", combined_maps.len());
 
             let mut sort_time = Measure::start("sort_storages");
-            let min_root = self.accounts_index.min_alive_root();
+            let mut min_root = self.accounts_index.min_alive_root();
+            if min_root.is_none() {
+                error!("hacking min root");
+                min_root = Some(0);
+            }
             let storages = SortedStorages::new_with_slots(
                 combined_maps.iter().zip(slots.into_iter()),
                 min_root,
