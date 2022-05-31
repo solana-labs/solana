@@ -7,7 +7,7 @@ mod tests {
             tpu_connection::TpuConnection,
         },
         solana_sdk::{packet::PACKET_DATA_SIZE, quic::QUIC_PORT_OFFSET, signature::Keypair},
-        solana_streamer::quic::spawn_server,
+        solana_streamer::quic::{spawn_server, StreamStats},
         std::{
             collections::HashMap,
             net::{SocketAddr, UdpSocket},
@@ -28,6 +28,7 @@ mod tests {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s.try_clone().unwrap(),
             &keypair,
@@ -38,6 +39,7 @@ mod tests {
             staked_nodes,
             10,
             10,
+            stats,
         )
         .unwrap();
 

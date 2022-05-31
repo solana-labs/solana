@@ -29,7 +29,9 @@ use {
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::signature::Keypair,
-    solana_streamer::quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+    solana_streamer::quic::{
+        spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS,
+    },
     std::{
         collections::HashMap,
         net::UdpSocket,
@@ -148,6 +150,7 @@ impl Tpu {
 
         let (verified_sender, verified_receiver) = unbounded();
 
+        let stats = Arc::new(StreamStats::default());
         let tpu_quic_t = spawn_server(
             transactions_quic_sockets,
             keypair,
@@ -158,19 +161,21 @@ impl Tpu {
             staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
         )
         .unwrap();
 
         let tpu_forwards_quic_t = spawn_server(
             transactions_forwards_quic_sockets,
             keypair,
-            cluster_info.my_contact_info().tpu.ip(),
+            cluster_info.my_contact_info().tpu_forwards.ip(),
             fetch_stage.forward_sender.clone(),
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
             staked_nodes,
-            MAX_STAKED_CONNECTIONS,
-            MAX_UNSTAKED_CONNECTIONS,
+            MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
+            0, // Prevent unstaked nodes from forwarding transactions
+            stats,
         )
         .unwrap();
 
