@@ -61,6 +61,7 @@ use {
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift, MAX_ALLOWABLE_DRIFT_PERCENTAGE,
             MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
+            MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
@@ -2418,10 +2419,15 @@ impl Bank {
 
     fn update_clock(&self, parent_epoch: Option<Epoch>) {
         let mut unix_timestamp = self.clock().unix_timestamp;
-        let warp_timestamp_again = self
+        let warp_timestamp = self
             .feature_set
-            .activated_slot(&feature_set::warp_timestamp_again::id());
-        let epoch_start_timestamp = if warp_timestamp_again == Some(self.slot()) {
+            .activated_slot(&feature_set::warp_timestamp_again::id())
+            == Some(self.slot())
+            || self
+                .feature_set
+                .activated_slot(&feature_set::warp_timestamp_with_a_vengeance::id())
+                == Some(self.slot());
+        let epoch_start_timestamp = if warp_timestamp {
             None
         } else {
             let epoch = if let Some(epoch) = parent_epoch {
@@ -2433,6 +2439,14 @@ impl Bank {
             Some((first_slot_in_epoch, self.clock().epoch_start_timestamp))
         };
         let max_allowable_drift = if self
+            .feature_set
+            .is_active(&feature_set::warp_timestamp_with_a_vengeance::id())
+        {
+            MaxAllowableDrift {
+                fast: MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST,
+                slow: MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
+            }
+        } else if self
             .feature_set
             .is_active(&feature_set::warp_timestamp_again::id())
         {
@@ -14950,30 +14964,27 @@ pub(crate) mod tests {
             * Duration::from_nanos(bank.ns_per_slot as u64)
     }
 
-    #[test]
-    fn test_warp_timestamp_again_feature_slow() {
+    fn test_warp_timestamp_activation(
+        mut genesis_config: GenesisConfig,
+        voting_keypair: Keypair,
+        feature_id: &Pubkey,
+        max_allowable_drift_slow_before: u32,
+        max_allowable_drift_slow_after: u32,
+    ) {
         fn max_allowable_delta_since_epoch(bank: &Bank, max_allowable_drift: u32) -> i64 {
             let poh_estimate_offset = poh_estimate_offset(bank);
             (poh_estimate_offset.as_secs()
                 + (poh_estimate_offset * max_allowable_drift / 100).as_secs()) as i64
         }
 
-        let leader_pubkey = solana_sdk::pubkey::new_rand();
-        let GenesisConfigInfo {
-            mut genesis_config,
-            voting_keypair,
-            ..
-        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
         let slots_in_epoch = 32;
-        genesis_config
-            .accounts
-            .remove(&feature_set::warp_timestamp_again::id())
-            .unwrap();
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
         let mut bank = Bank::new_for_tests(&genesis_config);
+        let slot_duration = Duration::from_nanos(bank.ns_per_slot as u64);
 
         let recent_timestamp: UnixTimestamp = bank.unix_timestamp_from_genesis();
-        let additional_secs = 8; // Greater than MAX_ALLOWABLE_DRIFT_PERCENTAGE for full epoch
+        let additional_secs =
+            ((slot_duration * max_allowable_drift_slow_before * 32) / 100).as_secs() as i64 + 1; // Greater than max_allowable_drift_slow_before for full epoch
         update_vote_account_timestamp(
             BlockTimestamp {
                 slot: bank.slot(),
@@ -14983,24 +14994,21 @@ pub(crate) mod tests {
             &voting_keypair.pubkey(),
         );
 
-        // additional_secs greater than MAX_ALLOWABLE_DRIFT_PERCENTAGE for an epoch
-        // timestamp bounded to 50% deviation
+        // additional_secs greater than max_allowable_drift_slow_after for an epoch
+        // timestamp bounded to max_allowable_drift_slow_before deviation
         for _ in 0..31 {
             bank = new_from_parent(&Arc::new(bank));
             assert_eq!(
                 bank.clock().unix_timestamp,
                 bank.clock().epoch_start_timestamp
-                    + max_allowable_delta_since_epoch(&bank, MAX_ALLOWABLE_DRIFT_PERCENTAGE),
+                    + max_allowable_delta_since_epoch(&bank, max_allowable_drift_slow_before),
             );
             assert_eq!(bank.clock().epoch_start_timestamp, recent_timestamp);
         }
 
         // Request `warp_timestamp_again` activation
         let feature = Feature { activated_at: None };
-        bank.store_account(
-            &feature_set::warp_timestamp_again::id(),
-            &feature::create_account(&feature, 42),
-        );
+        bank.store_account(feature_id, &feature::create_account(&feature, 42));
         let previous_epoch_timestamp = bank.clock().epoch_start_timestamp;
         let previous_timestamp = bank.clock().unix_timestamp;
 
@@ -15010,12 +15018,13 @@ pub(crate) mod tests {
         assert!(
             bank.clock().epoch_start_timestamp
                 > previous_epoch_timestamp
-                    + max_allowable_delta_since_epoch(&bank, MAX_ALLOWABLE_DRIFT_PERCENTAGE)
+                    + max_allowable_delta_since_epoch(&bank, max_allowable_drift_slow_before)
         );
 
         // Refresh vote timestamp
         let recent_timestamp: UnixTimestamp = bank.clock().unix_timestamp;
-        let additional_secs = 8;
+        let additional_secs =
+            ((slot_duration * max_allowable_drift_slow_after * 24) / 100).as_secs() as i64 + 1; // Greater than max_allowable_drift_slow_before for full epoch
         update_vote_account_timestamp(
             BlockTimestamp {
                 slot: bank.slot(),
@@ -15025,14 +15034,13 @@ pub(crate) mod tests {
             &voting_keypair.pubkey(),
         );
 
-        // additional_secs greater than MAX_ALLOWABLE_DRIFT_PERCENTAGE for 22 slots
-        // timestamp bounded to 80% deviation
+        // additional_secs greater than max_allowable_drift_slow_after for 24 slots timestamp bounded
         for _ in 0..23 {
             bank = new_from_parent(&Arc::new(bank));
             assert_eq!(
                 bank.clock().unix_timestamp,
                 bank.clock().epoch_start_timestamp
-                    + max_allowable_delta_since_epoch(&bank, MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW),
+                    + max_allowable_delta_since_epoch(&bank, max_allowable_drift_slow_after),
             );
             assert_eq!(bank.clock().epoch_start_timestamp, recent_timestamp);
         }
@@ -15046,6 +15054,54 @@ pub(crate) mod tests {
             );
             assert_eq!(bank.clock().epoch_start_timestamp, recent_timestamp);
         }
+    }
+
+    #[test]
+    fn test_warp_timestamp_again_feature_slow() {
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        genesis_config
+            .accounts
+            .remove(&feature_set::warp_timestamp_again::id())
+            .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::warp_timestamp_with_a_vengeance::id())
+            .unwrap();
+
+        test_warp_timestamp_activation(
+            genesis_config,
+            voting_keypair,
+            &feature_set::warp_timestamp_again::id(),
+            MAX_ALLOWABLE_DRIFT_PERCENTAGE,
+            MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
+        );
+    }
+
+    #[test]
+    fn test_warp_timestamp_with_a_vengeance() {
+        let leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config_with_leader(5, &leader_pubkey, 3);
+        genesis_config
+            .accounts
+            .remove(&feature_set::warp_timestamp_with_a_vengeance::id())
+            .unwrap();
+
+        test_warp_timestamp_activation(
+            genesis_config,
+            voting_keypair,
+            &feature_set::warp_timestamp_with_a_vengeance::id(),
+            MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW,
+            MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2,
+        );
     }
 
     #[test]

@@ -412,6 +412,10 @@ pub mod add_shred_type_to_shred_seed {
     solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
 }
 
+pub mod warp_timestamp_with_a_vengeance {
+    solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -508,6 +512,7 @@ lazy_static! {
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
+        (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
