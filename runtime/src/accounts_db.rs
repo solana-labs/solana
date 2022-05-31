@@ -1904,7 +1904,7 @@ impl AccountsDb {
     pub fn init_filler_accounts(&self, epoch_schedule: &EpochSchedule) {
         let count = self.filler_accounts_config.count;
         if count > 0 {
-            let slots_per_epoch = epoch_schedule.slots_per_epoch;
+            let slots_per_epoch = epoch_schedule.slots_per_epoch * 3;
             let accounts_per_slot = (count as u64) / slots_per_epoch;
             self.filler_accounts_per_slot
                 .store(accounts_per_slot, Ordering::Release);
