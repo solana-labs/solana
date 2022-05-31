@@ -73,7 +73,7 @@ use {
         vote_state::{self, VoteState},
     },
     std::{
-        collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+        collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
         ffi::OsStr,
         fs::File,
         io::{self, stdout, BufRead, BufReader, Write},
@@ -766,6 +766,7 @@ fn load_bank_forks(
             "snapshot.ledger-tool"
         });
 
+    let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
     } else {
@@ -773,6 +774,17 @@ fn load_bank_forks(
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         let incremental_snapshot_archives_dir =
             incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
+        if let Some(full_snapshot_slot) =
+            snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
+        {
+            let incremental_snapshot_slot =
+                snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                    &incremental_snapshot_archives_dir,
+                    full_snapshot_slot,
+                )
+                .unwrap_or_default();
+            starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
+        }
 
         Some(SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
@@ -785,19 +797,26 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        if let Ok(Some(slot_meta)) = blockstore.meta(halt_slot) {
-            if !slot_meta.is_full() {
-                eprintln!(
-                    "Unable to load bank forks at slot {} due to blockstore slot {} not being full",
-                    halt_slot, halt_slot
-                );
-                exit(1);
+        let mut max_slot = 0;
+        let mut next_slots: VecDeque<_> = vec![starting_slot].into();
+        while !next_slots.is_empty() {
+            let next_slot = next_slots.pop_front().unwrap();
+            if let Ok(Some(slot_meta)) = blockstore.meta(next_slot) {
+                if slot_meta.is_full() {
+                    max_slot = std::cmp::max(max_slot, next_slot);
+                    if max_slot >= halt_slot {
+                        break;
+                    }
+
+                    next_slots.extend(slot_meta.next_slots);
+                }
             }
-        } else {
-            eprintln!(
-                "Unable to load bank forks at slot {} due to blockstore missing slot {}",
-                halt_slot, halt_slot
-            );
+        }
+
+        if max_slot < halt_slot {
+            eprintln!("Unable to load bank forks at slot {} due to disconnected blocks. Max slot found from starting slot {} is {}",
+            halt_slot,
+            starting_slot,max_slot);
             exit(1);
         }
     }
