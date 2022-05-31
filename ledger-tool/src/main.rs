@@ -2505,11 +2505,6 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                if blockstore.meta(snapshot_slot).unwrap().is_none() {
-                    eprintln!("snapshot slot {} is not available in the blockstore. Cannot create a snapshot at this slot", snapshot_slot);
-                    exit(1);
-                }
-
                 let ending_slot = if is_minimize {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
@@ -2519,11 +2514,6 @@ fn main() {
                         );
                         exit(1);
                     }
-
-                    assert!(
-                        blockstore.meta(ending_slot).unwrap().is_some(),
-                        "Ending slot doesn't exist"
-                    );
 
                     Some(ending_slot)
                 } else {
