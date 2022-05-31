@@ -40,7 +40,7 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicUsize, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::Builder,
