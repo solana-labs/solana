@@ -737,7 +737,7 @@ where
             use_bg_thread_pool: false,
             check_hash: false,
             ancestors: Some(&ancestors),
-            use_write_cache: false,
+            use_write_cache: true,
             epoch_schedule: &genesis_config.epoch_schedule,
             rent_collector: &RentCollector::new(
                 genesis_config.epoch_schedule.get_epoch(snapshot_slot),
@@ -748,13 +748,11 @@ where
         },
     );
 
-    let accounts_data_len = 0;
-    /*
     let IndexGenerationInfo { accounts_data_len } = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
-    );*/
+    );
 
     accounts_db.maybe_add_filler_accounts(
         &genesis_config.epoch_schedule,
