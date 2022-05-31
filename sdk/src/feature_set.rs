@@ -319,6 +319,10 @@ pub mod add_shred_type_to_shred_seed {
     solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
 }
 
+pub mod warp_timestamp_with_a_vengeance {
+    solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -393,6 +397,7 @@ lazy_static! {
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
         (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
+        (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
