@@ -2832,6 +2832,16 @@ fn main() {
                                 bank.hash(),
                                 full_snapshot_archive_info.path().display(),
                             );
+
+                            if is_minimize {
+                                let starting_epoch = bank.epoch_schedule().get_epoch(snapshot_slot);
+                                let ending_epoch =
+                                    bank.epoch_schedule().get_epoch(ending_slot.unwrap());
+                                if starting_epoch != ending_epoch {
+                                    warn!("Minimized snapshot range crosses epoch boundary ({} to {}). Bank hashes after {} will not match replays from a full snapshot",
+                                        starting_epoch, ending_epoch, bank.epoch_schedule().get_last_slot_in_epoch(starting_epoch));
+                                }
+                            }
                         }
 
                         println!(
