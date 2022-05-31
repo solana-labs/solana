@@ -778,6 +778,7 @@ fn reconstruct_historical_roots(
             .map(|(root, _)| root),
     );
     snapshot_historical_roots.sort_unstable();
+    error!("historical roots len: {}", snapshot_historical_roots.len());
     let mut roots_tracker = accounts_db.accounts_index.roots_tracker.write().unwrap();
     snapshot_historical_roots.into_iter().for_each(|root| {
         roots_tracker.historical_roots.insert(root);
