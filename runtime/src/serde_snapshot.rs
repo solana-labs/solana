@@ -611,6 +611,7 @@ where
     let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
     let slots = RwLock::new(Vec::with_capacity(snapshot_storages.len()));
+    info!("measure remap");
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
         .map(|i| {
@@ -687,6 +688,7 @@ where
         max_append_vec_id
     );
 
+    info!("bank_hashes");
     // Process deserialized data, set necessary fields in self
     accounts_db
         .bank_hashes
@@ -707,6 +709,7 @@ where
 
     let mut measure_notify = Measure::start("accounts_notify");
 
+    info!("notify_account_restore_from_snapshot");
     let accounts_db = Arc::new(accounts_db);
     let accounts_db_clone = accounts_db.clone();
     let handle = Builder::new()
@@ -725,6 +728,7 @@ where
         solana_sdk::clock::DEFAULT_TICKS_PER_SLOT,
     );
 
+    info!("calc hash");
     let ancestors = crate::ancestors::Ancestors::from(slots.into_inner().unwrap());
     let _ = accounts_db.calculate_accounts_hash_helper(
         false,
@@ -744,11 +748,13 @@ where
         },
     );
 
+    let accounts_data_len = 0;
+    /*
     let IndexGenerationInfo { accounts_data_len } = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
-    );
+    );*/
 
     accounts_db.maybe_add_filler_accounts(
         &genesis_config.epoch_schedule,
