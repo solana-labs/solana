@@ -674,7 +674,7 @@ where
         })
         .collect::<Result<HashMap<Slot, _>, Error>>()?;
     measure_remap.stop();
-    error!("took: {}us", total.fetch(Ordering::Relaxed));
+    error!("took: {}us", total.load(Ordering::Relaxed));
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
