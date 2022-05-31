@@ -714,6 +714,22 @@ where
         })
         .unwrap();
 
+        let seconds_per_tick = std::time::Duration::from_secs_f64(1.0 / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND as f64);
+        let slots_per_year =
+        solana_sdk::timing::years_as_slots(1.0, &seconds_per_tick, solana_sdk::clock::DEFAULT_TICKS_PER_SLOT);
+
+    let _ = accounts_db.calculate_accounts_hash_helper(false, snapshot_slot, 
+            &crate::accounts_hash::CalcAccountsHashConfig {
+                use_bg_thread_pool: false,
+                check_hash: false,
+                ancestors: None,
+                use_write_cache: false,
+                epoch_schedule: &genesis_config.epoch_schedule,
+                rent_collector: &RentCollector::new(genesis_config.epoch_schedule.get_epoch(snapshot_slot), &genesis_config.epoch_schedule, slots_per_year, &genesis_config.rent),
+            }
+
+    );
+
     let IndexGenerationInfo { accounts_data_len } = accounts_db.generate_index(
         limit_load_slot_count_from_snapshot,
         verify_index,
