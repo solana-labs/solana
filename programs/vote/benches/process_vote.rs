@@ -52,7 +52,7 @@ fn create_accounts() -> (
         );
 
         for next_vote_slot in 0..num_initial_votes {
-            vote_state.process_next_vote_slot(next_vote_slot, 0);
+            vote_state.process_next_vote_slot(next_vote_slot, 0, None);
         }
         let mut vote_account_data: Vec<u8> = vec![0; VoteState::size_of()];
         let versioned = VoteStateVersions::new_current(vote_state);

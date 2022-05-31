@@ -40,6 +40,14 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
+// Number of slots of grace period for which maximum vote credits are awarded - votes landing within this number
+// of slots of the slot that is being voted on are awarded full credits.
+const VOTE_CREDITS_GRACE_SLOTS: u64 = 4;
+
+// Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within
+// the grace period.  After that grace period, vote credits are reduced.
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u64 = 16;
+
 #[frozen_abi(digest = "6LBwH5w3WyAWZhsM3KTG9QZP7nYBhcC61K33kHR6gMAD")]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
@@ -762,6 +770,8 @@ impl VoteState {
         new_root: Option<Slot>,
         timestamp: Option<i64>,
         epoch: Epoch,
+        in_slot: Option<Slot>,
+        feature_set: Option<&FeatureSet>,
     ) -> Result<(), VoteError> {
         assert!(!new_state.is_empty());
         if new_state.len() > MAX_LOCKOUT_HISTORY {
@@ -821,12 +831,23 @@ impl VoteState {
         let mut current_vote_state_index = 0;
         let mut new_vote_state_index = 0;
 
+        // Count the number of slots at and before the new root within the current vote state lockouts.  Start with 1
+        // for the new root.  The purpose of this is to know how many slots were rooted by this state update:
+        // - The new root was rooted
+        // - As were any slots that were in the current state but are not in the new state.  The only slots which
+        //   can be in this set are those oldest slots in the current vote state that are not present in the
+        //   new vote state; these have been "popped off the back" of the tower and thus represent finalized slots
+        let mut finalized_slot_count = 1_u64;
+
         for current_vote in &self.votes {
             // Find the first vote in the current vote state for a slot greater
             // than the new proposed root
             if let Some(new_root) = new_root {
                 if current_vote.slot <= new_root {
                     current_vote_state_index += 1;
+                    if current_vote.slot != new_root {
+                        finalized_slot_count += 1;
+                    }
                     continue;
                 }
             }
@@ -870,9 +891,33 @@ impl VoteState {
         // `new_vote_state` passed all the checks, finalize the change by rewriting
         // our state.
         if self.root_slot != new_root {
-            // TODO to think about: Note, people may be incentivized to set more
-            // roots to get more credits, but I think they can already do this...
-            self.increment_credits(epoch);
+            // Award vote credits based on the number of slots that were voted on and have reached finality
+            if feature_set
+                .map(|feature_set| feature_set.is_active(&feature_set::timely_vote_credits::id()))
+                .unwrap_or(false)
+            {
+                if let Some(in_slot) = in_slot {
+                    // Credits are awarded based on the "timeliness" of the vote transaction which landed them.  For
+                    // each finalized slot, there was one voted-on slot in the new vote state that was responsible for
+                    // finalizing it.  Each of those votes is awarded credits based on distance from the slot in which
+                    // the vote transaction has landed.
+                    let mut credits = 0;
+
+                    for lockout in new_state.iter().rev() {
+                        credits += Self::compute_vote_slot_credits(in_slot, lockout.slot);
+                        finalized_slot_count -= 1;
+                        if finalized_slot_count == 0 {
+                            break;
+                        }
+                    }
+
+                    self.increment_credits(epoch, credits);
+                } else {
+                    self.increment_credits(epoch, 1);
+                }
+            } else {
+                self.increment_credits(epoch, 1);
+            }
         }
         if let Some(timestamp) = timestamp {
             let last_slot = new_state.back().unwrap().slot;
@@ -888,6 +933,7 @@ impl VoteState {
         vote: &Vote,
         slot_hashes: &[SlotHash],
         epoch: Epoch,
+        voted_in_slot: Slot,
         feature_set: Option<&FeatureSet>,
     ) -> Result<(), VoteError> {
         if vote.slots.is_empty() {
@@ -916,13 +962,49 @@ impl VoteState {
 
         self.check_slots_are_valid(vote_slots, &vote.hash, slot_hashes)?;
 
+        // Only pass voted on slot into process_next_vote_slot if the timely vote credits feature is enabled,
+        // otherwise None is passed in and that implementation will use 'normal' vote credits
+        let voted_in_slot = feature_set.and_then(|f| {
+            if f.is_active(&feature_set::timely_vote_credits::id()) {
+                Some(voted_in_slot)
+            } else {
+                None
+            }
+        });
+
         vote_slots
             .iter()
-            .for_each(|s| self.process_next_vote_slot(*s, epoch));
+            .for_each(|s| self.process_next_vote_slot(*s, epoch, voted_in_slot));
         Ok(())
     }
 
-    pub fn process_next_vote_slot(&mut self, next_vote_slot: Slot, epoch: Epoch) {
+    fn compute_vote_slot_credits(voted_in_slot: Slot, voted_for_slot: Slot) -> u64 {
+        // Should be impossible for next_vote_slot to be >= voted_in_slot (how can you vote for a slot
+        // that isn't even complete yet?) but just in case there are bugs, this check will prevent the
+        // possibility of someone exploiting that for extra credits.
+        if voted_for_slot < voted_in_slot {
+            // The minimum latency for a vote on slot 0 lands in slot 1.  That is latency 0.  So subtract
+            // 1 from the diff between voted_in_slot and voted_for_slot to get the latency.
+            let vote_latency = (voted_in_slot - voted_for_slot) - 1;
+            // Must subtract 1 from VOTE_CREDITS_GRACE_SLOTS to get turn it into "grace latency"
+            let slot_credits_reduction = std::cmp::max(vote_latency, VOTE_CREDITS_GRACE_SLOTS - 1)
+                - (VOTE_CREDITS_GRACE_SLOTS - 1);
+            if slot_credits_reduction < VOTE_CREDITS_MAXIMUM_PER_SLOT {
+                VOTE_CREDITS_MAXIMUM_PER_SLOT - slot_credits_reduction
+            } else {
+                1
+            }
+        } else {
+            1
+        }
+    }
+
+    pub fn process_next_vote_slot(
+        &mut self,
+        next_vote_slot: Slot,
+        epoch: Epoch,
+        voted_in_slot: Option<Slot>,
+    ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .last_voted_slot()
@@ -940,14 +1022,21 @@ impl VoteState {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
 
-            self.increment_credits(epoch);
+            let credits = match voted_in_slot {
+                Some(voted_in_slot) => {
+                    Self::compute_vote_slot_credits(voted_in_slot, next_vote_slot)
+                }
+                None => 1,
+            };
+
+            self.increment_credits(epoch, credits);
         }
         self.votes.push_back(vote);
         self.double_lockouts();
     }
 
     /// increment credits, record credits for last epoch if new epoch
-    pub fn increment_credits(&mut self, epoch: Epoch) {
+    pub fn increment_credits(&mut self, epoch: Epoch, credits: u64) {
         // increment credits, record by epoch
 
         // never seen a credit
@@ -971,13 +1060,13 @@ impl VoteState {
             }
         }
 
-        self.epoch_credits.last_mut().unwrap().1 += 1;
+        self.epoch_credits.last_mut().unwrap().1 += credits;
     }
 
     /// "unchecked" functions used by tests and Tower
     pub fn process_vote_unchecked(&mut self, vote: Vote) {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
-        let _ignored = self.process_vote(&vote, &slot_hashes, self.current_epoch(), None);
+        let _ignored = self.process_vote(&vote, &slot_hashes, self.current_epoch(), 0, None);
     }
 
     #[cfg(test)]
@@ -1371,7 +1460,13 @@ pub fn process_vote<S: std::hash::BuildHasher>(
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
 
-    vote_state.process_vote(vote, slot_hashes, clock.epoch, Some(feature_set))?;
+    vote_state.process_vote(
+        vote,
+        slot_hashes,
+        clock.epoch,
+        clock.slot,
+        Some(feature_set),
+    )?;
     if let Some(timestamp) = vote.timestamp {
         vote.slots
             .iter()
@@ -1388,6 +1483,7 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     clock: &Clock,
     mut vote_state_update: VoteStateUpdate,
     signers: &HashSet<Pubkey, S>,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
     vote_state.check_update_vote_state_slots_are_valid(&mut vote_state_update, slot_hashes)?;
@@ -1396,6 +1492,8 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
         vote_state_update.root,
         vote_state_update.timestamp,
         clock.epoch,
+        Some(clock.slot),
+        Some(feature_set),
     )?;
     vote_account.set_state(&VoteStateVersions::new_current(vote_state))
 }
@@ -1678,11 +1776,11 @@ mod tests {
         let slot_hashes: Vec<_> = vote.slots.iter().rev().map(|x| (*x, vote.hash)).collect();
 
         assert_eq!(
-            vote_state_a.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state_a.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
         assert_eq!(
-            vote_state_b.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state_b.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
         assert_eq!(recent_votes(&vote_state_a), recent_votes(&vote_state_b));
@@ -1695,12 +1793,12 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(0, vote.hash)];
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
         let recent = recent_votes(&vote_state);
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Err(VoteError::VoteTooOld)
         );
         assert_eq!(recent, recent_votes(&vote_state));
@@ -1760,7 +1858,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
         assert_eq!(
@@ -1776,7 +1874,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
 
@@ -1795,7 +1893,7 @@ mod tests {
         let vote = Vote::new(vec![0], Hash::default());
         let slot_hashes: Vec<_> = vec![(*vote.slots.last().unwrap(), vote.hash)];
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&FeatureSet::default())),
             Ok(())
         );
 
@@ -1812,7 +1910,7 @@ mod tests {
 
         let vote = Vote::new(vec![], Hash::default());
         assert_eq!(
-            vote_state.process_vote(&vote, &[], 0, Some(&FeatureSet::default())),
+            vote_state.process_vote(&vote, &[], 0, 0, Some(&FeatureSet::default())),
             Err(VoteError::EmptySlots)
         );
     }
@@ -1853,7 +1951,7 @@ mod tests {
         let epochs = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
         for epoch in 0..epochs {
             for _j in 0..epoch {
-                vote_state.increment_credits(epoch);
+                vote_state.increment_credits(epoch, 1);
                 credits += 1;
             }
             expected.push((epoch, credits, credits - epoch));
@@ -1872,10 +1970,10 @@ mod tests {
         let mut vote_state = VoteState::default();
 
         assert_eq!(vote_state.epoch_credits().len(), 0);
-        vote_state.increment_credits(1);
+        vote_state.increment_credits(1, 1);
         assert_eq!(vote_state.epoch_credits().len(), 1);
 
-        vote_state.increment_credits(2);
+        vote_state.increment_credits(2, 1);
         assert_eq!(vote_state.epoch_credits().len(), 2);
     }
 
@@ -1885,10 +1983,347 @@ mod tests {
 
         let credits = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
         for i in 0..credits {
-            vote_state.increment_credits(i as u64);
+            vote_state.increment_credits(i as u64, 1);
         }
         assert_eq!(vote_state.credits(), credits);
         assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);
+    }
+
+    fn slots_to_lockouts(votes: &[Slot]) -> VecDeque<Lockout> {
+        let mut lockouts = VecDeque::<Lockout>::from(
+            votes
+                .iter()
+                .map(|slot| Lockout {
+                    slot: *slot,
+                    confirmation_count: 0,
+                })
+                .collect::<Vec<Lockout>>(),
+        );
+
+        let lockouts_len = lockouts.len();
+
+        for (idx, vote) in lockouts.iter_mut().enumerate() {
+            vote.confirmation_count = (lockouts_len - idx) as u32;
+        }
+
+        lockouts
+    }
+
+    // Test vote credit updates before and after "one credit per slot" feature is enabled
+    #[test]
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::field_reassign_with_default)]
+    fn test_vote_state_update_increment_credits() {
+        // Each element of test data is:
+        // (vote_state_votes: Vec<Slot>,
+        //  vote_state_root: Option<Slot>,
+        //  vote_state_update_votes: Vec<Slot>,
+        //  vote_state_update_root: Option<Slot>,
+        //  in_slot: Slot,
+        //  per_transaction_expected_credits: u64,
+        //  per_slot_expected_credits: u64)
+        let test_data: Vec<(
+            Vec<Slot>,
+            Option<Slot>,
+            Vec<Slot>,
+            Option<Slot>,
+            u64,
+            u64,
+            u64,
+        )> = vec![
+            // First slot finalized
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 28, 29,
+                ],
+                None,
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30,
+                ],
+                Some(0),
+                31,
+                1,
+                16,
+            ),
+            // Next slot finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+                Some(0),
+                vec![
+                    2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                    24, 25, 26, 27, 28, 29, 30, 31, 32,
+                ],
+                Some(1),
+                33,
+                1,
+                16,
+            ),
+            // Two slots finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+                Some(0),
+                vec![
+                    3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                    24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+                ],
+                Some(2),
+                34,
+                1,
+                32,
+            ),
+            // Three slots finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+                Some(0),
+                vec![
+                    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                    25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+                ],
+                Some(3),
+                35,
+                1,
+                48,
+            ),
+            // 30 slots finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30,
+                ],
+                Some(0),
+                vec![
+                    31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+                    51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+                ],
+                Some(30),
+                62,
+                1,
+                195,
+            ),
+            // 31 slots finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+                Some(0),
+                vec![
+                    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+                    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+                ],
+                Some(31),
+                63,
+                1,
+                196,
+            ),
+            // 5 slots finalized
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                ],
+                Some(0),
+                vec![
+                    6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+                ],
+                Some(5),
+                37,
+                1,
+                79,
+            ),
+            // 3 slots finalized after votes { 41, 42, 43, 44, 45, 46, 47 } follow 30 with latency 6
+            (
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                    23, 24, 25, 26, 27, 28, 29, 30,
+                ],
+                Some(0),
+                vec![
+                    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                    25, 26, 27, 41, 42, 43, 44, 45, 46, 47,
+                ],
+                Some(3),
+                53,
+                1,
+                39,
+            ),
+        ];
+
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
+
+        for data in &test_data {
+            let vote_state_votes = slots_to_lockouts(&data.0);
+            let vote_state_root = data.1;
+            let vote_state_update_votes = slots_to_lockouts(&data.2);
+            let vote_state_update_root = data.3;
+            let in_slot = Some(data.4);
+            let per_transaction_expected_credits = data.5;
+            let per_slot_expected_credits = data.6;
+
+            let mut vote_state = VoteState::default();
+
+            vote_state.votes = vote_state_votes.clone();
+
+            vote_state.root_slot = vote_state_root;
+
+            assert_eq!(
+                vote_state.process_new_vote_state(
+                    vote_state_update_votes.clone(),
+                    vote_state_update_root,
+                    None,
+                    100,
+                    in_slot,
+                    None,
+                ),
+                Ok(())
+            );
+
+            assert_eq!(
+                vote_state.epoch_credits[0].1,
+                per_transaction_expected_credits
+            );
+
+            let mut vote_state = VoteState::default();
+
+            vote_state.votes = vote_state_votes;
+
+            vote_state.root_slot = vote_state_root;
+
+            assert_eq!(
+                vote_state.process_new_vote_state(
+                    vote_state_update_votes,
+                    vote_state_update_root,
+                    None,
+                    100,
+                    in_slot,
+                    Some(&feature_set),
+                ),
+                Ok(())
+            );
+
+            assert_eq!(vote_state.epoch_credits[0].1, per_slot_expected_credits);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::field_reassign_with_default)]
+    fn test_timely_vote_credits() {
+        // Each element of test data is:
+        // (vote_state_votes: Vec<Slot>,
+        //  next_vote_slots: Vec<Slot>,
+        //  voted_in_slot: Slot,
+        //  expected_credits: u64)
+        let test_data: Vec<(Vec<Slot>, Vec<Slot>, Slot, u64)> = vec![
+            // No slots finalized yet
+            (vec![0, 1, 2], vec![4], 5, 0),
+            // 1 slot finalized with latency 0
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31],
+                32,
+                16,
+            ),
+            // 2 slots finalized with latency 1 and 0
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31, 32],
+                33,
+                32,
+            ),
+            // 3 slots finalized with latency 2, 1 and 0
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31, 32, 33],
+                34,
+                48,
+            ),
+            // 4 slots finalized with latency 3, 2, 1 and 0
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31, 32, 33, 34],
+                35,
+                64,
+            ),
+            // 5 slots finalized with latency 4, 3, 2, 1 and 0
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31, 32, 33, 34, 35],
+                36,
+                79,
+            ),
+            // 5 slots finalized with latency 6, 5, 4, 3, 2
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31, 32, 33, 34, 35],
+                38,
+                74,
+            ),
+            // 1 slot finalized with latency 200
+            (
+                vec![
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24, 25, 26, 27, 27, 29, 30,
+                ],
+                vec![31],
+                232,
+                1,
+            ),
+        ];
+
+        for data in &test_data {
+            let vote_state_votes = slots_to_lockouts(&data.0);
+            let next_vote_slots = &data.1;
+            let voted_in_slot = data.2;
+            let expected_credits = data.3;
+
+            let mut vote_state = VoteState::default();
+
+            vote_state.votes = vote_state_votes.clone();
+
+            for next_vote_slot in next_vote_slots {
+                vote_state.process_next_vote_slot(*next_vote_slot, 0, Some(voted_in_slot));
+            }
+
+            match expected_credits {
+                0 => assert_eq!(vote_state.epoch_credits.len(), 0),
+                _ => {
+                    assert_eq!(vote_state.epoch_credits.len(), 1);
+                    assert_eq!(vote_state.epoch_credits[0].1, expected_credits);
+                }
+            }
+        }
     }
 
     #[test]
@@ -2240,7 +2675,14 @@ mod tests {
             .collect();
 
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            ),
             Err(VoteError::TooManyVotes)
         );
     }
@@ -2267,6 +2709,8 @@ mod tests {
                 lesser_root,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None,
             ),
             Err(VoteError::RootRollBack)
         );
@@ -2279,6 +2723,8 @@ mod tests {
                 none_root,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None,
             ),
             Err(VoteError::RootRollBack)
         );
@@ -2301,7 +2747,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            ),
             Err(VoteError::ZeroConfirmations)
         );
 
@@ -2318,7 +2771,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            ),
             Err(VoteError::ZeroConfirmations)
         );
     }
@@ -2335,7 +2795,14 @@ mod tests {
         .collect();
 
         vote_state1
-            .process_new_vote_state(good_votes, None, None, vote_state1.current_epoch())
+            .process_new_vote_state(
+                good_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            )
             .unwrap();
 
         let mut vote_state1 = VoteState::default();
@@ -2346,7 +2813,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::ConfirmationTooLarge)
         );
     }
@@ -2374,6 +2848,8 @@ mod tests {
                 Some(root_slot),
                 None,
                 vote_state1.current_epoch(),
+                None,
+                None,
             ),
             Err(VoteError::SlotSmallerThanRoot)
         );
@@ -2396,6 +2872,8 @@ mod tests {
                 Some(root_slot),
                 None,
                 vote_state1.current_epoch(),
+                None,
+                None,
             ),
             Err(VoteError::SlotSmallerThanRoot)
         );
@@ -2418,7 +2896,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::SlotsNotOrdered)
         );
 
@@ -2435,7 +2920,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::SlotsNotOrdered)
         );
     }
@@ -2457,7 +2949,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::ConfirmationsNotOrdered)
         );
 
@@ -2474,7 +2973,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::ConfirmationsNotOrdered)
         );
     }
@@ -2498,7 +3004,14 @@ mod tests {
 
         // Slot 7 should have expired slot 0
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            ),
             Err(VoteError::NewVoteStateLockoutMismatch)
         );
     }
@@ -2519,7 +3032,7 @@ mod tests {
         .into_iter()
         .collect();
         vote_state1
-            .process_new_vote_state(votes, None, None, vote_state1.current_epoch())
+            .process_new_vote_state(votes, None, None, vote_state1.current_epoch(), None, None)
             .unwrap();
 
         let votes: VecDeque<Lockout> = vec![
@@ -2542,7 +3055,14 @@ mod tests {
         // Should error because newer vote state should not have lower confirmation the same slot
         // 1
         assert_eq!(
-            vote_state1.process_new_vote_state(votes, None, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                votes,
+                None,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::ConfirmationRollBack)
         );
     }
@@ -2573,6 +3093,8 @@ mod tests {
                     vote_state2.root_slot,
                     None,
                     vote_state2.current_epoch(),
+                    None,
+                    None,
                 )
                 .unwrap();
 
@@ -2630,6 +3152,8 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None,
             )
             .unwrap();
 
@@ -2670,6 +3194,8 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None
             ),
             Err(VoteError::LockoutConflict)
         );
@@ -2710,6 +3236,8 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None
             ),
             Err(VoteError::LockoutConflict)
         );
@@ -2754,6 +3282,8 @@ mod tests {
                 vote_state2.root_slot,
                 None,
                 vote_state2.current_epoch(),
+                None,
+                None,
             )
             .unwrap();
         assert_eq!(vote_state1, vote_state2,);
@@ -2789,7 +3319,14 @@ mod tests {
         let root = Some(1);
 
         assert_eq!(
-            vote_state1.process_new_vote_state(bad_votes, root, None, vote_state1.current_epoch(),),
+            vote_state1.process_new_vote_state(
+                bad_votes,
+                root,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None
+            ),
             Err(VoteError::LockoutConflict)
         );
 
@@ -2807,7 +3344,14 @@ mod tests {
         .collect();
 
         vote_state1
-            .process_new_vote_state(good_votes.clone(), root, None, vote_state1.current_epoch())
+            .process_new_vote_state(
+                good_votes.clone(),
+                root,
+                None,
+                vote_state1.current_epoch(),
+                None,
+                None,
+            )
             .unwrap();
         assert_eq!(vote_state1.votes, good_votes);
     }
@@ -2826,7 +3370,7 @@ mod tests {
         // error with `VotesTooOldAllFiltered`
         let slot_hashes = vec![(3, Hash::new_unique()), (2, Hash::new_unique())];
         assert_eq!(
-            vote_state.process_vote(&vote, &slot_hashes, 0, Some(&feature_set),),
+            vote_state.process_vote(&vote, &slot_hashes, 0, 0, Some(&feature_set),),
             Err(VoteError::VotesTooOldAllFiltered)
         );
 
@@ -2841,7 +3385,7 @@ mod tests {
 
         let vote = Vote::new(vec![old_vote_slot, vote_slot], vote_slot_hash);
         vote_state
-            .process_vote(&vote, &slot_hashes, 0, Some(&feature_set))
+            .process_vote(&vote, &slot_hashes, 0, 0, Some(&feature_set))
             .unwrap();
         assert_eq!(
             vote_state.votes.into_iter().collect::<Vec<Lockout>>(),
@@ -2870,7 +3414,7 @@ mod tests {
                 .unwrap()
                 .1;
             vote_state
-                .process_vote(&Vote::new(vote_slots, vote_hash), slot_hashes, 0, None)
+                .process_vote(&Vote::new(vote_slots, vote_hash), slot_hashes, 0, 0, None)
                 .unwrap();
         }
 
