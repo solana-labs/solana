@@ -610,10 +610,12 @@ where
     let num_collisions = AtomicUsize::new(0);
     let next_append_vec_id = AtomicAppendVecId::new(0);
     let mut measure_remap = Measure::start("remap");
+    let slots = RwLock::new(Vec::with_capacity(snapshot_storages.len()));
     let mut storage = (0..snapshot_storages.len())
         .into_par_iter()
         .map(|i| {
             let (slot, slot_storage) = &snapshot_storages[i];
+            slots.write().unwrap().push(*slot);
             let mut new_slot_storage = HashMap::new();
             for storage_entry in slot_storage {
                 let file_name = AppendVec::file_name(*slot, storage_entry.id());
@@ -714,20 +716,32 @@ where
         })
         .unwrap();
 
-        let seconds_per_tick = std::time::Duration::from_secs_f64(1.0 / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND as f64);
-        let slots_per_year =
-        solana_sdk::timing::years_as_slots(1.0, &seconds_per_tick, solana_sdk::clock::DEFAULT_TICKS_PER_SLOT);
+    let seconds_per_tick = std::time::Duration::from_secs_f64(
+        1.0 / solana_sdk::clock::DEFAULT_TICKS_PER_SECOND as f64,
+    );
+    let slots_per_year = solana_sdk::timing::years_as_slots(
+        1.0,
+        &seconds_per_tick,
+        solana_sdk::clock::DEFAULT_TICKS_PER_SLOT,
+    );
 
-    let _ = accounts_db.calculate_accounts_hash_helper(false, snapshot_slot, 
-            &crate::accounts_hash::CalcAccountsHashConfig {
-                use_bg_thread_pool: false,
-                check_hash: false,
-                ancestors: None,
-                use_write_cache: false,
-                epoch_schedule: &genesis_config.epoch_schedule,
-                rent_collector: &RentCollector::new(genesis_config.epoch_schedule.get_epoch(snapshot_slot), &genesis_config.epoch_schedule, slots_per_year, &genesis_config.rent),
-            }
-
+    let ancestors = crate::ancestors::Ancestors::from(slots.into_inner().unwrap());
+    let _ = accounts_db.calculate_accounts_hash_helper(
+        false,
+        snapshot_slot,
+        &crate::accounts_hash::CalcAccountsHashConfig {
+            use_bg_thread_pool: false,
+            check_hash: false,
+            ancestors: Some(&ancestors),
+            use_write_cache: false,
+            epoch_schedule: &genesis_config.epoch_schedule,
+            rent_collector: &RentCollector::new(
+                genesis_config.epoch_schedule.get_epoch(snapshot_slot),
+                &genesis_config.epoch_schedule,
+                slots_per_year,
+                &genesis_config.rent,
+            ),
+        },
     );
 
     let IndexGenerationInfo { accounts_data_len } = accounts_db.generate_index(
