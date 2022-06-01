@@ -70,7 +70,6 @@ failOnValidatorBootupFailure=true
 preemptible=true
 evalInfo=false
 tmpfsAccounts=false
-profile=false
 defaultCustomMemoryGB="$(cloud_DefaultCustomMemoryGB)"
 customMemoryGB="$defaultCustomMemoryGB"
 
@@ -166,7 +165,6 @@ $(
    --client-machine-type [type]
                     - custom client machine type
    --tmpfs-accounts - Put accounts directory on a swap-backed tmpfs volume
-   --profile        - Requested nodes will be used for profiling.
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -247,9 +245,6 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --custom-memory-gb ]]; then
       customMemoryGB=$2
       shift 2
-    elif [[ $1 == --profile ]]; then
-      profile=true
-      shift
     else
       usage "Unknown long option: $1"
     fi
@@ -327,9 +322,6 @@ gce)
       echo -e '\nWarning: At least 100GB of system RAM is recommending with `--tmpfs-accounts` (see `--custom-memory-gb`)\n'
     fi
   fi
-  if [[ "$profile" = "true" && "$enableGpu" = "true" ]]; then
-    usage "--profile not supported for gpu nodes"
-  fi
   cpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   gpuBootstrapLeaderMachineType+=" --custom-memory ${customMemoryGB}GB"
   ;;
@@ -342,9 +334,6 @@ ec2|azure|colo)
   fi
   if [[ "$customMemoryGB" != "$defaultCustomMemoryGB" ]]; then
     usage "--custom-memory-gb only supported on cloud provider: gce"
-  fi
-  if [[ "$profile" = "true" ]]; then
-    usage "--profile only supported on cloud provider: gce"
   fi
   ;;
 *)
@@ -707,7 +696,7 @@ create_error_cleanup() {
 case $command in
 delete)
   delete
- ;;
+  ;;
 
 create)
   [[ -n $additionalValidatorCount ]] || usage "Need number of nodes"
@@ -818,6 +807,7 @@ $(
     install-libssl-compatability.sh \
     install-redis.sh \
     install-rsync.sh \
+    install-perf.sh \
     localtime.sh \
     network-config.sh \
     remove-docker-interface.sh \
@@ -828,10 +818,6 @@ $(
 
   if [[ -n $validatorAdditionalDiskSizeInGb ]]; then
     cat mount-additional-disk.sh
-  fi
-
-  if [[ "$profile" = "true" ]]; then
-    cat install-perf.sh
   fi
 
   if [[ $selfDestructHours -gt 0 ]]; then
