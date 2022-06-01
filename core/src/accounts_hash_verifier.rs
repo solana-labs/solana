@@ -141,6 +141,7 @@ impl AccountsHashVerifier {
                     use_write_cache: false,
                     epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
+                    debug_startup: false,
                 },
                 &sorted_storages,
                 timings,
