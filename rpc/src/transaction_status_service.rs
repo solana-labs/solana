@@ -74,6 +74,7 @@ impl TransactionStatusService {
                 balances,
                 token_balances,
                 rent_debits,
+                transaction_indexes,
             }) => {
                 let slot = bank.slot();
                 for (
@@ -84,6 +85,7 @@ impl TransactionStatusService {
                     pre_token_balances,
                     post_token_balances,
                     rent_debits,
+                    _transaction_index,
                 ) in izip!(
                     transactions,
                     execution_results,
@@ -92,6 +94,7 @@ impl TransactionStatusService {
                     token_balances.pre_token_balances,
                     token_balances.post_token_balances,
                     rent_debits,
+                    transaction_indexes,
                 ) {
                     if let Some(details) = execution_result {
                         let TransactionExecutionDetails {

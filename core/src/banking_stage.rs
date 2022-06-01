@@ -1403,6 +1403,7 @@ impl BankingStage {
                     );
                     if let Some(transaction_status_sender) = transaction_status_sender {
                         let txs = batch.sanitized_transactions().to_vec();
+                        let transaction_indexes = vec![0; txs.len()]; // TODO: populate with real data
                         let post_balances = bank.collect_balances(batch);
                         let post_token_balances =
                             collect_token_balances(bank, batch, &mut mint_decimals);
@@ -1416,6 +1417,7 @@ impl BankingStage {
                                 post_token_balances,
                             ),
                             tx_results.rent_debits,
+                            transaction_indexes,
                         );
                     }
                 },

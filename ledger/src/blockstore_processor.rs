@@ -170,7 +170,10 @@ fn execute_batch(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_cost: u64,
 ) -> Result<()> {
-    let batch = &batch.batch;
+    let TransactionBatchWithIndexes {
+        batch,
+        transaction_indexes,
+    } = batch;
     let record_token_balances = transaction_status_sender.is_some();
 
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -250,6 +253,7 @@ fn execute_batch(
             balances,
             token_balances,
             rent_debits,
+            transaction_indexes.to_vec(),
         );
     }
 
@@ -1527,6 +1531,7 @@ pub struct TransactionStatusBatch {
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub rent_debits: Vec<RentDebits>,
+    pub transaction_indexes: Vec<usize>,
 }
 
 #[derive(Clone)]
@@ -1543,6 +1548,7 @@ impl TransactionStatusSender {
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         rent_debits: Vec<RentDebits>,
+        transaction_indexes: Vec<usize>,
     ) {
         let slot = bank.slot();
 
@@ -1561,6 +1567,7 @@ impl TransactionStatusSender {
                 balances,
                 token_balances,
                 rent_debits,
+                transaction_indexes,
             }))
         {
             trace!(
