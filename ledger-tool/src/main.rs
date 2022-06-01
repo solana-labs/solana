@@ -73,7 +73,7 @@ use {
         vote_state::{self, VoteState},
     },
     std::{
-        collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+        collections::{BTreeMap, BTreeSet, HashMap, HashSet},
         ffi::OsStr,
         fs::File,
         io::{self, stdout, BufRead, BufReader, Write},
@@ -797,26 +797,11 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        let mut max_slot = 0;
-        let mut next_slots: VecDeque<_> = vec![starting_slot].into();
-        while !next_slots.is_empty() {
-            let next_slot = next_slots.pop_front().unwrap();
-            if let Ok(Some(slot_meta)) = blockstore.meta(next_slot) {
-                if slot_meta.is_full() {
-                    max_slot = std::cmp::max(max_slot, next_slot);
-                    if max_slot >= halt_slot {
-                        break;
-                    }
-
-                    next_slots.extend(slot_meta.next_slots);
-                }
-            }
-        }
-
-        if max_slot < halt_slot {
-            eprintln!("Unable to load bank forks at slot {} due to disconnected blocks. Max slot found from starting slot {} is {}",
-            halt_slot,
-            starting_slot,max_slot);
+        if !blockstore.slots_connected(starting_slot, halt_slot) {
+            eprintln!(
+                "Unable to load bank forks at slot {} due to disconnected blocks.",
+                halt_slot,
+            );
             exit(1);
         }
     }
