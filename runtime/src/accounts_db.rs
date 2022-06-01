@@ -7833,6 +7833,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         m.stop();
         let mut m2 = Measure::start("filter");
+        error!("slots: {}", slots.len());
 
         let chunk_size = 5_000;
         let wide = self.thread_pool_clean.install(|| {
