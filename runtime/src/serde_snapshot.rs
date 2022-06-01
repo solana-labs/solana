@@ -736,7 +736,7 @@ where
     let old_slots = slots.read().unwrap().clone();
     let ancestors = crate::ancestors::Ancestors::from(slots.into_inner().unwrap());
     old_slots.iter().for_each(|slot| assert!(ancestors.contains_key(slot)));
-    info!("calc hash, slot: {}, ancestors: {:?}", snapshot_slot, ancestors);
+    info!("calc hash, slot: {}", snapshot_slot);
     let _ = accounts_db.calculate_accounts_hash_helper(
         false,
         snapshot_slot,
