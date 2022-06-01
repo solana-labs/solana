@@ -921,7 +921,6 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 }
 
 fn minimize_bank_for_snapshot(
-    genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     bank: Arc<Bank>,
     snapshot_slot: Slot,
@@ -930,46 +929,30 @@ fn minimize_bank_for_snapshot(
     let mut minimized_account_set = blockstore
         .get_accounts_used_in_range(snapshot_slot, ending_slot)
         .unwrap();
-
-    let rent_collected_accounts =
-        bank.get_rent_collection_accounts_between_slots(snapshot_slot, ending_slot);
-    minimized_account_set.extend(rent_collected_accounts);
-
-    for (pubkey, (_stake, account)) in bank.vote_accounts().iter() {
-        minimized_account_set.insert(*pubkey);
-        if let Ok(vote_state) = account.vote_state().as_ref() {
-            minimized_account_set.insert(vote_state.node_pubkey);
-        }
-    }
-
-    for (pubkey, _) in bank
-        .get_program_accounts(&stake::program::id(), &ScanConfig::default())
-        .unwrap()
-        .into_iter()
-    {
-        minimized_account_set.insert(pubkey);
-    }
-
-    for (pubkey, _) in genesis_config.accounts.iter() {
-        minimized_account_set.insert(*pubkey);
-    }
-
-    for (pubkey, _) in bank.feature_set.active.iter() {
-        minimized_account_set.insert(*pubkey);
-    }
-
-    for pubkey in bank.feature_set.inactive.iter() {
-        minimized_account_set.insert(*pubkey);
-    }
-
-    for pubkey in solana_sdk::sysvar::ALL_IDS.iter() {
-        minimized_account_set.insert(*pubkey);
-    }
-
-    for pubkey in solana_runtime::builtins::get_pubkeys() {
-        minimized_account_set.insert(pubkey);
-    }
-
+    minimized_account_set.extend(
+        bank.get_rent_collection_accounts_between_slots(snapshot_slot, ending_slot)
+            .iter(),
+    );
+    minimized_account_set.extend(bank.vote_accounts().iter().map(|(pubkey, _)| *pubkey));
+    minimized_account_set.extend(bank.vote_accounts().iter().filter_map(
+        |(_, (_, vote_account))| {
+            vote_account
+                .vote_state()
+                .as_ref()
+                .ok()
+                .map(|vote_state| vote_state.node_pubkey)
+        },
+    ));
+    minimized_account_set.extend(
+        bank.get_program_accounts(&stake::program::id(), &ScanConfig::default())
+            .unwrap()
+            .into_iter()
+            .map(|(pubkey, _)| pubkey),
+    );
+    minimized_account_set.extend(bank.feature_set.active.iter().map(|(pubkey, _)| *pubkey));
+    minimized_account_set.extend(bank.feature_set.inactive.iter());
+    minimized_account_set.extend(solana_sdk::sysvar::ALL_IDS.iter());
+    minimized_account_set.extend(solana_runtime::builtins::get_pubkeys());
     minimized_account_set.insert(solana_sdk::bpf_loader::id());
     minimized_account_set.insert(solana_sdk::bpf_loader_deprecated::id());
     minimized_account_set.insert(solana_sdk::bpf_loader_upgradeable::id());
@@ -2755,7 +2738,6 @@ fn main() {
 
                         if is_minimize {
                             minimize_bank_for_snapshot(
-                                &genesis_config,
                                 &blockstore,
                                 bank.clone(),
                                 snapshot_slot,
