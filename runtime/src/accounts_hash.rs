@@ -43,6 +43,7 @@ pub struct CalcAccountsHashConfig<'a> {
     pub use_write_cache: bool,
     pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
+    pub debug_startup: bool,
 }
 
 impl<'a> CalcAccountsHashConfig<'a> {

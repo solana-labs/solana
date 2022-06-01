@@ -1927,7 +1927,7 @@ pub fn snapshot_bank(
 /// Get the snapshot storages for this bank
 fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
-    let snapshot_storages = bank.get_snapshot_storages(None);
+    let snapshot_storages = bank.get_snapshot_storages(None, false);
     measure_snapshot_storages.stop();
     let snapshot_storages_count = snapshot_storages.iter().map(Vec::len).sum::<usize>();
     datapoint_info!(
@@ -1969,7 +1969,7 @@ pub fn bank_to_full_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
-    let snapshot_storages = bank.get_snapshot_storages(None);
+    let snapshot_storages = bank.get_snapshot_storages(None, false);
     let bank_snapshot_info =
         add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
 
@@ -2016,7 +2016,7 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
-    let snapshot_storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
+    let snapshot_storages = bank.get_snapshot_storages(Some(full_snapshot_slot), false);
     let bank_snapshot_info =
         add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
 

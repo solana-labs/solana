@@ -240,6 +240,7 @@ impl SnapshotRequestHandler {
                             use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
+                            debug_startup: false,
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);

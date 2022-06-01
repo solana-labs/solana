@@ -752,6 +752,7 @@ where
                 slots_per_year,
                 &genesis_config.rent,
             ),
+            debug_startup: true,
         },
     );
 
