@@ -93,6 +93,11 @@ impl BlockCostCapacityMeter {
     }
 }
 
+struct TransactionBatchWithIndexes<'a, 'b> {
+    pub batch: TransactionBatch<'a, 'b>,
+    pub transaction_indexes: Vec<usize>,
+}
+
 // get_max_thread_count to match number of threads in the old code.
 // see: https://github.com/solana-labs/solana/pull/24853
 lazy_static! {
@@ -157,7 +162,7 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatch,
+    batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -165,6 +170,7 @@ fn execute_batch(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_cost: u64,
 ) -> Result<()> {
+    let batch = &batch.batch;
     let record_token_balances = transaction_status_sender.is_some();
 
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -253,7 +259,7 @@ fn execute_batch(
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -300,18 +306,23 @@ fn rebatch_transactions<'a>(
     sanitized_txs: &'a [SanitizedTransaction],
     start: usize,
     end: usize,
-) -> TransactionBatch<'a, 'a> {
+    transaction_indexes: &'a [usize],
+) -> TransactionBatchWithIndexes<'a, 'a> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
     let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
     tx_batch.set_needs_unlock(false);
 
-    tx_batch
+    let transaction_indexes = transaction_indexes[start..=end].to_vec();
+    TransactionBatchWithIndexes {
+        batch: tx_batch,
+        transaction_indexes,
+    }
 }
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -319,14 +330,16 @@ fn execute_batches(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
 ) -> Result<()> {
-    let (lock_results, sanitized_txs): (Vec<_>, Vec<_>) = batches
+    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
             batch
+                .batch
                 .lock_results()
                 .iter()
                 .cloned()
-                .zip(batch.sanitized_transactions().to_vec())
+                .zip(batch.batch.sanitized_transactions().to_vec())
+                .zip(batch.transaction_indexes.to_vec())
         })
         .unzip();
 
@@ -352,7 +365,7 @@ fn execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
-    let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
     let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
@@ -373,6 +386,7 @@ fn execute_batches(
                         &sanitized_txs,
                         slice_start,
                         index,
+                        &transaction_indexes,
                     );
                     slice_start = next_index;
                     tx_batches.push(tx_batch);
@@ -408,6 +422,9 @@ fn execute_batches(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
+///
+/// This method is for use testing against a single Bank, and assumes `Bank::transaction_count()`
+/// represents the number of transactions executed in this Bank
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
@@ -415,6 +432,17 @@ pub fn process_entries_for_tests(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
+    let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
+    let mut entry_indexes: Vec<_> = entries
+        .iter()
+        .map(|e| {
+            let num_txs = e.transactions.len();
+            let next_starting_index = entry_starting_index.saturating_add(num_txs);
+            let indexes = (entry_starting_index..next_starting_index).collect::<Vec<_>>();
+            entry_starting_index = next_starting_index;
+            indexes
+        })
+        .collect();
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
@@ -434,6 +462,7 @@ pub fn process_entries_for_tests(
         None,
         &mut timings,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
+        &mut entry_indexes,
     );
 
     debug!("process_entries: {:?}", timings);
@@ -453,6 +482,7 @@ fn shuffle_slice<T>(indices: &[usize], slice: &mut [T]) {
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
+#[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [EntryType],
@@ -463,13 +493,14 @@ fn process_entries_with_callback(
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    entry_indexes: &mut [Vec<usize>],
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let cost_model = CostModel::new();
 
-    for entry in entries {
+    for (entry, transaction_indexes) in entries.iter_mut().zip(entry_indexes) {
         match entry {
             EntryType::Tick(hash) => {
                 // If it's a tick, save it for later
@@ -503,6 +534,7 @@ fn process_entries_with_callback(
                 if randomize {
                     let indices = get_random_indices(transactions.len());
                     shuffle_slice(&indices, transactions);
+                    shuffle_slice(&indices, transaction_indexes);
                 }
 
                 loop {
@@ -512,7 +544,10 @@ fn process_entries_with_callback(
 
                     // if locking worked
                     if first_lock_err.is_ok() {
-                        batches.push(batch);
+                        batches.push(TransactionBatchWithIndexes {
+                            batch,
+                            transaction_indexes: transaction_indexes.to_vec(),
+                        });
                         // done with this entry
                         break;
                     }
@@ -980,7 +1015,18 @@ fn confirm_slot_entries(
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
     let num_entries = entries.len();
-    let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
+    let mut entry_indexes = Vec::with_capacity(num_entries);
+    let mut entry_starting_index = progress.num_txs;
+    let num_txs = entries
+        .iter()
+        .map(|e| {
+            let num_txs = e.transactions.len();
+            let next_starting_index = entry_starting_index.saturating_add(num_txs);
+            entry_indexes.push((entry_starting_index..next_starting_index).collect::<Vec<_>>());
+            entry_starting_index = next_starting_index;
+            num_txs
+        })
+        .sum::<usize>();
     trace!(
         "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
@@ -1058,6 +1104,7 @@ fn confirm_slot_entries(
                 transaction_cost_metrics_sender,
                 &mut execute_timings,
                 cost_capacity_meter,
+                &mut entry_indexes,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -4048,6 +4095,7 @@ pub mod tests {
 
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
+        let transaction_indexes = vec![0, 1];
 
         let batch2 = rebatch_transactions(
             batch.lock_results(),
@@ -4055,9 +4103,10 @@ pub mod tests {
             batch.sanitized_transactions(),
             0,
             1,
+            &transaction_indexes,
         );
         assert!(batch.needs_unlock());
-        assert!(!batch2.needs_unlock());
+        assert!(!batch2.batch.needs_unlock());
     }
 
     #[test]
