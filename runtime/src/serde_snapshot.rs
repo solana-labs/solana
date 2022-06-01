@@ -733,7 +733,9 @@ where
         solana_sdk::clock::DEFAULT_TICKS_PER_SLOT,
     );
 
+    let old_slots = slots.read().unwrap().clone();
     let ancestors = crate::ancestors::Ancestors::from(slots.into_inner().unwrap());
+    old_slots.iter().for_each(|slot| assert!(ancestors.contains_key(slot)));
     info!("calc hash, slot: {}, ancestors: {:?}", snapshot_slot, ancestors);
     let _ = accounts_db.calculate_accounts_hash_helper(
         false,
