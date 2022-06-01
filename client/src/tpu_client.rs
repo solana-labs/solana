@@ -1,6 +1,6 @@
 use {
     crate::{
-        client_error::{ClientError, Result as ClientResult},
+        client_error::ClientError,
         connection_cache::get_connection,
         pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
         rpc_client::RpcClient,

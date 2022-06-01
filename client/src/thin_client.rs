@@ -592,19 +592,15 @@ impl SyncClient for ThinClient {
 }
 
 impl AsyncClient for ThinClient {
-    fn async_send_versioned_transaction(
-        &self,
-        transaction: VersionedTransaction,
-    ) -> TransportResult<Signature> {
+    fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
+        let transaction = VersionedTransaction::from(transaction);
         let conn = get_connection(self.tpu_addr());
         conn.serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
-    fn async_send_versioned_transaction_batch(
-        &self,
-        batch: Vec<VersionedTransaction>,
-    ) -> TransportResult<()> {
+    fn async_send_batch(&self, batch: Vec<Transaction>) -> TransportResult<()> {
+        let batch: Vec<VersionedTransaction> = batch.into_iter().map(Into::into).collect();
         let conn = get_connection(self.tpu_addr());
         conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
