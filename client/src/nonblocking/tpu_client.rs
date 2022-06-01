@@ -1,7 +1,7 @@
 use {
     crate::{
         client_error::ClientError,
-        connection_cache::send_wire_transaction_async,
+        connection_cache::get_connection,
         nonblocking::{
             pubsub_client::{PubsubClient, PubsubClientError},
             rpc_client::RpcClient,
@@ -13,6 +13,7 @@ use {
             LeaderTpuCache, LeaderTpuCacheUpdateInfo, RecentLeaderSlots, TpuClientConfig,
             MAX_FANOUT_SLOTS, SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL,
         },
+        tpu_connection::TpuConnection,
     },
     bincode::serialize,
     futures_util::stream::StreamExt,
@@ -98,8 +99,9 @@ impl TpuClient {
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
+            let conn = get_connection(&tpu_address);
             // Fake async
-            let result = send_wire_transaction_async(wire_transaction.clone(), &tpu_address);
+            let result = conn.send_wire_transaction_async(wire_transaction.clone());
             if let Err(err) = result {
                 last_error = Some(err);
             } else {
@@ -376,6 +378,8 @@ impl LeaderTpuService {
                 if let Some(unsubscribe) = unsubscribe {
                     (unsubscribe)().await;
                 }
+                // `notifications` requires a valid reference to `pubsub_client`
+                // so `notifications` must be dropped before moving `pubsub_client`
                 drop(notifications);
                 if let Some(pubsub_client) = pubsub_client {
                     pubsub_client.shutdown().await.unwrap();
