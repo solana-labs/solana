@@ -311,9 +311,11 @@ fn do_get_packet_offsets(
 
 pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
     let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
-    let first_pubkey_end = first_pubkey_start.saturating_add(size_of::<Pubkey>());
+    let maybe_first_pubkey_end = first_pubkey_start
+        .checked_add(size_of::<Pubkey>())
+        .filter(|v| v <= &packet.meta.size);
     // Check for tracer pubkey
-    if packet.meta.size > first_pubkey_start {
+    if let Some(first_pubkey_end) = maybe_first_pubkey_end {
         let is_tracer_packet =
             &packet.data()[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
         if is_tracer_packet {
