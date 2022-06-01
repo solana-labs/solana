@@ -145,6 +145,17 @@ impl TpuClient {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
+    ) -> Result<Self> {
+        let connection_cache =
+            Arc::new(RwLock::new(ConnectionCache::new(/* use_quic */ false)));
+        Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache)
+    }
+
+    /// Create a new client that disconnects when dropped
+    pub fn new_with_connection_cache(
+        rpc_client: Arc<RpcClient>,
+        websocket_url: &str,
+        config: TpuClientConfig,
         connection_cache: Arc<RwLock<ConnectionCache>>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));

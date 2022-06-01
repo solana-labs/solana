@@ -2225,8 +2225,8 @@ fn send_deploy_messages(
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
             let connection_cache =
-                Arc::new(RwLock::new(ConnectionCache::new(false /* use_quic */)));
-            let tpu_client = TpuClient::new(
+                Arc::new(RwLock::new(ConnectionCache::new(/* use_quic */ false)));
+            let tpu_client = TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
                 &config.websocket_url,
                 TpuClientConfig::default(),

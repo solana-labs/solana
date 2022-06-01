@@ -421,7 +421,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         CommitmentConfig::processed(),
     ));
     let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(tpu_use_quic)));
-    let tpu_client = TpuClient::new(
+    let tpu_client = TpuClient::new_with_connection_cache(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),

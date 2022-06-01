@@ -181,7 +181,7 @@ fn main() {
             ));
             let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(*use_quic)));
             let client = Arc::new(
-                TpuClient::new(
+                TpuClient::new_with_connection_cache(
                     rpc_client,
                     websocket_url,
                     TpuClientConfig::default(),

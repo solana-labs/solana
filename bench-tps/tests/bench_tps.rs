@@ -105,7 +105,7 @@ fn test_bench_tps_test_validator(config: Config) {
     let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
 
     let client = Arc::new(
-        TpuClient::new(
+        TpuClient::new_with_connection_cache(
             rpc_client,
             &websocket_url,
             TpuClientConfig::default(),
