@@ -79,6 +79,31 @@ impl core::fmt::Debug for Metrics {
     }
 }
 
+#[derive(Default)]
+pub struct ThreadExecuteTimings {
+    pub total_thread_us: u64,
+    pub total_transactions_executed: u64,
+    pub execute_timings: ExecuteTimings,
+}
+
+impl ThreadExecuteTimings {
+    pub fn accumulate(&mut self, other: &ThreadExecuteTimings) {
+        self.execute_timings.saturating_add_in_place(
+            ExecuteTimingType::TotalBatchesLen,
+            *other
+                .execute_timings
+                .metrics
+                .index(ExecuteTimingType::TotalBatchesLen),
+        );
+        self.execute_timings.accumulate(&other.execute_timings);
+        saturating_add_assign!(self.total_thread_us, other.total_thread_us);
+        saturating_add_assign!(
+            self.total_transactions_executed,
+            other.total_transactions_executed
+        );
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ExecuteTimings {
     pub metrics: Metrics,
