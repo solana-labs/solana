@@ -257,10 +257,6 @@ impl ErasureMeta {
             None => return false,
         };
         other.__unused_size = self.__unused_size;
-        // Ignore first_coding_index field for now to be backward compatible.
-        // TODO remove this once cluster is upgraded to always populate
-        // first_coding_index field.
-        other.first_coding_index = self.first_coding_index;
         self == &other
     }
 
@@ -275,16 +271,7 @@ impl ErasureMeta {
 
     pub(crate) fn coding_shreds_indices(&self) -> Range<u64> {
         let num_coding = self.config.num_coding() as u64;
-        // first_coding_index == 0 may imply that the field is not populated.
-        // self.set_index to be backward compatible.
-        // TODO remove this once cluster is upgraded to always populate
-        // first_coding_index field.
-        let first_coding_index = if self.first_coding_index == 0 {
-            self.set_index
-        } else {
-            self.first_coding_index
-        };
-        first_coding_index..first_coding_index + num_coding
+        self.first_coding_index..self.first_coding_index + num_coding
     }
 
     pub(crate) fn status(&self, index: &Index) -> ErasureMetaStatus {
