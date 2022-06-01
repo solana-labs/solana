@@ -1672,9 +1672,7 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
                 self.mismatch_found.fetch_add(1, Ordering::Relaxed);
             }
         }
-        if self.accum.is_empty() {
-            self.accum.append(&mut vec![Vec::new(); self.range]);
-        }
+        self.init_accum(self.range);
         self.accum[pubkey_to_bin_index].push(source_item);
     }
     fn scanning_complete(self) -> BinnedHashData {
