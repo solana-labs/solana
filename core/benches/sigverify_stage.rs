@@ -212,7 +212,7 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
 
     let mut c = 0;
     batches.iter_mut().for_each(|batch| {
-        batch.packets.iter_mut().for_each(|p| {
+        batch.iter_mut().for_each(|p| {
             let throw = die.sample(&mut rng);
             if throw < discard_factor {
                 p.meta.set_discard(true);
@@ -225,7 +225,8 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
 
 fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32) {
     let (batches0, num_valid_packets) = prepare_batches(discard_factor);
-    let verifier = TransactionSigVerifier::default();
+    let (_verified_s, _verified_r) = unbounded();
+    let verifier = TransactionSigVerifier::new(_verified_s);
 
     let mut c = 0;
     let mut total_shrink_time = 0;

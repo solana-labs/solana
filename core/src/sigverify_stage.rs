@@ -273,7 +273,8 @@ impl SigVerifyStage {
         }
     }
 
-    fn maybe_shrink_batches(packet_batches: &mut Vec<PacketBatch>) -> (u64, usize) {
+    /// make this function public so that it is available for benchmarking
+    pub fn maybe_shrink_batches(packet_batches: &mut Vec<PacketBatch>) -> (u64, usize) {
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_packets = count_packets_in_batches(packet_batches);
         let num_discarded_packets = count_discarded_packets(packet_batches);
