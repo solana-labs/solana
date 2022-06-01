@@ -57,6 +57,7 @@ solana-sdk = { path = "../sdk", version = "=1.10.22" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.22" }
 solana-streamer = { path = "../streamer", version = "=1.10.22" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.22" }
+solana-version = { path = "../version", version = "=1.10.22" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.22" }
 sys-info = "0.9.1"
 tempfile = "3.3.0"
@@ -73,7 +74,6 @@ serial_test = "0.6.0"
 solana-logger = { path = "../logger", version = "=1.10.22" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.10.22" }
 solana-stake-program = { path = "../programs/stake", version = "=1.10.22" }
-solana-version = { path = "../version", version = "=1.10.22" }
 static_assertions = "1.1.0"
 systemstat = "0.1.10"
 
