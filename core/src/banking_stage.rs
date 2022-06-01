@@ -4118,6 +4118,7 @@ mod tests {
                         vec![deserialized_packet.clone()].into_iter(),
                         1,
                     );
+                let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
                     &ForwardOption::ForwardTransaction,
                     &cluster_info,
@@ -4126,6 +4127,7 @@ mod tests {
                     true,
                     &data_budget,
                     &mut LeaderSlotMetricsTracker::new(0),
+                    &stats,
                 );
 
                 recv_socket
@@ -4225,6 +4227,7 @@ mod tests {
             ];
 
             for (name, forward_option, hold, expected_ids, expected_num_unprocessed) in test_cases {
+                let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
                     &forward_option,
                     &cluster_info,
@@ -4233,6 +4236,7 @@ mod tests {
                     hold,
                     &DataBudget::default(),
                     &mut LeaderSlotMetricsTracker::new(0),
+                    &stats,
                 );
 
                 recv_socket
