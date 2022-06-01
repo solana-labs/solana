@@ -83,6 +83,7 @@ fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, PartialEq)]
 pub enum UnpackPath<'a> {
     Valid(&'a Path),
     Ignore,
@@ -448,29 +449,27 @@ fn unpack_genesis<A: Read>(
         max_genesis_archive_unpacked_size,
         max_genesis_archive_unpacked_size,
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
-        |p, k| {
-            if is_valid_genesis_archive_entry(p, k) {
-                UnpackPath::Valid(unpack_dir)
-            } else {
-                UnpackPath::Invalid
-            }
-        },
+        |p, k| is_valid_genesis_archive_entry(unpack_dir, p, k),
     )
 }
 
-fn is_valid_genesis_archive_entry(parts: &[&str], kind: tar::EntryType) -> bool {
+fn is_valid_genesis_archive_entry<'a>(
+    unpack_dir: &'a Path,
+    parts: &[&str],
+    kind: tar::EntryType,
+) -> UnpackPath<'a> {
     trace!("validating: {:?} {:?}", parts, kind);
     #[allow(clippy::match_like_matches_macro)]
     match (parts, kind) {
-        ([DEFAULT_GENESIS_FILE], GNUSparse) => true,
-        ([DEFAULT_GENESIS_FILE], Regular) => true,
-        (["rocksdb"], Directory) => true,
-        (["rocksdb", _], GNUSparse) => true,
-        (["rocksdb", _], Regular) => true,
-        (["rocksdb_fifo"], Directory) => true,
-        (["rocksdb_fifo", _], GNUSparse) => true,
-        (["rocksdb_fifo", _], Regular) => true,
-        _ => false,
+        ([DEFAULT_GENESIS_FILE], GNUSparse) => UnpackPath::Valid(unpack_dir),
+        ([DEFAULT_GENESIS_FILE], Regular) => UnpackPath::Valid(unpack_dir),
+        (["rocksdb"], Directory) => UnpackPath::Ignore,
+        (["rocksdb", _], GNUSparse) => UnpackPath::Ignore,
+        (["rocksdb", _], Regular) => UnpackPath::Ignore,
+        (["rocksdb_fifo"], Directory) => UnpackPath::Ignore,
+        (["rocksdb_fifo", _], GNUSparse) => UnpackPath::Ignore,
+        (["rocksdb_fifo", _], Regular) => UnpackPath::Ignore,
+        _ => UnpackPath::Invalid,
     }
 }
 
@@ -583,95 +582,127 @@ mod tests {
 
     #[test]
     fn test_archive_is_valid_archive_entry() {
-        assert!(is_valid_genesis_archive_entry(
-            &["genesis.bin"],
-            tar::EntryType::Regular
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["genesis.bin"],
-            tar::EntryType::GNUSparse,
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb"],
-            tar::EntryType::Directory
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb", "foo"],
-            tar::EntryType::Regular
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb", "foo"],
-            tar::EntryType::GNUSparse,
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb_fifo"],
-            tar::EntryType::Directory
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo"],
-            tar::EntryType::Regular
-        ));
-        assert!(is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo"],
-            tar::EntryType::GNUSparse,
-        ));
-
-        assert!(!is_valid_genesis_archive_entry(
-            &["aaaa"],
-            tar::EntryType::Regular
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["aaaa"],
-            tar::EntryType::GNUSparse,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb"],
-            tar::EntryType::Regular
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb"],
-            tar::EntryType::GNUSparse,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb", "foo"],
-            tar::EntryType::Directory,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb", "foo", "bar"],
-            tar::EntryType::Directory,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb", "foo", "bar"],
-            tar::EntryType::Regular
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb", "foo", "bar"],
-            tar::EntryType::GNUSparse
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo"],
-            tar::EntryType::Regular
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo"],
-            tar::EntryType::GNUSparse,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo"],
-            tar::EntryType::Directory,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo", "bar"],
-            tar::EntryType::Directory,
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo", "bar"],
-            tar::EntryType::Regular
-        ));
-        assert!(!is_valid_genesis_archive_entry(
-            &["rocksdb_fifo", "foo", "bar"],
-            tar::EntryType::GNUSparse
-        ));
+        let path = Path::new("");
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["genesis.bin"], tar::EntryType::Regular),
+            UnpackPath::Valid(path)
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["genesis.bin"], tar::EntryType::GNUSparse,),
+            UnpackPath::Valid(path)
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb"], tar::EntryType::Directory),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb", "foo"], tar::EntryType::Regular),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb", "foo"], tar::EntryType::GNUSparse,),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb_fifo"], tar::EntryType::Directory),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb_fifo", "foo"], tar::EntryType::Regular),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb_fifo", "foo"],
+                tar::EntryType::GNUSparse,
+            ),
+            UnpackPath::Ignore
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["aaaa"], tar::EntryType::Regular),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["aaaa"], tar::EntryType::GNUSparse,),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb"], tar::EntryType::Regular),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb"], tar::EntryType::GNUSparse,),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb", "foo"], tar::EntryType::Directory,),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb", "foo", "bar"],
+                tar::EntryType::Directory,
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb", "foo", "bar"],
+                tar::EntryType::Regular
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb", "foo", "bar"],
+                tar::EntryType::GNUSparse
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb_fifo"], tar::EntryType::Regular),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(path, &["rocksdb_fifo"], tar::EntryType::GNUSparse,),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb_fifo", "foo"],
+                tar::EntryType::Directory,
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb_fifo", "foo", "bar"],
+                tar::EntryType::Directory,
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb_fifo", "foo", "bar"],
+                tar::EntryType::Regular
+            ),
+            UnpackPath::Invalid
+        );
+        assert_eq!(
+            is_valid_genesis_archive_entry(
+                path,
+                &["rocksdb_fifo", "foo", "bar"],
+                tar::EntryType::GNUSparse
+            ),
+            UnpackPath::Invalid
+        );
     }
 
     fn with_finalize_and_unpack<C>(archive: tar::Builder<Vec<u8>>, checker: C) -> Result<()>

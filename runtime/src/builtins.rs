@@ -5,50 +5,12 @@ use solana_frozen_abi::abi_example::AbiExample;
 use solana_sdk::AutoTraitBreakSendSync;
 use {
     crate::system_instruction_processor,
-    solana_program_runtime::{
-        invoke_context::{InvokeContext, ProcessInstructionWithContext},
-        stable_log,
-    },
+    solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
     solana_sdk::{
         feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
     },
     std::fmt,
 };
-
-fn process_instruction_with_program_logging(
-    process_instruction: ProcessInstructionWithContext,
-    first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    let logger = invoke_context.get_log_collector();
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
-
-    let result = process_instruction(first_instruction_account, invoke_context);
-
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    match &result {
-        Ok(()) => stable_log::program_success(&logger, program_id),
-        Err(err) => stable_log::program_failure(&logger, program_id, err),
-    }
-    result
-}
-
-macro_rules! with_program_logging {
-    ($process_instruction:expr) => {
-        |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
-            process_instruction_with_program_logging(
-                $process_instruction,
-                first_instruction_account,
-                invoke_context,
-            )
-        }
-    };
-}
 
 #[derive(Clone)]
 pub struct Builtin {
@@ -187,22 +149,22 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
-            with_program_logging!(system_instruction_processor::process_instruction),
+            system_instruction_processor::process_instruction,
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
-            with_program_logging!(solana_vote_program::vote_processor::process_instruction),
+            solana_vote_program::vote_processor::process_instruction,
         ),
         Builtin::new(
             "stake_program",
             stake::program::id(),
-            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
+            solana_stake_program::stake_instruction::process_instruction,
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
-            with_program_logging!(solana_config_program::config_processor::process_instruction),
+            solana_config_program::config_processor::process_instruction,
         ),
     ]
 }
@@ -256,7 +218,7 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             builtin: Builtin::new(
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
-                with_program_logging!(solana_zk_token_proof_program::process_instruction),
+                solana_zk_token_proof_program::process_instruction,
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
         }),

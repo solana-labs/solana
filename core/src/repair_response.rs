@@ -92,20 +92,17 @@ mod test {
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(1));
+        assert!(verify_shred_cpu(&packet, &leader_slots));
 
         let wrong_keypair = Keypair::new();
         let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(0));
+        assert!(!verify_shred_cpu(&packet, &leader_slots));
 
         let leader_slots = HashMap::new();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, None);
+        assert!(!verify_shred_cpu(&packet, &leader_slots));
     }
 
     #[test]

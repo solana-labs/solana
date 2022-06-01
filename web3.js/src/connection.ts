@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import crossFetch from 'cross-fetch';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
 import {
@@ -28,6 +27,7 @@ import RpcClient from 'jayson/lib/client/browser';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError} from './errors';
+import fetchImpl, {Response} from './fetch-impl';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
@@ -955,27 +955,25 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
-  customFetch?: typeof crossFetch,
+  customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
-  const fetch = customFetch ? customFetch : crossFetch;
+  const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
   }
 
-  let fetchWithMiddleware:
-    | ((url: string, options: any) => Promise<Response>)
-    | undefined;
+  let fetchWithMiddleware: FetchFn | undefined;
 
   if (fetchMiddleware) {
-    fetchWithMiddleware = async (url: string, options: any) => {
-      const modifiedFetchArgs = await new Promise<[string, any]>(
+    fetchWithMiddleware = async (info, init) => {
+      const modifiedFetchArgs = await new Promise<Parameters<FetchFn>>(
         (resolve, reject) => {
           try {
-            fetchMiddleware(url, options, (modifiedUrl, modifiedOptions) =>
-              resolve([modifiedUrl, modifiedOptions]),
+            fetchMiddleware(info, init, (modifiedInfo, modifiedInit) =>
+              resolve([modifiedInfo, modifiedInit]),
             );
           } catch (error) {
             reject(error);
@@ -2163,12 +2161,17 @@ export type ConfirmedSignatureInfo = {
 export type HttpHeaders = {[header: string]: string};
 
 /**
+ * The type of the JavaScript `fetch()` API
+ */
+export type FetchFn = typeof fetchImpl;
+
+/**
  * A callback used to augment the outgoing HTTP request
  */
 export type FetchMiddleware = (
-  url: string,
-  options: any,
-  fetch: (modifiedUrl: string, modifiedOptions: any) => void,
+  info: Parameters<FetchFn>[0],
+  init: Parameters<FetchFn>[1],
+  fetch: (...a: Parameters<FetchFn>) => void,
 ) => void;
 
 /**
@@ -2182,7 +2185,7 @@ export type ConnectionConfig = {
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional custom fetch function */
-  fetch?: typeof crossFetch;
+  fetch?: FetchFn;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
   /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */

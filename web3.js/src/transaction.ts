@@ -376,17 +376,6 @@ export class Transaction {
       });
     });
 
-    // Sort. Prioritizing first by signer, then by writable
-    accountMetas.sort(function (x, y) {
-      const pubkeySorting = x.pubkey
-        .toBase58()
-        .localeCompare(y.pubkey.toBase58());
-      const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
-      const checkWritable =
-        x.isWritable === y.isWritable ? pubkeySorting : x.isWritable ? -1 : 1;
-      return checkSigner || checkWritable;
-    });
-
     // Cull duplicate account metas
     const uniqueMetas: AccountMeta[] = [];
     accountMetas.forEach(accountMeta => {
@@ -397,9 +386,25 @@ export class Transaction {
       if (uniqueIndex > -1) {
         uniqueMetas[uniqueIndex].isWritable =
           uniqueMetas[uniqueIndex].isWritable || accountMeta.isWritable;
+        uniqueMetas[uniqueIndex].isSigner =
+          uniqueMetas[uniqueIndex].isSigner || accountMeta.isSigner;
       } else {
         uniqueMetas.push(accountMeta);
       }
+    });
+
+    // Sort. Prioritizing first by signer, then by writable
+    uniqueMetas.sort(function (x, y) {
+      if (x.isSigner !== y.isSigner) {
+        // Signers always come before non-signers
+        return x.isSigner ? -1 : 1;
+      }
+      if (x.isWritable !== y.isWritable) {
+        // Writable accounts always come before read-only accounts
+        return x.isWritable ? -1 : 1;
+      }
+      // Otherwise, sort by pubkey.
+      return x.pubkey._bn.cmp(y.pubkey._bn);
     });
 
     // Move fee payer to the front

@@ -14,24 +14,6 @@ use {
     std::{io::prelude::*, mem::size_of},
 };
 
-/// Look for a duplicate account and return its position if found
-pub fn is_duplicate(
-    instruction_context: &InstructionContext,
-    index_in_instruction: usize,
-) -> Option<usize> {
-    let index_in_transaction = instruction_context.get_index_in_transaction(index_in_instruction);
-    let old_approach = (instruction_context.get_number_of_program_accounts()..index_in_instruction)
-        .position(|index_in_instruction| {
-            instruction_context.get_index_in_transaction(index_in_instruction)
-                == index_in_transaction
-        });
-    let result = instruction_context
-        .is_duplicate(index_in_instruction)
-        .unwrap_or(None);
-    debug_assert_eq!(result, old_approach);
-    old_approach
-}
-
 pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
@@ -97,7 +79,7 @@ pub fn serialize_parameters_unaligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         size += 1; // dup
         if duplicate.is_none() {
             let data_len = instruction_context
@@ -125,7 +107,7 @@ pub fn serialize_parameters_unaligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         if let Some(position) = duplicate {
             v.write_u8(position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
@@ -179,7 +161,7 @@ pub fn deserialize_parameters_unaligned(
         ..instruction_context.get_number_of_accounts())
         .zip(account_lengths.iter())
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         start += 1; // is_dup
         if duplicate.is_none() {
             let mut borrowed_account = instruction_context
@@ -217,7 +199,7 @@ pub fn serialize_parameters_aligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         size += 1; // dup
         if duplicate.is_some() {
             size += 7; // padding to 64-bit aligned
@@ -251,7 +233,7 @@ pub fn serialize_parameters_aligned(
     for index_in_instruction in instruction_context.get_number_of_program_accounts()
         ..instruction_context.get_number_of_accounts()
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         if let Some(position) = duplicate {
             v.write_u8(position as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
@@ -316,7 +298,7 @@ pub fn deserialize_parameters_aligned(
         ..instruction_context.get_number_of_accounts())
         .zip(account_lengths.iter())
     {
-        let duplicate = is_duplicate(instruction_context, index_in_instruction);
+        let duplicate = instruction_context.is_duplicate(index_in_instruction)?;
         start += size_of::<u8>(); // position
         if duplicate.is_some() {
             start += 7; // padding to 64-bit aligned

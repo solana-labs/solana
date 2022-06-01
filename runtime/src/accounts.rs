@@ -252,7 +252,7 @@ impl Accounts {
         } else {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut payer_index = None;
+            let mut validated_fee_payer = false;
             let mut tx_rent: TransactionRent = 0;
             let account_keys = message.account_keys();
             let mut accounts = Vec::with_capacity(account_keys.len());
@@ -263,10 +263,7 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 } else {
-                    if payer_index.is_none() {
-                        payer_index = Some(i);
-                    }
-
+                    #[allow(clippy::collapsible_else_if)]
                     if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
@@ -274,7 +271,7 @@ impl Accounts {
                                 .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                         )
                     } else {
-                        let (account, rent) = if let Some(account_override) =
+                        let (mut account, rent) = if let Some(account_override) =
                             account_overrides.and_then(|overrides| overrides.get(key))
                         {
                             (account_override.clone(), 0)
@@ -297,6 +294,24 @@ impl Accounts {
                                 })
                                 .unwrap_or_default()
                         };
+
+                        if !validated_fee_payer {
+                            if i != 0 {
+                                warn!("Payer index should be 0! {:?}", tx);
+                            }
+
+                            Self::validate_fee_payer(
+                                key,
+                                &mut account,
+                                i,
+                                error_counters,
+                                rent_collector,
+                                feature_set,
+                                fee,
+                            )?;
+
+                            validated_fee_payer = true;
+                        }
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
@@ -346,20 +361,7 @@ impl Accounts {
             // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
-            if let Some(payer_index) = payer_index {
-                if payer_index != 0 {
-                    warn!("Payer index should be 0! {:?}", tx);
-                }
-
-                Self::check_fee_payer_balance(
-                    &mut accounts,
-                    payer_index,
-                    error_counters,
-                    rent_collector,
-                    feature_set,
-                    fee,
-                )?;
-
+            if validated_fee_payer {
                 let program_indices = message
                     .instructions()
                     .iter()
@@ -386,15 +388,15 @@ impl Accounts {
         }
     }
 
-    fn check_fee_payer_balance(
-        accounts: &mut [(Pubkey, AccountSharedData)],
+    fn validate_fee_payer(
+        payer_address: &Pubkey,
+        payer_account: &mut AccountSharedData,
         payer_index: usize,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         fee: u64,
     ) -> Result<()> {
-        let (ref payer_address, ref mut payer_account) = accounts[payer_index];
         if payer_account.lamports() == 0 {
             error_counters.account_not_found += 1;
             return Err(TransactionError::AccountNotFound);

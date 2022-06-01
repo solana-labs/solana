@@ -13,7 +13,8 @@ use {
         socketaddr,
     },
     solana_ledger::{
-        blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
+        blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions,
+        create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
     solana_program_runtime::compute_budget::ComputeBudget,

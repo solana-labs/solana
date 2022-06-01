@@ -38,6 +38,7 @@ const TRACER_KEY_BYTES: [u8; 32] = [
     155, 90, 30, 39, 116, 115, 238, 38, 126, 21, 232, 133,
 ];
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
+const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -152,13 +153,6 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
             return;
         }
 
-        // Check for tracer pubkey
-        if !packet.meta.is_tracer_packet()
-            && &packet.data()[pubkey_start..pubkey_end] == TRACER_KEY.as_ref()
-        {
-            packet.meta.flags |= PacketFlags::TRACER_PACKET;
-        }
-
         pubkey_start = pubkey_end;
         sig_start = sig_end;
     }
@@ -186,6 +180,13 @@ pub fn count_valid_packets(
                 })
                 .count()
         })
+        .sum()
+}
+
+pub fn count_discarded_packets(batches: &[PacketBatch]) -> usize {
+    batches
+        .iter()
+        .map(|batch| batch.iter().filter(|p| p.meta.discard()).count())
         .sum()
 }
 
@@ -306,6 +307,22 @@ fn do_get_packet_offsets(
         u32::try_from(pubkey_start)?,
         u32::try_from(pubkey_len)?,
     ))
+}
+
+pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
+    let first_pubkey_start: usize = TRACER_KEY_OFFSET_IN_TRANSACTION;
+    let first_pubkey_end = first_pubkey_start.saturating_add(size_of::<Pubkey>());
+    // Check for tracer pubkey
+    if packet.meta.size > first_pubkey_start {
+        let is_tracer_packet =
+            &packet.data()[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
+        if is_tracer_packet {
+            packet.meta.flags |= PacketFlags::TRACER_PACKET;
+        }
+        is_tracer_packet
+    } else {
+        false
+    }
 }
 
 fn get_packet_offsets(
@@ -476,13 +493,23 @@ impl Deduper {
         //false positive rate is 1/1000 at that point
         let saturated = self.saturated.load(Ordering::Relaxed);
         if saturated || now.duration_since(self.age) > self.max_age {
-            for i in &self.filter {
-                i.store(0, Ordering::Relaxed);
-            }
+            let len = self.filter.len();
+            self.filter.clear();
+            self.filter.resize_with(len, AtomicU64::default);
             self.seed = thread_rng().gen();
             self.age = now;
             self.saturated.store(false, Ordering::Relaxed);
         }
+    }
+
+    /// Compute hash from packet data, returns (hash, bin_pos).
+    fn compute_hash(&self, packet: &Packet) -> (u64, usize) {
+        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
+        hasher.write(packet.data());
+        let h = hasher.finish();
+        let len = self.filter.len();
+        let pos = (usize::try_from(h).unwrap()).wrapping_rem(len);
+        (h, pos)
     }
 
     // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
@@ -491,11 +518,7 @@ impl Deduper {
         if packet.meta.discard() {
             return 1;
         }
-        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(packet.data());
-        let hash = hasher.finish();
-        let len = self.filter.len();
-        let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
+        let (hash, pos) = self.compute_hash(packet);
         // saturate each position with or
         let prev = self.filter[pos].fetch_or(hash, Ordering::Relaxed);
         if prev == u64::MAX {
@@ -531,7 +554,7 @@ impl Deduper {
 }
 
 //inplace shrink a batch of packets
-pub fn shrink_batches(batches: &mut [PacketBatch]) -> usize {
+pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
@@ -561,7 +584,7 @@ pub fn shrink_batches(batches: &mut [PacketBatch]) -> usize {
             }
         }
     }
-    last_valid_batch
+    batches.truncate(last_valid_batch);
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
@@ -1508,8 +1531,7 @@ mod tests {
             start.sort_by(|a, b| a.data().cmp(b.data()));
 
             let packet_count = count_valid_packets(&batches, |_| ());
-            let res = shrink_batches(&mut batches);
-            batches.truncate(res);
+            shrink_batches(&mut batches);
 
             //make sure all the non discarded packets are the same
             let mut end = vec![];
@@ -1532,14 +1554,21 @@ mod tests {
 
         // No batches
         // truncate of 1 on len 0 is a noop
-        assert_eq!(shrink_batches(&mut []), 0);
+        shrink_batches(&mut Vec::new());
         // One empty batch
-        assert_eq!(shrink_batches(&mut [PacketBatch::with_capacity(0)]), 0);
+        {
+            let mut batches = vec![PacketBatch::with_capacity(0)];
+            shrink_batches(&mut batches);
+            assert_eq!(batches.len(), 0);
+        }
         // Many empty batches
-        let mut batches = (0..BATCH_COUNT)
-            .map(|_| PacketBatch::with_capacity(0))
-            .collect::<Vec<_>>();
-        assert_eq!(shrink_batches(&mut batches), 0);
+        {
+            let mut batches = (0..BATCH_COUNT)
+                .map(|_| PacketBatch::with_capacity(0))
+                .collect::<Vec<_>>();
+            shrink_batches(&mut batches);
+            assert_eq!(batches.len(), 0);
+        }
     }
 
     #[test]
@@ -1692,10 +1721,10 @@ mod tests {
                 })
             });
             debug!("done show valid packets for case {}", i);
-            let shrunken_batch_count = shrink_batches(&mut batches);
+            shrink_batches(&mut batches);
+            let shrunken_batch_count = batches.len();
             debug!("shrunk batch test {} count: {}", i, shrunken_batch_count);
             assert_eq!(shrunken_batch_count, *expect_batch_count);
-            batches.truncate(shrunken_batch_count);
             assert_eq!(count_valid_packets(&batches, |_| ()), *expect_valid_packets);
         }
     }

@@ -5,10 +5,13 @@ use {
     crate::{
         ancestor_iterator::AncestorIterator,
         blockstore_db::{
-            columns as cf, AccessType, BlockstoreOptions, Column, Database, IteratorDirection,
-            IteratorMode, LedgerColumn, LedgerColumnOptions, Result, ShredStorageType, WriteBatch,
+            columns as cf, Column, Database, IteratorDirection, IteratorMode, LedgerColumn, Result,
+            WriteBatch,
         },
         blockstore_meta::*,
+        blockstore_options::{
+            AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
+        },
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredId, ShredType, Shredder},
@@ -1859,7 +1862,7 @@ impl Blockstore {
             let upper_index = cmp::min(current_index, end_index);
             // the tick that will be used to figure out the timeout for this hole
             let data = db_iterator.value().expect("couldn't read value");
-            let reference_tick = u64::from(Shred::reference_tick_from_data(data).unwrap());
+            let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
             if ticks_since_first_insert < reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
                 // The higher index holes have not timed out yet
                 break 'outer;
@@ -4005,7 +4008,7 @@ macro_rules! create_new_tmp_ledger {
         $crate::blockstore::create_new_ledger_from_name(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::LedgerColumnOptions::default(),
+            $crate::blockstore_options::LedgerColumnOptions::default(),
         )
     };
 }
@@ -4016,7 +4019,7 @@ macro_rules! create_new_tmp_ledger_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::LedgerColumnOptions::default(),
+            $crate::blockstore_options::LedgerColumnOptions::default(),
         )
     };
 }
@@ -4027,11 +4030,11 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
             $crate::tmp_ledger_name!(),
             $genesis_config,
-            $crate::blockstore_db::LedgerColumnOptions {
-                shred_storage_type: $crate::blockstore_db::ShredStorageType::RocksFifo(
-                    $crate::blockstore_db::BlockstoreRocksFifoOptions::default(),
+            $crate::blockstore_options::LedgerColumnOptions {
+                shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
+                    $crate::blockstore_options::BlockstoreRocksFifoOptions::default(),
                 ),
-                ..$crate::blockstore_db::LedgerColumnOptions::default()
+                ..$crate::blockstore_options::LedgerColumnOptions::default()
             },
         )
     };
@@ -4319,7 +4322,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_db::BlockstoreRocksFifoOptions,
+            blockstore_options::BlockstoreRocksFifoOptions,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
             shred::{max_ticks_per_n_shreds, ShredFlags},

@@ -16,7 +16,7 @@ use {
     },
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig, blockstore::Blockstore,
-        blockstore_db::AccessType,
+        blockstore_options::AccessType,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     solana_storage_bigtable::CredentialType,

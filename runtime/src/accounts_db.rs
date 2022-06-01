@@ -1578,6 +1578,120 @@ struct IndexAccountMapEntry<'a> {
 
 type GenerateIndexAccountsMap<'a> = HashMap<Pubkey, IndexAccountMapEntry<'a>>;
 
+/// called on a struct while scanning append vecs
+trait AppendVecScan: Send + Sync + Clone {
+    /// set current slot of the scan
+    fn set_slot(&mut self, slot: Slot);
+    /// found `account` in the append vec
+    fn found_account(&mut self, account: &LoadedAccount);
+    /// scanning is done
+    fn scanning_complete(self) -> BinnedHashData;
+    /// initialize accumulator
+    fn init_accum(&mut self, count: usize);
+    fn get_accum(&mut self) -> BinnedHashData;
+    fn set_accum(&mut self, accum: BinnedHashData);
+}
+
+#[derive(Clone)]
+/// state to keep while scanning append vec accounts for hash calculation
+/// These would have been captured in a fn from within the scan function.
+/// Some of these are constant across all pubkeys, some are constant across a slot.
+/// Some could be unique per pubkey.
+struct ScanState<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> {
+    /// slot we're currently scanning
+    current_slot: Slot,
+    /// accumulated results
+    accum: BinnedHashData,
+    /// max slot (inclusive) that we're calculating accounts hash on
+    max_slot_info: SlotInfoInEpoch,
+    bin_calculator: &'a PubkeyBinCalculator24,
+    bin_range: &'a Range<usize>,
+    config: &'a CalcAccountsHashConfig<'a>,
+    mismatch_found: Arc<AtomicU64>,
+    stats: &'a crate::accounts_hash::HashStats,
+    find_unskipped_slot: &'a T,
+    filler_account_suffix: Option<&'a Pubkey>,
+    range: usize,
+    sort_time: Arc<AtomicU64>,
+}
+
+impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for ScanState<'a, T> {
+    fn set_slot(&mut self, slot: Slot) {
+        self.current_slot = slot;
+    }
+    fn init_accum(&mut self, count: usize) {
+        if self.accum.is_empty() {
+            self.accum.append(&mut vec![Vec::new(); count]);
+        }
+    }
+    fn found_account(&mut self, loaded_account: &LoadedAccount) {
+        let pubkey = loaded_account.pubkey();
+        let mut pubkey_to_bin_index = self.bin_calculator.bin_from_pubkey(pubkey);
+        if !self.bin_range.contains(&pubkey_to_bin_index) {
+            return;
+        }
+
+        // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
+        pubkey_to_bin_index -= self.bin_range.start;
+
+        let raw_lamports = loaded_account.lamports();
+        let zero_raw_lamports = raw_lamports == 0;
+        let balance = if zero_raw_lamports {
+            crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
+        } else {
+            raw_lamports
+        };
+
+        let loaded_hash = loaded_account.loaded_hash();
+        let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+            loaded_account,
+            &loaded_hash,
+            pubkey,
+            self.current_slot,
+            self.config.epoch_schedule,
+            self.config.rent_collector,
+            self.stats,
+            &self.max_slot_info,
+            self.find_unskipped_slot,
+            self.filler_account_suffix,
+        );
+        let loaded_hash = new_hash.unwrap_or(loaded_hash);
+
+        let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
+
+        if self.config.check_hash
+            && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
+        {
+            // this will not be supported anymore
+            let computed_hash = loaded_account.compute_hash(self.current_slot, pubkey);
+            if computed_hash != source_item.hash {
+                info!(
+                    "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
+                    computed_hash, source_item.hash, pubkey
+                );
+                self.mismatch_found.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        if self.accum.is_empty() {
+            self.accum.append(&mut vec![Vec::new(); self.range]);
+        }
+        self.accum[pubkey_to_bin_index].push(source_item);
+    }
+    fn scanning_complete(self) -> BinnedHashData {
+        let (result, timing) = AccountsDb::sort_slot_storage_scan(self.accum);
+        self.sort_time.fetch_add(timing, Ordering::Relaxed);
+        result
+    }
+    fn get_accum(&mut self) -> BinnedHashData {
+        let mut def = BinnedHashData::default();
+        std::mem::swap(&mut def, &mut self.accum);
+        def
+    }
+    fn set_accum(&mut self, mut accum: BinnedHashData) {
+        std::mem::swap(&mut self.accum, &mut accum);
+    }
+}
+
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
@@ -5707,20 +5821,17 @@ impl AccountsDb {
         )
     }
 
-    fn scan_multiple_account_storages_one_slot<F, B>(
+    fn scan_multiple_account_storages_one_slot<S>(
         storages: &[Arc<AccountStorageEntry>],
-        scan_func: &F,
-        slot: Slot,
-        retval: &mut B,
+        scanner: &mut S,
     ) where
-        F: Fn(LoadedAccount, &mut B, Slot) + Send + Sync,
-        B: Send + Default,
+        S: AppendVecScan,
     {
         let mut len = storages.len();
         if len == 1 {
             // only 1 storage, so no need to interleave between multiple storages based on write_version
             AppendVecAccountsIter::new(&storages[0].accounts)
-                .for_each(|account| scan_func(LoadedAccount::Stored(account), retval, slot));
+                .for_each(|account| scanner.found_account(&LoadedAccount::Stored(account)));
         } else {
             // we have to call the scan_func in order of write_version within a slot if there are multiple storages per slot
             let mut progress = Vec::with_capacity(len);
@@ -5748,7 +5859,7 @@ impl AccountsDb {
                 let mut account: (StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>) =
                     (0, None);
                 std::mem::swap(&mut account, &mut current[min_index]);
-                scan_func(LoadedAccount::Stored(account.1.unwrap()), retval, slot);
+                scanner.found_account(&LoadedAccount::Stored(account.1.unwrap()));
                 let next = progress[min_index].next().map(|stored_account| {
                     (stored_account.meta.write_version, Some(stored_account))
                 });
@@ -5800,20 +5911,18 @@ impl AccountsDb {
     }
 
     /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<F, F2>(
+    fn scan_account_storage_no_bank<S>(
         &self,
         cache_hash_data: &CacheHashData,
         config: &CalcAccountsHashConfig<'_>,
         snapshot_storages: &SortedStorages,
-        scan_func: F,
-        after_func: F2,
+        scanner: S,
         bin_range: &Range<usize>,
         bin_calculator: &PubkeyBinCalculator24,
         stats: &HashStats,
     ) -> Vec<BinnedHashData>
     where
-        F: Fn(LoadedAccount, &mut BinnedHashData, Slot) + Send + Sync,
-        F2: Fn(BinnedHashData) -> BinnedHashData + Send + Sync,
+        S: AppendVecScan,
     {
         let start_bin_index = bin_range.start;
 
@@ -5827,11 +5936,11 @@ impl AccountsDb {
         (0..chunks)
             .into_par_iter()
             .map(|chunk| {
-                let mut retval = vec![];
+                let mut scanner = scanner.clone();
                 // calculate start, end
                 let (start, mut end) = if chunk == 0 {
                     if slot0 == first_boundary {
-                        return after_func(retval); // if we evenly divide, nothing for special chunk 0 to do
+                        return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
                     }
                     // otherwise first chunk is not 'full'
                     (slot0, first_boundary)
@@ -5843,7 +5952,7 @@ impl AccountsDb {
                 };
                 end = std::cmp::min(end, range.end);
                 if start == end {
-                    return after_func(retval);
+                    return scanner.scanning_complete();
                 }
 
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data();
@@ -5851,9 +5960,9 @@ impl AccountsDb {
                 let eligible_for_caching =
                     !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
 
-                if eligible_for_caching && retval.is_empty() {
+                if eligible_for_caching {
                     let range = bin_range.end - bin_range.start;
-                    retval.append(&mut vec![Vec::new(); range]);
+                    scanner.init_accum(range);
                 }
 
                 let slots_per_epoch = config
@@ -5912,6 +6021,7 @@ impl AccountsDb {
                             "{}.{}.{}.{}.{}",
                             start, end, bin_range.start, bin_range.end, hash
                         );
+                        let mut retval = scanner.get_accum();
                         if cache_hash_data
                             .load(
                                 &Path::new(&file_name),
@@ -5923,6 +6033,7 @@ impl AccountsDb {
                         {
                             return retval;
                         }
+                        scanner.set_accum(retval);
 
                         // fall through and load normally - we failed to load
                     }
@@ -5935,6 +6046,7 @@ impl AccountsDb {
                 }
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
+                    scanner.set_slot(slot);
                     let valid_slot = sub_storages.is_some();
                     if config.use_write_cache {
                         let ancestors = config.ancestors.as_ref().unwrap();
@@ -5950,7 +6062,7 @@ impl AccountsDb {
                                             Cow::Owned(cached_account),
                                         ));
                                         let account = accessor.get_loaded_account().unwrap();
-                                        scan_func(account, &mut retval, slot);
+                                        scanner.found_account(&account);
                                     };
                                 }
                             }
@@ -5958,15 +6070,10 @@ impl AccountsDb {
                     }
 
                     if let Some(sub_storages) = sub_storages {
-                        Self::scan_multiple_account_storages_one_slot(
-                            sub_storages,
-                            &scan_func,
-                            slot,
-                            &mut retval,
-                        );
+                        Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
                     }
                 }
-                let r = after_func(retval);
+                let r = scanner.scanning_complete();
                 if !file_name.is_empty() {
                     let result = cache_hash_data.save(Path::new(&file_name), &r);
 
@@ -6123,77 +6230,34 @@ impl AccountsDb {
         let mut time = Measure::start("scan all accounts");
         stats.num_snapshot_storage = storage.storage_count();
         stats.num_slots = storage.slot_count();
-        let mismatch_found = AtomicU64::new(0);
+        let mismatch_found = Arc::new(AtomicU64::new(0));
         let range = bin_range.end - bin_range.start;
-        let sort_time = AtomicU64::new(0);
+        let sort_time = Arc::new(AtomicU64::new(0));
 
         let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
 
         let max_slot_info =
             SlotInfoInEpoch::new(storage.max_slot_inclusive(), config.epoch_schedule);
+        let scanner = ScanState {
+            current_slot: Slot::default(),
+            accum: BinnedHashData::default(),
+            bin_calculator: &bin_calculator,
+            config,
+            mismatch_found: mismatch_found.clone(),
+            max_slot_info,
+            find_unskipped_slot: &find_unskipped_slot,
+            filler_account_suffix,
+            range,
+            bin_range,
+            stats,
+            sort_time: sort_time.clone(),
+        };
 
         let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
             storage,
-            |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
-                let pubkey = loaded_account.pubkey();
-                let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(pubkey);
-                if !bin_range.contains(&pubkey_to_bin_index) {
-                    return;
-                }
-
-                // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
-                pubkey_to_bin_index -= bin_range.start;
-
-                let raw_lamports = loaded_account.lamports();
-                let zero_raw_lamports = raw_lamports == 0;
-                let balance = if zero_raw_lamports {
-                    crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
-                } else {
-                    raw_lamports
-                };
-
-                let loaded_hash = loaded_account.loaded_hash();
-                let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
-                    &loaded_account,
-                    &loaded_hash,
-                    pubkey,
-                    slot,
-                    config.epoch_schedule,
-                    config.rent_collector,
-                    stats,
-                    &max_slot_info,
-                    find_unskipped_slot,
-                    filler_account_suffix,
-                );
-                let loaded_hash = new_hash.unwrap_or(loaded_hash);
-
-                let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
-
-                if config.check_hash
-                    && !Self::is_filler_account_helper(pubkey, filler_account_suffix)
-                {
-                    // this will not be supported anymore
-                    let computed_hash = loaded_account.compute_hash(slot, pubkey);
-                    if computed_hash != source_item.hash {
-                        info!(
-                            "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
-                            computed_hash, source_item.hash, pubkey
-                        );
-                        mismatch_found.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-                if accum.is_empty() {
-                    accum.append(&mut vec![Vec::new(); range]);
-                }
-                accum[pubkey_to_bin_index].push(source_item);
-            },
-            |x| {
-                let (result, timing) = Self::sort_slot_storage_scan(x);
-                sort_time.fetch_add(timing, Ordering::Relaxed);
-                result
-            },
+            scanner,
             bin_range,
             &bin_calculator,
             stats,
@@ -8693,6 +8757,44 @@ pub mod tests {
         (storages, size, slot_expected)
     }
 
+    #[derive(Clone)]
+    struct TestScan {
+        calls: Arc<AtomicU64>,
+        pubkey: Pubkey,
+        slot_expected: Slot,
+        accum: BinnedHashData,
+        current_slot: Slot,
+        value_to_use_for_lamports: u64,
+    }
+
+    impl AppendVecScan for TestScan {
+        fn set_slot(&mut self, slot: Slot) {
+            self.current_slot = slot;
+        }
+        fn init_accum(&mut self, _count: usize) {}
+        fn get_accum(&mut self) -> BinnedHashData {
+            let mut def = BinnedHashData::default();
+            std::mem::swap(&mut def, &mut self.accum);
+            def
+        }
+        fn set_accum(&mut self, mut accum: BinnedHashData) {
+            std::mem::swap(&mut self.accum, &mut accum);
+        }
+        fn found_account(&mut self, loaded_account: &LoadedAccount) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            assert_eq!(loaded_account.pubkey(), &self.pubkey);
+            assert_eq!(self.slot_expected, self.current_slot);
+            self.accum.push(vec![CalculateHashIntermediate::new(
+                Hash::default(),
+                self.value_to_use_for_lamports,
+                self.pubkey,
+            )]);
+        }
+        fn scanning_complete(self) -> BinnedHashData {
+            self.accum
+        }
+    }
+
     #[test]
     fn test_accountsdb_scan_account_storage_no_bank() {
         solana_logger::setup();
@@ -8721,10 +8823,19 @@ pub mod tests {
             .accounts
             .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
 
-        let calls = AtomicU64::new(0);
+        let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
         let accounts_hash_cache_path = temp_dir.path();
         let accounts_db = AccountsDb::new_single_for_tests();
+
+        let test_scan = TestScan {
+            calls: calls.clone(),
+            pubkey,
+            slot_expected,
+            accum: Vec::default(),
+            current_slot: 0,
+            value_to_use_for_lamports: expected,
+        };
 
         let result = accounts_db.scan_account_storage_no_bank(
             &CacheHashData::new(&accounts_hash_cache_path),
@@ -8737,17 +8848,7 @@ pub mod tests {
                 rent_collector: &RentCollector::default(),
             },
             &get_storage_refs(&storages),
-            |loaded_account: LoadedAccount, accum: &mut BinnedHashData, slot: Slot| {
-                calls.fetch_add(1, Ordering::Relaxed);
-                assert_eq!(loaded_account.pubkey(), &pubkey);
-                assert_eq!(slot_expected, slot);
-                accum.push(vec![CalculateHashIntermediate::new(
-                    Hash::default(),
-                    expected,
-                    pubkey,
-                )]);
-            },
-            |a| a,
+            test_scan,
             &Range { start: 0, end: 1 },
             &PubkeyBinCalculator24::new(1),
             &HashStats::default(),
@@ -8791,22 +8892,28 @@ pub mod tests {
             .accounts
             .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
 
-        let calls = AtomicU64::new(0);
-        let mut accum = Vec::new();
-        let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
-            calls.fetch_add(1, Ordering::Relaxed);
-            assert_eq!(loaded_account.pubkey(), &pubkey);
-            assert_eq!(slot_expected, slot);
-            accum.push(expected);
-        };
-        AccountsDb::scan_multiple_account_storages_one_slot(
-            &storages[0],
-            &scan_func,
+        let calls = Arc::new(AtomicU64::new(0));
+
+        let mut test_scan = TestScan {
+            calls: calls.clone(),
+            pubkey,
             slot_expected,
-            &mut accum,
-        );
+            accum: Vec::default(),
+            current_slot: 0,
+            value_to_use_for_lamports: expected,
+        };
+
+        AccountsDb::scan_multiple_account_storages_one_slot(&storages[0], &mut test_scan);
+        let accum = test_scan.scanning_complete();
         assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert_eq!(accum, vec![expected]);
+        assert_eq!(
+            accum
+                .iter()
+                .flatten()
+                .map(|a| a.lamports)
+                .collect::<Vec<_>>(),
+            vec![expected]
+        );
     }
 
     fn sample_storage_with_entries(
@@ -8859,31 +8966,80 @@ pub mod tests {
             if *swap {
                 storages[..].swap(0, 1);
             }
-            let calls = AtomicU64::new(0);
-            let scan_func = |loaded_account: LoadedAccount, accum: &mut Vec<u64>, slot: Slot| {
-                calls.fetch_add(1, Ordering::Relaxed);
-                let write_version = loaded_account.write_version();
-                let first = loaded_account.pubkey() == &pubkey1 && write_version == write_version1;
-                assert!(
-                    first || loaded_account.pubkey() == &pubkey2 && write_version == write_version2
-                );
-                assert_eq!(slot_expected, slot);
-                if first {
-                    assert!(accum.is_empty());
-                } else {
-                    assert!(accum.len() == 1);
-                }
-                accum.push(write_version);
-            };
-            let mut accum = Vec::new();
-            AccountsDb::scan_multiple_account_storages_one_slot(
-                &storages,
-                &scan_func,
+            let calls = Arc::new(AtomicU64::new(0));
+            let mut scanner = TestScanSimple {
+                current_slot: 0,
                 slot_expected,
-                &mut accum,
-            );
+                pubkey1,
+                pubkey2,
+                accum: Vec::default(),
+                calls: calls.clone(),
+                write_version1,
+                write_version2,
+            };
+            AccountsDb::scan_multiple_account_storages_one_slot(&storages, &mut scanner);
+            let accum = scanner.scanning_complete();
             assert_eq!(calls.load(Ordering::Relaxed), storages.len() as u64);
-            assert_eq!(accum, vec![write_version1, write_version2]);
+            assert_eq!(
+                accum
+                    .iter()
+                    .flatten()
+                    .map(|a| a.lamports)
+                    .collect::<Vec<_>>(),
+                vec![write_version1, write_version2]
+            );
+        }
+    }
+
+    #[derive(Clone)]
+    struct TestScanSimple {
+        current_slot: Slot,
+        slot_expected: Slot,
+        calls: Arc<AtomicU64>,
+        accum: BinnedHashData,
+        pubkey1: Pubkey,
+        pubkey2: Pubkey,
+        write_version1: u64,
+        write_version2: u64,
+    }
+
+    impl AppendVecScan for TestScanSimple {
+        fn set_slot(&mut self, slot: Slot) {
+            self.current_slot = slot;
+        }
+        fn init_accum(&mut self, _count: usize) {}
+        fn found_account(&mut self, loaded_account: &LoadedAccount) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            let write_version = loaded_account.write_version();
+            let first =
+                loaded_account.pubkey() == &self.pubkey1 && write_version == self.write_version1;
+            assert!(
+                first
+                    || loaded_account.pubkey() == &self.pubkey2
+                        && write_version == self.write_version2
+            );
+            assert_eq!(self.slot_expected, self.current_slot);
+            if first {
+                assert!(self.accum.is_empty());
+            } else {
+                assert!(self.accum.len() == 1);
+            }
+            self.accum.push(vec![CalculateHashIntermediate {
+                hash: Hash::default(),
+                lamports: write_version,
+                pubkey: Pubkey::default(),
+            }]);
+        }
+        fn scanning_complete(self) -> BinnedHashData {
+            self.accum
+        }
+        fn get_accum(&mut self) -> BinnedHashData {
+            let mut def = BinnedHashData::default();
+            std::mem::swap(&mut def, &mut self.accum);
+            def
+        }
+        fn set_accum(&mut self, mut accum: BinnedHashData) {
+            std::mem::swap(&mut self.accum, &mut accum);
         }
     }
 
