@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "proto"
-version = "1.9.27"
+version = "1.9.28"
 dependencies = [
  "tonic-build",
 ]
