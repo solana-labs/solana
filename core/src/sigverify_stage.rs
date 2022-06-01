@@ -85,16 +85,12 @@ struct SigVerifierStats {
     total_dedup: usize,
     total_excess_fail: usize,
     total_valid_packets: usize,
-    total_pre_shrinks: usize,
-    total_post_shrinks: usize,
     total_shrinks: usize,
     total_discard_random: usize,
     total_dedup_time_us: usize,
     total_discard_time_us: usize,
     total_discard_random_time_us: usize,
     total_verify_time_us: usize,
-    pre_shrink_time_us: usize,
-    post_shrink_time_us: usize,
     total_shrink_time_us: usize,
 }
 
@@ -215,8 +211,6 @@ impl SigVerifierStats {
                 i64
             ),
             ("total_verify_time_us", self.total_verify_time_us, i64),
-            ("pre_shrink_time_us", self.pre_shrink_time_us, i64),
-            ("post_shrink_time_us", self.post_shrink_time_us, i64),
             ("total_shrink_time_us", self.total_shrink_time_us, i64),
         );
     }
