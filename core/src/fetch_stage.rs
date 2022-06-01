@@ -5,12 +5,9 @@ use {
         banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
         result::{Error, Result},
     },
-    crossbeam_channel::{unbounded, RecvTimeoutError, Sender},
+    crossbeam_channel::{unbounded, RecvTimeoutError},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
-    solana_perf::{
-        packet::{PacketBatch, PacketBatchRecycler},
-        recycler::Recycler,
-    },
+    solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{
         clock::DEFAULT_TICKS_PER_SLOT,
@@ -32,7 +29,6 @@ use {
 
 pub struct FetchStage {
     thread_hdls: Vec<JoinHandle<()>>,
-    pub forward_sender: Sender<PacketBatch>,
 }
 
 impl FetchStage {
@@ -47,6 +43,7 @@ impl FetchStage {
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
+        let (forward_sender, forward_receiver) = unbounded();
         (
             Self::new_with_sender(
                 sockets,
@@ -55,6 +52,8 @@ impl FetchStage {
                 exit,
                 &sender,
                 &vote_sender,
+                &forward_sender,
+                forward_receiver,
                 poh_recorder,
                 coalesce_ms,
                 None,
@@ -64,6 +63,7 @@ impl FetchStage {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
@@ -71,6 +71,8 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
+        forward_sender: &PacketBatchSender,
+        forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -85,6 +87,8 @@ impl FetchStage {
             exit,
             sender,
             vote_sender,
+            forward_sender,
+            forward_receiver,
             poh_recorder,
             coalesce_ms,
             in_vote_only_mode,
@@ -133,6 +137,7 @@ impl FetchStage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_multi_socket(
         tpu_sockets: Vec<Arc<UdpSocket>>,
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
@@ -140,6 +145,8 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
+        forward_sender: &PacketBatchSender,
+        forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -164,7 +171,6 @@ impl FetchStage {
             .collect();
 
         let tpu_forward_stats = Arc::new(StreamerReceiveStats::new("tpu_forwards_receiver"));
-        let (forward_sender, forward_receiver) = unbounded();
         let tpu_forwards_threads: Vec<_> = tpu_forwards_sockets
             .into_iter()
             .map(|socket| {
@@ -244,7 +250,6 @@ impl FetchStage {
             .into_iter()
             .flatten()
             .collect(),
-            forward_sender,
         }
     }
 

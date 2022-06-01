@@ -109,6 +109,7 @@ impl Tpu {
 
         let (packet_sender, packet_receiver) = unbounded();
         let (vote_packet_sender, vote_packet_receiver) = unbounded();
+        let (forwarded_packet_sender, forwarded_packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
@@ -116,6 +117,8 @@ impl Tpu {
             exit,
             &packet_sender,
             &vote_packet_sender,
+            &forwarded_packet_sender,
+            forwarded_packet_receiver,
             poh_recorder,
             tpu_coalesce_ms,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
@@ -169,7 +172,7 @@ impl Tpu {
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu_forwards.ip(),
-            fetch_stage.forward_sender.clone(),
+            forwarded_packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
             staked_nodes,
@@ -262,7 +265,7 @@ impl Tpu {
         // exit can deadlock. put an upper-bound on how long we wait for it
         let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            error!("timeout for closing tvu");
+            error!("timeout for closing tpu");
         }
         Ok(())
     }
