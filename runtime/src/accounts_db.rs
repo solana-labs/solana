@@ -3555,7 +3555,7 @@ impl AccountsDb {
         if sorted_slots.is_empty() {
             return;
         }
-        let _guard = self.active_stats.activate(ActiveStatItem::SquashAncient);
+        let mut guard = None;
 
         // the ancient append vec currently being written to
         let mut current_ancient = None;
@@ -3578,6 +3578,11 @@ impl AccountsDb {
                         continue;
                     }
                 };
+
+            if guard.is_none() {
+                // we are now doing interesting work in squashing ancient
+                guard = Some(self.active_stats.activate(ActiveStatItem::SquashAncient))
+            }
 
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
             let (stored_accounts, _num_stores, original_bytes) =
