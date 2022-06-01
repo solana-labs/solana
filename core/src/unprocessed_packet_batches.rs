@@ -35,12 +35,18 @@ pub enum DeserializedPacketError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct TransactionPriorityDetails {
+    priority: u64,
+    compute_unit_limit: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    priority: u64,
+    priority_details: TransactionPriorityDetails,
 }
 
 impl ImmutableDeserializedPacket {
@@ -65,7 +71,11 @@ impl ImmutableDeserializedPacket {
     }
 
     pub fn priority(&self) -> u64 {
-        self.priority
+        self.priority_details.priority
+    }
+
+    pub fn compute_unit_limit(&self) -> u64 {
+        self.priority_details.compute_unit_limit
     }
 }
 
@@ -83,13 +93,16 @@ impl DeserializedPacket {
     }
 
     #[cfg(test)]
-    fn new_with_priority(packet: Packet, priority: u64) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, Some(priority))
+    fn new_with_priority_details(
+        packet: Packet,
+        priority_details: TransactionPriorityDetails,
+    ) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, Some(priority_details))
     }
 
     pub fn new_internal(
         packet: Packet,
-        priority: Option<u64>,
+        priority_details: Option<TransactionPriorityDetails>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
         let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
@@ -98,8 +111,8 @@ impl DeserializedPacket {
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let priority = priority
-            .or_else(|| get_priority(sanitized_transaction.get_message()))
+        let priority_details = priority_details
+            .or_else(|| get_priority_details(sanitized_transaction.get_message()))
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         Ok(Self {
@@ -108,7 +121,7 @@ impl DeserializedPacket {
                 transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
-                priority,
+                priority_details,
             }),
             forwarded: false,
         })
@@ -364,7 +377,7 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-fn get_priority(message: &SanitizedVersionedMessage) -> Option<u64> {
+fn get_priority_details(message: &SanitizedVersionedMessage) -> Option<TransactionPriorityDetails> {
     let mut compute_budget = ComputeBudget::default();
     let prioritization_fee_details = compute_budget
         .process_instructions(
@@ -374,7 +387,10 @@ fn get_priority(message: &SanitizedVersionedMessage) -> Option<u64> {
             true, // don't reject txs that use set compute unit price ix
         )
         .ok()?;
-    Some(prioritization_fee_details.get_priority())
+    Some(TransactionPriorityDetails {
+        priority: prioritization_fee_details.get_priority(),
+        compute_unit_limit: compute_budget.compute_unit_limit,
+    })
 }
 
 pub fn transactions_to_deserialized_packets(
@@ -395,7 +411,7 @@ mod tests {
         super::*,
         solana_sdk::{
             compute_budget::ComputeBudgetInstruction, message::VersionedMessage, pubkey::Pubkey,
-            signature::Keypair, system_transaction,
+            signature::Keypair, system_instruction, system_transaction,
         },
         std::net::IpAddr,
     };
@@ -415,7 +431,7 @@ mod tests {
         DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_priority(priority: u64) -> DeserializedPacket {
+    fn packet_with_priority_details(priority: u64, compute_unit_limit: u64) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -423,7 +439,14 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        DeserializedPacket::new_with_priority(packet, priority).unwrap()
+        DeserializedPacket::new_with_priority_details(
+            packet,
+            TransactionPriorityDetails {
+                priority,
+                compute_unit_limit,
+            },
+        )
+        .unwrap()
     }
 
     #[test]
@@ -444,10 +467,10 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
         let heavier_packet_weight = 2;
-        let heavier_packet = packet_with_priority(heavier_packet_weight);
+        let heavier_packet = packet_with_priority_details(heavier_packet_weight, 200_000);
 
         let lesser_packet_weight = heavier_packet_weight - 1;
-        let lesser_packet = packet_with_priority(lesser_packet_weight);
+        let lesser_packet = packet_with_priority_details(lesser_packet_weight, 200_000);
 
         // Test that the heavier packet is actually heavier
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
@@ -528,10 +551,65 @@ mod tests {
     fn test_get_priority_with_valid_request_heap_frame_tx() {
         let payer = Pubkey::new_unique();
         let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
-            &[ComputeBudgetInstruction::request_heap_frame(32 * 1024)],
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::request_heap_frame(32 * 1024),
+            ],
             Some(&payer),
         )))
         .unwrap();
-        assert_eq!(get_priority(&message), Some(0));
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: 0,
+                compute_unit_limit:
+                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                        as u64
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_set_compute_units_limit() {
+        let requested_cu = 101u32;
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::set_compute_unit_limit(requested_cu),
+            ],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: 0,
+                compute_unit_limit: requested_cu as u64,
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_set_compute_unit_price() {
+        let requested_price = 1_000;
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::set_compute_unit_price(requested_price),
+            ],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: requested_price,
+                compute_unit_limit:
+                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                        as u64
+            })
+        );
     }
 }
