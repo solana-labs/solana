@@ -5187,8 +5187,8 @@ impl Bank {
                 self.rewrites_skipped_this_slot.read().unwrap().len(),
                 i64
             ),
+            ("total_time_us", measure.as_us(), i64),
         );
-        inc_new_counter_info!("collect_rent_eagerly-ms", measure.as_ms() as usize);
     }
 
     #[cfg(test)]
