@@ -1034,7 +1034,7 @@ fn validate_delegated_amount(
         || feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()))
         && stake_amount < crate::get_minimum_delegation(feature_set)
     {
-        return Err(StakeError::InsufficientStake.into());
+        return Err(StakeError::InsufficientDelegation.into());
     }
     Ok(ValidatedDelegatedInfo { stake_amount })
 }
