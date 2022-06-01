@@ -3,7 +3,7 @@ use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfo, ReplicaAccountInfoVersions,
+        ReplicaAccountInfoWithSignature, ReplicaAccountInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -104,9 +104,9 @@ impl AccountsUpdateNotifierImpl {
         &self,
         meta: &'a StoredMeta,
         account: &'a AccountSharedData,
-        txn_signature: &Signature,
-    ) -> Option<ReplicaAccountInfo<'a>> {
-        Some(ReplicaAccountInfo {
+        txn_signature: &'a Signature,
+    ) -> Option<ReplicaAccountInfoWithSignature<'a>> {
+        Some(ReplicaAccountInfoWithSignature {
             pubkey: meta.pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
@@ -114,15 +114,15 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
             data: account.data(),
             write_version: meta.write_version,
-            txn_signature: Some(txn_signature.clone()),
+            txn_signature: Some(txn_signature),
         })
     }
 
     fn accountinfo_from_stored_account_meta<'a>(
         &self,
         stored_account_meta: &'a StoredAccountMeta,
-    ) -> Option<ReplicaAccountInfo<'a>> {
-        Some(ReplicaAccountInfo {
+    ) -> Option<ReplicaAccountInfoWithSignature<'a>> {
+        Some(ReplicaAccountInfoWithSignature {
             pubkey: stored_account_meta.meta.pubkey.as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
@@ -136,7 +136,7 @@ impl AccountsUpdateNotifierImpl {
 
     fn notify_plugins_of_account_update(
         &self,
-        account: ReplicaAccountInfo,
+        account: ReplicaAccountInfoWithSignature,
         slot: Slot,
         is_startup: bool,
     ) {
@@ -149,7 +149,7 @@ impl AccountsUpdateNotifierImpl {
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-account");
             match plugin.update_account(
-                ReplicaAccountInfoVersions::V0_0_1(&account),
+                ReplicaAccountInfoVersions::V0_0_2(&account),
                 slot,
                 is_startup,
             ) {
