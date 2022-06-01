@@ -13,6 +13,7 @@ use std::{
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST: u32 = 25;
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
+pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2: u32 = 150;
 
 #[derive(Copy, Clone)]
 pub(crate) struct MaxAllowableDrift {
@@ -80,7 +81,7 @@ where
             && estimate_offset.saturating_sub(poh_estimate_offset) > max_allowable_drift_slow
         {
             // estimate offset since the start of the epoch is higher than
-            // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW`
+            // `max_allowable_drift_slow`
             estimate = epoch_start_timestamp
                 .saturating_add(poh_estimate_offset.as_secs() as i64)
                 .saturating_add(max_allowable_drift_slow.as_secs() as i64);
@@ -88,7 +89,7 @@ where
             && poh_estimate_offset.saturating_sub(estimate_offset) > max_allowable_drift_fast
         {
             // estimate offset since the start of the epoch is lower than
-            // `MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST`
+            // `max_allowable_drift_fast`
             estimate = epoch_start_timestamp
                 .saturating_add(poh_estimate_offset.as_secs() as i64)
                 .saturating_sub(max_allowable_drift_fast.as_secs() as i64);
