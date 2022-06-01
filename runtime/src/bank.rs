@@ -4057,13 +4057,30 @@ impl Bank {
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
+        let flip_nonce_blockhash_check = self
+            .feature_set
+            .is_active(&feature_set::flip_nonce_blockhash_check::id());
+        let enable_durable_nonce = flip_nonce_blockhash_check;
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
                     let recent_blockhash = tx.message().recent_blockhash();
-                    if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+                    if flip_nonce_blockhash_check {
+                        if let Some((address, account)) =
+                            self.check_transaction_for_nonce(tx, enable_durable_nonce)
+                        {
+                            (Ok(()), Some(NoncePartial::new(address, account)))
+                        } else if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+                            (Ok(()), None)
+                        } else {
+                            error_counters.blockhash_not_found += 1;
+                            (Err(TransactionError::BlockhashNotFound), None)
+                        }
+                    } else if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
                         (Ok(()), None)
-                    } else if let Some((address, account)) = self.check_transaction_for_nonce(tx) {
+                    } else if let Some((address, account)) =
+                        self.check_transaction_for_nonce(tx, enable_durable_nonce)
+                    {
                         (Ok(()), Some(NoncePartial::new(address, account)))
                     } else {
                         error_counters.blockhash_not_found += 1;
@@ -4136,16 +4153,13 @@ impl Bank {
     pub fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
+        enable_durable_nonce: bool,
     ) -> Option<TransactionAccount> {
-        if self.cluster_type() == ClusterType::MainnetBeta {
-            if self.slot() <= 135986379 {
-                self.check_message_for_nonce(tx.message())
-            } else {
-                None
-            }
-        } else {
-            self.check_message_for_nonce(tx.message())
-        }
+        (enable_durable_nonce
+            || self.cluster_type() != ClusterType::MainnetBeta
+            || self.slot() <= 135986379)
+            .then(|| self.check_message_for_nonce(tx.message()))
+            .flatten()
     }
 
     pub fn check_transactions(
@@ -12373,7 +12387,10 @@ pub(crate) mod tests {
         );
         let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
         assert_eq!(
-            bank.check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
+            bank.check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            ),
             Some((nonce_pubkey, nonce_account))
         );
     }
@@ -12399,7 +12416,10 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx,))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx,),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12425,7 +12445,10 @@ pub(crate) mod tests {
         );
         tx.message.instructions[0].accounts.clear();
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12452,7 +12475,10 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12476,7 +12502,10 @@ pub(crate) mod tests {
             Hash::default(),
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -13148,7 +13177,10 @@ pub(crate) mod tests {
             Err(TransactionError::BlockhashNotFound)
         );
         assert_eq!(
-            bank.check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
+            bank.check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            ),
             None
         );
     }

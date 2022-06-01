@@ -416,6 +416,10 @@ pub mod warp_timestamp_with_a_vengeance {
     solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
 }
 
+pub mod flip_nonce_blockhash_check {
+    solana_sdk::declare_id!("Hh2R4QhV84MZJVWdR8TMKan7px4kjJmUNJfJfLcdAc6Z");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -513,6 +517,7 @@ lazy_static! {
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
         (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
+        (flip_nonce_blockhash_check::id(), "flip nonce/non-nonce blockhash check"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
