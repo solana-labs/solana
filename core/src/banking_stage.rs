@@ -150,6 +150,8 @@ pub struct BankingStageStats {
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
     end_of_slot_filtered_invalid_count: AtomicUsize,
+    forwarded_transaction_count: AtomicUsize,
+    forwarded_vote_count: AtomicUsize,
     batch_packet_indexes_len: Histogram,
 
     // Timing
@@ -204,6 +206,8 @@ impl BankingStageStats {
                 .unprocessed_packet_conversion_elapsed
                 .load(Ordering::Relaxed)
             + self.transaction_processing_elapsed.load(Ordering::Relaxed)
+            + self.forwarded_transaction_count.load(Ordering::Relaxed) as u64
+            + self.forwarded_vote_count.load(Ordering::Relaxed) as u64
             + self.batch_packet_indexes_len.entries()
     }
 
@@ -265,6 +269,16 @@ impl BankingStageStats {
                     "end_of_slot_filtered_invalid_count",
                     self.end_of_slot_filtered_invalid_count
                         .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "forwarded_transaction_count",
+                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "forwarded_vote_count",
+                    self.forwarded_vote_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -497,17 +511,15 @@ impl BankingStage {
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         packets: Vec<&Packet>,
         data_budget: &DataBudget,
+        banking_stage_stats: &BankingStageStats,
     ) -> (std::result::Result<(), TransportError>, usize) {
-        let (addr, udp_only) = match forward_option {
+        let addr = match forward_option {
             ForwardOption::NotForward => return (Ok(()), 0),
             ForwardOption::ForwardTransaction => {
-                (next_leader_tpu_forwards(cluster_info, poh_recorder), false)
+                next_leader_tpu_forwards(cluster_info, poh_recorder)
             }
 
-            ForwardOption::ForwardTpuVote => {
-                // Votes must be forwarded only using UDP
-                (next_leader_tpu_vote(cluster_info, poh_recorder), true)
-            }
+            ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
         };
         let addr = match addr {
             Some(addr) => addr,
@@ -546,12 +558,18 @@ impl BankingStage {
 
             let mut measure = Measure::start("banking_stage-forward-us");
 
-            let conn = if udp_only {
-                // If the transaction must be forwarded using UDP, let's get the UDP connection.
+            let conn = if let ForwardOption::ForwardTpuVote = forward_option {
+                // The vote must be forwarded using only UDP. Let's get the UDP connection.
+                banking_stage_stats
+                    .forwarded_vote_count
+                    .fetch_add(packet_vec_len, Ordering::Relaxed);
                 Arc::new(UdpTpuConnection::new_from_addr(addr).into())
             } else {
-                // If the transaction could be forwarded using QUIC, get_connection() will use
+                // All other transactions can be forwarded using QUIC, get_connection() will use
                 // system wide setting to pick the correct connection object.
+                banking_stage_stats
+                    .forwarded_transaction_count
+                    .fetch_add(packet_vec_len, Ordering::Relaxed);
                 get_connection(&addr)
             };
             let res = conn.send_wire_transaction_batch_async(packet_vec);
@@ -936,6 +954,7 @@ impl BankingStage {
                             false,
                             data_budget,
                             slot_metrics_tracker,
+                            banking_stage_stats,
                         )
                     },
                     (),
@@ -954,6 +973,7 @@ impl BankingStage {
                             true,
                             data_budget,
                             slot_metrics_tracker,
+                            banking_stage_stats,
                         )
                     },
                     (),
@@ -973,6 +993,7 @@ impl BankingStage {
         hold: bool,
         data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        banking_stage_stats: &BankingStageStats,
     ) {
         if let ForwardOption::NotForward = forward_option {
             if !hold {
@@ -990,6 +1011,7 @@ impl BankingStage {
             poh_recorder,
             forwardable_packets,
             data_budget,
+            banking_stage_stats,
         );
         let failed_forwarded_packets_count =
             forwardable_packets_len.saturating_sub(sucessful_forwarded_packets_count);
