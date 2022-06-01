@@ -134,6 +134,11 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+// the current best way to add filler accounts is gradually.
+// In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
+// add filler accounts at the beginning, so that code path remains but won't execute at the moment.
+const ADD_FILLER_ACCOUNTS_GRADUALLY: bool = true;
+
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
@@ -1127,6 +1132,12 @@ pub struct AccountsDb {
 
     active_stats: ActiveStats,
 
+    /// number of filler accounts to add for each slot
+    pub filler_accounts_per_slot: AtomicU64,
+
+    /// number of slots remaining where filler accounts should be added
+    pub filler_account_slots_remaining: AtomicU64,
+
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
     // lower passes = faster total time, higher dynamic memory usage
@@ -1877,6 +1888,8 @@ impl AccountsDb {
         Self::bins_per_pass(num_hash_scan_passes);
 
         AccountsDb {
+            filler_accounts_per_slot: AtomicU64::default(),
+            filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
             accounts_hash_complete_one_epoch_old: RwLock::default(),
             skip_rewrites: false,
@@ -2034,6 +2047,20 @@ impl AccountsDb {
             }
         }
         new
+    }
+
+    /// Gradual means filler accounts will be added over the course of an epoch, during cache flush.
+    /// This is in contrast to adding all the filler accounts immediately before the validator starts.
+    fn init_gradual_filler_accounts(&self, slots_per_epoch: Slot) {
+        let count = self.filler_accounts_config.count;
+        if count > 0 {
+            // filler accounts are a debug only feature. integer division is fine here
+            let accounts_per_slot = (count as u64) / slots_per_epoch;
+            self.filler_accounts_per_slot
+                .store(accounts_per_slot, Ordering::Release);
+            self.filler_account_slots_remaining
+                .store(slots_per_epoch, Ordering::Release);
+        }
     }
 
     pub fn set_shrink_paths(&self, paths: Vec<PathBuf>) {
@@ -3417,6 +3444,15 @@ impl AccountsDb {
             .unwrap()
             .alive_roots
             .get_all_less_than(slot)
+    }
+
+    fn get_prior_root(&self, slot: Slot) -> Option<Slot> {
+        self.accounts_index
+            .roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .get_prior(slot)
     }
 
     /// get a sorted list of slots older than an epoch
@@ -5529,6 +5565,31 @@ impl AccountsDb {
                 }
             }
         }
+
+        let mut filler_accounts = 0;
+        if self.filler_accounts_enabled() {
+            let slots_remaining = self.filler_account_slots_remaining.load(Ordering::Acquire);
+            if slots_remaining > 0 {
+                // figure out
+                let pr = self.get_prior_root(slot);
+
+                if let Some(prior_root) = pr {
+                    let filler_account_slots =
+                        std::cmp::min(slot.saturating_sub(prior_root), slots_remaining);
+                    self.filler_account_slots_remaining
+                        .fetch_sub(filler_account_slots, Ordering::Release);
+                    let filler_accounts_per_slot =
+                        self.filler_accounts_per_slot.load(Ordering::Acquire);
+                    filler_accounts = filler_account_slots * filler_accounts_per_slot;
+
+                    // keep space for filler accounts
+                    let addl_size = (filler_accounts as u64)
+                        * ((self.filler_accounts_config.size + STORE_META_OVERHEAD) as u64);
+                    total_size += addl_size;
+                }
+            }
+        }
+
         let (accounts, hashes): (Vec<(&Pubkey, &AccountSharedData)>, Vec<Hash>) = iter_items
             .iter()
             .filter_map(|iter_item| {
@@ -5572,6 +5633,25 @@ impl AccountsDb {
                 Some(&flushed_store),
                 None,
             );
+
+            if filler_accounts > 0 {
+                // add extra filler accounts at the end of the append vec
+                let (account, hash) = self.get_filler_account(&Rent::default());
+                let mut accounts = Vec::with_capacity(filler_accounts as usize);
+                let mut hashes = Vec::with_capacity(filler_accounts as usize);
+                let pubkeys = self.get_filler_account_pubkeys(filler_accounts as usize);
+                pubkeys.iter().for_each(|key| {
+                    accounts.push((key, &account));
+                    hashes.push(hash);
+                });
+                self.store_accounts_frozen(
+                    (slot, &accounts[..]),
+                    Some(&hashes),
+                    Some(&flushed_store),
+                    None,
+                );
+            }
+
             // If the above sizing function is correct, just one AppendVec is enough to hold
             // all the data for the slot
             assert_eq!(
@@ -7799,6 +7879,40 @@ impl AccountsDb {
         }
     }
 
+    /// return 'AccountSharedData' and a hash for a filler account
+    fn get_filler_account(&self, rent: &Rent) -> (AccountSharedData, Hash) {
+        let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
+        let hash = Hash::from_str(string).unwrap();
+        let owner = Pubkey::from_str(string).unwrap();
+        let space = self.filler_accounts_config.size;
+        let rent_exempt_reserve = rent.minimum_balance(space);
+        let lamports = rent_exempt_reserve;
+        let mut account = AccountSharedData::new(lamports, space, &owner);
+        // just non-zero rent epoch. filler accounts are rent-exempt
+        let dummy_rent_epoch = 2;
+        account.set_rent_epoch(dummy_rent_epoch);
+        (account, hash)
+    }
+
+    fn get_filler_account_pubkeys(&self, count: usize) -> Vec<Pubkey> {
+        (0..count)
+            .map(|_| {
+                let subrange = solana_sdk::pubkey::new_rand();
+                self.get_filler_account_pubkey(&subrange)
+            })
+            .collect()
+    }
+
+    fn get_filler_account_pubkey(&self, subrange: &Pubkey) -> Pubkey {
+        // pubkey begins life as entire filler 'suffix' pubkey
+        let mut key = self.filler_account_suffix.unwrap();
+        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
+        // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
+        key.as_mut()[0..rent_prefix_bytes]
+            .copy_from_slice(&subrange.as_ref()[0..rent_prefix_bytes]);
+        key
+    }
+
     /// filler accounts are space-holding accounts which are ignored by hash calculations and rent.
     /// They are designed to allow a validator to run against a network successfully while simulating having many more accounts present.
     /// All filler accounts share a common pubkey suffix. The suffix is randomly generated per validator on startup.
@@ -7809,9 +7923,16 @@ impl AccountsDb {
         &self,
         epoch_schedule: &EpochSchedule,
         rent: &Rent,
-        rent_epoch: Epoch,
+        slot: Slot,
     ) {
         if self.filler_accounts_config.count == 0 {
+            return;
+        }
+
+        if ADD_FILLER_ACCOUNTS_GRADUALLY {
+            self.init_gradual_filler_accounts(
+                epoch_schedule.get_slots_in_epoch(epoch_schedule.get_epoch(slot)),
+            );
             return;
         }
 
@@ -7832,16 +7953,9 @@ impl AccountsDb {
         let root_count = roots.len();
         let per_pass = std::cmp::max(1, root_count / passes);
         let overall_index = AtomicUsize::new(0);
-        let string = "FiLLERACCoUNTooooooooooooooooooooooooooooooo";
-        let hash = Hash::from_str(string).unwrap();
-        let owner = Pubkey::from_str(string).unwrap();
-        let space = self.filler_accounts_config.size;
-        let rent_exempt_reserve = rent.minimum_balance(space);
-        let lamports = rent_exempt_reserve;
-        let mut account = AccountSharedData::new(lamports, space, &owner);
-        // needs to be non-zero
-        account.set_rent_epoch(rent_epoch);
-        let added = AtomicUsize::default();
+        let (account, hash) = self.get_filler_account(rent);
+        let added = AtomicU32::default();
+        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
         for pass in 0..=passes {
             self.accounts_index
                 .set_startup(Startup::StartupWithExtraThreads);
@@ -7871,19 +7985,12 @@ impl AccountsDb {
                 let accounts = (0..filler_entries)
                     .map(|_| {
                         let my_id = added.fetch_add(1, Ordering::Relaxed);
-                        let my_id_bytes = u32::to_be_bytes(my_id as u32);
-
-                        // pubkey begins life as entire filler 'suffix' pubkey
-                        let mut key = self.filler_account_suffix.unwrap();
-                        let rent_prefix_bytes = Self::filler_rent_partition_prefix_bytes();
-                        // first bytes are replaced with rent partition range: filler_rent_partition_prefix_bytes
-                        key.as_mut()[0..rent_prefix_bytes]
-                            .copy_from_slice(&subrange.start().as_ref()[0..rent_prefix_bytes]);
+                        let mut key = self.get_filler_account_pubkey(subrange.start());
                         // next bytes are replaced with my_id: filler_unique_id_bytes
+                        let my_id_bytes = u32::to_be_bytes(my_id);
                         key.as_mut()[rent_prefix_bytes
                             ..(rent_prefix_bytes + Self::filler_unique_id_bytes())]
                             .copy_from_slice(&my_id_bytes);
-                        assert!(subrange.contains(&key));
                         key
                     })
                     .collect::<Vec<_>>();
