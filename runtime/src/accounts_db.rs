@@ -3428,10 +3428,12 @@ impl AccountsDb {
         self.combine_ancient_slots(old_slots);
     }
 
+    /// create new ancient append vec
+    /// return it and the elapsed time for metrics
     fn create_ancient_append_vec(
         &self,
         slot: Slot,
-    ) -> (Option<(Slot, Arc<AccountStorageEntry>)>, u64) {
+    ) -> (Option<(Slot, Arc<AccountStorageEntry>)>, Duration) {
         let (new_ancient_storage, time) =
             self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
         info!(
@@ -3440,15 +3442,19 @@ impl AccountsDb {
             get_ancient_append_vec_capacity(),
             new_ancient_storage.append_vec_id(),
         );
-        (Some((slot, new_ancient_storage)), time)
+        (
+            Some((slot, new_ancient_storage)),
+            Duration::from_micros(time),
+        )
     }
 
     /// return true if created
+    /// also return elapsed time for metrics
     fn maybe_create_ancient_append_vec(
         &self,
         current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
         slot: Slot,
-    ) -> (bool, u64) {
+    ) -> (bool, Duration) {
         if current_ancient.is_none() {
             // our oldest slot is not an append vec of max size, or we filled the previous one.
             // So, create a new ancient append vec at 'slot'
@@ -3456,7 +3462,7 @@ impl AccountsDb {
             *current_ancient = result.0;
             (true, result.1)
         } else {
-            (false, 0)
+            (false, Duration::default())
         }
     }
 
@@ -3616,7 +3622,6 @@ impl AccountsDb {
             let mut create_and_insert_store_elapsed = 0;
 
             let alive_accounts = alive_accounts_collect.into_inner().unwrap();
-            //let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
             let alive_total = alive_total_collect.load(Ordering::Relaxed);
             index_read_elapsed.stop();
             let aligned_total: u64 = Self::page_align(alive_total as u64);
@@ -3630,7 +3635,7 @@ impl AccountsDb {
             let total_accounts_after_shrink = alive_accounts.len();
 
             let (_, time) = self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
-            create_and_insert_store_elapsed += time;
+            create_and_insert_store_elapsed += time.as_micros() as u64;
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
@@ -3656,7 +3661,7 @@ impl AccountsDb {
             if to_store.has_overflow() {
                 // we need a new ancient append vec
                 let result = self.create_ancient_append_vec(slot);
-                create_and_insert_store_elapsed += result.1;
+                create_and_insert_store_elapsed += result.1.as_micros() as u64;
                 current_ancient = result.0;
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
