@@ -1213,6 +1213,10 @@ impl Accounts {
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
 
+    pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        self.accounts_db.store_cached(slot, accounts)
+    }
+
     /// Add a slot to root.  Root slots cannot be purged
     pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
         self.accounts_db.add_root(slot)
