@@ -36,6 +36,36 @@ pub struct ReplicaAccountInfo<'a> {
     /// with higher write_version should supersede the one with lower
     /// write_version.
     pub write_version: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about an account being updated
+/// (extended with transaction signature doing this update)
+pub struct ReplicaAccountInfoWithSignature<'a> {
+    /// The Pubkey for the account
+    pub pubkey: &'a [u8],
+
+    /// The lamports for the account
+    pub lamports: u64,
+
+    /// The Pubkey of the owner program account
+    pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+
+    /// The data held in this account.
+    pub data: &'a [u8],
+
+    /// A global monotonically increasing atomic number, which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    /// write_version.
+    pub write_version: u64,
 
     /// First signature of the transaction caused this account modification
     pub txn_signature: Option<Signature>,
@@ -47,6 +77,7 @@ pub struct ReplicaAccountInfo<'a> {
 /// plugin implementations to handle the change.
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
+    V0_0_2(&'a ReplicaAccountInfoWithSignature<'a>),
 }
 
 /// Information about a transaction
