@@ -4594,6 +4594,7 @@ dependencies = [
  "solana-send-transaction-service",
  "solana-streamer",
  "solana-transaction-status",
+ "solana-version",
  "solana-vote-program",
  "sys-info",
  "tempfile",
