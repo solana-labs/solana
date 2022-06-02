@@ -94,7 +94,7 @@ impl BucketMapHolderStats {
 
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
         let age_now = storage.current_age();
-        let ages_flushed = storage.count_ages_flushed() as u64;
+        let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
         let last_ages_flushed = self.last_ages_flushed.swap(ages_flushed, Ordering::Relaxed) as u64;
         let mut age_now = age_now as u64;
