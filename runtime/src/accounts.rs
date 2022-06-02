@@ -2969,7 +2969,7 @@ mod tests {
             (message.account_keys[1], account2.clone()),
         ];
         let tx0 = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let tx0_sign = tx0.signature().clone();
+        let tx0_sign = *tx0.signature();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2985,7 +2985,7 @@ mod tests {
             (message.account_keys[1], account2),
         ];
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
-        let tx1_sign = tx1.signature().clone();
+        let tx1_sign = *tx1.signature();
 
         let loaded0 = (
             Ok(LoadedTransaction {
