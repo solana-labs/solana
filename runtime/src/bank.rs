@@ -334,18 +334,31 @@ struct CachedExecutorsEntry {
     executor: Arc<dyn Executor>,
     hit_count: AtomicU64,
 }
+
+impl Clone for CachedExecutorsEntry {
+    fn clone(&self) -> Self {
+        Self {
+            prev_epoch_count: self.prev_epoch_count,
+            epoch_count: AtomicU64::new(self.epoch_count.load(Relaxed)),
+            executor: self.executor.clone(),
+            hit_count: AtomicU64::new(self.hit_count.load(Relaxed)),
+        }
+    }
+}
+
 /// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
 struct CachedExecutors {
-    max: usize,
+    max_capacity: usize,
     current_epoch: Epoch,
     pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
     stats: executor_cache::Stats,
 }
+
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
-            max: MAX_CACHED_EXECUTORS,
+            max_capacity: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
             stats: executor_cache::Stats::default(),
@@ -363,55 +376,39 @@ impl AbiExample for CachedExecutors {
     }
 }
 
-impl Clone for CachedExecutors {
-    fn clone(&self) -> Self {
-        let executors = self.executors.iter().map(|(&key, entry)| {
-            let entry = CachedExecutorsEntry {
-                prev_epoch_count: entry.prev_epoch_count,
-                epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
-                executor: entry.executor.clone(),
-                hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
-            };
-            (key, entry)
-        });
-        Self {
-            max: self.max,
-            current_epoch: self.current_epoch,
-            executors: executors.collect(),
-            stats: executor_cache::Stats::default(),
-        }
-    }
-}
-
 impl CachedExecutors {
-    fn clone_with_epoch(&self, epoch: Epoch) -> Self {
-        if self.current_epoch == epoch {
-            return self.clone();
-        }
-        let executors = self.executors.iter().map(|(&key, entry)| {
-            // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
-            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
-            let entry = CachedExecutorsEntry {
-                prev_epoch_count: entry.epoch_count.load(Relaxed),
-                epoch_count: AtomicU64::default(),
-                executor: entry.executor.clone(),
-                hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
-            };
-            (key, entry)
-        });
+    fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
-            max: self.max,
-            current_epoch: epoch,
-            executors: executors.collect(),
-            stats: executor_cache::Stats::default(),
-        }
-    }
-
-    fn new(max: usize, current_epoch: Epoch) -> Self {
-        Self {
-            max,
+            max_capacity,
             current_epoch,
             executors: HashMap::new(),
+            stats: executor_cache::Stats::default(),
+        }
+    }
+
+    fn new_from_parent(parent: &CachedExecutors, current_epoch: Epoch) -> Self {
+        let executors = if parent.current_epoch == current_epoch {
+            parent.executors.clone()
+        } else {
+            parent
+                .executors
+                .iter()
+                .map(|(&key, entry)| {
+                    let entry = CachedExecutorsEntry {
+                        prev_epoch_count: entry.epoch_count.load(Relaxed),
+                        epoch_count: AtomicU64::default(),
+                        executor: entry.executor.clone(),
+                        hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
+                    };
+                    (key, entry)
+                })
+                .collect()
+        };
+
+        Self {
+            max_capacity: parent.max_capacity,
+            current_epoch,
+            executors,
             stats: executor_cache::Stats::default(),
         }
     }
@@ -457,7 +454,7 @@ impl CachedExecutors {
 
             let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
 
-            if self.executors.len() >= self.max {
+            if self.executors.len() >= self.max_capacity {
                 let mut least_keys = counts
                     .iter()
                     .take(new_executors.len())
@@ -1763,8 +1760,8 @@ impl Bank {
 
         let (cached_executors, cached_executors_time) = Measure::this(
             |_| {
-                let cached_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(cached_executors.clone_with_epoch(epoch))
+                let parent = parent.cached_executors.read().unwrap();
+                RwLock::new(CachedExecutors::new_from_parent(&parent, epoch))
             },
             (),
             "cached_executors_creation",
@@ -14455,7 +14452,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = cache.clone_with_epoch(1);
+        let mut cache = CachedExecutors::new_from_parent(&cache, 1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
@@ -14480,7 +14477,7 @@ pub(crate) mod tests {
             .count();
         assert_eq!(num_retained, 1);
 
-        cache = cache.clone_with_epoch(2);
+        cache = CachedExecutors::new_from_parent(&cache, 2);
         assert!(cache.current_epoch == 2);
 
         cache.put(&[(&key3, executor.clone())]);
@@ -14622,13 +14619,15 @@ pub(crate) mod tests {
         expected_stats.evictions.insert(program_id2, 1);
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
 
-        // make sure stats are cleared on clone
+        // make sure stats are cleared in new_from_parent
         assert_eq!(
-            ComparableStats::from(&cache.clone_with_epoch(CURRENT_EPOCH).stats),
+            ComparableStats::from(&CachedExecutors::new_from_parent(&cache, CURRENT_EPOCH).stats),
             ComparableStats::default()
         );
         assert_eq!(
-            ComparableStats::from(&cache.clone_with_epoch(CURRENT_EPOCH + 1).stats),
+            ComparableStats::from(
+                &CachedExecutors::new_from_parent(&cache, CURRENT_EPOCH + 1).stats
+            ),
             ComparableStats::default()
         );
     }
