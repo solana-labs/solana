@@ -3167,7 +3167,7 @@ impl AccountsDb {
             find_alive_elapsed = start.as_us();
 
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
-            create_and_insert_store_elapsed = time;
+            create_and_insert_store_elapsed = time.as_micros() as u64;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3296,7 +3296,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         aligned_total: u64,
-    ) -> (Arc<AccountStorageEntry>, u64) {
+    ) -> (Arc<AccountStorageEntry>, Duration) {
         let mut start = Measure::start("create_and_insert_store_elapsed");
         let shrunken_store = if let Some(new_store) =
             self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
@@ -3316,7 +3316,7 @@ impl AccountsDb {
             }
         };
         start.stop();
-        (shrunken_store, start.as_us())
+        (shrunken_store, Duration::from_micros(start.as_us()))
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -3486,10 +3486,7 @@ impl AccountsDb {
             get_ancient_append_vec_capacity(),
             new_ancient_storage.append_vec_id(),
         );
-        (
-            Some((slot, new_ancient_storage)),
-            Duration::from_micros(time),
-        )
+        (Some((slot, new_ancient_storage)), time)
     }
 
     /// return true if created
