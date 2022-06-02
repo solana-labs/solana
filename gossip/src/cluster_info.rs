@@ -3095,6 +3095,23 @@ mod tests {
     }
 
     #[test]
+    fn test_cluster_info_trace() {
+        solana_logger::setup();
+        let node = Node::new_localhost();
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        ));
+
+        info!(
+            "\n{}\n\n{}",
+            cluster_info.contact_info_trace(),
+            cluster_info.rpc_info_trace()
+        );
+    }
+
+    #[test]
     fn test_handle_pull() {
         solana_logger::setup();
         let node = Node::new_localhost();
