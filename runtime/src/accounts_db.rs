@@ -11491,7 +11491,6 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         let accounts = &[(&key, &account)][..];
-        let txn_signatures = &[Signature::default()];
         // update AccountsDb's bank hash
         {
             let mut bank_hashes = db.bank_hashes.write().unwrap();

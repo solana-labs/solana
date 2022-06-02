@@ -166,6 +166,7 @@ pub mod tests {
             account::{AccountSharedData, ReadableAccount},
             clock::Slot,
             pubkey::Pubkey,
+            signature::Signature,
         },
         std::sync::{
             atomic::{AtomicBool, Ordering},
