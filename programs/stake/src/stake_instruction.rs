@@ -3886,7 +3886,10 @@ mod tests {
         ];
         for (stake_delegation, expected_result) in &[
             (minimum_delegation, Ok(())),
-            (minimum_delegation - 1, Err(StakeError::InsufficientStake)),
+            (
+                minimum_delegation - 1,
+                Err(StakeError::InsufficientDelegation),
+            ),
         ] {
             for stake_state in &[
                 StakeState::Initialized(meta),
@@ -7029,7 +7032,7 @@ mod tests {
         fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
             do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
                 new_feature_set(),
-                Err(StakeError::InsufficientStake.into()),
+                Err(StakeError::InsufficientDelegation.into()),
             );
         }
         #[test]
