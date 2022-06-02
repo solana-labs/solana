@@ -182,14 +182,7 @@ fn bench_merkle_fec64_outgoing(b: &mut Bencher) {
         let root_hash = tree.root();
         let _signature = keypair.sign_message(root_hash.as_ref());
         let _proofs: Vec<_> = (0..64)
-            .collect::<Vec<_>>()
-            .par_chunks(16)
-            .map(|slice| {
-                slice
-                    .iter()
-                    .map(|i| (i, tree.prove_fec64(*i)))
-                    .collect::<Vec<_>>()
-            })
+            .map(|i| (i, tree.prove_fec64(i)))
             .collect();
     });
 }
