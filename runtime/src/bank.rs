@@ -1759,7 +1759,7 @@ impl Bank {
         );
 
         let (epoch_stakes, epoch_stakes_time) =
-            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_reation");
+            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_creation");
 
         let (builtin_programs, builtin_programs_time) = Measure::this(
             |_| parent.builtin_programs.clone(),
