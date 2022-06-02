@@ -12,7 +12,7 @@ use {
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_metrics::{datapoint_error, inc_new_counter_debug},
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
@@ -291,7 +291,7 @@ fn execute_batches_internal(
                     .sanitized_transactions()
                     .len() as u64;
                 let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time) = Measure::this(
+                let (result, execute_batches_time) = measure!(
                     |_| {
                         let result = execute_batch(
                             transaction_batch_with_indexes,
@@ -307,7 +307,6 @@ fn execute_batches_internal(
                         }
                         result
                     },
-                    (),
                     "execute_batch",
                 );
 
