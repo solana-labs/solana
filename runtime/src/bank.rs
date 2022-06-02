@@ -1403,6 +1403,19 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum NonceError {
+    // Transaction message does not refer to a durable nonce address.
+    NonceAddressNotFound,
+    // Nonce account is not found in accounts-db.
+    NonceAccountNotFound,
+    // verify_nonce_account returns false.
+    InvalidNonceAccount,
+    // Transaction refers to a valid nonce account
+    // but durable nonce is disabled.
+    DurableNonceDisabled,
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -3690,6 +3703,7 @@ impl Bank {
         }
         .or_else(|| {
             self.check_message_for_nonce(message)
+                .ok()
                 .and_then(|(address, account)| {
                     NoncePartial::new(address, account).lamports_per_signature()
                 })
@@ -4061,32 +4075,40 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::flip_nonce_blockhash_check::id());
         let enable_durable_nonce = flip_nonce_blockhash_check;
-        txs.zip(lock_results)
-            .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => {
-                    let recent_blockhash = tx.message().recent_blockhash();
-                    if flip_nonce_blockhash_check {
-                        if let Some((address, account)) =
-                            self.check_transaction_for_nonce(tx, enable_durable_nonce)
-                        {
-                            (Ok(()), Some(NoncePartial::new(address, account)))
-                        } else if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+        let mut check_age = |tx: &SanitizedTransaction| -> TransactionCheckResult {
+            let recent_blockhash = tx.message().recent_blockhash();
+            if flip_nonce_blockhash_check {
+                match self.check_transaction_for_nonce(tx, enable_durable_nonce) {
+                    Ok((address, account)) => (Ok(()), Some(NoncePartial::new(address, account))),
+                    Err(NonceError::NonceAddressNotFound) => {
+                        if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
                             (Ok(()), None)
                         } else {
                             error_counters.blockhash_not_found += 1;
                             (Err(TransactionError::BlockhashNotFound), None)
                         }
-                    } else if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
-                        (Ok(()), None)
-                    } else if let Some((address, account)) =
-                        self.check_transaction_for_nonce(tx, enable_durable_nonce)
-                    {
-                        (Ok(()), Some(NoncePartial::new(address, account)))
-                    } else {
+                    }
+                    Err(NonceError::NonceAccountNotFound)
+                    | Err(NonceError::InvalidNonceAccount)
+                    | Err(NonceError::DurableNonceDisabled) => {
                         error_counters.blockhash_not_found += 1;
                         (Err(TransactionError::BlockhashNotFound), None)
                     }
                 }
+            } else if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+                (Ok(()), None)
+            } else if let Ok((address, account)) =
+                self.check_transaction_for_nonce(tx, enable_durable_nonce)
+            {
+                (Ok(()), Some(NoncePartial::new(address, account)))
+            } else {
+                error_counters.blockhash_not_found += 1;
+                (Err(TransactionError::BlockhashNotFound), None)
+            }
+        };
+        txs.zip(lock_results)
+            .map(|(tx, lock_res)| match lock_res {
+                Ok(()) => check_age(tx),
                 Err(e) => (Err(e.clone()), None),
             })
             .collect()
@@ -4138,28 +4160,37 @@ impl Bank {
             .is_hash_valid_for_age(hash, max_age)
     }
 
-    fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
-        message
+    fn check_message_for_nonce(
+        &self,
+        message: &SanitizedMessage,
+    ) -> std::result::Result<TransactionAccount, NonceError> {
+        let nonce_address = message
             .get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
-            .and_then(|nonce_address| {
-                self.get_account_with_fixed_root(nonce_address)
-                    .map(|nonce_account| (*nonce_address, nonce_account))
-            })
-            .filter(|(_, nonce_account)| {
-                nonce_account::verify_nonce_account(nonce_account, message.recent_blockhash())
-            })
+            .ok_or(NonceError::NonceAddressNotFound)?;
+        let nonce_account = self
+            .get_account_with_fixed_root(nonce_address)
+            .ok_or(NonceError::NonceAccountNotFound)?;
+        if nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash()) {
+            Ok((*nonce_address, nonce_account))
+        } else {
+            Err(NonceError::InvalidNonceAccount)
+        }
     }
 
-    pub fn check_transaction_for_nonce(
+    fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
         enable_durable_nonce: bool,
-    ) -> Option<TransactionAccount> {
-        (enable_durable_nonce
+    ) -> std::result::Result<TransactionAccount, NonceError> {
+        let account = self.check_message_for_nonce(tx.message())?;
+        if enable_durable_nonce
             || self.cluster_type() != ClusterType::MainnetBeta
-            || self.slot() <= 135986379)
-            .then(|| self.check_message_for_nonce(tx.message()))
-            .flatten()
+            || self.slot() <= 135986379
+        {
+            Ok(account)
+        } else {
+            Err(NonceError::DurableNonceDisabled)
+        }
     }
 
     pub fn check_transactions(
@@ -12391,7 +12422,7 @@ pub(crate) mod tests {
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
             ),
-            Some((nonce_pubkey, nonce_account))
+            Ok((nonce_pubkey, nonce_account))
         );
     }
 
@@ -12415,12 +12446,13 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(bank
-            .check_transaction_for_nonce(
+        assert_eq!(
+            bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx,),
                 true, // enable_durable_nonce
-            )
-            .is_none());
+            ),
+            Err(NonceError::NonceAddressNotFound),
+        );
     }
 
     #[test]
@@ -12444,12 +12476,13 @@ pub(crate) mod tests {
             nonce_hash,
         );
         tx.message.instructions[0].accounts.clear();
-        assert!(bank
-            .check_transaction_for_nonce(
+        assert_eq!(
+            bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
-            )
-            .is_none());
+            ),
+            Err(NonceError::NonceAddressNotFound)
+        );
     }
 
     #[test]
@@ -12474,12 +12507,13 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        assert!(bank
-            .check_transaction_for_nonce(
+        assert_eq!(
+            bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
-            )
-            .is_none());
+            ),
+            Err(NonceError::NonceAccountNotFound)
+        );
     }
 
     #[test]
@@ -12501,12 +12535,13 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             Hash::default(),
         );
-        assert!(bank
-            .check_transaction_for_nonce(
+        assert_eq!(
+            bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
-            )
-            .is_none());
+            ),
+            Err(NonceError::InvalidNonceAccount)
+        );
     }
 
     #[test]
@@ -13181,7 +13216,7 @@ pub(crate) mod tests {
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
             ),
-            None
+            Err(NonceError::NonceAddressNotFound),
         );
     }
 
