@@ -19,7 +19,7 @@ pub struct UdpTpuConnection {
 }
 
 impl UdpTpuConnection {
-    pub fn new(tpu_addr: SocketAddr, _connection_stats: Arc<ConnectionCacheStats>) -> Self {
+    pub fn new_from_addr(tpu_addr: SocketAddr) -> Self {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
@@ -30,6 +30,10 @@ impl UdpTpuConnection {
             socket: client_socket,
             addr: tpu_addr,
         }
+    }
+
+    pub fn new(tpu_addr: SocketAddr, _connection_stats: Arc<ConnectionCacheStats>) -> Self {
+        Self::new_from_addr(tpu_addr)
     }
 }
 
