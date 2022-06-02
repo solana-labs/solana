@@ -5,13 +5,9 @@
 
 use {
     crate::{
-        connection_cache::{
-            par_serialize_and_send_transaction_batch, send_wire_transaction,
-            serialize_and_send_transaction,
-        },
-        rpc_client::RpcClient,
-        rpc_config::RpcProgramAccountsConfig,
-        rpc_response::Response,
+        connection_cache::get_connection, rpc_client::RpcClient,
+        rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
+        tpu_connection::TpuConnection,
     },
     log::*,
     solana_sdk::{
@@ -212,8 +208,9 @@ impl ThinClient {
                 bincode::serialize(&transaction).expect("transaction serialization failed");
             while now.elapsed().as_secs() < wait_time as u64 {
                 if num_confirmed == 0 {
+                    let conn = get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
-                    send_wire_transaction(&wire_transaction, self.tpu_addr())?;
+                    conn.send_wire_transaction(&wire_transaction)?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
@@ -597,13 +594,15 @@ impl SyncClient for ThinClient {
 impl AsyncClient for ThinClient {
     fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
         let transaction = VersionedTransaction::from(transaction);
-        serialize_and_send_transaction(&transaction, self.tpu_addr())?;
+        let conn = get_connection(self.tpu_addr());
+        conn.serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
-    fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
-        let batch: Vec<VersionedTransaction> = transactions.into_iter().map(Into::into).collect();
-        par_serialize_and_send_transaction_batch(&batch[..], self.tpu_addr())?;
+    fn async_send_batch(&self, batch: Vec<Transaction>) -> TransportResult<()> {
+        let batch: Vec<VersionedTransaction> = batch.into_iter().map(Into::into).collect();
+        let conn = get_connection(self.tpu_addr());
+        conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
     }
 

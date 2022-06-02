@@ -1,12 +1,12 @@
 use {
-    crate::connection_cache::ConnectionCacheStats,
+    crate::{
+        connection_cache::Connection, quic_client::QuicTpuConnection, udp_client::UdpTpuConnection,
+    },
+    enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    std::{
-        net::SocketAddr,
-        sync::{atomic::AtomicU64, Arc},
-    },
+    std::{net::SocketAddr, sync::atomic::AtomicU64},
 };
 
 #[derive(Default)]
@@ -25,59 +25,43 @@ pub struct ClientStats {
     pub make_connection_ms: AtomicU64,
 }
 
+#[enum_dispatch]
 pub trait TpuConnection {
-    fn new(tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self;
-
     fn tpu_addr(&self) -> &SocketAddr;
 
     fn serialize_and_send_transaction(
         &self,
         transaction: &VersionedTransaction,
-        stats: &ClientStats,
     ) -> TransportResult<()> {
         let wire_transaction =
             bincode::serialize(transaction).expect("serialize Transaction in send_batch");
-        self.send_wire_transaction(&wire_transaction, stats)
+        self.send_wire_transaction(&wire_transaction)
     }
 
-    fn send_wire_transaction<T>(
-        &self,
-        wire_transaction: T,
-        stats: &ClientStats,
-    ) -> TransportResult<()>
+    fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
     where
-        T: AsRef<[u8]>;
+        T: AsRef<[u8]>,
+    {
+        self.send_wire_transaction_batch(&[wire_transaction])
+    }
 
-    fn send_wire_transaction_async(
-        &self,
-        wire_transaction: Vec<u8>,
-        stats: Arc<ClientStats>,
-    ) -> TransportResult<()>;
+    fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()>;
 
     fn par_serialize_and_send_transaction_batch(
         &self,
         transactions: &[VersionedTransaction],
-        stats: &ClientStats,
     ) -> TransportResult<()> {
         let buffers = transactions
             .into_par_iter()
             .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
             .collect::<Vec<_>>();
 
-        self.send_wire_transaction_batch(&buffers, stats)
+        self.send_wire_transaction_batch(&buffers)
     }
 
-    fn send_wire_transaction_batch<T>(
-        &self,
-        buffers: &[T],
-        stats: &ClientStats,
-    ) -> TransportResult<()>
+    fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
     where
         T: AsRef<[u8]>;
 
-    fn send_wire_transaction_batch_async(
-        &self,
-        buffers: Vec<Vec<u8>>,
-        stats: Arc<ClientStats>,
-    ) -> TransportResult<()>;
+    fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>;
 }
