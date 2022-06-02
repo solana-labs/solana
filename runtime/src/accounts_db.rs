@@ -5833,7 +5833,9 @@ impl AccountsDb {
                     assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
                     Box::new(txn_signatures.iter())
                 },
-                None => Box::new(std::iter::repeat(default_sig_ref).take(accounts_and_meta_to_store.len())),
+                None => Box::new(
+                    std::iter::repeat(default_sig_ref).take(accounts_and_meta_to_store.len()),
+                ),
             };
 
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, iter)
@@ -13159,7 +13161,7 @@ pub mod tests {
         db.store_cached(
             1,
             &[(&zero_lamport_account_key, &zero_lamport_account)],
-            None
+            None,
         );
 
         // Store into slot 2, which makes all updates from slot 1 outdated.
@@ -13171,7 +13173,7 @@ pub mod tests {
         db.store_cached(
             2,
             &[(&zero_lamport_account_key, &zero_lamport_account)],
-            None
+            None,
         );
         db.add_root(1);
         db.add_root(2);
