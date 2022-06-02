@@ -3085,13 +3085,9 @@ impl Bank {
             metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
             metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
             metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
-            let evict_invalid_stakes_cache_entries = self
-                .feature_set
-                .is_active(&feature_set::evict_invalid_stakes_cache_entries::id());
             self.stakes_cache.handle_invalid_keys(
                 invalid_stake_keys,
                 invalid_vote_keys,
-                evict_invalid_stakes_cache_entries,
                 self.slot(),
             );
             vote_with_stake_delegations_map
