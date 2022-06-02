@@ -689,6 +689,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
             &keypair,
@@ -699,6 +700,7 @@ mod test {
             Arc::<RwLock<HashMap<IpAddr, u64>>>::default(), // staked_nodes
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            stats,
         )
         .unwrap();
 
