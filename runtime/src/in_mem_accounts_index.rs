@@ -102,12 +102,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// called after flush scans this bucket at the current age
     fn set_has_aged(&self, age: Age) {
-        self.last_age_flushed.store(age, Ordering::Relaxed);
+        self.last_age_flushed.store(age, Ordering::Release);
         self.storage.bucket_flushed_at_current_age();
     }
 
     fn last_age_flushed(&self) -> Age {
-        self.last_age_flushed.load(Ordering::Relaxed)
+        self.last_age_flushed.load(Ordering::Acquire)
     }
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
