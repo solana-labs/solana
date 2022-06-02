@@ -52,7 +52,7 @@ use {
         borrow::Cow,
         cell::RefCell,
         cmp,
-        collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet},
+        collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap, HashSet, VecDeque},
         convert::TryInto,
         fmt::Write,
         fs,
@@ -525,6 +525,24 @@ impl Blockstore {
             .db
             .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Forward))?;
         Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
+    }
+
+    /// Determines if starting_slot and ending_slot are connected
+    pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
+        let mut next_slots: VecDeque<_> = vec![starting_slot].into();
+        while let Some(slot) = next_slots.pop_front() {
+            if let Ok(Some(slot_meta)) = self.meta(slot) {
+                if slot_meta.is_full() {
+                    match slot.cmp(&ending_slot) {
+                        cmp::Ordering::Less => next_slots.extend(slot_meta.next_slots),
+                        cmp::Ordering::Equal => return true,
+                        cmp::Ordering::Greater => {} // slot is greater than the ending slot, so all its children would be as well
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     fn get_recovery_data_shreds<'a>(
@@ -5380,6 +5398,49 @@ pub mod tests {
 
         }
     */
+    #[test]
+    pub fn test_slots_connected_chain() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let num_slots = 3;
+        for slot in 1..=num_slots {
+            let (shreds, _) = make_slot_entries(slot, slot.saturating_sub(1), 100);
+            blockstore.insert_shreds(shreds, None, true).unwrap();
+
+            let meta = blockstore.meta(slot).unwrap().unwrap();
+            assert_eq!(slot, meta.slot);
+            assert!(meta.is_full());
+            assert!(meta.next_slots.is_empty());
+        }
+
+        assert!(blockstore.slots_connected(1, 3));
+        assert!(!blockstore.slots_connected(1, 4)); // slot 4 does not exist
+    }
+
+    #[test]
+    pub fn test_slots_connected_disconnected() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        fn make_and_insert_slot(blockstore: &Blockstore, slot: Slot, parent_slot: Slot) {
+            let (shreds, _) = make_slot_entries(slot, parent_slot, 100);
+            blockstore.insert_shreds(shreds, None, true).unwrap();
+
+            let meta = blockstore.meta(slot).unwrap().unwrap();
+            assert_eq!(slot, meta.slot);
+            assert!(meta.is_full());
+            assert!(meta.next_slots.is_empty());
+        }
+
+        make_and_insert_slot(&blockstore, 1, 0);
+        make_and_insert_slot(&blockstore, 2, 1);
+        make_and_insert_slot(&blockstore, 4, 2);
+
+        assert!(!blockstore.slots_connected(1, 3)); // Slot 3 does not exit
+        assert!(blockstore.slots_connected(1, 4));
+    }
+
     #[test]
     pub fn test_get_slots_since() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();

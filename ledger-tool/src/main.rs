@@ -774,7 +774,6 @@ fn load_bank_forks(
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
         let incremental_snapshot_archives_dir =
             incremental_snapshot_archive_path.unwrap_or_else(|| full_snapshot_archives_dir.clone());
-
         if let Some(full_snapshot_slot) =
             snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
         {
@@ -798,20 +797,12 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        for slot in starting_slot..=halt_slot {
-            if let Ok(Some(slot_meta)) = blockstore.meta(slot) {
-                if !slot_meta.is_full() {
-                    eprintln!("Unable to process from slot {} to {} due to blockstore slot {} not being full",
-                        starting_slot, halt_slot, slot);
-                    exit(1);
-                }
-            } else {
-                eprintln!(
-                    "Unable to process from slot {} to {} due to blockstore missing slot {}",
-                    starting_slot, halt_slot, slot
-                );
-                exit(1);
-            }
+        if !blockstore.slots_connected(starting_slot, halt_slot) {
+            eprintln!(
+                "Unable to load bank forks at slot {} due to disconnected blocks.",
+                halt_slot,
+            );
+            exit(1);
         }
     }
 
