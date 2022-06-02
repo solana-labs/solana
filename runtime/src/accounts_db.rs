@@ -11501,8 +11501,8 @@ pub mod tests {
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
         db.store_accounts_unfrozen(
-            (some_slot, accounts), 
-            Some(&[&some_hash]), 
+            (some_slot, accounts),
+            Some(&[&some_hash]),
             false,
             None,
         );
