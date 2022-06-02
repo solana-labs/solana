@@ -48,6 +48,9 @@ const VOTE_CREDITS_GRACE_SLOTS: u64 = 4;
 // the grace period.  After that grace period, vote credits are reduced.
 pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u64 = 16;
 
+// Number of credits to reduce award by for each slot beyond the grace period
+pub const VOTE_CREDITS_REDUCTION_PER_SLOT: f64 = 1_f64;
+
 #[frozen_abi(digest = "6LBwH5w3WyAWZhsM3KTG9QZP7nYBhcC61K33kHR6gMAD")]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
@@ -986,15 +989,24 @@ impl VoteState {
             // The minimum latency for a vote on slot 0 lands in slot 1.  That is latency 0.  So subtract
             // 1 from the diff between voted_in_slot and voted_for_slot to get the latency.
             let vote_latency = (voted_in_slot - voted_for_slot) - 1;
-            // Must subtract 1 from VOTE_CREDITS_GRACE_SLOTS to get turn it into "grace latency"
-            let slot_credits_reduction = std::cmp::max(vote_latency, VOTE_CREDITS_GRACE_SLOTS - 1)
+            // Must subtract 1 from VOTE_CREDITS_GRACE_SLOTS to get turn it into "grace latency", which is number of
+            // slots latency after the grace period
+            let grace_latency = std::cmp::max(vote_latency, VOTE_CREDITS_GRACE_SLOTS - 1)
                 - (VOTE_CREDITS_GRACE_SLOTS - 1);
-            if slot_credits_reduction < VOTE_CREDITS_MAXIMUM_PER_SLOT {
-                VOTE_CREDITS_MAXIMUM_PER_SLOT - slot_credits_reduction
-            } else {
+            // Convert grace latency into credits of reduction
+            let credits_reduction =
+                ((grace_latency as f64) * VOTE_CREDITS_REDUCTION_PER_SLOT) as u64;
+            // If the remainder after the reduction would be at least one, subtract
+            if credits_reduction < VOTE_CREDITS_MAXIMUM_PER_SLOT {
+                VOTE_CREDITS_MAXIMUM_PER_SLOT - credits_reduction
+            }
+            // Else a minimum of 1 credit is awarded
+            else {
                 1
             }
         } else {
+            warn!("Computing credits in an impossible situation: voted-for slot is at or before voted-on slot.  \
+                   Awarding only 1 vote credit");
             1
         }
     }
@@ -1989,24 +2001,16 @@ mod tests {
         assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);
     }
 
-    fn slots_to_lockouts(votes: &[Slot]) -> VecDeque<Lockout> {
-        let mut lockouts = VecDeque::<Lockout>::from(
-            votes
+    fn make_lockouts(lockouts: &[(Slot, u32)]) -> VecDeque<Lockout> {
+        VecDeque::<Lockout>::from(
+            lockouts
                 .iter()
-                .map(|slot| Lockout {
+                .map(|(slot, confirmation_count)| Lockout {
                     slot: *slot,
-                    confirmation_count: 0,
+                    confirmation_count: *confirmation_count,
                 })
                 .collect::<Vec<Lockout>>(),
-        );
-
-        let lockouts_len = lockouts.len();
-
-        for (idx, vote) in lockouts.iter_mut().enumerate() {
-            vote.confirmation_count = (lockouts_len - idx) as u32;
-        }
-
-        lockouts
+        )
     }
 
     // Test vote credit updates before and after "one credit per slot" feature is enabled
@@ -2015,17 +2019,17 @@ mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_vote_state_update_increment_credits() {
         // Each element of test data is:
-        // (vote_state_votes: Vec<Slot>,
+        // (vote_state_lockouts: Vec<(Slot, u32)>,
         //  vote_state_root: Option<Slot>,
-        //  vote_state_update_votes: Vec<Slot>,
+        //  vote_state_update_lockouts: Vec<(Slot, u32)>,
         //  vote_state_update_root: Option<Slot>,
         //  in_slot: Slot,
         //  per_transaction_expected_credits: u64,
         //  per_slot_expected_credits: u64)
         let test_data: Vec<(
-            Vec<Slot>,
+            Vec<(Slot, u32)>,
             Option<Slot>,
-            Vec<Slot>,
+            Vec<(Slot, u32)>,
             Option<Slot>,
             u64,
             u64,
@@ -2034,77 +2038,293 @@ mod tests {
             // First slot finalized
             (
                 vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 28, 29,
+                    (1, 31),
+                    (2, 30),
+                    (3, 29),
+                    (4, 28),
+                    (5, 27),
+                    (6, 26),
+                    (7, 25),
+                    (8, 24),
+                    (9, 23),
+                    (10, 22),
+                    (11, 21),
+                    (12, 20),
+                    (13, 19),
+                    (14, 18),
+                    (15, 17),
+                    (16, 16),
+                    (17, 15),
+                    (18, 14),
+                    (19, 13),
+                    (20, 12),
+                    (21, 11),
+                    (22, 10),
+                    (23, 9),
+                    (24, 8),
+                    (25, 7),
+                    (26, 6),
+                    (27, 5),
+                    (28, 4),
+                    (29, 3),
+                    (30, 2),
+                    (31, 1),
                 ],
                 None,
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30,
-                ],
-                Some(0),
-                31,
-                1,
-                16,
-            ),
-            // Next slot finalized
-            (
-                vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30, 31,
-                ],
-                Some(0),
-                vec![
-                    2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                    24, 25, 26, 27, 28, 29, 30, 31, 32,
+                    (2, 31),
+                    (3, 30),
+                    (4, 29),
+                    (5, 28),
+                    (6, 27),
+                    (7, 26),
+                    (8, 25),
+                    (9, 24),
+                    (10, 23),
+                    (11, 22),
+                    (12, 21),
+                    (13, 20),
+                    (14, 19),
+                    (15, 18),
+                    (16, 17),
+                    (17, 16),
+                    (18, 15),
+                    (19, 14),
+                    (20, 13),
+                    (21, 12),
+                    (22, 11),
+                    (23, 10),
+                    (24, 9),
+                    (25, 8),
+                    (26, 7),
+                    (27, 6),
+                    (28, 5),
+                    (29, 4),
+                    (30, 3),
+                    (31, 2),
+                    (32, 1),
                 ],
                 Some(1),
                 33,
                 1,
-                16,
+                VOTE_CREDITS_MAXIMUM_PER_SLOT,
             ),
-            // Two slots finalized
+            // Next slot finalized
             (
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                    (2, 31),
+                    (3, 30),
+                    (4, 29),
+                    (5, 28),
+                    (6, 27),
+                    (7, 26),
+                    (8, 25),
+                    (9, 24),
+                    (10, 23),
+                    (11, 22),
+                    (12, 21),
+                    (13, 20),
+                    (14, 19),
+                    (15, 18),
+                    (16, 17),
+                    (17, 16),
+                    (18, 15),
+                    (19, 14),
+                    (20, 13),
+                    (21, 12),
+                    (22, 11),
+                    (23, 10),
+                    (24, 9),
+                    (25, 8),
+                    (26, 7),
+                    (27, 6),
+                    (28, 5),
+                    (29, 4),
+                    (30, 3),
+                    (31, 2),
+                    (32, 1),
                 ],
-                Some(0),
+                Some(1),
                 vec![
-                    3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-                    24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+                    (3, 31),
+                    (4, 30),
+                    (5, 29),
+                    (6, 28),
+                    (7, 27),
+                    (8, 26),
+                    (9, 25),
+                    (10, 24),
+                    (11, 23),
+                    (12, 22),
+                    (13, 21),
+                    (14, 20),
+                    (15, 19),
+                    (16, 18),
+                    (17, 17),
+                    (18, 16),
+                    (19, 15),
+                    (20, 14),
+                    (21, 13),
+                    (22, 12),
+                    (23, 11),
+                    (24, 10),
+                    (25, 9),
+                    (26, 8),
+                    (27, 7),
+                    (28, 6),
+                    (29, 5),
+                    (30, 4),
+                    (31, 3),
+                    (32, 2),
+                    (33, 1),
                 ],
                 Some(2),
                 34,
                 1,
-                32,
+                VOTE_CREDITS_MAXIMUM_PER_SLOT,
             ),
-            // Three slots finalized
+            // Two slots finalized
             (
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                    (3, 31),
+                    (4, 30),
+                    (5, 29),
+                    (6, 28),
+                    (7, 27),
+                    (8, 26),
+                    (9, 25),
+                    (10, 24),
+                    (11, 23),
+                    (12, 22),
+                    (13, 21),
+                    (14, 20),
+                    (15, 19),
+                    (16, 18),
+                    (17, 17),
+                    (18, 16),
+                    (19, 15),
+                    (20, 14),
+                    (21, 13),
+                    (22, 12),
+                    (23, 11),
+                    (24, 10),
+                    (25, 9),
+                    (26, 8),
+                    (27, 7),
+                    (28, 6),
+                    (29, 5),
+                    (30, 4),
+                    (31, 3),
+                    (32, 2),
+                    (33, 1),
                 ],
-                Some(0),
+                Some(2),
                 vec![
-                    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-                    25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+                    (5, 31),
+                    (6, 30),
+                    (7, 29),
+                    (8, 28),
+                    (9, 27),
+                    (10, 26),
+                    (11, 25),
+                    (12, 24),
+                    (13, 23),
+                    (14, 22),
+                    (15, 21),
+                    (16, 20),
+                    (17, 19),
+                    (18, 18),
+                    (19, 17),
+                    (20, 16),
+                    (21, 15),
+                    (22, 14),
+                    (23, 13),
+                    (24, 12),
+                    (25, 11),
+                    (26, 10),
+                    (27, 9),
+                    (28, 8),
+                    (29, 7),
+                    (30, 6),
+                    (31, 5),
+                    (32, 4),
+                    (33, 3),
+                    (34, 2),
+                    (35, 1),
                 ],
-                Some(3),
-                35,
+                Some(4),
+                36,
                 1,
-                48,
+                2 * VOTE_CREDITS_MAXIMUM_PER_SLOT,
             ),
             // 30 slots finalized
             (
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30,
+                    (1, 31),
+                    (2, 30),
+                    (3, 29),
+                    (4, 28),
+                    (5, 27),
+                    (6, 26),
+                    (7, 25),
+                    (8, 24),
+                    (9, 23),
+                    (10, 22),
+                    (11, 21),
+                    (12, 20),
+                    (13, 19),
+                    (14, 18),
+                    (15, 17),
+                    (16, 16),
+                    (17, 15),
+                    (18, 14),
+                    (19, 13),
+                    (20, 12),
+                    (21, 11),
+                    (22, 10),
+                    (23, 9),
+                    (24, 8),
+                    (25, 7),
+                    (26, 6),
+                    (27, 5),
+                    (28, 4),
+                    (29, 3),
+                    (30, 2),
+                    (31, 1),
                 ],
                 Some(0),
                 vec![
-                    31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
-                    51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+                    (31, 31),
+                    (32, 30),
+                    (33, 29),
+                    (34, 28),
+                    (35, 27),
+                    (36, 26),
+                    (37, 25),
+                    (38, 24),
+                    (39, 23),
+                    (40, 22),
+                    (41, 21),
+                    (42, 20),
+                    (43, 19),
+                    (44, 18),
+                    (45, 17),
+                    (46, 16),
+                    (47, 15),
+                    (48, 14),
+                    (49, 13),
+                    (50, 12),
+                    (51, 11),
+                    (52, 10),
+                    (53, 9),
+                    (54, 8),
+                    (55, 7),
+                    (56, 6),
+                    (57, 5),
+                    (58, 4),
+                    (59, 3),
+                    (60, 2),
+                    (61, 1),
                 ],
                 Some(30),
                 62,
@@ -2114,50 +2334,159 @@ mod tests {
             // 31 slots finalized
             (
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                    (1, 31),
+                    (2, 30),
+                    (3, 29),
+                    (4, 28),
+                    (5, 27),
+                    (6, 26),
+                    (7, 25),
+                    (8, 24),
+                    (9, 23),
+                    (10, 22),
+                    (11, 21),
+                    (12, 20),
+                    (13, 19),
+                    (14, 18),
+                    (15, 17),
+                    (16, 16),
+                    (17, 15),
+                    (18, 14),
+                    (19, 13),
+                    (20, 12),
+                    (21, 11),
+                    (22, 10),
+                    (23, 9),
+                    (24, 8),
+                    (25, 7),
+                    (26, 6),
+                    (27, 5),
+                    (28, 4),
+                    (29, 3),
+                    (30, 2),
+                    (31, 1),
                 ],
                 Some(0),
                 vec![
-                    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-                    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+                    (32, 31),
+                    (33, 30),
+                    (34, 29),
+                    (35, 28),
+                    (36, 27),
+                    (37, 26),
+                    (38, 25),
+                    (39, 24),
+                    (40, 23),
+                    (41, 22),
+                    (42, 21),
+                    (43, 20),
+                    (44, 19),
+                    (45, 18),
+                    (46, 17),
+                    (47, 16),
+                    (48, 15),
+                    (49, 14),
+                    (50, 13),
+                    (51, 12),
+                    (52, 11),
+                    (53, 10),
+                    (54, 9),
+                    (55, 8),
+                    (56, 7),
+                    (57, 6),
+                    (58, 5),
+                    (59, 4),
+                    (60, 3),
+                    (61, 2),
+                    (62, 1),
                 ],
                 Some(31),
                 63,
                 1,
                 196,
             ),
-            // 5 slots finalized
+            // Complex expiry: start with 1 - 31 in the tower, then locally vote for 35, 36, 37, 38, 42, 43, 46, 47,
+            // 48, 49, 50, 53.  None of the intermediate tower states land as tx, only the resulting complete state
+            // does.  This test very succinctly illustrates the way that "timely vote credits" are an approximation of
+            // the latencies involved, because vote expiry causes the votes immediately before expired votes to be
+            // charged with "worse" latency than they actually had (because expiry caused them to look like they had
+            // more latency when cast than they did).  The only easy solution to this is to track the voted-in slot
+            // along with each voted-on slot, and use those values when computing vote credits.  But this would
+            // require changes to the Lockout struct to add a new value ("credits to award for this vote") and that
+            // would then require changes to the serialized format of the tower, which seems like an extensive and
+            // risky undertaking.
             (
                 vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30, 31,
+                    (1, 31),
+                    (2, 30),
+                    (3, 29),
+                    (4, 28),
+                    (5, 27),
+                    (6, 26),
+                    (7, 25),
+                    (8, 24),
+                    (9, 23),
+                    (10, 22),
+                    (11, 21),
+                    (12, 20),
+                    (13, 19),
+                    (14, 18),
+                    (15, 17),
+                    (16, 16),
+                    (17, 15),
+                    (18, 14),
+                    (19, 13),
+                    (20, 12),
+                    (21, 11),
+                    (22, 10),
+                    (23, 9),
+                    (24, 8),
+                    (25, 7),
+                    (26, 6),
+                    (27, 5),
+                    (28, 4),
+                    (29, 3),
+                    (30, 2),
+                    (31, 1),
                 ],
                 Some(0),
                 vec![
-                    6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-                    27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+                    (7, 31),
+                    (8, 30),
+                    (9, 29),
+                    (10, 28),
+                    (11, 27),
+                    (12, 26),
+                    (13, 25),
+                    (14, 24),
+                    (15, 23),
+                    (16, 22),
+                    (17, 21),
+                    (18, 20),
+                    (19, 19),
+                    (20, 18),
+                    (21, 17),
+                    (22, 16),
+                    (23, 15),
+                    (24, 14),
+                    (25, 13),
+                    (26, 12),
+                    (27, 11),
+                    (28, 10),
+                    (29, 9),
+                    (35, 8),
+                    (36, 7),
+                    (42, 6),
+                    (46, 5),
+                    (47, 4),
+                    (48, 3),
+                    (49, 2),
+                    (53, 1),
                 ],
-                Some(5),
-                37,
+                Some(6),
+                54,
                 1,
-                79,
-            ),
-            // 3 slots finalized after votes { 41, 42, 43, 44, 45, 46, 47 } follow 30 with latency 6
-            (
-                vec![
-                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                    23, 24, 25, 26, 27, 28, 29, 30,
-                ],
-                Some(0),
-                vec![
-                    4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-                    25, 26, 27, 41, 42, 43, 44, 45, 46, 47,
-                ],
-                Some(3),
-                53,
-                1,
-                39,
+                78,
             ),
         ];
 
@@ -2165,9 +2494,9 @@ mod tests {
         feature_set.activate(&feature_set::timely_vote_credits::id(), 1);
 
         for data in &test_data {
-            let vote_state_votes = slots_to_lockouts(&data.0);
+            let vote_state_votes = make_lockouts(&data.0);
             let vote_state_root = data.1;
-            let vote_state_update_votes = slots_to_lockouts(&data.2);
+            let vote_state_update_votes = make_lockouts(&data.2);
             let vote_state_update_root = data.3;
             let in_slot = Some(data.4);
             let per_transaction_expected_credits = data.5;
@@ -2223,94 +2552,69 @@ mod tests {
     #[allow(clippy::field_reassign_with_default)]
     fn test_timely_vote_credits() {
         // Each element of test data is:
-        // (vote_state_votes: Vec<Slot>,
-        //  next_vote_slots: Vec<Slot>,
+        // (next_vote_slots: Vec<Slot>,
         //  voted_in_slot: Slot,
         //  expected_credits: u64)
-        let test_data: Vec<(Vec<Slot>, Vec<Slot>, Slot, u64)> = vec![
-            // No slots finalized yet
-            (vec![0, 1, 2], vec![4], 5, 0),
+        let test_data: Vec<(Vec<Slot>, Slot, u64)> = vec![
             // 1 slot finalized with latency 0
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31],
-                32,
-                16,
-            ),
+            (vec![32], 33, 16),
             // 2 slots finalized with latency 1 and 0
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31, 32],
-                33,
-                32,
-            ),
+            (vec![32, 33], 34, 32),
             // 3 slots finalized with latency 2, 1 and 0
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31, 32, 33],
-                34,
-                48,
-            ),
+            (vec![32, 33, 34], 35, 48),
             // 4 slots finalized with latency 3, 2, 1 and 0
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31, 32, 33, 34],
-                35,
-                64,
-            ),
+            (vec![32, 33, 34, 35], 36, 64),
             // 5 slots finalized with latency 4, 3, 2, 1 and 0
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31, 32, 33, 34, 35],
-                36,
-                79,
-            ),
+            (vec![32, 33, 34, 35, 36], 37, 79),
             // 5 slots finalized with latency 6, 5, 4, 3, 2
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31, 32, 33, 34, 35],
-                38,
-                74,
-            ),
+            (vec![32, 33, 34, 35, 36], 39, 74),
             // 1 slot finalized with latency 200
-            (
-                vec![
-                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-                    22, 23, 24, 25, 26, 27, 27, 29, 30,
-                ],
-                vec![31],
-                232,
-                1,
-            ),
+            (vec![32], 233, 1),
         ];
 
+        // Initial lockouts for all test cases
+        let initial_lockouts = make_lockouts(&vec![
+            (1, 31),
+            (2, 30),
+            (3, 29),
+            (4, 28),
+            (5, 27),
+            (6, 26),
+            (7, 25),
+            (8, 24),
+            (9, 23),
+            (10, 22),
+            (11, 21),
+            (12, 20),
+            (13, 19),
+            (14, 18),
+            (15, 17),
+            (16, 16),
+            (17, 15),
+            (18, 14),
+            (19, 13),
+            (20, 12),
+            (21, 11),
+            (22, 10),
+            (23, 9),
+            (24, 8),
+            (25, 7),
+            (26, 6),
+            (27, 5),
+            (28, 4),
+            (29, 3),
+            (30, 2),
+            (31, 1),
+        ]);
+
         for data in &test_data {
-            let vote_state_votes = slots_to_lockouts(&data.0);
-            let next_vote_slots = &data.1;
-            let voted_in_slot = data.2;
-            let expected_credits = data.3;
+            let next_vote_slots = &data.0;
+            let voted_in_slot = data.1;
+            let expected_credits = data.2;
 
             let mut vote_state = VoteState::default();
 
-            vote_state.votes = vote_state_votes.clone();
+            vote_state.votes = initial_lockouts.clone();
 
             for next_vote_slot in next_vote_slots {
                 vote_state.process_next_vote_slot(*next_vote_slot, 0, Some(voted_in_slot));
