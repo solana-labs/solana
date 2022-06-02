@@ -124,22 +124,35 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn bucket_flushed_at_current_age(&self) {
-        self.count_buckets_flushed.fetch_add(1, Ordering::Release);
-        self.maybe_advance_age();
+        let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::Release);
+        self.maybe_advance_age_internal(
+            self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
+        );
     }
 
     /// have all buckets been flushed at the current age?
     pub fn all_buckets_flushed_at_current_age(&self) -> bool {
-        self.count_buckets_flushed() >= self.bins
+        self.all_buckets_flushed_at_current_age_internal(self.count_buckets_flushed())
+    }
+
+    /// have all buckets been flushed at the current age?
+    fn all_buckets_flushed_at_current_age_internal(&self, count_buckets_flushed: usize) -> bool {
+        count_buckets_flushed >= self.bins
     }
 
     pub fn count_buckets_flushed(&self) -> usize {
         self.count_buckets_flushed.load(Ordering::Acquire)
     }
 
+    /// if all buckets are flushed at the current age and time has elapsed, then advanced age
     pub fn maybe_advance_age(&self) -> bool {
-        // check has_age_interval_elapsed last as calling it modifies state on success
-        if self.all_buckets_flushed_at_current_age() && self.has_age_interval_elapsed() {
+        self.maybe_advance_age_internal(self.all_buckets_flushed_at_current_age())
+    }
+
+    /// if all buckets are flushed at the current age and time has elapsed, then advanced age
+    fn maybe_advance_age_internal(&self, all_buckets_flushed_at_current_age: bool) -> bool {
+        // call has_age_interval_elapsed last since calling it modifies state on success
+        if all_buckets_flushed_at_current_age && self.has_age_interval_elapsed() {
             self.increment_age();
             true
         } else {
