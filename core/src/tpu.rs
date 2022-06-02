@@ -29,7 +29,9 @@ use {
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::signature::Keypair,
-    solana_streamer::quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+    solana_streamer::quic::{
+        spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS,
+    },
     std::{
         collections::HashMap,
         net::UdpSocket,
@@ -53,6 +55,7 @@ pub struct TpuSockets {
     pub vote: Vec<UdpSocket>,
     pub broadcast: Vec<UdpSocket>,
     pub transactions_quic: UdpSocket,
+    pub transactions_forwards_quic: UdpSocket,
 }
 
 pub struct Tpu {
@@ -63,6 +66,7 @@ pub struct Tpu {
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
     tpu_quic_t: thread::JoinHandle<()>,
+    tpu_forwards_quic_t: thread::JoinHandle<()>,
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
@@ -100,10 +104,12 @@ impl Tpu {
             vote: tpu_vote_sockets,
             broadcast: broadcast_sockets,
             transactions_quic: transactions_quic_sockets,
+            transactions_forwards_quic: transactions_forwards_quic_sockets,
         } = sockets;
 
         let (packet_sender, packet_receiver) = unbounded();
         let (vote_packet_sender, vote_packet_receiver) = unbounded();
+        let (forwarded_packet_sender, forwarded_packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
@@ -111,6 +117,8 @@ impl Tpu {
             exit,
             &packet_sender,
             &vote_packet_sender,
+            &forwarded_packet_sender,
+            forwarded_packet_receiver,
             poh_recorder,
             tpu_coalesce_ms,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
@@ -145,6 +153,7 @@ impl Tpu {
 
         let (verified_sender, verified_receiver) = unbounded();
 
+        let stats = Arc::new(StreamStats::default());
         let tpu_quic_t = spawn_server(
             transactions_quic_sockets,
             keypair,
@@ -152,9 +161,24 @@ impl Tpu {
             packet_sender,
             exit.clone(),
             MAX_QUIC_CONNECTIONS_PER_IP,
-            staked_nodes,
+            staked_nodes.clone(),
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
+        )
+        .unwrap();
+
+        let tpu_forwards_quic_t = spawn_server(
+            transactions_forwards_quic_sockets,
+            keypair,
+            cluster_info.my_contact_info().tpu_forwards.ip(),
+            forwarded_packet_sender,
+            exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_IP,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
+            0, // Prevent unstaked nodes from forwarding transactions
+            stats,
         )
         .unwrap();
 
@@ -223,6 +247,7 @@ impl Tpu {
             cluster_info_vote_listener,
             broadcast_stage,
             tpu_quic_t,
+            tpu_forwards_quic_t,
             find_packet_sender_stake_stage,
             vote_find_packet_sender_stake_stage,
             staked_nodes_updater_service,
@@ -240,7 +265,7 @@ impl Tpu {
         // exit can deadlock. put an upper-bound on how long we wait for it
         let timeout = Duration::from_secs(TPU_THREADS_JOIN_TIMEOUT_SECONDS);
         if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            error!("timeout for closing tvu");
+            error!("timeout for closing tpu");
         }
         Ok(())
     }
@@ -257,6 +282,7 @@ impl Tpu {
             self.staked_nodes_updater_service.join(),
         ];
         self.tpu_quic_t.join()?;
+        self.tpu_forwards_quic_t.join()?;
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;

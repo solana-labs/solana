@@ -17,7 +17,10 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_client::{connection_cache::get_connection, tpu_connection::TpuConnection},
+    solana_client::{
+        connection_cache::get_connection, tpu_connection::TpuConnection,
+        udp_client::UdpTpuConnection,
+    },
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::blockstore_processor::TransactionStatusSender,
@@ -147,6 +150,8 @@ pub struct BankingStageStats {
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
     end_of_slot_filtered_invalid_count: AtomicUsize,
+    forwarded_transaction_count: AtomicUsize,
+    forwarded_vote_count: AtomicUsize,
     batch_packet_indexes_len: Histogram,
 
     // Timing
@@ -201,6 +206,8 @@ impl BankingStageStats {
                 .unprocessed_packet_conversion_elapsed
                 .load(Ordering::Relaxed)
             + self.transaction_processing_elapsed.load(Ordering::Relaxed)
+            + self.forwarded_transaction_count.load(Ordering::Relaxed) as u64
+            + self.forwarded_vote_count.load(Ordering::Relaxed) as u64
             + self.batch_packet_indexes_len.entries()
     }
 
@@ -262,6 +269,16 @@ impl BankingStageStats {
                     "end_of_slot_filtered_invalid_count",
                     self.end_of_slot_filtered_invalid_count
                         .swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "forwarded_transaction_count",
+                    self.forwarded_transaction_count.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "forwarded_vote_count",
+                    self.forwarded_vote_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -489,10 +506,26 @@ impl BankingStage {
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets(
-        tpu_forwards: &std::net::SocketAddr,
+        forward_option: &ForwardOption,
+        cluster_info: &ClusterInfo,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
         packets: Vec<&Packet>,
         data_budget: &DataBudget,
+        banking_stage_stats: &BankingStageStats,
     ) -> (std::result::Result<(), TransportError>, usize) {
+        let addr = match forward_option {
+            ForwardOption::NotForward => return (Ok(()), 0),
+            ForwardOption::ForwardTransaction => {
+                next_leader_tpu_forwards(cluster_info, poh_recorder)
+            }
+
+            ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
+        };
+        let addr = match addr {
+            Some(addr) => addr,
+            None => return (Ok(()), 0),
+        };
+
         const INTERVAL_MS: u64 = 100;
         const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
@@ -525,7 +558,20 @@ impl BankingStage {
 
             let mut measure = Measure::start("banking_stage-forward-us");
 
-            let conn = get_connection(tpu_forwards);
+            let conn = if let ForwardOption::ForwardTpuVote = forward_option {
+                // The vote must be forwarded using only UDP. Let's get the UDP connection.
+                banking_stage_stats
+                    .forwarded_vote_count
+                    .fetch_add(packet_vec_len, Ordering::Relaxed);
+                Arc::new(UdpTpuConnection::new_from_addr(addr).into())
+            } else {
+                // All other transactions can be forwarded using QUIC, get_connection() will use
+                // system wide setting to pick the correct connection object.
+                banking_stage_stats
+                    .forwarded_transaction_count
+                    .fetch_add(packet_vec_len, Ordering::Relaxed);
+                get_connection(&addr)
+            };
             let res = conn.send_wire_transaction_batch_async(packet_vec);
 
             measure.stop();
@@ -908,6 +954,7 @@ impl BankingStage {
                             false,
                             data_budget,
                             slot_metrics_tracker,
+                            banking_stage_stats,
                         )
                     },
                     (),
@@ -926,6 +973,7 @@ impl BankingStage {
                             true,
                             data_budget,
                             slot_metrics_tracker,
+                            banking_stage_stats,
                         )
                     },
                     (),
@@ -945,29 +993,26 @@ impl BankingStage {
         hold: bool,
         data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        banking_stage_stats: &BankingStageStats,
     ) {
-        let addr = match forward_option {
-            ForwardOption::NotForward => {
-                if !hold {
-                    buffered_packet_batches.clear();
-                }
-                return;
+        if let ForwardOption::NotForward = forward_option {
+            if !hold {
+                buffered_packet_batches.clear();
             }
-            ForwardOption::ForwardTransaction => {
-                next_leader_tpu_forwards(cluster_info, poh_recorder)
-            }
-            ForwardOption::ForwardTpuVote => next_leader_tpu_vote(cluster_info, poh_recorder),
-        };
-        let addr = match addr {
-            Some(addr) => addr,
-            None => return,
-        };
+            return;
+        }
 
         let forwardable_packets =
             Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
         let forwardable_packets_len = forwardable_packets.len();
-        let (_forward_result, sucessful_forwarded_packets_count) =
-            Self::forward_buffered_packets(&addr, forwardable_packets, data_budget);
+        let (_forward_result, sucessful_forwarded_packets_count) = Self::forward_buffered_packets(
+            forward_option,
+            cluster_info,
+            poh_recorder,
+            forwardable_packets,
+            data_budget,
+            banking_stage_stats,
+        );
         let failed_forwarded_packets_count =
             forwardable_packets_len.saturating_sub(sucessful_forwarded_packets_count);
 
@@ -4072,6 +4117,7 @@ mod tests {
                         vec![deserialized_packet.clone()].into_iter(),
                         1,
                     );
+                let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
                     &ForwardOption::ForwardTransaction,
                     &cluster_info,
@@ -4080,6 +4126,7 @@ mod tests {
                     true,
                     &data_budget,
                     &mut LeaderSlotMetricsTracker::new(0),
+                    &stats,
                 );
 
                 recv_socket
@@ -4179,6 +4226,7 @@ mod tests {
             ];
 
             for (name, forward_option, hold, expected_ids, expected_num_unprocessed) in test_cases {
+                let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
                     &forward_option,
                     &cluster_info,
@@ -4187,6 +4235,7 @@ mod tests {
                     hold,
                     &DataBudget::default(),
                     &mut LeaderSlotMetricsTracker::new(0),
+                    &stats,
                 );
 
                 recv_socket
