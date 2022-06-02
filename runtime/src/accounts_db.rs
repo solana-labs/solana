@@ -3974,6 +3974,7 @@ impl AccountsDb {
         collector
     }
 
+    /// Only guaranteed to be safe when called from rent collection
     pub fn range_scan_accounts<F, A, R>(
         &self,
         metric_name: &'static str,
@@ -4003,12 +4004,13 @@ impl AccountsDb {
                 // meaning no other subsystems can invalidate the account_info before making their
                 // changes to the index entry.
                 // For details, see the comment in retry_to_get_account_accessor()
-                let account_slot = self
+                if let Some(account_slot) = self
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
-                    .unwrap();
-                scan_func(&mut collector, Some(account_slot))
+                {
+                    scan_func(&mut collector, Some(account_slot))
+                }
             },
         );
         collector
