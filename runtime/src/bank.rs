@@ -4074,7 +4074,10 @@ impl Bank {
         let flip_nonce_blockhash_check = self
             .feature_set
             .is_active(&feature_set::flip_nonce_blockhash_check::id());
-        let enable_durable_nonce = flip_nonce_blockhash_check;
+        let enable_durable_nonce = flip_nonce_blockhash_check
+            && self
+                .feature_set
+                .is_active(&feature_set::enable_durable_nonce::id());
         let mut check_age = |tx: &SanitizedTransaction| -> TransactionCheckResult {
             let recent_blockhash = tx.message().recent_blockhash();
             if flip_nonce_blockhash_check {
