@@ -42,6 +42,7 @@ use {
         native_loader,
         nonce::{state::Versions as NonceVersions, State as NonceState},
         pubkey::Pubkey,
+        signature::Signature,
         slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
@@ -59,7 +60,6 @@ use {
         },
     },
 };
-use solana_sdk::signature::Signature;
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
 
@@ -1042,7 +1042,8 @@ impl Accounts {
     }
 
     pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(slot, &[(pubkey, account)], None);
+        self.accounts_db
+            .store_cached(slot, &[(pubkey, account)], None);
     }
 
     fn lock_account(
@@ -1211,7 +1212,8 @@ impl Accounts {
             lamports_per_signature,
             leave_nonce_on_success,
         );
-        self.accounts_db.store_cached(slot, &accounts_to_store, Some(&txn_signatures));
+        self.accounts_db
+            .store_cached(slot, &accounts_to_store, Some(&txn_signatures));
     }
 
     /// Add a slot to root.  Root slots cannot be purged

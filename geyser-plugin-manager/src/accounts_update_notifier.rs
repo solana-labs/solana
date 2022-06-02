@@ -3,7 +3,7 @@ use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfoWithSignature, ReplicaAccountInfoVersions,
+        ReplicaAccountInfoVersions, ReplicaAccountInfoWithSignature,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -31,7 +31,9 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         account: &AccountSharedData,
         txn_signature: &Signature,
     ) {
-        if let Some(account_info) = self.accountinfo_from_shared_account_data(meta, account, txn_signature) {
+        if let Some(account_info) =
+            self.accountinfo_from_shared_account_data(meta, account, txn_signature)
+        {
             self.notify_plugins_of_account_update(account_info, slot, false);
         }
     }

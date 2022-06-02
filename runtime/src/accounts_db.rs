@@ -74,8 +74,8 @@ use {
         hash::Hash,
         pubkey::Pubkey,
         rent::Rent,
-        timing::AtomicInterval,
         signature::Signature,
+        timing::AtomicInterval,
     },
     std::{
         borrow::{Borrow, Cow},
@@ -5744,7 +5744,7 @@ impl AccountsDb {
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
-        txn_signatures_iter: Box<dyn std::iter::Iterator<Item=&&Signature> + 'a>,
+        txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &&Signature> + 'a>,
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -5753,7 +5753,8 @@ impl AccountsDb {
         });
 
         accounts_and_meta_to_store
-            .iter().zip(txn_signatures_iter)
+            .iter()
+            .zip(txn_signatures_iter)
             .enumerate()
             .map(|(i, ((meta, account), signature))| {
                 let hash = hashes.map(|hashes| hashes[i].borrow());
@@ -5794,7 +5795,7 @@ impl AccountsDb {
         storage_finder: F,
         mut write_version_producer: P,
         is_cached_store: bool,
-        txn_signatures: Option<&'a[&'a Signature]>,
+        txn_signatures: Option<&'a [&'a Signature]>,
     ) -> Vec<AccountInfo> {
         let mut calc_stored_meta_time = Measure::start("calc_stored_meta");
         let slot = accounts.target_slot();
@@ -5827,21 +5828,15 @@ impl AccountsDb {
         if self.caching_enabled && is_cached_store {
             let default_sig = Signature::default();
             let default_sig_ref = &&default_sig;
-            let iter: Box<dyn std::iter::Iterator<Item=&&Signature>> = match txn_signatures {
+            let iter: Box<dyn std::iter::Iterator<Item = &&Signature>> = match txn_signatures {
                 Some(txn_signatures) => {
                     assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
                     Box::new(txn_signatures.iter())
                 },
-                None => Box::new(std::iter::repeat(default_sig_ref)
-                    .take(accounts_and_meta_to_store.len())),
+                None => Box::new(std::iter::repeat(default_sig_ref).take(accounts_and_meta_to_store.len())),
             };
 
-            self.write_accounts_to_cache(
-                slot,
-                hashes,
-                &accounts_and_meta_to_store,
-                iter,
-            )
+            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, iter)
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
@@ -7361,7 +7356,7 @@ impl AccountsDb {
         &self,
         accounts: impl StorableAccounts<'a, T>,
         is_cached_store: bool,
-        txn_signatures: Option<&'a[&'a Signature]>,
+        txn_signatures: Option<&'a [&'a Signature]>,
     ) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
@@ -7518,7 +7513,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[&Hash]>,
         is_cached_store: bool,
-        txn_signatures: Option<&'a[&'a Signature]>,
+        txn_signatures: Option<&'a [&'a Signature]>,
     ) {
         // This path comes from a store to a non-frozen slot.
         // If a store is dead here, then a newer update for
@@ -7570,7 +7565,7 @@ impl AccountsDb {
         write_version_producer: Option<Box<dyn Iterator<Item = u64>>>,
         is_cached_store: bool,
         reset_accounts: bool,
-        txn_signatures: Option<&'b[&'b Signature]>,
+        txn_signatures: Option<&'b [&'b Signature]>,
     ) -> StoreAccountsTiming {
         let storage_finder = Box::new(move |slot, size| {
             storage
@@ -11500,12 +11495,7 @@ pub mod tests {
         }
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_accounts_unfrozen(
-            (some_slot, accounts),
-            Some(&[&some_hash]),
-            false,
-            None,
-        );
+        db.store_accounts_unfrozen((some_slot, accounts), Some(&[&some_hash]), false, None);
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
@@ -13166,7 +13156,11 @@ pub mod tests {
         assert!(!db.storage.get_slot_storage_entries(0).unwrap().is_empty());
 
         // Store into slot 1, a dummy slot that will be dead and purged before flush
-        db.store_cached(1, &[(&zero_lamport_account_key, &zero_lamport_account)], None);
+        db.store_cached(
+            1,
+            &[(&zero_lamport_account_key, &zero_lamport_account)],
+            None
+        );
 
         // Store into slot 2, which makes all updates from slot 1 outdated.
         // This means slot 1 is a dead slot. Later, slot 1 will be cleaned/purged
@@ -13174,7 +13168,11 @@ pub mod tests {
         // the refcount of `zero_lamport_account_key` because cached keys do not bump
         // the refcount in the index. This means clean should *not* remove
         // `zero_lamport_account_key` from slot 2
-        db.store_cached(2, &[(&zero_lamport_account_key, &zero_lamport_account)], None);
+        db.store_cached(
+            2,
+            &[(&zero_lamport_account_key, &zero_lamport_account)],
+            None
+        );
         db.add_root(1);
         db.add_root(2);
 
