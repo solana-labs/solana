@@ -1,5 +1,4 @@
 import * as BufferLayout from '@solana/buffer-layout';
-import {u64} from '@solana/buffer-layout-utils';
 
 import {
   encodeData,
@@ -13,6 +12,7 @@ import {PublicKey} from './publickey';
 import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
 import {toBuffer} from './util/to-buffer';
+import {u64} from './util/bigint';
 
 /**
  * Create account system transaction params

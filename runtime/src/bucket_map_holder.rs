@@ -27,7 +27,7 @@ pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
 pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<SlotT<T>>>,
 
-    pub count_ages_flushed: AtomicUsize,
+    pub count_buckets_flushed: AtomicUsize,
     pub age: AtomicU8,
     pub stats: BucketMapHolderStats,
 
@@ -68,7 +68,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
         // this should happen before the age.fetch_add
-        let previous = self.count_ages_flushed.swap(0, Ordering::Acquire);
+        let previous = self.count_buckets_flushed.swap(0, Ordering::Acquire);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
@@ -124,17 +124,17 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn bucket_flushed_at_current_age(&self) {
-        self.count_ages_flushed.fetch_add(1, Ordering::Release);
+        self.count_buckets_flushed.fetch_add(1, Ordering::Release);
         self.maybe_advance_age();
     }
 
     /// have all buckets been flushed at the current age?
     pub fn all_buckets_flushed_at_current_age(&self) -> bool {
-        self.count_ages_flushed() >= self.bins
+        self.count_buckets_flushed() >= self.bins
     }
 
-    pub fn count_ages_flushed(&self) -> usize {
-        self.count_ages_flushed.load(Ordering::Acquire)
+    pub fn count_buckets_flushed(&self) -> usize {
+        self.count_buckets_flushed.load(Ordering::Acquire)
     }
 
     pub fn maybe_advance_age(&self) -> bool {
@@ -196,7 +196,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         Self {
             disk,
             ages_to_stay_in_cache,
-            count_ages_flushed: AtomicUsize::default(),
+            count_buckets_flushed: AtomicUsize::default(),
             age: AtomicU8::default(),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: Arc::default(),
@@ -257,13 +257,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
     fn throttling_wait_ms(&self) -> Option<u64> {
         let interval_ms = self.age_interval_ms();
         let elapsed_ms = self.age_timer.elapsed_ms();
-        let bins_flushed = self.count_ages_flushed() as u64;
+        let bins_flushed = self.count_buckets_flushed() as u64;
         self.throttling_wait_ms_internal(interval_ms, elapsed_ms, bins_flushed)
     }
 
     /// true if this thread can sleep
     fn should_thread_sleep(&self) -> bool {
-        let bins_flushed = self.count_ages_flushed();
+        let bins_flushed = self.count_buckets_flushed();
         if bins_flushed >= self.bins {
             // all bins flushed, so this thread can sleep
             true
@@ -376,7 +376,8 @@ pub mod tests {
             }
 
             // this would normally happen once time went off and all buckets had been flushed at the previous age
-            test.count_ages_flushed.fetch_add(bins, Ordering::Release);
+            test.count_buckets_flushed
+                .fetch_add(bins, Ordering::Release);
             test.increment_age();
         }
     }

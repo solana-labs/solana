@@ -2,7 +2,7 @@ use {
     crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::{
@@ -31,23 +31,23 @@ use {
     subtle::{ConditionallySelectable, ConstantTimeGreater},
 };
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const MAX_FEE_BASIS_POINTS: u64 = 10_000;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const ONE_IN_BASIS_POINTS: u128 = MAX_FEE_BASIS_POINTS as u128;
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const TRANSFER_AMOUNT_LO_BITS: usize = 16;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const TRANSFER_AMOUNT_HI_BITS: usize = 32;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const TRANSFER_DELTA_BITS: usize = 64;
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 lazy_static::lazy_static! {
     pub static ref COMMITMENT_MAX: PedersenCommitment = Pedersen::encode((1_u64 <<
                                                                          TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1);
@@ -80,7 +80,7 @@ pub struct TransferWithFeeData {
     pub proof: TransferWithFeeProof,
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl TransferWithFeeData {
     pub fn new(
         transfer_amount: u64,
@@ -240,7 +240,7 @@ impl TransferWithFeeData {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl Verifiable for TransferWithFeeData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = TransferWithFeeProof::transcript_new(
@@ -285,7 +285,7 @@ pub struct TransferWithFeeProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl TransferWithFeeProof {
     fn transcript_new(
         transfer_with_fee_pubkeys: &pod::TransferWithFeePubkeys,
@@ -585,7 +585,7 @@ impl TransferWithFeeProof {
 /// The ElGamal public keys needed for a transfer with fee
 #[derive(Clone)]
 #[repr(C)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub struct TransferWithFeePubkeys {
     pub source_pubkey: ElGamalPubkey,
     pub destination_pubkey: ElGamalPubkey,
@@ -593,7 +593,7 @@ pub struct TransferWithFeePubkeys {
     pub withdraw_withheld_authority_pubkey: ElGamalPubkey,
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl TransferWithFeePubkeys {
     pub fn to_bytes(&self) -> [u8; 128] {
         let mut bytes = [0u8; 128];
@@ -630,14 +630,14 @@ impl TransferWithFeePubkeys {
 
 #[derive(Clone)]
 #[repr(C)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub struct FeeEncryption {
     pub commitment: PedersenCommitment,
     pub destination_handle: DecryptHandle,
     pub withdraw_withheld_authority_handle: DecryptHandle,
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl FeeEncryption {
     pub fn new(
         amount: u64,
@@ -673,7 +673,7 @@ pub struct FeeParameters {
     pub maximum_fee: u64,
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl FeeParameters {
     pub fn to_bytes(&self) -> [u8; 10] {
         let mut bytes = [0u8; 10];
@@ -694,7 +694,7 @@ impl FeeParameters {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> Option<(u64, u64)> {
     let numerator = (transfer_amount as u128).checked_mul(fee_rate_basis_points as u128)?;
     let mut fee = numerator.checked_div(ONE_IN_BASIS_POINTS)?;
@@ -712,7 +712,7 @@ fn calculate_fee(transfer_amount: u64, fee_rate_basis_points: u16) -> Option<(u6
     Some((fee as u64, delta_fee as u64))
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn compute_delta_commitment_and_opening(
     (commitment_lo, opening_lo): (&PedersenCommitment, &PedersenOpening),
     (commitment_hi, opening_hi): (&PedersenCommitment, &PedersenOpening),
@@ -732,7 +732,7 @@ fn compute_delta_commitment_and_opening(
     (delta_commitment, opening_delta)
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn compute_delta_commitment(
     commitment_lo: &PedersenCommitment,
     commitment_hi: &PedersenCommitment,

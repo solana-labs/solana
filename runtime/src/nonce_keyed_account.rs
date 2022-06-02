@@ -332,12 +332,14 @@ mod test {
                 InstructionAccount {
                     index_in_transaction: 0,
                     index_in_caller: 0,
+                    index_in_callee: 0,
                     is_signer: true,
                     is_writable: true,
                 },
                 InstructionAccount {
                     index_in_transaction: 1,
                     index_in_caller: 1,
+                    index_in_callee: 1,
                     is_signer: false,
                     is_writable: true,
                 },

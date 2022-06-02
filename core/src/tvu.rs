@@ -161,8 +161,11 @@ impl Tvu {
         let (verified_sender, verified_receiver) = unbounded();
         let sigverify_stage = SigVerifyStage::new(
             fetch_receiver,
-            verified_sender,
-            ShredSigVerifier::new(bank_forks.clone(), leader_schedule_cache.clone()),
+            ShredSigVerifier::new(
+                bank_forks.clone(),
+                leader_schedule_cache.clone(),
+                verified_sender,
+            ),
             "shred-verifier",
         );
 
@@ -343,7 +346,7 @@ pub mod tests {
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
             blockstore::BlockstoreSignals,
-            blockstore_db::BlockstoreOptions,
+            blockstore_options::BlockstoreOptions,
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
         },

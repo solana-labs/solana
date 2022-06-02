@@ -26,7 +26,7 @@ declare_deprecated_sysvar_id!(
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Entry {
     pub blockhash: Hash,
     pub fee_calculator: FeeCalculator,
@@ -76,7 +76,7 @@ impl<'a> PartialOrd for IterItem<'a> {
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RecentBlockhashes(Vec<Entry>);
 
 impl Default for RecentBlockhashes {

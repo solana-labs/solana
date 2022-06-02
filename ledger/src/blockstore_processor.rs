@@ -1346,7 +1346,7 @@ fn load_frozen_forks(
             if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
                 let can_cached_slot_be_unflushed = true;
-                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed);
+                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed, true);
                 break;
             }
         }
@@ -1597,7 +1597,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_db::{AccessType, BlockstoreOptions},
+            blockstore_options::{AccessType, BlockstoreOptions},
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
@@ -3585,7 +3585,7 @@ pub mod tests {
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
         let successes: BTreeSet<Pubkey> = replay_vote_receiver
             .try_iter()
-            .map(|(vote_pubkey, _, _)| vote_pubkey)
+            .map(|(vote_pubkey, ..)| vote_pubkey)
             .collect();
         assert_eq!(successes, expected_successful_voter_pubkeys);
     }

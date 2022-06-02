@@ -490,9 +490,9 @@ fn network_run_pull(
         let requests: Vec<_> = {
             network_values
                 .par_iter()
-                .filter_map(|from| {
+                .flat_map_iter(|from| {
                     let mut pings = Vec::new();
-                    let (peer, filters) = from
+                    let requests = from
                         .gossip
                         .new_pull_request(
                             thread_pool,
@@ -506,12 +506,14 @@ fn network_run_pull(
                             &mut pings,
                             &SocketAddrSpace::Unspecified,
                         )
-                        .ok()?;
+                        .unwrap_or_default();
                     let from_pubkey = from.keypair.pubkey();
                     let label = CrdsValueLabel::ContactInfo(from_pubkey);
                     let gossip_crds = from.gossip.crds.read().unwrap();
                     let self_info = gossip_crds.get::<&CrdsValue>(&label).unwrap().clone();
-                    Some((peer.id, filters, self_info))
+                    requests
+                        .into_iter()
+                        .map(move |(peer, filters)| (peer.id, filters, self_info.clone()))
                 })
                 .collect()
         };

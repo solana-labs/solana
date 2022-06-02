@@ -65,7 +65,7 @@ fn check_txs(
     no_bank
 }
 
-#[derive(ArgEnum, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, PartialEq, Eq)]
 enum WriteLockContention {
     /// No transactions lock the same accounts.
     None,
@@ -367,13 +367,15 @@ fn main() {
             for (packet_batch_index, packet_batch) in
                 packets_for_this_iteration.packet_batches.iter().enumerate()
             {
-                sent += packet_batch.packets.len();
+                sent += packet_batch.len();
                 trace!(
                     "Sending PacketBatch index {}, {}",
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender.send(vec![packet_batch.clone()]).unwrap();
+                verified_sender
+                    .send((vec![packet_batch.clone()], None))
+                    .unwrap();
             }
 
             for tx in &packets_for_this_iteration.transactions {

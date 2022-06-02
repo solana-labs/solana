@@ -1,6 +1,6 @@
 //! Implementations of syscalls used when `solana-program` is built for non-BPF targets.
 
-#![cfg(not(target_arch = "bpf"))]
+#![cfg(not(target_os = "solana"))]
 
 use {
     crate::{

@@ -37,7 +37,7 @@ pub struct Tower1_7_14 {
 }
 
 #[frozen_abi(digest = "CxwFFxKfn6ez6wifDKr5WYr3eu2PsWUKdMYp3LX8Xj52")]
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Eq, AbiExample)]
 pub struct SavedTower1_7_14 {
     pub(crate) signature: Signature,
     pub(crate) data: Vec<u8>,

@@ -102,12 +102,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// called after flush scans this bucket at the current age
     fn set_has_aged(&self, age: Age) {
-        self.last_age_flushed.store(age, Ordering::Relaxed);
+        self.last_age_flushed.store(age, Ordering::Release);
         self.storage.bucket_flushed_at_current_age();
     }
 
     fn last_age_flushed(&self) -> Age {
-        self.last_age_flushed.load(Ordering::Relaxed)
+        self.last_age_flushed.load(Ordering::Acquire)
     }
 
     fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
@@ -1493,10 +1493,10 @@ mod tests {
         solana_logger::setup();
         let test = new_for_test::<u64>();
         assert!(test.get_should_age(test.storage.current_age()));
-        assert_eq!(test.storage.count_ages_flushed(), 0);
+        assert_eq!(test.storage.count_buckets_flushed(), 0);
         test.set_has_aged(0);
         assert!(!test.get_should_age(test.storage.current_age()));
-        assert_eq!(test.storage.count_ages_flushed(), 1);
+        assert_eq!(test.storage.count_buckets_flushed(), 1);
         // simulate rest of buckets aging
         for _ in 1..BINS_FOR_TESTING {
             assert!(!test.storage.all_buckets_flushed_at_current_age());
@@ -1508,7 +1508,7 @@ mod tests {
         assert_eq!(test.storage.current_age(), 1);
         assert!(!test.storage.all_buckets_flushed_at_current_age());
         assert!(test.get_should_age(test.storage.current_age()));
-        assert_eq!(test.storage.count_ages_flushed(), 0);
+        assert_eq!(test.storage.count_buckets_flushed(), 0);
     }
 
     #[test]

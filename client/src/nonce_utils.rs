@@ -16,7 +16,7 @@ use {
     },
 };
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     #[error("invalid account owner")]
     InvalidAccountOwner,

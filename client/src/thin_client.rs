@@ -5,13 +5,9 @@
 
 use {
     crate::{
-        connection_cache::{
-            par_serialize_and_send_transaction_batch, send_wire_transaction,
-            serialize_and_send_transaction,
-        },
-        rpc_client::RpcClient,
-        rpc_config::RpcProgramAccountsConfig,
-        rpc_response::Response,
+        connection_cache::get_connection, rpc_client::RpcClient,
+        rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
+        tpu_connection::TpuConnection,
     },
     log::*,
     solana_sdk::{
@@ -212,8 +208,9 @@ impl ThinClient {
                 bincode::serialize(&transaction).expect("transaction serialization failed");
             while now.elapsed().as_secs() < wait_time as u64 {
                 if num_confirmed == 0 {
+                    let conn = get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
-                    send_wire_transaction(&wire_transaction, self.tpu_addr())?;
+                    conn.send_wire_transaction(&wire_transaction)?;
                 }
 
                 if let Ok(confirmed_blocks) = self.poll_for_signature_confirmation(
@@ -599,7 +596,8 @@ impl AsyncClient for ThinClient {
         &self,
         transaction: VersionedTransaction,
     ) -> TransportResult<Signature> {
-        serialize_and_send_transaction(&transaction, self.tpu_addr())?;
+        let conn = get_connection(self.tpu_addr());
+        conn.serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
@@ -607,7 +605,8 @@ impl AsyncClient for ThinClient {
         &self,
         batch: Vec<VersionedTransaction>,
     ) -> TransportResult<()> {
-        par_serialize_and_send_transaction_batch(&batch[..], self.tpu_addr())?;
+        let conn = get_connection(self.tpu_addr());
+        conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
     }
 }

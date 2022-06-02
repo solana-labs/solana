@@ -13,7 +13,7 @@ clap = { version = "3.1.8", features = ["derive"] }
 crossbeam-channel = "0.5"
 log = "0.4.17"
 rand = "0.7.0"
-rayon = "1.5.2"
+rayon = "1.5.3"
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-gossip = { path = "../gossip", version = "=1.11.0" }
 solana-ledger = { path = "../ledger", version = "=1.11.0" }

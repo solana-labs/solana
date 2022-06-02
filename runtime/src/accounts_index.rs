@@ -124,7 +124,7 @@ pub trait IndexValue:
 {
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },
@@ -1140,6 +1140,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
+    /// Only guaranteed to be safe when called from rent collection
     pub(crate) fn range_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,

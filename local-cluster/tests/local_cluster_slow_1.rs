@@ -490,7 +490,7 @@ fn test_duplicate_shreds_broadcast_leader() {
                         // Filter out votes not from the bad leader
                         if label.pubkey() == bad_leader_id {
                             let vote = vote_parser::parse_vote_transaction(&leader_vote_tx)
-                                .map(|(_, vote, _)| vote)
+                                .map(|(_, vote, ..)| vote)
                                 .unwrap();
                             // Filter out empty votes
                             if !vote.is_empty() {

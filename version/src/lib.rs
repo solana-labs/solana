@@ -10,7 +10,7 @@ use {
 extern crate solana_frozen_abi_macro;
 
 // Older version structure used earlier 1.3.x releases
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct LegacyVersion {
     major: u16,
     minor: u16,
@@ -20,7 +20,7 @@ pub struct LegacyVersion {
 
 impl Sanitize for LegacyVersion {}
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, AbiExample)]
 pub struct Version {
     pub major: u16,
     pub minor: u16,

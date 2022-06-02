@@ -12,6 +12,7 @@ documentation = "https://docs.rs/solana-ledger-tool"
 [dependencies]
 bs58 = "0.4.0"
 clap = "2.33.1"
+chrono = "0.4.11"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
 dashmap = "4.0.2"
@@ -45,7 +46,7 @@ assert_cmd = "2.0"
 bytecount = "0.6.2"
 
 [target."cfg(unix)".dependencies]
-signal-hook = "0.3.13"
+signal-hook = "0.3.14"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

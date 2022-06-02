@@ -119,7 +119,7 @@ pub struct Accounts {
 // for the load instructions
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<usize>>;
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
@@ -252,7 +252,7 @@ impl Accounts {
         } else {
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let mut payer_index = None;
+            let mut validated_fee_payer = false;
             let mut tx_rent: TransactionRent = 0;
             let account_keys = message.account_keys();
             let mut accounts = Vec::with_capacity(account_keys.len());
@@ -263,10 +263,7 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 } else {
-                    if payer_index.is_none() {
-                        payer_index = Some(i);
-                    }
-
+                    #[allow(clippy::collapsible_else_if)]
                     if solana_sdk::sysvar::instructions::check_id(key) {
                         Self::construct_instructions_account(
                             message,
@@ -274,7 +271,7 @@ impl Accounts {
                                 .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
                         )
                     } else {
-                        let (account, rent) = if let Some(account_override) =
+                        let (mut account, rent) = if let Some(account_override) =
                             account_overrides.and_then(|overrides| overrides.get(key))
                         {
                             (account_override.clone(), 0)
@@ -297,6 +294,24 @@ impl Accounts {
                                 })
                                 .unwrap_or_default()
                         };
+
+                        if !validated_fee_payer {
+                            if i != 0 {
+                                warn!("Payer index should be 0! {:?}", tx);
+                            }
+
+                            Self::validate_fee_payer(
+                                key,
+                                &mut account,
+                                i,
+                                error_counters,
+                                rent_collector,
+                                feature_set,
+                                fee,
+                            )?;
+
+                            validated_fee_payer = true;
+                        }
 
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
@@ -346,56 +361,7 @@ impl Accounts {
             // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
-            if let Some(payer_index) = payer_index {
-                if payer_index != 0 {
-                    warn!("Payer index should be 0! {:?}", tx);
-                }
-                let (ref payer_address, ref mut payer_account) = accounts[payer_index];
-                if payer_account.lamports() == 0 {
-                    error_counters.account_not_found += 1;
-                    return Err(TransactionError::AccountNotFound);
-                }
-                let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
-                    error_counters.invalid_account_for_fee += 1;
-                    TransactionError::InvalidAccountForFee
-                })? {
-                    SystemAccountKind::System => 0,
-                    SystemAccountKind::Nonce => {
-                        // Should we ever allow a fees charge to zero a nonce account's
-                        // balance. The state MUST be set to uninitialized in that case
-                        rent_collector.rent.minimum_balance(NonceState::size())
-                    }
-                };
-
-                if payer_account.lamports() < fee + min_balance {
-                    error_counters.insufficient_funds += 1;
-                    return Err(TransactionError::InsufficientFundsForFee);
-                }
-                let payer_pre_rent_state =
-                    RentState::from_account(payer_account, &rent_collector.rent);
-                payer_account
-                    .checked_sub_lamports(fee)
-                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
-
-                let payer_post_rent_state =
-                    RentState::from_account(payer_account, &rent_collector.rent);
-                let rent_state_result = check_rent_state_with_account(
-                    &payer_pre_rent_state,
-                    &payer_post_rent_state,
-                    payer_address,
-                    payer_account,
-                    feature_set.is_active(&feature_set::do_support_realloc::id()),
-                    feature_set
-                        .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                        .then(|| payer_index),
-                );
-                // Feature gate only wraps the actual error return so that the metrics and debug
-                // logging generated by `check_rent_state_with_account()` can be examined before
-                // feature activation
-                if feature_set.is_active(&feature_set::require_rent_exempt_accounts::id()) {
-                    rent_state_result?;
-                }
-
+            if validated_fee_payer {
                 let program_indices = message
                     .instructions()
                     .iter()
@@ -408,6 +374,7 @@ impl Accounts {
                         )
                     })
                     .collect::<Result<Vec<Vec<usize>>>>()?;
+
                 Ok(LoadedTransaction {
                     accounts,
                     program_indices,
@@ -419,6 +386,60 @@ impl Accounts {
                 Err(TransactionError::AccountNotFound)
             }
         }
+    }
+
+    fn validate_fee_payer(
+        payer_address: &Pubkey,
+        payer_account: &mut AccountSharedData,
+        payer_index: usize,
+        error_counters: &mut TransactionErrorMetrics,
+        rent_collector: &RentCollector,
+        feature_set: &FeatureSet,
+        fee: u64,
+    ) -> Result<()> {
+        if payer_account.lamports() == 0 {
+            error_counters.account_not_found += 1;
+            return Err(TransactionError::AccountNotFound);
+        }
+        let min_balance = match get_system_account_kind(payer_account).ok_or_else(|| {
+            error_counters.invalid_account_for_fee += 1;
+            TransactionError::InvalidAccountForFee
+        })? {
+            SystemAccountKind::System => 0,
+            SystemAccountKind::Nonce => {
+                // Should we ever allow a fees charge to zero a nonce account's
+                // balance. The state MUST be set to uninitialized in that case
+                rent_collector.rent.minimum_balance(NonceState::size())
+            }
+        };
+
+        if payer_account.lamports() < fee + min_balance {
+            error_counters.insufficient_funds += 1;
+            return Err(TransactionError::InsufficientFundsForFee);
+        }
+        let payer_pre_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
+        payer_account
+            .checked_sub_lamports(fee)
+            .map_err(|_| TransactionError::InsufficientFundsForFee)?;
+
+        let payer_post_rent_state = RentState::from_account(payer_account, &rent_collector.rent);
+        let rent_state_result = check_rent_state_with_account(
+            &payer_pre_rent_state,
+            &payer_post_rent_state,
+            payer_address,
+            payer_account,
+            feature_set.is_active(&feature_set::do_support_realloc::id()),
+            feature_set
+                .is_active(&feature_set::include_account_index_in_rent_error::ID)
+                .then(|| payer_index),
+        );
+        // Feature gate only wraps the actual error return so that the metrics and debug
+        // logging generated by `check_rent_state_with_account()` can be examined before
+        // feature activation
+        if feature_set.is_active(&feature_set::require_rent_exempt_accounts::id()) {
+            rent_state_result?;
+        }
+        Ok(())
     }
 
     fn load_executable_accounts(
@@ -758,6 +779,7 @@ impl Accounts {
             .collect())
     }
 
+    /// only called at startup vs steady-state runtime
     pub fn calculate_capitalization(
         &self,
         ancestors: &Ancestors,
@@ -768,7 +790,7 @@ impl Accounts {
         rent_collector: &RentCollector,
     ) -> u64 {
         let use_index = false;
-        let is_startup = false; // there may be conditions where this is called at startup.
+        let is_startup = true;
         self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,
@@ -795,6 +817,7 @@ impl Accounts {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
+        ignore_mismatch: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -804,6 +827,7 @@ impl Accounts {
             epoch_schedule,
             rent_collector,
             can_cached_slot_be_unflushed,
+            ignore_mismatch,
         ) {
             warn!("verify_bank_hash failed: {:?}", err);
             false
@@ -1423,7 +1447,8 @@ mod tests {
                 inner_instructions: None,
                 durable_nonce_fee: nonce.map(DurableNonceFee::from),
                 return_data: None,
-                executed_units: 0u64,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
             },
             executors: Rc::new(RefCell::new(Executors::default())),
         }

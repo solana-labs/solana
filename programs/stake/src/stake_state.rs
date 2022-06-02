@@ -153,7 +153,7 @@ pub(crate) fn new_stake(
 ///  and the total points over which those lamports
 ///  are to be distributed
 //  basically read as rewards/points, but in integers instead of as an f64
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PointValue {
     pub rewards: u64, // lamports to split
     pub points: u128, // over these points
@@ -216,7 +216,7 @@ fn calculate_stake_points(
     .points
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 struct CalculatedStakePoints {
     points: u128,
     new_credits_observed: u64,
@@ -329,7 +329,7 @@ fn calculate_stake_points_and_credits(
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 struct CalculatedStakeRewards {
     staker_rewards: u64,
     voter_rewards: u64,
@@ -1034,7 +1034,7 @@ fn validate_delegated_amount(
         || feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()))
         && stake_amount < crate::get_minimum_delegation(feature_set)
     {
-        return Err(StakeError::InsufficientStake.into());
+        return Err(StakeError::InsufficientDelegation.into());
     }
     Ok(ValidatedDelegatedInfo { stake_amount })
 }

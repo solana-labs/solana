@@ -181,7 +181,7 @@ added to the leader schedule.
 
 After your validator is restarted with the new identity keypair, per step 4,
 start a second non-voting validator on a different machine with the old identity keypair
-without providing the `--vote-account` argument.
+without providing the `--vote-account` argument, as well as with the `--no-wait-for-vote-to-start-leader` argument.
 
 This temporary validator should be run for two full epochs. During this time it will:
 * Produce blocks for the remaining slots that are assigned to your old validator identity

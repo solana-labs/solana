@@ -30,9 +30,12 @@ use {
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
-    solana_ledger::blockstore_db::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    solana_ledger::{
+        blockstore_db::DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        blockstore_options::{
+            BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+            LedgerColumnOptions, ShredStorageType,
+        },
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -93,7 +96,7 @@ use {
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Operation {
     Initialize,
     Run,
@@ -410,7 +413,7 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     for entrypoint in entrypoints {
         match solana_net_utils::get_cluster_shred_version(entrypoint) {
             Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
-            Ok(0) => eprintln!("zero sherd-version from entrypoint: {}", entrypoint),
+            Ok(0) => eprintln!("zero shred-version from entrypoint: {}", entrypoint),
             Ok(shred_version) => {
                 info!(
                     "obtained shred-version {} from {}",
@@ -1360,11 +1363,12 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_pubsub_notification_threads")
                 .long("rpc-pubsub-notification-threads")
+                .requires("full_rpc_api")
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
                 .help("The maximum number of threads that RPC PubSub will use \
-                       for generating notifications."),
+                       for generating notifications. 0 will disable RPC PubSub notifications"),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -2417,6 +2421,7 @@ pub fn main() {
         );
         exit(1);
     }
+    let full_api = matches.is_present("full_rpc_api");
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2438,7 +2443,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            full_api: matches.is_present("full_rpc_api"),
+            full_api,
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2484,7 +2489,11 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
+            notification_threads: if full_api {
+                value_of(&matches, "rpc_pubsub_notification_threads")
+            } else {
+                Some(0)
+            },
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),

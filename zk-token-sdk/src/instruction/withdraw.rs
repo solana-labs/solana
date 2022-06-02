@@ -2,7 +2,7 @@ use {
     crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::{
@@ -19,7 +19,7 @@ use {
     std::convert::TryInto,
 };
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 const WITHDRAW_AMOUNT_BIT_LENGTH: usize = 64;
 
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
@@ -44,7 +44,7 @@ pub struct WithdrawData {
 }
 
 impl WithdrawData {
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn new(
         amount: u64,
         keypair: &ElGamalKeypair,
@@ -75,7 +75,7 @@ impl WithdrawData {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl Verifiable for WithdrawData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawProof::transcript_new(&self.pubkey, &self.final_ciphertext);
@@ -104,7 +104,7 @@ pub struct WithdrawProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl WithdrawProof {
     fn transcript_new(
         pubkey: &pod::ElGamalPubkey,

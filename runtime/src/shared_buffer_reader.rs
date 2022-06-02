@@ -24,7 +24,7 @@ use {
 // # bytes allocated and populated by reading ahead
 const TOTAL_BUFFER_BUDGET_DEFAULT: usize = 2_000_000_000;
 // data is read-ahead and saved in chunks of this many bytes
-const CHUNK_SIZE_DEFAULT: usize = 50_000_000;
+const CHUNK_SIZE_DEFAULT: usize = 100_000_000;
 
 type OneSharedBuffer = Arc<Vec<u8>>;
 
@@ -844,7 +844,9 @@ pub mod tests {
 
                             let parallel_reader = reader_ct > 2;
                             let handle = if parallel_reader {
-                                let threads = 8;
+                                // Avoid to create more than the number of threads available in the
+                                // current rayon threadpool. Deadlock could happen otherwise.
+                                let threads = std::cmp::min(8, rayon::current_num_threads());
                                 Some({
                                     let parallel = (0..threads)
                                         .into_iter()

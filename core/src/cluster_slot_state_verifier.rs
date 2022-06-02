@@ -14,7 +14,7 @@ pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
 pub(crate) type EpochSlotsFrozenSlots = BTreeMap<Slot, Hash>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ClusterConfirmedHash {
     // Ordered from strongest confirmation to weakest. Stronger
     // confirmations take precedence over weaker ones.
@@ -22,7 +22,7 @@ pub enum ClusterConfirmedHash {
     EpochSlotsFrozen(Hash),
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum BankStatus {
     Frozen(Hash),
     Dead,
@@ -71,7 +71,7 @@ impl BankStatus {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DeadState {
     // Keep fields private, forces construction
     // via constructor
@@ -106,7 +106,7 @@ impl DeadState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct BankFrozenState {
     // Keep fields private, forces construction
     // via constructor
@@ -149,7 +149,7 @@ impl BankFrozenState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DuplicateConfirmedState {
     // Keep fields private, forces construction
     // via constructor
@@ -174,7 +174,7 @@ impl DuplicateConfirmedState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DuplicateState {
     // Keep fields private, forces construction
     // via constructor
@@ -211,7 +211,7 @@ impl DuplicateState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct EpochSlotsFrozenState {
     // Keep fields private, forces construction
     // via constructor
@@ -255,7 +255,7 @@ impl EpochSlotsFrozenState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum SlotStateUpdate {
     BankFrozen(BankFrozenState),
     DuplicateConfirmed(DuplicateConfirmedState),
@@ -280,7 +280,7 @@ impl SlotStateUpdate {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum ResultingStateChange {
     // Bank was frozen
     BankFrozen(Hash),

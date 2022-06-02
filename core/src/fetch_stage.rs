@@ -43,6 +43,7 @@ impl FetchStage {
     ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
+        let (forward_sender, forward_receiver) = unbounded();
         (
             Self::new_with_sender(
                 sockets,
@@ -51,6 +52,8 @@ impl FetchStage {
                 exit,
                 &sender,
                 &vote_sender,
+                &forward_sender,
+                forward_receiver,
                 poh_recorder,
                 coalesce_ms,
                 None,
@@ -60,6 +63,7 @@ impl FetchStage {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_sender(
         sockets: Vec<UdpSocket>,
         tpu_forwards_sockets: Vec<UdpSocket>,
@@ -67,6 +71,8 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
+        forward_sender: &PacketBatchSender,
+        forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -81,6 +87,8 @@ impl FetchStage {
             exit,
             sender,
             vote_sender,
+            forward_sender,
+            forward_receiver,
             poh_recorder,
             coalesce_ms,
             in_vote_only_mode,
@@ -97,12 +105,12 @@ impl FetchStage {
         };
 
         let mut packet_batch = recvr.recv()?;
-        let mut num_packets = packet_batch.packets.len();
-        packet_batch.packets.iter_mut().for_each(mark_forwarded);
+        let mut num_packets = packet_batch.len();
+        packet_batch.iter_mut().for_each(mark_forwarded);
         let mut packet_batches = vec![packet_batch];
         while let Ok(mut packet_batch) = recvr.try_recv() {
-            packet_batch.packets.iter_mut().for_each(mark_forwarded);
-            num_packets += packet_batch.packets.len();
+            packet_batch.iter_mut().for_each(mark_forwarded);
+            num_packets += packet_batch.len();
             packet_batches.push(packet_batch);
             // Read at most 1K transactions in a loop
             if num_packets > 1024 {
@@ -129,6 +137,7 @@ impl FetchStage {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_multi_socket(
         tpu_sockets: Vec<Arc<UdpSocket>>,
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
@@ -136,6 +145,8 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
+        forward_sender: &PacketBatchSender,
+        forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -160,7 +171,6 @@ impl FetchStage {
             .collect();
 
         let tpu_forward_stats = Arc::new(StreamerReceiveStats::new("tpu_forwards_receiver"));
-        let (forward_sender, forward_receiver) = unbounded();
         let tpu_forwards_threads: Vec<_> = tpu_forwards_sockets
             .into_iter()
             .map(|socket| {

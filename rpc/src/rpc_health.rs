@@ -10,7 +10,7 @@ use {
     },
 };
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum RpcHealthStatus {
     Ok,
     Behind { num_slots: Slot }, // Validator is behind its known validators

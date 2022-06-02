@@ -3691,6 +3691,7 @@ impl RpcClient {
     ///             length: 5,
     ///         }),
     ///         commitment: Some(CommitmentConfig::processed()),
+    ///         min_context_slot: Some(1234),
     ///     },
     ///     with_context: Some(false),
     /// };
@@ -3709,6 +3710,11 @@ impl RpcClient {
             self.rpc_client
                 .get_program_accounts_with_config(pubkey, config),
         )
+    }
+
+    /// Returns the stake minimum delegation, in lamports.
+    pub fn get_stake_minimum_delegation(&self) -> ClientResult<u64> {
+        self.invoke(self.rpc_client.get_stake_minimum_delegation())
     }
 
     /// Request the transaction count.
@@ -4100,7 +4106,7 @@ mod tests {
             system_transaction,
             transaction::TransactionError,
         },
-        std::{io, thread},
+        std::{collections::HashMap, io, thread},
     };
 
     #[test]
@@ -4315,5 +4321,44 @@ mod tests {
         #[allow(deprecated)]
         let is_err = rpc_client.get_latest_blockhash().is_err();
         assert!(is_err);
+    }
+
+    #[test]
+    fn test_get_stake_minimum_delegation() {
+        let expected_minimum_delegation: u64 = 123_456_789;
+        let rpc_client = {
+            let mocks = {
+                let rpc_response = {
+                    let program_id = solana_sdk::stake::program::id().to_string();
+                    let data = (
+                        base64::encode(expected_minimum_delegation.to_le_bytes()),
+                        ReturnDataEncoding::Base64,
+                    );
+                    serde_json::to_value(Response {
+                        context: RpcResponseContext {
+                            slot: 1,
+                            api_version: None,
+                        },
+                        value: RpcSimulateTransactionResult {
+                            err: None,
+                            logs: None,
+                            accounts: None,
+                            units_consumed: None,
+                            return_data: Some(RpcTransactionReturnData { program_id, data }),
+                        },
+                    })
+                    .unwrap()
+                };
+                let mut mocks = HashMap::new();
+                mocks.insert(RpcRequest::SimulateTransaction, rpc_response);
+                mocks
+            };
+            RpcClient::new_mock_with_mocks("succeeds".to_string(), mocks)
+        };
+
+        let client_result = rpc_client.get_stake_minimum_delegation();
+        assert!(client_result.is_ok());
+        let actual_minimum_delegation = client_result.unwrap();
+        assert_eq!(actual_minimum_delegation, expected_minimum_delegation);
     }
 }

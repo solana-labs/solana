@@ -74,20 +74,11 @@ pub fn secp256k1_recover(
     recovery_id: u8,
     signature: &[u8],
 ) -> Result<Secp256k1Pubkey, Secp256k1RecoverError> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
-        extern "C" {
-            fn sol_secp256k1_recover(
-                hash: *const u8,
-                recovery_id: u64,
-                signature: *const u8,
-                result: *mut u8,
-            ) -> u64;
-        }
-
         let mut pubkey_buffer = [0u8; SECP256K1_PUBLIC_KEY_LENGTH];
         let result = unsafe {
-            sol_secp256k1_recover(
+            crate::syscalls::sol_secp256k1_recover(
                 hash.as_ptr(),
                 recovery_id as u64,
                 signature.as_ptr(),
@@ -101,7 +92,7 @@ pub fn secp256k1_recover(
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         let message = libsecp256k1::Message::parse_slice(hash)
             .map_err(|_| Secp256k1RecoverError::InvalidHash)?;

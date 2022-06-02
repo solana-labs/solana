@@ -17,18 +17,18 @@
 //
 // `clippy::op_ref` is turned off to prevent clippy from warning that this is not idiomatic code.
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 #[macro_use]
 pub(crate) mod macros;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub mod encryption;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub mod errors;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod range_proof;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod sigma_proofs;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 mod transcript;
 
 // TODO: re-organize visibility

@@ -85,7 +85,7 @@ pub const DUPLICATE_THRESHOLD: f64 = 1.0 - SWITCH_FORK_THRESHOLD - DUPLICATE_LIV
 const MAX_VOTE_SIGNATURES: usize = 200;
 const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum HeaviestForkFailures {
     LockedOut(u64),
     FailedThreshold(u64),
@@ -1796,11 +1796,6 @@ impl ReplayStage {
         trace!("handle votable bank {}", bank.slot());
         let new_root = tower.record_bank_vote(bank, vote_account_pubkey);
 
-        let saved_tower = SavedTower::new(tower, identity_keypair).unwrap_or_else(|err| {
-            error!("Unable to create saved tower: {:?}", err);
-            std::process::exit(1);
-        });
-
         if let Some(new_root) = new_root {
             // get the root bank before squash
             let root_bank = bank_forks
@@ -1873,7 +1868,6 @@ impl ReplayStage {
             identity_keypair,
             authorized_voter_keypairs,
             tower,
-            saved_tower,
             switch_fork_decision,
             vote_signatures,
             *has_new_vote_been_rooted,
@@ -2070,7 +2064,6 @@ impl ReplayStage {
         identity_keypair: &Keypair,
         authorized_voter_keypairs: &[Arc<Keypair>],
         tower: &mut Tower,
-        saved_tower: SavedTower,
         switch_fork_decision: &SwitchForkDecision,
         vote_signatures: &mut Vec<Signature>,
         has_new_vote_been_rooted: bool,
@@ -2094,6 +2087,11 @@ impl ReplayStage {
         replay_timing.generate_vote_us += generate_time.as_us();
         if let Some(vote_tx) = vote_tx {
             tower.refresh_last_vote_tx_blockhash(vote_tx.message.recent_blockhash);
+
+            let saved_tower = SavedTower::new(tower, identity_keypair).unwrap_or_else(|err| {
+                error!("Unable to create saved tower: {:?}", err);
+                std::process::exit(1);
+            });
 
             let tower_slots = tower.tower_slots();
             voting_sender
@@ -3182,7 +3180,7 @@ pub(crate) mod tests {
             create_new_tmp_ledger,
             genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
             get_tmp_ledger_path,
-            shred::{Shred, ShredFlags, SIZE_OF_DATA_SHRED_PAYLOAD},
+            shred::{Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
         },
         solana_rpc::{
             optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -3781,7 +3779,7 @@ pub(crate) mod tests {
     fn test_dead_fork_entry_deserialize_failure() {
         // Insert entry that causes deserialization failure
         let res = check_dead_fork(|_, bank| {
-            let gibberish = [0xa5u8; SIZE_OF_DATA_SHRED_PAYLOAD];
+            let gibberish = [0xa5u8; LEGACY_SHRED_DATA_CAPACITY];
             let parent_offset = bank.slot() - bank.parent_slot();
             let shred = Shred::new_from_data(
                 bank.slot(),
@@ -5912,7 +5910,6 @@ pub(crate) mod tests {
             &identity_keypair,
             &my_vote_keypair,
             &mut tower,
-            SavedTower::default(),
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,
@@ -5978,7 +5975,6 @@ pub(crate) mod tests {
             &identity_keypair,
             &my_vote_keypair,
             &mut tower,
-            SavedTower::default(),
             &SwitchForkDecision::SameFork,
             &mut voted_signatures,
             has_new_vote_been_rooted,

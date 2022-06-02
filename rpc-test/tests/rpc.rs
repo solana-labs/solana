@@ -121,6 +121,7 @@ fn test_rpc_send_tx() {
         encoding: Some(UiAccountEncoding::Base64),
         commitment: None,
         data_slice: None,
+        min_context_slot: None,
     };
     let req = json_req!(
         "getAccountInfo",

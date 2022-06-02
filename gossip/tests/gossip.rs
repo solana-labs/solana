@@ -260,7 +260,7 @@ pub fn cluster_info_retransmit() {
     let retransmit_peers: Vec<_> = peers.iter().collect();
     retransmit_to(
         &retransmit_peers,
-        &p.data[..p.meta.size],
+        p.data(),
         &tn1,
         false,
         &SocketAddrSpace::Unspecified,
@@ -270,7 +270,7 @@ pub fn cluster_info_retransmit() {
         .map(|s| {
             let mut p = Packet::default();
             s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-            let res = s.recv_from(&mut p.data);
+            let res = s.recv_from(p.buffer_mut());
             res.is_err() //true if failed to receive the retransmit packet
         })
         .collect();

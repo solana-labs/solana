@@ -16,11 +16,24 @@ use {
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+/// Contains account meta data which varies between instruction.
+///
+/// It also contains indices to other structures for faster lookup.
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
+    /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: usize,
+    /// Points to the first occurrence in the parent `InstructionContext`
+    ///
+    /// This excludes the program accounts.
     pub index_in_caller: usize,
+    /// Points to the first occurrence in the current `InstructionContext`
+    ///
+    /// This excludes the program accounts.
+    pub index_in_callee: usize,
+    /// Is this account supposed to sign
     pub is_signer: bool,
+    /// Is this account allowed to become writable
     pub is_writable: bool,
 }
 
@@ -240,7 +253,7 @@ impl TransactionContext {
 }
 
 /// Return data at the end of a transaction
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct TransactionReturnData {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
@@ -368,6 +381,28 @@ impl InstructionContext {
             .index_in_transaction)
         } else {
             Err(InstructionError::NotEnoughAccountKeys)
+        }
+    }
+
+    /// Returns `Some(index_in_instruction)` if this is a duplicate
+    /// and `None` if it is the first account with this key
+    pub fn is_duplicate(
+        &self,
+        index_in_instruction: usize,
+    ) -> Result<Option<usize>, InstructionError> {
+        if index_in_instruction < self.program_accounts.len()
+            || index_in_instruction >= self.get_number_of_accounts()
+        {
+            Err(InstructionError::NotEnoughAccountKeys)
+        } else {
+            let index_in_instruction =
+                index_in_instruction.saturating_sub(self.program_accounts.len());
+            let index_in_callee = self.instruction_accounts[index_in_instruction].index_in_callee;
+            Ok(if index_in_callee == index_in_instruction {
+                None
+            } else {
+                Some(index_in_callee)
+            })
         }
     }
 
@@ -512,8 +547,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
-    pub fn set_owner(&mut self, pubkey: &[u8]) {
+    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         self.account.copy_into_owner_from_slice(pubkey);
+        Ok(())
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -522,8 +558,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
-    pub fn set_lamports(&mut self, lamports: u64) {
+    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.account.set_lamports(lamports);
+        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -532,8 +569,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(LamportsError::ArithmeticOverflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Subtracts lamports from this account (transaction wide)
@@ -542,8 +578,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(LamportsError::ArithmeticUnderflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
@@ -552,24 +587,26 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a writable slice of the account data (transaction wide)
-    pub fn get_data_mut(&mut self) -> &mut [u8] {
-        self.account.data_as_mut_slice()
+    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
-    pub fn set_data(&mut self, data: &[u8]) {
+    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
         }
+        Ok(())
     }
 
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
-    pub fn set_data_length(&mut self, new_len: usize) {
+    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
         self.account.data_mut().resize(new_len, 0);
+        Ok(())
     }
 
     /// Deserializes the account data into a state
@@ -597,8 +634,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
-    pub fn set_executable(&mut self, is_executable: bool) {
+    pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         self.account.set_executable(is_executable);
+        Ok(())
     }
 
     /// Returns the rent epoch of this account (transaction wide)

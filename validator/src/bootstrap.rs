@@ -152,6 +152,7 @@ fn verify_reachable_ports(
     }
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
+        udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
@@ -1114,14 +1115,15 @@ mod with_incremental_snapshots {
         validator_config: &ValidatorConfig,
         rpc_peers: &[ContactInfo],
     ) -> Vec<PeerSnapshotHash> {
-        let known_snapshot_hashes =
-            get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
-
         let mut peer_snapshot_hashes = get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers);
-        retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
-            &known_snapshot_hashes,
-            &mut peer_snapshot_hashes,
-        );
+        if validator_config.known_validators.is_some() {
+            let known_snapshot_hashes =
+                get_snapshot_hashes_from_known_validators(cluster_info, validator_config);
+            retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
+                &known_snapshot_hashes,
+                &mut peer_snapshot_hashes,
+            );
+        }
         retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,

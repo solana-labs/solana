@@ -225,7 +225,7 @@ impl HashStats {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
     pub lamports: u64,
@@ -242,7 +242,7 @@ impl CalculateHashIntermediate {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct CumulativeOffset {
     pub index: Vec<usize>,
     pub start_offset: usize,

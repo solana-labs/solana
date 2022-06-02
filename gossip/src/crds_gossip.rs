@@ -217,7 +217,7 @@ impl CrdsGossip {
         ping_cache: &Mutex<PingCache>,
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
-    ) -> Result<(ContactInfo, Vec<CrdsFilter>), CrdsGossipError> {
+    ) -> Result<HashMap<ContactInfo, Vec<CrdsFilter>>, CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
             &self.crds,

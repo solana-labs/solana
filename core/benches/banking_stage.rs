@@ -85,7 +85,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
-            let _ignored = BankingStage::consume_buffered_packets(
+            BankingStage::consume_buffered_packets(
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
@@ -254,9 +254,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     v.len(),
                 );
                 for xv in v {
-                    sent += xv.packets.len();
+                    sent += xv.len();
                 }
-                verified_sender.send(v.to_vec()).unwrap();
+                verified_sender.send((v.to_vec(), None)).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);
 

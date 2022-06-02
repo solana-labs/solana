@@ -21,12 +21,15 @@ sha2 = "0.10.2"
 solana-frozen-abi-macro = { path = "macro", version = "=1.11.0" }
 thiserror = "1.0"
 
-[target.'cfg(not(target_arch = "bpf"))'.dependencies]
-generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"] }
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+generic-array = { version = "0.14.5", default-features = false, features = [
+	"serde",
+	"more_lengths"
+] }
 im = { version = "15.1.0", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
 
-[target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
+[target.'cfg(not(target_os = "solana"))'.dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [build-dependencies]

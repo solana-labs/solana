@@ -13,7 +13,7 @@ pub struct FixedSchedule {
 }
 
 /// Stake-weighted leader schedule for one epoch.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
     // Inverted index from pubkeys to indices where they are the leader.

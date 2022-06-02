@@ -114,6 +114,8 @@ fn generate_chunked_transfers(
     let keypair_chunks = source_keypair_chunks.len();
     let mut reclaim_lamports_back_to_source_account = false;
     let mut chunk_index = 0;
+    let mut last_generate_txs_time = Instant::now();
+
     while start.elapsed() < duration {
         generate_txs(
             shared_txs,
@@ -123,6 +125,17 @@ fn generate_chunked_transfers(
             threads,
             reclaim_lamports_back_to_source_account,
         );
+
+        datapoint_info!(
+            "blockhash_stats",
+            (
+                "time_elapsed_since_last_generate_txs",
+                last_generate_txs_time.elapsed().as_millis(),
+                i64
+            )
+        );
+
+        last_generate_txs_time = Instant::now();
 
         // In sustained mode, overlap the transfers with generation. This has higher average
         // performance but lower peak performance in tested environments.
@@ -433,6 +446,14 @@ fn poll_blockhash<T: BenchTpsClient>(
         if blockhash_updated {
             let balance = client.get_balance(id).unwrap_or(0);
             metrics_submit_lamport_balance(balance);
+            datapoint_info!(
+                "blockhash_stats",
+                (
+                    "time_elapsed_since_last_blockhash_update",
+                    blockhash_last_updated.elapsed().as_millis(),
+                    i64
+                )
+            )
         }
 
         if exit_signal.load(Ordering::Relaxed) {
@@ -451,6 +472,7 @@ fn do_tx_transfers<T: BenchTpsClient>(
     thread_batch_sleep_ms: usize,
     client: &Arc<T>,
 ) {
+    let mut last_sent_time = timestamp();
     loop {
         if thread_batch_sleep_ms > 0 {
             sleep(Duration::from_millis(thread_batch_sleep_ms as u64));
@@ -466,10 +488,14 @@ fn do_tx_transfers<T: BenchTpsClient>(
             let transfer_start = Instant::now();
             let mut old_transactions = false;
             let mut transactions = Vec::<_>::new();
+            let mut min_timestamp = u64::MAX;
             for tx in txs0 {
                 let now = timestamp();
                 // Transactions that are too old will be rejected by the cluster Don't bother
                 // sending them.
+                if tx.1 < min_timestamp {
+                    min_timestamp = tx.1;
+                }
                 if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
                     old_transactions = true;
                     continue;
@@ -477,9 +503,27 @@ fn do_tx_transfers<T: BenchTpsClient>(
                 transactions.push(tx.0);
             }
 
+            if min_timestamp != u64::MAX {
+                datapoint_info!(
+                    "bench-tps-do_tx_transfers",
+                    ("oldest-blockhash-age", timestamp() - min_timestamp, i64),
+                );
+            }
+
             if let Err(error) = client.send_batch(transactions) {
                 warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
+
+            datapoint_info!(
+                "bench-tps-do_tx_transfers",
+                (
+                    "time-elapsed-since-last-send",
+                    timestamp() - last_sent_time,
+                    i64
+                ),
+            );
+
+            last_sent_time = timestamp();
 
             if old_transactions {
                 let mut shared_txs_wl = shared_txs.write().expect("write lock in do_tx_transfers");

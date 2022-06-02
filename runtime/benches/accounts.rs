@@ -124,7 +124,8 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             test_hash_calculation,
             &EpochSchedule::default(),
             &RentCollector::default(),
-            false
+            false,
+            false,
         ))
     });
 }

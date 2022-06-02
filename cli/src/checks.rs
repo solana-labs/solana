@@ -68,6 +68,22 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
     let fee = get_fee_for_messages(rpc_client, messages)?;
+    check_account_for_spend_and_fee_with_commitment(
+        rpc_client,
+        account_pubkey,
+        balance,
+        fee,
+        commitment,
+    )
+}
+
+pub fn check_account_for_spend_and_fee_with_commitment(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    balance: u64,
+    fee: u64,
+    commitment: CommitmentConfig,
+) -> Result<(), CliError> {
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,

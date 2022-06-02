@@ -3,7 +3,6 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, SIZE_OF_NONCE},
     },
-    solana_perf::packet::limited_deserialize,
     solana_sdk::{clock::Slot, packet::Packet},
     std::{io, net::SocketAddr},
 };
@@ -29,23 +28,21 @@ pub fn repair_response_packet_from_bytes(
     nonce: Nonce,
 ) -> Option<Packet> {
     let mut packet = Packet::default();
-    packet.meta.size = bytes.len() + SIZE_OF_NONCE;
-    if packet.meta.size > packet.data.len() {
+    let size = bytes.len() + SIZE_OF_NONCE;
+    if size > packet.buffer_mut().len() {
         return None;
     }
-    packet.meta.set_addr(dest);
-    packet.data[..bytes.len()].copy_from_slice(&bytes);
-    let mut wr = io::Cursor::new(&mut packet.data[bytes.len()..]);
+    packet.meta.size = size;
+    packet.meta.set_socket_addr(dest);
+    packet.buffer_mut()[..bytes.len()].copy_from_slice(&bytes);
+    let mut wr = io::Cursor::new(&mut packet.buffer_mut()[bytes.len()..]);
     bincode::serialize_into(&mut wr, &nonce).expect("Buffer not large enough to fit nonce");
     Some(packet)
 }
 
-pub fn nonce(buf: &[u8]) -> Option<Nonce> {
-    if buf.len() < SIZE_OF_NONCE {
-        None
-    } else {
-        limited_deserialize(&buf[buf.len() - SIZE_OF_NONCE..]).ok()
-    }
+pub fn nonce(packet: &Packet) -> Option<Nonce> {
+    let nonce_start = packet.meta.size.checked_sub(SIZE_OF_NONCE)?;
+    packet.deserialize_slice(nonce_start..).ok()
 }
 
 #[cfg(test)]
@@ -95,20 +92,17 @@ mod test {
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(1));
+        assert!(verify_shred_cpu(&packet, &leader_slots));
 
         let wrong_keypair = Keypair::new();
         let leader_slots = [(slot, wrong_keypair.pubkey().to_bytes())]
             .iter()
             .cloned()
             .collect();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, Some(0));
+        assert!(!verify_shred_cpu(&packet, &leader_slots));
 
         let leader_slots = HashMap::new();
-        let rv = verify_shred_cpu(&packet, &leader_slots);
-        assert_eq!(rv, None);
+        assert!(!verify_shred_cpu(&packet, &leader_slots));
     }
 
     #[test]
