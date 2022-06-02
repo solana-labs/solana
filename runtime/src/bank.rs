@@ -5155,14 +5155,15 @@ impl Bank {
     }
 
     pub fn minimize_bank_for_snapshot(&self, mut minimized_account_set: HashSet<Pubkey>) {
-        self.add_owner_accounts(&mut minimized_account_set);
-        self.add_programdata_accounts(&mut minimized_account_set);
+        self.minimization_add_owner_accounts(&mut minimized_account_set);
+        self.minimization_add_programdata_accounts(&mut minimized_account_set);
         self.accounts()
             .accounts_db
             .minimize_accounts_db(self.slot(), &minimized_account_set);
     }
 
-    fn add_owner_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
+    // Used to get owner accounts in `minimize_bank_for_snapshot`
+    fn minimization_add_owner_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
         let owner_accounts: HashSet<_> = self
             .accounts()
             .accounts_db
@@ -5179,7 +5180,8 @@ impl Bank {
         });
     }
 
-    fn add_programdata_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
+    // Used to get owner accounts in `minimize_bank_for_snapshot`
+    fn minimization_add_programdata_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
         let programdata_accounts: HashSet<_> = self
             .accounts()
             .accounts_db
