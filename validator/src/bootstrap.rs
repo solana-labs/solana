@@ -1422,22 +1422,12 @@ mod with_incremental_snapshots {
 
         // It is a programmer bug if the assert fires!  By the time this function is called, the
         // only remaining `incremental_snapshot_hashes` should all be the same.
-        if final_peer_snapshot_hash.snapshot_hash.incr.is_some() {
-            assert!(
-                peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
-                    peer_snapshot_hash.snapshot_hash.incr == final_peer_snapshot_hash.snapshot_hash.incr
-                }),
-                "To safely pick a peer at random, all the incremental snapshot hashes must be the same"
-            );
-        } else {
-            assert!(
-                peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
-                    peer_snapshot_hash.snapshot_hash.full
-                        == final_peer_snapshot_hash.snapshot_hash.full
-                }),
-                "To safely pick a peer at random, all the full snapshot hashes must be the same"
-            );
-        }
+        assert!(
+            peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
+                peer_snapshot_hash.snapshot_hash == final_peer_snapshot_hash.snapshot_hash
+            }),
+            "To safely pick a peer at random, all the snapshot hashes must be the same"
+        );
 
         trace!("final peer snapshot hash: {:?}", final_peer_snapshot_hash);
         final_peer_snapshot_hash.clone()
