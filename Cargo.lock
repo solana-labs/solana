@@ -4658,7 +4658,6 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "log",
- "lru",
  "quinn",
  "quinn-proto",
  "rand 0.7.3",
