@@ -409,14 +409,14 @@ mod test {
     #[test]
     fn test_sanitize_coding_shred() {
         let mut shred = ShredCode::new_from_parity_shard(
-            1,   // slot
-            12,  // index
-            &[], // parity_shard
-            11,  // fec_set_index
-            11,  // num_data_shreds
-            11,  // num_coding_shreds
-            8,   // position
-            0,   // version
+            1,    // slot
+            12,   // index
+            None, // parity_shard
+            11,   // fec_set_index
+            11,   // num_data_shreds
+            11,   // num_coding_shreds
+            8,    // position
+            0,    // version
         );
         assert_matches!(shred.sanitize(), Ok(()));
         // index < position is invalid.
