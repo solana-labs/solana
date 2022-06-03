@@ -70,6 +70,96 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
         .map(|v| v.convert_to_current())
 }
 
+<<<<<<< HEAD
+=======
+/// Deserialize the state data of a durable transaction nonce account.
+///
+/// # Errors
+///
+/// Returns an error if the account is not owned by the system program or
+/// contains no data. Returns an error if the account state is uninitialized or
+/// fails to deserialize.
+///
+/// # Examples
+///
+/// Create and sign a transaction with a durable nonce:
+///
+/// ```no_run
+/// use solana_client::{
+///     rpc_client::RpcClient,
+///     nonce_utils,
+/// };
+/// use solana_sdk::{
+///     message::Message,
+///     pubkey::Pubkey,
+///     signature::{Keypair, Signer},
+///     system_instruction,
+///     transaction::Transaction,
+/// };
+/// use std::path::Path;
+/// use anyhow::Result;
+/// # use anyhow::anyhow;
+///
+/// fn create_transfer_tx_with_nonce(
+///     client: &RpcClient,
+///     nonce_account_pubkey: &Pubkey,
+///     payer: &Keypair,
+///     receiver: &Pubkey,
+///     amount: u64,
+///     tx_path: &Path,
+/// ) -> Result<()> {
+///
+///     let instr_transfer = system_instruction::transfer(
+///         &payer.pubkey(),
+///         receiver,
+///         amount,
+///     );
+///
+///     // In this example, `payer` is `nonce_account_pubkey`'s authority
+///     let instr_advance_nonce_account = system_instruction::advance_nonce_account(
+///         nonce_account_pubkey,
+///         &payer.pubkey(),
+///     );
+///
+///     // The `advance_nonce_account` instruction must be the first issued in
+///     // the transaction.
+///     let message = Message::new(
+///         &[
+///             instr_advance_nonce_account,
+///             instr_transfer
+///         ],
+///         Some(&payer.pubkey()),
+///     );
+///
+///     let mut tx = Transaction::new_unsigned(message);
+///
+///     // Sign the tx with nonce_account's `blockhash` instead of the
+///     // network's latest blockhash.
+///     let nonce_account = client.get_account(nonce_account_pubkey)?;
+///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
+///     let blockhash = nonce_data.blockhash();
+///
+///     tx.try_sign(&[payer], blockhash)?;
+///
+///     // Save the signed transaction locally for later submission.
+///     save_tx_to_file(&tx_path, &tx)?;
+///
+///     Ok(())
+/// }
+/// #
+/// # fn save_tx_to_file(path: &Path, tx: &Transaction) -> Result<()> {
+/// #     Ok(())
+/// # }
+/// #
+/// # let client = RpcClient::new(String::new());
+/// # let nonce_account_pubkey = Pubkey::new_unique();
+/// # let payer = Keypair::new();
+/// # let receiver = Pubkey::new_unique();
+/// # create_transfer_tx_with_nonce(&client, &nonce_account_pubkey, &payer, &receiver, 1024, Path::new("new_tx"))?;
+/// #
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
 pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
     account: &T,
 ) -> Result<Data, Error> {
