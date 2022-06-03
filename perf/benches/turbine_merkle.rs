@@ -181,9 +181,7 @@ fn bench_merkle_fec64_outgoing(b: &mut Bencher) {
         let tree = TurbineMerkleTree::new_from_bufs_vec_par(&bufs_vec, 16);
         let root_hash = tree.root();
         let _signature = keypair.sign_message(root_hash.as_ref());
-        let _proofs: Vec<_> = (0..64)
-            .map(|i| (i, tree.prove_fec64(i)))
-            .collect();
+        let _proofs: Vec<_> = (0..64).map(|i| (i, tree.prove_fec64(i))).collect();
     });
 }
 
