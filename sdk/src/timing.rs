@@ -81,11 +81,11 @@ impl AtomicInterval {
     /// except, if skip_first=false, false until 'interval_time_ms' has elapsed since this struct was created
     pub fn should_update_ext(&self, interval_time_ms: u64, skip_first: bool) -> bool {
         let now = timestamp();
-        let last = self.last_update.load(Ordering::Relaxed);
+        let last = self.last_update.load(Ordering::Acquire);
         now.saturating_sub(last) > interval_time_ms
             && self
                 .last_update
-                .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange(last, now, Ordering::AcqRel, Ordering::Acquire)
                 == Ok(last)
             && !(skip_first && last == 0)
     }
@@ -93,7 +93,7 @@ impl AtomicInterval {
     /// return ms elapsed since the last time the time was set
     pub fn elapsed_ms(&self) -> u64 {
         let now = timestamp();
-        let last = self.last_update.load(Ordering::Relaxed);
+        let last = self.last_update.load(Ordering::Acquire);
         now.saturating_sub(last) // wrapping somehow?
     }
 
