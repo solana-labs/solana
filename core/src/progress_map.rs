@@ -36,7 +36,13 @@ impl std::ops::DerefMut for ReplaySlotStats {
 }
 
 impl ReplaySlotStats {
-    pub fn report_stats(&self, slot: Slot, num_entries: usize, num_shreds: u64) {
+    pub fn report_stats(
+        &self,
+        slot: Slot,
+        num_entries: usize,
+        num_shreds: u64,
+        bank_complete_time_us: u64,
+    ) {
         datapoint_info!(
             "replay-slot-stats",
             ("slot", slot as i64, i64),
@@ -104,6 +110,7 @@ impl ReplaySlotStats {
                     .index(ExecuteTimingType::UpdateStakesCacheUs),
                 i64
             ),
+            ("bank_complete_time_us", bank_complete_time_us, i64),
             (
                 "total_batches_len",
                 *self
