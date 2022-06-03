@@ -1260,10 +1260,7 @@ pub(crate) mod tests {
             transaction::Transaction,
         },
         solana_transaction_status::{TransactionDetails, UiTransactionEncoding},
-        std::{
-            collections::HashSet,
-            sync::atomic::{AtomicU64, Ordering::Relaxed},
-        },
+        std::{collections::HashSet, sync::atomic::AtomicU64},
     };
 
     fn make_account_result(lamports: u64, subscription: u64, data: &str) -> serde_json::Value {
@@ -1869,8 +1866,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
-        bank.lazy_rent_collection.store(true, Relaxed);
+        let bank = Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests();
 
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -2056,8 +2052,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
-        bank.lazy_rent_collection.store(true, Relaxed);
+        let bank = Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests();
 
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -2167,8 +2162,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100);
-        let bank = Bank::new_for_tests(&genesis_config);
-        bank.lazy_rent_collection.store(true, Relaxed);
+        let bank = Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests();
 
         let blockhash = bank.last_blockhash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));

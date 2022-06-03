@@ -1322,7 +1322,7 @@ pub struct Bank {
 
     pub cluster_type: Option<ClusterType>,
 
-    pub lazy_rent_collection: AtomicBool,
+    pub lazy_rent_collection: bool,
 
     // this is temporary field only to remove rewards_pool entirely
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
@@ -1513,7 +1513,7 @@ impl Bank {
             builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
-            lazy_rent_collection: AtomicBool::default(),
+            lazy_rent_collection: false,
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
             cached_executors: RwLock::<Arc<CachedExecutors>>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
@@ -1846,7 +1846,7 @@ impl Bank {
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
             cluster_type: parent.cluster_type,
-            lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
+            lazy_rent_collection: parent.lazy_rent_collection,
             rewards_pool_pubkeys,
             cached_executors,
             transaction_debug_keys,
@@ -5171,7 +5171,7 @@ impl Bank {
     }
 
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
-        if self.lazy_rent_collection.load(Relaxed) {
+        if self.lazy_rent_collection {
             return;
         }
 
@@ -5208,9 +5208,10 @@ impl Bank {
         );
     }
 
-    #[cfg(test)]
-    fn restore_old_behavior_for_fragile_tests(&self) {
-        self.lazy_rent_collection.store(true, Relaxed);
+    /// only used by tests
+    pub fn restore_old_behavior_for_fragile_tests(mut self) -> Bank {
+        self.lazy_rent_collection = true;
+        self
     }
 
     fn rent_collection_partitions(&self) -> Vec<Partition> {
@@ -8532,10 +8533,10 @@ pub(crate) mod tests {
 
         genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
-        let root_bank = Bank::new_for_tests(&genesis_config);
         // until we completely transition to the eager rent collection,
         // we must ensure lazy rent collection doens't get broken!
-        root_bank.restore_old_behavior_for_fragile_tests();
+        let root_bank =
+            Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests();
         let root_bank = Arc::new(root_bank);
         let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
         bank.add_builtin("mock_program", &mock_program_id, mock_process_instruction);
@@ -9562,33 +9563,33 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         // create a bank that ticks really slowly...
-        let bank0 = Arc::new(Bank::new_for_tests(&GenesisConfig {
-            accounts: (0..42)
-                .map(|_| {
-                    (
-                        solana_sdk::pubkey::new_rand(),
-                        Account::new(1_000_000_000, 0, &Pubkey::default()),
-                    )
-                })
-                .collect(),
-            // set it up so the first epoch is a full year long
-            poh_config: PohConfig {
-                target_tick_duration: Duration::from_secs(
-                    SECONDS_PER_YEAR as u64
-                        / MINIMUM_SLOTS_PER_EPOCH as u64
-                        / DEFAULT_TICKS_PER_SLOT,
-                ),
-                hashes_per_tick: None,
-                target_tick_count: None,
-            },
-            cluster_type: ClusterType::MainnetBeta,
+        let bank0 = Arc::new(
+            Bank::new_for_tests(&GenesisConfig {
+                accounts: (0..42)
+                    .map(|_| {
+                        (
+                            solana_sdk::pubkey::new_rand(),
+                            Account::new(1_000_000_000, 0, &Pubkey::default()),
+                        )
+                    })
+                    .collect(),
+                // set it up so the first epoch is a full year long
+                poh_config: PohConfig {
+                    target_tick_duration: Duration::from_secs(
+                        SECONDS_PER_YEAR as u64
+                            / MINIMUM_SLOTS_PER_EPOCH as u64
+                            / DEFAULT_TICKS_PER_SLOT,
+                    ),
+                    hashes_per_tick: None,
+                    target_tick_count: None,
+                },
+                cluster_type: ClusterType::MainnetBeta,
 
-            ..GenesisConfig::default()
-        }));
-
-        // enable lazy rent collection because this test depends on rent-due accounts
-        // not being eagerly-collected for exact rewards calculation
-        bank0.restore_old_behavior_for_fragile_tests();
+                ..GenesisConfig::default() // enable lazy rent collection because this test depends on rent-due accounts
+                                           // not being eagerly-collected for exact rewards calculation
+            })
+            .restore_old_behavior_for_fragile_tests(),
+        );
 
         assert_eq!(
             bank0.capitalization(),
@@ -9680,33 +9681,33 @@ pub(crate) mod tests {
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
         // create a bank that ticks really slowly...
-        let bank = Arc::new(Bank::new_for_tests(&GenesisConfig {
-            accounts: (0..42)
-                .map(|_| {
-                    (
-                        solana_sdk::pubkey::new_rand(),
-                        Account::new(1_000_000_000, 0, &Pubkey::default()),
-                    )
-                })
-                .collect(),
-            // set it up so the first epoch is a full year long
-            poh_config: PohConfig {
-                target_tick_duration: Duration::from_secs(
-                    SECONDS_PER_YEAR as u64
-                        / MINIMUM_SLOTS_PER_EPOCH as u64
-                        / DEFAULT_TICKS_PER_SLOT,
-                ),
-                hashes_per_tick: None,
-                target_tick_count: None,
-            },
-            cluster_type: ClusterType::MainnetBeta,
+        let bank = Arc::new(
+            Bank::new_for_tests(&GenesisConfig {
+                accounts: (0..42)
+                    .map(|_| {
+                        (
+                            solana_sdk::pubkey::new_rand(),
+                            Account::new(1_000_000_000, 0, &Pubkey::default()),
+                        )
+                    })
+                    .collect(),
+                // set it up so the first epoch is a full year long
+                poh_config: PohConfig {
+                    target_tick_duration: Duration::from_secs(
+                        SECONDS_PER_YEAR as u64
+                            / MINIMUM_SLOTS_PER_EPOCH as u64
+                            / DEFAULT_TICKS_PER_SLOT,
+                    ),
+                    hashes_per_tick: None,
+                    target_tick_count: None,
+                },
+                cluster_type: ClusterType::MainnetBeta,
 
-            ..GenesisConfig::default()
-        }));
-
-        // enable lazy rent collection because this test depends on rent-due accounts
-        // not being eagerly-collected for exact rewards calculation
-        bank.restore_old_behavior_for_fragile_tests();
+                ..GenesisConfig::default() // enable lazy rent collection because this test depends on rent-due accounts
+                                           // not being eagerly-collected for exact rewards calculation
+            })
+            .restore_old_behavior_for_fragile_tests(),
+        );
 
         assert_eq!(
             bank.capitalization(),
@@ -11764,8 +11765,8 @@ pub(crate) mod tests {
     #[test]
     fn test_bank_get_program_accounts() {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
-        let parent = Arc::new(Bank::new_for_tests(&genesis_config));
-        parent.restore_old_behavior_for_fragile_tests();
+        let parent =
+            Arc::new(Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests());
 
         let genesis_accounts: Vec<_> = parent.get_all_accounts_with_modified_slots().unwrap();
         assert!(
@@ -13848,13 +13849,15 @@ pub(crate) mod tests {
 
         // Set root for bank 0, with caching disabled so we can get the size
         // of the storage for this slot
-        let mut bank0 = Arc::new(Bank::new_with_config(
-            &genesis_config,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-        ));
-        bank0.restore_old_behavior_for_fragile_tests();
+        let mut bank0 = Arc::new(
+            Bank::new_with_config(
+                &genesis_config,
+                AccountSecondaryIndexes::default(),
+                false,
+                AccountShrinkThreshold::default(),
+            )
+            .restore_old_behavior_for_fragile_tests(),
+        );
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
         bank0.squash();
@@ -13962,13 +13965,15 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
         // Set root for bank 0, with caching enabled
-        let mut bank0 = Arc::new(Bank::new_with_config(
-            &genesis_config,
-            AccountSecondaryIndexes::default(),
-            true,
-            AccountShrinkThreshold::default(),
-        ));
-        bank0.restore_old_behavior_for_fragile_tests();
+        let mut bank0 = Arc::new(
+            Bank::new_with_config(
+                &genesis_config,
+                AccountSecondaryIndexes::default(),
+                true,
+                AccountShrinkThreshold::default(),
+            )
+            .restore_old_behavior_for_fragile_tests(),
+        );
 
         let pubkey0_size = get_shrink_account_size();
 
@@ -14035,8 +14040,8 @@ pub(crate) mod tests {
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        bank.restore_old_behavior_for_fragile_tests();
+        let mut bank =
+            Arc::new(Bank::new_for_tests(&genesis_config).restore_old_behavior_for_fragile_tests());
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
 
