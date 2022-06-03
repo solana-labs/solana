@@ -1096,11 +1096,8 @@ mod with_incremental_snapshots {
     ///
     /// The result is a vector of peers with snapshot hashes that:
     /// 1. match a snapshot hash from the known validators
-    /// 2. have the highest full snapshot slot
-    /// 3. have the highest incremental snapshot slot
-    ///
-    /// NOTE: If the node's full snapshot interval is different from its known validators, it may
-    /// be more likely to download full snapshots more often than necessary.
+    /// 2. have the highest incremental snapshot slot
+    /// 3. have the highest full snapshot slot of (2)
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
@@ -1121,10 +1118,10 @@ mod with_incremental_snapshots {
                 &mut peer_snapshot_hashes,
             );
         }
-        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
         );
+        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
 
         peer_snapshot_hashes
     }
