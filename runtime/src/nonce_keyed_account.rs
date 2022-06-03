@@ -5,8 +5,16 @@ use {
         account_utils::State as AccountUtilsState,
         feature_set::{self, nonce_must_be_writable},
         instruction::{checked_add, InstructionError},
+<<<<<<< HEAD
         keyed_account::KeyedAccount,
         nonce::{self, state::Versions, State},
+=======
+        nonce::{
+            self,
+            state::{DurableNonce, Versions},
+            State,
+        },
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
         pubkey::Pubkey,
         system_instruction::{nonce_to_instruction_error, NonceError},
         sysvar::rent::Rent,
@@ -14,6 +22,7 @@ use {
     std::collections::HashSet,
 };
 
+<<<<<<< HEAD
 pub trait NonceKeyedAccount {
     fn advance_nonce_account(
         &self,
@@ -41,6 +50,23 @@ pub trait NonceKeyedAccount {
         invoke_context: &InvokeContext,
     ) -> Result<(), InstructionError>;
 }
+=======
+fn get_durable_nonce(invoke_context: &InvokeContext) -> DurableNonce {
+    let separate_nonce_from_blockhash = invoke_context
+        .feature_set
+        .is_active(&feature_set::separate_nonce_from_blockhash::id());
+    DurableNonce::from_blockhash(&invoke_context.blockhash, separate_nonce_from_blockhash)
+}
+
+pub fn advance_nonce_account(
+    account: &mut BorrowedAccount,
+    signers: &HashSet<Pubkey>,
+    invoke_context: &InvokeContext,
+) -> Result<(), InstructionError> {
+    let merge_nonce_error_into_system_error = invoke_context
+        .feature_set
+        .is_active(&feature_set::merge_nonce_error_into_system_error::id());
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
 
 impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
     fn advance_nonce_account(
@@ -52,11 +78,45 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             .feature_set
             .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
+<<<<<<< HEAD
         if invoke_context
             .feature_set
             .is_active(&nonce_must_be_writable::id())
             && !self.is_writable()
         {
+=======
+    let state: Versions = account.get_state()?;
+    match state.convert_to_current() {
+        State::Initialized(data) => {
+            if !signers.contains(&data.authority) {
+                ic_msg!(
+                    invoke_context,
+                    "Advance nonce account: Account {} must be a signer",
+                    data.authority
+                );
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            let next_durable_nonce = get_durable_nonce(invoke_context);
+            if data.durable_nonce == next_durable_nonce {
+                ic_msg!(
+                    invoke_context,
+                    "Advance nonce account: nonce can only advance once per slot"
+                );
+                return Err(nonce_to_instruction_error(
+                    NonceError::NotExpired,
+                    merge_nonce_error_into_system_error,
+                ));
+            }
+
+            let new_data = nonce::state::Data::new(
+                data.authority,
+                next_durable_nonce,
+                invoke_context.lamports_per_signature,
+            );
+            account.set_state(&Versions::new_current(State::Initialized(new_data)))
+        }
+        _ => {
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
             ic_msg!(
                 invoke_context,
                 "Advance nonce account: Account {} must be writeable",
@@ -65,6 +125,7 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
             return Err(InstructionError::InvalidArgument);
         }
 
+<<<<<<< HEAD
         let state = AccountUtilsState::<Versions>::state(self)?.convert_to_current();
         match state {
             State::Initialized(data) => {
@@ -78,6 +139,25 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                 }
                 let recent_blockhash = invoke_context.blockhash;
                 if data.blockhash == recent_blockhash {
+=======
+    let state: Versions = from.get_state()?;
+    let signer = match state.convert_to_current() {
+        State::Uninitialized => {
+            if lamports > from.get_lamports() {
+                ic_msg!(
+                    invoke_context,
+                    "Withdraw nonce account: insufficient lamports {}, need {}",
+                    from.get_lamports(),
+                    lamports,
+                );
+                return Err(InstructionError::InsufficientFunds);
+            }
+            *from.get_key()
+        }
+        State::Initialized(ref data) => {
+            if lamports == from.get_lamports() {
+                if data.durable_nonce == get_durable_nonce(invoke_context) {
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
                     ic_msg!(
                         invoke_context,
                         "Advance nonce account: nonce can only advance once per slot"
@@ -255,6 +335,15 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     merge_nonce_error_into_system_error,
                 ))
             }
+<<<<<<< HEAD
+=======
+            let data = nonce::state::Data::new(
+                *nonce_authority,
+                get_durable_nonce(invoke_context),
+                invoke_context.lamports_per_signature,
+            );
+            account.set_state(&Versions::new_current(State::Initialized(data)))
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
         }
     }
 
@@ -309,6 +398,26 @@ impl<'a> NonceKeyedAccount for KeyedAccount<'a> {
                     merge_nonce_error_into_system_error,
                 ))
             }
+<<<<<<< HEAD
+=======
+            let new_data = nonce::state::Data::new(
+                *nonce_authority,
+                data.durable_nonce,
+                data.get_lamports_per_signature(),
+            );
+            account.set_state(&Versions::new_current(State::Initialized(new_data)))
+        }
+        _ => {
+            ic_msg!(
+                invoke_context,
+                "Authorize nonce account: Account {} state is invalid",
+                account.get_key()
+            );
+            Err(nonce_to_instruction_error(
+                NonceError::BadAccountState,
+                merge_nonce_error_into_system_error,
+            ))
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
         }
     }
 }
@@ -429,7 +538,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             data.authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         // First nonce instruction drives state from Uninitialized to Initialized
@@ -448,7 +557,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             data.authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         // Second nonce instruction consumes and replaces stored nonce
@@ -467,7 +576,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             data.authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         // Third nonce instruction for fun and profit
@@ -536,7 +645,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         assert_eq!(state, State::Initialized(data));
@@ -887,7 +996,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         assert_eq!(state, State::Initialized(data.clone()));
@@ -917,7 +1026,7 @@ mod test {
             .convert_to_current();
         let data = nonce::state::Data::new(
             data.authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         assert_eq!(state, State::Initialized(data));
@@ -1133,7 +1242,7 @@ mod test {
             .unwrap();
         let data = nonce::state::Data::new(
             authorized,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         assert_eq!(result, Ok(()));
@@ -1212,7 +1321,7 @@ mod test {
         let authority = Pubkey::default();
         let data = nonce::state::Data::new(
             authority,
-            invoke_context.blockhash,
+            get_durable_nonce(&invoke_context),
             invoke_context.lamports_per_signature,
         );
         invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX]
@@ -1301,7 +1410,7 @@ mod test {
                 .get_account_at_index(NONCE_ACCOUNT_INDEX)
                 .unwrap()
                 .borrow(),
-            &invoke_context.blockhash,
+            get_durable_nonce(&invoke_context).as_hash(),
         ));
     }
 
@@ -1352,7 +1461,7 @@ mod test {
                 .get_account_at_index(NONCE_ACCOUNT_INDEX)
                 .unwrap()
                 .borrow(),
-            &invoke_context.blockhash,
+            get_durable_nonce(&invoke_context).as_hash(),
         ));
     }
 }

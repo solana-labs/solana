@@ -325,7 +325,7 @@ fn test_create_account_with_seed() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Test by creating transfer TX with nonce, fully offline
     let mut authority_config = CliConfig::recent_for_tests();

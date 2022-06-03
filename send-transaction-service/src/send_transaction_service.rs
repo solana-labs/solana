@@ -764,8 +764,12 @@ mod test {
         crate::tpu_info::NullTpuInfo,
         crossbeam_channel::unbounded,
         solana_sdk::{
-            account::AccountSharedData, genesis_config::create_genesis_config, nonce,
-            pubkey::Pubkey, signature::Signer, system_program, system_transaction,
+            account::AccountSharedData,
+            genesis_config::create_genesis_config,
+            nonce::{self, state::DurableNonce},
+            pubkey::Pubkey,
+            signature::Signer,
+            system_program, system_transaction,
         },
         std::ops::Sub,
     };
@@ -1068,7 +1072,8 @@ mod test {
             .unwrap();
 
         let nonce_address = Pubkey::new_unique();
-        let durable_nonce = Hash::new_unique();
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
         let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::new(Pubkey::default(), durable_nonce, 42),
         ));
@@ -1101,7 +1106,7 @@ mod test {
                 rooted_signature,
                 vec![],
                 last_valid_block_height,
-                Some((nonce_address, durable_nonce)),
+                Some((nonce_address, *durable_nonce.as_hash())),
                 None,
                 Some(Instant::now()),
             ),
@@ -1192,7 +1197,7 @@ mod test {
                 Signature::default(),
                 vec![],
                 root_bank.block_height() - 1,
-                Some((nonce_address, durable_nonce)),
+                Some((nonce_address, *durable_nonce.as_hash())),
                 None,
                 Some(Instant::now()),
             ),
@@ -1284,7 +1289,7 @@ mod test {
                 Signature::default(),
                 vec![],
                 last_valid_block_height,
-                Some((nonce_address, durable_nonce)),
+                Some((nonce_address, *durable_nonce.as_hash())),
                 None,
                 Some(Instant::now().sub(Duration::from_millis(4000))),
             ),
@@ -1311,7 +1316,8 @@ mod test {
         for mut transaction in transactions.values_mut() {
             transaction.last_sent_time = Some(Instant::now().sub(Duration::from_millis(4000)));
         }
-        let new_durable_nonce = Hash::new_unique();
+        let new_durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
         let new_nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::new(Pubkey::default(), new_durable_nonce, 42),
         ));

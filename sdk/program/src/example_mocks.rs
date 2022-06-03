@@ -23,6 +23,32 @@ pub mod solana_client {
         pub type Result<T> = std::result::Result<T, ClientError>;
     }
 
+<<<<<<< HEAD
+=======
+    pub mod nonce_utils {
+        use {
+            super::super::solana_sdk::{
+                account::ReadableAccount, account_utils::StateMut, pubkey::Pubkey,
+            },
+            crate::nonce::state::{Data, DurableNonce, Versions},
+        };
+
+        #[derive(thiserror::Error, Debug)]
+        #[error("mock-error")]
+        pub struct Error;
+
+        pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
+            _account: &T,
+        ) -> Result<Data, Error> {
+            Ok(Data::new(
+                Pubkey::new_unique(),
+                DurableNonce::default(),
+                5000,
+            ))
+        }
+    }
+
+>>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
     pub mod rpc_client {
         use super::{
             super::solana_sdk::{hash::Hash, signature::Signature, transaction::Transaction},
