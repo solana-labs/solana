@@ -3332,34 +3332,29 @@ impl AccountsDb {
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let remove_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let total_bytes_collect = AtomicUsize::new(0);
-        self.thread_pool_clean.install(|| {
-            const CHUNK_SIZE: usize = 50;
-            stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
-                let mut chunk_bytes = 0;
-                let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
-                let mut remove_pubkeys = Vec::with_capacity(CHUNK_SIZE);
-                chunk.iter().for_each(|(pubkey, account)| {
-                    if minimized_account_set.contains(pubkey) {
-                        chunk_bytes += account.account_size;
-                        keep_accounts.push((pubkey, account));
-                    } else if let Some(read_entry) =
-                        self.accounts_index.get_account_read_entry(pubkey)
-                    {
-                        remove_pubkeys.push(pubkey);
-                        read_entry.unref();
-                    }
-                });
-
-                keep_accounts_collect
-                    .lock()
-                    .unwrap()
-                    .append(&mut keep_accounts);
-                remove_pubkeys_collect
-                    .lock()
-                    .unwrap()
-                    .append(&mut remove_pubkeys);
-                total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
+        const CHUNK_SIZE: usize = 50;
+        stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
+            let mut chunk_bytes = 0;
+            let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
+            let mut remove_pubkeys = Vec::with_capacity(CHUNK_SIZE);
+            chunk.iter().for_each(|(pubkey, account)| {
+                if minimized_account_set.contains(pubkey) {
+                    chunk_bytes += account.account_size;
+                    keep_accounts.push((pubkey, account));
+                } else if let Some(_) = self.accounts_index.get_account_read_entry(pubkey) {
+                    remove_pubkeys.push(pubkey);
+                }
             });
+
+            keep_accounts_collect
+                .lock()
+                .unwrap()
+                .append(&mut keep_accounts);
+            remove_pubkeys_collect
+                .lock()
+                .unwrap()
+                .append(&mut remove_pubkeys);
+            total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
         });
 
         let keep_accounts = keep_accounts_collect.into_inner().unwrap();
