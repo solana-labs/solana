@@ -4148,6 +4148,10 @@ impl AccountsDb {
         self.do_load(ancestors, pubkey, None, load_hint)
     }
 
+    pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
+        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
+    }
+
     pub fn load_with_fixed_root(
         &self,
         ancestors: &Ancestors,
@@ -4481,6 +4485,19 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
+        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+    }
+
+    /// if 'load_into_read_cache_only', then return value is meaningless.
+    ///   The goal is to get the account into the read-only cache.
+    fn do_load_with_populate_read_cache(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+        max_root: Option<Slot>,
+        load_hint: LoadHint,
+        load_into_read_cache_only: bool,
+    ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
@@ -4488,10 +4505,25 @@ impl AccountsDb {
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-        if self.caching_enabled && !storage_location.is_cached() {
-            let result = self.read_only_accounts_cache.load(*pubkey, slot);
-            if let Some(account) = result {
-                return Some((account, slot));
+        if self.caching_enabled {
+            let in_write_cache = storage_location.is_cached();
+            if !load_into_read_cache_only {
+                if !in_write_cache {
+                    let result = self.read_only_accounts_cache.load(*pubkey, slot);
+                    if let Some(account) = result {
+                        return Some((account, slot));
+                    }
+                }
+            } else {
+                // goal is to load into read cache
+                if in_write_cache {
+                    // no reason to load in read cache. already in write cache
+                    return None;
+                }
+                if self.read_only_accounts_cache.in_cache(pubkey, slot) {
+                    // already in read cache
+                    return None;
+                }
             }
         }
 
