@@ -369,7 +369,7 @@ impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
         match source {
-            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.write().unwrap().remove(0),
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.read().unwrap()[0],
             PreAllocatedAccountMapEntry::Raw(raw) => raw,
         }
     }
