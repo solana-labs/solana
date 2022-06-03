@@ -41,7 +41,7 @@ pub struct ReplicaAccountInfo<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Information about an account being updated
 /// (extended with transaction signature doing this update)
-pub struct ReplicaAccountInfoWithSignature<'a> {
+pub struct ReplicaAccountInfoV2<'a> {
     /// The Pubkey for the account
     pub pubkey: &'a [u8],
 
@@ -77,7 +77,7 @@ pub struct ReplicaAccountInfoWithSignature<'a> {
 /// plugin implementations to handle the change.
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
-    V0_0_2(&'a ReplicaAccountInfoWithSignature<'a>),
+    V0_0_2(&'a ReplicaAccountInfoV2<'a>),
 }
 
 /// Information about a transaction

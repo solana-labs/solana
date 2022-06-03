@@ -3,7 +3,7 @@ use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfoVersions, ReplicaAccountInfoWithSignature,
+        ReplicaAccountInfoVersions, ReplicaAccountInfoV2,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -107,8 +107,8 @@ impl AccountsUpdateNotifierImpl {
         meta: &'a StoredMeta,
         account: &'a AccountSharedData,
         txn_signature: &'a Signature,
-    ) -> Option<ReplicaAccountInfoWithSignature<'a>> {
-        Some(ReplicaAccountInfoWithSignature {
+    ) -> Option<ReplicaAccountInfoV2<'a>> {
+        Some(ReplicaAccountInfoV2 {
             pubkey: meta.pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
@@ -123,8 +123,8 @@ impl AccountsUpdateNotifierImpl {
     fn accountinfo_from_stored_account_meta<'a>(
         &self,
         stored_account_meta: &'a StoredAccountMeta,
-    ) -> Option<ReplicaAccountInfoWithSignature<'a>> {
-        Some(ReplicaAccountInfoWithSignature {
+    ) -> Option<ReplicaAccountInfoV2<'a>> {
+        Some(ReplicaAccountInfoV2 {
             pubkey: stored_account_meta.meta.pubkey.as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
@@ -138,7 +138,7 @@ impl AccountsUpdateNotifierImpl {
 
     fn notify_plugins_of_account_update(
         &self,
-        account: ReplicaAccountInfoWithSignature,
+        account: ReplicaAccountInfoV2,
         slot: Slot,
         is_startup: bool,
     ) {
