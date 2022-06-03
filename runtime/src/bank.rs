@@ -5183,8 +5183,12 @@ impl Bank {
         let partitions = self.rent_collection_partitions();
         let count = partitions.len();
         let rent_metrics = RentMetrics::default();
-        partitions.into_iter().for_each(|partition| {
-            self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
+        // partitions will usually be 1, but could be more if we skip slots
+        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        thread_pool.install(|| {
+            partitions.into_par_iter().for_each(|partition| {
+                self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
+            });
         });
         measure.stop();
         datapoint_info!(
