@@ -420,6 +420,10 @@ pub mod separate_nonce_from_blockhash {
     solana_sdk::declare_id!("Gea3ZkK2N4pHuVZVxWcnAtS6UEDdyumdYt4pFcKjA3ar");
 }
 
+pub mod enable_durable_nonce {
+    solana_sdk::declare_id!("4EJQtF2pkRyawwcTVfQutzq4Sa5hRhibF6QAK1QXhtEX");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -518,6 +522,7 @@ lazy_static! {
         (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
+        (enable_durable_nonce::id(), "enable durable nonce #25744"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
