@@ -13,7 +13,7 @@ edition = "2021"
 crossbeam-channel = "0.5"
 gethostname = "0.2.3"
 lazy_static = "1.4.0"
-log = "0.4.14"
+log = "0.4.17"
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 

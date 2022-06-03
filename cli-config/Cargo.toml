@@ -14,7 +14,7 @@ dirs-next = "2.0.0"
 lazy_static = "1.4.0"
 serde = "1.0.137"
 serde_derive = "1.0.103"
-serde_yaml = "0.8.23"
+serde_yaml = "0.8.24"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
 url = "2.2.2"

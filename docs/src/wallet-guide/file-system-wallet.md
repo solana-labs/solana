@@ -54,7 +54,7 @@ solana-keygen verify <PUBKEY> ~/my-solana-wallet/my-keypair.json
 
 where `<PUBKEY>` is replaced with your wallet address.
 The command will output "Success" if the given address matches the
-the one in your keypair file, and "Failed" otherwise.
+one in your keypair file, and "Failed" otherwise.
 
 ## Creating Multiple File System Wallet Addresses
 

@@ -89,7 +89,7 @@ pub enum CliCommand {
         timeout: Duration,
         blockhash: Option<Hash>,
         print_timestamp: bool,
-        additional_fee: Option<u32>,
+        compute_unit_price: Option<u64>,
     },
     Rent {
         data_length: usize,
@@ -877,7 +877,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             print_timestamp,
-            additional_fee,
+            compute_unit_price,
         } => process_ping(
             &rpc_client,
             config,
@@ -886,7 +886,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             *print_timestamp,
-            additional_fee,
+            compute_unit_price,
         ),
         CliCommand::Rent {
             data_length,
@@ -1986,7 +1986,10 @@ mod tests {
         assert!(result.is_ok());
 
         let vote_account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!({
                 "data": ["KLUv/QBYNQIAtAIBAAAAbnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/EFAAEAAB8ACQD6gx92zAiAAecDP4B2XeEBSIx7MQeung==", "base64+zstd"],
                 "lamports": 42,
@@ -2272,7 +2275,10 @@ mod tests {
         // Success case
         let mut config = CliConfig::default();
         let account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: Value::Null,
         });
         let mut mocks = HashMap::new();

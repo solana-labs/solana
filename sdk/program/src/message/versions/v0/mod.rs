@@ -15,12 +15,12 @@ use crate::{
     hash::Hash,
     instruction::{CompiledInstruction, Instruction},
     message::{
-        compiled_keys::CompileError, legacy::BUILTIN_PROGRAMS_KEYS, AccountKeys, CompiledKeys,
+        compiled_keys::CompileError, legacy::is_builtin_key_or_sysvar, AccountKeys, CompiledKeys,
         MessageHeader, MESSAGE_VERSION_PREFIX,
     },
     pubkey::Pubkey,
-    sanitize::{Sanitize, SanitizeError},
-    short_vec, sysvar,
+    sanitize::SanitizeError,
+    short_vec,
 };
 pub use loaded::*;
 
@@ -52,7 +52,9 @@ pub struct MessageAddressTableLookup {
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
-    /// The message header, identifying signed and read-only `account_keys`
+    /// The message header, identifying signed and read-only `account_keys`.
+    /// Header values only describe static `account_keys`, they do not describe
+    /// any additional account keys loaded via address table lookups.
     pub header: MessageHeader,
 
     /// List of accounts loaded by this transaction.
@@ -67,7 +69,10 @@ pub struct Message {
     ///
     /// # Notes
     ///
-    /// Account and program indexes will index into the list of addresses
+    /// Program indexes must index into the list of message `account_keys` because
+    /// program id's cannot be dynamically loaded from a lookup table.
+    ///
+    /// Account indexes must index into the list of addresses
     /// constructed from the concatenation of three key lists:
     ///   1) message `account_keys`
     ///   2) ordered list of keys loaded from `writable` lookup table indexes
@@ -81,13 +86,13 @@ pub struct Message {
     pub address_table_lookups: Vec<MessageAddressTableLookup>,
 }
 
-impl Sanitize for Message {
-    fn sanitize(&self) -> Result<(), SanitizeError> {
-        // signing area and read-only non-signing area should not
-        // overlap
+impl Message {
+    /// Sanitize message fields and compiled instruction indexes
+    pub fn sanitize(&self, reject_dynamic_program_ids: bool) -> Result<(), SanitizeError> {
+        let num_static_account_keys = self.account_keys.len();
         if usize::from(self.header.num_required_signatures)
             .saturating_add(usize::from(self.header.num_readonly_unsigned_accounts))
-            > self.account_keys.len()
+            > num_static_account_keys
         {
             return Err(SanitizeError::IndexOutOfBounds);
         }
@@ -97,29 +102,59 @@ impl Sanitize for Message {
             return Err(SanitizeError::InvalidValue);
         }
 
-        let mut num_loaded_accounts = self.account_keys.len();
-        for lookup in &self.address_table_lookups {
-            let num_table_loaded_accounts = lookup
-                .writable_indexes
-                .len()
-                .saturating_add(lookup.readonly_indexes.len());
+        let num_dynamic_account_keys = {
+            let mut total_lookup_keys: usize = 0;
+            for lookup in &self.address_table_lookups {
+                let num_lookup_indexes = lookup
+                    .writable_indexes
+                    .len()
+                    .saturating_add(lookup.readonly_indexes.len());
 
-            // each lookup table must be used to load at least one account
-            if num_table_loaded_accounts == 0 {
-                return Err(SanitizeError::InvalidValue);
+                // each lookup table must be used to load at least one account
+                if num_lookup_indexes == 0 {
+                    return Err(SanitizeError::InvalidValue);
+                }
+
+                total_lookup_keys = total_lookup_keys.saturating_add(num_lookup_indexes);
             }
+            total_lookup_keys
+        };
 
-            num_loaded_accounts = num_loaded_accounts.saturating_add(num_table_loaded_accounts);
+        // this is redundant with the above sanitization checks which require that:
+        // 1) the header describes at least 1 RW account
+        // 2) the header doesn't describe more account keys than the number of account keys
+        if num_static_account_keys == 0 {
+            return Err(SanitizeError::InvalidValue);
         }
 
-        // the number of loaded accounts must be <= 256 since account indices are
-        // encoded as `u8`
-        if num_loaded_accounts > 256 {
+        // the combined number of static and dynamic account keys must be <= 256
+        // since account indices are encoded as `u8`
+        let total_account_keys = num_static_account_keys.saturating_add(num_dynamic_account_keys);
+        if total_account_keys > 256 {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
+        // `expect` is safe because of earlier check that
+        // `num_static_account_keys` is non-zero
+        let max_account_ix = total_account_keys
+            .checked_sub(1)
+            .expect("message doesn't contain any account keys");
+
+        // switch to rejecting program ids loaded from lookup tables so that
+        // static analysis on program instructions can be performed without
+        // loading on-chain data from a bank
+        let max_program_id_ix = if reject_dynamic_program_ids {
+            // `expect` is safe because of earlier check that
+            // `num_static_account_keys` is non-zero
+            num_static_account_keys
+                .checked_sub(1)
+                .expect("message doesn't contain any static account keys")
+        } else {
+            max_account_ix
+        };
+
         for ci in &self.instructions {
-            if usize::from(ci.program_id_index) >= num_loaded_accounts {
+            if usize::from(ci.program_id_index) > max_program_id_ix {
                 return Err(SanitizeError::IndexOutOfBounds);
             }
             // A program cannot be a payer.
@@ -127,7 +162,7 @@ impl Sanitize for Message {
                 return Err(SanitizeError::IndexOutOfBounds);
             }
             for ai in &ci.accounts {
-                if usize::from(*ai) >= num_loaded_accounts {
+                if usize::from(*ai) > max_account_ix {
                     return Err(SanitizeError::IndexOutOfBounds);
                 }
             }
@@ -309,7 +344,7 @@ impl Message {
                 // demote reserved ids
                 self.account_keys
                     .get(key_index)
-                    .map(|key| sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key))
+                    .map(is_builtin_key_or_sysvar)
                     .unwrap_or_default()
             }
             && !{
@@ -337,7 +372,9 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
@@ -356,7 +393,9 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
@@ -375,13 +414,15 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
     #[test]
-    fn test_sanitize_with_table_lookup_and_ix() {
-        assert!(Message {
+    fn test_sanitize_with_table_lookup_and_ix_with_dynamic_program_id() {
+        let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
                 ..MessageHeader::default()
@@ -395,11 +436,43 @@ mod tests {
             instructions: vec![CompiledInstruction {
                 program_id_index: 4,
                 accounts: vec![0, 1, 2, 3],
+                data: vec![],
+            }],
+            ..Message::default()
+        };
+
+        assert!(message.sanitize(
+            false, // require_static_program_ids
+        ).is_ok());
+
+        assert!(message.sanitize(
+            true, // require_static_program_ids
+        ).is_err());
+    }
+
+    #[test]
+    fn test_sanitize_with_table_lookup_and_ix_with_static_program_id() {
+        assert!(Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                ..MessageHeader::default()
+            },
+            account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
+            address_table_lookups: vec![MessageAddressTableLookup {
+                account_key: Pubkey::new_unique(),
+                writable_indexes: vec![1, 2, 3],
+                readonly_indexes: vec![0],
+            }],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 1,
+                accounts: vec![2, 3, 4, 5],
                 data: vec![]
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
@@ -410,7 +483,9 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
@@ -425,7 +500,9 @@ mod tests {
             account_keys: vec![Pubkey::new_unique()],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
@@ -444,7 +521,9 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
@@ -458,7 +537,9 @@ mod tests {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
@@ -472,7 +553,9 @@ mod tests {
             account_keys: (0..=256).map(|_| Pubkey::new_unique()).collect(),
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
@@ -491,7 +574,9 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_ok());
     }
 
@@ -510,13 +595,15 @@ mod tests {
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
     #[test]
     fn test_sanitize_with_invalid_ix_program_id() {
-        assert!(Message {
+        let message = Message {
             header: MessageHeader {
                 num_required_signatures: 1,
                 ..MessageHeader::default()
@@ -530,12 +617,17 @@ mod tests {
             instructions: vec![CompiledInstruction {
                 program_id_index: 2,
                 accounts: vec![],
-                data: vec![]
+                data: vec![],
             }],
             ..Message::default()
-        }
-        .sanitize()
-        .is_err());
+        };
+
+        assert!(message
+            .sanitize(true /* require_static_program_ids */)
+            .is_err());
+        assert!(message
+            .sanitize(false /* require_static_program_ids */)
+            .is_err());
     }
 
     #[test]
@@ -545,7 +637,7 @@ mod tests {
                 num_required_signatures: 1,
                 ..MessageHeader::default()
             },
-            account_keys: vec![Pubkey::new_unique()],
+            account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
             address_table_lookups: vec![MessageAddressTableLookup {
                 account_key: Pubkey::new_unique(),
                 writable_indexes: vec![],
@@ -553,12 +645,14 @@ mod tests {
             }],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
-                accounts: vec![2],
+                accounts: vec![3],
                 data: vec![]
             }],
             ..Message::default()
         }
-        .sanitize()
+        .sanitize(
+            true, // require_static_program_ids
+        )
         .is_err());
     }
 
@@ -572,26 +666,25 @@ mod tests {
     #[test]
     fn test_try_compile() {
         let mut keys = vec![];
-        keys.resize_with(8, Pubkey::new_unique);
+        keys.resize_with(7, Pubkey::new_unique);
 
         let payer = keys[0];
-        let program_id = keys[7];
+        let program_id = keys[6];
         let instructions = vec![Instruction {
             program_id,
             accounts: vec![
                 AccountMeta::new(keys[1], true),
                 AccountMeta::new_readonly(keys[2], true),
                 AccountMeta::new(keys[3], false),
-                AccountMeta::new_readonly(keys[4], false),
-                AccountMeta::new(keys[5], false),
-                AccountMeta::new_readonly(keys[6], false),
+                AccountMeta::new(keys[4], false), // loaded from lut
+                AccountMeta::new_readonly(keys[5], false), // loaded from lut
             ],
             data: vec![],
         }];
         let address_lookup_table_accounts = vec![
             AddressLookupTableAccount {
                 key: Pubkey::new_unique(),
-                addresses: vec![keys[5], keys[6], program_id],
+                addresses: vec![keys[4], keys[5], keys[6]],
             },
             AddressLookupTableAccount {
                 key: Pubkey::new_unique(),
@@ -614,16 +707,16 @@ mod tests {
                     num_readonly_unsigned_accounts: 1
                 },
                 recent_blockhash,
-                account_keys: vec![keys[0], keys[1], keys[2], keys[3], keys[4]],
+                account_keys: vec![keys[0], keys[1], keys[2], keys[3], program_id],
                 instructions: vec![CompiledInstruction {
-                    program_id_index: 7,
-                    accounts: vec![1, 2, 3, 4, 5, 6],
+                    program_id_index: 4,
+                    accounts: vec![1, 2, 3, 5, 6],
                     data: vec![],
                 },],
                 address_table_lookups: vec![MessageAddressTableLookup {
                     account_key: address_lookup_table_accounts[0].key,
                     writable_indexes: vec![0],
-                    readonly_indexes: vec![1, 2],
+                    readonly_indexes: vec![1],
                 }],
             })
         );

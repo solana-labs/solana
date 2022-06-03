@@ -32,14 +32,15 @@ impl StakedNodesUpdaterService {
                 let mut last_stakes = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
                     let mut new_ip_to_stake = HashMap::new();
-                    Self::try_refresh_ip_to_stake(
+                    if Self::try_refresh_ip_to_stake(
                         &mut last_stakes,
                         &mut new_ip_to_stake,
                         &bank_forks,
                         &cluster_info,
-                    );
-                    let mut shared = shared_staked_nodes.write().unwrap();
-                    *shared = new_ip_to_stake;
+                    ) {
+                        let mut shared = shared_staked_nodes.write().unwrap();
+                        *shared = new_ip_to_stake;
+                    }
                 }
             })
             .unwrap();
@@ -52,7 +53,7 @@ impl StakedNodesUpdaterService {
         ip_to_stake: &mut HashMap<IpAddr, u64>,
         bank_forks: &RwLock<BankForks>,
         cluster_info: &ClusterInfo,
-    ) {
+    ) -> bool {
         if last_stakes.elapsed() > IP_TO_STAKE_REFRESH_DURATION {
             let root_bank = bank_forks.read().unwrap().root_bank();
             let staked_nodes = root_bank.staked_nodes();
@@ -65,8 +66,10 @@ impl StakedNodesUpdaterService {
                 })
                 .collect();
             *last_stakes = Instant::now();
+            true
         } else {
             sleep(Duration::from_millis(1));
+            false
         }
     }
 

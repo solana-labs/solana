@@ -21,6 +21,7 @@ use {
     solana_client::rpc_cache::LargestAccountsCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
+        bigtable_upload::ConfirmedBlockUploadConfig,
         bigtable_upload_service::BigTableUploadService, blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
     },
@@ -160,7 +161,22 @@ impl RpcRequestMiddleware {
     where
         P: AsRef<Path>,
     {
-        let root = &self.snapshot_config.as_ref().unwrap().snapshot_archives_dir;
+        let root = if self
+            .full_snapshot_archive_path_regex
+            .is_match(Path::new("").join(&stem).to_str().unwrap())
+        {
+            &self
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .full_snapshot_archives_dir
+        } else {
+            &self
+                .snapshot_config
+                .as_ref()
+                .unwrap()
+                .incremental_snapshot_archives_dir
+        };
         let local_path = root.join(&stem);
         if local_path.exists() {
             local_path
@@ -236,7 +252,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 // Convenience redirect to the latest snapshot
                 let full_snapshot_archive_info =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.snapshot_archives_dir,
+                        &snapshot_config.full_snapshot_archives_dir,
                     );
                 let snapshot_archive_info =
                     if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
@@ -244,7 +260,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             Some(full_snapshot_archive_info.snapshot_archive_info().clone())
                         } else {
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &snapshot_config.snapshot_archives_dir,
+                                &snapshot_config.incremental_snapshot_archives_dir,
                                 full_snapshot_archive_info.slot(),
                             )
                             .map(|incremental_snapshot_archive_info| {
@@ -337,7 +353,7 @@ impl JsonRpcService {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
@@ -395,12 +411,13 @@ impl JsonRpcService {
                         info!("BigTable ledger storage initialized");
 
                         let bigtable_ledger_upload_service = if enable_bigtable_ledger_upload {
-                            Some(Arc::new(BigTableUploadService::new(
+                            Some(Arc::new(BigTableUploadService::new_with_config(
                                 runtime.clone(),
                                 bigtable_ledger_storage.clone(),
                                 blockstore.clone(),
                                 block_commitment_cache.clone(),
                                 current_transaction_status_slot.clone(),
+                                ConfirmedBlockUploadConfig::default(),
                                 exit_bigtable_ledger_upload_service.clone(),
                             )))
                         } else {
@@ -502,28 +519,29 @@ impl JsonRpcService {
                         e,
                         rpc_addr.port()
                     );
+                    close_handle_sender.send(Err(e.to_string())).unwrap();
                     return;
                 }
 
                 let server = server.unwrap();
-                close_handle_sender.send(server.close_handle()).unwrap();
+                close_handle_sender.send(Ok(server.close_handle())).unwrap();
                 server.wait();
                 exit_bigtable_ledger_upload_service.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
-        let close_handle = close_handle_receiver.recv().unwrap();
+        let close_handle = close_handle_receiver.recv().unwrap()?;
         let close_handle_ = close_handle.clone();
         validator_exit
             .write()
             .unwrap()
             .register_exit(Box::new(move || close_handle_.close()));
-        Self {
+        Ok(Self {
             thread_hdl,
             #[cfg(test)]
             request_processor: test_request_processor,
             close_handle: Some(close_handle),
-        }
+        })
     }
 
     pub fn exit(&mut self) {
@@ -542,6 +560,7 @@ mod tests {
     use {
         super::*,
         crate::rpc::create_validator_exit,
+        solana_client::rpc_config::RpcContextConfig,
         solana_gossip::{
             contact_info::ContactInfo,
             crds::GossipRoute,
@@ -614,7 +633,8 @@ mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
-        );
+        )
+        .unwrap();
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -622,7 +642,8 @@ mod tests {
             10_000,
             rpc_service
                 .request_processor
-                .get_balance(&mint_keypair.pubkey(), None)
+                .get_balance(&mint_keypair.pubkey(), RpcContextConfig::default())
+                .unwrap()
                 .value
         );
         rpc_service.exit();

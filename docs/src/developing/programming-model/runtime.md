@@ -49,9 +49,9 @@ To prevent a program from abusing computation resources, each instruction in a
 transaction is given a compute budget. The budget consists of computation units
 that are consumed as the program performs various operations and bounds that the
 program may not exceed. When the program consumes its entire budget or exceeds
-a bound, then the runtime halts the program and returns an error.
+a bound, the runtime halts the program and returns an error.
 
-Note: The compute budget currently applies per-instruction but is moving toward
+Note: The compute budget currently applies per-instruction, but is moving toward
 a per-transaction model. For more information see [Transaction-wide Compute
 Budget](#transaction-wide-compute-budget).
 
@@ -101,6 +101,27 @@ At runtime a program may log how much of the compute budget remains. See
 [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
 
+A transaction may set the maximum number of compute units it is allowed to
+consume by including a "request units"
+[`ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
+Note that a transaction's prioritization fee is calculated from multiplying the
+number of compute units requested by the compute unit price (measured in
+micro-lamports) set by the transaction.  So transactions should request the
+minimum amount of compute units required for execution to minimize fees. Also
+note that fees are not adjusted when the number of requested compute units
+exceeds the number of compute units consumed by an executed transaction.
+
+Compute Budget instructions don't require any accounts and don't consume any
+compute units to process.  Transactions can only contain one of each type of
+compute budget instruction, duplicate types will result in an error.
+
+The `ComputeBudgetInstruction::set_compute_unit_limit` function can be used to create
+these instructions:
+
+```rust
+let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
+```
+
 ## Transaction-wide Compute Budget
 
 Transactions are processed as a single entity and are the primary unit of block
@@ -111,31 +132,18 @@ transaction-wide budget rather than per-instruction.
 For information on what the compute budget is and how it is applied see [Compute
 Budget](#compute-budget).
 
-With a transaction-wide compute budget the `max_units` cap is applied to the
-entire transaction rather than to each instruction within the transaction. The
-default number of maximum units will calculated per instruction which means the
-sum of the compute units used by each instruction in the transaction must not
-exceed that value. The default number of maximum units allowed matches existing
-values to avoid breaking existing client behavior.
-
-### Reduce transaction fees
-
-_Note: At the time of writing, transaction fees are still charged by the number of
-signatures but will eventually be calculated from requested compute unit cap._
-
-Most transactions won't use the default number of compute units so they can include a
-[``ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39)
-to lower the compute unit cap. **Important: Lower compute caps will be charged lower fees.**
-
-Compute Budget instructions don't require any accounts and must lie in the first
-3 instructions of a transaction otherwise they will be ignored.
-
-The `ComputeBudgetInstruction::request_units` function can be used to create
-these instructions:
-
-```rust
-let instruction = ComputeBudgetInstruction::request_units(300_000);
-```
+The transaction-wide compute budget applies the `max_units` cap to the entire
+transaction rather than to each instruction within the transaction. The default
+transaction-wide `max_units` will be calculated as the product of the number of
+instructions in the transaction (excluding [Compute Budget](#compute-budget)
+instructions) by the default per-instruction units, which is currently 200k.
+During processing, the sum of the compute units used by each instruction in the
+transaction must not exceed that value. This default value attempts to retain
+existing behavior to avoid breaking clients. Transactions can request a specific
+number of `max_units` via [Compute Budget](#compute-budget) instructions.
+Clients should request only what they need; requesting the minimum amount of
+units required to process the transaction will reduce overall transaction cost,
+which may include a prioritization-fee charged for every compute unit.
 
 ## New Features
 

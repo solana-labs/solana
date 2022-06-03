@@ -148,21 +148,18 @@ impl Hash {
 pub fn hashv(vals: &[&[u8]]) -> Hash {
     // Perform the calculation inline, calling this from within a program is
     // not supported
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         let mut hasher = Hasher::default();
         hasher.hashv(vals);
         hasher.result()
     }
     // Call via a system call to perform the calculation
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
-        extern "C" {
-            fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64;
-        }
         let mut hash_result = [0; HASH_BYTES];
         unsafe {
-            sol_sha256(
+            crate::syscalls::sol_sha256(
                 vals as *const _ as *const u8,
                 vals.len() as u64,
                 &mut hash_result as *mut _ as *mut u8,

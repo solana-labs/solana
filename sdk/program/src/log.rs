@@ -91,49 +91,35 @@ macro_rules! msg {
 /// Print a string to the log.
 #[inline]
 pub fn sol_log(message: &str) {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     unsafe {
-        sol_log_(message.as_ptr(), message.len() as u64);
+        crate::syscalls::sol_log_(message.as_ptr(), message.len() as u64);
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_log(message);
-}
-
-#[cfg(target_arch = "bpf")]
-extern "C" {
-    fn sol_log_(message: *const u8, len: u64);
 }
 
 /// Print 64-bit values represented as hexadecimal to the log.
 #[inline]
 pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     unsafe {
-        sol_log_64_(arg1, arg2, arg3, arg4, arg5);
+        crate::syscalls::sol_log_64_(arg1, arg2, arg3, arg4, arg5);
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_log_64(arg1, arg2, arg3, arg4, arg5);
-}
-
-#[cfg(target_arch = "bpf")]
-extern "C" {
-    fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64);
 }
 
 /// Print some slices as base64.
 pub fn sol_log_data(data: &[&[u8]]) {
-    #[cfg(target_arch = "bpf")]
-    {
-        extern "C" {
-            fn sol_log_data(data: *const u8, data_len: u64);
-        }
+    #[cfg(target_os = "solana")]
+    unsafe {
+        crate::syscalls::sol_log_data(data as *const _ as *const u8, data.len() as u64)
+    };
 
-        unsafe { sol_log_data(data as *const _ as *const u8, data.len() as u64) };
-    }
-
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_log_data(data);
 }
 
@@ -172,15 +158,10 @@ pub fn sol_log_params(accounts: &[AccountInfo], data: &[u8]) {
 /// Print the remaining compute units available to the program.
 #[inline]
 pub fn sol_log_compute_units() {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     unsafe {
-        sol_log_compute_units_();
+        crate::syscalls::sol_log_compute_units_();
     }
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_log_compute_units();
-}
-
-#[cfg(target_arch = "bpf")]
-extern "C" {
-    fn sol_log_compute_units_();
 }

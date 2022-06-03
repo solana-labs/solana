@@ -6,7 +6,7 @@ use solana_program::declare_id;
 
 pub mod error;
 pub mod instruction;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub mod processor;
 pub mod state;
 

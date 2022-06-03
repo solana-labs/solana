@@ -1,11 +1,11 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import {Token, u64} from '@solana/spl-token';
+import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {useFakeTimers, SinonFakeTimers} from 'sinon';
 
 import {
-  Account,
   Authorized,
   Connection,
   EpochSchedule,
@@ -44,13 +44,21 @@ import {
   mockRpcResponse,
   mockServer,
 } from './mocks/rpc-http';
-import {stubRpcWebSocket, restoreRpcWebSocket} from './mocks/rpc-websockets';
-import type {TransactionSignature} from '../src/transaction';
+import {
+  stubRpcWebSocket,
+  restoreRpcWebSocket,
+  mockRpcMessage,
+} from './mocks/rpc-websockets';
+import {TransactionInstruction, TransactionSignature} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
 } from '../src/connection';
+import {
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
+} from '../src/util/tx-expiry-custom-errors';
 
 use(chaiAsPromised);
 
@@ -885,22 +893,261 @@ describe('Connection', function () {
     });
   }
 
-  it('confirm transaction - error', async () => {
-    const badTransactionSignature = 'bad transaction signature';
+  if (process.env.TEST_LIVE) {
+    describe('transaction confirmation (live)', () => {
+      let connection: Connection;
+      beforeEach(() => {
+        connection = new Connection(url, 'confirmed');
+      });
 
-    await expect(
-      connection.confirmTransaction(badTransactionSignature),
-    ).to.be.rejectedWith('signature must be base58 encoded');
+      describe('blockheight based transaction confirmation', () => {
+        let latestBlockhash: {blockhash: string; lastValidBlockHeight: number};
+        let signature: string;
 
-    await mockRpcResponse({
-      method: 'getSignatureStatuses',
-      params: [[badTransactionSignature]],
-      error: mockErrorResponse,
+        beforeEach(async function () {
+          this.timeout(60 * 1000);
+          const keypair = Keypair.generate();
+          const [
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            _,
+            blockhash,
+          ] = await Promise.all([
+            connection.confirmTransaction(
+              await connection.requestAirdrop(
+                keypair.publicKey,
+                LAMPORTS_PER_SOL,
+              ),
+            ),
+            helpers.latestBlockhash({connection}),
+          ]);
+          latestBlockhash = blockhash;
+          const ix = new TransactionInstruction({
+            keys: [
+              {
+                pubkey: keypair.publicKey,
+                isSigner: true,
+                isWritable: true,
+              },
+            ],
+            programId: new PublicKey(
+              'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+            ),
+            data: Buffer.from('Hello world', 'utf8'),
+          });
+
+          const transaction = new Transaction({
+            ...latestBlockhash,
+          });
+          transaction.add(ix);
+          transaction.sign(keypair);
+          signature = await connection.sendTransaction(transaction, [keypair]);
+        });
+
+        it('confirms transactions using the last valid blockheight strategy', async () => {
+          let result = await connection.confirmTransaction(
+            {
+              signature,
+              ...latestBlockhash,
+            },
+            'processed',
+          );
+          expect(result.value).to.have.property('err', null);
+        }).timeout(60 * 1000);
+
+        it('throws when confirming using a blockhash whose last valid blockheight has passed', async () => {
+          const confirmationPromise = connection.confirmTransaction({
+            signature,
+            ...latestBlockhash,
+            lastValidBlockHeight: (await connection.getBlockHeight()) - 1, // Simulate the blockheight having passed.
+          });
+          expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredBlockheightExceededError,
+          );
+        }).timeout(60 * 1000);
+      });
     });
+  }
 
-    await expect(
-      connection.getSignatureStatus(badTransactionSignature),
-    ).to.be.rejectedWith(mockErrorMessage);
+  if (!process.env.TEST_LIVE) {
+    describe('transaction confirmation (mock)', () => {
+      let clock: SinonFakeTimers;
+      beforeEach(() => {
+        clock = useFakeTimers();
+      });
+
+      afterEach(() => {
+        clock.restore();
+      });
+
+      it('confirm transaction - timeout expired', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise(() => {}),
+        });
+        const timeoutPromise = connection.confirmTransaction(mockSignature);
+
+        // Advance the clock past all waiting timers, notably the expiry timer.
+        clock.runAllAsync();
+
+        await expect(timeoutPromise).to.be.rejectedWith(
+          TransactionExpiredTimeoutError,
+        );
+      });
+
+      it('confirm transaction - block height exceeded', async () => {
+        const mockSignature =
+          '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise(() => {}), // Never resolve this = never get a response.
+        });
+
+        const lastValidBlockHeight = 3;
+
+        // Start the block height at `lastValidBlockHeight - 1`.
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: lastValidBlockHeight - 1,
+        });
+
+        const confirmationPromise = connection.confirmTransaction({
+          signature: mockSignature,
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight,
+        });
+        clock.runAllAsync();
+
+        // Advance the block height to the `lastValidBlockHeight`.
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: lastValidBlockHeight,
+        });
+        clock.runAllAsync();
+
+        // Advance the block height to `lastValidBlockHeight + 1`,
+        // past the last valid blockheight for this transaction.
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: lastValidBlockHeight + 1,
+        });
+        clock.runAllAsync();
+        await expect(confirmationPromise).to.be.rejectedWith(
+          TransactionExpiredBlockheightExceededError,
+        );
+      });
+
+      it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+        const mockSignature =
+          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+        let resolveResultPromise: (result: SignatureResult) => void;
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise<SignatureResult>(resolve => {
+            resolveResultPromise = resolve;
+          }),
+        });
+
+        // Simulate a failure to fetch the block height.
+        let rejectBlockheightPromise: () => void;
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: (() => {
+            const p = new Promise((_, reject) => {
+              rejectBlockheightPromise = reject;
+            });
+            p.catch(() => {});
+            return p;
+          })(),
+        });
+
+        const confirmationPromise = connection.confirmTransaction({
+          signature: mockSignature,
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight: 3,
+        });
+
+        rejectBlockheightPromise();
+        clock.runToLastAsync();
+        resolveResultPromise({err: null});
+        clock.runToLastAsync();
+
+        expect(confirmationPromise).not.to.eventually.be.rejected;
+      });
+
+      it('confirm transaction - block height confirmed', async () => {
+        const mockSignature =
+          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+        let resolveResultPromise: (result: SignatureResult) => void;
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise<SignatureResult>(resolve => {
+            resolveResultPromise = resolve;
+          }),
+        });
+
+        const lastValidBlockHeight = 3;
+
+        // Advance the block height to the `lastValidBlockHeight`.
+        await mockRpcResponse({
+          method: 'getBlockHeight',
+          params: [],
+          value: lastValidBlockHeight,
+        });
+
+        const confirmationPromise = connection.confirmTransaction({
+          signature: mockSignature,
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight,
+        });
+        clock.runAllAsync();
+
+        // Return a signature result in the nick of time.
+        resolveResultPromise({err: null});
+
+        await expect(confirmationPromise).to.eventually.deep.equal({
+          context: {slot: 11},
+          value: {err: null},
+        });
+      });
+    });
+  }
+
+  describe('transaction confirmation', () => {
+    it('confirm transaction - error', async () => {
+      const badTransactionSignature = 'bad transaction signature';
+
+      await expect(
+        connection.confirmTransaction({
+          blockhash: 'sampleBlockhash',
+          lastValidBlockHeight: 9999,
+          signature: badTransactionSignature,
+        }),
+      ).to.be.rejectedWith('signature must be base58 encoded');
+
+      await mockRpcResponse({
+        method: 'getSignatureStatuses',
+        params: [[badTransactionSignature]],
+        error: mockErrorResponse,
+      });
+
+      await expect(
+        connection.getSignatureStatus(badTransactionSignature),
+      ).to.be.rejectedWith(mockErrorMessage);
+    });
   });
 
   it('get transaction count', async () => {
@@ -2656,11 +2903,11 @@ describe('Connection', function () {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
-    const {blockhash} = await helpers.latestBlockhash({connection});
+    const latestBlockhash = await helpers.latestBlockhash({connection});
 
     const transaction = new Transaction({
       feePayer: accountFrom.publicKey,
-      recentBlockhash: blockhash,
+      ...latestBlockhash,
     }).add(
       SystemProgram.transfer({
         fromPubkey: accountFrom.publicKey,
@@ -2816,70 +3063,96 @@ describe('Connection', function () {
       const connection = new Connection(url, 'confirmed');
       const newAccount = Keypair.generate().publicKey;
 
-      let testToken: Token;
-      let testTokenPubkey: PublicKey;
-      let testTokenAccount: PublicKey;
+      let testTokenMintPubkey: PublicKey;
+      let testOwnerKeypair: Keypair;
+      let testTokenAccountPubkey: PublicKey;
       let testSignature: TransactionSignature;
-      let testOwner: Account;
 
       // Setup token mints and accounts for token tests
       before(async function () {
         this.timeout(30 * 1000);
 
-        const payerAccount = new Account();
+        const payerKeypair = new Keypair();
         await connection.confirmTransaction(
-          await connection.requestAirdrop(payerAccount.publicKey, 100000000000),
+          await connection.requestAirdrop(payerKeypair.publicKey, 100000000000),
         );
 
-        const mintOwner = new Account();
-        const accountOwner = new Account();
-        const token = await Token.createMint(
+        const mintOwnerKeypair = new Keypair();
+        const accountOwnerKeypair = new Keypair();
+        const mintPubkey = await splToken.createMint(
           connection as any,
-          payerAccount,
-          mintOwner.publicKey,
-          null,
-          2,
-          TOKEN_PROGRAM_ID,
+          payerKeypair,
+          mintOwnerKeypair.publicKey,
+          null, // freeze authority
+          2, // decimals
         );
 
-        const tokenAccount = await token.createAccount(accountOwner.publicKey);
-        await token.mintTo(tokenAccount, mintOwner, [], 11111);
-
-        const token2 = await Token.createMint(
+        const tokenAccountPubkey = await splToken.createAccount(
           connection as any,
-          payerAccount,
-          mintOwner.publicKey,
-          null,
-          2,
-          TOKEN_PROGRAM_ID,
+          payerKeypair,
+          mintPubkey,
+          accountOwnerKeypair.publicKey,
         );
 
-        const token2Account = await token2.createAccount(
-          accountOwner.publicKey,
-        );
-        await token2.mintTo(token2Account, mintOwner, [], 100);
-
-        const tokenAccountDest = await token.createAccount(
-          accountOwner.publicKey,
-        );
-        testSignature = await token.transfer(
-          tokenAccount,
-          tokenAccountDest,
-          accountOwner,
-          [],
-          new u64(1),
+        await splToken.mintTo(
+          connection as any,
+          payerKeypair,
+          mintPubkey,
+          tokenAccountPubkey,
+          mintOwnerKeypair,
+          11111,
         );
 
-        await connection.confirmTransaction(testSignature, 'finalized');
+        console.log('create mint');
+        const mintPubkey2 = await splToken.createMint(
+          connection as any,
+          payerKeypair,
+          mintOwnerKeypair.publicKey,
+          null, // freeze authority
+          2, // decimals
+        );
 
-        testOwner = accountOwner;
-        testToken = token;
-        testTokenAccount = tokenAccount as PublicKey;
-        testTokenPubkey = testToken.publicKey as PublicKey;
+        const tokenAccountPubkey2 = await splToken.createAccount(
+          connection as any,
+          payerKeypair,
+          mintPubkey2,
+          accountOwnerKeypair.publicKey,
+        );
+
+        await splToken.mintTo(
+          connection as any,
+          payerKeypair,
+          mintPubkey2,
+          tokenAccountPubkey2,
+          mintOwnerKeypair,
+          100,
+        );
+
+        const tokenAccountDestPubkey = await splToken.createAccount(
+          connection as any,
+          payerKeypair,
+          mintPubkey,
+          accountOwnerKeypair.publicKey,
+          new Keypair() as any,
+        );
+
+        testSignature = await splToken.transfer(
+          connection as any,
+          payerKeypair,
+          tokenAccountPubkey,
+          tokenAccountDestPubkey,
+          accountOwnerKeypair,
+          1,
+        );
+
+        testTokenMintPubkey = mintPubkey as PublicKey;
+        testOwnerKeypair = accountOwnerKeypair;
+        testTokenAccountPubkey = tokenAccountPubkey as PublicKey;
       });
 
       it('get token supply', async () => {
-        const supply = (await connection.getTokenSupply(testTokenPubkey)).value;
+        const supply = (await connection.getTokenSupply(testTokenMintPubkey))
+          .value;
         expect(supply.uiAmount).to.eq(111.11);
         expect(supply.decimals).to.eq(2);
         expect(supply.amount).to.eq('11111');
@@ -2889,12 +3162,12 @@ describe('Connection', function () {
 
       it('get token largest accounts', async () => {
         const largestAccounts = (
-          await connection.getTokenLargestAccounts(testTokenPubkey)
+          await connection.getTokenLargestAccounts(testTokenMintPubkey)
         ).value;
 
         expect(largestAccounts).to.have.length(2);
         const largestAccount = largestAccounts[0];
-        expect(largestAccount.address).to.eql(testTokenAccount);
+        expect(largestAccount.address).to.eql(testTokenAccountPubkey);
         expect(largestAccount.amount).to.eq('11110');
         expect(largestAccount.decimals).to.eq(2);
         expect(largestAccount.uiAmount).to.eq(111.1);
@@ -2932,7 +3205,7 @@ describe('Connection', function () {
 
       it('get token account balance', async () => {
         const balance = (
-          await connection.getTokenAccountBalance(testTokenAccount)
+          await connection.getTokenAccountBalance(testTokenAccountPubkey)
         ).value;
         expect(balance.amount).to.eq('11110');
         expect(balance.decimals).to.eq(2);
@@ -2944,7 +3217,7 @@ describe('Connection', function () {
 
       it('get parsed token account info', async () => {
         const accountInfo = (
-          await connection.getParsedAccountInfo(testTokenAccount)
+          await connection.getParsedAccountInfo(testTokenAccountPubkey)
         ).value;
         if (accountInfo) {
           const data = accountInfo.data;
@@ -2975,9 +3248,12 @@ describe('Connection', function () {
 
       it('get parsed token accounts by owner', async () => {
         const tokenAccounts = (
-          await connection.getParsedTokenAccountsByOwner(testOwner.publicKey, {
-            mint: testTokenPubkey,
-          })
+          await connection.getParsedTokenAccountsByOwner(
+            testOwnerKeypair.publicKey,
+            {
+              mint: testTokenMintPubkey,
+            },
+          )
         ).value;
         tokenAccounts.forEach(({account}) => {
           expect(account.owner).to.eql(TOKEN_PROGRAM_ID);
@@ -2993,14 +3269,14 @@ describe('Connection', function () {
 
       it('get token accounts by owner', async () => {
         const accountsWithMintFilter = (
-          await connection.getTokenAccountsByOwner(testOwner.publicKey, {
-            mint: testTokenPubkey,
+          await connection.getTokenAccountsByOwner(testOwnerKeypair.publicKey, {
+            mint: testTokenMintPubkey,
           })
         ).value;
         expect(accountsWithMintFilter).to.have.length(2);
 
         const accountsWithProgramFilter = (
-          await connection.getTokenAccountsByOwner(testOwner.publicKey, {
+          await connection.getTokenAccountsByOwner(testOwnerKeypair.publicKey, {
             programId: TOKEN_PROGRAM_ID,
           })
         ).value;
@@ -3008,19 +3284,19 @@ describe('Connection', function () {
 
         const noAccounts = (
           await connection.getTokenAccountsByOwner(newAccount, {
-            mint: testTokenPubkey,
+            mint: testTokenMintPubkey,
           })
         ).value;
         expect(noAccounts).to.have.length(0);
 
         await expect(
-          connection.getTokenAccountsByOwner(testOwner.publicKey, {
+          connection.getTokenAccountsByOwner(testOwnerKeypair.publicKey, {
             mint: newAccount,
           }),
         ).to.be.rejected;
 
         await expect(
-          connection.getTokenAccountsByOwner(testOwner.publicKey, {
+          connection.getTokenAccountsByOwner(testOwnerKeypair.publicKey, {
             programId: newAccount,
           }),
         ).to.be.rejected;
@@ -3075,6 +3351,11 @@ describe('Connection', function () {
 
   if (process.env.TEST_LIVE) {
     it('stake activation should return activating for new accounts', async () => {
+      // todo: use `Connection.getMinimumStakeDelegation` when implemented
+      const MIN_STAKE_DELEGATION = LAMPORTS_PER_SOL;
+      const STAKE_ACCOUNT_MIN_BALANCE =
+        await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
+
       const voteAccounts = await connection.getVoteAccounts();
       const voteAccount = voteAccounts.current.concat(
         voteAccounts.delinquent,
@@ -3088,17 +3369,13 @@ describe('Connection', function () {
       );
       await connection.confirmTransaction(signature, 'confirmed');
 
-      const minimumAmount = await connection.getMinimumBalanceForRentExemption(
-        StakeProgram.space,
-      );
-
       const newStakeAccount = Keypair.generate();
       let createAndInitialize = StakeProgram.createAccount({
         fromPubkey: authorized.publicKey,
         stakePubkey: newStakeAccount.publicKey,
         authorized: new Authorized(authorized.publicKey, authorized.publicKey),
         lockup: new Lockup(0, 0, new PublicKey(0)),
-        lamports: minimumAmount + 42,
+        lamports: STAKE_ACCOUNT_MIN_BALANCE + MIN_STAKE_DELEGATION,
       });
 
       await sendAndConfirmTransaction(
@@ -3136,7 +3413,7 @@ describe('Connection', function () {
         'confirmed',
       );
       expect(activationState.state).to.eq('activating');
-      expect(activationState.inactive).to.eq(42);
+      expect(activationState.inactive).to.eq(MIN_STAKE_DELEGATION);
       expect(activationState.active).to.eq(0);
     });
   }
@@ -3552,7 +3829,11 @@ describe('Connection', function () {
         {skipPreflight: true},
       );
 
-      await connection.confirmTransaction(signature);
+      await connection.confirmTransaction({
+        blockhash: transaction.recentBlockhash,
+        lastValidBlockHeight: transaction.lastValidBlockHeight,
+        signature,
+      });
 
       const response = (await connection.getSignatureStatus(signature)).value;
       if (response !== null) {
@@ -3585,7 +3866,7 @@ describe('Connection', function () {
             await connection._rpcWebSocket.notify('ping');
             break;
             // eslint-disable-next-line no-empty
-          } catch {}
+          } catch (_err) {}
           await sleep(100);
         }
       });

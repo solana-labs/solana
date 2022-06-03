@@ -83,6 +83,8 @@ pub struct HashStats {
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
+    /// # ancient append vecs encountered
+    pub ancient_append_vecs: AtomicUsize,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -203,6 +205,11 @@ impl HashStats {
                 i64
             ),
             (
+                "ancient_append_vecs",
+                self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
                 "append_vec_sizes_older_than_epoch",
                 self.append_vec_sizes_older_than_epoch
                     .load(Ordering::Relaxed) as i64,
@@ -218,7 +225,7 @@ impl HashStats {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
     pub lamports: u64,
@@ -235,7 +242,7 @@ impl CalculateHashIntermediate {
     }
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct CumulativeOffset {
     pub index: Vec<usize>,
     pub start_offset: usize,

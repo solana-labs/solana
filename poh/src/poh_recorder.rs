@@ -193,7 +193,7 @@ pub struct WorkingBank {
     pub max_tick_height: u64,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PohLeaderStatus {
     NotReached,
     Reached { poh_slot: Slot, parent_slot: Slot },

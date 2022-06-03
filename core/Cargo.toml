@@ -21,16 +21,17 @@ bs58 = "0.4.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
-etcd-client = { version = "0.9.1", features = ["tls"] }
+etcd-client = { version = "0.8.1", features = ["tls"] }
 fs_extra = "1.2.0"
 histogram = "0.6.9"
 itertools = "0.10.3"
-log = "0.4.14"
-lru = "0.7.5"
+lazy_static = "1.4.0"
+log = "0.4.17"
+lru = "0.7.6"
+min-max-heap = "1.3.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
-rayon = "1.5.2"
-retain_mut = "0.1.7"
+rayon = "1.5.3"
 serde = "1.0.137"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.11.0" }
@@ -55,25 +56,25 @@ solana-sdk = { path = "../sdk", version = "=1.11.0" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.0" }
 solana-streamer = { path = "../streamer", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
+solana-version = { path = "../version", version = "=1.11.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
 sys-info = "0.9.1"
 tempfile = "3.3.0"
 thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "~1.14.1", features = ["full"] }
 trees = "0.4.2"
 
 [dev-dependencies]
 matches = "0.1.9"
-raptorq = "1.6.5"
+raptorq = "1.7.0"
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 serde_json = "1.0.81"
 serial_test = "0.6.0"
 solana-logger = { path = "../logger", version = "=1.11.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.11.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.11.0" }
-solana-version = { path = "../version", version = "=1.11.0" }
 static_assertions = "1.1.0"
-systemstat = "0.1.10"
+systemstat = "0.1.11"
 
 [target."cfg(unix)".dependencies]
 sysctl = "0.4.4"
@@ -95,6 +96,9 @@ name = "sigverify_stage"
 
 [[bench]]
 name = "retransmit_stage"
+
+[[bench]]
+name = "unprocessed_packet_batches"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

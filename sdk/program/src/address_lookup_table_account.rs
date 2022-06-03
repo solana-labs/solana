@@ -6,7 +6,7 @@
 
 use solana_program::pubkey::Pubkey;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AddressLookupTableAccount {
     pub key: Pubkey,
     pub addresses: Vec<Pubkey>,

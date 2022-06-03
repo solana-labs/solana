@@ -6,4 +6,4 @@ license = "Apache-2.0"
 publish = false
 
 [build-dependencies]
-regex = "1.5.4"
+regex = "1.5.6"

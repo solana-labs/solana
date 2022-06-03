@@ -1,4 +1,4 @@
-#![cfg(not(target_arch = "bpf"))]
+#![cfg(not(target_os = "solana"))]
 
 use {
     crate::errors::ProofError,

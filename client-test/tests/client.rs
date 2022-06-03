@@ -144,6 +144,7 @@ fn test_account_subscription() {
         commitment: Some(CommitmentConfig::finalized()),
         encoding: None,
         data_slice: None,
+        min_context_slot: None,
     });
     let (mut client, receiver) = PubsubClient::account_subscribe(
         &format!("ws://0.0.0.0:{}/", pubsub_addr.port()),

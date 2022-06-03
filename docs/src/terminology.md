@@ -217,7 +217,7 @@ The public key of the [account](#account) containing a [program](#program).
 
 ## proof of history (PoH)
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each of which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
 
 ## public key (pubkey)
 
@@ -243,7 +243,7 @@ A fraction of a [block](#block); the smallest unit sent between [validators](#va
 
 A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
 This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](#transaction-id)
+Thus, the first signature in transaction can be treated as [transaction id](#transaction-id)
 
 ## skipped slot
 

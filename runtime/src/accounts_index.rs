@@ -44,7 +44,7 @@ use {
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
 pub const BINS_FOR_TESTING: usize = 2; // we want > 1, but each bin is a few disk files with a disk based index, so fewer is better
-pub const BINS_FOR_BENCHMARKS: usize = 2;
+pub const BINS_FOR_BENCHMARKS: usize = 8192;
 pub const FLUSH_THREADS_TESTING: usize = 1;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
@@ -124,7 +124,7 @@ pub trait IndexValue:
 {
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },
@@ -458,11 +458,11 @@ impl RootsTracker {
 
 #[derive(Debug, Default)]
 pub struct AccountsIndexRootsStats {
-    pub roots_len: usize,
-    pub uncleaned_roots_len: usize,
-    pub previous_uncleaned_roots_len: usize,
-    pub roots_range: u64,
-    pub historical_roots_len: usize,
+    pub roots_len: Option<usize>,
+    pub uncleaned_roots_len: Option<usize>,
+    pub previous_uncleaned_roots_len: Option<usize>,
+    pub roots_range: Option<u64>,
+    pub historical_roots_len: Option<usize>,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
     pub clean_unref_from_storage_us: u64,
@@ -1140,6 +1140,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
+    /// Only guaranteed to be safe when called from rent collection
     pub(crate) fn range_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
@@ -1832,11 +1833,12 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
             false
         } else {
-            stats.roots_len = w_roots_tracker.alive_roots.len();
-            stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
-            stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
-            stats.roots_range = w_roots_tracker.alive_roots.range_width();
-            stats.historical_roots_len = w_roots_tracker.historical_roots.len();
+            stats.roots_len = Some(w_roots_tracker.alive_roots.len());
+            stats.uncleaned_roots_len = Some(w_roots_tracker.uncleaned_roots.len());
+            stats.previous_uncleaned_roots_len =
+                Some(w_roots_tracker.previous_uncleaned_roots.len());
+            stats.roots_range = Some(w_roots_tracker.alive_roots.range_width());
+            stats.historical_roots_len = Some(w_roots_tracker.historical_roots.len());
             true
         }
     }

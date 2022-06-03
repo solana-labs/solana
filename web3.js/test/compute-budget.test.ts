@@ -8,8 +8,6 @@ import {
   Transaction,
   ComputeBudgetProgram,
   ComputeBudgetInstruction,
-  PublicKey,
-  SystemProgram,
   sendAndConfirmTransaction,
 } from '../src';
 import {helpers} from './mocks/rpc-http';
@@ -21,15 +19,13 @@ describe('ComputeBudgetProgram', () => {
   it('requestUnits', () => {
     const params = {
       units: 150000,
-      additionalFee: 0,
+      additionalFee: LAMPORTS_PER_SOL,
     };
-    const transaction = new Transaction().add(
-      ComputeBudgetProgram.requestUnits(params),
-    );
-    expect(transaction.instructions).to.have.length(1);
-    const [computeBudgetInstruction] = transaction.instructions;
-    expect(params).to.eql(
-      ComputeBudgetInstruction.decodeRequestUnits(computeBudgetInstruction),
+    const ix = ComputeBudgetProgram.requestUnits(params);
+    const decodedParams = ComputeBudgetInstruction.decodeRequestUnits(ix);
+    expect(params).to.eql(decodedParams);
+    expect(ComputeBudgetInstruction.decodeInstructionType(ix)).to.eq(
+      'RequestUnits',
     );
   });
 
@@ -37,48 +33,49 @@ describe('ComputeBudgetProgram', () => {
     const params = {
       bytes: 33 * 1024,
     };
-    const transaction = new Transaction().add(
-      ComputeBudgetProgram.requestHeapFrame(params),
-    );
-    expect(transaction.instructions).to.have.length(1);
-    const [computeBudgetInstruction] = transaction.instructions;
-    expect(params).to.eql(
-      ComputeBudgetInstruction.decodeRequestHeapFrame(computeBudgetInstruction),
+    const ix = ComputeBudgetProgram.requestHeapFrame(params);
+    const decodedParams = ComputeBudgetInstruction.decodeRequestHeapFrame(ix);
+    expect(decodedParams).to.eql(params);
+    expect(ComputeBudgetInstruction.decodeInstructionType(ix)).to.eq(
+      'RequestHeapFrame',
     );
   });
 
-  it('ComputeBudgetInstruction', () => {
-    const requestUnits = ComputeBudgetProgram.requestUnits({
-      units: 150000,
-      additionalFee: 0,
-    });
-    const requestHeapFrame = ComputeBudgetProgram.requestHeapFrame({
-      bytes: 33 * 1024,
-    });
+  it('setComputeUnitLimit', () => {
+    const params = {
+      units: 50_000,
+    };
+    const ix = ComputeBudgetProgram.setComputeUnitLimit(params);
+    const decodedParams =
+      ComputeBudgetInstruction.decodeSetComputeUnitLimit(ix);
+    expect(decodedParams).to.eql(params);
+    expect(ComputeBudgetInstruction.decodeInstructionType(ix)).to.eq(
+      'SetComputeUnitLimit',
+    );
+  });
 
-    const requestUnitsTransaction = new Transaction().add(requestUnits);
-    expect(requestUnitsTransaction.instructions).to.have.length(1);
-    const requestUnitsTransactionType =
-      ComputeBudgetInstruction.decodeInstructionType(
-        requestUnitsTransaction.instructions[0],
-      );
-    expect(requestUnitsTransactionType).to.eq('RequestUnits');
-
-    const requestHeapFrameTransaction = new Transaction().add(requestHeapFrame);
-    expect(requestHeapFrameTransaction.instructions).to.have.length(1);
-    const requestHeapFrameTransactionType =
-      ComputeBudgetInstruction.decodeInstructionType(
-        requestHeapFrameTransaction.instructions[0],
-      );
-    expect(requestHeapFrameTransactionType).to.eq('RequestHeapFrame');
+  it('setComputeUnitPrice', () => {
+    const params = {
+      microLamports: 100_000,
+    };
+    const ix = ComputeBudgetProgram.setComputeUnitPrice(params);
+    const expectedParams = {
+      ...params,
+      microLamports: BigInt(params.microLamports),
+    };
+    const decodedParams =
+      ComputeBudgetInstruction.decodeSetComputeUnitPrice(ix);
+    expect(decodedParams).to.eql(expectedParams);
+    expect(ComputeBudgetInstruction.decodeInstructionType(ix)).to.eq(
+      'SetComputeUnitPrice',
+    );
   });
 
   if (process.env.TEST_LIVE) {
-    const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
-    const FEE_AMOUNT = LAMPORTS_PER_SOL;
-    it('live compute budget actions', async () => {
+    it('send live request units ix', async () => {
       const connection = new Connection(url, 'confirmed');
-
+      const FEE_AMOUNT = LAMPORTS_PER_SOL;
+      const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
       const baseAccount = Keypair.generate();
       const basePubkey = baseAccount.publicKey;
       await helpers.airdrop({
@@ -87,69 +84,49 @@ describe('ComputeBudgetProgram', () => {
         amount: STARTING_AMOUNT,
       });
 
-      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(
-        STARTING_AMOUNT,
-      );
-
-      const seed = 'hi there';
-      const programId = Keypair.generate().publicKey;
-      const createAccountWithSeedAddress = await PublicKey.createWithSeed(
-        basePubkey,
-        seed,
-        programId,
-      );
-      const space = 0;
-
-      let minimumAmount = await connection.getMinimumBalanceForRentExemption(
-        space,
-      );
-
-      const createAccountWithSeedParams = {
-        fromPubkey: basePubkey,
-        newAccountPubkey: createAccountWithSeedAddress,
-        basePubkey,
-        seed,
-        lamports: minimumAmount,
-        space,
-        programId,
-      };
-
-      const createAccountFeeTooHighTransaction = new Transaction().add(
+      const additionalFeeTooHighTransaction = new Transaction().add(
         ComputeBudgetProgram.requestUnits({
-          units: 2,
-          additionalFee: 2 * FEE_AMOUNT,
+          units: 150_000,
+          additionalFee: STARTING_AMOUNT,
         }),
-        SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
+
       await expect(
         sendAndConfirmTransaction(
           connection,
-          createAccountFeeTooHighTransaction,
+          additionalFeeTooHighTransaction,
           [baseAccount],
           {preflightCommitment: 'confirmed'},
         ),
       ).to.be.rejected;
 
-      expect(await connection.getBalance(baseAccount.publicKey)).to.eq(
-        STARTING_AMOUNT,
-      );
-
-      const createAccountFeeTransaction = new Transaction().add(
+      const validAdditionalFeeTransaction = new Transaction().add(
         ComputeBudgetProgram.requestUnits({
-          units: 2,
+          units: 150_000,
           additionalFee: FEE_AMOUNT,
         }),
-        SystemProgram.createAccountWithSeed(createAccountWithSeedParams),
       );
       await sendAndConfirmTransaction(
         connection,
-        createAccountFeeTransaction,
+        validAdditionalFeeTransaction,
         [baseAccount],
         {preflightCommitment: 'confirmed'},
       );
       expect(await connection.getBalance(baseAccount.publicKey)).to.be.at.most(
-        STARTING_AMOUNT - FEE_AMOUNT - minimumAmount,
+        STARTING_AMOUNT - FEE_AMOUNT,
       );
+    });
+
+    it('send live request heap ix', async () => {
+      const connection = new Connection(url, 'confirmed');
+      const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
+      const baseAccount = Keypair.generate();
+      const basePubkey = baseAccount.publicKey;
+      await helpers.airdrop({
+        connection,
+        address: basePubkey,
+        amount: STARTING_AMOUNT,
+      });
 
       async function expectRequestHeapFailure(bytes: number) {
         const requestHeapFrameTransaction = new Transaction().add(
@@ -181,6 +158,63 @@ describe('ComputeBudgetProgram', () => {
         [baseAccount],
         {preflightCommitment: 'confirmed'},
       );
-    }).timeout(10 * 1000);
+    });
+
+    it('send live compute unit ixs', async () => {
+      const connection = new Connection(url, 'confirmed');
+      const FEE_AMOUNT = LAMPORTS_PER_SOL;
+      const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
+      const baseAccount = Keypair.generate();
+      const basePubkey = baseAccount.publicKey;
+      await helpers.airdrop({
+        connection,
+        address: basePubkey,
+        amount: STARTING_AMOUNT,
+      });
+
+      // lamport fee = 2B * 1M / 1M = 2 SOL
+      const prioritizationFeeTooHighTransaction = new Transaction()
+        .add(
+          ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: 2_000_000_000,
+          }),
+        )
+        .add(
+          ComputeBudgetProgram.setComputeUnitLimit({
+            units: 1_000_000,
+          }),
+        );
+
+      await expect(
+        sendAndConfirmTransaction(
+          connection,
+          prioritizationFeeTooHighTransaction,
+          [baseAccount],
+          {preflightCommitment: 'confirmed'},
+        ),
+      ).to.be.rejected;
+
+      // lamport fee = 1B * 1M / 1M = 1 SOL
+      const validPrioritizationFeeTransaction = new Transaction()
+        .add(
+          ComputeBudgetProgram.setComputeUnitPrice({
+            microLamports: 1_000_000_000,
+          }),
+        )
+        .add(
+          ComputeBudgetProgram.setComputeUnitLimit({
+            units: 1_000_000,
+          }),
+        );
+      await sendAndConfirmTransaction(
+        connection,
+        validPrioritizationFeeTransaction,
+        [baseAccount],
+        {preflightCommitment: 'confirmed'},
+      );
+      expect(await connection.getBalance(baseAccount.publicKey)).to.be.at.most(
+        STARTING_AMOUNT - FEE_AMOUNT,
+      );
+    });
   }
 });

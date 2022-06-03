@@ -23,7 +23,7 @@ use {
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -209,7 +209,7 @@ fn run_check_duplicate(
     cluster_info: &ClusterInfo,
     blockstore: &Blockstore,
     shred_receiver: &Receiver<Shred>,
-    duplicate_slot_sender: &DuplicateSlotSender,
+    duplicate_slots_sender: &DuplicateSlotSender,
 ) -> Result<()> {
     let check_duplicate = |shred: Shred| -> Result<()> {
         let shred_slot = shred.slot();
@@ -224,7 +224,7 @@ fn run_check_duplicate(
                     shred.into_payload(),
                 )?;
 
-                duplicate_slot_sender.send(shred_slot)?;
+                duplicate_slots_sender.send(shred_slot)?;
             }
         }
 
@@ -353,8 +353,8 @@ where
     F: Fn(&Shred, Arc<Bank>, /*last root:*/ Slot) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
-    let mut packets = verified_receiver.recv_timeout(timer)?;
-    packets.extend(verified_receiver.try_iter().flatten());
+    let mut packet_batches = verified_receiver.recv_timeout(timer)?;
+    packet_batches.extend(verified_receiver.try_iter().flatten());
     let now = Instant::now();
     let last_root = blockstore.last_root();
     let working_bank = bank_forks.read().unwrap().working_bank();
@@ -363,20 +363,16 @@ where
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
             return None;
         }
-        // shred fetch stage should be sending packets
-        // with sufficiently large buffers. Needed to ensure
-        // call to `new_from_serialized_shred` is safe.
-        assert_eq!(packet.data.len(), PACKET_DATA_SIZE);
-        let serialized_shred = packet.data.to_vec();
+        let serialized_shred = packet.data().to_vec();
         let shred = Shred::new_from_serialized_shred(serialized_shred).ok()?;
         if !shred_filter(&shred, working_bank.clone(), last_root) {
             return None;
         }
         if packet.meta.repair() {
             let repair_info = RepairMeta {
-                _from_addr: packet.meta.addr(),
+                _from_addr: packet.meta.socket_addr(),
                 // If can't parse the nonce, dump the packet.
-                nonce: repair_response::nonce(&packet.data)?,
+                nonce: repair_response::nonce(packet)?,
             };
             Some((shred, Some(repair_info)))
         } else {
@@ -384,9 +380,9 @@ where
         }
     };
     let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
-        packets
+        packet_batches
             .par_iter()
-            .flat_map_iter(|pkt| pkt.packets.iter().filter_map(handle_packet))
+            .flat_map_iter(|packet_batch| packet_batch.iter().filter_map(handle_packet))
             .unzip()
     });
     // Exclude repair packets from retransmit.
@@ -406,9 +402,16 @@ where
     }
     insert_shred_sender.send((shreds, repair_infos))?;
 
-    stats.num_packets += packets.iter().map(|pkt| pkt.packets.len()).sum::<usize>();
-    for packet in packets.iter().flat_map(|pkt| pkt.packets.iter()) {
-        *stats.addrs.entry(packet.meta.addr()).or_default() += 1;
+    stats.num_packets += packet_batches
+        .iter()
+        .map(|packet_batch| packet_batch.len())
+        .sum::<usize>();
+    for packet in packet_batches
+        .iter()
+        .flat_map(|packet_batch| packet_batch.iter())
+    {
+        let addr = packet.meta.socket_addr();
+        *stats.addrs.entry(addr).or_default() += 1;
     }
     stats.elapsed += now.elapsed();
     Ok(())
@@ -530,7 +533,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         duplicate_receiver: Receiver<Shred>,
-        duplicate_slot_sender: DuplicateSlotSender,
+        duplicate_slots_sender: DuplicateSlotSender,
     ) -> JoinHandle<()> {
         let handle_error = || {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
@@ -547,7 +550,7 @@ impl WindowService {
                     &cluster_info,
                     &blockstore,
                     &duplicate_receiver,
-                    &duplicate_slot_sender,
+                    &duplicate_slots_sender,
                 ) {
                     if Self::should_exit_on_error(e, &mut noop, &handle_error) {
                         break;

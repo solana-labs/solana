@@ -14,7 +14,7 @@ use {
     },
 };
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, AbiExample)]
 pub enum SavedTowerVersions {
     V1_17_14(SavedTower1_7_14),
     Current(SavedTower),
@@ -76,7 +76,7 @@ impl From<SavedTower1_7_14> for SavedTowerVersions {
 }
 
 #[frozen_abi(digest = "Gaxfwvx5MArn52mKZQgzHmDCyn5YfCuTHvp5Et3rFfpp")]
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Eq, AbiExample)]
 pub struct SavedTower {
     signature: Signature,
     data: Vec<u8>,
@@ -109,7 +109,7 @@ pub trait TowerStorage: Sync + Send {
     fn store(&self, saved_tower: &SavedTowerVersions) -> Result<()>;
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NullTowerStorage {}
 
 impl TowerStorage for NullTowerStorage {
@@ -125,7 +125,7 @@ impl TowerStorage for NullTowerStorage {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FileTowerStorage {
     pub tower_path: PathBuf,
 }

@@ -12,7 +12,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         blockstore::{Blockstore, PurgeType},
-        blockstore_db::{AccessType, BlockstoreOptions},
+        blockstore_options::{AccessType, BlockstoreOptions},
         leader_schedule::{FixedSchedule, LeaderSchedule},
     },
     solana_local_cluster::{
@@ -26,6 +26,7 @@ use {
         account::AccountSharedData,
         clock::{self, Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
         hash::Hash,
+        native_token::LAMPORTS_PER_SOL,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
@@ -46,6 +47,9 @@ use {
 
 pub const RUST_LOG_FILTER: &str =
     "error,solana_core::replay_stage=warn,solana_local_cluster=info,local_cluster=info";
+
+pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
+pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
 
 pub fn last_vote_in_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<(Slot, Hash)> {
     restore_tower(tower_path, node_pubkey).map(|tower| tower.last_voted_slot_hash().unwrap())
@@ -437,7 +441,8 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
 
 pub struct SnapshotValidatorConfig {
     pub bank_snapshots_dir: TempDir,
-    pub snapshot_archives_dir: TempDir,
+    pub full_snapshot_archives_dir: TempDir,
+    pub incremental_snapshot_archives_dir: TempDir,
     pub account_storage_dirs: Vec<TempDir>,
     pub validator_config: ValidatorConfig,
 }
@@ -466,11 +471,15 @@ impl SnapshotValidatorConfig {
         // Create the snapshot config
         let _ = fs::create_dir_all(farf_dir());
         let bank_snapshots_dir = tempfile::tempdir_in(farf_dir()).unwrap();
-        let snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+        let full_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
+        let incremental_snapshot_archives_dir = tempfile::tempdir_in(farf_dir()).unwrap();
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots,
             incremental_snapshot_archive_interval_slots,
-            snapshot_archives_dir: snapshot_archives_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
             bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
             maximum_full_snapshot_archives_to_retain: usize::MAX,
             maximum_incremental_snapshot_archives_to_retain: usize::MAX,
@@ -491,7 +500,8 @@ impl SnapshotValidatorConfig {
 
         SnapshotValidatorConfig {
             bank_snapshots_dir,
-            snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
             account_storage_dirs,
             validator_config,
         }

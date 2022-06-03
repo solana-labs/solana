@@ -22,7 +22,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
-        match socket.recv_from(&mut p.data) {
+        match socket.recv_from(p.buffer_mut()) {
             Err(_) if i > 0 => {
                 break;
             }
@@ -31,7 +31,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num
             }
             Ok((nrecv, from)) => {
                 p.meta.size = nrecv;
-                p.meta.set_addr(&from);
+                p.meta.set_socket_addr(&from);
                 if i == 0 {
                     socket.set_nonblocking(true)?;
                 }
@@ -84,9 +84,10 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
     for (packet, hdr, iov, addr) in
         izip!(packets.iter_mut(), &mut hdrs, &mut iovs, &mut addrs).take(count)
     {
+        let buffer = packet.buffer_mut();
         *iov = iovec {
-            iov_base: packet.data.as_mut_ptr() as *mut libc::c_void,
-            iov_len: packet.data.len(),
+            iov_base: buffer.as_mut_ptr() as *mut libc::c_void,
+            iov_len: buffer.len(),
         };
         hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
         hdr.msg_hdr.msg_namelen = SOCKADDR_STORAGE_SIZE as socklen_t;
@@ -107,7 +108,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
     for (addr, hdr, pkt) in izip!(addrs, hdrs, packets.iter_mut()).take(nrecv) {
         pkt.meta.size = hdr.msg_len as usize;
         if let Some(addr) = cast_socket_addr(&addr, &hdr) {
-            pkt.meta.set_addr(&addr.to_std());
+            pkt.meta.set_socket_addr(&addr.to_std());
         }
     }
     Ok(nrecv)
@@ -148,7 +149,7 @@ mod tests {
             assert_eq!(sent, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.addr(), saddr);
+                assert_eq!(packet.meta.socket_addr(), saddr);
             }
         };
 
@@ -174,7 +175,7 @@ mod tests {
             assert_eq!(TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.addr(), saddr);
+                assert_eq!(packet.meta.socket_addr(), saddr);
             }
 
             packets
@@ -184,7 +185,7 @@ mod tests {
             assert_eq!(sent - TEST_NUM_MSGS, recv);
             for packet in packets.iter().take(recv) {
                 assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-                assert_eq!(packet.meta.addr(), saddr);
+                assert_eq!(packet.meta.socket_addr(), saddr);
             }
         };
 
@@ -216,7 +217,7 @@ mod tests {
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr);
+            assert_eq!(packet.meta.socket_addr(), saddr);
         }
         reader.set_nonblocking(true).unwrap();
 
@@ -256,11 +257,11 @@ mod tests {
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(sent1) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr1);
+            assert_eq!(packet.meta.socket_addr(), saddr1);
         }
         for packet in packets.iter().skip(sent1).take(recv - sent1) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr2);
+            assert_eq!(packet.meta.socket_addr(), saddr2);
         }
 
         packets
@@ -270,7 +271,7 @@ mod tests {
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
-            assert_eq!(packet.meta.addr(), saddr2);
+            assert_eq!(packet.meta.socket_addr(), saddr2);
         }
     }
 }

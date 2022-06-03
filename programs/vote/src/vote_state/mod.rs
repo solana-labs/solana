@@ -41,7 +41,7 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
 #[frozen_abi(digest = "6LBwH5w3WyAWZhsM3KTG9QZP7nYBhcC61K33kHR6gMAD")]
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
     Vote(Vote),
     VoteStateUpdate(VoteStateUpdate),

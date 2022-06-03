@@ -370,7 +370,7 @@ fn write_signatures<W: io::Write>(
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AccountKeyType<'a> {
     Known(&'a Pubkey),
     Unknown {

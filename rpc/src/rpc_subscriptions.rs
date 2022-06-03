@@ -1,4 +1,5 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
+
 use {
     crate::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
@@ -16,7 +17,7 @@ use {
     serde::Serialize,
     solana_account_decoder::{parse_token::is_known_spl_token_id, UiAccount, UiAccountEncoding},
     solana_client::rpc_response::{
-        ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcBlockUpdate,
+        ProcessedSignatureResult, ReceivedSignatureResult, Response as RpcResponse, RpcBlockUpdate,
         RpcBlockUpdateError, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext,
         RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
@@ -92,7 +93,7 @@ impl From<NotificationEntry> for TimestampedNotificationEntry {
 pub enum NotificationEntry {
     Slot(SlotInfo),
     SlotUpdate(SlotUpdate),
-    Vote((Pubkey, VoteTransaction)),
+    Vote((Pubkey, VoteTransaction, Signature)),
     Root(Slot),
     Bank(CommitmentSlots),
     Gossip(Slot),
@@ -153,10 +154,10 @@ where
             filter_results(results, params, *w_last_notified_slot, bank);
         for result in filter_results {
             notifier.notify(
-                Response {
-                    context: RpcResponseContext { slot },
+                RpcResponse::from(RpcNotificationResponse {
+                    context: RpcNotificationContext { slot },
                     value: result,
-                },
+                }),
                 subscription,
                 is_final,
             );
@@ -174,6 +175,33 @@ pub struct RpcNotification {
     pub is_final: bool,
     pub json: Weak<String>,
     pub created_at: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct RpcNotificationResponse<T> {
+    context: RpcNotificationContext,
+    value: T,
+}
+
+impl<T> From<RpcNotificationResponse<T>> for RpcResponse<T> {
+    fn from(notification: RpcNotificationResponse<T>) -> Self {
+        let RpcNotificationResponse {
+            context: RpcNotificationContext { slot },
+            value,
+        } = notification;
+        Self {
+            context: RpcResponseContext {
+                slot,
+                api_version: None,
+            },
+            value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RpcNotificationContext {
+    slot: Slot,
 }
 
 const RPC_NOTIFICATIONS_METRICS_SUBMISSION_INTERVAL_MS: Duration = Duration::from_millis(2_000);
@@ -499,7 +527,7 @@ impl PubsubNotificationStats {
 }
 
 pub struct RpcSubscriptions {
-    notification_sender: Sender<TimestampedNotificationEntry>,
+    notification_sender: Option<Sender<TimestampedNotificationEntry>>,
     t_cleanup: Option<JoinHandle<()>>,
 
     exit: Arc<AtomicBool>,
@@ -598,30 +626,36 @@ impl RpcSubscriptions {
                 config.queue_capacity_bytes,
             )),
         };
-        let notification_threads = config.notification_threads;
-        let t_cleanup = Builder::new()
-            .name("solana-rpc-notifications".to_string())
-            .spawn(move || {
-                let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(notification_threads.unwrap_or_else(get_thread_count))
-                    .thread_name(|i| format!("sol-sub-notif-{}", i))
-                    .build()
-                    .unwrap();
-                pool.install(|| {
-                    Self::process_notifications(
-                        exit_clone,
-                        max_complete_transaction_status_slot,
-                        blockstore,
-                        notifier,
-                        notification_receiver,
-                        subscriptions,
-                        bank_forks,
-                        block_commitment_cache,
-                        optimistically_confirmed_bank,
-                    )
-                });
-            })
-            .unwrap();
+        let notification_threads = config.notification_threads.unwrap_or_else(get_thread_count);
+        let t_cleanup = if notification_threads == 0 {
+            None
+        } else {
+            Some(
+                Builder::new()
+                    .name("solana-rpc-notifications".to_string())
+                    .spawn(move || {
+                        let pool = rayon::ThreadPoolBuilder::new()
+                            .num_threads(notification_threads)
+                            .thread_name(|i| format!("sol-sub-notif-{}", i))
+                            .build()
+                            .unwrap();
+                        pool.install(|| {
+                            Self::process_notifications(
+                                exit_clone,
+                                max_complete_transaction_status_slot,
+                                blockstore,
+                                notifier,
+                                notification_receiver,
+                                subscriptions,
+                                bank_forks,
+                                block_commitment_cache,
+                                optimistically_confirmed_bank,
+                            )
+                        });
+                    })
+                    .unwrap(),
+            )
+        };
 
         let control = SubscriptionControl::new(
             config.max_active_subscriptions,
@@ -630,9 +664,12 @@ impl RpcSubscriptions {
         );
 
         Self {
-            notification_sender,
-            t_cleanup: Some(t_cleanup),
-
+            notification_sender: if notification_threads == 0 {
+                None
+            } else {
+                Some(notification_sender)
+            },
+            t_cleanup,
             exit: exit.clone(),
             control,
         }
@@ -691,8 +728,8 @@ impl RpcSubscriptions {
         self.enqueue_notification(NotificationEntry::SignaturesReceived(slot_signatures));
     }
 
-    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction) {
-        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote)));
+    pub fn notify_vote(&self, vote_pubkey: Pubkey, vote: VoteTransaction, signature: Signature) {
+        self.enqueue_notification(NotificationEntry::Vote((vote_pubkey, vote, signature)));
     }
 
     pub fn notify_roots(&self, mut rooted_slots: Vec<Slot>) {
@@ -707,13 +744,15 @@ impl RpcSubscriptions {
     }
 
     fn enqueue_notification(&self, notification_entry: NotificationEntry) {
-        match self.notification_sender.send(notification_entry.into()) {
-            Ok(()) => (),
-            Err(SendError(notification)) => {
-                warn!(
-                    "Dropped RPC Notification - receiver disconnected : {:?}",
-                    notification
-                );
+        if let Some(ref notification_sender) = self.notification_sender {
+            match notification_sender.send(notification_entry.into()) {
+                Ok(()) => (),
+                Err(SendError(notification)) => {
+                    warn!(
+                        "Dropped RPC Notification - receiver disconnected : {:?}",
+                        notification
+                    );
+                }
             }
         }
     }
@@ -775,17 +814,18 @@ impl RpcSubscriptions {
                         // These notifications are only triggered by votes observed on gossip,
                         // unlike `NotificationEntry::Gossip`, which also accounts for slots seen
                         // in VoteState's from bank states built in ReplayStage.
-                        NotificationEntry::Vote((vote_pubkey, ref vote_info)) => {
-                            let rpc_vote = RpcVote {
-                                vote_pubkey: vote_pubkey.to_string(),
-                                slots: vote_info.slots(),
-                                hash: bs58::encode(vote_info.hash()).into_string(),
-                                timestamp: vote_info.timestamp(),
-                            };
+                        NotificationEntry::Vote((vote_pubkey, ref vote_info, signature)) => {
                             if let Some(sub) = subscriptions
                                 .node_progress_watchers()
                                 .get(&SubscriptionParams::Vote)
                             {
+                                let rpc_vote = RpcVote {
+                                    vote_pubkey: vote_pubkey.to_string(),
+                                    slots: vote_info.slots(),
+                                    hash: bs58::encode(vote_info.hash()).into_string(),
+                                    timestamp: vote_info.timestamp(),
+                                    signature: signature.to_string(),
+                                };
                                 debug!("vote notify: {:?}", vote_info);
                                 inc_new_counter_info!("rpc-subscription-notify-vote", 1);
                                 notifier.notify(&rpc_vote, sub, false);
@@ -839,12 +879,12 @@ impl RpcSubscriptions {
                                         {
                                             if params.enable_received_notification {
                                                 notifier.notify(
-                                                    Response {
-                                                        context: RpcResponseContext { slot },
+                                                    RpcResponse::from(RpcNotificationResponse {
+                                                        context: RpcNotificationContext { slot },
                                                         value: RpcSignatureResult::ReceivedSignature(
                                                             ReceivedSignatureResult::ReceivedSignature,
                                                         ),
-                                                    },
+                                                    }),
                                                     subscription,
                                                     false,
                                                 );
@@ -987,10 +1027,10 @@ impl RpcSubscriptions {
                                     Ok(block_update) => {
                                         if let Some(block_update) = block_update {
                                             notifier.notify(
-                                                Response {
-                                                    context: RpcResponseContext { slot: s },
+                                                RpcResponse::from(RpcNotificationResponse {
+                                                    context: RpcNotificationContext { slot: s },
                                                     value: block_update,
-                                                },
+                                                }),
                                                 subscription,
                                                 false,
                                             );
@@ -1004,14 +1044,14 @@ impl RpcSubscriptions {
                                         // we don't advance `w_last_unnotified_slot` so that
                                         // it'll retry on the next notification trigger
                                         notifier.notify(
-                                            Response {
-                                                context: RpcResponseContext { slot: s },
+                                            RpcResponse::from(RpcNotificationResponse {
+                                                context: RpcNotificationContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
                                                     err: Some(err),
                                                 },
-                                            },
+                                            }),
                                             subscription,
                                             false,
                                         );
@@ -1318,6 +1358,7 @@ pub(crate) mod tests {
                         commitment: Some(CommitmentConfig::processed()),
                         encoding: None,
                         data_slice: None,
+                        min_context_slot: None,
                     }),
                 )
                 .unwrap();
@@ -2656,6 +2697,7 @@ pub(crate) mod tests {
                     commitment: Some(CommitmentConfig::confirmed()),
                     encoding: None,
                     data_slice: None,
+                    min_context_slot: None,
                 }),
             )
             .unwrap();
@@ -2743,6 +2785,7 @@ pub(crate) mod tests {
                     commitment: Some(CommitmentConfig::confirmed()),
                     encoding: None,
                     data_slice: None,
+                    min_context_slot: None,
                 }),
             )
             .unwrap();

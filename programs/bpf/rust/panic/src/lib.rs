@@ -1,6 +1,6 @@
 //! Example Rust-based BPF program that panics
 
-#[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
+#[cfg(all(feature = "custom-panic", target_os = "solana"))]
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     // Note: Full panic reporting is included here for testing purposes

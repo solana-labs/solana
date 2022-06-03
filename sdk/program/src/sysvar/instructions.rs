@@ -8,7 +8,7 @@ use crate::{
     sanitize::SanitizeError,
     serialize_utils::{read_pubkey, read_slice, read_u16, read_u8},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::serialize_utils::{append_slice, append_u16, append_u8},
     bitflags::bitflags,
@@ -20,7 +20,7 @@ pub struct Instructions();
 crate::declare_sysvar_id!("Sysvar1nstructions1111111111111111111111111", Instructions);
 
 // Construct the account data for the Instructions Sysvar
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub fn construct_instructions_data(instructions: &[BorrowedInstruction]) -> Vec<u8> {
     let mut data = serialize_instructions(instructions);
     // add room for current instruction index.
@@ -43,7 +43,7 @@ pub struct BorrowedInstruction<'a> {
     pub data: &'a [u8],
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 bitflags! {
     struct InstructionsSysvarAccountMeta: u8 {
         const NONE = 0b00000000;
@@ -65,7 +65,7 @@ bitflags! {
 //   35..67 - program_id
 //   67..69 - data len - u16
 //   69..data_len - data
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn serialize_instructions(instructions: &[BorrowedInstruction]) -> Vec<u8> {
     // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
     let mut data = Vec::with_capacity(instructions.len() * (32 * 2));

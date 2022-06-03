@@ -14,7 +14,7 @@ base64 = "0.13.0"
 clap = "2.33.1"
 serde = "1.0.137"
 serde_json = "1.0.81"
-serde_yaml = "0.8.23"
+serde_yaml = "0.8.24"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.0" }
 solana-entry = { path = "../entry", version = "=1.11.0" }

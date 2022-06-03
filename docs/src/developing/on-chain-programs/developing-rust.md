@@ -218,7 +218,6 @@ single-threaded environment, and must be deterministic:
   - `rand`
   - `std::fs`
   - `std::net`
-  - `std::os`
   - `std::future`
   - `std::process`
   - `std::sync`
@@ -331,7 +330,7 @@ custom-panic = []
 Then provide a custom implementation of the panic handler:
 
 ```rust
-#[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
+#[cfg(all(feature = "custom-panic", target_os = "solana"))]
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     solana_program::msg!("program custom panic enabled");
@@ -352,7 +351,7 @@ programs can provide their own custom panic handler with an empty
 implementation.
 
 ```rust
-#[cfg(all(feature = "custom-panic", target_arch = "bpf"))]
+#[cfg(all(feature = "custom-panic", target_os = "solana"))]
 #[no_mangle]
 fn custom_panic(info: &core::panic::PanicInfo<'_>) {
     // Do nothing to save space

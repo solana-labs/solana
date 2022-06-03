@@ -30,9 +30,12 @@ use {
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
-    solana_ledger::blockstore_db::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    solana_ledger::{
+        blockstore_db::DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        blockstore_options::{
+            BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+            LedgerColumnOptions, ShredStorageType,
+        },
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -54,10 +57,11 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -92,7 +96,7 @@ use {
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Operation {
     Initialize,
     Run,
@@ -409,7 +413,7 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     for entrypoint in entrypoints {
         match solana_net_utils::get_cluster_shred_version(entrypoint) {
             Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
-            Ok(0) => eprintln!("zero sherd-version from entrypoint: {}", entrypoint),
+            Ok(0) => eprintln!("zero shred-version from entrypoint: {}", entrypoint),
             Ok(shred_version) => {
                 info!(
                     "obtained shred-version {} from {}",
@@ -726,6 +730,14 @@ pub fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .help("Use DIR as snapshot location [default: --ledger value]"),
+        )
+        .arg(
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
+                .conflicts_with("no-incremental-snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
         )
         .arg(
             Arg::with_name("tower")
@@ -1351,11 +1363,12 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_pubsub_notification_threads")
                 .long("rpc-pubsub-notification-threads")
+                .requires("full_rpc_api")
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
                 .help("The maximum number of threads that RPC PubSub will use \
-                       for generating notifications."),
+                       for generating notifications. 0 will disable RPC PubSub notifications"),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -1475,8 +1488,8 @@ pub fn main() {
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
-                .possible_values(&["bz2", "gzip", "zstd", "tar", "none"])
-                .default_value("zstd")
+                .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
+                .default_value(DEFAULT_ARCHIVE_COMPRESSION)
                 .value_name("ARCHIVE_TYPE")
                 .takes_value(true)
                 .help("Snapshot archive format to use."),
@@ -1587,6 +1600,12 @@ pub fn main() {
                 .long("accounts-db-skip-rewrites")
                 .help("Accounts that are rent exempt and have no changes are not rewritten. \
                       This produces snapshots that older versions cannot read.")
+                      .hidden(true),
+        )
+        .arg(
+            Arg::with_name("accounts_db_ancient_append_vecs")
+                .long("accounts-db-ancient-append-vecs")
+                .help("AppendVecs that are older than an epoch are squashed together.")
                       .hidden(true),
         )
         .arg(
@@ -2326,6 +2345,7 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
+        ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
         ..AccountsDbConfig::default()
     };
 
@@ -2401,6 +2421,7 @@ pub fn main() {
         );
         exit(1);
     }
+    let full_api = matches.is_present("full_rpc_api");
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2422,7 +2443,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            full_api: matches.is_present("full_rpc_api"),
+            full_api,
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2468,7 +2489,11 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
+            notification_threads: if full_api {
+                value_of(&matches, "rpc_pubsub_notification_threads")
+            } else {
+                Some(0)
+            },
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
@@ -2602,29 +2627,44 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let snapshot_archives_dir = if matches.is_present("snapshots") {
+    let full_snapshot_archives_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
-    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let incremental_snapshot_archives_dir =
+        if matches.is_present("incremental_snapshot_archive_path") {
+            let incremental_snapshot_archives_dir = PathBuf::from(
+                matches
+                    .value_of("incremental_snapshot_archive_path")
+                    .unwrap(),
+            );
+            fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to create incremental snapshot archives directory {:?}: {}",
+                    incremental_snapshot_archives_dir.display(),
+                    err
+                );
+                exit(1);
+            });
+            incremental_snapshot_archives_dir
+        } else {
+            full_snapshot_archives_dir.clone()
+        };
+    let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            bank_snapshots_dir, err
+            bank_snapshots_dir.display(),
+            err
         );
         exit(1);
     });
 
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
-        match archive_format_str.as_str() {
-            "bz2" => ArchiveFormat::TarBzip2,
-            "gzip" => ArchiveFormat::TarGzip,
-            "zstd" => ArchiveFormat::TarZstd,
-            "tar" | "none" => ArchiveFormat::Tar,
-            _ => panic!("Archive format not recognized: {}", archive_format_str),
-        }
+        ArchiveFormat::from_cli_arg(&archive_format_str)
+            .unwrap_or_else(|| panic!("Archive format not recognized: {}", archive_format_str))
     };
 
     let snapshot_version =
@@ -2657,7 +2697,8 @@ pub fn main() {
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
-        snapshot_archives_dir: snapshot_archives_dir.clone(),
+        full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
@@ -2743,7 +2784,6 @@ pub fn main() {
             "rocksdb_perf_sample_interval",
             usize
         ),
-        ..LedgerColumnOptions::default()
     };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
@@ -2887,7 +2927,8 @@ pub fn main() {
         Some(version)
     });
     solana_entry::entry::init_poh();
-    snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -2897,7 +2938,8 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_archives_dir,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,

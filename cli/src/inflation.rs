@@ -15,7 +15,7 @@ use {
     std::sync::Arc,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum InflationCliCommand {
     Show,
     Rewards(Vec<Pubkey>, Option<Epoch>),

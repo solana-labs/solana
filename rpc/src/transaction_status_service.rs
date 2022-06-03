@@ -315,6 +315,7 @@ pub(crate) mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
+            true, // require_static_program_ids
         )
         .unwrap();
 
@@ -350,7 +351,8 @@ pub(crate) mod tests {
                 .unwrap(),
             )),
             return_data: None,
-            executed_units: 0u64,
+            executed_units: 0,
+            accounts_data_len_delta: 0,
         });
 
         let balances = TransactionBalancesSet {

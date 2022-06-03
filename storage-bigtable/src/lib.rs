@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     crate::bigtable::RowKey,
     log::*,
@@ -25,6 +26,7 @@ use {
         convert::TryInto,
     },
     thiserror::Error,
+    tokio::task::JoinError,
 };
 
 #[macro_use]
@@ -54,6 +56,9 @@ pub enum Error {
 
     #[error("Signature not found")]
     SignatureNotFound,
+
+    #[error("tokio error")]
+    TokioJoinError(JoinError),
 }
 
 impl std::convert::From<bigtable::Error> for Error {
@@ -292,7 +297,7 @@ impl From<Reward> for StoredConfirmedBlockReward {
 }
 
 // A serialized `TransactionInfo` is stored in the `tx` table
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct TransactionInfo {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -301,7 +306,7 @@ struct TransactionInfo {
 }
 
 // Part of a serialized `TransactionInfo` which is stored in the `tx` table
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct UploadedTransaction {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -335,7 +340,7 @@ impl From<TransactionInfo> for TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct LegacyTransactionByAddrInfo {
     pub signature: Signature,          // The transaction signature
     pub err: Option<TransactionError>, // None if the transaction executed successfully
@@ -737,8 +742,6 @@ impl LedgerStorage {
         slot: Slot,
         confirmed_block: VersionedConfirmedBlock,
     ) -> Result<()> {
-        let mut bytes_written = 0;
-
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
         let mut tx_cells = vec![];
@@ -790,21 +793,51 @@ impl LedgerStorage {
             })
             .collect();
 
+        let mut tasks = vec![];
+
         if !tx_cells.is_empty() {
-            bytes_written += self
-                .connection
-                .put_bincode_cells_with_retry::<TransactionInfo>("tx", &tx_cells)
-                .await?;
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_bincode_cells_with_retry::<TransactionInfo>("tx", &tx_cells)
+                    .await
+            }));
         }
 
         if !tx_by_addr_cells.is_empty() {
-            bytes_written += self
-                .connection
-                .put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
                     "tx-by-addr",
                     &tx_by_addr_cells,
                 )
-                .await?;
+                .await
+            }));
+        }
+
+        let mut bytes_written = 0;
+        let mut maybe_first_err: Option<Error> = None;
+
+        let results = futures::future::join_all(tasks).await;
+        for result in results {
+            match result {
+                Err(err) => {
+                    if maybe_first_err.is_none() {
+                        maybe_first_err = Some(Error::TokioJoinError(err));
+                    }
+                }
+                Ok(Err(err)) => {
+                    if maybe_first_err.is_none() {
+                        maybe_first_err = Some(Error::BigTableError(err));
+                    }
+                }
+                Ok(Ok(bytes)) => {
+                    bytes_written += bytes;
+                }
+            }
+        }
+
+        if let Some(err) = maybe_first_err {
+            return Err(err);
         }
 
         let num_transactions = confirmed_block.transactions.len();

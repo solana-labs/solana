@@ -16,7 +16,7 @@ use {
 pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
 pub const DUPLICATE_RATE: usize = 10;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BroadcastDuplicatesConfig {
     /// Amount of stake (excluding the leader) to send different version of slots to.
     /// Note this is sampled from a list of stakes sorted least to greatest.

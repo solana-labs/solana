@@ -16,14 +16,14 @@ use {
     },
 };
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionConfirmationStatus {
     Processed,
     Confirmed,
     Finalized,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionStatus {
     pub slot: Slot,
     pub confirmations: Option<usize>, // None = rooted
@@ -31,7 +31,7 @@ pub struct TransactionStatus {
     pub confirmation_status: Option<TransactionConfirmationStatus>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionSimulationDetails {
     pub logs: Vec<String>,
@@ -39,7 +39,7 @@ pub struct TransactionSimulationDetails {
     pub return_data: Option<TransactionReturnData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BanksTransactionResultWithSimulation {
     pub result: Option<transaction::Result<()>>,
     pub simulation_details: Option<TransactionSimulationDetails>,

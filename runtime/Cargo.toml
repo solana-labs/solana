@@ -20,21 +20,21 @@ bzip2 = "0.4.3"
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
-flate2 = "1.0.23"
+flate2 = "1.0.24"
 fnv = "1.0.7"
-im = { version = "15.0.0", features = ["rayon", "serde"] }
+im = { version = "15.1.0", features = ["rayon", "serde"] }
 index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
-log = "0.4.14"
+log = "0.4.17"
 memmap2 = "0.5.3"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 num_cpus = "1.13.1"
 ouroboros = "0.15.0"
 rand = "0.7.0"
-rayon = "1.5.2"
-regex = "1.5.4"
+rayon = "1.5.3"
+regex = "1.5.6"
 serde = { version = "1.0.137", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.11.0" }
@@ -56,7 +56,10 @@ symlink = "0.1.0"
 tar = "0.4.38"
 tempfile = "3.3.0"
 thiserror = "1.0"
-zstd = "0.11.1"
+zstd = "0.11.2"
+lz4 = "1.23.3"
+strum_macros = "0.24"
+strum = { version = "0.24", features = ["derive"] }
 
 [lib]
 crate-type = ["lib"]

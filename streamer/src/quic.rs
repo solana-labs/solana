@@ -154,6 +154,7 @@ fn handle_chunk(
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
     stats: Arc<StreamStats>,
+    stake: u64,
 ) -> bool {
     match chunk {
         Ok(maybe_chunk) => {
@@ -177,8 +178,9 @@ fn handle_chunk(
                 if maybe_batch.is_none() {
                     let mut batch = PacketBatch::with_capacity(1);
                     let mut packet = Packet::default();
-                    packet.meta.set_addr(remote_addr);
-                    batch.packets.push(packet);
+                    packet.meta.set_socket_addr(remote_addr);
+                    packet.meta.sender_stake = stake;
+                    batch.push(packet);
                     *maybe_batch = Some(batch);
                     stats
                         .total_packets_allocated
@@ -187,15 +189,15 @@ fn handle_chunk(
 
                 if let Some(batch) = maybe_batch.as_mut() {
                     let end = chunk.offset as usize + chunk.bytes.len();
-                    batch.packets[0].data[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
-                    batch.packets[0].meta.size = std::cmp::max(batch.packets[0].meta.size, end);
+                    batch[0].buffer_mut()[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
+                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                 }
             } else {
                 trace!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
-                    let len = batch.packets[0].meta.size;
+                    let len = batch[0].meta.size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
                             .total_packet_batch_send_err
@@ -277,9 +279,10 @@ impl ConnectionTable {
                     }
                 }
             }
-            self.table.remove(&oldest_ip.unwrap());
-            self.total_size -= 1;
-            num_pruned += 1;
+            if let Some(removed) = self.table.remove(&oldest_ip.unwrap()) {
+                self.total_size -= removed.len();
+                num_pruned += removed.len();
+            }
         }
         num_pruned
     }
@@ -324,7 +327,7 @@ impl ConnectionTable {
 }
 
 #[derive(Default)]
-struct StreamStats {
+pub struct StreamStats {
     total_connections: AtomicUsize,
     total_new_connections: AtomicUsize,
     total_streams: AtomicUsize,
@@ -339,6 +342,7 @@ struct StreamStats {
     total_stream_read_errors: AtomicUsize,
     num_evictions: AtomicUsize,
     connection_add_failed: AtomicUsize,
+    connection_add_failed_unstaked_node: AtomicUsize,
     connection_setup_timeout: AtomicUsize,
 }
 
@@ -374,6 +378,12 @@ impl StreamStats {
             (
                 "connection_add_failed",
                 self.connection_add_failed.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_add_failed_unstaked_node",
+                self.connection_add_failed_unstaked_node
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -433,6 +443,7 @@ fn handle_connection(
     connection_table: Arc<Mutex<ConnectionTable>>,
     stream_exit: Arc<AtomicBool>,
     stats: Arc<StreamStats>,
+    stake: u64,
 ) {
     tokio::spawn(async move {
         debug!(
@@ -455,6 +466,7 @@ fn handle_connection(
                                 &remote_addr,
                                 &packet_sender,
                                 stats.clone(),
+                                stake,
                             ) {
                                 last_update.store(timing::timestamp(), Ordering::Relaxed);
                                 break;
@@ -481,6 +493,7 @@ fn handle_connection(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
@@ -491,6 +504,7 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -501,7 +515,6 @@ pub fn spawn_server(
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
-    let stats = Arc::new(StreamStats::default());
     let handle = thread::spawn(move || {
         let handle = runtime.spawn(async move {
             debug!("spawn quic server");
@@ -535,44 +548,57 @@ pub fn spawn_server(
 
                         let remote_addr = connection.remote_address();
 
-                        let mut connection_table_l =
-                            if staked_nodes.read().unwrap().contains_key(&remote_addr.ip()) {
+                        let (mut connection_table_l, stake) = {
+                            let staked_nodes = staked_nodes.read().unwrap();
+                            if let Some(stake) = staked_nodes.get(&remote_addr.ip()) {
+                                let stake = *stake;
+                                drop(staked_nodes);
                                 let mut connection_table_l =
                                     staked_connection_table.lock().unwrap();
                                 let num_pruned =
                                     connection_table_l.prune_oldest(max_staked_connections);
                                 stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                                connection_table_l
+                                (connection_table_l, stake)
                             } else {
+                                drop(staked_nodes);
                                 let mut connection_table_l = connection_table.lock().unwrap();
                                 let num_pruned =
                                     connection_table_l.prune_oldest(max_unstaked_connections);
                                 stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                                connection_table_l
-                            };
+                                (connection_table_l, 0)
+                            }
+                        };
 
-                        if let Some((last_update, stream_exit)) = connection_table_l
-                            .try_add_connection(
-                                &remote_addr,
-                                timing::timestamp(),
-                                max_connections_per_ip,
-                            )
-                        {
-                            drop(connection_table_l);
-                            let packet_sender = packet_sender.clone();
-                            let stats = stats.clone();
-                            let connection_table1 = connection_table.clone();
-                            handle_connection(
-                                uni_streams,
-                                packet_sender,
-                                remote_addr,
-                                last_update,
-                                connection_table1,
-                                stream_exit,
-                                stats,
-                            );
+                        if stake != 0 || max_unstaked_connections > 0 {
+                            if let Some((last_update, stream_exit)) = connection_table_l
+                                .try_add_connection(
+                                    &remote_addr,
+                                    timing::timestamp(),
+                                    max_connections_per_ip,
+                                )
+                            {
+                                drop(connection_table_l);
+                                let packet_sender = packet_sender.clone();
+                                let stats = stats.clone();
+                                let connection_table1 = connection_table.clone();
+                                handle_connection(
+                                    uni_streams,
+                                    packet_sender,
+                                    remote_addr,
+                                    last_update,
+                                    connection_table1,
+                                    stream_exit,
+                                    stats,
+                                    stake,
+                                );
+                            } else {
+                                stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                            }
                         } else {
-                            stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                            connection.close(0u32.into(), &[0u8]);
+                            stats
+                                .connection_add_failed_unstaked_node
+                                .fetch_add(1, Ordering::Relaxed);
                         }
                     } else {
                         stats
@@ -728,6 +754,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
             &keypair,
@@ -738,6 +765,7 @@ mod test {
             staked_nodes,
             10,
             10,
+            stats,
         )
         .unwrap();
 
@@ -767,7 +795,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 10 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets == num_expected_packets {
@@ -775,7 +803,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, 1);
             }
         }
@@ -798,6 +826,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
             &keypair,
@@ -808,6 +837,7 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            stats,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -839,7 +869,7 @@ mod test {
         let mut total_packets = 0;
         while now.elapsed().as_secs() < 5 {
             if let Ok(packets) = receiver.recv_timeout(Duration::from_secs(1)) {
-                total_packets += packets.packets.len();
+                total_packets += packets.len();
                 all_packets.push(packets)
             }
             if total_packets > num_expected_packets {
@@ -847,7 +877,7 @@ mod test {
             }
         }
         for batch in all_packets {
-            for p in &batch.packets {
+            for p in batch.iter() {
                 assert_eq!(p.meta.size, num_bytes);
             }
         }
@@ -858,11 +888,57 @@ mod test {
     }
 
     #[test]
+    fn test_quic_server_unstaked_node_connect_failure() {
+        solana_logger::setup();
+
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, _receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            0, // Do not allow any connection from unstaked clients/nodes
+            stats,
+        )
+        .unwrap();
+
+        let runtime = rt();
+        let _rt_guard = runtime.enter();
+        let conn1 = Arc::new(make_client_endpoint(&runtime, &server_address));
+
+        // Send a full size packet with single byte writes.
+        let handle = runtime.spawn(async move {
+            if let Ok(mut s1) = conn1.connection.open_uni().await {
+                for _ in 0..PACKET_DATA_SIZE {
+                    // Ignoring any errors here. s1.finish() will test the error condition
+                    s1.write_all(&[0u8]).await.unwrap_or_default();
+                }
+                s1.finish().await.unwrap_err();
+            }
+        });
+        runtime.block_on(handle).unwrap();
+
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
+    }
+
+    #[test]
     fn test_prune_table() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
         let mut table = ConnectionTable::default();
-        let num_entries = 5;
+        let mut num_entries = 5;
         let max_connections_per_ip = 10;
         let sockets: Vec<_> = (0..num_entries)
             .into_iter()
@@ -873,12 +949,17 @@ mod test {
                 .try_add_connection(socket, i as u64, max_connections_per_ip)
                 .unwrap();
         }
+        num_entries += 1;
+        table
+            .try_add_connection(&sockets[0], 5, max_connections_per_ip)
+            .unwrap();
+
         let new_size = 3;
         let pruned = table.prune_oldest(new_size);
         assert_eq!(pruned, num_entries as usize - new_size);
         for v in table.table.values() {
             for x in v {
-                assert!(x.last_update() >= (num_entries as u64 - new_size as u64));
+                assert!((x.last_update() + 1) >= (num_entries as u64 - new_size as u64));
             }
         }
         assert_eq!(table.table.len(), new_size);
@@ -886,7 +967,6 @@ mod test {
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
             table.remove_connection(socket);
         }
-        info!("{:?}", table);
         assert_eq!(table.total_size, 0);
     }
 }

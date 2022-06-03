@@ -16,7 +16,6 @@ use {
             AccountKeys, Message, MessageHeader, VersionedMessage,
         },
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::Signature,
         transaction::{
             Result as TransactionResult, Transaction, TransactionError, TransactionVersion,
@@ -123,7 +122,7 @@ impl Default for TransactionDetails {
 }
 
 /// A duplicate representation of an Instruction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiInstruction {
     Compiled(UiCompiledInstruction),
@@ -143,7 +142,7 @@ impl UiInstruction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiParsedInstruction {
     Parsed(ParsedInstruction),
@@ -151,7 +150,7 @@ pub enum UiParsedInstruction {
 }
 
 /// A duplicate representation of a CompiledInstruction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiCompiledInstruction {
     pub program_id_index: u8,
@@ -170,7 +169,7 @@ impl From<&CompiledInstruction> for UiCompiledInstruction {
 }
 
 /// A partially decoded CompiledInstruction that includes explicit account addresses
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiPartiallyDecodedInstruction {
     pub program_id: String,
@@ -192,7 +191,7 @@ impl UiPartiallyDecodedInstruction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerInstructions {
     /// Transaction instruction index
     pub index: u8,
@@ -200,7 +199,7 @@ pub struct InnerInstructions {
     pub instructions: Vec<CompiledInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiInnerInstructions {
     /// Transaction instruction index
@@ -329,7 +328,7 @@ pub struct UiTransactionStatusMeta {
 }
 
 /// A duplicate representation of LoadedAddresses
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLoadedAddresses {
     pub writable: Vec<String>,
@@ -406,7 +405,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionConfirmationStatus {
     Processed,
@@ -414,7 +413,7 @@ pub enum TransactionConfirmationStatus {
     Finalized,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
@@ -459,7 +458,7 @@ impl TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfirmedTransactionStatusWithSignature {
     pub signature: Signature,
     pub slot: Slot,
@@ -468,7 +467,7 @@ pub struct ConfirmedTransactionStatusWithSignature {
     pub block_time: Option<UnixTimestamp>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reward {
     pub pubkey: String,
@@ -772,7 +771,7 @@ pub struct EncodedConfirmedTransactionWithStatusMeta {
     pub block_time: Option<UnixTimestamp>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
     LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
@@ -867,19 +866,25 @@ impl EncodedTransaction {
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
         };
 
-        transaction.filter(|transaction| transaction.sanitize().is_ok())
+        transaction.filter(|transaction| {
+            transaction
+                .sanitize(
+                    true, // require_static_program_ids
+                )
+                .is_ok()
+        })
     }
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTransaction {
     pub signatures: Vec<String>,
     pub message: UiMessage,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiMessage {
     Parsed(UiParsedMessage),
@@ -953,7 +958,7 @@ impl EncodableWithMeta for v0::Message {
 }
 
 /// A duplicate representation of a Message, in raw format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiRawMessage {
     pub header: MessageHeader,
@@ -965,7 +970,7 @@ pub struct UiRawMessage {
 }
 
 /// A duplicate representation of a MessageAddressTableLookup, in raw format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAddressTableLookup {
     pub account_key: String,
@@ -984,7 +989,7 @@ impl From<&MessageAddressTableLookup> for UiAddressTableLookup {
 }
 
 /// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
     pub account_keys: Vec<ParsedAccount>,
@@ -995,7 +1000,7 @@ pub struct UiParsedMessage {
 
 // A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
 // the one's compliment of the slot so that rows may be listed in reverse order
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionByAddrInfo {
     pub signature: Signature,          // The transaction signature
     pub err: Option<TransactionError>, // None if the transaction executed successfully

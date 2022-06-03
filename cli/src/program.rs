@@ -54,7 +54,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ProgramCliCommand {
     Deploy {
         program_location: Option<String>,
@@ -924,25 +924,53 @@ fn process_program_deploy(
             .get_account_with_commitment(&buffer_pubkey, config.commitment)?
             .value
         {
-            if let Ok(UpgradeableLoaderState::Buffer {
-                authority_address: _,
-            }) = account.state()
-            {
-            } else {
-                return Err(format!("Buffer account {} is not initialized", buffer_pubkey).into());
+            if !bpf_loader_upgradeable::check_id(&account.owner) {
+                return Err(format!(
+                    "Buffer account {buffer_pubkey} is not owned by the BPF Upgradeable Loader",
+                )
+                .into());
             }
-            (vec![], account.data.len())
+
+            match account.state() {
+                Ok(UpgradeableLoaderState::Buffer { .. }) => {
+                    // continue if buffer is initialized
+                }
+                Ok(UpgradeableLoaderState::Program { .. }) => {
+                    return Err(
+                        format!("Cannot use program account {buffer_pubkey} as buffer").into(),
+                    );
+                }
+                Ok(UpgradeableLoaderState::ProgramData { .. }) => {
+                    return Err(format!(
+                        "Cannot use program data account {buffer_pubkey} as buffer",
+                    )
+                    .into())
+                }
+                Ok(UpgradeableLoaderState::Uninitialized) => {
+                    return Err(format!("Buffer account {buffer_pubkey} is not initialized").into());
+                }
+                Err(_) => {
+                    return Err(
+                        format!("Buffer account {buffer_pubkey} could not be deserialized").into(),
+                    )
+                }
+            };
+
+            let program_len = account
+                .data
+                .len()
+                .saturating_sub(UpgradeableLoaderState::size_of_buffer_metadata());
+
+            (vec![], program_len)
         } else {
             return Err(format!(
-                "Buffer account {} not found, was it already consumed?",
-                buffer_pubkey
+                "Buffer account {buffer_pubkey} not found, was it already consumed?",
             )
             .into());
         }
     } else {
         return Err("Program location required if buffer not supplied".into());
     };
-    let buffer_data_len = program_len;
     let programdata_len = if let Some(len) = max_len {
         if program_len > len {
             return Err("Max length specified not large enough".into());
@@ -954,7 +982,7 @@ fn process_program_deploy(
         program_len * 2
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(buffer_data_len)?,
+        UpgradeableLoaderState::size_of_programdata(program_len),
     )?;
 
     let result = if do_deploy {
@@ -967,7 +995,7 @@ fn process_program_deploy(
             rpc_client.clone(),
             config,
             &program_data,
-            buffer_data_len,
+            program_len,
             programdata_len,
             minimum_balance,
             &bpf_loader_upgradeable::id(),
@@ -1066,7 +1094,7 @@ fn process_write_buffer(
         program_data.len()
     };
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(buffer_data_len)?,
+        UpgradeableLoaderState::size_of_programdata(buffer_data_len),
     )?;
 
     let result = do_process_program_write_and_deploy(
@@ -1281,7 +1309,7 @@ fn get_programs(
                     .unwrap_or_else(|| "none".to_string()),
                 last_deploy_slot: slot,
                 data_len: programdata_account.data.len()
-                    - UpgradeableLoaderState::programdata_data_offset()?,
+                    - UpgradeableLoaderState::size_of_programdata_metadata(),
                 lamports: programdata_account.lamports,
                 use_lamports_unit,
             });
@@ -1363,7 +1391,7 @@ fn process_show(
                                         .unwrap_or_else(|| "none".to_string()),
                                     last_deploy_slot: slot,
                                     data_len: programdata_account.data.len()
-                                        - UpgradeableLoaderState::programdata_data_offset()?,
+                                        - UpgradeableLoaderState::size_of_programdata_metadata(),
                                     lamports: programdata_account.lamports,
                                     use_lamports_unit,
                                 }))
@@ -1384,7 +1412,7 @@ fn process_show(
                                 .map(|pubkey| pubkey.to_string())
                                 .unwrap_or_else(|| "none".to_string()),
                             data_len: account.data.len()
-                                - UpgradeableLoaderState::buffer_data_offset()?,
+                                - UpgradeableLoaderState::size_of_buffer_metadata(),
                             lamports: account.lamports,
                             use_lamports_unit,
                         }))
@@ -1441,8 +1469,7 @@ fn process_dump(
                         if let Ok(UpgradeableLoaderState::ProgramData { .. }) =
                             programdata_account.state()
                         {
-                            let offset =
-                                UpgradeableLoaderState::programdata_data_offset().unwrap_or(0);
+                            let offset = UpgradeableLoaderState::size_of_programdata_metadata();
                             let program_data = &programdata_account.data[offset..];
                             let mut f = File::create(output_location)?;
                             f.write_all(program_data)?;
@@ -1454,7 +1481,7 @@ fn process_dump(
                         Err(format!("Program {} has been closed", account_pubkey).into())
                     }
                 } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
-                    let offset = UpgradeableLoaderState::buffer_data_offset().unwrap_or(0);
+                    let offset = UpgradeableLoaderState::size_of_buffer_metadata();
                     let program_data = &account.data[offset..];
                     let mut f = File::create(output_location)?;
                     f.write_all(program_data)?;
@@ -1730,7 +1757,7 @@ fn do_process_program_write_and_deploy(
     rpc_client: Arc<RpcClient>,
     config: &CliConfig,
     program_data: &[u8],
-    buffer_data_len: usize,
+    program_len: usize,
     programdata_len: usize,
     minimum_balance: u64,
     loader_id: &Pubkey,
@@ -1758,9 +1785,9 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &account,
                     if loader_id == &bpf_loader_upgradeable::id() {
-                        UpgradeableLoaderState::buffer_len(buffer_data_len)?
+                        UpgradeableLoaderState::size_of_buffer(program_len)
                     } else {
-                        buffer_data_len
+                        program_len
                     },
                     minimum_balance,
                     allow_excessive_balance,
@@ -1772,7 +1799,7 @@ fn do_process_program_write_and_deploy(
                         buffer_pubkey,
                         &buffer_authority_signer.pubkey(),
                         minimum_balance,
-                        buffer_data_len,
+                        program_len,
                     )?,
                     minimum_balance,
                 )
@@ -1782,7 +1809,7 @@ fn do_process_program_write_and_deploy(
                         &config.signers[0].pubkey(),
                         buffer_pubkey,
                         minimum_balance,
-                        buffer_data_len as u64,
+                        program_len as u64,
                         loader_id,
                     )],
                     minimum_balance,
@@ -1848,7 +1875,7 @@ fn do_process_program_write_and_deploy(
                     buffer_pubkey,
                     &program_signers[1].pubkey(),
                     rpc_client.get_minimum_balance_for_rent_exemption(
-                        UpgradeableLoaderState::program_len()?,
+                        UpgradeableLoaderState::size_of_program(),
                     )?,
                     programdata_len,
                 )?,
@@ -1871,7 +1898,14 @@ fn do_process_program_write_and_deploy(
     }
 
     if !skip_fee_check {
-        check_payer(&rpc_client, config, balance_needed, &messages)?;
+        check_payer(
+            &rpc_client,
+            config,
+            balance_needed,
+            &initial_message,
+            &write_messages,
+            &final_message,
+        )?;
     }
 
     send_deploy_messages(
@@ -1911,7 +1945,7 @@ fn do_process_program_upgrade(
     let loader_id = bpf_loader_upgradeable::id();
     let data_len = program_data.len();
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(
-        UpgradeableLoaderState::programdata_len(data_len)?,
+        UpgradeableLoaderState::size_of_programdata(data_len),
     )?;
 
     // Build messages to calculate fees
@@ -1930,7 +1964,7 @@ fn do_process_program_upgrade(
                     &config.signers[0].pubkey(),
                     &buffer_signer.pubkey(),
                     &account,
-                    UpgradeableLoaderState::buffer_len(data_len)?,
+                    UpgradeableLoaderState::size_of_buffer(data_len),
                     minimum_balance,
                     true,
                 )?
@@ -2005,9 +2039,17 @@ fn do_process_program_upgrade(
         &blockhash,
     );
     messages.push(&final_message);
+    let final_message = Some(final_message);
 
     if !skip_fee_check {
-        check_payer(&rpc_client, config, balance_needed, &messages)?;
+        check_payer(
+            &rpc_client,
+            config,
+            balance_needed,
+            &initial_message,
+            &write_messages,
+            &final_message,
+        )?;
     }
 
     send_deploy_messages(
@@ -2015,7 +2057,7 @@ fn do_process_program_upgrade(
         config,
         &initial_message,
         &write_messages,
-        &Some(final_message),
+        &final_message,
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
@@ -2044,7 +2086,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
             reject_broken_elfs: true,
             ..Config::default()
         },
-        register_syscalls(&mut invoke_context).unwrap(),
+        register_syscalls(&mut invoke_context, true).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 
@@ -2107,14 +2149,28 @@ fn check_payer(
     rpc_client: &RpcClient,
     config: &CliConfig,
     balance_needed: u64,
-    messages: &[&Message],
+    initial_message: &Option<Message>,
+    write_messages: &Option<Vec<Message>>,
+    final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Does the payer have enough?
-    check_account_for_spend_multiple_fees_with_commitment(
+    let mut fee = 0;
+    if let Some(message) = initial_message {
+        fee += rpc_client.get_fee_for_message(message)?;
+    }
+    if let Some(write_messages) = write_messages {
+        // Assume all write messages cost the same
+        if let Some(message) = write_messages.get(0) {
+            fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
+        }
+    }
+    if let Some(message) = final_message {
+        fee += rpc_client.get_fee_for_message(message)?;
+    }
+    check_account_for_spend_and_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         balance_needed,
-        messages,
+        fee,
         config.commitment,
     )?;
     Ok(())

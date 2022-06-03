@@ -11,7 +11,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-log = { version = "0.4.11" }
+log = { version = "0.4.17" }
 memmap2 = "0.5.3"
 modular-bitfield = "0.11.2"
 rand = "0.7.0"
@@ -21,7 +21,7 @@ tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"
-rayon = "1.5.2"
+rayon = "1.5.3"
 solana-logger = { path = "../logger", version = "=1.11.0" }
 
 [lib]
