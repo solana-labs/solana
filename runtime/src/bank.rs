@@ -5255,7 +5255,7 @@ impl Bank {
         hold_range.stop();
 
         let mut load = Measure::start("load");
-        let accounts = self
+        let mut accounts = self
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
@@ -5268,16 +5268,17 @@ impl Bank {
         let mut total_collected = CollectedInfo::default();
         let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
+        let mut accounts_to_store =
+            Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
         let mut collect_us = 0;
         let mut hash_skipped_rewrites_us = 0;
-        let mut store_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
-        for (pubkey, mut account, loaded_slot) in accounts {
+        for (pubkey, account, loaded_slot) in accounts.iter_mut() {
             let old_rent_epoch = account.rent_epoch();
             let mut time = Measure::start("collect");
             let collected = self.rent_collector.collect_from_existing_account(
-                &pubkey,
-                &mut account,
+                pubkey,
+                account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             time.stop();
@@ -5291,9 +5292,9 @@ impl Bank {
                 && Self::skip_rewrite(
                     bank_slot,
                     collected.rent_amount,
-                    loaded_slot,
+                    *loaded_slot,
                     old_rent_epoch,
-                    &account,
+                    account,
                 )
             {
                 // this would have been rewritten previously. Now we skip it.
@@ -5301,24 +5302,27 @@ impl Bank {
                 // This will be needed to calculate the bank's hash.
                 let mut time = Measure::start("hash_account");
                 let hash =
-                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), account, pubkey);
                 time.stop();
                 hash_skipped_rewrites_us += time.as_us();
-                rewrites_skipped.push((pubkey, hash));
+                rewrites_skipped.push((*pubkey, hash));
                 assert_eq!(collected, CollectedInfo::default());
             } else if !just_rewrites {
-                let mut time = Measure::start("store_account");
                 total_collected += collected;
-                self.store_account(&pubkey, &account);
-                time.stop();
-                store_us += time.as_us();
+                accounts_to_store.push((pubkey, account));
             }
-            rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
+            rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
         }
         metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
         metrics.collect_us.fetch_add(collect_us, Relaxed);
         metrics.hash_us.fetch_add(hash_skipped_rewrites_us, Relaxed);
-        metrics.store_us.fetch_add(store_us, Relaxed);
+
+        if !accounts_to_store.is_empty() {
+            let mut time = Measure::start("store_account");
+            self.store_accounts(&accounts_to_store);
+            time.stop();
+            metrics.store_us.fetch_add(time.as_us(), Relaxed);
+        }
 
         self.remember_skipped_rewrites(rewrites_skipped);
         self.collected_rent
@@ -6062,12 +6066,18 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+        self.store_accounts(&[(pubkey, account)])
+    }
+
+    pub fn store_accounts(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
         assert!(!self.freeze_started());
         self.rc
             .accounts
-            .store_slow_cached(self.slot(), pubkey, account);
+            .store_accounts_cached(self.slot(), accounts);
         let mut m = Measure::start("stakes_cache.check_and_store");
-        self.stakes_cache.check_and_store(pubkey, account);
+        for (pubkey, account) in accounts {
+            self.stakes_cache.check_and_store(pubkey, account);
+        }
         m.stop();
         self.rc
             .accounts

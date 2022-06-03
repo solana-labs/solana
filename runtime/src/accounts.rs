@@ -1040,10 +1040,6 @@ impl Accounts {
         self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
-    pub fn store_slow_cached(&self, slot: Slot, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.accounts_db.store_cached(slot, &[(pubkey, account)]);
-    }
-
     fn lock_account(
         &self,
         account_locks: &mut AccountLocks,
@@ -1211,6 +1207,10 @@ impl Accounts {
             leave_nonce_on_success,
         );
         self.accounts_db.store_cached(slot, &accounts_to_store);
+    }
+
+    pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        self.accounts_db.store_cached(slot, accounts)
     }
 
     /// Add a slot to root.  Root slots cannot be purged
