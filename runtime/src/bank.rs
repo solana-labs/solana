@@ -5375,6 +5375,11 @@ impl Bank {
         true
     }
 
+    fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
+        const PREFIX_SIZE: usize = mem::size_of::<u64>();
+        u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap())
+    }
+
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
     pub fn partition_from_pubkey(
@@ -5382,7 +5387,6 @@ impl Bank {
         partition_count: PartitionsPerCycle,
     ) -> PartitionIndex {
         type Prefix = u64;
-        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
         const PREFIX_MAX: Prefix = Prefix::max_value();
 
         if partition_count == 1 {
@@ -5392,7 +5396,7 @@ impl Bank {
         // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
 
-        let prefix = u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap());
+        let prefix = Self::prefix_from_pubkey(pubkey);
         if prefix == 0 {
             return 0;
         }
