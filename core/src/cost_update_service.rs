@@ -103,8 +103,7 @@ impl CostUpdateService {
                     mut execute_timings,
                 } => {
                     let (update_count, update_cost_model_time) = Measure::this(
-                        |_| Self::update_cost_model(&cost_model, &mut execute_timings),
-                        (),
+                        || Self::update_cost_model(&cost_model, &mut execute_timings),
                         "update_cost_model_time",
                     );
                     cost_update_service_timing.update(update_count, update_cost_model_time.as_us());

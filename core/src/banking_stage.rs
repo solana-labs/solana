@@ -627,8 +627,7 @@ impl BankingStage {
                 // TODO: Right now we iterate through buffer and try the highest weighted transaction once
                 // but we should retry the highest weighted transactions more often.
                 let (bank_start, poh_recorder_lock_time) = Measure::this(
-                    |_| poh_recorder.lock().unwrap().bank_start(),
-                    (),
+                    || poh_recorder.lock().unwrap().bank_start(),
                     "poh_recorder_lock",
                 );
                 slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
@@ -643,7 +642,7 @@ impl BankingStage {
                 {
                     let (process_transactions_summary, process_packets_transactions_time) =
                         Measure::this(
-                            |_| {
+                            || {
                                 Self::process_packets_transactions(
                                     &working_bank,
                                     &bank_creation_time,
@@ -656,7 +655,6 @@ impl BankingStage {
                                     slot_metrics_tracker,
                                 )
                             },
-                            (),
                             "process_packets_transactions",
                         );
                     slot_metrics_tracker.increment_process_packets_transactions_us(
@@ -676,11 +674,8 @@ impl BankingStage {
                         )
                     {
                         let poh_recorder_lock_time = {
-                            let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
-                                |_| poh_recorder.lock().unwrap(),
-                                (),
-                                "poh_recorder_lock",
-                            );
+                            let (poh_recorder_locked, poh_recorder_lock_time) =
+                                Measure::this(|| poh_recorder.lock().unwrap(), "poh_recorder_lock");
 
                             reached_end_of_slot = Some(EndOfSlot {
                                 next_slot_leader: poh_recorder_locked.next_slot_leader(),
@@ -744,11 +739,8 @@ impl BankingStage {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
                     let poh_recorder_lock_time = {
-                        let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
-                            |_| poh_recorder.lock().unwrap(),
-                            (),
-                            "poh_recorder_lock",
-                        );
+                        let (poh_recorder_locked, poh_recorder_lock_time) =
+                            Measure::this(|| poh_recorder.lock().unwrap(), "poh_recorder_lock");
 
                         reached_end_of_slot = Some(EndOfSlot {
                             next_slot_leader: poh_recorder_locked.next_slot_leader(),
@@ -884,7 +876,7 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) {
         let (decision, make_decision_time) = Measure::this(
-            |_| {
+            || {
                 let bank_start;
                 let (
                     leader_at_slot_offset,
@@ -913,7 +905,6 @@ impl BankingStage {
                     would_be_leader_shortly,
                 )
             },
-            (),
             "make_decision",
         );
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
@@ -921,7 +912,7 @@ impl BankingStage {
         match decision {
             BufferedPacketsDecision::Consume(max_tx_ingestion_ns) => {
                 let (_, consume_buffered_packets_time) = Measure::this(
-                    |_| {
+                    || {
                         Self::consume_buffered_packets(
                             my_pubkey,
                             max_tx_ingestion_ns,
@@ -937,7 +928,6 @@ impl BankingStage {
                             UNPROCESSED_BUFFER_STEP_SIZE,
                         )
                     },
-                    (),
                     "consume_buffered_packets",
                 );
                 slot_metrics_tracker
@@ -945,7 +935,7 @@ impl BankingStage {
             }
             BufferedPacketsDecision::Forward => {
                 let (_, forward_time) = Measure::this(
-                    |_| {
+                    || {
                         Self::handle_forwarding(
                             forward_option,
                             cluster_info,
@@ -957,14 +947,13 @@ impl BankingStage {
                             banking_stage_stats,
                         )
                     },
-                    (),
                     "forward",
                 );
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
             }
             BufferedPacketsDecision::ForwardAndHold => {
                 let (_, forward_and_hold_time) = Measure::this(
-                    |_| {
+                    || {
                         Self::handle_forwarding(
                             forward_option,
                             cluster_info,
@@ -976,7 +965,6 @@ impl BankingStage {
                             banking_stage_stats,
                         )
                     },
-                    (),
                     "forward_and_hold",
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
@@ -1065,7 +1053,7 @@ impl BankingStage {
             let my_pubkey = cluster_info.id();
             if !buffered_packet_batches.is_empty() {
                 let (_, process_buffered_packets_time) = Measure::this(
-                    |_| {
+                    || {
                         Self::process_buffered_packets(
                             &my_pubkey,
                             poh_recorder,
@@ -1081,7 +1069,6 @@ impl BankingStage {
                             &mut slot_metrics_tracker,
                         )
                     },
-                    (),
                     "process_buffered_packets",
                 );
                 slot_metrics_tracker
@@ -1090,14 +1077,13 @@ impl BankingStage {
 
             if last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD {
                 let (_, slot_metrics_checker_check_slot_boundary_time) = Measure::this(
-                    |_| {
+                    || {
                         let current_poh_bank = {
                             let poh = poh_recorder.lock().unwrap();
                             poh.bank_start()
                         };
                         slot_metrics_tracker.update_on_leader_slot_boundary(&current_poh_bank);
                     },
-                    (),
                     "slot_metrics_checker_check_slot_boundary",
                 );
                 slot_metrics_tracker.increment_slot_metrics_check_slot_boundary_us(
@@ -1119,7 +1105,7 @@ impl BankingStage {
             };
 
             let (res, receive_and_buffer_packets_time) = Measure::this(
-                |_| {
+                || {
                     Self::receive_and_buffer_packets(
                         verified_receiver,
                         recv_start,
@@ -1130,7 +1116,6 @@ impl BankingStage {
                         &mut slot_metrics_tracker,
                     )
                 },
-                (),
                 "receive_and_buffer_packets",
             );
             slot_metrics_tracker
@@ -1166,14 +1151,11 @@ impl BankingStage {
             inc_new_counter_info!("banking_stage-record_count", 1);
             inc_new_counter_info!("banking_stage-record_transactions", num_to_record);
 
-            let (hash, hash_time) = Measure::this(|_| hash_transactions(&transactions), (), "hash");
+            let (hash, hash_time) = Measure::this(|| hash_transactions(&transactions), "hash");
             record_transactions_timings.hash_us = hash_time.as_us();
 
-            let (res, poh_record_time) = Measure::this(
-                |_| recorder.record(bank_slot, hash, transactions),
-                (),
-                "hash",
-            );
+            let (res, poh_record_time) =
+                Measure::this(|| recorder.record(bank_slot, hash, transactions), "hash");
             record_transactions_timings.poh_record_us = poh_record_time.as_us();
 
             match res {
@@ -1210,7 +1192,7 @@ impl BankingStage {
         let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
         let ((pre_balances, pre_token_balances), collect_balances_time) = Measure::this(
-            |_| {
+            || {
                 // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
                 // the likelihood of any single thread getting starved and processing old ids.
                 // TODO: Banking stage threads should be prioritized to complete faster then this queue
@@ -1229,13 +1211,12 @@ impl BankingStage {
 
                 (pre_balances, pre_token_balances)
             },
-            (),
             "collect_balances",
         );
         execute_and_commit_timings.collect_balances_us = collect_balances_time.as_us();
 
         let (load_and_execute_transactions_output, load_execute_time) = Measure::this(
-            |_| {
+            || {
                 bank.load_and_execute_transactions(
                     batch,
                     MAX_PROCESSING_AGE,
@@ -1246,7 +1227,6 @@ impl BankingStage {
                     None, // account_overrides
                 )
             },
-            (),
             "load_execute",
         );
         execute_and_commit_timings.load_execute_us = load_execute_time.as_us();
@@ -1265,7 +1245,7 @@ impl BankingStage {
         let transactions_attempted_execution_count = execution_results.len();
         let (executed_transactions, execution_results_to_transactions_time): (Vec<_>, Measure) =
             Measure::this(
-                |_| {
+                || {
                     execution_results
                         .iter()
                         .zip(batch.sanitized_transactions())
@@ -1278,19 +1258,16 @@ impl BankingStage {
                         })
                         .collect()
                 },
-                (),
                 "execution_results_to_transactions",
             );
 
         let (last_blockhash, lamports_per_signature) =
             bank.last_blockhash_and_lamports_per_signature();
-        let (freeze_lock, freeze_lock_time) =
-            Measure::this(|_| bank.freeze_lock(), (), "freeze_lock");
+        let (freeze_lock, freeze_lock_time) = Measure::this(|| bank.freeze_lock(), "freeze_lock");
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
 
         let (record_transactions_summary, record_time) = Measure::this(
-            |_| Self::record_transactions(bank.slot(), executed_transactions, poh),
-            (),
+            || Self::record_transactions(bank.slot(), executed_transactions, poh),
             "record_transactions",
         );
         execute_and_commit_timings.record_us = record_time.as_us();
@@ -1333,7 +1310,7 @@ impl BankingStage {
             );
 
             let (tx_results, commit_time) = Measure::this(
-                |_| {
+                || {
                     bank.commit_transactions(
                         sanitized_txs,
                         &mut loaded_transactions,
@@ -1350,7 +1327,6 @@ impl BankingStage {
                         &mut execute_and_commit_timings.execute_timings,
                     )
                 },
-                (),
                 "commit",
             );
             let commit_time_us = commit_time.as_us();
@@ -1368,7 +1344,7 @@ impl BankingStage {
                 .collect();
 
             let (_, find_and_send_votes_time) = Measure::this(
-                |_| {
+                || {
                     bank_utils::find_and_send_votes(
                         sanitized_txs,
                         &tx_results,
@@ -1392,7 +1368,6 @@ impl BankingStage {
                         );
                     }
                 },
-                (),
                 "find_and_send_votes",
             );
             execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_time.as_us();
@@ -1882,7 +1857,7 @@ impl BankingStage {
             (Vec<SanitizedTransaction>, Vec<usize>),
             _,
         ) = Measure::this(
-            |_| {
+            || {
                 deserialized_packets
                     .enumerate()
                     .filter_map(|(i, deserialized_packet)| {
@@ -1896,7 +1871,6 @@ impl BankingStage {
                     })
                     .unzip()
             },
-            (),
             "packet_conversion",
         );
 
@@ -1909,7 +1883,7 @@ impl BankingStage {
 
         // Process transactions
         let (mut process_transactions_summary, process_transactions_time) = Measure::this(
-            |_| {
+            || {
                 Self::process_transactions(
                     bank,
                     bank_creation_time,
@@ -1920,7 +1894,6 @@ impl BankingStage {
                     qos_service,
                 )
             },
-            (),
             "process_transaction_time",
         );
         let process_transactions_us = process_transactions_time.as_us();
@@ -1943,7 +1916,7 @@ impl BankingStage {
 
         // Filter out the retryable transactions that are too old
         let (filtered_retryable_transaction_indexes, filter_retryable_packets_time) = Measure::this(
-            |_| {
+            || {
                 Self::filter_pending_packets_from_pending_txs(
                     bank,
                     &transactions,
@@ -1951,7 +1924,6 @@ impl BankingStage {
                     retryable_transaction_indexes,
                 )
             },
-            (),
             "filter_pending_packets_time",
         );
         let filter_retryable_packets_us = filter_retryable_packets_time.as_us();
