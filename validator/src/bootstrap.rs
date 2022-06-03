@@ -631,15 +631,15 @@ fn get_highest_local_snapshot_hash(
                     incremental_snapshot_archives_dir,
                     full_snapshot_info.slot(),
                 )
+                .map(|incremental_snapshot_info| {
+                    (
+                        incremental_snapshot_info.slot(),
+                        *incremental_snapshot_info.hash(),
+                    )
+                })
             } else {
                 None
             }
-            .and_then(|incremental_snapshot_info| {
-                Some((
-                    incremental_snapshot_info.slot(),
-                    *incremental_snapshot_info.hash(),
-                ))
-            })
             .or_else(|| Some((full_snapshot_info.slot(), *full_snapshot_info.hash())))
         },
     )
