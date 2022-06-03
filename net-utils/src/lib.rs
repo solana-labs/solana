@@ -8,7 +8,7 @@ use {
     std::{
         collections::{BTreeMap, HashSet},
         io::{self, Read, Write},
-        net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
+        net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket},
         sync::{Arc, RwLock},
         time::{Duration, Instant},
     },
@@ -437,6 +437,11 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
         io::ErrorKind::Other,
         format!("No available UDP ports in {:?}", range),
     ))
+}
+
+pub fn bind_client_socket() -> io::Result<UdpSocket> {
+    bind_in_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), VALIDATOR_PORT_RANGE)
+        .map(|(_, socket)| socket)
 }
 
 // binds many sockets to the same port in a range
