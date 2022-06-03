@@ -198,6 +198,7 @@ struct RentMetrics {
     collect_us: AtomicU64,
     hash_us: AtomicU64,
     store_us: AtomicU64,
+    count: AtomicU64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -5179,16 +5180,13 @@ impl Bank {
         let partitions = self.rent_collection_partitions();
         let count = partitions.len();
         let rent_metrics = RentMetrics::default();
-        let account_count: usize = partitions
-            .into_iter()
-            .map(|partition| {
-                self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
-            })
-            .sum();
+        partitions.into_iter().for_each(|partition| {
+            self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
+        });
         measure.stop();
         datapoint_info!(
             "collect_rent_eagerly",
-            ("accounts", account_count, i64),
+            ("accounts", rent_metrics.count.load(Relaxed), i64),
             ("partitions", count, i64),
             (
                 "skipped_rewrites",
@@ -5233,37 +5231,12 @@ impl Bank {
         }
     }
 
-    /// load accounts with pubkeys in 'partition'
-    /// collect rent
-    /// store accounts, whether rent was collected or not
-    /// update bank's rewrites set for all rewrites that were skipped
-    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
-    /// return # accounts loaded
-    fn collect_rent_in_partition(
+    fn collect_rent_from_accounts(
         &self,
-        partition: Partition,
-        just_rewrites: bool,
+        mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
         metrics: &RentMetrics,
-    ) -> usize {
-        let subrange = Self::pubkey_range_from_partition(partition);
-
-        let mut hold_range = Measure::start("hold_range");
-        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
-        self.rc
-            .accounts
-            .hold_range_in_memory(&subrange, true, thread_pool);
-        hold_range.stop();
-
-        let mut load = Measure::start("load");
-        let mut accounts = self
-            .rc
-            .accounts
-            .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
-        let account_count = accounts.len();
-        load.stop();
-        metrics.load_us.fetch_add(load.as_us(), Relaxed);
-
-        // parallelize?
+        just_rewrites: bool,
+    ) {
         let mut rent_debits = RentDebits::default();
         let mut total_collected = CollectedInfo::default();
         let bank_slot = self.slot();
@@ -5313,7 +5286,6 @@ impl Bank {
             }
             rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
         }
-        metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
         metrics.collect_us.fetch_add(collect_us, Relaxed);
         metrics.hash_us.fetch_add(hash_skipped_rewrites_us, Relaxed);
 
@@ -5334,11 +5306,91 @@ impl Bank {
         self.update_accounts_data_size_delta_off_chain(
             -(total_collected.account_data_len_reclaimed as i64),
         );
+    }
 
-        self.rc
-            .accounts
-            .hold_range_in_memory(&subrange, false, thread_pool);
-        account_count
+    /// load accounts with pubkeys in 'partition'
+    /// collect rent
+    /// store accounts, whether rent was collected or not
+    /// update bank's rewrites set for all rewrites that were skipped
+    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
+    fn collect_rent_in_partition(
+        &self,
+        partition: Partition,
+        just_rewrites: bool,
+        metrics: &RentMetrics,
+    ) {
+        let subrange_full = Self::pubkey_range_from_partition(partition);
+
+        let mut hold_range = Measure::start("hold_range");
+        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        thread_pool.install(|| {
+            self.rc
+                .accounts
+                .hold_range_in_memory(&subrange_full, true, thread_pool);
+            hold_range.stop();
+            metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
+
+            // divide the range into num_threads smaller ranges and process in parallel
+            // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
+            // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
+            let num_threads = crate::accounts_db::quarter_thread_count() as u64;
+            let sz = std::mem::size_of::<u64>();
+            let start_prefix = Self::prefix_from_pubkey(subrange_full.start());
+            let end_prefix_inclusive = Self::prefix_from_pubkey(subrange_full.end());
+            let range = end_prefix_inclusive - start_prefix;
+            let increment = range / num_threads;
+            for thread_metrics in (0..num_threads)
+                .into_par_iter()
+                .map(|chunk| {
+                    let metrics = RentMetrics::default();
+                    let offset = |chunk| start_prefix + chunk * increment;
+                    let start = offset(chunk);
+                    let last = chunk == num_threads - 1;
+                    let merge_prefix = |prefix: u64, mut bound: Pubkey| {
+                        bound.as_mut()[0..sz].copy_from_slice(&prefix.to_be_bytes());
+                        bound
+                    };
+                    let start = merge_prefix(start, *subrange_full.start());
+                    let mut load = Measure::start("load");
+                    let accounts = if last {
+                        let end = *subrange_full.end();
+                        let subrange = start..=end; // IN-clusive
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    } else {
+                        let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
+                        let subrange = start..end; // EX-clusive, the next 'start' will be this same value
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    };
+                    load.stop();
+                    metrics.load_us.fetch_add(load.as_us(), Relaxed);
+
+                    self.collect_rent_from_accounts(accounts, &metrics, just_rewrites);
+                    metrics
+                })
+                .collect::<Vec<_>>()
+            {
+                metrics
+                    .load_us
+                    .fetch_add(thread_metrics.load_us.load(Relaxed), Relaxed);
+                metrics
+                    .store_us
+                    .fetch_add(thread_metrics.store_us.load(Relaxed), Relaxed);
+                metrics
+                    .hash_us
+                    .fetch_add(thread_metrics.hash_us.load(Relaxed), Relaxed);
+                metrics
+                    .collect_us
+                    .fetch_add(thread_metrics.collect_us.load(Relaxed), Relaxed);
+            }
+
+            self.rc
+                .accounts
+                .hold_range_in_memory(&subrange_full, false, thread_pool);
+        });
     }
 
     // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
