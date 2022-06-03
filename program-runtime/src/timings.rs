@@ -261,7 +261,7 @@ eager_macro_rules! { $eager_1
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ThreadExecuteTimings {
     pub total_thread_us: u64,
     pub total_transactions_executed: u64,

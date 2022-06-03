@@ -272,15 +272,20 @@ fn execute_batches_internal(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    cumulative_timings: &mut ExecuteTimings,
-    end_to_end_timings: &mut ThreadExecuteTimings,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_costs: &[u64],
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
+    let ConfirmationTiming {
+        execute_timings: ref mut cumulative_execute_timings,
+        ref mut end_to_end_execute_timings,
+        ..
+    } = confirmation_timing;
     let execution_timings_per_thread: RwLock<HashMap<usize, ThreadExecuteTimings>> =
         RwLock::new(HashMap::new());
 
+    let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
@@ -336,9 +341,15 @@ fn execute_batches_internal(
             })
             .collect()
     });
-    cumulative_timings
+    execute_batches_elapsed.stop();
+
+    cumulative_execute_timings
         .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
-    cumulative_timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
+    cumulative_execute_timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
+    saturating_add_assign!(
+        confirmation_timing.execute_batches_us,
+        execute_batches_elapsed.as_us()
+    );
 
     let mut current_max_thread_execution_time: Option<ThreadExecuteTimings> = None;
     for (_, thread_execution_time) in execution_timings_per_thread
@@ -351,7 +362,7 @@ fn execute_batches_internal(
             execute_timings,
             ..
         } = &thread_execution_time;
-        cumulative_timings.accumulate(execute_timings);
+        cumulative_execute_timings.accumulate(execute_timings);
         if *total_thread_us
             > current_max_thread_execution_time
                 .as_ref()
@@ -363,8 +374,8 @@ fn execute_batches_internal(
     }
 
     if let Some(current_max_thread_execution_time) = current_max_thread_execution_time {
-        end_to_end_timings.accumulate(&current_max_thread_execution_time);
-        end_to_end_timings
+        end_to_end_execute_timings.accumulate(&current_max_thread_execution_time);
+        end_to_end_execute_timings
             .execute_timings
             .saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     };
@@ -397,8 +408,7 @@ fn execute_batches(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    cumulative_timings: &mut ExecuteTimings,
-    end_to_end_timings: &mut ThreadExecuteTimings,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
 ) -> Result<()> {
@@ -483,8 +493,7 @@ fn execute_batches(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
-        cumulative_timings,
-        end_to_end_timings,
+        confirmation_timing,
         cost_capacity_meter,
         &tx_batch_costs,
     )
@@ -512,9 +521,9 @@ pub fn process_entries_for_tests(
         }
     };
 
-    let mut timings = ExecuteTimings::default();
     let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
     let mut end_to_end_execute_timings = ThreadExecuteTimings::default();
+    let mut confirmation_timing = ConfirmationTiming::default();
     let mut replay_entries: Vec<_> =
         entry::verify_transactions(entries, Arc::new(verify_transaction))?
             .into_iter()
@@ -529,6 +538,7 @@ pub fn process_entries_for_tests(
                 }
             })
             .collect();
+
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
@@ -537,12 +547,11 @@ pub fn process_entries_for_tests(
         transaction_status_sender,
         replay_vote_sender,
         None,
-        &mut timings,
-        &mut end_to_end_execute_timings,
+        &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
     );
 
-    debug!("process_entries: {:?}", timings);
+    debug!("process_entries: {:?}", confirmation_timing);
     result
 }
 
@@ -556,8 +565,7 @@ fn process_entries_with_callback(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
-    cumulative_timings: &mut ExecuteTimings,
-    end_to_end_timings: &mut ThreadExecuteTimings,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
@@ -584,8 +592,7 @@ fn process_entries_with_callback(
                         entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
-                        cumulative_timings,
-                        end_to_end_timings,
+                        confirmation_timing,
                         cost_capacity_meter.clone(),
                         &cost_model,
                     )?;
@@ -655,8 +662,7 @@ fn process_entries_with_callback(
                             entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
-                            cumulative_timings,
-                            end_to_end_timings,
+                            confirmation_timing,
                             cost_capacity_meter.clone(),
                             &cost_model,
                         )?;
@@ -672,8 +678,7 @@ fn process_entries_with_callback(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
-        cumulative_timings,
-        end_to_end_timings,
+        confirmation_timing,
         cost_capacity_meter,
         &cost_model,
     )?;
@@ -835,8 +840,8 @@ pub fn process_blockstore_from_root(
     }
 
     let mut timing = ExecuteTimings::default();
-    // Iterate and replay slots from blockstore starting from `start_slot`
 
+    // Iterate and replay slots from blockstore starting from `start_slot`
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
@@ -996,9 +1001,11 @@ fn confirm_full_slot(
     }
 }
 
+#[derive(Debug)]
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
+    pub execute_batches_us: u64,
     pub poh_verify_elapsed: u64,
     pub transaction_verify_elapsed: u64,
     pub fetch_elapsed: u64,
@@ -1012,6 +1019,7 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
+            execute_batches_us: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,
             fetch_elapsed: 0,
@@ -1195,8 +1203,7 @@ fn confirm_slot_entries(
                 transaction_status_sender,
                 replay_vote_sender,
                 transaction_cost_metrics_sender,
-                &mut timing.execute_timings,
-                &mut timing.end_to_end_execute_timings,
+                timing,
                 cost_capacity_meter,
             )
             .map_err(BlockstoreProcessorError::from);
