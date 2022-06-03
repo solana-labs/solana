@@ -1564,6 +1564,10 @@ impl AccountsDb {
         // validate inside here
         Self::bins_per_pass(num_hash_scan_passes);
 
+        // Increase the stack for accounts threads
+        // rayon needs a lot of stack
+        const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
+
         AccountsDb {
             active_stats: ActiveStats::default(),
             accounts_index,
@@ -1587,6 +1591,7 @@ impl AccountsDb {
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .thread_name(|i| format!("solana-db-accounts-{}", i))
+                .stack_size(ACCOUNTS_STACK_SIZE)
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
