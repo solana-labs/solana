@@ -200,7 +200,7 @@ fn test_transfer() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Nonced transfer
     config.signers = vec![&default_signer];
@@ -237,7 +237,7 @@ fn test_transfer() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
     assert_ne!(nonce_hash, new_nonce_hash);
 
     // Assign nonce authority to offline
@@ -263,7 +263,7 @@ fn test_transfer() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Offline, nonced transfer
     offline.signers = vec![&default_offline_signer];

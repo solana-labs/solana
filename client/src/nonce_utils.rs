@@ -199,7 +199,7 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 ///     // network's latest blockhash.
 ///     let nonce_account = client.get_account(nonce_account_pubkey)?;
 ///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
-///     let blockhash = nonce_data.blockhash;
+///     let blockhash = nonce_data.blockhash();
 ///
 ///     tx.try_sign(&[payer], blockhash)?;
 ///

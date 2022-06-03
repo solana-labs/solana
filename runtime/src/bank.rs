@@ -124,7 +124,8 @@ use {
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::sol_to_lamports,
-        nonce, nonce_account,
+        nonce::{self, state::DurableNonce},
+        nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
@@ -4909,13 +4910,19 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
+        let durable_nonce = {
+            let separate_nonce_from_blockhash = self
+                .feature_set
+                .is_active(&feature_set::separate_nonce_from_blockhash::id());
+            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+        };
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
             &execution_results,
             loaded_txs,
             &self.rent_collector,
-            &last_blockhash,
+            &durable_nonce,
             lamports_per_signature,
             self.leave_nonce_on_success(),
         );
@@ -7622,14 +7629,12 @@ pub(crate) mod tests {
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
 
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
         let nonce_account = AccountSharedData::new_data(
             43,
             &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::new(
-                    Pubkey::default(),
-                    Hash::new_unique(),
-                    lamports_per_signature,
-                ),
+                nonce::state::Data::new(Pubkey::default(), durable_nonce, lamports_per_signature),
             )),
             &system_program::id(),
         )
@@ -12347,7 +12352,7 @@ pub(crate) mod tests {
             let state =
                 StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
             match state {
-                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash),
+                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash()),
                 _ => None,
             }
         })
@@ -13049,7 +13054,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13086,7 +13091,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13119,7 +13124,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13156,7 +13161,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13198,13 +13203,13 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        // Caught by the system program because the tx hash is valid
+        // SanitizedMessage::get_durable_nonce returns None because nonce
+        // account is not writable. Durable nonce and blockhash domains are
+        // separate, so the recent_blockhash (== durable nonce) in the
+        // transaction is not found in the hash queue.
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument
-            ))
+            Err(TransactionError::BlockhashNotFound),
         );
         // Kick nonce hash off the blockhash_queue
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
