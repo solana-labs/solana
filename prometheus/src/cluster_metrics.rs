@@ -1,7 +1,10 @@
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_runtime::bank::Bank;
 
-use crate::{utils::{write_metric, Metric, MetricFamily}, token::Lamports};
+use crate::{
+    token::Lamports,
+    utils::{write_metric, Metric, MetricFamily},
+};
 use std::{io, sync::Arc, time::SystemTime};
 
 pub fn write_cluster_metrics<W: io::Write>(
@@ -11,6 +14,10 @@ pub fn write_cluster_metrics<W: io::Write>(
     out: &mut W,
 ) -> io::Result<()> {
     let identity_pubkey = cluster_info.id();
+    let version = cluster_info
+        .get_node_version(&identity_pubkey)
+        .unwrap_or_default();
+
     write_metric(
         out,
         &MetricFamily {
@@ -31,6 +38,18 @@ pub fn write_cluster_metrics<W: io::Write>(
             help: "The current node's identity balance",
             type_: "count",
             metrics: vec![Metric::new_sol(identity_balance).at(at)],
+        },
+    )?;
+
+    write_metric(
+        out,
+        &MetricFamily {
+            name: "solana_cluster_node_version_info",
+            help: "The current Solana node's version",
+            type_: "count",
+            metrics: vec![Metric::new(1)
+                .with_label("version", version.to_string())
+                .at(at)],
         },
     )?;
 
