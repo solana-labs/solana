@@ -18,7 +18,7 @@ pub enum RpcHealthStatus {
 }
 
 pub struct RpcHealth {
-    cluster_info: Arc<ClusterInfo>,
+    pub cluster_info: Arc<ClusterInfo>,
     known_validators: Option<HashSet<Pubkey>>,
     health_check_slot_distance: u64,
     override_health_check: Arc<AtomicBool>,

@@ -28,6 +28,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
+    solana_prometheus::render_prometheus,
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -299,14 +300,24 @@ impl RequestMiddleware for RpcRequestMiddleware {
                 .into()
         } else if self.is_file_get_path(request.uri().path()) {
             self.process_file_get(request.uri().path())
-        } else if request.uri().path() == "/health" {
-            hyper::Response::builder()
-                .status(hyper::StatusCode::OK)
-                .body(hyper::Body::from(self.health_check()))
-                .unwrap()
-                .into()
         } else {
-            request.into()
+            match request.uri().path() {
+                "/health" => hyper::Response::builder()
+                    .status(hyper::StatusCode::OK)
+                    .body(hyper::Body::from(self.health_check()))
+                    .unwrap()
+                    .into(),
+                "/prometheus" => hyper::Response::builder()
+                    .status(hyper::StatusCode::OK)
+                    .header("Content-Type", "text/plain; version=0.0.4; charset=UTF-8")
+                    .body(hyper::Body::from(render_prometheus(
+                        &self.bank_forks,
+                        &self.health.cluster_info,
+                    )))
+                    .unwrap()
+                    .into(),
+                _ => request.into(),
+            }
         }
     }
 }

@@ -5889,6 +5889,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-prometheus"
+version = "1.10.28"
+dependencies = [
+ "jsonrpc-http-server",
+ "solana-gossip",
+ "solana-runtime",
+ "solana-sdk 1.12.0",
+]
+
+[[package]]
 name = "solana-pubsub-client"
 version = "1.12.0"
 dependencies = [
@@ -5972,6 +5982,7 @@ dependencies = [
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
+ "solana-prometheus",
  "solana-rayon-threadlimit",
  "solana-rpc-client-api",
  "solana-runtime",
