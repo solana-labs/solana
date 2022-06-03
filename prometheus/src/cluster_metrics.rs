@@ -21,7 +21,7 @@ pub fn write_cluster_metrics<W: io::Write>(
     write_metric(
         out,
         &MetricFamily {
-            name: "solana_cluster_identity_info",
+            name: "solana_cluster_identity_public_key_info",
             help: "The current node's identity",
             type_: "count",
             metrics: vec![Metric::new(1)
