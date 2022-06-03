@@ -1664,7 +1664,7 @@ impl ShrinkAncientStats {
     }
 }
 
-fn quarter_thread_count() -> usize {
+pub fn quarter_thread_count() -> usize {
     std::cmp::max(2, num_cpus::get() / 4)
 }
 
