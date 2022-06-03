@@ -67,7 +67,9 @@ pub fn send_to(
     for p in batch.iter() {
         let addr = p.meta.socket_addr();
         if socket_addr_space.check(&addr) {
-            socket.send_to(p.data(), &addr)?;
+            if let Some(data) = p.data(..) {
+                socket.send_to(data, &addr)?;
+            }
         }
     }
     Ok(())

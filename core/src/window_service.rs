@@ -363,7 +363,7 @@ where
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
             return None;
         }
-        let serialized_shred = packet.data().to_vec();
+        let serialized_shred = packet.data(..)?.to_vec();
         let shred = Shred::new_from_serialized_shred(serialized_shred).ok()?;
         if !shred_filter(&shred, working_bank.clone(), last_root) {
             return None;
