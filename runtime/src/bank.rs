@@ -5294,7 +5294,7 @@ impl Bank {
                     collected.rent_amount,
                     *loaded_slot,
                     old_rent_epoch,
-                    &account,
+                    account,
                 )
             {
                 // this would have been rewritten previously. Now we skip it.
@@ -5311,7 +5311,7 @@ impl Bank {
                 total_collected += collected;
                 accounts_to_store.push((pubkey, account));
             }
-            rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
+            rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
         }
         metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
         metrics.collect_us.fetch_add(collect_us, Relaxed);
