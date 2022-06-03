@@ -223,7 +223,8 @@ pub(crate) mod tests {
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, MessageHeader, SanitizedMessage},
-            nonce, nonce_account,
+            nonce::{self, state::DurableNonce},
+            nonce_account,
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
             system_transaction,
@@ -323,7 +324,9 @@ pub(crate) mod tests {
         let pubkey = Pubkey::new_unique();
 
         let mut nonce_account = nonce_account::create_account(1).into_inner();
-        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
             .set_state(&nonce::state::Versions::new_current(
                 nonce::State::Initialized(data),
