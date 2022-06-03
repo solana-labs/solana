@@ -3118,17 +3118,17 @@ mod tests {
 
             let info = ContactInfo {
                 id: keypair.pubkey(),
-                gossip: gossip,
-                tvu: tvu,
-                tvu_forwards: tvu_forwards,
-                repair: repair,
-                tpu: tpu,
-                tpu_forwards: tpu_forwards,
-                tpu_vote: tpu_vote,
-                rpc: rpc,
-                rpc_pubsub: rpc_pubsub,
-                serve_repair: serve_repair,
-                wallclock: timestamp() + 1000,
+                gossip,
+                tvu,
+                tvu_forwards,
+                repair,
+                tpu,
+                tpu_forwards,
+                tpu_vote,
+                rpc,
+                rpc_pubsub,
+                serve_repair,
+                wallclock: timestamp(),
                 shred_version: 0,
             };
             Node {
