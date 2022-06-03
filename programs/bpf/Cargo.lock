@@ -4621,6 +4621,7 @@ dependencies = [
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
+ "regex",
  "rustc_version",
  "serde",
  "serde_bytes",
