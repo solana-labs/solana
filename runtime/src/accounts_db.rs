@@ -3341,7 +3341,7 @@ impl AccountsDb {
                 if minimized_account_set.contains(pubkey) {
                     chunk_bytes += account.account_size;
                     keep_accounts.push((pubkey, account));
-                } else if let Some(_) = self.accounts_index.get_account_read_entry(pubkey) {
+                } else if self.accounts_index.get_account_read_entry(pubkey).is_some() {
                     remove_pubkeys.push(pubkey);
                 }
             });
