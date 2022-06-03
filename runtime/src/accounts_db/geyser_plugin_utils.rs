@@ -64,7 +64,7 @@ impl AccountsDb {
         slot: Slot,
         meta: &StoredMeta,
         account: &AccountSharedData,
-        txn_signature: Option<&Signature>,
+        txn_signature: &Option<&Signature>,
     ) {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();

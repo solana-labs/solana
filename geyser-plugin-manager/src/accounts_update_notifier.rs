@@ -29,7 +29,7 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
         slot: Slot,
         meta: &StoredMeta,
         account: &AccountSharedData,
-        txn_signature: Option<&Signature>,
+        txn_signature: &Option<&Signature>,
     ) {
         if let Some(account_info) =
             self.accountinfo_from_shared_account_data(meta, account, txn_signature)
@@ -106,7 +106,7 @@ impl AccountsUpdateNotifierImpl {
         &self,
         meta: &'a StoredMeta,
         account: &'a AccountSharedData,
-        txn_signature: Option<&'a Signature>,
+        txn_signature: &'a Option<&'a Signature>,
     ) -> Option<ReplicaAccountInfoV2<'a>> {
         Some(ReplicaAccountInfoV2 {
             pubkey: meta.pubkey.as_ref(),
@@ -116,7 +116,7 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
             data: account.data(),
             write_version: meta.write_version,
-            txn_signature: txn_signature,
+            txn_signature: txn_signature.clone(),
         })
     }
 

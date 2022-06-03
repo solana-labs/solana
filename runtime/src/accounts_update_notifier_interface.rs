@@ -11,7 +11,7 @@ pub trait AccountsUpdateNotifierInterface: std::fmt::Debug {
         slot: Slot,
         meta: &StoredMeta,
         account: &AccountSharedData,
-        txn_signature: Option<&Signature>,
+        txn_signature: &Option<&Signature>,
     );
 
     /// Notified when the AccountsDb is initialized at start when restored
