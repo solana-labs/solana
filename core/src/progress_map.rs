@@ -36,7 +36,13 @@ impl std::ops::DerefMut for ReplaySlotStats {
 }
 
 impl ReplaySlotStats {
-    pub fn report_stats(&self, slot: Slot, num_entries: usize, num_shreds: u64) {
+    pub fn report_stats(
+        &self,
+        slot: Slot,
+        num_entries: usize,
+        num_shreds: u64,
+        bank_complete_time_us: u64,
+    ) {
         lazy! {
             datapoint_info!(
                 "replay-slot-stats",
