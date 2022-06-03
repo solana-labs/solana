@@ -3252,54 +3252,76 @@ impl AccountsDb {
     pub(crate) fn minimize_accounts_db(
         &self,
         snapshot_slot: Slot,
-        minimized_account_set: &HashSet<Pubkey>,
+        minimized_account_set: &DashSet<Pubkey>,
     ) {
         let minimized_slot_set = self.get_minimized_slot_set(minimized_account_set);
 
         let mut dead_slots = Vec::new();
         let mut dead_storages = Vec::new();
-        for storages in self.get_snapshot_storages(snapshot_slot, None, None).0 {
+        let mut count = 0;
+        let mut filter_storages_us = 0;
+
+        let snapshot_storages = self.get_snapshot_storages(snapshot_slot, None, None).0;
+        let num_slots = snapshot_storages.len();
+
+        for storages in snapshot_storages {
             let slot = storages.first().unwrap().slot();
             if slot == snapshot_slot {
                 continue;
             }
             if minimized_slot_set.contains(&slot) {
+                let mut filter_storages_measure = Measure::start("filter storages");
                 self.filter_storages(storages, minimized_account_set, &mut dead_storages);
+                filter_storages_measure.stop();
+                filter_storages_us += filter_storages_measure.as_us();
             } else {
                 dead_slots.push(slot);
             }
+
+            count += 1;
+            if count % 1000 == 0 {
+                info!(
+                    "filtering storages took {filter_storages_us}us progress {count}/{num_slots}"
+                );
+                filter_storages_us = 0;
+            }
         }
 
+        let mut purge_slots_measure = Measure::start("purge slots");
         self.purge_slots_from_cache_and_store(
             dead_slots.iter(),
             &self.external_purge_slots_stats,
             true,
         );
+        purge_slots_measure.stop();
+        info!("{purge_slots_measure}");
+
+        let mut drop_or_recycle_stores_measure = Measure::start("drop or recycle stores");
         self.drop_or_recycle_stores(dead_storages);
+        drop_or_recycle_stores_measure.stop();
+        info!("{drop_or_recycle_stores_measure}");
     }
 
-    fn get_minimized_slot_set(&self, minimized_account_set: &HashSet<Pubkey>) -> HashSet<Slot> {
-        let mut minimized_slot_set = HashSet::new();
-        self.thread_pool_clean.install(|| {
-            minimized_slot_set.par_extend(minimized_account_set.par_iter().flat_map(|pubkey| {
-                if let Some(read_entry) = self.accounts_index.get_account_read_entry(pubkey) {
-                    read_entry
-                        .slot_list()
-                        .iter()
-                        .map(|(slot, _)| *slot)
-                        .collect()
-                } else {
-                    HashSet::new()
-                }
-            }));
+    fn get_minimized_slot_set(&self, minimized_account_set: &DashSet<Pubkey>) -> DashSet<Slot> {
+        let mut minimized_slot_set_measure = Measure::start("generate minimized slot set");
+        let minimized_slot_set = DashSet::new();
+        minimized_account_set.par_iter().for_each(|pubkey| {
+            if let Some(read_entry) = self.accounts_index.get_account_read_entry(&pubkey) {
+                read_entry.slot_list().iter().for_each(|(slot, _)| {
+                    minimized_slot_set.insert(*slot);
+                });
+            }
         });
+        minimized_slot_set_measure.stop();
+        info!("{minimized_slot_set_measure}");
+
         minimized_slot_set
     }
 
     fn filter_storages(
         &self,
         storages: Vec<Arc<AccountStorageEntry>>,
-        minimized_account_set: &HashSet<Pubkey>,
+        minimized_account_set: &DashSet<Pubkey>,
         dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
     ) {
         let slot = storages.first().unwrap().slot();

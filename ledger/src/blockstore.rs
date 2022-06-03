@@ -22,6 +22,7 @@ use {
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
+    dashmap::DashSet,
     log::*,
     rayon::{
         iter::{IntoParallelRefIterator, ParallelIterator},
@@ -2737,23 +2738,18 @@ impl Blockstore {
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
-    ) -> Result<HashSet<Pubkey>> {
-        let mut result = HashSet::new();
+    ) -> Result<DashSet<Pubkey>> {
+        let result = DashSet::new();
+
         for slot in starting_slot..=ending_slot {
             let entries = self.get_slot_entries(slot, 0)?;
-            let slot_accounts: Vec<HashSet<Pubkey>> = PAR_THREAD_POOL.install(|| {
-                entries
-                    .par_iter()
-                    .map(|entry| {
-                        entry
-                            .transactions
-                            .iter()
-                            .flat_map(|tx| tx.message.static_account_keys().iter().cloned())
-                            .collect()
-                    })
-                    .collect()
+            entries.par_iter().for_each(|entry| {
+                entry.transactions.iter().for_each(|tx| {
+                    tx.message.static_account_keys().iter().for_each(|pubkey| {
+                        result.insert(*pubkey);
+                    });
+                });
             });
-            result.extend(slot_accounts.into_iter().flatten());
         }
 
         Ok(result)

@@ -926,32 +926,35 @@ fn minimize_bank_for_snapshot(
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) {
+    let mut transaction_accounts_measure = Measure::start("get transaction accounts");
     let mut minimized_account_set = blockstore
         .get_accounts_used_in_range(snapshot_slot, ending_slot)
         .unwrap();
-    minimized_account_set.extend(
-        bank.get_rent_collection_accounts_between_slots(snapshot_slot, ending_slot)
-            .iter(),
+    transaction_accounts_measure.stop();
+    info!("{transaction_accounts_measure}");
+
+    let mut rent_collection_accounts_measure = Measure::start("get rent collection accounts");
+    bank.get_rent_collection_accounts_between_slots(
+        &minimized_account_set,
+        snapshot_slot,
+        ending_slot,
     );
-    minimized_account_set.extend(bank.vote_accounts().iter().map(|(pubkey, _)| *pubkey));
-    minimized_account_set.extend(bank.vote_accounts().iter().filter_map(
-        |(_, (_, vote_account))| {
-            vote_account
-                .vote_state()
-                .as_ref()
-                .ok()
-                .map(|vote_state| vote_state.node_pubkey)
-        },
-    ));
-    minimized_account_set.extend(
-        bank.get_program_accounts(&stake::program::id(), &ScanConfig::default())
-            .unwrap()
-            .into_iter()
-            .map(|(pubkey, _)| pubkey),
-    );
+    rent_collection_accounts_measure.stop();
+    info!("{rent_collection_accounts_measure}");
+
+    let mut vote_accounts_measure = Measure::start("get vote accounts");
+    for (pubkey, (_stake, vote_account)) in bank.vote_accounts().iter() {
+        minimized_account_set.insert(*pubkey);
+        if let Ok(vote_state) = vote_account.vote_state().as_ref() {
+            minimized_account_set.insert(vote_state.node_pubkey);
+        }
+    }
+    vote_accounts_measure.stop();
+    info!("{vote_accounts_measure}");
+
     minimized_account_set.extend(bank.feature_set.active.iter().map(|(pubkey, _)| *pubkey));
-    minimized_account_set.extend(bank.feature_set.inactive.iter());
-    minimized_account_set.extend(solana_sdk::sysvar::ALL_IDS.iter());
+    minimized_account_set.extend(bank.feature_set.inactive.iter().cloned());
+    minimized_account_set.extend(solana_sdk::sysvar::ALL_IDS.iter().cloned());
     minimized_account_set.extend(solana_runtime::builtins::get_pubkeys());
     minimized_account_set.insert(solana_sdk::bpf_loader::id());
     minimized_account_set.insert(solana_sdk::bpf_loader_deprecated::id());

@@ -71,12 +71,12 @@ use {
         vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
-    dashmap::DashMap,
+    dashmap::{DashMap, DashSet},
     itertools::Itertools,
     log::*,
     rand::Rng,
     rayon::{
-        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelExtend, ParallelIterator},
+        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure},
@@ -5154,83 +5154,90 @@ impl Bank {
         self.collect_rent_eagerly(true);
     }
 
-    pub fn minimize_bank_for_snapshot(&self, mut minimized_account_set: HashSet<Pubkey>) {
-        self.minimization_add_owner_accounts(&mut minimized_account_set);
-        self.minimization_add_programdata_accounts(&mut minimized_account_set);
+    pub fn minimize_bank_for_snapshot(&self, minimized_account_set: DashSet<Pubkey>) {
+        self.minimization_add_stake_accounts(&minimized_account_set);
+        self.minimization_add_owner_accounts(&minimized_account_set);
+        self.minimization_add_programdata_accounts(&minimized_account_set);
         self.accounts()
             .accounts_db
             .minimize_accounts_db(self.slot(), &minimized_account_set);
     }
 
-    // Used to get owner accounts in `minimize_bank_for_snapshot`
-    fn minimization_add_owner_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
-        let owner_accounts: HashSet<_> = self
-            .accounts()
-            .accounts_db
-            .thread_pool_clean
-            .install(|| {
-                minimized_account_set
-                    .par_iter()
-                    .filter_map(|pubkey| self.get_account(pubkey))
-                    .map(|account| *account.owner())
-            })
-            .collect();
-        self.accounts().accounts_db.thread_pool_clean.install(|| {
-            minimized_account_set.par_extend(owner_accounts);
-        });
+    // Used to get program accounts in `minimized_bank_for_snapshot`
+    fn minimization_add_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
+        let mut stake_accounts_measure = Measure::start("get stake accounts");
+        self.get_program_accounts(&solana_sdk::stake::program::id(), &ScanConfig::default())
+            .unwrap()
+            .into_par_iter()
+            .for_each(|(pubkey, _)| {
+                minimized_account_set.insert(pubkey);
+            });
+        stake_accounts_measure.stop();
+        info!("{stake_accounts_measure}");
     }
 
     // Used to get owner accounts in `minimize_bank_for_snapshot`
-    fn minimization_add_programdata_accounts(&self, minimized_account_set: &mut HashSet<Pubkey>) {
-        let programdata_accounts: HashSet<_> = self
-            .accounts()
-            .accounts_db
-            .thread_pool_clean
-            .install(|| {
-                minimized_account_set.par_iter().filter_map(|pubkey| {
-                    self.get_account(pubkey)
-                        .filter(|account| account.executable())
-                        .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
-                        .and_then(|account| {
-                            if let Ok(UpgradeableLoaderState::Program {
-                                programdata_address,
-                            }) = account.state()
-                            {
-                                Some(programdata_address)
-                            } else {
-                                None
-                            }
-                        })
-                })
+    fn minimization_add_owner_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
+        let mut owner_accounts_measure = Measure::start("get owner accounts");
+        let owner_accounts: HashSet<_> = minimized_account_set
+            .par_iter()
+            .filter_map(|pubkey| self.get_account(&pubkey))
+            .map(|account| *account.owner())
+            .collect();
+        owner_accounts.into_par_iter().for_each(|pubkey| {
+            minimized_account_set.insert(pubkey);
+        });
+        owner_accounts_measure.stop();
+        info!("{owner_accounts_measure}");
+    }
+
+    // Used to get owner accounts in `minimize_bank_for_snapshot`
+    fn minimization_add_programdata_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
+        let mut programdata_accounts_measure = Measure::start("get programdata accounts");
+        let programdata_accounts: HashSet<_> = minimized_account_set
+            .par_iter()
+            .filter_map(|pubkey| self.get_account(&pubkey))
+            .filter(|account| account.executable())
+            .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
+            .filter_map(|account| {
+                if let Ok(UpgradeableLoaderState::Program {
+                    programdata_address,
+                }) = account.state()
+                {
+                    Some(programdata_address)
+                } else {
+                    None
+                }
             })
             .collect();
-        self.accounts()
-            .accounts_db
-            .thread_pool_clean
-            .install(|| minimized_account_set.par_extend(programdata_accounts));
+        programdata_accounts.into_par_iter().for_each(|pubkey| {
+            minimized_account_set.insert(pubkey);
+        });
+        programdata_accounts_measure.stop();
+        info!("{programdata_accounts_measure}");
     }
 
     pub fn get_rent_collection_accounts_between_slots(
         &self,
+        minimized_account_set: &DashSet<Pubkey>,
         starting_slot: Slot,
         ending_slot: Slot,
-    ) -> HashSet<Pubkey> {
+    ) {
         let partitions = if !self.use_fixed_collection_cycle() {
             self.variable_cycle_partitions_between_slots(starting_slot, ending_slot)
         } else {
             self.fixed_cycle_partitions_between_slots(starting_slot, ending_slot)
         };
 
-        partitions
-            .into_iter()
-            .flat_map(|partition| {
-                let subrange = Self::pubkey_range_from_partition(partition);
-                self.accounts()
-                    .load_to_collect_rent_eagerly(&self.ancestors, subrange)
-                    .into_iter()
-                    .map(|(pubkey, ..)| pubkey)
-            })
-            .collect()
+        partitions.into_iter().for_each(|partition| {
+            let subrange = Self::pubkey_range_from_partition(partition);
+            self.accounts()
+                .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                .into_par_iter()
+                .for_each(|(pubkey, ..)| {
+                    minimized_account_set.insert(pubkey);
+                })
+        });
     }
 
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
