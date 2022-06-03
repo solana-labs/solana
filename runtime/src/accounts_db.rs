@@ -5744,7 +5744,7 @@ impl AccountsDb {
         slot: Slot,
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
-        txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &&Signature> + 'a>,
+        txn_signatures_iter: Box<dyn std::iter::Iterator<Item = Option<&Signature>> + 'a>,
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -5768,7 +5768,7 @@ impl AccountsDb {
                     account.lamports(),
                 );
 
-                self.notify_account_at_accounts_update(slot, meta, &account, *signature);
+                self.notify_account_at_accounts_update(slot, meta, &account, signature);
 
                 let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
                 // hash this account in the bg
@@ -5826,15 +5826,18 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
-            let default_sig = Signature::default();
-            let default_sig_ref = &&default_sig;
-            let signature_iter: Box<dyn std::iter::Iterator<Item = &&Signature>> = match txn_signatures {
+            let signature_iter: Box<dyn std::iter::Iterator<Item = Option<&Signature>>> = match txn_signatures {
                 Some(txn_signatures) => {
                     assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
-                    Box::new(txn_signatures.iter())
+                    Box::new(
+                        txn_signatures
+                            .into_iter()
+                            .map(|&v| Some(v))
+                            .collect::<Vec<Option<&Signature>>>()
+                            .into_iter())
                 }
                 None => Box::new(
-                    std::iter::repeat(default_sig_ref).take(accounts_and_meta_to_store.len()),
+                    std::iter::repeat(None).take(accounts_and_meta_to_store.len()),
                 ),
             };
 
