@@ -4913,7 +4913,12 @@ impl Bank {
             .accounts
             .hold_range_in_memory(&subrange, true, thread_pool);
 
+<<<<<<< HEAD
         let accounts = self
+=======
+        let mut load = Measure::start("load");
+        let mut accounts = self
+>>>>>>> 0da0e0da6 (Bank: Batch account stores in collect_rent_eagerly (#25707))
             .rc
             .accounts
             .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
@@ -4922,10 +4927,23 @@ impl Bank {
         // parallelize?
         let mut rent_debits = RentDebits::default();
         let mut total_collected = CollectedInfo::default();
+<<<<<<< HEAD
         for (pubkey, mut account) in accounts {
+=======
+        let bank_slot = self.slot();
+        let mut rewrites_skipped = Vec::with_capacity(accounts.len());
+        let mut accounts_to_store =
+            Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
+        let mut collect_us = 0;
+        let mut hash_skipped_rewrites_us = 0;
+        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
+        for (pubkey, account, loaded_slot) in accounts.iter_mut() {
+            let old_rent_epoch = account.rent_epoch();
+            let mut time = Measure::start("collect");
+>>>>>>> 0da0e0da6 (Bank: Batch account stores in collect_rent_eagerly (#25707))
             let collected = self.rent_collector.collect_from_existing_account(
-                &pubkey,
-                &mut account,
+                pubkey,
+                account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_collected += collected;
@@ -4933,10 +4951,51 @@ impl Bank {
             // even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
             // ensures we verify the whole on-chain state (= all accounts)
+<<<<<<< HEAD
             // via the account delta hash slowly once per an epoch.
             self.store_account(&pubkey, &account);
             rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
         }
+=======
+            // via the bank delta hash slowly once per an epoch.
+            if can_skip_rewrites
+                && Self::skip_rewrite(
+                    bank_slot,
+                    collected.rent_amount,
+                    *loaded_slot,
+                    old_rent_epoch,
+                    account,
+                )
+            {
+                // this would have been rewritten previously. Now we skip it.
+                // calculate the hash that we would have gotten if we did the rewrite.
+                // This will be needed to calculate the bank's hash.
+                let mut time = Measure::start("hash_account");
+                let hash =
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), account, pubkey);
+                time.stop();
+                hash_skipped_rewrites_us += time.as_us();
+                rewrites_skipped.push((*pubkey, hash));
+                assert_eq!(collected, CollectedInfo::default());
+            } else if !just_rewrites {
+                total_collected += collected;
+                accounts_to_store.push((pubkey, account));
+            }
+            rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
+        }
+        metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
+        metrics.collect_us.fetch_add(collect_us, Relaxed);
+        metrics.hash_us.fetch_add(hash_skipped_rewrites_us, Relaxed);
+
+        if !accounts_to_store.is_empty() {
+            let mut time = Measure::start("store_account");
+            self.store_accounts(&accounts_to_store);
+            time.stop();
+            metrics.store_us.fetch_add(time.as_us(), Relaxed);
+        }
+
+        self.remember_skipped_rewrites(rewrites_skipped);
+>>>>>>> 0da0e0da6 (Bank: Batch account stores in collect_rent_eagerly (#25707))
         self.collected_rent
             .fetch_add(total_collected.rent_amount, Relaxed);
         self.rewards
@@ -5599,12 +5658,31 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+        self.store_accounts(&[(pubkey, account)])
+    }
+
+    pub fn store_accounts(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
         assert!(!self.freeze_started());
         self.rc
             .accounts
+<<<<<<< HEAD
             .store_slow_cached(self.slot(), pubkey, account);
 
         self.stakes_cache.check_and_store(pubkey, account);
+=======
+            .store_accounts_cached(self.slot(), accounts);
+        let mut m = Measure::start("stakes_cache.check_and_store");
+        for (pubkey, account) in accounts {
+            self.stakes_cache.check_and_store(pubkey, account);
+        }
+        m.stop();
+        self.rc
+            .accounts
+            .accounts_db
+            .stats
+            .stakes_cache_check_and_store_us
+            .fetch_add(m.as_us(), Relaxed);
+>>>>>>> 0da0e0da6 (Bank: Batch account stores in collect_rent_eagerly (#25707))
     }
 
     pub fn force_flush_accounts_cache(&self) {
