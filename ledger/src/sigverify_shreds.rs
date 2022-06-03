@@ -301,10 +301,22 @@ pub fn verify_shreds_gpu(
 /// }
 /// Signature is the first thing in the packet, and slot is the first thing in the signed message.
 fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
+<<<<<<< HEAD
     let sig_start = 0;
     let sig_end = sig_start + size_of::<Signature>();
     let msg_start = sig_end;
     let signature = keypair.sign_message(&packet.data()[msg_start..]);
+=======
+    let sig = shred::layout::get_signature_range();
+    let msg = shred::layout::get_shred(packet)
+        .and_then(shred::layout::get_signed_message_range)
+        .unwrap();
+    assert!(
+        packet.meta.size >= sig.end,
+        "packet is not large enough for a signature"
+    );
+    let signature = keypair.sign_message(packet.data(msg).unwrap());
+>>>>>>> 5dbf7d8f9 (removes raw indexing into packet data (#25554))
     trace!("signature {:?}", signature);
     packet.buffer_mut()[..sig_end].copy_from_slice(signature.as_ref());
 }

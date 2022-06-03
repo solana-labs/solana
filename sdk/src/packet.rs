@@ -5,6 +5,7 @@ use {
     std::{
         fmt, io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        slice::SliceIndex,
     },
 };
 
@@ -39,7 +40,7 @@ pub struct Meta {
 #[repr(C)]
 pub struct Packet {
     // Bytes past Packet.meta.size are not valid to read from.
-    // Use Packet.data() to read from the buffer.
+    // Use Packet.data(index) to read from the buffer.
     buffer: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
 }
@@ -50,10 +51,14 @@ impl Packet {
     }
 
     /// Returns an immutable reference to the underlying buffer up to
-    /// Packet.meta.size. The rest of the buffer is not valid to read from.
+    /// packet.meta.size. The rest of the buffer is not valid to read from.
+    /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
     #[inline]
-    pub fn data(&self) -> &[u8] {
-        &self.buffer[..self.meta.size]
+    pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
+    where
+        I: SliceIndex<[u8]>,
+    {
+        self.buffer.get(..self.meta.size)?.get(index)
     }
 
     /// Returns a mutable reference to the entirety of the underlying buffer to
@@ -88,10 +93,9 @@ impl Packet {
     pub fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
     where
         T: serde::de::DeserializeOwned,
-        I: std::slice::SliceIndex<[u8], Output = [u8]>,
+        I: SliceIndex<[u8], Output = [u8]>,
     {
-        let data = self.data();
-        let bytes = data.get(index).ok_or(bincode::ErrorKind::SizeLimit)?;
+        let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
         bincode::options()
             .with_limit(PACKET_DATA_SIZE as u64)
             .with_fixint_encoding()
@@ -123,7 +127,7 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        self.meta == other.meta && self.data() == other.data()
+        self.meta == other.meta && self.data(..) == other.data(..)
     }
 }
 

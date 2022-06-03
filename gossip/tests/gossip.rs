@@ -260,7 +260,7 @@ pub fn cluster_info_retransmit() {
     let retransmit_peers: Vec<_> = peers.iter().collect();
     retransmit_to(
         &retransmit_peers,
-        p.data(),
+        p.data(..).unwrap(),
         &tn1,
         false,
         &SocketAddrSpace::Unspecified,

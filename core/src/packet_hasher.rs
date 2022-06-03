@@ -26,7 +26,7 @@ impl Default for PacketHasher {
 
 impl PacketHasher {
     pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
-        self.hash_data(packet.data())
+        self.hash_data(packet.data(..).unwrap_or_default())
     }
 
     pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {
