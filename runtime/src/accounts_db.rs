@@ -5828,7 +5828,7 @@ impl AccountsDb {
         if self.caching_enabled && is_cached_store {
             let default_sig = Signature::default();
             let default_sig_ref = &&default_sig;
-            let iter: Box<dyn std::iter::Iterator<Item = &&Signature>> = match txn_signatures {
+            let signature_iter: Box<dyn std::iter::Iterator<Item = &&Signature>> = match txn_signatures {
                 Some(txn_signatures) => {
                     assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
                     Box::new(txn_signatures.iter())
@@ -5838,7 +5838,7 @@ impl AccountsDb {
                 ),
             };
 
-            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, iter)
+            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
