@@ -934,26 +934,8 @@ fn minimize_bank_for_snapshot(
         .get_accounts_used_in_range(snapshot_slot, ending_slot)
         .unwrap();
     transaction_accounts_measure.stop();
-    info!("{transaction_accounts_measure}");
-
-    let mut rent_collection_accounts_measure = Measure::start("get rent collection accounts");
-    bank.get_rent_collection_accounts_between_slots(
-        &minimized_account_set,
-        snapshot_slot,
-        ending_slot,
-    );
-    rent_collection_accounts_measure.stop();
-    info!("{rent_collection_accounts_measure}");
-
-    let mut vote_accounts_measure = Measure::start("get vote accounts");
-    for (pubkey, (_stake, vote_account)) in bank.vote_accounts().iter() {
-        minimized_account_set.insert(*pubkey);
-        if let Ok(vote_state) = vote_account.vote_state().as_ref() {
-            minimized_account_set.insert(vote_state.node_pubkey);
-        }
-    }
-    vote_accounts_measure.stop();
-    info!("{vote_accounts_measure}");
+    let total_accounts_len = minimized_account_set.len();
+    info!("Added {total_accounts_len} accounts from transactions. {transaction_accounts_measure}");
 
     minimized_account_set.extend(bank.feature_set.active.iter().map(|(pubkey, _)| *pubkey));
     minimized_account_set.extend(bank.feature_set.inactive.iter().cloned());
@@ -966,7 +948,7 @@ fn minimize_bank_for_snapshot(
     minimized_account_set.insert(solana_sdk::secp256k1_program::id());
     minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
 
-    bank.minimize_bank_for_snapshot(minimized_account_set);
+    bank.minimize_bank_for_snapshot(minimized_account_set, snapshot_slot, ending_slot);
     bank.force_flush_accounts_cache();
     bank.set_capitalization();
 }
