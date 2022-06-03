@@ -5154,16 +5154,26 @@ impl Bank {
         self.collect_rent_eagerly(true);
     }
 
+    /// Adds additional necessary accounts to `minimized_account_set`, then removes all other accounts from
+    /// accounts_db
     pub fn minimize_bank_for_snapshot(&self, minimized_account_set: DashSet<Pubkey>) {
         self.minimization_add_stake_accounts(&minimized_account_set);
         self.minimization_add_owner_accounts(&minimized_account_set);
         self.minimization_add_programdata_accounts(&minimized_account_set);
+
+        info!(
+            "Generated minimized account set with {} accounts for slots {}..={}",
+            minimized_account_set.len(),
+            snapshot_slot,
+            ending_slot
+        );
+
         self.accounts()
             .accounts_db
             .minimize_accounts_db(self.slot(), &minimized_account_set);
     }
 
-    // Used to get program accounts in `minimized_bank_for_snapshot`
+    // Used to get stake accounts in `minimized_bank_for_snapshot`
     fn minimization_add_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let mut stake_accounts_measure = Measure::start("get stake accounts");
         self.get_program_accounts(&solana_sdk::stake::program::id(), &ScanConfig::default())

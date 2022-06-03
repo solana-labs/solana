@@ -920,6 +920,9 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
+/// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
+/// Removes all other accounts from accounts_db, and updates the accounts hash
+/// and capitalization. This is used by the --minimize option in create-snapshot
 fn minimize_bank_for_snapshot(
     blockstore: &Blockstore,
     bank: Arc<Bank>,
@@ -962,13 +965,6 @@ fn minimize_bank_for_snapshot(
     minimized_account_set.insert(solana_sdk::ed25519_program::id());
     minimized_account_set.insert(solana_sdk::secp256k1_program::id());
     minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
-
-    info!(
-        "Generated minimized account set with {} accounts for slots {}..={}",
-        minimized_account_set.len(),
-        snapshot_slot,
-        ending_slot
-    );
 
     bank.minimize_bank_for_snapshot(minimized_account_set);
     bank.force_flush_accounts_cache();
