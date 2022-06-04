@@ -5867,9 +5867,9 @@ impl AccountsDb {
                     assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
                     Box::new(txn_signatures.iter())
                 }
-                None => Box::new(
-                    std::iter::repeat(&None).take(accounts_and_meta_to_store.len()),
-                ),
+                None => {
+                    Box::new(std::iter::repeat(&None).take(accounts_and_meta_to_store.len()))
+                },
             };
 
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)

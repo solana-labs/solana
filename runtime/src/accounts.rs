@@ -1233,7 +1233,10 @@ impl Accounts {
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
-    ) -> (Vec<(&'a Pubkey, &'a AccountSharedData)>, Vec<Option<&'a Signature>>) {
+    ) -> (
+        Vec<(&'a Pubkey, &'a AccountSharedData)>,
+        Vec<Option<&'a Signature>>
+    ) {
         let mut accounts = Vec::with_capacity(load_results.len());
         let mut signatures = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
@@ -3049,14 +3052,10 @@ mod tests {
         assert_eq!(txn_signatures.len(), 2);
         assert!(txn_signatures
             .iter()
-            .any(|signature| signature.unwrap().to_string().eq(
-                &tx0_sign.to_string()
-            )));
+            .any(|signature| signature.unwrap().to_string().eq(&tx0_sign.to_string())));
         assert!(txn_signatures
             .iter()
-            .any(|signature| signature.unwrap().to_string().eq(
-                &tx1_sign.to_string()
-            )));
+            .any(|signature| signature.unwrap().to_string().eq(&tx1_sign.to_string())));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(
