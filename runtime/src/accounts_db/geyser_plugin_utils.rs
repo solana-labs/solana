@@ -188,7 +188,7 @@ pub mod tests {
             slot: Slot,
             meta: &StoredMeta,
             account: &AccountSharedData,
-            _txn_signature: &Signature,
+            _txn_signature: &Option<&Signature>,
         ) {
             self.accounts_notified
                 .entry(meta.pubkey)

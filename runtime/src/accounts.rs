@@ -3049,10 +3049,14 @@ mod tests {
         assert_eq!(txn_signatures.len(), 2);
         assert!(txn_signatures
             .iter()
-            .any(|signature| signature.to_string().eq(&tx0_sign.to_string())));
+            .any(|signature| signature.unwrap().to_string().eq(
+                &tx0_sign.to_string()
+            )));
         assert!(txn_signatures
             .iter()
-            .any(|signature| signature.to_string().eq(&tx1_sign.to_string())));
+            .any(|signature| signature.unwrap().to_string().eq(
+                &tx1_sign.to_string()
+            )));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(
