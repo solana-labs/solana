@@ -349,7 +349,7 @@ impl Clone for CachedExecutorsEntry {
 /// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
 struct CachedExecutors {
-    max_capacity: usize,
+    capacity: usize,
     current_epoch: Epoch,
     pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
     stats: executor_cache::Stats,
@@ -358,7 +358,7 @@ struct CachedExecutors {
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
-            max_capacity: MAX_CACHED_EXECUTORS,
+            capacity: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
             stats: executor_cache::Stats::default(),
@@ -379,18 +379,21 @@ impl AbiExample for CachedExecutors {
 impl CachedExecutors {
     fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
-            max_capacity,
+            capacity: max_capacity,
             current_epoch,
             executors: HashMap::new(),
             stats: executor_cache::Stats::default(),
         }
     }
 
-    fn new_from_parent(parent: &CachedExecutors, current_epoch: Epoch) -> Self {
-        let executors = if parent.current_epoch == current_epoch {
-            parent.executors.clone()
+    fn new_from_parent_bank_executors(
+        parent_bank_executors: &CachedExecutors,
+        current_epoch: Epoch,
+    ) -> Self {
+        let executors = if parent_bank_executors.current_epoch == current_epoch {
+            parent_bank_executors.executors.clone()
         } else {
-            parent
+            parent_bank_executors
                 .executors
                 .iter()
                 .map(|(&key, entry)| {
@@ -406,7 +409,7 @@ impl CachedExecutors {
         };
 
         Self {
-            max_capacity: parent.max_capacity,
+            capacity: parent_bank_executors.capacity,
             current_epoch,
             executors,
             stats: executor_cache::Stats::default(),
@@ -454,7 +457,7 @@ impl CachedExecutors {
 
             let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
 
-            if self.executors.len() >= self.max_capacity {
+            if self.executors.len() >= self.capacity {
                 let mut least_keys = counts
                     .iter()
                     .take(new_executors.len())
@@ -1760,8 +1763,11 @@ impl Bank {
 
         let (cached_executors, cached_executors_time) = Measure::this(
             |_| {
-                let parent = parent.cached_executors.read().unwrap();
-                RwLock::new(CachedExecutors::new_from_parent(&parent, epoch))
+                let parent_bank_executors = parent.cached_executors.read().unwrap();
+                RwLock::new(CachedExecutors::new_from_parent_bank_executors(
+                    &parent_bank_executors,
+                    epoch,
+                ))
             },
             (),
             "cached_executors_creation",
@@ -14452,7 +14458,7 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = CachedExecutors::new_from_parent(&cache, 1);
+        let mut cache = CachedExecutors::new_from_parent_bank_executors(&cache, 1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
@@ -14477,7 +14483,7 @@ pub(crate) mod tests {
             .count();
         assert_eq!(num_retained, 1);
 
-        cache = CachedExecutors::new_from_parent(&cache, 2);
+        cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
         cache.put(&[(&key3, executor.clone())]);
@@ -14621,12 +14627,14 @@ pub(crate) mod tests {
 
         // make sure stats are cleared in new_from_parent
         assert_eq!(
-            ComparableStats::from(&CachedExecutors::new_from_parent(&cache, CURRENT_EPOCH).stats),
+            ComparableStats::from(
+                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
+            ),
             ComparableStats::default()
         );
         assert_eq!(
             ComparableStats::from(
-                &CachedExecutors::new_from_parent(&cache, CURRENT_EPOCH + 1).stats
+                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
             ),
             ComparableStats::default()
         );
