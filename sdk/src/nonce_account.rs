@@ -20,12 +20,13 @@ pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
     )
 }
 
+// TODO: Consider changing argument from Hash to DurableNonce.
 pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> bool {
     if acc.owner() != &crate::system_program::id() {
         return false;
     }
     match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
-        Ok(State::Initialized(ref data)) => *hash == data.blockhash,
+        Ok(State::Initialized(ref data)) => hash == &data.blockhash(),
         _ => false,
     }
 }

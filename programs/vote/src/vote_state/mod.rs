@@ -7,6 +7,7 @@ use {
     bincode::{deserialize, serialize_into, ErrorKind},
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_metrics::datapoint_debug,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
@@ -1297,9 +1298,11 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             .unwrap_or(false);
 
         if reject_active_vote_account_close {
+            datapoint_debug!("vote-account-close", ("reject-active", 1, i64));
             return Err(InstructionError::ActiveVoteAccountClose);
         } else {
             // Deinitialize upon zero-balance
+            datapoint_debug!("vote-account-close", ("allow", 1, i64));
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
     } else if let Some(rent_sysvar) = rent_sysvar {

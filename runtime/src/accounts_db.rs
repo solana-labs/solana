@@ -1665,7 +1665,7 @@ impl ShrinkAncientStats {
     }
 }
 
-fn quarter_thread_count() -> usize {
+pub fn quarter_thread_count() -> usize {
     std::cmp::max(2, num_cpus::get() / 4)
 }
 
@@ -1888,6 +1888,10 @@ impl AccountsDb {
         // validate inside here
         Self::bins_per_pass(num_hash_scan_passes);
 
+        // Increase the stack for accounts threads
+        // rayon needs a lot of stack
+        const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
+
         AccountsDb {
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
@@ -1917,6 +1921,7 @@ impl AccountsDb {
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .thread_name(|i| format!("solana-db-accounts-{}", i))
+                .stack_size(ACCOUNTS_STACK_SIZE)
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),
@@ -3168,7 +3173,7 @@ impl AccountsDb {
             find_alive_elapsed = start.as_us();
 
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
-            create_and_insert_store_elapsed = time;
+            create_and_insert_store_elapsed = time.as_micros() as u64;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3297,7 +3302,7 @@ impl AccountsDb {
         &self,
         slot: Slot,
         aligned_total: u64,
-    ) -> (Arc<AccountStorageEntry>, u64) {
+    ) -> (Arc<AccountStorageEntry>, Duration) {
         let mut start = Measure::start("create_and_insert_store_elapsed");
         let shrunken_store = if let Some(new_store) =
             self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
@@ -3317,7 +3322,7 @@ impl AccountsDb {
             }
         };
         start.stop();
-        (shrunken_store, start.as_us())
+        (shrunken_store, Duration::from_micros(start.as_us()))
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -3487,10 +3492,7 @@ impl AccountsDb {
             get_ancient_append_vec_capacity(),
             new_ancient_storage.append_vec_id(),
         );
-        (
-            Some((slot, new_ancient_storage)),
-            Duration::from_micros(time),
-        )
+        (Some((slot, new_ancient_storage)), time)
     }
 
     /// return true if created
@@ -3978,6 +3980,7 @@ impl AccountsDb {
         collector
     }
 
+    /// Only guaranteed to be safe when called from rent collection
     pub fn range_scan_accounts<F, A, R>(
         &self,
         metric_name: &'static str,
@@ -4007,12 +4010,13 @@ impl AccountsDb {
                 // meaning no other subsystems can invalidate the account_info before making their
                 // changes to the index entry.
                 // For details, see the comment in retry_to_get_account_accessor()
-                let account_slot = self
+                if let Some(account_slot) = self
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
-                    .unwrap();
-                scan_func(&mut collector, Some(account_slot))
+                {
+                    scan_func(&mut collector, Some(account_slot))
+                }
             },
         );
         collector
@@ -4143,6 +4147,10 @@ impl AccountsDb {
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
         self.do_load(ancestors, pubkey, None, load_hint)
+    }
+
+    pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
+        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
     }
 
     pub fn load_with_fixed_root(
@@ -4478,6 +4486,19 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
+        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+    }
+
+    /// if 'load_into_read_cache_only', then return value is meaningless.
+    ///   The goal is to get the account into the read-only cache.
+    fn do_load_with_populate_read_cache(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+        max_root: Option<Slot>,
+        load_hint: LoadHint,
+        load_into_read_cache_only: bool,
+    ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
 
@@ -4485,10 +4506,25 @@ impl AccountsDb {
             self.read_index_for_accessor_or_load_slow(ancestors, pubkey, max_root, false)?;
         // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
-        if self.caching_enabled && !storage_location.is_cached() {
-            let result = self.read_only_accounts_cache.load(*pubkey, slot);
-            if let Some(account) = result {
-                return Some((account, slot));
+        if self.caching_enabled {
+            let in_write_cache = storage_location.is_cached();
+            if !load_into_read_cache_only {
+                if !in_write_cache {
+                    let result = self.read_only_accounts_cache.load(*pubkey, slot);
+                    if let Some(account) = result {
+                        return Some((account, slot));
+                    }
+                }
+            } else {
+                // goal is to load into read cache
+                if in_write_cache {
+                    // no reason to load in read cache. already in write cache
+                    return None;
+                }
+                if self.read_only_accounts_cache.in_cache(pubkey, slot) {
+                    // already in read cache
+                    return None;
+                }
             }
         }
 

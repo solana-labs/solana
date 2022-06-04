@@ -124,7 +124,8 @@ use {
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::sol_to_lamports,
-        nonce, nonce_account,
+        nonce::{self, state::DurableNonce},
+        nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
         pubkey::Pubkey,
@@ -190,6 +191,16 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
 pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
+
+#[derive(Default)]
+struct RentMetrics {
+    hold_range_us: AtomicU64,
+    load_us: AtomicU64,
+    collect_us: AtomicU64,
+    hash_us: AtomicU64,
+    store_us: AtomicU64,
+    count: AtomicU64,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RentDebit {
@@ -335,18 +346,31 @@ struct CachedExecutorsEntry {
     executor: Arc<dyn Executor>,
     hit_count: AtomicU64,
 }
+
+impl Clone for CachedExecutorsEntry {
+    fn clone(&self) -> Self {
+        Self {
+            prev_epoch_count: self.prev_epoch_count,
+            epoch_count: AtomicU64::new(self.epoch_count.load(Relaxed)),
+            executor: self.executor.clone(),
+            hit_count: AtomicU64::new(self.hit_count.load(Relaxed)),
+        }
+    }
+}
+
 /// LFU Cache of executors with single-epoch memory of usage counts
 #[derive(Debug)]
 struct CachedExecutors {
-    max: usize,
+    capacity: usize,
     current_epoch: Epoch,
     pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
     stats: executor_cache::Stats,
 }
+
 impl Default for CachedExecutors {
     fn default() -> Self {
         Self {
-            max: MAX_CACHED_EXECUTORS,
+            capacity: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
             executors: HashMap::default(),
             stats: executor_cache::Stats::default(),
@@ -364,55 +388,42 @@ impl AbiExample for CachedExecutors {
     }
 }
 
-impl Clone for CachedExecutors {
-    fn clone(&self) -> Self {
-        let executors = self.executors.iter().map(|(&key, entry)| {
-            let entry = CachedExecutorsEntry {
-                prev_epoch_count: entry.prev_epoch_count,
-                epoch_count: AtomicU64::new(entry.epoch_count.load(Relaxed)),
-                executor: entry.executor.clone(),
-                hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
-            };
-            (key, entry)
-        });
-        Self {
-            max: self.max,
-            current_epoch: self.current_epoch,
-            executors: executors.collect(),
-            stats: executor_cache::Stats::default(),
-        }
-    }
-}
-
 impl CachedExecutors {
-    fn clone_with_epoch(self: &Arc<Self>, epoch: Epoch) -> Arc<Self> {
-        if self.current_epoch == epoch {
-            return self.clone();
-        }
-        let executors = self.executors.iter().map(|(&key, entry)| {
-            // The total_count = prev_epoch_count + epoch_count will be used for LFU eviction.
-            // If the epoch has changed, we store the prev_epoch_count and reset the epoch_count to 0.
-            let entry = CachedExecutorsEntry {
-                prev_epoch_count: entry.epoch_count.load(Relaxed),
-                epoch_count: AtomicU64::default(),
-                executor: entry.executor.clone(),
-                hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
-            };
-            (key, entry)
-        });
-        Arc::new(Self {
-            max: self.max,
-            current_epoch: epoch,
-            executors: executors.collect(),
-            stats: executor_cache::Stats::default(),
-        })
-    }
-
-    fn new(max: usize, current_epoch: Epoch) -> Self {
+    fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
-            max,
+            capacity: max_capacity,
             current_epoch,
             executors: HashMap::new(),
+            stats: executor_cache::Stats::default(),
+        }
+    }
+
+    fn new_from_parent_bank_executors(
+        parent_bank_executors: &CachedExecutors,
+        current_epoch: Epoch,
+    ) -> Self {
+        let executors = if parent_bank_executors.current_epoch == current_epoch {
+            parent_bank_executors.executors.clone()
+        } else {
+            parent_bank_executors
+                .executors
+                .iter()
+                .map(|(&key, entry)| {
+                    let entry = CachedExecutorsEntry {
+                        prev_epoch_count: entry.epoch_count.load(Relaxed),
+                        epoch_count: AtomicU64::default(),
+                        executor: entry.executor.clone(),
+                        hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
+                    };
+                    (key, entry)
+                })
+                .collect()
+        };
+
+        Self {
+            capacity: parent_bank_executors.capacity,
+            current_epoch,
+            executors,
             stats: executor_cache::Stats::default(),
         }
     }
@@ -458,7 +469,7 @@ impl CachedExecutors {
 
             let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
 
-            if self.executors.len() >= self.max {
+            if self.executors.len() >= self.capacity {
                 let mut least_keys = counts
                     .iter()
                     .take(new_executors.len())
@@ -1319,9 +1330,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    // Inner Arc is meant to implement copy-on-write semantics as opposed to
-    // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
-    cached_executors: RwLock<Arc<CachedExecutors>>,
+    cached_executors: RwLock<CachedExecutors>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1506,7 +1515,7 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<Arc<CachedExecutors>>::default(),
+            cached_executors: RwLock::<CachedExecutors>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1750,7 +1759,7 @@ impl Bank {
         );
 
         let (epoch_stakes, epoch_stakes_time) =
-            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_reation");
+            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_creation");
 
         let (builtin_programs, builtin_programs_time) = Measure::this(
             |_| parent.builtin_programs.clone(),
@@ -1766,8 +1775,11 @@ impl Bank {
 
         let (cached_executors, cached_executors_time) = Measure::this(
             |_| {
-                let cached_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(cached_executors.clone_with_epoch(epoch))
+                let parent_bank_executors = parent.cached_executors.read().unwrap();
+                RwLock::new(CachedExecutors::new_from_parent_bank_executors(
+                    &parent_bank_executors,
+                    epoch,
+                ))
             },
             (),
             "cached_executors_creation",
@@ -2194,10 +2206,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: RwLock::new(Arc::new(CachedExecutors::new(
-                MAX_CACHED_EXECUTORS,
-                fields.epoch,
-            ))),
+            cached_executors: RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch)),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
@@ -3076,13 +3085,9 @@ impl Bank {
             metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
             metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
             metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
-            let evict_invalid_stakes_cache_entries = self
-                .feature_set
-                .is_active(&feature_set::evict_invalid_stakes_cache_entries::id());
             self.stakes_cache.handle_invalid_keys(
                 invalid_stake_keys,
                 invalid_vote_keys,
-                evict_invalid_stakes_cache_entries,
                 self.slot(),
             );
             vote_with_stake_delegations_map
@@ -4047,6 +4052,13 @@ impl Bank {
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
+        let separate_nonce_from_blockhash = self
+            .feature_set
+            .is_active(&feature_set::separate_nonce_from_blockhash::id());
+        let enable_durable_nonce = separate_nonce_from_blockhash
+            && self
+                .feature_set
+                .is_active(&feature_set::enable_durable_nonce::id());
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
@@ -4054,7 +4066,9 @@ impl Bank {
                     let recent_blockhash = tx.message().recent_blockhash();
                     if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
                         (Ok(()), None)
-                    } else if let Some((address, account)) = self.check_transaction_for_nonce(tx) {
+                    } else if let Some((address, account)) =
+                        self.check_transaction_for_nonce(tx, enable_durable_nonce)
+                    {
                         (Ok(()), Some(NoncePartial::new(address, account)))
                     } else {
                         error_counters.blockhash_not_found += 1;
@@ -4124,19 +4138,16 @@ impl Bank {
             })
     }
 
-    pub fn check_transaction_for_nonce(
+    fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
+        enable_durable_nonce: bool,
     ) -> Option<TransactionAccount> {
-        if self.cluster_type() == ClusterType::MainnetBeta {
-            if self.slot() <= 135986379 {
-                self.check_message_for_nonce(tx.message())
-            } else {
-                None
-            }
-        } else {
-            self.check_message_for_nonce(tx.message())
-        }
+        (enable_durable_nonce
+            || self.slot() <= 135986379
+            || self.cluster_type() != ClusterType::MainnetBeta)
+            .then(|| self.check_message_for_nonce(tx.message()))
+            .flatten()
     }
 
     pub fn check_transactions(
@@ -4180,15 +4191,17 @@ impl Bank {
             return Rc::new(RefCell::new(Executors::default()));
         }
 
-        let cache = self.cached_executors.read().unwrap();
-        let executors = executable_keys
-            .into_iter()
-            .filter_map(|key| {
-                cache
-                    .get(key)
-                    .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
-            })
-            .collect();
+        let executors = {
+            let cache = self.cached_executors.read().unwrap();
+            executable_keys
+                .into_iter()
+                .filter_map(|key| {
+                    cache
+                        .get(key)
+                        .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
+                })
+                .collect()
+        };
 
         Rc::new(RefCell::new(executors))
     }
@@ -4216,21 +4229,17 @@ impl Bank {
             .collect();
 
         if !dirty_executors.is_empty() {
-            let mut cache = self.cached_executors.write().unwrap();
-            let cache = Arc::make_mut(&mut cache);
-            cache.put(&dirty_executors);
+            self.cached_executors.write().unwrap().put(&dirty_executors);
         }
     }
 
     /// Remove an executor from the bank's cache
     fn remove_executor(&self, pubkey: &Pubkey) {
-        let mut cache = self.cached_executors.write().unwrap();
-        let _ = Arc::make_mut(&mut cache).remove(pubkey);
+        let _ = self.cached_executors.write().unwrap().remove(pubkey);
     }
 
     pub fn clear_executors(&self) {
-        let mut cache = self.cached_executors.write().unwrap();
-        Arc::make_mut(&mut cache).clear();
+        self.cached_executors.write().unwrap().clear();
     }
 
     /// Execute a transaction using the provided loaded accounts and update
@@ -4903,13 +4912,19 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
+        let durable_nonce = {
+            let separate_nonce_from_blockhash = self
+                .feature_set
+                .is_active(&feature_set::separate_nonce_from_blockhash::id());
+            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+        };
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
             &execution_results,
             loaded_txs,
             &self.rent_collector,
-            &last_blockhash,
+            &durable_nonce,
             lamports_per_signature,
             self.leave_nonce_on_success(),
         );
@@ -5173,14 +5188,14 @@ impl Bank {
         let mut measure = Measure::start("collect_rent_eagerly-ms");
         let partitions = self.rent_collection_partitions();
         let count = partitions.len();
-        let account_count: usize = partitions
-            .into_iter()
-            .map(|partition| self.collect_rent_in_partition(partition, just_rewrites))
-            .sum();
+        let rent_metrics = RentMetrics::default();
+        partitions.into_iter().for_each(|partition| {
+            self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
+        });
         measure.stop();
         datapoint_info!(
             "collect_rent_eagerly",
-            ("accounts", account_count, i64),
+            ("accounts", rent_metrics.count.load(Relaxed), i64),
             ("partitions", count, i64),
             (
                 "skipped_rewrites",
@@ -5188,6 +5203,15 @@ impl Bank {
                 i64
             ),
             ("total_time_us", measure.as_us(), i64),
+            (
+                "hold_range_us",
+                rent_metrics.hold_range_us.load(Relaxed),
+                i64
+            ),
+            ("load_us", rent_metrics.load_us.load(Relaxed), i64),
+            ("collect_us", rent_metrics.collect_us.load(Relaxed), i64),
+            ("hash_us", rent_metrics.hash_us.load(Relaxed), i64),
+            ("store_us", rent_metrics.store_us.load(Relaxed), i64),
         );
     }
 
@@ -5216,39 +5240,31 @@ impl Bank {
         }
     }
 
-    /// load accounts with pubkeys in 'partition'
-    /// collect rent
-    /// store accounts, whether rent was collected or not
-    /// update bank's rewrites set for all rewrites that were skipped
-    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
-    /// return # accounts loaded
-    fn collect_rent_in_partition(&self, partition: Partition, just_rewrites: bool) -> usize {
-        let subrange = Self::pubkey_range_from_partition(partition);
-
-        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
-        self.rc
-            .accounts
-            .hold_range_in_memory(&subrange, true, thread_pool);
-
-        let accounts = self
-            .rc
-            .accounts
-            .load_to_collect_rent_eagerly(&self.ancestors, subrange.clone());
-        let account_count = accounts.len();
-
-        // parallelize?
+    fn collect_rent_from_accounts(
+        &self,
+        mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
+        metrics: &RentMetrics,
+        just_rewrites: bool,
+    ) {
         let mut rent_debits = RentDebits::default();
         let mut total_collected = CollectedInfo::default();
         let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
+        let mut accounts_to_store =
+            Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
+        let mut collect_us = 0;
+        let mut hash_skipped_rewrites_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
-        for (pubkey, mut account, loaded_slot) in accounts {
+        for (pubkey, account, loaded_slot) in accounts.iter_mut() {
             let old_rent_epoch = account.rent_epoch();
+            let mut time = Measure::start("collect");
             let collected = self.rent_collector.collect_from_existing_account(
-                &pubkey,
-                &mut account,
+                pubkey,
+                account,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
+            time.stop();
+            collect_us += time.as_us();
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
@@ -5258,24 +5274,37 @@ impl Bank {
                 && Self::skip_rewrite(
                     bank_slot,
                     collected.rent_amount,
-                    loaded_slot,
+                    *loaded_slot,
                     old_rent_epoch,
-                    &account,
+                    account,
                 )
             {
                 // this would have been rewritten previously. Now we skip it.
                 // calculate the hash that we would have gotten if we did the rewrite.
                 // This will be needed to calculate the bank's hash.
+                let mut time = Measure::start("hash_account");
                 let hash =
-                    crate::accounts_db::AccountsDb::hash_account(self.slot(), &account, &pubkey);
-                rewrites_skipped.push((pubkey, hash));
+                    crate::accounts_db::AccountsDb::hash_account(self.slot(), account, pubkey);
+                time.stop();
+                hash_skipped_rewrites_us += time.as_us();
+                rewrites_skipped.push((*pubkey, hash));
                 assert_eq!(collected, CollectedInfo::default());
             } else if !just_rewrites {
                 total_collected += collected;
-                self.store_account(&pubkey, &account);
+                accounts_to_store.push((pubkey, account));
             }
-            rent_debits.insert(&pubkey, collected.rent_amount, account.lamports());
+            rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
         }
+        metrics.collect_us.fetch_add(collect_us, Relaxed);
+        metrics.hash_us.fetch_add(hash_skipped_rewrites_us, Relaxed);
+
+        if !accounts_to_store.is_empty() {
+            let mut time = Measure::start("store_account");
+            self.store_accounts(&accounts_to_store);
+            time.stop();
+            metrics.store_us.fetch_add(time.as_us(), Relaxed);
+        }
+
         self.remember_skipped_rewrites(rewrites_skipped);
         self.collected_rent
             .fetch_add(total_collected.rent_amount, Relaxed);
@@ -5286,11 +5315,91 @@ impl Bank {
         self.update_accounts_data_size_delta_off_chain(
             -(total_collected.account_data_len_reclaimed as i64),
         );
+    }
 
-        self.rc
-            .accounts
-            .hold_range_in_memory(&subrange, false, thread_pool);
-        account_count
+    /// load accounts with pubkeys in 'partition'
+    /// collect rent
+    /// store accounts, whether rent was collected or not
+    /// update bank's rewrites set for all rewrites that were skipped
+    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
+    fn collect_rent_in_partition(
+        &self,
+        partition: Partition,
+        just_rewrites: bool,
+        metrics: &RentMetrics,
+    ) {
+        let subrange_full = Self::pubkey_range_from_partition(partition);
+
+        let mut hold_range = Measure::start("hold_range");
+        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+        thread_pool.install(|| {
+            self.rc
+                .accounts
+                .hold_range_in_memory(&subrange_full, true, thread_pool);
+            hold_range.stop();
+            metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
+
+            // divide the range into num_threads smaller ranges and process in parallel
+            // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
+            // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
+            let num_threads = crate::accounts_db::quarter_thread_count() as u64;
+            let sz = std::mem::size_of::<u64>();
+            let start_prefix = Self::prefix_from_pubkey(subrange_full.start());
+            let end_prefix_inclusive = Self::prefix_from_pubkey(subrange_full.end());
+            let range = end_prefix_inclusive - start_prefix;
+            let increment = range / num_threads;
+            for thread_metrics in (0..num_threads)
+                .into_par_iter()
+                .map(|chunk| {
+                    let metrics = RentMetrics::default();
+                    let offset = |chunk| start_prefix + chunk * increment;
+                    let start = offset(chunk);
+                    let last = chunk == num_threads - 1;
+                    let merge_prefix = |prefix: u64, mut bound: Pubkey| {
+                        bound.as_mut()[0..sz].copy_from_slice(&prefix.to_be_bytes());
+                        bound
+                    };
+                    let start = merge_prefix(start, *subrange_full.start());
+                    let mut load = Measure::start("load");
+                    let accounts = if last {
+                        let end = *subrange_full.end();
+                        let subrange = start..=end; // IN-clusive
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    } else {
+                        let end = merge_prefix(offset(chunk + 1), *subrange_full.start());
+                        let subrange = start..end; // EX-clusive, the next 'start' will be this same value
+                        self.rc
+                            .accounts
+                            .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                    };
+                    load.stop();
+                    metrics.load_us.fetch_add(load.as_us(), Relaxed);
+
+                    self.collect_rent_from_accounts(accounts, &metrics, just_rewrites);
+                    metrics
+                })
+                .collect::<Vec<_>>()
+            {
+                metrics
+                    .load_us
+                    .fetch_add(thread_metrics.load_us.load(Relaxed), Relaxed);
+                metrics
+                    .store_us
+                    .fetch_add(thread_metrics.store_us.load(Relaxed), Relaxed);
+                metrics
+                    .hash_us
+                    .fetch_add(thread_metrics.hash_us.load(Relaxed), Relaxed);
+                metrics
+                    .collect_us
+                    .fetch_add(thread_metrics.collect_us.load(Relaxed), Relaxed);
+            }
+
+            self.rc
+                .accounts
+                .hold_range_in_memory(&subrange_full, false, thread_pool);
+        });
     }
 
     // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
@@ -5331,6 +5440,11 @@ impl Bank {
         true
     }
 
+    fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
+        const PREFIX_SIZE: usize = mem::size_of::<u64>();
+        u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap())
+    }
+
     /// This is the inverse of pubkey_range_from_partition.
     /// return the lowest end_index which would contain this pubkey
     pub fn partition_from_pubkey(
@@ -5338,7 +5452,6 @@ impl Bank {
         partition_count: PartitionsPerCycle,
     ) -> PartitionIndex {
         type Prefix = u64;
-        const PREFIX_SIZE: usize = mem::size_of::<Prefix>();
         const PREFIX_MAX: Prefix = Prefix::max_value();
 
         if partition_count == 1 {
@@ -5348,7 +5461,7 @@ impl Bank {
         // not-overflowing way of `(Prefix::max_value() + 1) / partition_count`
         let partition_width = (PREFIX_MAX - partition_count + 1) / partition_count + 1;
 
-        let prefix = u64::from_be_bytes(pubkey.as_ref()[0..PREFIX_SIZE].try_into().unwrap());
+        let prefix = Self::prefix_from_pubkey(pubkey);
         if prefix == 0 {
             return 0;
         }
@@ -6014,12 +6127,18 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+        self.store_accounts(&[(pubkey, account)])
+    }
+
+    pub fn store_accounts(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
         assert!(!self.freeze_started());
         self.rc
             .accounts
-            .store_slow_cached(self.slot(), pubkey, account);
+            .store_accounts_cached(self.slot(), accounts);
         let mut m = Measure::start("stakes_cache.check_and_store");
-        self.stakes_cache.check_and_store(pubkey, account);
+        for (pubkey, account) in accounts {
+            self.stakes_cache.check_and_store(pubkey, account);
+        }
         m.stop();
         self.rc
             .accounts
@@ -6595,6 +6714,13 @@ impl Bank {
 
     pub fn get_thread_pool(&self) -> &ThreadPool {
         &self.rc.accounts.accounts_db.thread_pool_clean
+    }
+
+    pub fn load_account_into_read_cache(&self, key: &Pubkey) {
+        self.rc
+            .accounts
+            .accounts_db
+            .load_account_into_read_cache(&self.ancestors, key);
     }
 
     pub fn update_accounts_hash_with_index_option(
@@ -7505,14 +7631,12 @@ pub(crate) mod tests {
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
 
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
         let nonce_account = AccountSharedData::new_data(
             43,
             &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::new(
-                    Pubkey::default(),
-                    Hash::new_unique(),
-                    lamports_per_signature,
-                ),
+                nonce::state::Data::new(Pubkey::default(), durable_nonce, lamports_per_signature),
             )),
             &system_program::id(),
         )
@@ -9383,7 +9507,7 @@ pub(crate) mod tests {
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
-        bank.collect_rent_in_partition((0, 0, 1), true);
+        bank.collect_rent_in_partition((0, 0, 1), true, &RentMetrics::default());
         {
             let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
             // `rewrites_skipped.len()` is the number of non-rent paying accounts in the slot. This
@@ -9405,7 +9529,7 @@ pub(crate) mod tests {
         }
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        bank.collect_rent_in_partition((0, 0, 1), false); // all range
+        bank.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all range
 
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
         assert_eq!(
@@ -9488,8 +9612,8 @@ pub(crate) mod tests {
         assert_eq!(hash1_with_zero, hash1_without_zero);
         assert_ne!(hash1_with_zero, Hash::default());
 
-        bank2_with_zero.collect_rent_in_partition((0, 0, 1), false); // all
-        bank2_without_zero.collect_rent_in_partition((0, 0, 1), false); // all
+        bank2_with_zero.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all
+        bank2_without_zero.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all
 
         bank2_with_zero.freeze();
         let hash2_with_zero = bank2_with_zero.hash();
@@ -12230,7 +12354,7 @@ pub(crate) mod tests {
             let state =
                 StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
             match state {
-                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash),
+                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash()),
                 _ => None,
             }
         })
@@ -12325,7 +12449,10 @@ pub(crate) mod tests {
         );
         let nonce_account = bank.get_account(&nonce_pubkey).unwrap();
         assert_eq!(
-            bank.check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
+            bank.check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            ),
             Some((nonce_pubkey, nonce_account))
         );
     }
@@ -12351,7 +12478,10 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx,))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx,),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12377,7 +12507,10 @@ pub(crate) mod tests {
         );
         tx.message.instructions[0].accounts.clear();
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12404,7 +12537,10 @@ pub(crate) mod tests {
             nonce_hash,
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12428,7 +12564,10 @@ pub(crate) mod tests {
             Hash::default(),
         );
         assert!(bank
-            .check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx))
+            .check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            )
             .is_none());
     }
 
@@ -12932,7 +13071,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -12969,7 +13108,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13002,7 +13141,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13039,7 +13178,7 @@ pub(crate) mod tests {
                     StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
                 match state {
                     Ok(nonce::State::Initialized(ref data)) => {
-                        Some((data.blockhash, data.fee_calculator))
+                        Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
                 }
@@ -13081,13 +13220,13 @@ pub(crate) mod tests {
             &[&custodian_keypair, &nonce_keypair],
             nonce_hash,
         );
-        // Caught by the system program because the tx hash is valid
+        // SanitizedMessage::get_durable_nonce returns None because nonce
+        // account is not writable. Durable nonce and blockhash domains are
+        // separate, so the recent_blockhash (== durable nonce) in the
+        // transaction is not found in the hash queue.
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument
-            ))
+            Err(TransactionError::BlockhashNotFound),
         );
         // Kick nonce hash off the blockhash_queue
         for _ in 0..MAX_RECENT_BLOCKHASHES + 1 {
@@ -13100,7 +13239,10 @@ pub(crate) mod tests {
             Err(TransactionError::BlockhashNotFound)
         );
         assert_eq!(
-            bank.check_transaction_for_nonce(&SanitizedTransaction::from_transaction_for_tests(tx)),
+            bank.check_transaction_for_nonce(
+                &SanitizedTransaction::from_transaction_for_tests(tx),
+                true, // enable_durable_nonce
+            ),
             None
         );
     }
@@ -14518,13 +14660,13 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = Arc::new(cache).clone_with_epoch(1);
+        let mut cache = CachedExecutors::new_from_parent_bank_executors(&cache, 1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        Arc::make_mut(&mut cache).put(&[(&key4, executor.clone())]);
+        cache.put(&[(&key4, executor.clone())]);
 
         assert!(cache.get(&key4).is_some());
         let num_retained = [&key1, &key2, &key3]
@@ -14533,8 +14675,8 @@ pub(crate) mod tests {
             .count();
         assert_eq!(num_retained, 2);
 
-        Arc::make_mut(&mut cache).put(&[(&key1, executor.clone())]);
-        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
+        cache.put(&[(&key1, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key3).is_some());
         let num_retained = [&key2, &key4]
@@ -14543,10 +14685,10 @@ pub(crate) mod tests {
             .count();
         assert_eq!(num_retained, 1);
 
-        cache = cache.clone_with_epoch(2);
+        cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
-        Arc::make_mut(&mut cache).put(&[(&key3, executor.clone())]);
+        cache.put(&[(&key3, executor.clone())]);
         assert!(cache.get(&key3).is_some());
     }
 
@@ -14610,6 +14752,94 @@ pub(crate) mod tests {
 
         // one-hit-wonder counter not incremented
         assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 1);
+    }
+
+    #[test]
+    fn test_cached_executors_stats() {
+        #[derive(Debug, Default, PartialEq)]
+        struct ComparableStats {
+            hits: u64,
+            misses: u64,
+            evictions: HashMap<Pubkey, u64>,
+            insertions: u64,
+            replacements: u64,
+            one_hit_wonders: u64,
+        }
+        impl From<&executor_cache::Stats> for ComparableStats {
+            fn from(stats: &executor_cache::Stats) -> Self {
+                let executor_cache::Stats {
+                    hits,
+                    misses,
+                    evictions,
+                    insertions,
+                    replacements,
+                    one_hit_wonders,
+                } = stats;
+                ComparableStats {
+                    hits: hits.load(Relaxed),
+                    misses: misses.load(Relaxed),
+                    evictions: evictions.clone(),
+                    insertions: insertions.load(Relaxed),
+                    replacements: replacements.load(Relaxed),
+                    one_hit_wonders: one_hit_wonders.load(Relaxed),
+                }
+            }
+        }
+
+        const CURRENT_EPOCH: Epoch = 0;
+        let mut cache = CachedExecutors::new(2, CURRENT_EPOCH);
+        let mut expected_stats = ComparableStats::default();
+
+        let program_id1 = Pubkey::new_unique();
+        let program_id2 = Pubkey::new_unique();
+        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
+
+        // make sure we're starting from where we think we are
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats,);
+
+        // insert some executors
+        cache.put(&[(&program_id1, executor.clone())]);
+        cache.put(&[(&program_id2, executor.clone())]);
+        expected_stats.insertions += 2;
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
+
+        // replace a one-hit-wonder executor
+        cache.put(&[(&program_id1, executor.clone())]);
+        expected_stats.replacements += 1;
+        expected_stats.one_hit_wonders += 1;
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
+
+        // hit some executors
+        cache.get(&program_id1);
+        cache.get(&program_id1);
+        cache.get(&program_id2);
+        expected_stats.hits += 3;
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
+
+        // miss an executor
+        cache.get(&Pubkey::new_unique());
+        expected_stats.misses += 1;
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
+
+        // evict an executor
+        cache.put(&[(&Pubkey::new_unique(), executor.clone())]);
+        expected_stats.insertions += 1;
+        expected_stats.evictions.insert(program_id2, 1);
+        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
+
+        // make sure stats are cleared in new_from_parent
+        assert_eq!(
+            ComparableStats::from(
+                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
+            ),
+            ComparableStats::default()
+        );
+        assert_eq!(
+            ComparableStats::from(
+                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
+            ),
+            ComparableStats::default()
+        );
     }
 
     #[test]

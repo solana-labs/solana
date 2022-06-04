@@ -4496,9 +4496,19 @@ dependencies = [
 name = "solana-cargo-build-bpf"
 version = "1.11.0"
 dependencies = [
+ "cargo_metadata",
+ "clap 3.1.8",
+ "solana-sdk 1.11.0",
+]
+
+[[package]]
+name = "solana-cargo-build-sbf"
+version = "1.11.0"
+dependencies = [
  "bzip2",
  "cargo_metadata",
  "clap 3.1.8",
+ "log",
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4508,6 +4518,14 @@ dependencies = [
 
 [[package]]
 name = "solana-cargo-test-bpf"
+version = "1.11.0"
+dependencies = [
+ "cargo_metadata",
+ "clap 3.1.8",
+]
+
+[[package]]
+name = "solana-cargo-test-sbf"
 version = "1.11.0"
 dependencies = [
  "cargo_metadata",
@@ -4658,7 +4676,6 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "log",
- "lru",
  "quinn",
  "quinn-proto",
  "rand 0.7.3",
@@ -6290,9 +6307,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.29"
+version = "0.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aab642ccfa31bfd4389387019a6b1204ad93f9528d2ac8e1e36c8de62bdf1f8"
+checksum = "4df28dcb607dd56ab0022f99d3a9ff1ee0d87951315762c0b89e946c087ebbea"
 dependencies = [
  "byteorder",
  "combine",

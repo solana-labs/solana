@@ -368,12 +368,14 @@ pub fn deserialize_packets<'a>(
 
 /// Read the transaction message from packet data
 pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
-    let (sig_len, sig_size) =
-        decode_shortu16_len(packet.data()).map_err(DeserializedPacketError::ShortVecError)?;
+    let (sig_len, sig_size) = packet
+        .data(..)
+        .and_then(|bytes| decode_shortu16_len(bytes).ok())
+        .ok_or(DeserializedPacketError::ShortVecError(()))?;
     sig_len
         .checked_mul(size_of::<Signature>())
         .and_then(|v| v.checked_add(sig_size))
-        .and_then(|msg_start| packet.data().get(msg_start..))
+        .and_then(|msg_start| packet.data(msg_start..))
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 

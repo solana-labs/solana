@@ -119,7 +119,6 @@ impl StakesCache {
         &self,
         invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-        should_evict_invalid_entries: bool,
         current_slot: Slot,
     ) {
         if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
@@ -128,16 +127,10 @@ impl StakesCache {
 
         // Prune invalid stake delegations and vote accounts that were
         // not properly evicted in normal operation.
-        let mut maybe_stakes = if should_evict_invalid_entries {
-            Some(self.0.write().unwrap())
-        } else {
-            None
-        };
+        let mut stakes = self.0.write().unwrap();
 
         for (stake_pubkey, reason) in invalid_stake_keys {
-            if let Some(stakes) = maybe_stakes.as_mut() {
-                stakes.remove_stake_delegation(&stake_pubkey);
-            }
+            stakes.remove_stake_delegation(&stake_pubkey);
             datapoint_warn!(
                 "bank-stake_delegation_accounts-invalid-account",
                 ("slot", current_slot as i64, i64),
@@ -147,9 +140,7 @@ impl StakesCache {
         }
 
         for (vote_pubkey, reason) in invalid_vote_keys {
-            if let Some(stakes) = maybe_stakes.as_mut() {
-                stakes.remove_vote_account(&vote_pubkey);
-            }
+            stakes.remove_vote_account(&vote_pubkey);
             datapoint_warn!(
                 "bank-stake_delegation_accounts-invalid-account",
                 ("slot", current_slot as i64, i64),
