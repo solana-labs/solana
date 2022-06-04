@@ -3880,7 +3880,6 @@ impl Bank {
         let _ = self.cached_executors.write().unwrap().remove(pubkey);
     }
 
-<<<<<<< HEAD
     pub fn load_lookup_table_addresses(
         &self,
         address_table_lookups: &[MessageAddressTableLookup],
@@ -3906,10 +3905,6 @@ impl Bank {
                 )
             })
             .collect::<std::result::Result<_, AddressLookupError>>()?)
-=======
-    pub fn clear_executors(&self) {
-        self.cached_executors.write().unwrap().clear();
->>>>>>> 61ad8fcc5 (Fix bank executor stats and remove copy-on-write semantics (#25621))
     }
 
     /// Execute a transaction using the provided loaded accounts and update
