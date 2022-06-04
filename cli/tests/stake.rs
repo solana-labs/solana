@@ -509,7 +509,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Delegate stake
     config.signers = vec![&config_keypair];
@@ -539,7 +539,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Deactivate stake
     config.command = CliCommand::DeactivateStake {
@@ -802,7 +802,7 @@ fn test_stake_authorize() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Nonced assignment of new online stake authority
     let online_authority = Keypair::new();
@@ -870,7 +870,7 @@ fn test_stake_authorize() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
     assert_ne!(nonce_hash, new_nonce_hash);
 }
 
@@ -1126,7 +1126,7 @@ fn test_stake_split() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Nonced offline split
     let split_account = keypair_from_seed(&[2u8; 32]).unwrap();
@@ -1400,7 +1400,7 @@ fn test_stake_set_lockup() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Nonced offline set lockup
     let lockup = LockupArgs {
@@ -1515,7 +1515,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Create stake account offline
     let stake_keypair = keypair_from_seed(&[4u8; 32]).unwrap();
@@ -1576,7 +1576,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Offline, nonced stake-withdraw
     let recipient = keypair_from_seed(&[5u8; 32]).unwrap();
@@ -1630,7 +1630,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
     )
     .and_then(|ref a| nonce_utils::data_from_account(a))
     .unwrap()
-    .blockhash;
+    .blockhash();
 
     // Create another stake account. This time with seed
     let seed = "seedy";
