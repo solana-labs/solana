@@ -3928,13 +3928,6 @@ impl Bank {
         let _ = self.cached_executors.write().unwrap().remove(pubkey);
     }
 
-<<<<<<< HEAD
-=======
-    pub fn clear_executors(&self) {
-        self.cached_executors.write().unwrap().clear();
-    }
-
->>>>>>> 61ad8fcc5 (Fix bank executor stats and remove copy-on-write semantics (#25621))
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     fn execute_loaded_transaction(
