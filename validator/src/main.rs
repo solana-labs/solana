@@ -30,12 +30,9 @@ use {
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
-    solana_ledger::{
-        blockstore_db::DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-        blockstore_options::{
-            BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-            LedgerColumnOptions, ShredStorageType,
-        },
+    solana_ledger::blockstore_options::{
+        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
