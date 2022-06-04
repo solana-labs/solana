@@ -5862,15 +5862,16 @@ impl AccountsDb {
             .fetch_add(calc_stored_meta_time.as_us(), Ordering::Relaxed);
 
         if self.caching_enabled && is_cached_store {
-            let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> = match txn_signatures {
-                Some(txn_signatures) => {
-                    assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
-                    Box::new(txn_signatures.iter())
-                }
-                None => {
-                    Box::new(std::iter::repeat(&None).take(accounts_and_meta_to_store.len()))
-                },
-            };
+            let signature_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>>> =
+                match txn_signatures {
+                    Some(txn_signatures) => {
+                        assert_eq!(txn_signatures.len(), accounts_and_meta_to_store.len());
+                        Box::new(txn_signatures.iter())
+                    }
+                    None => {
+                        Box::new(std::iter::repeat(&None).take(accounts_and_meta_to_store.len()))
+                    },
+                };
 
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)
         } else {

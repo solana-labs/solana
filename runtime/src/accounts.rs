@@ -1235,7 +1235,7 @@ impl Accounts {
         leave_nonce_on_success: bool,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
-        Vec<Option<&'a Signature>>
+        Vec<Option<&'a Signature>>,
     ) {
         let mut accounts = Vec::with_capacity(load_results.len());
         let mut signatures = Vec::with_capacity(load_results.len());
