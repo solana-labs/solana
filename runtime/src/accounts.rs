@@ -1215,7 +1215,7 @@ impl Accounts {
     }
 
     pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.accounts_db.store_cached(slot, accounts)
+        self.accounts_db.store_cached(slot, accounts, None)
     }
 
     /// Add a slot to root.  Root slots cannot be purged
