@@ -172,6 +172,7 @@ fn bench_merkle_create_tree_from_bufs_vec_par_64_8(b: &mut Bencher) {
     bench_merkle_create_tree_from_bufs_vec_par(b, 64, 8);
 }
 
+// simulate work required for one batch of outgoing shreds
 #[bench]
 fn bench_merkle_fec64_outgoing(b: &mut Bencher) {
     let keypair = Keypair::new();
@@ -185,6 +186,7 @@ fn bench_merkle_fec64_outgoing(b: &mut Bencher) {
     });
 }
 
+// simulate work required for one batch of incoming shreds
 #[bench]
 fn bench_merkle_fec64_incoming(b: &mut Bencher) {
     let keypair = Keypair::new();
@@ -196,14 +198,20 @@ fn bench_merkle_fec64_incoming(b: &mut Bencher) {
     let proof_data: Vec<_> = bufs_vec
         .iter()
         .enumerate()
-        .map(|(i, v)| (i, v, &signature, tree.prove_fec64(i)))
+        .map(|(i, v)| (i, v, root_hash, signature, tree.prove_fec64(i)))
         .collect();
     b.iter(|| {
+        let (fec_set_root_hash, fec_set_sig) = proof_data
+            .first()
+            .map(|(_, _, root_hash, sig, _)| (root_hash, sig))
+            .unwrap();
+        assert!(fec_set_sig.verify(keypair.pubkey().as_ref(), root_hash.as_ref()));
         proof_data.par_chunks(16).for_each(|slice| {
-            slice.iter().for_each(|(i, v, sig, proof)| {
+            slice.iter().for_each(|(i, v, root_hash, sig, proof)| {
                 let leaf_hash = TurbineMerkleHash::hash(v);
+                assert_eq!(&sig, &fec_set_sig);
+                assert_eq!(&root_hash, &fec_set_root_hash);
                 assert!(proof.verify(&root_hash, &leaf_hash, *i));
-                assert!(sig.verify(keypair.pubkey().as_ref(), root_hash.as_ref()));
             });
         });
     });
