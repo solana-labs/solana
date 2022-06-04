@@ -84,6 +84,13 @@ eager_macro_rules! { $eager_1
     macro_rules! report_execute_timings {
         ($self: expr) => {
             (
+                "validate_transactions_us",
+                *$self
+                    .metrics
+                    .index(ExecuteTimingType::CheckUs),
+                i64
+            ),
+            (
                 "load_us",
                 *$self
                     .metrics
@@ -95,6 +102,13 @@ eager_macro_rules! { $eager_1
                 *$self
                     .metrics
                     .index(ExecuteTimingType::ExecuteUs),
+                i64
+            ),
+            (
+                "collect_logs_us",
+                *$self
+                    .metrics
+                    .index(ExecuteTimingType::CollectLogsUs),
                 i64
             ),
             (
