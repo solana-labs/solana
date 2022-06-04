@@ -333,10 +333,10 @@ pub fn check_nonce_account(
 ) -> Result<(), CliError> {
     match state_from_account(nonce_account)? {
         State::Initialized(ref data) => {
-            if &data.blockhash != nonce_hash {
+            if &data.blockhash() != nonce_hash {
                 Err(Error::InvalidHash {
                     provided: *nonce_hash,
-                    expected: data.blockhash,
+                    expected: data.blockhash(),
                 }
                 .into())
             } else if nonce_authority != &data.authority {
@@ -524,7 +524,7 @@ pub fn process_get_nonce(
         .and_then(|ref a| state_from_account(a))?
     {
         State::Uninitialized => Ok("Nonce account is uninitialized".to_string()),
-        State::Initialized(ref data) => Ok(format!("{:?}", data.blockhash)),
+        State::Initialized(ref data) => Ok(format!("{:?}", data.blockhash())),
     }
 }
 
@@ -598,7 +598,7 @@ pub fn process_show_nonce_account(
             ..CliNonceAccount::default()
         };
         if let Some(data) = data {
-            nonce_account.nonce = Some(data.blockhash.to_string());
+            nonce_account.nonce = Some(data.blockhash().to_string());
             nonce_account.lamports_per_signature = Some(data.fee_calculator.lamports_per_signature);
             nonce_account.authority = Some(data.authority.to_string());
         }
@@ -665,7 +665,11 @@ mod tests {
             account::Account,
             account_utils::StateMut,
             hash::hash,
-            nonce::{self, state::Versions, State},
+            nonce::{
+                self,
+                state::{DurableNonce, Versions},
+                State,
+            },
             nonce_account,
             signature::{read_keypair_file, write_keypair, Keypair, Signer},
             system_program,
@@ -925,11 +929,13 @@ mod tests {
 
     #[test]
     fn test_check_nonce_account() {
-        let blockhash = Hash::default();
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::default(), /*separate_domains:*/ true);
+        let blockhash = *durable_nonce.as_hash();
         let nonce_pubkey = solana_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
             nonce_pubkey,
-            blockhash,
+            durable_nonce,
             0,
         )));
         let valid = Account::new_data(1, &data, &system_program::ID);
@@ -949,9 +955,11 @@ mod tests {
             assert_eq!(err, Error::InvalidAccountData,);
         }
 
+        let invalid_durable_nonce =
+            DurableNonce::from_blockhash(&hash(b"invalid"), /*separate_domains:*/ true);
         let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
             nonce_pubkey,
-            hash(b"invalid"),
+            invalid_durable_nonce,
             0,
         )));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID).unwrap();
@@ -962,7 +970,7 @@ mod tests {
                 err,
                 Error::InvalidHash {
                     provided: blockhash,
-                    expected: hash(b"invalid"),
+                    expected: *invalid_durable_nonce.as_hash(),
                 }
             );
         }
@@ -970,7 +978,7 @@ mod tests {
         let new_nonce_authority = solana_sdk::pubkey::new_rand();
         let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
             new_nonce_authority,
-            blockhash,
+            durable_nonce,
             0,
         )));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
@@ -1019,7 +1027,9 @@ mod tests {
         let mut nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
 
-        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
             .set_state(&Versions::new_current(State::Initialized(data.clone())))
             .unwrap();
@@ -1048,7 +1058,9 @@ mod tests {
             Err(Error::InvalidStateForOperation)
         );
 
-        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
             .set_state(&Versions::new_current(State::Initialized(data.clone())))
             .unwrap();
