@@ -5870,7 +5870,7 @@ impl AccountsDb {
                     }
                     None => {
                         Box::new(std::iter::repeat(&None).take(accounts_and_meta_to_store.len()))
-                    },
+                    }
                 };
 
             self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)
