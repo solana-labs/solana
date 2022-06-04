@@ -116,7 +116,7 @@ impl AccountsUpdateNotifierImpl {
             rent_epoch: account.rent_epoch(),
             data: account.data(),
             write_version: meta.write_version,
-            txn_signature: txn_signature.clone(),
+            txn_signature: *txn_signature,
         })
     }
 
