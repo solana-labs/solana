@@ -3764,26 +3764,13 @@ impl Bank {
     fn check_transaction_for_nonce(
         &self,
         tx: &SanitizedTransaction,
-<<<<<<< HEAD
-    ) -> Option<(Pubkey, AccountSharedData)> {
-        if self.cluster_type() == ClusterType::MainnetBeta {
-            if self.slot() <= 135986379 {
-                self.check_message_for_nonce(tx.message())
-            } else {
-                None
-            }
-        } else {
-            self.check_message_for_nonce(tx.message())
-        }
-=======
         enable_durable_nonce: bool,
-    ) -> Option<TransactionAccount> {
+    ) -> Option<(Pubkey, AccountSharedData)> {
         (enable_durable_nonce
             || self.slot() <= 135986379
             || self.cluster_type() != ClusterType::MainnetBeta)
             .then(|| self.check_message_for_nonce(tx.message()))
             .flatten()
->>>>>>> 985177413 (adds feature gate enabling durable nonce)
     }
 
     pub fn check_transactions(

@@ -862,18 +862,9 @@ mod test {
                 ..ProcessTransactionsResult::default()
             }
         );
-<<<<<<< HEAD
         // Advance nonce
-        let new_durable_nonce = Hash::new_unique();
-=======
-        // Advance nonce, simulate the transaction was again last sent 4 seconds ago.
-        // This time the transaction should have been dropped.
-        for mut transaction in transactions.values_mut() {
-            transaction.last_sent_time = Some(Instant::now().sub(Duration::from_millis(4000)));
-        }
         let new_durable_nonce =
             DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
         let new_nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
             nonce::state::Data::new(Pubkey::default(), new_durable_nonce, 42),
         ));

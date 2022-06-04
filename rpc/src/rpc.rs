@@ -4396,14 +4396,8 @@ pub mod tests {
             fee_calculator::DEFAULT_BURN_PERCENT,
             hash::{hash, Hash},
             instruction::InstructionError,
-<<<<<<< HEAD
             message::Message,
             nonce, rpc_port,
-=======
-            message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
-            nonce::{self, state::DurableNonce},
-            rpc_port,
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
             signature::{Keypair, Signer},
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
@@ -5472,7 +5466,6 @@ pub mod tests {
         assert!(contains_slot);
 
         // Set up nonce accounts to test filters
-<<<<<<< HEAD
         let nonce_keypair0 = Keypair::new();
         let instruction = system_instruction::create_nonce_account(
             &alice.pubkey(),
@@ -5495,26 +5488,6 @@ pub mod tests {
         let message = Message::new(&instruction, Some(&alice.pubkey()));
         let tx = Transaction::new(&[&alice, &nonce_keypair1], message, blockhash);
         bank.process_transaction(&tx).unwrap();
-=======
-        let nonce_authorities = (0..2)
-            .map(|_| {
-                let pubkey = Pubkey::new_unique();
-                let authority = Pubkey::new_unique();
-                let account = AccountSharedData::new_data(
-                    42,
-                    &nonce::state::Versions::new_current(nonce::State::new_initialized(
-                        &authority,
-                        DurableNonce::default(),
-                        1000,
-                    )),
-                    &system_program::id(),
-                )
-                .unwrap();
-                bank.store_account(&pubkey, &account);
-                authority
-            })
-            .collect::<Vec<_>>();
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
 
         // Test memcmp filter; filter on Initialized state
         let req = format!(

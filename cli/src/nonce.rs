@@ -333,17 +333,8 @@ pub fn check_nonce_account(
 ) -> Result<(), CliError> {
     match state_from_account(nonce_account)? {
         State::Initialized(ref data) => {
-<<<<<<< HEAD
-            if &data.blockhash != nonce_hash {
-                Err(Error::InvalidHash.into())
-=======
             if &data.blockhash() != nonce_hash {
-                Err(Error::InvalidHash {
-                    provided: *nonce_hash,
-                    expected: data.blockhash(),
-                }
-                .into())
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
+                Err(Error::InvalidHash.into())
             } else if nonce_authority != &data.authority {
                 Err(Error::InvalidAuthority.into())
             } else {
@@ -967,27 +958,12 @@ mod tests {
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
-<<<<<<< HEAD
             assert_eq!(err, Error::InvalidHash,);
-=======
-            assert_eq!(
-                err,
-                Error::InvalidHash {
-                    provided: blockhash,
-                    expected: *invalid_durable_nonce.as_hash(),
-                }
-            );
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
         }
 
         let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
-<<<<<<< HEAD
             solana_sdk::pubkey::new_rand(),
-            blockhash,
-=======
-            new_nonce_authority,
             durable_nonce,
->>>>>>> 5ee157f43 (separates durable nonce and blockhash domains)
             0,
         )));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
