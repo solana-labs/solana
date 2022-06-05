@@ -60,7 +60,7 @@ $ cargo test
 ```
 
 ### Starting a local testnet
-Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps).
+Start your own testnet locally, instructions are in the [online docs](https://docs.solana.com/cluster/bench-tps). test bla
 
 ### Accessing the remote development cluster
 * `devnet` - stable public cluster for development accessible via
