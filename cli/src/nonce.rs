@@ -13,7 +13,7 @@ use {
     solana_clap_utils::{
         input_parsers::*,
         input_validators::*,
-        keypair::{DefaultSigner, SignerIndex},
+        keypair::{CliSigners, DefaultSigner, SignerIndex},
         memo::{memo_arg, MEMO_ARG},
         nonce::*,
     },
@@ -30,8 +30,8 @@ use {
         pubkey::Pubkey,
         system_instruction::{
             advance_nonce_account, authorize_nonce_account, create_nonce_account,
-            create_nonce_account_with_seed, instruction_to_nonce_error, withdraw_nonce_account,
-            NonceError, SystemError,
+            create_nonce_account_with_seed, instruction_to_nonce_error, upgrade_nonce_account,
+            withdraw_nonce_account, NonceError, SystemError,
         },
         system_program,
         transaction::{Transaction, TransactionError},
@@ -171,6 +171,19 @@ impl NonceSubCommands for App<'_, '_> {
                         .help("The amount to withdraw from the nonce account, in SOL"),
                 )
                 .arg(nonce_authority_arg())
+                .arg(memo_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("upgrade-nonce-account")
+                .about("One-time idempotent upgrade of legacy nonce versions \
+                        in order to bump them out of chain blockhash domain.")
+                .arg(
+                    pubkey!(Arg::with_name("nonce_account_pubkey")
+                        .index(1)
+                        .value_name("NONCE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Nonce account to upgrade. "),
+                )
                 .arg(memo_arg()),
         )
     }
@@ -322,6 +335,20 @@ pub fn parse_withdraw_from_nonce_account(
             lamports,
         },
         signers: signer_info.signers,
+    })
+}
+
+pub(crate) fn parse_upgrade_nonce_account(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let nonce_account = pubkey_of(matches, "nonce_account_pubkey").unwrap();
+    let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    Ok(CliCommandInfo {
+        command: CliCommand::UpgradeNonceAccount {
+            nonce_account,
+            memo,
+        },
+        signers: CliSigners::default(),
     })
 }
 
@@ -656,6 +683,39 @@ pub fn process_withdraw_from_nonce_account(
     }
 }
 
+pub(crate) fn process_upgrade_nonce_account(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    nonce_account: Pubkey,
+    memo: Option<&String>,
+) -> ProcessResult {
+    let latest_blockhash = rpc_client.get_latest_blockhash()?;
+    let ixs = vec![upgrade_nonce_account(nonce_account)].with_memo(memo);
+    let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
+    let mut tx = Transaction::new_unsigned(message);
+    tx.try_sign(&config.signers, latest_blockhash)?;
+    check_account_for_fee_with_commitment(
+        rpc_client,
+        &config.signers[0].pubkey(),
+        &tx.message,
+        config.commitment,
+    )?;
+    let merge_errors =
+        get_feature_is_active(rpc_client, &merge_nonce_error_into_system_error::id())?;
+    let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
+    if merge_errors {
+        log_instruction_custom_error::<SystemError>(result, config)
+    } else {
+        log_instruction_custom_error_ex::<NonceError, _>(result, config, |ix_error| {
+            if let InstructionError::Custom(_) = ix_error {
+                instruction_to_nonce_error(ix_error, merge_errors)
+            } else {
+                None
+            }
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -923,6 +983,23 @@ mod tests {
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&authority_keypair_file).unwrap().into()
                 ],
+            }
+        );
+
+        // Test UpgradeNonceAccount Subcommand.
+        let test_upgrade_nonce_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "upgrade-nonce-account",
+            &nonce_account_string,
+        ]);
+        assert_eq!(
+            parse_command(&test_upgrade_nonce_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::UpgradeNonceAccount {
+                    nonce_account: nonce_account_pubkey,
+                    memo: None,
+                },
+                signers: CliSigners::default(),
             }
         );
     }

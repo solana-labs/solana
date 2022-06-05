@@ -133,6 +133,15 @@ pub fn parse_system(
                 }),
             })
         }
+        SystemInstruction::UpgradeNonceAccount => {
+            check_num_system_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "upgradeNonce".to_string(),
+                info: json!({
+                    "nonceAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
         SystemInstruction::Allocate { space } => {
             check_num_system_accounts(&instruction.accounts, 1)?;
             Ok(ParsedInstructionEnum {

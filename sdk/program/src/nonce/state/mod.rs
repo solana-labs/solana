@@ -62,6 +62,29 @@ impl Versions {
             State::Initialized(ref data) => (recent_blockhash == &data.blockhash()).then(|| data),
         }
     }
+
+    // Upgrades legacy nonces out of chain blockhash domains.
+    pub fn upgrade(self) -> Option<Self> {
+        match self {
+            Self::Legacy(mut state) => {
+                match *state {
+                    // An Uninitialized legacy nonce cannot verify a durable
+                    // transaction. The nonce will be upgraded to Current
+                    // version when initialized. Therefore there is no need to
+                    // upgrade Uninitialized legacy nonces.
+                    State::Uninitialized => None,
+                    State::Initialized(ref mut data) => {
+                        data.durable_nonce = DurableNonce::from_blockhash(
+                            &data.blockhash(),
+                            true, // separate_domains
+                        );
+                        Some(Self::Current(state))
+                    }
+                }
+            }
+            Self::Current(_) => None,
+        }
+    }
 }
 
 impl From<Versions> for State {
@@ -175,5 +198,37 @@ mod tests {
                 Some(&data)
             );
         }
+    }
+
+    #[test]
+    fn test_nonce_versions_upgrade() {
+        // Uninitialized
+        let versions = Versions::Legacy(Box::new(State::Uninitialized));
+        assert_eq!(versions.upgrade(), None);
+        // Initialized
+        let blockhash = Hash::from([171; 32]);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        let data = Data {
+            authority: Pubkey::new_unique(),
+            durable_nonce,
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 2718,
+            },
+        };
+        let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
+        let durable_nonce =
+            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ true);
+        assert_ne!(data.durable_nonce, durable_nonce);
+        let data = Data {
+            durable_nonce,
+            ..data
+        };
+        let versions = versions.upgrade().unwrap();
+        assert_eq!(
+            versions,
+            Versions::Current(Box::new(State::Initialized(data)))
+        );
+        assert_eq!(versions.upgrade(), None);
     }
 }
