@@ -129,9 +129,8 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
     account: &T,
 ) -> Result<State, Error> {
     account_identity_ok(account)?;
-    StateMut::<Versions>::state(account)
-        .map_err(|_| Error::InvalidAccountData)
-        .map(|v| v.convert_to_current())
+    let versions = StateMut::<Versions>::state(account).map_err(|_| Error::InvalidAccountData)?;
+    Ok(State::from(versions))
 }
 
 /// Deserialize the state data of a durable transaction nonce account.
