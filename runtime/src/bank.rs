@@ -5265,8 +5265,6 @@ impl Bank {
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         for (pubkey, account, loaded_slot) in accounts.iter_mut() {
-            let old_rent_epoch = account.rent_epoch();
-
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
@@ -5285,7 +5283,7 @@ impl Bank {
                     bank_slot,
                     rent_collected_info.rent_amount,
                     *loaded_slot,
-                    old_rent_epoch,
+                    account.rent_epoch(),
                     account,
                 )
             {
