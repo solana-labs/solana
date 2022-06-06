@@ -425,6 +425,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 disk_entry
                             } else {
                                 // not on disk, so insert new thing
+                                self.stats().inc_insert(self.bin);
                                 new_value.into_account_map_entry(&self.storage)
                             };
                             assert!(new_value.dirty());
