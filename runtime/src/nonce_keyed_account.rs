@@ -104,8 +104,8 @@ pub fn withdraw_nonce_account(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    let mut from =
-        instruction_context.try_borrow_account(transaction_context, from_account_index)?;
+    let mut from = instruction_context
+        .try_borrow_instruction_account(transaction_context, from_account_index)?;
     let merge_nonce_error_into_system_error = invoke_context
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
@@ -180,7 +180,8 @@ pub fn withdraw_nonce_account(
     from.checked_sub_lamports(lamports)
         .map_err(|_| InstructionError::ArithmeticOverflow)?;
     drop(from);
-    let mut to = instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    let mut to = instruction_context
+        .try_borrow_instruction_account(transaction_context, to_account_index)?;
     to.checked_add_lamports(lamports)
         .map_err(|_| InstructionError::ArithmeticOverflow)?;
 
@@ -450,9 +451,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -621,9 +622,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -666,9 +667,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -698,9 +699,9 @@ mod test {
         let withdraw_lamports = nonce_account.get_lamports() + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -734,9 +735,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -760,9 +761,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -815,9 +816,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -847,9 +848,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -893,9 +894,9 @@ mod test {
         drop(nonce_account);
         drop(to_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -926,9 +927,9 @@ mod test {
         let withdraw_lamports = nonce_account.get_lamports() + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -959,9 +960,9 @@ mod test {
         let withdraw_lamports = 42 + 1;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,
@@ -992,9 +993,9 @@ mod test {
         let withdraw_lamports = u64::MAX - 54;
         drop(nonce_account);
         let result = withdraw_nonce_account(
-            1 + NONCE_ACCOUNT_INDEX,
+            NONCE_ACCOUNT_INDEX,
             withdraw_lamports,
-            1 + WITHDRAW_TO_ACCOUNT_INDEX,
+            WITHDRAW_TO_ACCOUNT_INDEX,
             &rent,
             &signers,
             &invoke_context,

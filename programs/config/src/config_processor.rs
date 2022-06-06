@@ -20,11 +20,9 @@ pub fn process_instruction(
     let data = instruction_context.get_instruction_data();
 
     let key_list: ConfigKeys = limited_deserialize(data)?;
-    let config_account_key =
-        transaction_context
-            .get_key_of_account_at_index(instruction_context.get_index_in_transaction(
-                instruction_context.get_number_of_program_accounts(),
-            )?)?;
+    let config_account_key = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_of_instruction_account_in_transaction(0)?,
+    )?;
     let config_account =
         instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     let is_config_account_signer = config_account.is_signer();
