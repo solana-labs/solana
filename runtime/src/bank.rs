@@ -5308,8 +5308,8 @@ impl Bank {
         }
 
         if !accounts_to_store.is_empty() {
-            // TODO: Do not call `store_accounts()` here.  Instead return `accounts_to_store` and
-            // have `collect_rent_in_partition()` perform all the stores.
+            // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
+            // and have `collect_rent_in_partition()` perform all the stores.
             let (_, measure) = measure!(self.store_accounts(&accounts_to_store));
             time_storing_accounts_us += measure.as_us();
         }
@@ -5390,8 +5390,6 @@ impl Bank {
                     CollectRentInPartitionInfo::reduce,
                 );
 
-            // bprumo TODO: is it safe to move this "release-the-hold" up here? No reason to hold the
-            // range while we write the results/metrics, right?
             self.rc
                 .accounts
                 .hold_range_in_memory(&subrange_full, false, thread_pool);
