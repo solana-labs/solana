@@ -136,7 +136,12 @@ impl SystemMonitorService {
         let thread_hdl = Builder::new()
             .name("system-monitor".to_string())
             .spawn(move || {
-                Self::run(exit, report_os_memory_stats, report_os_network_stats, report_os_cpu_stats);
+                Self::run(
+                    exit,
+                    report_os_memory_stats,
+                    report_os_network_stats,
+                    report_os_cpu_stats,
+                );
             })
             .unwrap();
 
@@ -351,19 +356,17 @@ impl SystemMonitorService {
         let load_avg = sys_info::loadavg()?;
         let num_threads = sys_info::proc_total()?;
 
-        Ok(
-            CpuInfo {
-                cpu_num,
-                cpu_freq_mhz,
-                load_avg,
-                num_threads,
-            }
-        )
+        Ok(CpuInfo {
+            cpu_num,
+            cpu_freq_mhz,
+            load_avg,
+            num_threads,
+        })
     }
 
     fn report_cpu_stats() {
         if let Ok(info) = Self::cpu_info() {
-            datapoint_warn!(
+            datapoint_info!(
                 "cpu-stats",
                 ("cpu_num", info.cpu_num as i64, i64),
                 ("cpu0_freq_mhz", info.cpu_freq_mhz as i64, i64),
@@ -375,7 +378,12 @@ impl SystemMonitorService {
         }
     }
 
-    pub fn run(exit: Arc<AtomicBool>, report_os_memory_stats: bool, report_os_network_stats: bool, report_os_cpu_stats: bool) {
+    pub fn run(
+        exit: Arc<AtomicBool>,
+        report_os_memory_stats: bool,
+        report_os_network_stats: bool,
+        report_os_cpu_stats: bool,
+    ) {
         let mut udp_stats = None;
         let network_limits_timer = AtomicInterval::default();
         let udp_timer = AtomicInterval::default();
@@ -397,8 +405,7 @@ impl SystemMonitorService {
             if report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
                 Self::report_mem_stats();
             }
-            //if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
-            if cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
+            if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                 Self::report_cpu_stats();
             }
             sleep(SLEEP_INTERVAL);
@@ -443,11 +450,5 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         assert!(SystemMonitorService::calc_percent(99, 100) < 100.0);
         let one_tb_as_kb = (1u64 << 40) >> 10;
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
-    }
-
-    #[test]
-    fn test_cpu_info() {
-        solana_logger::setup();
-        SystemMonitorService::report_cpu_stats();
     }
 }
