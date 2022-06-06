@@ -1721,7 +1721,7 @@ mod tests {
             batches.iter_mut().enumerate().for_each(|(i, b)| {
                 b.iter_mut().enumerate().for_each(|(j, p)| {
                     if !p.meta.discard() {
-                        debug!("{} {}", i, j)
+                        trace!("{} {}", i, j)
                     }
                 })
             });
