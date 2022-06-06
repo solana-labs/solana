@@ -12,7 +12,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
     },
-    sys_info::LoadAvg,
+    sys_info::{Error, LoadAvg},
 };
 
 const MS_PER_S: u64 = 1_000;
@@ -365,12 +365,12 @@ impl SystemMonitorService {
         if let Ok(info) = Self::cpu_info() {
             datapoint_warn!(
                 "cpu-stats",
-                ("cpu_num", info.cpu_num, u32),
-                ("cpu0_freq_mhz", info.cpu_freq_mhz, u64),
+                ("cpu_num", info.cpu_num as i64, i64),
+                ("cpu0_freq_mhz", info.cpu_freq_mhz as i64, i64),
                 ("average_load_one_minute", info.load_avg.one, f64),
                 ("average_load_five_minutes", info.load_avg.five, f64),
                 ("average_load_fifteen_minutes", info.load_avg.fifteen, f64),
-                ("total_num_threads", info.num_threads, u64),
+                ("total_num_threads", info.num_threads as i64, i64),
             )
         }
     }
@@ -443,5 +443,9 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         assert!(SystemMonitorService::calc_percent(99, 100) < 100.0);
         let one_tb_as_kb = (1u64 << 40) >> 10;
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
+    }
+
+    fn test_cpu_info() {
+        report_cpu_stats();
     }
 }
