@@ -1382,6 +1382,35 @@ fn main() {
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
+    let target_rocksdb_shred_compaction_arg = Arg::with_name("target_rocksdb_shred_compaction")
+        .hidden(true)
+        .long("target-rocksdb-shred-compaction")
+        .value_name("TARGET_ROCKSDB_COMPACTION_STYLE")
+        .takes_value(true)
+        .possible_values(&["level", "fifo"])
+        .default_value("level")
+        .help(
+            "EXPERIMENTAL: How RocksDB compacts shreds in the target DB. \
+             This option allows you to copy an existing ledger into a new one with a \
+             different shred compaction style. \
+                 Possible values are: \
+                 'level': stores shreds using RocksDB's default (level) compaction. \
+                 'fifo': stores shreds under RocksDB's FIFO compaction. \
+                     This option is more efficient on disk-write-bytes of the ledger store.",
+        );
+    let target_fifo_shred_storage_size_arg =
+        Arg::with_name("target_rocksdb_fifo_shred_storage_size")
+            .hidden(true)
+            .long("target-rocksdb-fifo-shred-storage-size")
+            .value_name("TARGET_SHRED_STORAGE_SIZE_BYTES")
+            .takes_value(true)
+            .validator(is_parsable::<u64>)
+            .default_value(default_rocksdb_fifo_shred_storage_size)
+            .help(
+                "The shred storage size in bytes in the target DB. \
+                       The suggested value is 50% of your ledger storage size in bytes.",
+            );
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -1483,6 +1512,8 @@ fn main() {
             .about("Copy the ledger")
             .arg(&starting_slot_arg)
             .arg(&ending_slot_arg)
+            .arg(&target_rocksdb_shred_compaction_arg)
+            .arg(&target_fifo_shred_storage_size_arg)
             .arg(
                 Arg::with_name("target_db")
                     .long("target-db")
@@ -2166,6 +2197,11 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
+                let target_shred_storage_type = shred_storage_type_from_matches(
+                    arg_matches,
+                    "target_rocksdb_shred_compaction",
+                    "target_rocksdb_fifo_shred_storage_size",
+                );
                 let source = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
@@ -2177,10 +2213,8 @@ fn main() {
                     &target_db,
                     AccessType::Primary,
                     None,
-                    &shred_storage_type,
-                    force_update_to_open,
+                    &target_shred_storage_type,
                 );
-
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
