@@ -445,6 +445,7 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
     }
 
+    #[test]
     fn test_cpu_info() {
         solana_logger::setup();
         SystemMonitorService::report_cpu_stats();
