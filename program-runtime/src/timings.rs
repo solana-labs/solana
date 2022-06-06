@@ -50,6 +50,7 @@ pub enum ExecuteTimingType {
     NumExecuteBatches,
     CollectLogsUs,
     TotalBatchesLen,
+    UpdateTransactionStatuses,
 }
 
 pub struct Metrics([u64; ExecuteTimingType::ITEM_COUNT]);
@@ -141,6 +142,14 @@ eager_macro_rules! { $eager_1
 
                     .metrics
                     .index(ExecuteTimingType::NumExecuteBatches),
+                i64
+            ),
+            (
+                "update_transaction_statuses",
+                *$self
+
+                    .metrics
+                    .index(ExecuteTimingType::UpdateTransactionStatuses),
                 i64
             ),
             (
