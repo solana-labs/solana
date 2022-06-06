@@ -15,8 +15,8 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, Shred, ShredData, ShredId, ShredType,
-            Shredder,
+            self, max_ticks_per_n_shreds, ErasureSetId, ProcessShredsStats, Shred, ShredData,
+            ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
     },
@@ -1696,6 +1696,7 @@ impl Blockstore {
                     true,        // is_last_in_slot
                     start_index, // next_shred_index
                     start_index, // next_code_index
+                    &mut ProcessShredsStats::default(),
                 );
                 all_shreds.append(&mut data_shreds);
                 all_shreds.append(&mut coding_shreds);
@@ -1721,6 +1722,7 @@ impl Blockstore {
                 is_full_slot,
                 0, // next_shred_index
                 0, // next_code_index
+                &mut ProcessShredsStats::default(),
             );
             all_shreds.append(&mut data_shreds);
             all_shreds.append(&mut coding_shreds);
@@ -3766,15 +3768,14 @@ pub fn create_new_ledger(
     let version = solana_sdk::shred_version::version_from_hash(&last_hash);
 
     let shredder = Shredder::new(0, 0, 0, version).unwrap();
-    let shreds = shredder
-        .entries_to_shreds(
-            &Keypair::new(),
-            &entries,
-            true, // is_last_in_slot
-            0,    // next_shred_index
-            0,    // next_code_index
-        )
-        .0;
+    let (shreds, _) = shredder.entries_to_shreds(
+        &Keypair::new(),
+        &entries,
+        true, // is_last_in_slot
+        0,    // next_shred_index
+        0,    // next_code_index
+        &mut ProcessShredsStats::default(),
+    );
     assert!(shreds.last().unwrap().last_in_slot());
 
     blockstore.insert_shreds(shreds, None, false)?;
@@ -4030,6 +4031,7 @@ pub fn entries_to_test_shreds(
             is_full_slot,
             0, // next_shred_index,
             0, // next_code_index
+            &mut ProcessShredsStats::default(),
         )
         .0
 }
@@ -8440,6 +8442,7 @@ pub mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            &mut ProcessShredsStats::default(),
         );
 
         let genesis_config = create_genesis_config(2).genesis_config;
@@ -8500,6 +8503,7 @@ pub mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index,
+            &mut ProcessShredsStats::default(),
         );
         let (duplicate_shreds, _) = shredder.entries_to_shreds(
             &leader_keypair,
@@ -8507,6 +8511,7 @@ pub mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            &mut ProcessShredsStats::default(),
         );
         let shred = shreds[0].clone();
         let duplicate_shred = duplicate_shreds[0].clone();
