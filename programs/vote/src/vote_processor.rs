@@ -101,6 +101,7 @@ pub fn process_instruction(
                     &clock,
                     vote_state_update,
                     &signers,
+                    &invoke_context.feature_set,
                 )
             } else {
                 Err(InstructionError::InvalidInstructionData)
