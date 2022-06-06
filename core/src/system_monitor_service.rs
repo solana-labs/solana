@@ -446,6 +446,7 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
     }
 
     fn test_cpu_info() {
-        report_cpu_stats();
+        solana_logger::setup();
+        SystemMonitorService::report_cpu_stats();
     }
 }
