@@ -31,7 +31,7 @@ use {
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_runtime::{
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
@@ -929,11 +929,12 @@ fn minimize_bank_for_snapshot(
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) {
-    let mut transaction_accounts_measure = Measure::start("get transaction accounts");
-    let mut minimized_account_set = blockstore
-        .get_accounts_used_in_range(snapshot_slot, ending_slot)
-        .unwrap();
-    transaction_accounts_measure.stop();
+    let (mut minimized_account_set, transaction_accounts_measure) = measure!(
+        blockstore
+            .get_accounts_used_in_range(snapshot_slot, ending_slot)
+            .unwrap(),
+        "get transaction accounts"
+    );
     let total_accounts_len = minimized_account_set.len();
     info!("Added {total_accounts_len} accounts from transactions. {transaction_accounts_measure}");
 
