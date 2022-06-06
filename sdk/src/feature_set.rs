@@ -425,7 +425,7 @@ pub mod enable_durable_nonce {
 }
 
 pub mod vote_state_update_credit_per_dequeue {
-    solana_sdk::declare_id!("CPFKGKaoDHQFwHjj5pd2sCPXxksSWJFgUDSda5LRJFck");
+    solana_sdk::declare_id!("CveezY6FDLVBToHDcvJRmtMouqzsmj4UXYh5ths5G5Uv");
 }
 
 lazy_static! {
