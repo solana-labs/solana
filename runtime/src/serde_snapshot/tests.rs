@@ -5,6 +5,7 @@ use {
         accounts::{create_test_accounts, Accounts},
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, StatusCacheRc},
+        genesis_utils::activate_feature,
         hardened_unpack::UnpackedAppendVecMap,
     },
     bincode::serialize_into,
@@ -12,6 +13,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
+        feature_set::disable_fee_calculator,
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -297,6 +299,64 @@ fn test_accounts_serialize_newer() {
 #[test]
 fn test_bank_serialize_newer() {
     test_bank_serialize_style(SerdeStyle::Newer)
+}
+
+#[test]
+fn test_blank_extra_fields() {
+    solana_logger::setup();
+    let (mut genesis_config, _) = create_genesis_config(500);
+    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    bank0.squash();
+    let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+    // Set extra fields
+    bank.fee_rate_governor.lamports_per_signature = 7000;
+
+    // Serialize, but don't serialize the extra fields
+    let snapshot_storages = bank.get_snapshot_storages(None);
+    let mut buf = vec![];
+    let mut writer = Cursor::new(&mut buf);
+    crate::serde_snapshot::bank_to_stream_no_extra_fields(
+        SerdeStyle::Newer,
+        &mut std::io::BufWriter::new(&mut writer),
+        &bank,
+        &snapshot_storages,
+    )
+    .unwrap();
+
+    // Deserialize
+    let rdr = Cursor::new(&buf[..]);
+    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+    let copied_accounts = TempDir::new().unwrap();
+    let unpacked_append_vec_map =
+        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+    let dbank = crate::serde_snapshot::bank_from_streams(
+        SerdeStyle::Newer,
+        &mut snapshot_streams,
+        &dbank_paths,
+        unpacked_append_vec_map,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    // Defaults to 0
+    assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
