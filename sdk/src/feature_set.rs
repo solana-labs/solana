@@ -375,6 +375,10 @@ pub mod enable_durable_nonce {
     solana_sdk::declare_id!("4EJQtF2pkRyawwcTVfQutzq4Sa5hRhibF6QAK1QXhtEX");
 }
 
+pub mod executables_incur_cpi_data_cost {
+    solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -462,6 +466,7 @@ lazy_static! {
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
+        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
