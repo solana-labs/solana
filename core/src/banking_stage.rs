@@ -2713,7 +2713,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -2935,7 +2935,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3070,7 +3070,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3143,7 +3143,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
@@ -3293,7 +3293,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3493,7 +3493,7 @@ mod tests {
         let recorder = poh_recorder.recorder();
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.lock().unwrap().set_bank(&bank, false);
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3700,7 +3700,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3861,7 +3861,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -4018,7 +4018,7 @@ mod tests {
             // Processes one packet per iteration of the loop
             let num_packets_to_process_per_iteration = num_conflicting_transactions;
             for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
-                poh_recorder.lock().unwrap().set_bank(&bank);
+                poh_recorder.lock().unwrap().set_bank(&bank, false);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
                     max_tx_processing_ns,
@@ -4067,7 +4067,7 @@ mod tests {
             // each iteration of this loop will process one element of the batch per iteration of the
             // loop.
             let interrupted_iteration = 1;
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
