@@ -1,7 +1,7 @@
 use {
     crate::{
         client_error::{ClientError, Result as ClientResult},
-        connection_cache::{get_connection, ConnectionCache},
+        connection_cache::ConnectionCache,
         pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
         rpc_client::RpcClient,
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
@@ -87,7 +87,7 @@ pub struct TpuClient {
     leader_tpu_service: LeaderTpuService,
     exit: Arc<AtomicBool>,
     rpc_client: Arc<RpcClient>,
-    connection_cache: Arc<RwLock<ConnectionCache>>,
+    connection_cache: Arc<ConnectionCache>,
 }
 
 impl TpuClient {
@@ -121,7 +121,7 @@ impl TpuClient {
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots)
         {
-            let conn = get_connection(&self.connection_cache, &tpu_address);
+            let conn = self.connection_cache.get_connection(&tpu_address);
             let result = conn.send_wire_transaction_async(wire_transaction.clone());
             if let Err(err) = result {
                 last_error = Some(err);
@@ -146,8 +146,7 @@ impl TpuClient {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let connection_cache =
-            Arc::new(RwLock::new(ConnectionCache::new(/* use_quic */ false)));
+        let connection_cache = Arc::new(ConnectionCache::new(/* use_quic */ false));
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache)
     }
 
@@ -156,7 +155,7 @@ impl TpuClient {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let leader_tpu_service =

@@ -66,7 +66,7 @@ use {
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
-        sync::{Arc, RwLock},
+        sync::Arc,
         time::{Duration, Instant},
     },
 };
@@ -598,7 +598,7 @@ fn main() {
             exit(1);
         });
 
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(cmd_params.tpu_use_quic)));
+        let connection_cache = Arc::new(ConnectionCache::new(cmd_params.tpu_use_quic));
         let (client, num_clients) =
             get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
         if validators.len() < num_clients {

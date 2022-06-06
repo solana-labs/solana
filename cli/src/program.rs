@@ -55,7 +55,7 @@ use {
         mem::size_of,
         path::PathBuf,
         str::FromStr,
-        sync::{Arc, RwLock},
+        sync::Arc,
     },
 };
 
@@ -2224,8 +2224,7 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let connection_cache =
-                Arc::new(RwLock::new(ConnectionCache::new(/* use_quic */ false)));
+            let connection_cache = Arc::new(ConnectionCache::new(/* use_quic */ false));
             let tpu_client = TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
                 &config.websocket_url,

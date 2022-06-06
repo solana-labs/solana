@@ -133,7 +133,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -230,7 +230,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if connection_cache.read().unwrap().get_use_quic() {
+        let warm_quic_cache_service = if connection_cache.get_use_quic() {
             Some(WarmQuicCacheService::new(
                 connection_cache.clone(),
                 cluster_info.clone(),
@@ -454,7 +454,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
-            &Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC))),
+            &Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

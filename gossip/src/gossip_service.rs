@@ -198,7 +198,7 @@ pub fn discover(
 pub fn get_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
-    connection_cache: Arc<RwLock<ConnectionCache>>,
+    connection_cache: Arc<ConnectionCache>,
 ) -> ThinClient {
     let nodes: Vec<_> = nodes
         .iter()
@@ -212,7 +212,7 @@ pub fn get_client(
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
-    connection_cache: Arc<RwLock<ConnectionCache>>,
+    connection_cache: Arc<ConnectionCache>,
 ) -> (ThinClient, usize) {
     let addrs: Vec<_> = nodes
         .iter()

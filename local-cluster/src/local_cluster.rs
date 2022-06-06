@@ -109,7 +109,7 @@ pub struct LocalCluster {
     pub entry_point_info: ContactInfo,
     pub validators: HashMap<Pubkey, ClusterValidatorInfo>,
     pub genesis_config: GenesisConfig,
-    pub connection_cache: Arc<RwLock<ConnectionCache>>,
+    pub connection_cache: Arc<ConnectionCache>,
 }
 
 impl LocalCluster {
@@ -275,7 +275,7 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
-            connection_cache: Arc::new(RwLock::new(ConnectionCache::new(config.tpu_use_quic))),
+            connection_cache: Arc::new(ConnectionCache::new(config.tpu_use_quic)),
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis

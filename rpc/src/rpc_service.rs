@@ -352,7 +352,7 @@ impl JsonRpcService {
         send_transaction_service_config: send_transaction_service::Config,
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
@@ -613,7 +613,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
+        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),

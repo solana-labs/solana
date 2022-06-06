@@ -2,10 +2,7 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{
-        connection_cache::{get_connection, ConnectionCache},
-        tpu_connection::TpuConnection,
-    },
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -334,7 +331,7 @@ impl SendTransactionService {
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
     ) -> Self {
@@ -358,7 +355,7 @@ impl SendTransactionService {
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         config: Config,
     ) -> Self {
         let stats_report = Arc::new(SendTransactionServiceStatsReport::default());
@@ -401,7 +398,7 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         stats_report: Arc<SendTransactionServiceStatsReport>,
@@ -504,7 +501,7 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         stats_report: Arc<SendTransactionServiceStatsReport>,
@@ -559,7 +556,7 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: Option<&T>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) {
@@ -583,7 +580,7 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info_provider: &Arc<Mutex<CurrentLeaderInfo<T>>>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) -> ProcessTransactionsResult {
@@ -705,26 +702,26 @@ impl SendTransactionService {
     fn send_transaction(
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Result<(), TransportError> {
-        let conn = get_connection(connection_cache, tpu_address);
+        let conn = connection_cache.get_connection(tpu_address);
         conn.send_wire_transaction_async(wire_transaction.to_vec())
     }
 
     fn send_transactions_with_metrics(
         tpu_address: &SocketAddr,
         wire_transactions: &[&[u8]],
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Result<(), TransportError> {
         let wire_transactions = wire_transactions.iter().map(|t| t.to_vec()).collect();
-        let conn = get_connection(connection_cache, tpu_address);
+        let conn = connection_cache.get_connection(tpu_address);
         conn.send_wire_transaction_batch_async(wire_transactions)
     }
 
     fn send_transactions(
         tpu_address: &SocketAddr,
         wire_transactions: &[&[u8]],
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         stats: &SendTransactionServiceStats,
     ) {
         let mut measure = Measure::start("send-us");
@@ -797,7 +794,7 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = unbounded();
 
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
+        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
         let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -865,7 +862,7 @@ mod test {
                 Some(Instant::now()),
             ),
         );
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
+        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
@@ -1138,7 +1135,7 @@ mod test {
         );
         let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(None)));
         let stats = SendTransactionServiceStats::default();
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
+        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,

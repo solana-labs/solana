@@ -352,7 +352,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            Arc::new(RwLock::new(ConnectionCache::new(tpu_use_quic))),
+            Arc::new(ConnectionCache::new(tpu_use_quic)),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

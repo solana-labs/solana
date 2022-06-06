@@ -30,7 +30,7 @@ async fn start_abortable_tcp_server(
     tpu_addr: SocketAddr,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-    connection_cache: Arc<RwLock<ConnectionCache>>,
+    connection_cache: Arc<ConnectionCache>,
     exit: Arc<AtomicBool>,
 ) {
     let server = start_tcp_server(
@@ -61,7 +61,7 @@ impl RpcBanksService {
         tpu_addr: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
         exit: Arc<AtomicBool>,
     ) {
         let server = start_abortable_tcp_server(
@@ -80,7 +80,7 @@ impl RpcBanksService {
         tpu_addr: SocketAddr,
         bank_forks: &Arc<RwLock<BankForks>>,
         block_commitment_cache: &Arc<RwLock<BlockCommitmentCache>>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let bank_forks = bank_forks.clone();
@@ -120,7 +120,7 @@ mod tests {
     fn test_rpc_banks_server_exit() {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)));
+        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
         let exit = Arc::new(AtomicBool::new(false));
         let addr = "127.0.0.1:0".parse().unwrap();
         let service = RpcBanksService::new(

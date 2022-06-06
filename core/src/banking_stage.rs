@@ -18,7 +18,7 @@ use {
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_client::{
-        connection_cache::{get_connection, ConnectionCache},
+        connection_cache::ConnectionCache,
         tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
     },
     solana_entry::entry::hash_transactions,
@@ -410,7 +410,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -437,7 +437,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -576,7 +576,7 @@ impl BankingStage {
                 banking_stage_stats
                     .forwarded_transaction_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                get_connection(connection_cache, &addr)
+                connection_cache.get_connection(&addr)
             };
             let res = conn.send_wire_transaction_batch_async(packet_vec);
 
@@ -878,7 +878,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        connection_cache: &RwLock<ConnectionCache>,
+        connection_cache: &ConnectionCache,
     ) {
         let (decision, make_decision_time) = measure!(
             {
@@ -1043,7 +1043,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         data_budget: &DataBudget,
         cost_model: Arc<RwLock<CostModel>>,
-        connection_cache: Arc<RwLock<ConnectionCache>>,
+        connection_cache: Arc<ConnectionCache>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
@@ -2271,7 +2271,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                Arc::new(RwLock::new(ConnectionCache::default())),
+                Arc::new(ConnectionCache::default()),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -2321,7 +2321,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                Arc::new(RwLock::new(ConnectionCache::default())),
+                Arc::new(ConnectionCache::default()),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -2396,7 +2396,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
-                Arc::new(RwLock::new(ConnectionCache::default())),
+                Arc::new(ConnectionCache::default()),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2548,7 +2548,7 @@ mod tests {
                     None,
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
-                    Arc::new(RwLock::new(ConnectionCache::default())),
+                    Arc::new(ConnectionCache::default()),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -4076,7 +4076,7 @@ mod tests {
                 ("budget-available", DataBudget::default(), 1),
             ];
 
-            let connection_cache = RwLock::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+            let connection_cache = ConnectionCache::new(DEFAULT_TPU_USE_QUIC);
             for (name, data_budget, expected_num_forwarded) in test_cases {
                 let mut unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(
@@ -4166,7 +4166,7 @@ mod tests {
             let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
             let cluster_info = new_test_cluster_info(local_node.info);
             let recv_socket = &local_node.sockets.tpu_forwards[0];
-            let connection_cache = RwLock::new(ConnectionCache::default());
+            let connection_cache = ConnectionCache::default();
 
             let test_cases = vec![
                 ("not-forward", ForwardOption::NotForward, true, vec![], 2),

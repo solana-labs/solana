@@ -19,14 +19,7 @@ use {
         commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
-    std::{
-        collections::HashMap,
-        fs::File,
-        io::prelude::*,
-        path::Path,
-        process::exit,
-        sync::{Arc, RwLock},
-    },
+    std::{collections::HashMap, fs::File, io::prelude::*, path::Path, process::exit, sync::Arc},
 };
 
 /// Number of signatures for all transactions in ~1 week at ~100K TPS
@@ -109,7 +102,7 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-            let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(*use_quic)));
+            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
             let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
                     eprintln!("RPC address should parse as socketaddr {:?}", e);
@@ -179,7 +172,7 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(*use_quic)));
+            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
             let client = Arc::new(
                 TpuClient::new_with_connection_cache(
                     rpc_client,

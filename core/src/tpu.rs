@@ -97,7 +97,7 @@ impl Tpu {
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
-        connection_cache: &Arc<RwLock<ConnectionCache>>,
+        connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
     ) -> Self {
         let TpuSockets {

@@ -50,7 +50,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     nodes: usize,
     ignore_nodes: HashSet<Pubkey, S>,
     socket_addr_space: SocketAddrSpace,
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
 ) {
     let cluster_nodes =
         discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
@@ -93,7 +93,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
 pub fn verify_balances<S: ::std::hash::BuildHasher>(
     expected_balances: HashMap<Pubkey, u64, S>,
     node: &ContactInfo,
-    connection_cache: Arc<RwLock<ConnectionCache>>,
+    connection_cache: Arc<ConnectionCache>,
 ) {
     let (rpc, tpu) = node.client_facing_addr();
     let client = ThinClient::new(rpc, tpu, connection_cache);
@@ -108,7 +108,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
 pub fn send_many_transactions(
     node: &ContactInfo,
     funding_keypair: &Keypair,
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
@@ -196,7 +196,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     entry_point_info: &ContactInfo,
     entry_point_validator_exit: &Arc<RwLock<Exit>>,
     funding_keypair: &Keypair,
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
     nodes: usize,
     slot_millis: u64,
     socket_addr_space: SocketAddrSpace,
@@ -305,7 +305,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
 pub fn check_for_new_roots(
     num_new_roots: usize,
     contact_infos: &[ContactInfo],
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
     test_name: &str,
 ) {
     let mut roots = vec![HashSet::new(); contact_infos.len()];
@@ -342,7 +342,7 @@ pub fn check_for_new_roots(
 pub fn check_no_new_roots(
     num_slots_to_wait: usize,
     contact_infos: &[ContactInfo],
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
     test_name: &str,
 ) {
     assert!(!contact_infos.is_empty());
@@ -407,7 +407,7 @@ pub fn check_no_new_roots(
 fn poll_all_nodes_for_signature(
     entry_point_info: &ContactInfo,
     cluster_nodes: &[ContactInfo],
-    connection_cache: &Arc<RwLock<ConnectionCache>>,
+    connection_cache: &Arc<ConnectionCache>,
     sig: &Signature,
     confs: usize,
 ) -> Result<(), TransportError> {

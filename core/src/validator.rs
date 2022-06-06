@@ -745,7 +745,7 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        let connection_cache = Arc::new(RwLock::new(ConnectionCache::new(use_quic)));
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
