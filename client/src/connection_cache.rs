@@ -1,8 +1,9 @@
 use {
     crate::{
-        quic_client::QuicTpuConnection, tpu_connection::ClientStats, udp_client::UdpTpuConnection,
+        quic_client::QuicTpuConnection,
+        tpu_connection::{ClientStats, Connection},
+        udp_client::UdpTpuConnection,
     },
-    enum_dispatch::enum_dispatch,
     indexmap::map::IndexMap,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -19,6 +20,7 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
+<<<<<<< HEAD
 #[enum_dispatch(TpuConnection)]
 pub enum Connection {
     UdpTpuConnection,
@@ -29,6 +31,8 @@ pub enum Connection {
 /// QUIC connections.
 pub const DEFAULT_TPU_USE_QUIC: bool = false;
 
+=======
+>>>>>>> 67a11ce4b (client: Add nonblocking udp client and connection trait (#25775))
 #[derive(Default)]
 pub struct ConnectionCacheStats {
     cache_hits: AtomicU64,
