@@ -7,7 +7,7 @@ use {
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::sendmmsg::batch_send,
     std::{
-        net::{SocketAddr, UdpSocket},
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::Arc,
     },
 };
@@ -19,7 +19,9 @@ pub struct UdpTpuConnection {
 
 impl UdpTpuConnection {
     pub fn new_from_addr(tpu_addr: SocketAddr) -> Self {
-        let socket = solana_net_utils::bind_client_socket().unwrap();
+        let socket =
+            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .unwrap();
         Self {
             socket,
             addr: tpu_addr,

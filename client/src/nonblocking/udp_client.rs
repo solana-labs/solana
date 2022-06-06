@@ -2,9 +2,12 @@
 //! an interface for sending transactions
 
 use {
-    crate::nonblocking::tpu_connection::TpuConnection, async_trait::async_trait,
-    core::iter::repeat, solana_sdk::transport::Result as TransportResult,
-    solana_streamer::nonblocking::sendmmsg::batch_send, std::net::SocketAddr,
+    crate::nonblocking::tpu_connection::TpuConnection,
+    async_trait::async_trait,
+    core::iter::repeat,
+    solana_sdk::transport::Result as TransportResult,
+    solana_streamer::nonblocking::sendmmsg::batch_send,
+    std::net::{IpAddr, Ipv4Addr, SocketAddr},
     tokio::net::UdpSocket,
 };
 
@@ -15,7 +18,9 @@ pub struct UdpTpuConnection {
 
 impl UdpTpuConnection {
     pub fn new(tpu_addr: SocketAddr) -> Self {
-        let socket = solana_net_utils::bind_client_socket().unwrap();
+        let socket =
+            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .unwrap();
         socket.set_nonblocking(true).unwrap();
         Self::new_with_std_socket(tpu_addr, socket)
     }
@@ -61,6 +66,7 @@ mod tests {
         crate::nonblocking::{tpu_connection::TpuConnection, udp_client::UdpTpuConnection},
         solana_sdk::packet::{Packet, PACKET_DATA_SIZE},
         solana_streamer::nonblocking::recvmmsg::recv_mmsg,
+        std::net::{IpAddr, Ipv4Addr},
         tokio::net::UdpSocket,
     };
 
@@ -97,7 +103,9 @@ mod tests {
     async fn test_send_from_socket() {
         let addr_str = "0.0.0.0:50101";
         let addr = addr_str.parse().unwrap();
-        let socket = solana_net_utils::bind_client_socket().unwrap();
+        let socket =
+            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .unwrap();
         socket.set_nonblocking(true).unwrap();
         let connection = UdpTpuConnection::new_with_std_socket(addr, socket);
         let reader = UdpSocket::bind(addr_str).await.expect("bind");
