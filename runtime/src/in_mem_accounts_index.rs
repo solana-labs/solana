@@ -282,10 +282,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // if someone else holds the arc,
                     //  then they think the item is still in the index and can make modifications.
                     // We have to have a write lock to the map here, which means nobody else can get
-                    //  the arc, but someone may already have retreived a clone of it.
+                    //  the arc, but someone may already have retrieved a clone of it.
                     // account index in_mem flushing is one such possibility
                     self.delete_disk_key(occupied.key());
-                    self.stats().insert_or_delete_mem(false, self.bin);
                     occupied.remove();
                 }
                 result
