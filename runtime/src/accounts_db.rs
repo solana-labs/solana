@@ -64,7 +64,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -3270,9 +3270,10 @@ impl AccountsDb {
                 continue;
             }
             if minimized_slot_set.contains(&slot) {
-                let mut filter_storages_measure = Measure::start("filter storages");
-                self.filter_storages(storages, minimized_account_set, &mut dead_storages);
-                filter_storages_measure.stop();
+                let (_, filter_storages_measure) = measure!(
+                    self.filter_storages(storages, minimized_account_set, &mut dead_storages),
+                    "filter storages"
+                );
                 filter_storages_us += filter_storages_measure.as_us();
             } else {
                 dead_slots.push(slot);
@@ -3287,32 +3288,38 @@ impl AccountsDb {
             }
         }
 
-        let mut purge_slots_measure = Measure::start("purge slots");
-        self.purge_slots_from_cache_and_store(
-            dead_slots.iter(),
-            &self.external_purge_slots_stats,
-            true,
+        let (_, purge_slots_measure) = measure!(
+            self.purge_slots_from_cache_and_store(
+                dead_slots.iter(),
+                &self.external_purge_slots_stats,
+                true,
+            ),
+            "purge slots"
         );
-        purge_slots_measure.stop();
         info!("{purge_slots_measure}");
 
-        let mut drop_or_recycle_stores_measure = Measure::start("drop or recycle stores");
-        self.drop_or_recycle_stores(dead_storages);
-        drop_or_recycle_stores_measure.stop();
+        let (_, drop_or_recycle_stores_measure) = measure!(
+            self.drop_or_recycle_stores(dead_storages),
+            "drop or recycle stores"
+        );
         info!("{drop_or_recycle_stores_measure}");
     }
 
     fn get_minimized_slot_set(&self, minimized_account_set: &DashSet<Pubkey>) -> DashSet<Slot> {
-        let mut minimized_slot_set_measure = Measure::start("generate minimized slot set");
-        let minimized_slot_set = DashSet::new();
-        minimized_account_set.par_iter().for_each(|pubkey| {
-            if let Some(read_entry) = self.accounts_index.get_account_read_entry(&pubkey) {
-                read_entry.slot_list().iter().for_each(|(slot, _)| {
-                    minimized_slot_set.insert(*slot);
+        let (minimized_slot_set, minimized_slot_set_measure) = measure!(
+            {
+                let minimized_slot_set = DashSet::new();
+                minimized_account_set.par_iter().for_each(|pubkey| {
+                    if let Some(read_entry) = self.accounts_index.get_account_read_entry(&pubkey) {
+                        read_entry.slot_list().iter().for_each(|(slot, _)| {
+                            minimized_slot_set.insert(*slot);
+                        });
+                    }
                 });
-            }
-        });
-        minimized_slot_set_measure.stop();
+                minimized_slot_set
+            },
+            "generate minimized slot set"
+        );
         info!("{minimized_slot_set_measure}");
 
         minimized_slot_set
