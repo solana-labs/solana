@@ -196,6 +196,33 @@ impl<'a> TypeContext<'a> for Context {
     {
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
+        let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
+        (
+            SerializableVersionedBank::from(fields),
+            SerializableAccountsDb::<'a, Self> {
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
+                slot: serializable_bank.bank.rc.slot,
+                account_storage_entries: serializable_bank.snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+            // Additional fields, we manually store the lamps per signature here so that
+            // we can grab it on restart.
+            // TODO: if we do a snapshot version bump, consider moving this out.
+            lamports_per_signature,
+        )
+            .serialize(serializer)
+    }
+
+    #[cfg(test)]
+    fn serialize_bank_and_storage_without_extra_fields<S: serde::ser::Serializer>(
+        serializer: S,
+        serializable_bank: &SerializableBankAndStorageNoExtra<'a, Self>,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where
+        Self: std::marker::Sized,
+    {
+        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
+        let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
@@ -279,8 +306,18 @@ impl<'a> TypeContext<'a> for Context {
     where
         R: Read,
     {
-        let bank_fields = deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
+        let mut bank_fields: BankFieldsToDeserialize =
+            deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
         let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
+        // Process extra fields
+        let lamports_per_signature: u64 = match deserialize_from(stream) {
+            Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(0),
+            Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(0),
+            result => result,
+        }?;
+        bank_fields.fee_rate_governor = bank_fields
+            .fee_rate_governor
+            .clone_with_lamports_per_signature(lamports_per_signature);
         Ok((bank_fields, accounts_db_fields))
     }
 
@@ -311,6 +348,7 @@ impl<'a> TypeContext<'a> for Context {
         let rhs = bank_fields;
         let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
         let hard_forks = RwLock::new(rhs.hard_forks.clone());
+        let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
             ancestors: &rhs.ancestors,
@@ -346,6 +384,9 @@ impl<'a> TypeContext<'a> for Context {
             is_delta: rhs.is_delta,
         };
 
-        bincode::serialize_into(stream_writer, &(bank, accounts_db_fields))
+        bincode::serialize_into(
+            stream_writer,
+            &(bank, accounts_db_fields, lamports_per_signature),
+        )
     }
 }
