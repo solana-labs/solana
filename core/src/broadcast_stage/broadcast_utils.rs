@@ -2,7 +2,6 @@ use {
     crate::result::Result,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shred,
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
@@ -25,9 +24,6 @@ pub struct UnfinishedSlotInfo {
     pub(crate) next_code_index: u32,
     pub slot: Slot,
     pub parent: Slot,
-    // Data shreds buffered to make a batch of size
-    // MAX_DATA_SHREDS_PER_FEC_BLOCK.
-    pub(crate) data_shreds_buffer: Vec<Shred>,
 }
 
 /// This parameter tunes how many entries are received in one iteration of recv loop
