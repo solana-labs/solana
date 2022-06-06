@@ -3249,6 +3249,7 @@ impl AccountsDb {
         total_accounts_after_shrink
     }
 
+    /// Remove all accounts not in `minimized_account_set`. This should only be used by ledger-tool to create minimized snapshots.
     pub(crate) fn minimize_accounts_db(
         &self,
         snapshot_slot: Slot,
