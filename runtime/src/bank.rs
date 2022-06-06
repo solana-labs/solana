@@ -5377,9 +5377,8 @@ impl Bank {
                             .accounts
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
                     });
-                    let info = self.collect_rent_from_accounts(accounts, just_rewrites);
                     CollectRentInPartitionInfo::new(
-                        info,
+                        self.collect_rent_from_accounts(accounts, just_rewrites),
                         Duration::from_nanos(measure_load_accounts.as_ns()),
                     )
                 })
