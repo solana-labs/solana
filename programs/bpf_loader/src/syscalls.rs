@@ -369,7 +369,8 @@ pub fn bind_syscall_context_objects<'a, 'b>(
             .transaction_context
             .get_current_instruction_context()
             .and_then(|instruction_context| {
-                instruction_context.try_borrow_program_account(invoke_context.transaction_context)
+                instruction_context
+                    .try_borrow_last_program_account(invoke_context.transaction_context)
             })
             .map(|program_account| *program_account.get_owner())
             .map_err(SyscallError::InstructionError)?;
@@ -2946,8 +2947,9 @@ where
         ))?;
     accounts.push((*program_account_index, None));
 
-    for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
-        if index_in_instruction != instruction_account.index_in_callee {
+    for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
+    {
+        if instruction_account_index != instruction_account.index_in_callee {
             continue; // Skip duplicate account
         }
         let mut callee_account = instruction_context
@@ -3121,7 +3123,7 @@ fn call<'a, 'b: 'a>(
         .get_current_instruction_context()
         .map_err(SyscallError::InstructionError)?;
     let caller_program_id = instruction_context
-        .get_program_key(transaction_context)
+        .get_last_program_key(transaction_context)
         .map_err(SyscallError::InstructionError)?;
     let signers = syscall.translate_signers(
         caller_program_id,
@@ -3288,9 +3290,8 @@ declare_syscall!(
         let program_id = *question_mark!(
             transaction_context
                 .get_current_instruction_context()
-                .and_then(
-                    |instruction_context| instruction_context.get_program_key(transaction_context)
-                )
+                .and_then(|instruction_context| instruction_context
+                    .get_last_program_key(transaction_context))
                 .map_err(SyscallError::InstructionError),
             result
         );
@@ -3570,19 +3571,26 @@ declare_syscall!(
                     result
                 );
 
-                *program_id =
-                    instruction_context.get_program_id(invoke_context.transaction_context);
+                *program_id = *question_mark!(
+                    instruction_context
+                        .get_last_program_key(invoke_context.transaction_context)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                );
                 data.clone_from_slice(instruction_context.get_instruction_data());
                 let account_metas = question_mark!(
-                    (instruction_context.get_number_of_program_accounts()
-                        ..instruction_context.get_number_of_accounts())
-                        .map(|index_in_instruction| Ok(AccountMeta {
+                    (0..instruction_context.get_number_of_instruction_accounts())
+                        .map(|instruction_account_index| Ok(AccountMeta {
                             pubkey: *invoke_context.get_key_of_account_at_index(
                                 instruction_context
-                                    .get_index_in_transaction(index_in_instruction)?
+                                    .get_index_of_instruction_account_in_transaction(
+                                        instruction_account_index
+                                    )?
                             )?,
-                            is_signer: instruction_context.is_signer(index_in_instruction)?,
-                            is_writable: instruction_context.is_writable(index_in_instruction)?,
+                            is_signer: instruction_context
+                                .is_instruction_account_signer(instruction_account_index)?,
+                            is_writable: instruction_context
+                                .is_instruction_account_writable(instruction_account_index)?,
                         }))
                         .collect::<Result<Vec<_>, InstructionError>>()
                         .map_err(SyscallError::InstructionError),
