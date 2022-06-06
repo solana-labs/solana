@@ -5187,16 +5187,19 @@ impl Bank {
     // Used to get vote and node pubkeys in `minimized_bank_for_snapshot`
     fn minimization_add_vote_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
-        let mut vote_accounts_measure = Measure::start("get vote accounts");
-        self.vote_accounts()
-            .par_iter()
-            .for_each(|(pubkey, (_stake, vote_account))| {
-                minimized_account_set.insert(*pubkey);
-                if let Ok(vote_state) = vote_account.vote_state().as_ref() {
-                    minimized_account_set.insert(vote_state.node_pubkey);
-                }
-            });
-        vote_accounts_measure.stop();
+        let (_, vote_accounts_measure) = measure!(
+            {
+                self.vote_accounts()
+                    .par_iter()
+                    .for_each(|(pubkey, (_stake, vote_account))| {
+                        minimized_account_set.insert(*pubkey);
+                        if let Ok(vote_state) = vote_account.vote_state().as_ref() {
+                            minimized_account_set.insert(vote_state.node_pubkey);
+                        }
+                    });
+            },
+            "get vote accounts"
+        );
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
@@ -5206,14 +5209,20 @@ impl Bank {
     // Used to get stake accounts in `minimized_bank_for_snapshot`
     fn minimization_add_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
-        let mut stake_accounts_measure = Measure::start("get stake accounts");
-        self.get_program_accounts(&solana_sdk::stake::program::id(), &ScanConfig::default())
-            .unwrap()
-            .into_par_iter()
-            .for_each(|(pubkey, _)| {
-                minimized_account_set.insert(pubkey);
-            });
-        stake_accounts_measure.stop();
+        let (_, stake_accounts_measure) = measure!(
+            {
+                self.get_program_accounts(
+                    &solana_sdk::stake::program::id(),
+                    &ScanConfig::default(),
+                )
+                .unwrap()
+                .into_par_iter()
+                .for_each(|(pubkey, _)| {
+                    minimized_account_set.insert(pubkey);
+                });
+            },
+            "get stake accounts"
+        );
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
@@ -5223,16 +5232,19 @@ impl Bank {
     // Used to get owner accounts in `minimize_bank_for_snapshot`
     fn minimization_add_owner_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
-        let mut owner_accounts_measure = Measure::start("get owner accounts");
-        let owner_accounts: HashSet<_> = minimized_account_set
-            .par_iter()
-            .filter_map(|pubkey| self.get_account(&pubkey))
-            .map(|account| *account.owner())
-            .collect();
-        owner_accounts.into_par_iter().for_each(|pubkey| {
-            minimized_account_set.insert(pubkey);
-        });
-        owner_accounts_measure.stop();
+        let (_, owner_accounts_measure) = measure!(
+            {
+                let owner_accounts: HashSet<_> = minimized_account_set
+                    .par_iter()
+                    .filter_map(|pubkey| self.get_account(&pubkey))
+                    .map(|account| *account.owner())
+                    .collect();
+                owner_accounts.into_par_iter().for_each(|pubkey| {
+                    minimized_account_set.insert(pubkey);
+                });
+            },
+            "get owner accounts"
+        );
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
@@ -5242,27 +5254,30 @@ impl Bank {
     // Used to get owner accounts in `minimize_bank_for_snapshot`
     fn minimization_add_programdata_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
-        let mut programdata_accounts_measure = Measure::start("get programdata accounts");
-        let programdata_accounts: HashSet<_> = minimized_account_set
-            .par_iter()
-            .filter_map(|pubkey| self.get_account(&pubkey))
-            .filter(|account| account.executable())
-            .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
-            .filter_map(|account| {
-                if let Ok(UpgradeableLoaderState::Program {
-                    programdata_address,
-                }) = account.state()
-                {
-                    Some(programdata_address)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        programdata_accounts.into_par_iter().for_each(|pubkey| {
-            minimized_account_set.insert(pubkey);
-        });
-        programdata_accounts_measure.stop();
+        let (_, programdata_accounts_measure) = measure!(
+            {
+                let programdata_accounts: HashSet<_> = minimized_account_set
+                    .par_iter()
+                    .filter_map(|pubkey| self.get_account(&pubkey))
+                    .filter(|account| account.executable())
+                    .filter(|account| bpf_loader_upgradeable::check_id(account.owner()))
+                    .filter_map(|account| {
+                        if let Ok(UpgradeableLoaderState::Program {
+                            programdata_address,
+                        }) = account.state()
+                        {
+                            Some(programdata_address)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                programdata_accounts.into_par_iter().for_each(|pubkey| {
+                    minimized_account_set.insert(pubkey);
+                });
+            },
+            "get programdata accounts"
+        );
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
@@ -5277,24 +5292,26 @@ impl Bank {
         ending_slot: Slot,
     ) {
         let initial_accounts_len = minimized_account_set.len();
-        let mut rent_collection_accounts_measure = Measure::start("get rent collection accounts");
+        let (_, rent_collection_accounts_measure) = measure!(
+            {
+                let partitions = if !self.use_fixed_collection_cycle() {
+                    self.variable_cycle_partitions_between_slots(starting_slot, ending_slot)
+                } else {
+                    self.fixed_cycle_partitions_between_slots(starting_slot, ending_slot)
+                };
 
-        let partitions = if !self.use_fixed_collection_cycle() {
-            self.variable_cycle_partitions_between_slots(starting_slot, ending_slot)
-        } else {
-            self.fixed_cycle_partitions_between_slots(starting_slot, ending_slot)
-        };
-
-        partitions.into_iter().for_each(|partition| {
-            let subrange = Self::pubkey_range_from_partition(partition);
-            self.accounts()
-                .load_to_collect_rent_eagerly(&self.ancestors, subrange)
-                .into_par_iter()
-                .for_each(|(pubkey, ..)| {
-                    minimized_account_set.insert(pubkey);
-                })
-        });
-        rent_collection_accounts_measure.stop();
+                partitions.into_iter().for_each(|partition| {
+                    let subrange = Self::pubkey_range_from_partition(partition);
+                    self.accounts()
+                        .load_to_collect_rent_eagerly(&self.ancestors, subrange)
+                        .into_par_iter()
+                        .for_each(|(pubkey, ..)| {
+                            minimized_account_set.insert(pubkey);
+                        })
+                });
+            },
+            "get rent collection accounts"
+        );
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
