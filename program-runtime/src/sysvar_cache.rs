@@ -186,10 +186,9 @@ pub mod get_sysvar_with_account_check {
         instruction_context: &InstructionContext,
         instruction_account_index: usize,
     ) -> Result<(), InstructionError> {
-        if !S::check_id(
-            instruction_context
-                .get_instruction_account_key(transaction_context, instruction_account_index)?,
-        ) {
+        let index_in_transaction = instruction_context
+            .get_index_of_instruction_account_in_transaction(instruction_account_index)?;
+        if !S::check_id(transaction_context.get_key_of_account_at_index(index_in_transaction)?) {
             return Err(InstructionError::InvalidArgument);
         }
         Ok(())
@@ -198,12 +197,12 @@ pub mod get_sysvar_with_account_check {
     pub fn clock(
         invoke_context: &InvokeContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<Arc<Clock>, InstructionError> {
         check_sysvar_account::<Clock>(
             invoke_context.transaction_context,
             instruction_context,
-            index_in_instruction,
+            instruction_account_index,
         )?;
         invoke_context.get_sysvar_cache().get_clock()
     }
@@ -211,12 +210,12 @@ pub mod get_sysvar_with_account_check {
     pub fn rent(
         invoke_context: &InvokeContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<Arc<Rent>, InstructionError> {
         check_sysvar_account::<Rent>(
             invoke_context.transaction_context,
             instruction_context,
-            index_in_instruction,
+            instruction_account_index,
         )?;
         invoke_context.get_sysvar_cache().get_rent()
     }
@@ -224,12 +223,12 @@ pub mod get_sysvar_with_account_check {
     pub fn slot_hashes(
         invoke_context: &InvokeContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<Arc<SlotHashes>, InstructionError> {
         check_sysvar_account::<SlotHashes>(
             invoke_context.transaction_context,
             instruction_context,
-            index_in_instruction,
+            instruction_account_index,
         )?;
         invoke_context.get_sysvar_cache().get_slot_hashes()
     }
@@ -238,12 +237,12 @@ pub mod get_sysvar_with_account_check {
     pub fn recent_blockhashes(
         invoke_context: &InvokeContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<Arc<RecentBlockhashes>, InstructionError> {
         check_sysvar_account::<RecentBlockhashes>(
             invoke_context.transaction_context,
             instruction_context,
-            index_in_instruction,
+            instruction_account_index,
         )?;
         invoke_context.get_sysvar_cache().get_recent_blockhashes()
     }
@@ -251,12 +250,12 @@ pub mod get_sysvar_with_account_check {
     pub fn stake_history(
         invoke_context: &InvokeContext,
         instruction_context: &InstructionContext,
-        index_in_instruction: usize,
+        instruction_account_index: usize,
     ) -> Result<Arc<StakeHistory>, InstructionError> {
         check_sysvar_account::<StakeHistory>(
             invoke_context.transaction_context,
             instruction_context,
-            index_in_instruction,
+            instruction_account_index,
         )?;
         invoke_context.get_sysvar_cache().get_stake_history()
     }
