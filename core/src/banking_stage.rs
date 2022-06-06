@@ -18,8 +18,8 @@ use {
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_client::{
-        connection_cache::ConnectionCache,
-        tpu_connection::TpuConnection, udp_client::UdpTpuConnection,
+        connection_cache::ConnectionCache, tpu_connection::TpuConnection,
+        udp_client::UdpTpuConnection,
     },
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -511,7 +511,7 @@ impl BankingStage {
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets(
-        connection_cache: &RwLock<ConnectionCache>,
+        connection_cache: &ConnectionCache,
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -983,7 +983,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         banking_stage_stats: &BankingStageStats,
-        connection_cache: &RwLock<ConnectionCache>,
+        connection_cache: &ConnectionCache,
     ) {
         if let ForwardOption::NotForward = forward_option {
             if !hold {
