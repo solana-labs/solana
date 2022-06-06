@@ -110,6 +110,8 @@ struct RecordTransactionsSummary {
     record_transactions_timings: RecordTransactionsTimings,
     // Result of trying to record the transactions into the PoH stream
     result: Result<(), PohRecorderError>,
+    // List of indexes of each transaction in the slot
+    transaction_indexes: Vec<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1203,6 +1205,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
+        let mut transaction_indexes = vec![];
 
         if !transactions.is_empty() {
             let num_to_record = transactions.len();
@@ -1217,7 +1220,9 @@ impl BankingStage {
             record_transactions_timings.poh_record_us = poh_record_time.as_us();
 
             match res {
-                Ok(()) => (),
+                Ok(indexes) => {
+                    transaction_indexes = indexes;
+                }
                 Err(PohRecorderError::MaxHeightReached) => {
                     inc_new_counter_info!("banking_stage-max_height_reached", 1);
                     inc_new_counter_info!(
@@ -1227,6 +1232,7 @@ impl BankingStage {
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
+                        transaction_indexes: vec![],
                     };
                 }
                 Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
@@ -1236,6 +1242,7 @@ impl BankingStage {
         RecordTransactionsSummary {
             record_transactions_timings,
             result: Ok(()),
+            transaction_indexes,
         }
     }
 
@@ -1328,6 +1335,7 @@ impl BankingStage {
         let RecordTransactionsSummary {
             result: record_transactions_result,
             record_transactions_timings,
+            transaction_indexes,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = RecordTransactionsTimings {
             execution_results_to_transactions_us: execution_results_to_transactions_time.as_us(),
@@ -1403,10 +1411,21 @@ impl BankingStage {
                     );
                     if let Some(transaction_status_sender) = transaction_status_sender {
                         let txs = batch.sanitized_transactions().to_vec();
-                        let transaction_indexes = vec![0; txs.len()]; // TODO: populate with real data
                         let post_balances = bank.collect_balances(batch);
                         let post_token_balances =
                             collect_token_balances(bank, batch, &mut mint_decimals);
+                        let mut transaction_indexes_iter = transaction_indexes.into_iter();
+                        let batch_transaction_indexes: Vec<_> = tx_results
+                            .execution_results
+                            .iter()
+                            .map(|result| {
+                                if result.was_executed() {
+                                    transaction_indexes_iter.next().unwrap_or_default()
+                                } else {
+                                    0
+                                }
+                            })
+                            .collect();
                         transaction_status_sender.send_transaction_status_batch(
                             bank.clone(),
                             txs,
@@ -1417,7 +1436,7 @@ impl BankingStage {
                                 post_token_balances,
                             ),
                             tx_results.rent_debits,
-                            transaction_indexes,
+                            batch_transaction_indexes,
                         );
                     }
                 },
