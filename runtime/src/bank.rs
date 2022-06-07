@@ -5203,7 +5203,10 @@ impl Bank {
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!("Added {new_accounts_len} for total of {total_accounts_len} accounts. {vote_accounts_measure}");
+        info!(
+            "Added {} vote accounts for total of {} accounts. {}",
+            new_accounts_len, total_accounts_len, vote_accounts_measure
+        );
     }
 
     // Used to get stake accounts in `minimized_bank_for_snapshot`
@@ -5226,7 +5229,10 @@ impl Bank {
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!("Added {new_accounts_len} for total of {total_accounts_len} accounts. {stake_accounts_measure}");
+        info!(
+            "Added {} stake accounts for total of {} accounts. {}",
+            new_accounts_len, total_accounts_len, stake_accounts_measure
+        );
     }
 
     // Used to get owner accounts in `minimize_bank_for_snapshot`
@@ -5248,7 +5254,10 @@ impl Bank {
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!("Added {new_accounts_len} for total of {total_accounts_len} accounts. {owner_accounts_measure}");
+        info!(
+            "Added {} owner accounts for total of {} accounts. {}",
+            new_accounts_len, total_accounts_len, owner_accounts_measure
+        );
     }
 
     // Used to get owner accounts in `minimize_bank_for_snapshot`
@@ -5281,7 +5290,10 @@ impl Bank {
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!("Added {new_accounts_len} for total of {total_accounts_len} accounts. {programdata_accounts_measure}");
+        info!(
+            "Added {} program data accounts for total of {} accounts. {}",
+            new_accounts_len, total_accounts_len, programdata_accounts_measure
+        );
     }
 
     // Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
@@ -5315,7 +5327,10 @@ impl Bank {
 
         let total_accounts_len = minimized_account_set.len();
         let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!("Added {new_accounts_len} for total of {total_accounts_len} accounts. {rent_collection_accounts_measure}");
+        info!(
+            "Added {} rent collection accounts for total of {} accounts. {}",
+            new_accounts_len, total_accounts_len, rent_collection_accounts_measure
+        );
     }
 
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
