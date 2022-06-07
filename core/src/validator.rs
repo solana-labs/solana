@@ -983,6 +983,7 @@ impl Validator {
                 vote: node.sockets.tpu_vote,
                 broadcast: node.sockets.broadcast,
                 transactions_quic: node.sockets.tpu_quic,
+                transactions_forwards_quic: node.sockets.tpu_forwards_quic,
             },
             &rpc_subscriptions,
             transaction_status_sender,
@@ -1003,7 +1004,11 @@ impl Validator {
             &identity_keypair,
         );
 
-        datapoint_info!("validator-new", ("id", id.to_string(), String));
+        datapoint_info!(
+            "validator-new",
+            ("id", id.to_string(), String),
+            ("version", solana_version::version!(), String)
+        );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {

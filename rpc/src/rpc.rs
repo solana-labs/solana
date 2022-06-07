@@ -4570,7 +4570,8 @@ pub mod tests {
             hash::{hash, Hash},
             instruction::InstructionError,
             message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
-            nonce, rpc_port,
+            nonce::{self, state::DurableNonce},
+            rpc_port,
             signature::{Keypair, Signer},
             slot_hashes::SlotHashes,
             system_program, system_transaction,
@@ -5550,7 +5551,7 @@ pub mod tests {
                     42,
                     &nonce::state::Versions::new_current(nonce::State::new_initialized(
                         &authority,
-                        &Hash::default(),
+                        DurableNonce::default(),
                         1000,
                     )),
                     &system_program::id(),

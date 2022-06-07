@@ -259,6 +259,23 @@ impl RollingBitField {
         all
     }
 
+    /// return highest item < 'max_slot_exclusive'
+    pub fn get_prior(&self, max_slot_exclusive: Slot) -> Option<Slot> {
+        let mut slot = max_slot_exclusive.saturating_sub(1);
+        self.min().and_then(|min| {
+            loop {
+                if self.contains(&slot) {
+                    return Some(slot);
+                }
+                slot = slot.saturating_sub(1);
+                if slot == 0 || slot < min {
+                    break;
+                }
+            }
+            None
+        })
+    }
+
     pub fn get_all(&self) -> Vec<u64> {
         let mut all = Vec::with_capacity(self.count);
         self.excess.iter().for_each(|slot| all.push(*slot));

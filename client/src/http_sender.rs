@@ -20,9 +20,9 @@ use {
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
         },
-        thread::sleep,
         time::{Duration, Instant},
     },
+    tokio::time::sleep,
 };
 
 pub struct HttpSender {
@@ -147,7 +147,7 @@ impl RpcSender for HttpSender {
                                 response, too_many_requests_retries, duration
                             );
 
-                    sleep(duration);
+                    sleep(duration).await;
                     stats_updater.add_rate_limited_time(duration);
                     continue;
                 }

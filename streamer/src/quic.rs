@@ -327,7 +327,7 @@ impl ConnectionTable {
 }
 
 #[derive(Default)]
-struct StreamStats {
+pub struct StreamStats {
     total_connections: AtomicUsize,
     total_new_connections: AtomicUsize,
     total_streams: AtomicUsize,
@@ -342,6 +342,7 @@ struct StreamStats {
     total_stream_read_errors: AtomicUsize,
     num_evictions: AtomicUsize,
     connection_add_failed: AtomicUsize,
+    connection_add_failed_unstaked_node: AtomicUsize,
     connection_setup_timeout: AtomicUsize,
 }
 
@@ -377,6 +378,12 @@ impl StreamStats {
             (
                 "connection_add_failed",
                 self.connection_add_failed.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_add_failed_unstaked_node",
+                self.connection_add_failed_unstaked_node
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -486,6 +493,7 @@ fn handle_connection(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
@@ -496,6 +504,7 @@ pub fn spawn_server(
     staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -506,7 +515,6 @@ pub fn spawn_server(
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
 
-    let stats = Arc::new(StreamStats::default());
     let handle = thread::spawn(move || {
         let handle = runtime.spawn(async move {
             debug!("spawn quic server");
@@ -561,29 +569,36 @@ pub fn spawn_server(
                             }
                         };
 
-                        if let Some((last_update, stream_exit)) = connection_table_l
-                            .try_add_connection(
-                                &remote_addr,
-                                timing::timestamp(),
-                                max_connections_per_ip,
-                            )
-                        {
-                            drop(connection_table_l);
-                            let packet_sender = packet_sender.clone();
-                            let stats = stats.clone();
-                            let connection_table1 = connection_table.clone();
-                            handle_connection(
-                                uni_streams,
-                                packet_sender,
-                                remote_addr,
-                                last_update,
-                                connection_table1,
-                                stream_exit,
-                                stats,
-                                stake,
-                            );
+                        if stake != 0 || max_unstaked_connections > 0 {
+                            if let Some((last_update, stream_exit)) = connection_table_l
+                                .try_add_connection(
+                                    &remote_addr,
+                                    timing::timestamp(),
+                                    max_connections_per_ip,
+                                )
+                            {
+                                drop(connection_table_l);
+                                let packet_sender = packet_sender.clone();
+                                let stats = stats.clone();
+                                let connection_table1 = connection_table.clone();
+                                handle_connection(
+                                    uni_streams,
+                                    packet_sender,
+                                    remote_addr,
+                                    last_update,
+                                    connection_table1,
+                                    stream_exit,
+                                    stats,
+                                    stake,
+                                );
+                            } else {
+                                stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                            }
                         } else {
-                            stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                            connection.close(0u32.into(), &[0u8]);
+                            stats
+                                .connection_add_failed_unstaked_node
+                                .fetch_add(1, Ordering::Relaxed);
                         }
                     } else {
                         stats
@@ -739,6 +754,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
             &keypair,
@@ -749,6 +765,7 @@ mod test {
             staked_nodes,
             10,
             10,
+            stats,
         )
         .unwrap();
 
@@ -809,6 +826,7 @@ mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
             &keypair,
@@ -819,6 +837,7 @@ mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
+            stats,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -863,6 +882,52 @@ mod test {
             }
         }
         assert_eq!(total_packets, num_expected_packets);
+
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn test_quic_server_unstaked_node_connect_failure() {
+        solana_logger::setup();
+
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, _receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let stats = Arc::new(StreamStats::default());
+        let t = spawn_server(
+            s,
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes,
+            MAX_STAKED_CONNECTIONS,
+            0, // Do not allow any connection from unstaked clients/nodes
+            stats,
+        )
+        .unwrap();
+
+        let runtime = rt();
+        let _rt_guard = runtime.enter();
+        let conn1 = Arc::new(make_client_endpoint(&runtime, &server_address));
+
+        // Send a full size packet with single byte writes.
+        let handle = runtime.spawn(async move {
+            if let Ok(mut s1) = conn1.connection.open_uni().await {
+                for _ in 0..PACKET_DATA_SIZE {
+                    // Ignoring any errors here. s1.finish() will test the error condition
+                    s1.write_all(&[0u8]).await.unwrap_or_default();
+                }
+                s1.finish().await.unwrap_err();
+            }
+        });
+        runtime.block_on(handle).unwrap();
 
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();

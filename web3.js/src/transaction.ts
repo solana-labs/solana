@@ -403,8 +403,8 @@ export class Transaction {
         // Writable accounts always come before read-only accounts
         return x.isWritable ? -1 : 1;
       }
-      // Otherwise, sort by pubkey.
-      return x.pubkey._bn.cmp(y.pubkey._bn);
+      // Otherwise, sort by pubkey, stringwise.
+      return x.pubkey.toBase58().localeCompare(y.pubkey.toBase58());
     });
 
     // Move fee payer to the front

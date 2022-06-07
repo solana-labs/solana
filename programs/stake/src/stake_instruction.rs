@@ -3886,7 +3886,10 @@ mod tests {
         ];
         for (stake_delegation, expected_result) in &[
             (minimum_delegation, Ok(())),
-            (minimum_delegation - 1, Err(StakeError::InsufficientStake)),
+            (
+                minimum_delegation - 1,
+                Err(StakeError::InsufficientDelegation),
+            ),
         ] {
             for stake_state in &[
                 StakeState::Initialized(meta),
@@ -6551,7 +6554,7 @@ mod tests {
         // Instruction will fail
         let mut reference_vote_state = VoteState::default();
         for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
-            reference_vote_state.increment_credits(epoch as Epoch);
+            reference_vote_state.increment_credits(epoch as Epoch, 1);
         }
         reference_vote_account
             .borrow_mut()
@@ -6571,7 +6574,7 @@ mod tests {
         // Instruction will fail
         let mut reference_vote_state = VoteState::default();
         for epoch in 0..=current_epoch {
-            reference_vote_state.increment_credits(epoch);
+            reference_vote_state.increment_credits(epoch, 1);
         }
         assert_eq!(
             reference_vote_state.epoch_credits[current_epoch as usize - 2].0,
@@ -6601,7 +6604,7 @@ mod tests {
         // Instruction will succeed
         let mut reference_vote_state = VoteState::default();
         for epoch in 0..=current_epoch {
-            reference_vote_state.increment_credits(epoch);
+            reference_vote_state.increment_credits(epoch, 1);
         }
         reference_vote_account
             .borrow_mut()
@@ -6630,7 +6633,7 @@ mod tests {
 
         let mut vote_state = VoteState::default();
         for epoch in 0..MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION / 2 {
-            vote_state.increment_credits(epoch as Epoch);
+            vote_state.increment_credits(epoch as Epoch, 1);
         }
         vote_account
             .serialize_data(&VoteStateVersions::new_current(vote_state))
@@ -6684,8 +6687,10 @@ mod tests {
         // `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` ago.
         // Instruction will succeed
         let mut vote_state = VoteState::default();
-        vote_state
-            .increment_credits(current_epoch - MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION as Epoch);
+        vote_state.increment_credits(
+            current_epoch - MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION as Epoch,
+            1,
+        );
         vote_account
             .serialize_data(&VoteStateVersions::new_current(vote_state))
             .unwrap();
@@ -6703,6 +6708,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state.increment_credits(
             current_epoch - (MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION - 1) as Epoch,
+            1,
         );
         vote_account
             .serialize_data(&VoteStateVersions::new_current(vote_state))
@@ -7029,7 +7035,7 @@ mod tests {
         fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation() {
             do_test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
                 new_feature_set(),
-                Err(StakeError::InsufficientStake.into()),
+                Err(StakeError::InsufficientDelegation.into()),
             );
         }
         #[test]

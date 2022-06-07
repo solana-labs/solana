@@ -152,6 +152,7 @@ fn verify_reachable_ports(
     }
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_forwards.iter());
+        udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {
         udp_sockets.extend(node.sockets.tpu_vote.iter());
@@ -1107,8 +1108,8 @@ mod with_incremental_snapshots {
     ///
     /// The result is a vector of peers with snapshot hashes that:
     /// 1. match a snapshot hash from the known validators
-    /// 2. have the highest full snapshot slot
-    /// 3. have the highest incremental snapshot slot
+    /// 2. have the highest incremental snapshot slot
+    /// 3. have the highest full snapshot slot of (2)
     fn get_peer_snapshot_hashes(
         cluster_info: &ClusterInfo,
         validator_config: &ValidatorConfig,
@@ -1123,10 +1124,10 @@ mod with_incremental_snapshots {
                 &mut peer_snapshot_hashes,
             );
         }
-        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
         retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
         );
+        retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
 
         peer_snapshot_hashes
     }

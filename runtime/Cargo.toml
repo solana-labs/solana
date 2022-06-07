@@ -20,7 +20,7 @@ bzip2 = "0.4.3"
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
-flate2 = "1.0.23"
+flate2 = "1.0.24"
 fnv = "1.0.7"
 im = { version = "15.1.0", features = ["rayon", "serde"] }
 index_list = "0.2.7"

@@ -14,6 +14,125 @@ use {
     },
 };
 
+#[derive(Default)]
+pub struct BlockstoreInsertionMetrics {
+    pub insert_lock_elapsed_us: u64,
+    pub insert_shreds_elapsed_us: u64,
+    pub shred_recovery_elapsed_us: u64,
+    pub chaining_elapsed_us: u64,
+    pub commit_working_sets_elapsed_us: u64,
+    pub write_batch_elapsed_us: u64,
+    pub total_elapsed_us: u64,
+    pub index_meta_time_us: u64,
+    pub num_shreds: usize,
+    pub num_inserted: u64,
+    pub num_repair: u64,
+    pub num_recovered: usize,
+    pub num_recovered_blockstore_error: usize,
+    pub num_recovered_inserted: usize,
+    pub num_recovered_failed_sig: usize,
+    pub num_recovered_failed_invalid: usize,
+    pub num_recovered_exists: usize,
+    pub num_data_shreds_exists: usize,
+    pub num_data_shreds_invalid: usize,
+    pub num_data_shreds_blockstore_error: usize,
+    pub num_coding_shreds_exists: usize,
+    pub num_coding_shreds_invalid: usize,
+    pub num_coding_shreds_invalid_erasure_config: usize,
+    pub num_coding_shreds_inserted: usize,
+}
+
+impl BlockstoreInsertionMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            ("num_shreds", self.num_shreds as i64, i64),
+            ("total_elapsed_us", self.total_elapsed_us as i64, i64),
+            (
+                "insert_lock_elapsed_us",
+                self.insert_lock_elapsed_us as i64,
+                i64
+            ),
+            (
+                "insert_shreds_elapsed_us",
+                self.insert_shreds_elapsed_us as i64,
+                i64
+            ),
+            (
+                "shred_recovery_elapsed_us",
+                self.shred_recovery_elapsed_us as i64,
+                i64
+            ),
+            ("chaining_elapsed_us", self.chaining_elapsed_us as i64, i64),
+            (
+                "commit_working_sets_elapsed_us",
+                self.commit_working_sets_elapsed_us as i64,
+                i64
+            ),
+            (
+                "write_batch_elapsed_us",
+                self.write_batch_elapsed_us as i64,
+                i64
+            ),
+            ("num_inserted", self.num_inserted as i64, i64),
+            ("num_repair", self.num_repair as i64, i64),
+            ("num_recovered", self.num_recovered as i64, i64),
+            (
+                "num_recovered_inserted",
+                self.num_recovered_inserted as i64,
+                i64
+            ),
+            (
+                "num_recovered_failed_sig",
+                self.num_recovered_failed_sig as i64,
+                i64
+            ),
+            (
+                "num_recovered_failed_invalid",
+                self.num_recovered_failed_invalid as i64,
+                i64
+            ),
+            (
+                "num_recovered_exists",
+                self.num_recovered_exists as i64,
+                i64
+            ),
+            (
+                "num_recovered_blockstore_error",
+                self.num_recovered_blockstore_error,
+                i64
+            ),
+            ("num_data_shreds_exists", self.num_data_shreds_exists, i64),
+            ("num_data_shreds_invalid", self.num_data_shreds_invalid, i64),
+            (
+                "num_data_shreds_blockstore_error",
+                self.num_data_shreds_blockstore_error,
+                i64
+            ),
+            (
+                "num_coding_shreds_exists",
+                self.num_coding_shreds_exists,
+                i64
+            ),
+            (
+                "num_coding_shreds_invalid",
+                self.num_coding_shreds_invalid,
+                i64
+            ),
+            (
+                "num_coding_shreds_invalid_erasure_config",
+                self.num_coding_shreds_invalid_erasure_config,
+                i64
+            ),
+            (
+                "num_coding_shreds_inserted",
+                self.num_coding_shreds_inserted,
+                i64
+            ),
+        );
+    }
+}
+
 /// A metrics struct that exposes RocksDB's column family properties.
 ///
 /// Here we only expose a subset of all the internal properties which are

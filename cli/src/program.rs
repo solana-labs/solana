@@ -1898,7 +1898,14 @@ fn do_process_program_write_and_deploy(
     }
 
     if !skip_fee_check {
-        check_payer(&rpc_client, config, balance_needed, &messages)?;
+        check_payer(
+            &rpc_client,
+            config,
+            balance_needed,
+            &initial_message,
+            &write_messages,
+            &final_message,
+        )?;
     }
 
     send_deploy_messages(
@@ -2032,9 +2039,17 @@ fn do_process_program_upgrade(
         &blockhash,
     );
     messages.push(&final_message);
+    let final_message = Some(final_message);
 
     if !skip_fee_check {
-        check_payer(&rpc_client, config, balance_needed, &messages)?;
+        check_payer(
+            &rpc_client,
+            config,
+            balance_needed,
+            &initial_message,
+            &write_messages,
+            &final_message,
+        )?;
     }
 
     send_deploy_messages(
@@ -2042,7 +2057,7 @@ fn do_process_program_upgrade(
         config,
         &initial_message,
         &write_messages,
-        &Some(final_message),
+        &final_message,
         buffer_signer,
         Some(upgrade_authority),
         Some(&[upgrade_authority]),
@@ -2134,14 +2149,28 @@ fn check_payer(
     rpc_client: &RpcClient,
     config: &CliConfig,
     balance_needed: u64,
-    messages: &[&Message],
+    initial_message: &Option<Message>,
+    write_messages: &Option<Vec<Message>>,
+    final_message: &Option<Message>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Does the payer have enough?
-    check_account_for_spend_multiple_fees_with_commitment(
+    let mut fee = 0;
+    if let Some(message) = initial_message {
+        fee += rpc_client.get_fee_for_message(message)?;
+    }
+    if let Some(write_messages) = write_messages {
+        // Assume all write messages cost the same
+        if let Some(message) = write_messages.get(0) {
+            fee += rpc_client.get_fee_for_message(message)? * (write_messages.len() as u64);
+        }
+    }
+    if let Some(message) = final_message {
+        fee += rpc_client.get_fee_for_message(message)?;
+    }
+    check_account_for_spend_and_fee_with_commitment(
         rpc_client,
         &config.signers[0].pubkey(),
         balance_needed,
-        messages,
+        fee,
         config.commitment,
     )?;
     Ok(())

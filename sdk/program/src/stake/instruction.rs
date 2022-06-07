@@ -57,6 +57,9 @@ pub enum StakeError {
         "stake account has not been delinquent for the minimum epochs required for deactivation"
     )]
     MinimumDelinquentEpochsForDeactivationNotMet,
+
+    #[error("delegation amount is less than the minimum")]
+    InsufficientDelegation,
 }
 
 impl<E> DecodeError<E> for StakeError {

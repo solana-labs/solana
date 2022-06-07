@@ -29,7 +29,7 @@ pub struct UdpSocketPair {
 pub type PortRange = (u16, u16);
 
 pub const VALIDATOR_PORT_RANGE: PortRange = (8000, 10_000);
-pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 12; // VALIDATOR_PORT_RANGE must be at least this wide
+pub const MINIMUM_VALIDATOR_PORT_RANGE_WIDTH: u16 = 13; // VALIDATOR_PORT_RANGE must be at least this wide
 
 pub(crate) const HEADER_LENGTH: usize = 4;
 pub(crate) const IP_ECHO_SERVER_RESPONSE_LENGTH: usize = HEADER_LENGTH + 23;
@@ -437,6 +437,10 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
         io::ErrorKind::Other,
         format!("No available UDP ports in {:?}", range),
     ))
+}
+
+pub fn bind_in_validator_port_range(ip_addr: IpAddr) -> io::Result<UdpSocket> {
+    bind_in_range(ip_addr, VALIDATOR_PORT_RANGE).map(|(_, socket)| socket)
 }
 
 // binds many sockets to the same port in a range

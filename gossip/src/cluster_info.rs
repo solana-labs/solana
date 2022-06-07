@@ -728,8 +728,8 @@ impl ClusterInfo {
         format!(
             "RPC Address       |Age(ms)| Node identifier                              \
              | Version | RPC  |PubSub|ShredVer\n\
-             ------------------+-------+----------------------------------------------+---------+\
-             ------+------+--------\n\
+             ------------------+-------+----------------------------------------------\
+             +---------+------+------+--------\n\
              {}\
              RPC Enabled Nodes: {}",
             nodes.join(""),
@@ -774,7 +774,7 @@ impl ClusterInfo {
                     };
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^9}| {:5}|  {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip, &self.socket_addr_space) {
                             ip_addr.to_string()
                         } else {
@@ -805,8 +805,8 @@ impl ClusterInfo {
         format!(
             "IP Address        |Age(ms)| Node identifier                              \
              | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer\n\
-             ------------------+-------+----------------------------------------------+---------+\
-             ------+------+-------+------+------+------+------+------+--------\n\
+             ------------------+-------+----------------------------------------------\
+             +---------+------+-------+------+------+------+------+------+------+--------\n\
              {}\
              Nodes: {}{}{}",
             nodes.join(""),
@@ -2719,6 +2719,7 @@ pub struct Sockets {
     pub serve_repair: UdpSocket,
     pub ancestor_hashes_requests: UdpSocket,
     pub tpu_quic: UdpSocket,
+    pub tpu_forwards_quic: UdpSocket,
 }
 
 #[derive(Debug)]
@@ -2741,7 +2742,8 @@ impl Node {
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let tpu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
         let rpc_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
@@ -2786,6 +2788,7 @@ impl Node {
                 serve_repair,
                 ancestor_hashes_requests,
                 tpu_quic,
+                tpu_forwards_quic,
             },
         }
     }
@@ -2822,7 +2825,8 @@ impl Node {
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
-        let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
+        let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
@@ -2866,6 +2870,7 @@ impl Node {
                 serve_repair,
                 ancestor_hashes_requests,
                 tpu_quic,
+                tpu_forwards_quic,
             },
         }
     }
@@ -2896,6 +2901,14 @@ impl Node {
 
         let (tpu_forwards_port, tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
+
+        let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
+            bind_ip_addr,
+            (
+                tpu_forwards_port + QUIC_PORT_OFFSET,
+                tpu_forwards_port + QUIC_PORT_OFFSET + 1,
+            ),
+        );
 
         let (tpu_vote_port, tpu_vote_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 1).expect("tpu_vote multi_bind");
@@ -2944,6 +2957,7 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 ancestor_hashes_requests,
                 tpu_quic,
+                tpu_forwards_quic,
             },
         }
     }
@@ -3050,6 +3064,7 @@ mod tests {
         itertools::izip,
         rand::{seq::SliceRandom, SeedableRng},
         rand_chacha::ChaChaRng,
+        regex::Regex,
         solana_ledger::shred::Shredder,
         solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
         solana_sdk::signature::{Keypair, Signer},
@@ -3078,6 +3093,91 @@ mod tests {
             &node,
             &SocketAddrSpace::Unspecified
         ));
+    }
+
+    #[test]
+    fn test_cluster_info_trace() {
+        solana_logger::setup();
+        let keypair = Keypair::from_base58_string("3jATNWfbii1btv6nCpToAXAJz6a4km5HsLSWiwLfNvHNQAmvksLFVAKGUz286bXb9N4ivXx8nuwkn91PFDTyoFEp");
+
+        let node = {
+            let tpu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8900);
+            let _tpu_quic = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8901);
+
+            let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888);
+            let tvu = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8902);
+            let tvu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8903);
+            let tpu_forwards = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8904);
+
+            let tpu_vote = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8906);
+            let repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8907);
+            let rpc = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8908);
+            let rpc_pubsub = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8909);
+
+            let serve_repair = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8910);
+
+            let info = ContactInfo {
+                id: keypair.pubkey(),
+                gossip,
+                tvu,
+                tvu_forwards,
+                repair,
+                tpu,
+                tpu_forwards,
+                tpu_vote,
+                rpc,
+                rpc_pubsub,
+                serve_repair,
+                wallclock: timestamp(),
+                shred_version: 0,
+            };
+            Node {
+                info,
+                sockets: Sockets {
+                    gossip: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    ip_echo: None,
+                    tvu: vec![],
+                    tvu_forwards: vec![],
+                    tpu: vec![],
+                    tpu_forwards: vec![],
+                    tpu_vote: vec![],
+                    broadcast: vec![],
+                    repair: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    retransmit_sockets: vec![],
+                    serve_repair: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    ancestor_hashes_requests: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    tpu_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                    tpu_forwards_quic: UdpSocket::bind("0.0.0.0:0").unwrap(),
+                },
+            }
+        };
+
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            Arc::new(keypair),
+            SocketAddrSpace::Unspecified,
+        ));
+
+        let golden = r#"
+IP Address        |Age(ms)| Node identifier                              | Version |Gossip|TPUvote| TPU  |TPUfwd| TVU  |TVUfwd|Repair|ServeR|ShredVer
+------------------+-------+----------------------------------------------+---------+------+-------+------+------+------+------+------+------+--------
+127.0.0.1       me|     \d | 7fGBVaezz2YrTxAkwvLjBZpxrGEfNsd14Jxw9W5Df5zY |    -    | 8888 |  8906 | 8900 | 8904 | 8902 | 8903 | 8907 | 8910 | 0
+Nodes: 1
+
+RPC Address       |Age(ms)| Node identifier                              | Version | RPC  |PubSub|ShredVer
+------------------+-------+----------------------------------------------+---------+------+------+--------
+127.0.0.1       me|     \d | 7fGBVaezz2YrTxAkwvLjBZpxrGEfNsd14Jxw9W5Df5zY |    -    | 8908 | 8909 | 0
+RPC Enabled Nodes: 1"#;
+
+        let re = Regex::new(golden).unwrap();
+
+        let output = format!(
+            "\n{}\n\n{}",
+            cluster_info.contact_info_trace(),
+            cluster_info.rpc_info_trace()
+        );
+
+        assert!(re.is_match(&output));
     }
 
     #[test]

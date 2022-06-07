@@ -74,7 +74,7 @@ We currently do not use the Github workflow to publish security advisories. Once
 
 <a name="bounty"></a>
 ## Security Bug Bounties
-We offer bounties for critical security issues. Please see below for more details.
+We offer bounties for critical security issues. Please see below for more details. Either a demonstration or a valid bug report is all that's necessary to submit a bug bounty. A patch to fix the issue isn't required.
 
 #### Loss of Funds:
 $2,000,000 USD in locked SOL tokens (locked for 12 months)

@@ -369,7 +369,7 @@ impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
         match source {
-            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.write().unwrap().remove(0),
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.read().unwrap()[0],
             PreAllocatedAccountMapEntry::Raw(raw) => raw,
         }
     }
@@ -1140,6 +1140,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
+    /// Only guaranteed to be safe when called from rent collection
     pub(crate) fn range_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
