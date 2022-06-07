@@ -2221,7 +2221,6 @@ mod tests {
                 VersionedTransaction,
             },
         },
-        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
         solana_vote_program::vote_transaction,
@@ -4076,7 +4075,7 @@ mod tests {
                 ("budget-available", DataBudget::default(), 1),
             ];
 
-            let connection_cache = ConnectionCache::new(DEFAULT_TPU_USE_QUIC);
+            let connection_cache = ConnectionCache::default();
             for (name, data_budget, expected_num_forwarded) in test_cases {
                 let mut unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(

@@ -6,7 +6,10 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_USE_QUIC},
+        thin_client::ThinClient,
+    },
     solana_core::{
         tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -37,7 +40,6 @@ use {
         system_transaction,
         transaction::Transaction,
     },
-    solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{
@@ -252,7 +254,7 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let mut validators = HashMap::new();
@@ -447,7 +449,7 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -794,7 +796,7 @@ impl Cluster for LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info

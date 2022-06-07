@@ -2,7 +2,7 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
-    solana_client::{nonblocking, rpc_client::RpcClient},
+    solana_client::{connection_cache::DEFAULT_TPU_USE_QUIC, nonblocking, rpc_client::RpcClient},
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -748,7 +748,7 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

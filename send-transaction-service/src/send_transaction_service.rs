@@ -101,8 +101,6 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
-pub const DEFAULT_TPU_USE_QUIC: bool = false;
-
 #[derive(Clone, Debug)]
 pub struct Config {
     pub retry_rate_ms: u64,
@@ -794,7 +792,7 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = unbounded();
 
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -862,7 +860,7 @@ mod test {
                 Some(Instant::now()),
             ),
         );
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
@@ -1135,7 +1133,7 @@ mod test {
         );
         let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(None)));
         let stats = SendTransactionServiceStats::default();
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,

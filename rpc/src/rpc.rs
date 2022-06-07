@@ -4585,7 +4585,6 @@ pub mod tests {
                 self, SimpleAddressLoader, Transaction, TransactionError, TransactionVersion,
             },
         },
-        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
             TransactionDetails,
@@ -4933,7 +4932,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let request_processor = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -4952,7 +4951,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -4985,7 +4984,7 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -5097,7 +5096,7 @@ pub mod tests {
         bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
 
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -6225,7 +6224,7 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let meta = JsonRpcRequestProcessor::new_from_bank(
             &bank,
             SocketAddrSpace::Unspecified,
@@ -6280,7 +6279,7 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
@@ -6547,7 +6546,7 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,

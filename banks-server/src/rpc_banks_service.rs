@@ -111,16 +111,13 @@ impl RpcBanksService {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*, solana_runtime::bank::Bank,
-        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
-    };
+    use {super::*, solana_runtime::bank::Bank};
 
     #[test]
     fn test_rpc_banks_server_exit() {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let exit = Arc::new(AtomicBool::new(false));
         let addr = "127.0.0.1:0".parse().unwrap();
         let service = RpcBanksService::new(

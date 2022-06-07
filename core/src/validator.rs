@@ -2051,6 +2051,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -2086,7 +2087,7 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
@@ -2181,7 +2182,7 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    false, // use_quic
+                    DEFAULT_TPU_USE_QUIC,
                 )
             })
             .collect();

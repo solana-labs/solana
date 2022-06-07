@@ -578,7 +578,6 @@ mod tests {
             signature::Signer,
             signer::keypair::Keypair,
         },
-        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
         solana_streamer::socket::SocketAddrSpace,
         std::{
             io::Write,
@@ -613,7 +612,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
-        let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+        let connection_cache = Arc::new(ConnectionCache::default());
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),

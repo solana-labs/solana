@@ -22,7 +22,6 @@ use {
         commitment_config::CommitmentConfig,
         signature::{Keypair, Signer},
     },
-    solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
     std::{sync::Arc, time::Duration},
@@ -99,7 +98,7 @@ fn test_bench_tps_test_validator(config: Config) {
         CommitmentConfig::processed(),
     ));
     let websocket_url = test_validator.rpc_pubsub_url();
-    let connection_cache = Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC));
+    let connection_cache = Arc::new(ConnectionCache::default());
 
     let client = Arc::new(
         TpuClient::new_with_connection_cache(

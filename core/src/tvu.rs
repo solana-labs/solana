@@ -356,7 +356,6 @@ pub mod tests {
         solana_rpc::optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         solana_runtime::bank::Bank,
         solana_sdk::signature::{Keypair, Signer},
-        solana_send_transaction_service::send_transaction_service::DEFAULT_TPU_USE_QUIC,
         solana_streamer::socket::SocketAddrSpace,
         std::sync::atomic::{AtomicU64, Ordering},
     };
@@ -454,7 +453,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
-            &Arc::new(ConnectionCache::new(DEFAULT_TPU_USE_QUIC)),
+            &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

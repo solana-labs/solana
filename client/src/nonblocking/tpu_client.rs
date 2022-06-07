@@ -126,7 +126,7 @@ impl TpuClient {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let connection_cache = Arc::new(ConnectionCache::new(/* use_quic */ false));
+        let connection_cache = Arc::new(ConnectionCache::default());
         Self::new_with_connection_cache(rpc_client, websocket_url, config, connection_cache).await
     }
 
