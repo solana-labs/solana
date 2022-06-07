@@ -2003,22 +2003,9 @@ fn main() {
 
                 let exit_signal = Arc::new(AtomicBool::new(false));
                 let system_monitor_service =
-                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
+                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false, false);
 
-<<<<<<< HEAD
                 if let Some(limit) =
-=======
-                let no_os_memory_stats_reporting =
-                    arg_matches.is_present("no_os_memory_stats_reporting");
-                let system_monitor_service = SystemMonitorService::new(
-                    Arc::clone(&exit_signal),
-                    !no_os_memory_stats_reporting,
-                    false,
-                    false,
-                );
-
-                accounts_index_config.index_limit_mb = if let Some(limit) =
->>>>>>> ba0406395 (Add CPUmetrics (#25802))
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
                 {
                     accounts_index_config.index_limit_mb = Some(limit);
