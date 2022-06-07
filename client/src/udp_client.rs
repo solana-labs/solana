@@ -4,7 +4,6 @@
 use {
     crate::{connection_cache::ConnectionCacheStats, tpu_connection::TpuConnection},
     core::iter::repeat,
-    solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::transport::Result as TransportResult,
     solana_streamer::sendmmsg::batch_send,
     std::{
@@ -20,14 +19,11 @@ pub struct UdpTpuConnection {
 
 impl UdpTpuConnection {
     pub fn new_from_addr(tpu_addr: SocketAddr) -> Self {
-        let (_, client_socket) = solana_net_utils::bind_in_range(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            VALIDATOR_PORT_RANGE,
-        )
-        .unwrap();
-
+        let socket =
+            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .unwrap();
         Self {
-            socket: client_socket,
+            socket,
             addr: tpu_addr,
         }
     }

@@ -165,6 +165,13 @@ impl FeeRateGovernor {
         me
     }
 
+    pub fn clone_with_lamports_per_signature(&self, lamports_per_signature: u64) -> Self {
+        Self {
+            lamports_per_signature,
+            ..*self
+        }
+    }
+
     /// calculate unburned fee from a fee total, returns (unburned, burned)
     pub fn burn(&self, fees: u64) -> (u64, u64) {
         let burned = fees * u64::from(self.burn_percent) / 100;

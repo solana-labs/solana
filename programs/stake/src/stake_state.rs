@@ -2373,8 +2373,8 @@ mod tests {
         );
 
         // put 2 credits in at epoch 0
-        vote_state.increment_credits(0);
-        vote_state.increment_credits(0);
+        vote_state.increment_credits(0, 1);
+        vote_state.increment_credits(0, 1);
 
         // this one should be able to collect exactly 2
         assert_eq!(
@@ -2435,7 +2435,7 @@ mod tests {
         // put 193,536,000 credits in at epoch 0, typical for a 14-day epoch
         //  this loop takes a few seconds...
         for _ in 0..epoch_slots {
-            vote_state.increment_credits(0);
+            vote_state.increment_credits(0, 1);
         }
 
         // no overflow on points
@@ -2476,8 +2476,8 @@ mod tests {
         );
 
         // put 2 credits in at epoch 0
-        vote_state.increment_credits(0);
-        vote_state.increment_credits(0);
+        vote_state.increment_credits(0, 1);
+        vote_state.increment_credits(0, 1);
 
         // this one should be able to collect exactly 2
         assert_eq!(
@@ -2523,7 +2523,7 @@ mod tests {
         );
 
         // put 1 credit in epoch 1
-        vote_state.increment_credits(1);
+        vote_state.increment_credits(1, 1);
 
         stake.credits_observed = 2;
         // this one should be able to collect the one just added
@@ -2548,7 +2548,7 @@ mod tests {
         );
 
         // put 1 credit in epoch 2
-        vote_state.increment_credits(2);
+        vote_state.increment_credits(2, 1);
         // this one should be able to collect 2 now
         assert_eq!(
             Some(CalculatedStakeRewards {

@@ -439,6 +439,10 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
     ))
 }
 
+pub fn bind_in_validator_port_range(ip_addr: IpAddr) -> io::Result<UdpSocket> {
+    bind_in_range(ip_addr, VALIDATOR_PORT_RANGE).map(|(_, socket)| socket)
+}
+
 // binds many sockets to the same port in a range
 pub fn multi_bind_in_range(
     ip_addr: IpAddr,

@@ -137,7 +137,7 @@ pub fn create_executor(
             .feature_set
             .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
         reject_broken_elfs: reject_deployment_of_broken_elfs,
-        noop_instruction_ratio: 1.0 / 256.0,
+        noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
         encrypt_environment_registers: true,
         disable_deprecated_load_instructions: reject_deployment_of_broken_elfs

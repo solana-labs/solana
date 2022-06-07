@@ -24,9 +24,9 @@ pub mod solana_client {
     pub mod nonce_utils {
         use {
             super::super::solana_sdk::{
-                account::ReadableAccount, account_utils::StateMut, hash::Hash, pubkey::Pubkey,
+                account::ReadableAccount, account_utils::StateMut, pubkey::Pubkey,
             },
-            crate::nonce::state::{Data, Versions},
+            crate::nonce::state::{Data, DurableNonce, Versions},
         };
 
         #[derive(thiserror::Error, Debug)]
@@ -36,7 +36,11 @@ pub mod solana_client {
         pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
             _account: &T,
         ) -> Result<Data, Error> {
-            Ok(Data::new(Pubkey::new_unique(), Hash::default(), 5000))
+            Ok(Data::new(
+                Pubkey::new_unique(),
+                DurableNonce::default(),
+                5000,
+            ))
         }
     }
 

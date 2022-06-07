@@ -1,4 +1,4 @@
-//! Example Rust-based BPF noop program
+//! Example Rust-based SBF noop program
 
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};
 
@@ -8,5 +8,5 @@ fn process_instruction(
     _accounts: &[AccountInfo],
     _instruction_data: &[u8],
 ) -> ProgramResult {
-    // error to make build fail: no return value
+    Ok(())
 }

@@ -72,7 +72,9 @@ if [[ $CI_OS_NAME = windows ]]; then
   # yet available on windows
   BINS=(
     cargo-build-bpf
+    cargo-build-sbf
     cargo-test-bpf
+    cargo-test-sbf
     solana
     solana-install
     solana-install-init
@@ -103,7 +105,9 @@ else
   if [[ -z "$validatorOnly" ]]; then
     BINS+=(
       cargo-build-bpf
+      cargo-build-sbf
       cargo-test-bpf
+      cargo-test-sbf
       solana-dos
       solana-install-init
       solana-stake-accounts

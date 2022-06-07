@@ -6,7 +6,7 @@
 use {
     crossbeam_channel::Receiver,
     solana_ledger::blockstore::Blockstore,
-    solana_measure::measure::Measure,
+    solana_measure::measure,
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{bank::Bank, cost_model::CostModel},
     solana_sdk::timing::timestamp,
@@ -102,9 +102,8 @@ impl CostUpdateService {
                 CostUpdate::ExecuteTiming {
                     mut execute_timings,
                 } => {
-                    let (update_count, update_cost_model_time) = Measure::this(
-                        |_| Self::update_cost_model(&cost_model, &mut execute_timings),
-                        (),
+                    let (update_count, update_cost_model_time) = measure!(
+                        Self::update_cost_model(&cost_model, &mut execute_timings),
                         "update_cost_model_time",
                     );
                     cost_update_service_timing.update(update_count, update_cost_model_time.as_us());
