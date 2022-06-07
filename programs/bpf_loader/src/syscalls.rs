@@ -13,6 +13,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         question_mark,
+        verifier::RequisiteVerifier,
         vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
     solana_sdk::{
@@ -384,7 +385,7 @@ pub fn register_syscalls(
 }
 
 pub fn bind_syscall_context_objects<'a, 'b>(
-    vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
+    vm: &mut EbpfVm<'a, RequisiteVerifier, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory,
     orig_account_lengths: Vec<usize>,

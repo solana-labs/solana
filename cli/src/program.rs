@@ -25,7 +25,11 @@ use {
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::invoke_context::InvokeContext,
-    solana_rbpf::{elf::Executable, verifier, vm::Config},
+    solana_rbpf::{
+        elf::Executable,
+        verifier::RequisiteVerifier,
+        vm::{Config, VerifiedExecutable},
+    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::Account,
@@ -2079,9 +2083,8 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
         &program_data,
-        Some(verifier::check),
         Config {
             reject_broken_elfs: true,
             ..Config::default()
@@ -2089,6 +2092,12 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         register_syscalls(&mut invoke_context, true).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
+
+    let _ =
+        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
+            executable,
+        )
+        .map_err(|err| format!("ELF error: {}", err))?;
 
     Ok(program_data)
 }
