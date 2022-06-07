@@ -224,10 +224,6 @@ impl ConnectionCache {
         }
     }
 
-    pub fn set_use_quic(&mut self, use_quic: bool) {
-        self.use_quic.store(use_quic, Ordering::Relaxed);
-    }
-
     pub fn get_use_quic(&self) -> bool {
         self.use_quic.load(Ordering::Relaxed)
     }
