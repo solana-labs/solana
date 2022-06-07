@@ -1624,8 +1624,8 @@ fn main() {
                     .conflicts_with("no_snapshot")
             )
             .arg(
-                Arg::with_name("minimize")
-                    .long("minimize")
+                Arg::with_name("minimized")
+                    .long("minimized")
                     .takes_value(false)
                     .help("Create a minimized snapshot instead of a full snapshot. This snapshot \
                           will only include information needed to replay the ledger from the \
@@ -1638,7 +1638,7 @@ fn main() {
                     .long("ending-slot")
                     .takes_value(true)
                     .value_name("ENDING_SLOT")
-                    .help("Ending slot for the minimized snapshot creation")
+                    .help("Ending slot for minimized snapshot creation")
             )
             .arg(
                 Arg::with_name("snapshot_archive_format")
@@ -2383,7 +2383,7 @@ fn main() {
             }
             ("create-snapshot", Some(arg_matches)) => {
                 let is_incremental = arg_matches.is_present("incremental");
-                let is_minimize = arg_matches.is_present("minimize");
+                let is_minimized = arg_matches.is_present("minimized");
                 let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
                     .unwrap_or_else(|_| {
                         match (
@@ -2470,7 +2470,7 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                let ending_slot = if is_minimize {
+                let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
@@ -2487,7 +2487,7 @@ fn main() {
 
                 let snapshot_type_str = if is_incremental {
                     "incremental "
-                } else if is_minimize {
+                } else if is_minimized {
                     "minimized "
                 } else {
                     ""
@@ -2718,7 +2718,7 @@ fn main() {
                             bank
                         };
 
-                        if is_minimize {
+                        if is_minimized {
                             minimize_bank_for_snapshot(
                                 &blockstore,
                                 bank.clone(),
@@ -2797,7 +2797,7 @@ fn main() {
                                 full_snapshot_archive_info.path().display(),
                             );
 
-                            if is_minimize {
+                            if is_minimized {
                                 let starting_epoch = bank.epoch_schedule().get_epoch(snapshot_slot);
                                 let ending_epoch =
                                     bank.epoch_schedule().get_epoch(ending_slot.unwrap());
