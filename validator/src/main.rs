@@ -31,8 +31,8 @@ use {
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -2771,10 +2771,7 @@ pub fn main() {
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
+                    ShredStorageType::rocks_fifo(shred_storage_size)
                 }
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
