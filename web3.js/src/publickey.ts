@@ -35,6 +35,14 @@ function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
+/** @internal */
+interface Base58StringCacheEntry {
+  [x: number]: Base58StringCacheEntry;
+  value: string | null;
+}
+/** @internal */
+const base58StringCache: Base58StringCacheEntry = {value: null};
+
 /**
  * A public key
  */
@@ -84,7 +92,18 @@ export class PublicKey extends Struct {
    * Return the base-58 representation of the public key
    */
   toBase58(): string {
-    return bs58.encode(this.toBytes());
+    const bytes = this.toBytes();
+    let cacheEntry = base58StringCache;
+    bytes.forEach(word => {
+      if (cacheEntry[word] === undefined) {
+        cacheEntry[word] = {value: null};
+      }
+      cacheEntry = cacheEntry[word];
+    });
+    if (cacheEntry.value === null) {
+      cacheEntry.value = bs58.encode(bytes);
+    }
+    return cacheEntry.value;
   }
 
   toJSON(): string {

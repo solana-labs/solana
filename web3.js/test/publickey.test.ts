@@ -1,14 +1,27 @@
 import BN from 'bn.js';
+import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {SinonSpy, spy} from 'sinon';
 
 import {Keypair} from '../src/keypair';
-import {PublicKey, MAX_SEED_LENGTH} from '../src/publickey';
+import {MAX_SEED_LENGTH} from '../src/publickey';
 
 use(chaiAsPromised);
 
 describe('PublicKey', function () {
+  let PublicKey;
+  beforeEach(() => {
+    delete require.cache[require.resolve('../src/publickey')];
+    PublicKey = require('../src/publickey').PublicKey;
+    spy(bs58, 'encode');
+  });
+
+  afterEach(() => {
+    (bs58.encode as SinonSpy).restore();
+  });
+
   it('invalid', () => {
     expect(() => {
       new PublicKey([
@@ -69,6 +82,29 @@ describe('PublicKey', function () {
       0, 0, 0, 0, 0, 0, 0,
     ]);
     expect(key4.toBase58()).to.eq('11111111111111111111111111111111');
+  });
+
+  it('memoizes base58 string computations', () => {
+    const key = new PublicKey('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toBase58()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toBase58()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toJSON()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toJSON()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toString()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(key.toString()).to.eq('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(bs58.encode).to.have.been.calledOnce;
+  });
+
+  it('memoizes base58 string computations for the same public key across instances of PublicKey', () => {
+    const keyA = new PublicKey('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    const keyB = new PublicKey('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+    expect(keyA.toBase58()).to.eq(
+      'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',
+    );
+    expect(keyB.toBase58()).to.eq(
+      'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',
+    );
+    expect(bs58.encode).to.have.been.calledOnce;
   });
 
   it('toJSON', () => {
