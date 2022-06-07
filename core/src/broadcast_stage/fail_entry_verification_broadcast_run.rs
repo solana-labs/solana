@@ -99,14 +99,23 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             self.next_code_index = index + 1;
         }
         let last_shreds = last_entries.map(|(good_last_entry, bad_last_entry)| {
-            let (good_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[good_last_entry], true, self.next_shred_index, self.next_code_index);
-
-            let (bad_last_data_shred, _) =
-                // Don't mark the last shred as last so that validators won't know that
-                // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &[bad_last_entry], false, self.next_shred_index, self.next_code_index);
-
+            let (good_last_data_shred, _) = shredder.entries_to_shreds(
+                keypair,
+                &[good_last_entry],
+                true,
+                self.next_shred_index,
+                self.next_code_index,
+            );
+            // Don't mark the last shred as last so that validators won't know
+            // that they've gotten all the shreds, and will continue trying to
+            // repair.
+            let (bad_last_data_shred, _) = shredder.entries_to_shreds(
+                keypair,
+                &[bad_last_entry],
+                false,
+                self.next_shred_index,
+                self.next_code_index,
+            );
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
         });

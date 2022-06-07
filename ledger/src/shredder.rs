@@ -83,14 +83,16 @@ impl Shredder {
         (data_shreds, coding_shreds)
     }
 
-    // Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds.
-    // "FEC set index" is the index of first data shred in that FEC block.
-    // Shred indices with the same value of:
-    //   (shred_index - fec_set_offset) / MAX_DATA_SHREDS_PER_FEC_BLOCK
-    // belong to the same FEC set.
-    pub fn fec_set_index(shred_index: u32, fec_set_offset: u32) -> Option<u32> {
-        let diff = shred_index.checked_sub(fec_set_offset)?;
-        Some(shred_index - diff % MAX_DATA_SHREDS_PER_FEC_BLOCK)
+    /// Each FEC block has maximum MAX_DATA_SHREDS_PER_FEC_BLOCK shreds.
+    /// "FEC set index" is the index of first data shred in that FEC block.
+    /// **Data** shreds with the same value of:
+    ///     (data_shred.index() - fec_set_offset) / MAX_DATA_SHREDS_PER_FEC_BLOCK
+    /// belong to the same FEC set.
+    /// Coding shreds inherit their fec_set_index from the data shreds that
+    /// they are generated from.
+    pub fn fec_set_index(data_shred_index: u32, fec_set_offset: u32) -> Option<u32> {
+        let diff = data_shred_index.checked_sub(fec_set_offset)?;
+        Some(data_shred_index - diff % MAX_DATA_SHREDS_PER_FEC_BLOCK)
     }
 
     pub fn entries_to_data_shreds(
