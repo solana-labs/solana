@@ -5,13 +5,16 @@ use {
         accounts::{test_utils::create_test_accounts, Accounts},
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, Rewrites, StatusCacheRc},
+        genesis_utils::{activate_all_features, activate_feature},
         hardened_unpack::UnpackedAppendVecMap,
+        snapshot_utils::ArchiveFormat,
     },
     bincode::serialize_into,
     rand::{thread_rng, Rng},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
+        feature_set::disable_fee_calculator,
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -361,13 +364,192 @@ fn test_bank_serialize_newer() {
     }
 }
 
+#[test]
+fn test_extra_fields_eof() {
+    solana_logger::setup();
+    let (mut genesis_config, _) = create_genesis_config(500);
+    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    bank0.squash();
+    let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+    // Set extra fields
+    bank.fee_rate_governor.lamports_per_signature = 7000;
+
+    // Serialize
+    let snapshot_storages = bank.get_snapshot_storages(None);
+    let mut buf = vec![];
+    let mut writer = Cursor::new(&mut buf);
+    crate::serde_snapshot::bank_to_stream(
+        SerdeStyle::Newer,
+        &mut std::io::BufWriter::new(&mut writer),
+        &bank,
+        &snapshot_storages,
+    )
+    .unwrap();
+
+    // Deserialize
+    let rdr = Cursor::new(&buf[..]);
+    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+    let copied_accounts = TempDir::new().unwrap();
+    let unpacked_append_vec_map =
+        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+    let dbank = crate::serde_snapshot::bank_from_streams(
+        SerdeStyle::Newer,
+        &mut snapshot_streams,
+        &dbank_paths,
+        unpacked_append_vec_map,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(
+        bank.fee_rate_governor.lamports_per_signature,
+        dbank.fee_rate_governor.lamports_per_signature
+    );
+}
+
+#[test]
+fn test_extra_fields_full_snapshot_archive() {
+    solana_logger::setup();
+
+    let (mut genesis_config, _) = create_genesis_config(500);
+    activate_all_features(&mut genesis_config);
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    while !bank.is_complete() {
+        bank.fill_bank_with_ticks_for_tests();
+    }
+
+    // Set extra field
+    bank.fee_rate_governor.lamports_per_signature = 7000;
+
+    let accounts_dir = TempDir::new().unwrap();
+    let bank_snapshots_dir = TempDir::new().unwrap();
+    let full_snapshot_archives_dir = TempDir::new().unwrap();
+    let incremental_snapshot_archives_dir = TempDir::new().unwrap();
+
+    // Serialize
+    let snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+        &bank_snapshots_dir,
+        &bank,
+        None,
+        full_snapshot_archives_dir.path(),
+        incremental_snapshot_archives_dir.path(),
+        ArchiveFormat::TarBzip2,
+        1,
+        0,
+    )
+    .unwrap();
+
+    // Deserialize
+    let (dbank, _) = snapshot_utils::bank_from_snapshot_archives(
+        &[PathBuf::from(accounts_dir.path())],
+        bank_snapshots_dir.path(),
+        &snapshot_archive_info,
+        None,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        false,
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(
+        bank.fee_rate_governor.lamports_per_signature,
+        dbank.fee_rate_governor.lamports_per_signature
+    );
+}
+
+#[test]
+fn test_blank_extra_fields() {
+    solana_logger::setup();
+    let (mut genesis_config, _) = create_genesis_config(500);
+    activate_feature(&mut genesis_config, disable_fee_calculator::id());
+
+    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    bank0.squash();
+    let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+
+    // Set extra fields
+    bank.fee_rate_governor.lamports_per_signature = 7000;
+
+    // Serialize, but don't serialize the extra fields
+    let snapshot_storages = bank.get_snapshot_storages(None);
+    let mut buf = vec![];
+    let mut writer = Cursor::new(&mut buf);
+    crate::serde_snapshot::bank_to_stream_no_extra_fields(
+        SerdeStyle::Newer,
+        &mut std::io::BufWriter::new(&mut writer),
+        &bank,
+        &snapshot_storages,
+    )
+    .unwrap();
+
+    // Deserialize
+    let rdr = Cursor::new(&buf[..]);
+    let mut reader = std::io::BufReader::new(&buf[rdr.position() as usize..]);
+    let mut snapshot_streams = SnapshotStreams {
+        full_snapshot_stream: &mut reader,
+        incremental_snapshot_stream: None,
+    };
+    let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
+    let copied_accounts = TempDir::new().unwrap();
+    let unpacked_append_vec_map =
+        copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
+    let dbank = crate::serde_snapshot::bank_from_streams(
+        SerdeStyle::Newer,
+        &mut snapshot_streams,
+        &dbank_paths,
+        unpacked_append_vec_map,
+        &genesis_config,
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        None,
+        AccountShrinkThreshold::default(),
+        false,
+        Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
+        None,
+    )
+    .unwrap();
+
+    // Defaults to 0
+    assert_eq!(0, dbank.fee_rate_governor.lamports_per_signature);
+}
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 mod test_bank_serialize {
     use super::*;
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "HT9yewU4zJ6ZAgJ7aDSbHPtzZGZqASpq6rkq6ET42Kki")]
+    #[frozen_abi(digest = "9vGBt7YfymKUTPWLHVVpQbDtPD7dFDwXRMFkCzwujNqJ")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

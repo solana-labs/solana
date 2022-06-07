@@ -1,7 +1,7 @@
 //! State for durable transaction nonces.
 
 mod current;
-pub use current::{Data, State};
+pub use current::{Data, DurableNonce, State};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

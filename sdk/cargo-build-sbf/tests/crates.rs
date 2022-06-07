@@ -20,15 +20,15 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str]) -> Output {
         .join(crate_name)
         .join("Cargo.toml");
     let toml = format!("{}", toml.display());
-    let mut args = vec!["--bpf-sdk", "../bpf", "--manifest-path", &toml];
+    let mut args = vec!["--sbf-sdk", "../bpf", "--manifest-path", &toml];
     for arg in extra_args {
         args.push(arg);
     }
-    let cargo_build_bpf = root.join("target").join("debug").join("cargo-build-bpf");
-    let output = Command::new(cargo_build_bpf)
+    let cargo_build_sbf = root.join("target").join("debug").join("cargo-build-sbf");
+    let output = Command::new(cargo_build_sbf)
         .args(&args)
         .output()
-        .expect("Error running cargo-build-bpf");
+        .expect("Error running cargo-build-sbf");
     if !output.status.success() {
         eprintln!("--- stdout ---");
         io::stderr().write_all(&output.stdout).unwrap();
@@ -51,7 +51,7 @@ fn test_build() {
 fn test_dump() {
     // This test requires rustfilt.
     assert!(Command::new("cargo")
-        .args(&["install", "rustfilt"])
+        .args(&["install", "-f", "rustfilt"])
         .status()
         .expect("Unable to install rustfilt required for --dump option")
         .success());
@@ -71,7 +71,7 @@ fn test_dump() {
 #[test]
 #[serial]
 fn test_out_dir() {
-    let output = run_cargo_build("noop", &["--bpf-out-dir", "tmp_out"]);
+    let output = run_cargo_build("noop", &["--sbf-out-dir", "tmp_out"]);
     assert!(output.status.success());
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dir = cwd.join("tmp_out");
@@ -89,7 +89,7 @@ fn test_generate_child_script_on_failre() {
         .join("tests")
         .join("crates")
         .join("fail")
-        .join("cargo-build-bpf-child-script-cargo.sh");
+        .join("cargo-build-sbf-child-script-cargo.sh");
     assert!(scr.exists());
     fs::remove_file(scr).expect("Failed to remove script");
 }

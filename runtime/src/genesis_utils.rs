@@ -196,16 +196,20 @@ pub fn create_genesis_config_with_leader(
 pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     // Activate all features at genesis in development mode
     for feature_id in FeatureSet::default().inactive {
-        genesis_config.accounts.insert(
-            feature_id,
-            Account::from(feature::create_account(
-                &Feature {
-                    activated_at: Some(0),
-                },
-                std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1),
-            )),
-        );
+        activate_feature(genesis_config, feature_id);
     }
+}
+
+pub fn activate_feature(genesis_config: &mut GenesisConfig, feature_id: Pubkey) {
+    genesis_config.accounts.insert(
+        feature_id,
+        Account::from(feature::create_account(
+            &Feature {
+                activated_at: Some(0),
+            },
+            std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1),
+        )),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

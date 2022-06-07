@@ -52,6 +52,11 @@ impl ReadOnlyAccountsCache {
         }
     }
 
+    /// true if pubkey is in cache at slot
+    pub fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
+        self.cache.contains_key(&(*pubkey, slot))
+    }
+
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
         let key = (pubkey, slot);
         let mut entry = match self.cache.get_mut(&key) {

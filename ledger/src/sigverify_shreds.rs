@@ -281,7 +281,7 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
         packet.meta.size >= sig.end,
         "packet is not large enough for a signature"
     );
-    let signature = keypair.sign_message(&packet.data()[msg]);
+    let signature = keypair.sign_message(packet.data(msg).unwrap());
     trace!("signature {:?}", signature);
     packet.buffer_mut()[sig].copy_from_slice(signature.as_ref());
 }
