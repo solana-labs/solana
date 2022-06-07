@@ -37,14 +37,14 @@ impl TurbineMerkleHash {
 
     pub fn hash_leaf<T>(bufs: &[T]) -> TurbineMerkleHash
     where
-        T: AsRef<[u8]> + Sync
+        T: AsRef<[u8]> + Sync,
     {
         Self::hash(bufs, Some(LEAF_PREFIX))
     }
 
     pub fn hash_intermediate<T>(bufs: &[T]) -> TurbineMerkleHash
     where
-        T: AsRef<[u8]> + Sync
+        T: AsRef<[u8]> + Sync,
     {
         Self::hash(bufs, Some(INTERMEDIATE_PREFIX))
     }
@@ -251,7 +251,10 @@ impl TurbineMerkleTree {
         let mut level_leaves = leaves.len();
         while level_leaves > 1 {
             for i in (0..level_leaves).step_by(2) {
-                let hash = TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                let hash = TurbineMerkleHash::hash_intermediate(&[
+                    &tree[base + i].0,
+                    &tree[base + i + 1].0,
+                ]);
                 tree.push(hash);
             }
             base += level_leaves;
@@ -290,8 +293,10 @@ impl TurbineMerkleTree {
                 let mut level_leaves = slice.len();
                 while level_leaves > 1 {
                     for i in (0..level_leaves).step_by(2) {
-                        let hash =
-                            TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                        let hash = TurbineMerkleHash::hash_intermediate(&[
+                            &tree[base + i].0,
+                            &tree[base + i + 1].0,
+                        ]);
                         tree.push(hash);
                     }
                     base += level_leaves;
@@ -320,7 +325,10 @@ impl TurbineMerkleTree {
         base = (chunk * 2 - 1) * level_nodes - level_nodes;
         while level_nodes > 1 {
             for i in (0..level_nodes).step_by(2) {
-                let hash = TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                let hash = TurbineMerkleHash::hash_intermediate(&[
+                    &tree[base + i].0,
+                    &tree[base + i + 1].0,
+                ]);
                 tree.push(hash);
             }
             base += level_nodes;
