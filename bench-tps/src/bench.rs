@@ -1046,11 +1046,21 @@ mod tests {
         super::*,
         itertools::izip,
         solana_client::nonce_utils,
+        solana_client::thin_client::{create_client, ThinClient},
+        solana_core::validator::ValidatorConfig,
+        solana_faucet::faucet::run_local_faucet,
+        solana_local_cluster::{
+            cluster::Cluster,
+            local_cluster::{ClusterConfig, LocalCluster},
+            validator_configs::make_identical_validator_configs,
+        },
+        solana_rpc::rpc::JsonRpcConfig,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             fee_calculator::FeeRateGovernor, genesis_config::create_genesis_config,
             native_token::sol_to_lamports,
         },
+        solana_streamer::socket::SocketAddrSpace,
     };
 
     fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
@@ -1099,35 +1109,90 @@ mod tests {
 
     #[test]
     fn test_durable_nonce() {
-        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        /*let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
         let bank = Bank::new_for_tests(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));
+        let client = Arc::new(BankClient::new(bank));*/
+        solana_logger::setup();
 
-        let config = Config {
-            id,
-            tx_count: 10,
-            duration: Duration::from_secs(5),
-            ..Config::default()
+        // 1. Create faucet thread
+        let faucet_keypair = Keypair::new();
+        let faucet_pubkey = faucet_keypair.pubkey();
+        let faucet_addr = run_local_faucet(faucet_keypair, None);
+        let mut validator_config = ValidatorConfig::default_for_test();
+        validator_config.rpc_config = JsonRpcConfig {
+            faucet_addr: Some(faucet_addr),
+            ..JsonRpcConfig::default_for_test()
         };
 
-        let keypair_count = config.tx_count * config.keypair_multiplier;
+        // 2. Create a local cluster which is aware of faucet
+        let num_nodes = 1;
+        let native_instruction_processors = vec![];
+        let cluster = LocalCluster::new(
+            &mut ClusterConfig {
+                node_stakes: vec![999_990; num_nodes],
+                cluster_lamports: 200_000_000,
+                validator_configs: make_identical_validator_configs(
+                    &ValidatorConfig {
+                        rpc_config: JsonRpcConfig {
+                            faucet_addr: Some(faucet_addr),
+                            ..JsonRpcConfig::default_for_test()
+                        },
+                        ..ValidatorConfig::default_for_test()
+                    },
+                    num_nodes,
+                ),
+                native_instruction_processors,
+                ..ClusterConfig::default()
+            },
+            SocketAddrSpace::Unspecified,
+        );
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        // 3. Transfer funds to faucet account
+        cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
+
+        // 4. Create client
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
+
+        let client = Arc::new(create_client(
+            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.tpu,
+        ));
+
+        let funding_keypair = &cluster.funding_keypair;
+        let tx_count = 10;
+        let keypair_multiplier = 8;
+
+        //let config = Config {
+        //    id: cluster.funding_keypair, //id,
+        //    tx_count: 10,
+        //    duration: Duration::from_secs(5),
+        //    ..Config::default()
+        //};
+
+        let keypair_count = tx_count * keypair_multiplier;
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20).unwrap();
+            generate_and_fund_keypairs(client.clone(), funding_keypair, keypair_count, 20).unwrap();
 
         let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
         let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
-        for chunk in keypairs.chunks_exact(2 * config.tx_count) {
-            source_keypair_chunks.push(chunk[..config.tx_count].iter().collect());
-            dest_keypair_chunks.push(chunk[config.tx_count..].iter().collect());
+        for chunk in keypairs.chunks_exact(2 * tx_count) {
+            source_keypair_chunks.push(chunk[..tx_count].iter().collect());
+            dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
         }
 
-        let nonce_accounts =
-            generate_durable_nonce_accounts(client.clone(), &config.id, &source_keypair_chunks)
-                .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
+        let nonce_accounts = generate_durable_nonce_accounts(
+            client.clone(),
+            funding_keypair,
+            &source_keypair_chunks,
+        )
+        .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
 
         let mut nonce_account_chunks: Vec<Vec<&Keypair>> =
             Vec::with_capacity(source_keypair_chunks.len());
-        for chunk in nonce_accounts.chunks_exact(config.tx_count) {
+        for chunk in nonce_accounts.chunks_exact(tx_count) {
             nonce_account_chunks.push(chunk.iter().collect());
         }
 
