@@ -8668,6 +8668,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_minimization_add_owner_accounts() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let owner_pubkey = solana_sdk::pubkey::new_rand();
+        bank.store_account(&pubkey, &AccountSharedData::new(1, 0, &owner_pubkey));
+
+        let owner_accounts = DashSet::new();
+        owner_accounts.insert(pubkey);
+
+        bank.minimization_add_owner_accounts(&owner_accounts);
+        assert!(owner_accounts.contains(&pubkey));
+        assert!(owner_accounts.contains(&owner_pubkey));
+    }
+
+    #[test]
     #[ignore]
     fn test_rent_distribution() {
         solana_logger::setup();
