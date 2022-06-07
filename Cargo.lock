@@ -4512,6 +4512,7 @@ dependencies = [
  "regex",
  "serial_test",
  "solana-download-utils",
+ "solana-logger 1.11.0",
  "solana-sdk 1.11.0",
  "tar",
 ]
