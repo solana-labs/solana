@@ -1703,8 +1703,8 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_time) = Measure::this(
-            |_| BankRc {
+        let (rc, bank_rc_time) = measure!(
+            BankRc {
                 accounts: Arc::new(Accounts::new_from_parent(
                     &parent.rc.accounts,
                     slot,
@@ -1714,20 +1714,18 @@ impl Bank {
                 slot,
                 bank_id_generator: parent.rc.bank_id_generator.clone(),
             },
-            (),
             "bank_rc_creation",
         );
 
-        let (src, status_cache_rc_time) = Measure::this(
-            |_| StatusCacheRc {
+        let (src, status_cache_rc_time) = measure!(
+            StatusCacheRc {
                 status_cache: parent.src.status_cache.clone(),
             },
-            (),
             "status_cache_rc_creation",
         );
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time) = Measure::this(
-            |_| {
+        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
+            {
                 let fee_rate_governor = FeeRateGovernor::new_derived(
                     &parent.fee_rate_governor,
                     parent.signature_count(),
@@ -1741,65 +1739,54 @@ impl Bank {
                 };
                 (fee_rate_governor, fee_calculator)
             },
-            (),
             "fee_components_creation",
         );
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
-        let (blockhash_queue, blockhash_queue_time) = Measure::this(
-            |_| RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
-            (),
+        let (blockhash_queue, blockhash_queue_time) = measure!(
+            RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
             "blockhash_queue_creation",
         );
 
-        let (stakes_cache, stakes_cache_time) = Measure::this(
-            |_| StakesCache::new(parent.stakes_cache.stakes().clone()),
-            (),
+        let (stakes_cache, stakes_cache_time) = measure!(
+            StakesCache::new(parent.stakes_cache.stakes().clone()),
             "stakes_cache_creation",
         );
 
         let (epoch_stakes, epoch_stakes_time) =
-            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_creation");
+            measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
 
-        let (builtin_programs, builtin_programs_time) = Measure::this(
-            |_| parent.builtin_programs.clone(),
-            (),
-            "builtin_programs_creation",
-        );
+        let (builtin_programs, builtin_programs_time) =
+            measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
 
-        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = Measure::this(
-            |_| parent.rewards_pool_pubkeys.clone(),
-            (),
+        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
+            parent.rewards_pool_pubkeys.clone(),
             "rewards_pool_pubkeys_creation",
         );
 
-        let (cached_executors, cached_executors_time) = Measure::this(
-            |_| {
+        let (cached_executors, cached_executors_time) = measure!(
+            {
                 let parent_bank_executors = parent.cached_executors.read().unwrap();
                 RwLock::new(CachedExecutors::new_from_parent_bank_executors(
                     &parent_bank_executors,
                     epoch,
                 ))
             },
-            (),
             "cached_executors_creation",
         );
 
-        let (transaction_debug_keys, transaction_debug_keys_time) = Measure::this(
-            |_| parent.transaction_debug_keys.clone(),
-            (),
+        let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
+            parent.transaction_debug_keys.clone(),
             "transation_debug_keys_creation",
         );
 
-        let (transaction_log_collector_config, transaction_log_collector_config_time) =
-            Measure::this(
-                |_| parent.transaction_log_collector_config.clone(),
-                (),
-                "transaction_log_collector_config_creation",
-            );
+        let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
+            parent.transaction_log_collector_config.clone(),
+            "transaction_log_collector_config_creation",
+        );
 
         let (feature_set, feature_set_time) =
-            Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
+            measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
@@ -1878,8 +1865,8 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
         };
 
-        let (_, ancestors_time) = Measure::this(
-            |_| {
+        let (_, ancestors_time) = measure!(
+            {
                 let mut ancestors = Vec::with_capacity(1 + new.parents().len());
                 ancestors.push(new.slot());
                 new.parents().iter().for_each(|p| {
@@ -1887,48 +1874,43 @@ impl Bank {
                 });
                 new.ancestors = Ancestors::from(ancestors);
             },
-            (),
             "ancestors_creation",
         );
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
-        let (_, update_epoch_time) = Measure::this(
-            |_| {
+        let (_, update_epoch_time) = measure!(
+            {
                 if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = Measure::this(
-                        |_| ThreadPoolBuilder::new().build().unwrap(),
-                        (),
+                    let (thread_pool, thread_pool_time) = measure!(
+                        ThreadPoolBuilder::new().build().unwrap(),
                         "thread_pool_creation",
                     );
 
-                    let (_, apply_feature_activations_time) = Measure::this(
-                        |_| new.apply_feature_activations(false, false),
-                        (),
+                    let (_, apply_feature_activations_time) = measure!(
+                        new.apply_feature_activations(false, false),
                         "apply_feature_activation",
                     );
 
                     // Add new entry to stakes.stake_history, set appropriate epoch and
                     // update vote accounts with warmed up stakes before saving a
                     // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) = Measure::this(
-                        |_| new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                        (),
+                    let (_, activate_epoch_time) = measure!(
+                        new.stakes_cache.activate_epoch(epoch, &thread_pool),
                         "activate_epoch",
                     );
 
                     // Save a snapshot of stakes for use in consensus and stake weighted networking
                     let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) = Measure::this(
-                        |_| new.update_epoch_stakes(leader_schedule_epoch),
-                        (),
+                    let (_, update_epoch_stakes_time) = measure!(
+                        new.update_epoch_stakes(leader_schedule_epoch),
                         "update_epoch_stakes",
                     );
 
                     let mut metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = Measure::this(
-                        |_| {
+                    let (_, update_rewards_with_thread_pool_time) = measure!(
+                        {
                             new.update_rewards_with_thread_pool(
                                 parent_epoch,
                                 reward_calc_tracer,
@@ -1936,7 +1918,6 @@ impl Bank {
                                 &mut metrics,
                             )
                         },
-                        (),
                         "update_rewards_with_thread_pool",
                     );
 
@@ -2004,27 +1985,22 @@ impl Bank {
                     new.update_epoch_stakes(leader_schedule_epoch);
                 }
             },
-            (),
             "update_epoch",
         );
 
         // Update sysvars before processing transactions
-        let (_, update_sysvars_time) = Measure::this(
-            |_| {
+        let (_, update_sysvars_time) = measure!(
+            {
                 new.update_slot_hashes();
                 new.update_stake_history(Some(parent_epoch));
                 new.update_clock(Some(parent_epoch));
                 new.update_fees();
             },
-            (),
             "update_sysvars",
         );
 
-        let (_, fill_sysvar_cache_time) = Measure::this(
-            |_| new.fill_missing_sysvar_cache_entries(),
-            (),
-            "fill_sysvar_cache",
-        );
+        let (_, fill_sysvar_cache_time) =
+            measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
 
         time.stop();
 
