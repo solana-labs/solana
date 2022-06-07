@@ -379,6 +379,10 @@ pub mod executables_incur_cpi_data_cost {
     solana_sdk::declare_id!("7GUcYgq4tVtaqNCKT3dho9r4665Qp5TxCZ27Qgjx3829");
 }
 
+pub mod quick_bail_on_panic {
+    solana_sdk::declare_id!("DpJREPyuMZ5nDfU6H3WTqSqUFSXAfw8u7xqmWtEwJDcP");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -466,7 +470,12 @@ lazy_static! {
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
+<<<<<<< HEAD
         (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
+=======
+        (vote_state_update_credit_per_dequeue::id(), "Calculate vote credits for VoteStateUpdate per vote dequeue to match credit awards for Vote instruction"),
+        (quick_bail_on_panic::id(), "quick bail on panic"),
+>>>>>>> ff68bf6c2 (quick bail on panic (#25804))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
