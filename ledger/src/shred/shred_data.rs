@@ -2,7 +2,7 @@ use {
     crate::shred::{
         self,
         common::dispatch,
-        legacy,
+        legacy, merkle,
         traits::{Shred as _, ShredData as ShredDataTrait},
         DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredVariant,
         MAX_DATA_SHREDS_PER_SLOT,
@@ -13,6 +13,7 @@ use {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ShredData {
     Legacy(legacy::ShredData),
+    Merkle(merkle::ShredData),
 }
 
 impl ShredData {
@@ -77,26 +78,44 @@ impl ShredData {
     pub(super) fn bytes_to_store(&self) -> &[u8] {
         match self {
             Self::Legacy(shred) => shred.bytes_to_store(),
+            Self::Merkle(shred) => shred.payload(),
         }
     }
 
     // Possibly zero pads bytes stored in blockstore.
     pub(crate) fn resize_stored_shred(shred: Vec<u8>) -> Result<Vec<u8>, Error> {
         match shred::layout::get_shred_variant(&shred)? {
-            ShredVariant::LegacyCode => Err(Error::InvalidShredType),
+            ShredVariant::LegacyCode | ShredVariant::MerkleCode(_) => Err(Error::InvalidShredType),
+            ShredVariant::MerkleData(_) => {
+                if shred.len() != merkle::ShredData::SIZE_OF_PAYLOAD {
+                    return Err(Error::InvalidPayloadSize(shred.len()));
+                }
+                Ok(shred)
+            }
             ShredVariant::LegacyData => legacy::ShredData::resize_stored_shred(shred),
         }
     }
 
     // Maximum size of ledger data that can be embedded in a data-shred.
-    pub(crate) fn capacity() -> Result<usize, Error> {
-        Ok(legacy::ShredData::CAPACITY)
+    // merkle_proof_size is the number of proof entries in the merkle tree
+    // branch. None indicates a legacy data-shred.
+    pub(crate) fn capacity(merkle_proof_size: Option<u8>) -> Result<usize, Error> {
+        match merkle_proof_size {
+            None => Ok(legacy::ShredData::CAPACITY),
+            Some(proof_size) => merkle::ShredData::capacity(proof_size),
+        }
     }
 }
 
 impl From<legacy::ShredData> for ShredData {
     fn from(shred: legacy::ShredData) -> Self {
         Self::Legacy(shred)
+    }
+}
+
+impl From<merkle::ShredData> for ShredData {
+    fn from(shred: merkle::ShredData) -> Self {
+        Self::Merkle(shred)
     }
 }
 
