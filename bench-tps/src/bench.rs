@@ -16,6 +16,7 @@ use {
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_token::Sol,
+        nonce::State,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction, system_transaction,
@@ -105,6 +106,7 @@ fn generate_chunked_transfers(
     shared_tx_active_thread_count: Arc<AtomicIsize>,
     source_keypair_chunks: Vec<Vec<&Keypair>>,
     dest_keypair_chunks: &mut [VecDeque<&Keypair>],
+    nonce_account_chunks: Option<Vec<Vec<&Keypair>>>,
     threads: usize,
     duration: Duration,
     sustained: bool,
@@ -117,11 +119,18 @@ fn generate_chunked_transfers(
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
+        let nonce_chunk: Option<&[&Keypair]> =
+            if let Some(ref nonce_account_chunks) = nonce_account_chunks {
+                Some(&nonce_account_chunks[chunk_index])
+            } else {
+                None
+            };
         generate_txs(
             shared_txs,
             &recent_blockhash,
             &source_keypair_chunks[chunk_index],
             &dest_keypair_chunks[chunk_index],
+            nonce_chunk,
             threads,
             reclaim_lamports_back_to_source_account,
         );
@@ -202,6 +211,48 @@ where
         .collect()
 }
 
+fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    funding_key: &Keypair,
+    authority_account_chunks: &Vec<Vec<&Keypair>>,
+) -> Result<Vec<Keypair>> {
+    // Do we need to check that authority has enough money to pay for durable transaction?
+
+    let account_count = authority_account_chunks.len() * authority_account_chunks[0].len();
+    let nonce_rent = client
+        .get_minimum_balance_for_rent_exemption(State::size())
+        .unwrap();
+    // Can't I just use random keypair as funding_key here?
+    let (nonce_accounts, _extra) = generate_keypairs(funding_key, account_count as u64);
+    for (i, authority_account) in authority_account_chunks
+        .iter()
+        .flat_map(<_>::into_iter)
+        .enumerate()
+    {
+        let nonce_account = &nonce_accounts[i];
+
+        let instr = system_instruction::create_nonce_account(
+            &authority_account.pubkey(),
+            &nonce_account.pubkey(),
+            &authority_account.pubkey(), // Make the fee payer the nonce account authority
+            nonce_rent,
+        );
+
+        let mut tx = Transaction::new_with_payer(&instr, Some(&authority_account.pubkey()));
+
+        let blockhash = client.get_latest_blockhash().unwrap();
+        if tx
+            .try_sign(&[nonce_account, authority_account], blockhash)
+            .is_err()
+        {
+            return Err(BenchTpsError::Custom("Signing has failed".to_string()));
+        }
+
+        let _sign = client.send_transaction(tx)?;
+    }
+    Ok(nonce_accounts)
+}
+
 pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
 where
     T: 'static + BenchTpsClient + Send + Sync,
@@ -224,6 +275,25 @@ where
         source_keypair_chunks.push(chunk[..tx_count].iter().collect());
         dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
     }
+
+    let mut nonce_accounts = if config.use_durable_nonce {
+        Some(
+            generate_durable_nonce_accounts(client.clone(), &id, &source_keypair_chunks)
+                .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error)),
+        )
+    } else {
+        None
+    };
+
+    let nonce_account_chunks = if config.use_durable_nonce {
+        let mut nonce_account_chunks = Vec::with_capacity(source_keypair_chunks.len());
+        for chunk in nonce_accounts.as_mut().unwrap().chunks_exact(tx_count) {
+            nonce_account_chunks.push(chunk.iter().collect());
+        }
+        Some(nonce_account_chunks)
+    } else {
+        None
+    };
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
@@ -250,17 +320,22 @@ where
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
     let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
-    let blockhash_thread = {
+    // if we use durable nonce, we don't need
+    let blockhash_thread = if !config.use_durable_nonce {
         let exit_signal = exit_signal.clone();
         let blockhash = blockhash.clone();
         let client = client.clone();
         let id = id.pubkey();
-        Builder::new()
-            .name("solana-blockhash-poller".to_string())
-            .spawn(move || {
-                poll_blockhash(&exit_signal, &blockhash, &client, &id);
-            })
-            .unwrap()
+        Some(
+            Builder::new()
+                .name("solana-blockhash-poller".to_string())
+                .spawn(move || {
+                    poll_blockhash(&exit_signal, &blockhash, &client, &id);
+                })
+                .unwrap(),
+        )
+    } else {
+        None
     };
 
     let s_threads = create_sender_threads(
@@ -283,6 +358,7 @@ where
         shared_tx_active_thread_count,
         source_keypair_chunks,
         &mut dest_keypair_chunks,
+        nonce_account_chunks,
         threads,
         duration,
         sustained,
@@ -304,9 +380,11 @@ where
         }
     }
 
-    info!("Waiting for blockhash thread...");
-    if let Err(err) = blockhash_thread.join() {
-        info!("  join() failed with: {:?}", err);
+    if let Some(blockhash_thread) = blockhash_thread {
+        info!("Waiting for blockhash thread...");
+        if let Err(err) = blockhash_thread.join() {
+            info!("  join() failed with: {:?}", err);
+        }
     }
 
     let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
@@ -334,6 +412,7 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
 fn generate_system_txs(
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
+    nonce_account_chunk: Option<&[&Keypair]>,
     reclaim: bool,
     blockhash: &Hash,
 ) -> Vec<(Transaction, u64)> {
@@ -359,6 +438,7 @@ fn generate_txs(
     blockhash: &Arc<RwLock<Hash>>,
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
+    nonce_account_chunk: Option<&[&Keypair]>,
     threads: usize,
     reclaim: bool,
 ) {
@@ -370,7 +450,7 @@ fn generate_txs(
     );
     let signing_start = Instant::now();
 
-    let transactions = generate_system_txs(source, dest, reclaim, &blockhash);
+    let transactions = generate_system_txs(source, dest, nonce_account_chunk, reclaim, &blockhash);
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -959,12 +1039,182 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
 mod tests {
     use {
         super::*,
+        itertools::izip,
+        solana_client::nonce_utils,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             fee_calculator::FeeRateGovernor, genesis_config::create_genesis_config,
             native_token::sol_to_lamports,
         },
     };
+
+    /*fn gen<C, I1, I2, I3, T>(client: Arc<C>, source_it: I1, dest_it: I2, nonce_it: I3) -> Vec<(Transaction, u64)>
+    where
+        C: 'static + BenchTpsClient + Send + Sync,
+        I1: ExactSizeIterator<Item = &Keypair>,
+        I2: ExactSizeIterator<Item = &Keypair>,
+        I3: ExactSizeIterator<Item = &Keypair>,
+    {
+        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(source_it.len());
+        for (from, to, nonce) in izip!(source_it, dest_it, nonce_it) {
+                let nonce_account_pubkey = nonce.pubkey();
+                let nonce_account = client.get_account(nonce_account_pubkey).unwrap_or_else(|error| panic!("{:?}", error) );
+                let nonce_data = nonce_utils::data_from_account(&nonce_account).unwrap_or_else(|error| panic!("{:?}", error) );
+                let nonce_blockhash = nonce_data.blockhash;
+                transactions.push( (
+                    system_transaction::nonced_transfer(
+                        from,
+                        &to.pubkey(),
+                        1,
+                        &nonce.pubkey(),
+                        from,
+                        nonce_blockhash,
+                    ),
+                    0,
+                ) );
+        }
+        // current timestamp to avoid filtering out some transactions if they are too old
+        let t = timestamp();
+        for mut tx in transactions {
+            tx.1 = t;
+        }
+        transactions
+    }*/
+
+    fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+        client: Arc<T>,
+        source: &Vec<&Keypair>,
+        dest: &VecDeque<&Keypair>,
+        nonce: &Vec<&Keypair>,
+        reclaim: bool,
+    ) -> Vec<(Transaction, u64)> {
+        let length = source.len();
+        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
+        for i in 0..length {
+            let nonce_account_pubkey = nonce[i].pubkey();
+            let nonce_account = client
+                .get_account(nonce_account_pubkey)
+                .unwrap_or_else(|error| panic!("{:?}", error));
+            let nonce_data = nonce_utils::data_from_account(&nonce_account[i])
+                .unwrap_or_else(|error| panic!("{:?}", error));
+            let nonce_blockhash = nonce_data.blockhash;
+
+            let (from, to) = if !reclaim {
+                (source[i], dest[i])
+            } else {
+                (dest[i], source[i]) // should fail because there is no authority for dest
+            };
+
+            transactions.push((
+                system_transaction::nonced_transfer(
+                    from,
+                    &to.pubkey(),
+                    1,
+                    &nonce[i].pubkey(),
+                    from,
+                    nonce_blockhash,
+                ),
+                timestamp(),
+            ));
+        }
+        // current timestamp to avoid filtering out some transactions if they are too old
+        let t = timestamp();
+        for mut tx in transactions {
+            tx.1 = t;
+        }
+        transactions
+
+        /*
+        let triples: Vec<_> = if !reclaim {
+            //izip!(source, dest, nonce)
+            source
+                .iter()
+                .zip(dest.iter())
+                .zip(nonce.iter())
+                .map(|((s, d), n)| (s, d, n))
+        } else {
+            //izip!(dest, source, nonce)
+            dest
+                .iter()
+                .zip(source.iter())
+                .zip(nonce.iter())
+                .map(|((s, d), n)| (s, d, n))
+        };
+
+        triples
+            .par_iter()
+            .map(|(from, to, nonce)| {
+                //let nonce_hash = Hash::default();
+                let nonce_account_pubkey = nonce.pubkey();
+                let nonce_account = client.get_account(nonce_account_pubkey).unwrap_or_else(|error| panic!("{:?}", error) );
+                let nonce_data = nonce_utils::data_from_account(&nonce_account).unwrap_or_else(|error| panic!("{:?}", error) );
+                let nonce_blockhash = nonce_data.blockhash;
+                (
+                    system_transaction::nonced_transfer(
+                        from,
+                        &to.pubkey(),
+                        1,
+                        nonce,
+                        from,
+                        nonce_blockhash,
+                    ),
+                    timestamp(),
+                )
+            })
+            .collect()*/
+    }
+
+    #[test]
+    fn test_durable_nonce() {
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let client = Arc::new(BankClient::new(bank));
+
+        let config = Config {
+            id,
+            tx_count: 10,
+            duration: Duration::from_secs(5),
+            ..Config::default()
+        };
+
+        let keypair_count = config.tx_count * config.keypair_multiplier;
+        let keypairs =
+            generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20).unwrap();
+
+        let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+        let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+        for chunk in keypairs.chunks_exact(2 * config.tx_count) {
+            source_keypair_chunks.push(chunk[..config.tx_count].iter().collect());
+            dest_keypair_chunks.push(chunk[config.tx_count..].iter().collect());
+        }
+
+        let mut nonce_accounts =
+            generate_durable_nonce_accounts(client.clone(), &config.id, &source_keypair_chunks)
+                .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
+
+        let mut nonce_account_chunks: Vec<Vec<&Keypair>> =
+            Vec::with_capacity(source_keypair_chunks.len());
+        for chunk in nonce_accounts.chunks_exact(config.tx_count) {
+            nonce_account_chunks.push(chunk.iter().collect());
+        }
+
+        let invalid_blockhash = Hash::default(); // blockhash is not used if durable nonce account is present
+        for (source, dest, nonce) in izip!(
+            &source_keypair_chunks,
+            &dest_keypair_chunks,
+            &nonce_account_chunks
+        ) {
+            let transactions_with_timestamps =
+                generate_nonced_system_txs(client.clone(), source, &dest, &nonce, false);
+            let mut transactions = Vec::with_capacity(transactions_with_timestamps.len());
+            for (tx, _timestamp) in transactions_with_timestamps {
+                transactions.push(tx);
+            }
+            if let Err(error) = client.send_batch(transactions) {
+                println!("send_batch_sync in do_tx_transfers failed: {}", error);
+            }
+        }
+    }
 
     #[test]
     fn test_bench_tps_bank_client() {

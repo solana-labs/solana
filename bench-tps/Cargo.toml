@@ -37,6 +37,7 @@ thiserror = "1.0"
 serial_test = "0.6.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.11.0" }
 solana-test-validator = { path = "../test-validator", version = "=1.11.0" }
+itertools = "0.10.3"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

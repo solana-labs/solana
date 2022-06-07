@@ -52,6 +52,7 @@ pub struct Config {
     pub target_node: Option<Pubkey>,
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
+    pub use_durable_nonce: bool,
 }
 
 impl Default for Config {
@@ -78,6 +79,7 @@ impl Default for Config {
             target_node: None,
             external_client_type: ExternalClientType::default(),
             use_quic: false,
+            use_durable_nonce: false,
         }
     }
 }
