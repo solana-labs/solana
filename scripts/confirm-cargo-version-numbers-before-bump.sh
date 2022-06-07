@@ -41,8 +41,8 @@ for ignore in "${ignores[@]}"; do
   not_paths+=(-not -path "*/$ignore/*")
 done
 
+# shellcheck disable=2207
 Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml "${not_paths[@]}"))
-echo ${Cargo_tomls[*]}
 
 for Cargo_toml in "${Cargo_tomls[@]}"; do
   manifest_version="$(readCargoVariable version "${Cargo_toml}")"
