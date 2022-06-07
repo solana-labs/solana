@@ -8578,6 +8578,44 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_get_rent_collection_accounts_between_slots() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let rent_collection_accounts = DashSet::new();
+        bank.get_rent_collection_accounts_between_slots(
+            &rent_collection_accounts,
+            100_000,
+            110_000,
+        );
+        assert!(
+            rent_collection_accounts.is_empty(),
+            "rent collection accounts should be empty: len={}",
+            rent_collection_accounts.len()
+        );
+
+        let pubkey: Pubkey = "ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9ND"
+            .parse()
+            .unwrap();
+        bank.store_account(&pubkey, &AccountSharedData::new(1, 0, &Pubkey::default()));
+
+        bank.get_rent_collection_accounts_between_slots(
+            &rent_collection_accounts,
+            100_000,
+            110_000,
+        );
+        assert_eq!(
+            1,
+            rent_collection_accounts.len(),
+            "rent collection accounts should have len=1: len={}",
+            rent_collection_accounts.len()
+        );
+        assert!(rent_collection_accounts.contains(&pubkey));
+    }
+
+    #[test]
     #[ignore]
     fn test_rent_distribution() {
         solana_logger::setup();
