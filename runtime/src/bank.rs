@@ -8616,6 +8616,27 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_minimization_add_vote_accounts() {
+        solana_logger::setup();
+
+        let bootstrap_validator_pubkey = solana_sdk::pubkey::new_rand();
+        let bootstrap_validator_stake_lamports = 30;
+        let genesis_config_info = create_genesis_config_with_leader(
+            10,
+            &bootstrap_validator_pubkey,
+            bootstrap_validator_stake_lamports,
+        );
+
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+
+        let vote_accounts = DashSet::new();
+        bank.minimization_add_vote_accounts(&vote_accounts);
+
+        assert!(vote_accounts.contains(&genesis_config_info.voting_keypair.pubkey()));
+        assert!(vote_accounts.contains(&genesis_config_info.validator_pubkey));
+    }
+
+    #[test]
     #[ignore]
     fn test_rent_distribution() {
         solana_logger::setup();
