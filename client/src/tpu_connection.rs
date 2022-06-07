@@ -44,7 +44,7 @@ pub trait TpuConnection {
 
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
     where
-        T: AsRef<[u8]>,
+        T: AsRef<[u8]> + Send + Sync,
     {
         self.send_wire_transaction_batch(&[wire_transaction])
     }
@@ -65,7 +65,7 @@ pub trait TpuConnection {
 
     fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
     where
-        T: AsRef<[u8]>;
+        T: AsRef<[u8]> + Send + Sync;
 
     fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()>;
 }
