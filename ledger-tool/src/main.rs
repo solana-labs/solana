@@ -1764,6 +1764,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("drop-cf")
+                .setting(AppSettings::Hidden)
                 .about("Drop column family.")
                 .arg(
                     Arg::with_name("cf_name")
