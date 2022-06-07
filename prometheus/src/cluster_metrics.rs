@@ -36,7 +36,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         &MetricFamily {
             name: "solana_cluster_identity_balance_total",
             help: "The current node's identity balance",
-            type_: "count",
+            type_: "gauge",
             metrics: vec![Metric::new_sol(identity_balance).at(at)],
         },
     )?;
