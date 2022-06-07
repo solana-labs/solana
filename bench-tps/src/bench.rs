@@ -223,7 +223,8 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         .get_minimum_balance_for_rent_exemption(State::size())
         .unwrap();
     // Can't I just use random keypair as funding_key here?
-    let (nonce_accounts, _extra) = generate_keypairs(funding_key, account_count as u64);
+    let funding_key = Keypair::new();
+    let (nonce_accounts, _extra) = generate_keypairs(&funding_key, account_count as u64);
     for (i, authority_account) in authority_account_chunks
         .iter()
         .flat_map(<_>::into_iter)
@@ -249,6 +250,10 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         }
 
         let _sign = client.send_transaction(tx)?;
+        let ac = client.get_account(&nonce_account.pubkey());
+        if ac.is_err() {
+            panic!("{:?}", ac.err().unwrap());
+        }
     }
     Ok(nonce_accounts)
 }
@@ -1048,39 +1053,6 @@ mod tests {
         },
     };
 
-    /*fn gen<C, I1, I2, I3, T>(client: Arc<C>, source_it: I1, dest_it: I2, nonce_it: I3) -> Vec<(Transaction, u64)>
-    where
-        C: 'static + BenchTpsClient + Send + Sync,
-        I1: ExactSizeIterator<Item = &Keypair>,
-        I2: ExactSizeIterator<Item = &Keypair>,
-        I3: ExactSizeIterator<Item = &Keypair>,
-    {
-        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(source_it.len());
-        for (from, to, nonce) in izip!(source_it, dest_it, nonce_it) {
-                let nonce_account_pubkey = nonce.pubkey();
-                let nonce_account = client.get_account(nonce_account_pubkey).unwrap_or_else(|error| panic!("{:?}", error) );
-                let nonce_data = nonce_utils::data_from_account(&nonce_account).unwrap_or_else(|error| panic!("{:?}", error) );
-                let nonce_blockhash = nonce_data.blockhash;
-                transactions.push( (
-                    system_transaction::nonced_transfer(
-                        from,
-                        &to.pubkey(),
-                        1,
-                        &nonce.pubkey(),
-                        from,
-                        nonce_blockhash,
-                    ),
-                    0,
-                ) );
-        }
-        // current timestamp to avoid filtering out some transactions if they are too old
-        let t = timestamp();
-        for mut tx in transactions {
-            tx.1 = t;
-        }
-        transactions
-    }*/
-
     fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
         client: Arc<T>,
         source: &Vec<&Keypair>,
@@ -1093,9 +1065,9 @@ mod tests {
         for i in 0..length {
             let nonce_account_pubkey = nonce[i].pubkey();
             let nonce_account = client
-                .get_account(nonce_account_pubkey)
+                .get_account(&nonce_account_pubkey)
                 .unwrap_or_else(|error| panic!("{:?}", error));
-            let nonce_data = nonce_utils::data_from_account(&nonce_account[i])
+            let nonce_data = nonce_utils::data_from_account(&nonce_account)
                 .unwrap_or_else(|error| panic!("{:?}", error));
             let nonce_blockhash = nonce_data.blockhash;
 
@@ -1119,49 +1091,10 @@ mod tests {
         }
         // current timestamp to avoid filtering out some transactions if they are too old
         let t = timestamp();
-        for mut tx in transactions {
+        for mut tx in &mut transactions {
             tx.1 = t;
         }
         transactions
-
-        /*
-        let triples: Vec<_> = if !reclaim {
-            //izip!(source, dest, nonce)
-            source
-                .iter()
-                .zip(dest.iter())
-                .zip(nonce.iter())
-                .map(|((s, d), n)| (s, d, n))
-        } else {
-            //izip!(dest, source, nonce)
-            dest
-                .iter()
-                .zip(source.iter())
-                .zip(nonce.iter())
-                .map(|((s, d), n)| (s, d, n))
-        };
-
-        triples
-            .par_iter()
-            .map(|(from, to, nonce)| {
-                //let nonce_hash = Hash::default();
-                let nonce_account_pubkey = nonce.pubkey();
-                let nonce_account = client.get_account(nonce_account_pubkey).unwrap_or_else(|error| panic!("{:?}", error) );
-                let nonce_data = nonce_utils::data_from_account(&nonce_account).unwrap_or_else(|error| panic!("{:?}", error) );
-                let nonce_blockhash = nonce_data.blockhash;
-                (
-                    system_transaction::nonced_transfer(
-                        from,
-                        &to.pubkey(),
-                        1,
-                        nonce,
-                        from,
-                        nonce_blockhash,
-                    ),
-                    timestamp(),
-                )
-            })
-            .collect()*/
     }
 
     #[test]
@@ -1188,7 +1121,7 @@ mod tests {
             dest_keypair_chunks.push(chunk[config.tx_count..].iter().collect());
         }
 
-        let mut nonce_accounts =
+        let nonce_accounts =
             generate_durable_nonce_accounts(client.clone(), &config.id, &source_keypair_chunks)
                 .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
 
@@ -1198,7 +1131,6 @@ mod tests {
             nonce_account_chunks.push(chunk.iter().collect());
         }
 
-        let invalid_blockhash = Hash::default(); // blockhash is not used if durable nonce account is present
         for (source, dest, nonce) in izip!(
             &source_keypair_chunks,
             &dest_keypair_chunks,
