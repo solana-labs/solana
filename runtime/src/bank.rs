@@ -8687,6 +8687,34 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_minimization_add_programdata_accounts() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let program_id = solana_sdk::pubkey::new_rand();
+        let programdata_address = solana_sdk::pubkey::new_rand();
+
+        let program = UpgradeableLoaderState::Program {
+            programdata_address,
+        };
+
+        let mut program_account =
+            AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
+        program_account.set_executable(true);
+
+        bank.store_account(&program_id, &program_account);
+
+        let programdata_accounts = DashSet::new();
+        programdata_accounts.insert(program_id);
+
+        bank.minimization_add_programdata_accounts(&programdata_accounts);
+        assert!(programdata_accounts.contains(&program_id));
+        assert!(programdata_accounts.contains(&programdata_address));
+    }
+
+    #[test]
     #[ignore]
     fn test_rent_distribution() {
         solana_logger::setup();
