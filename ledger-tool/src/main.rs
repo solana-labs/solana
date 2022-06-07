@@ -2003,7 +2003,7 @@ fn main() {
 
                 let exit_signal = Arc::new(AtomicBool::new(false));
                 let system_monitor_service =
-                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false);
+                    SystemMonitorService::new(Arc::clone(&exit_signal), true, false, false);
 
                 if let Some(limit) =
                     value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
