@@ -16,7 +16,7 @@ declare tag="$2"
 echo "branch: $branch tag: $tag"
 
 # The tag is expected to be the branch name plus a patch number. eg:
-#   tag:    v1.2.3 
+#   tag:    v1.2.3
 #   branch: v1.2
 if ! [[ "$tag" == "$branch"* ]]; then
     >&2 echo "Tag must start with the branch name. Tag: $tag   Branch: $branch"
