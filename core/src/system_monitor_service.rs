@@ -12,6 +12,7 @@ use {
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
     },
+    sys_info::{Error, LoadAvg},
 };
 
 const MS_PER_S: u64 = 1_000;
@@ -20,6 +21,7 @@ const MS_PER_H: u64 = MS_PER_M * 60;
 const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
+const SAMPLE_INTERVAL_CPU_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -39,6 +41,13 @@ struct UdpStats {
     sndbuf_errors: usize,
     in_csum_errors: usize,
     ignored_multi: usize,
+}
+
+struct CpuInfo {
+    cpu_num: u32,
+    cpu_freq_mhz: u64,
+    load_avg: LoadAvg,
+    num_threads: u64,
 }
 
 impl UdpStats {
@@ -121,12 +130,18 @@ impl SystemMonitorService {
         exit: Arc<AtomicBool>,
         report_os_memory_stats: bool,
         report_os_network_stats: bool,
+        report_os_cpu_stats: bool,
     ) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
             .name("system-monitor".to_string())
             .spawn(move || {
-                Self::run(exit, report_os_memory_stats, report_os_network_stats);
+                Self::run(
+                    exit,
+                    report_os_memory_stats,
+                    report_os_network_stats,
+                    report_os_cpu_stats,
+                );
             })
             .unwrap();
 
@@ -335,11 +350,45 @@ impl SystemMonitorService {
         }
     }
 
-    pub fn run(exit: Arc<AtomicBool>, report_os_memory_stats: bool, report_os_network_stats: bool) {
+    fn cpu_info() -> Result<CpuInfo, Error> {
+        let cpu_num = sys_info::cpu_num()?;
+        let cpu_freq_mhz = sys_info::cpu_speed()?;
+        let load_avg = sys_info::loadavg()?;
+        let num_threads = sys_info::proc_total()?;
+
+        Ok(CpuInfo {
+            cpu_num,
+            cpu_freq_mhz,
+            load_avg,
+            num_threads,
+        })
+    }
+
+    fn report_cpu_stats() {
+        if let Ok(info) = Self::cpu_info() {
+            datapoint_info!(
+                "cpu-stats",
+                ("cpu_num", info.cpu_num as i64, i64),
+                ("cpu0_freq_mhz", info.cpu_freq_mhz as i64, i64),
+                ("average_load_one_minute", info.load_avg.one, f64),
+                ("average_load_five_minutes", info.load_avg.five, f64),
+                ("average_load_fifteen_minutes", info.load_avg.fifteen, f64),
+                ("total_num_threads", info.num_threads as i64, i64),
+            )
+        }
+    }
+
+    pub fn run(
+        exit: Arc<AtomicBool>,
+        report_os_memory_stats: bool,
+        report_os_network_stats: bool,
+        report_os_cpu_stats: bool,
+    ) {
         let mut udp_stats = None;
         let network_limits_timer = AtomicInterval::default();
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
+        let cpu_timer = AtomicInterval::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -355,6 +404,9 @@ impl SystemMonitorService {
             }
             if report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
                 Self::report_mem_stats();
+            }
+            if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
+                Self::report_cpu_stats();
             }
             sleep(SLEEP_INTERVAL);
         }
