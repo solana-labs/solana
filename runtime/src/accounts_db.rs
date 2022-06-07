@@ -12434,6 +12434,60 @@ pub mod tests {
     }
 
     #[test]
+    fn test_minimize_accounts_db() {
+        solana_logger::setup();
+
+        let accounts = AccountsDb::new_single_for_tests();
+
+        let num_slots = 5;
+        let num_accounts_per_slot = 300;
+
+        let minimized_account_set = DashSet::new();
+
+        let mut current_slot = 0;
+        for _ in 0..num_slots {
+            let pubkeys: Vec<_> = (0..num_accounts_per_slot)
+                .map(|_| solana_sdk::pubkey::new_rand())
+                .collect();
+
+            let some_lamport = 223;
+            let no_data = 0;
+            let owner = *AccountSharedData::default().owner();
+            let account = AccountSharedData::new(some_lamport, no_data, &owner);
+
+            current_slot += 1;
+
+            for (index, pubkey) in pubkeys.iter().enumerate() {
+                accounts.store_uncached(current_slot, &[(pubkey, &account)]);
+
+                if current_slot % 2 == 0 && index % 100 == 0 {
+                    minimized_account_set.insert(*pubkey);
+                }
+            }
+            accounts.get_accounts_delta_hash(current_slot);
+            accounts.add_root(current_slot);
+        }
+
+        assert_eq!(minimized_account_set.len(), 6);
+        accounts.minimize_accounts_db(current_slot, &minimized_account_set);
+
+        let snapshot_storages = accounts.get_snapshot_storages(current_slot, None, None).0;
+        assert_eq!(snapshot_storages.len(), 3);
+
+        let mut account_count = 0;
+        snapshot_storages.into_iter().for_each(|storages| {
+            storages.into_iter().for_each(|storage| {
+                account_count += AppendVecAccountsIter::new(&storage.accounts).count();
+            });
+        });
+
+        assert_eq!(
+            account_count,
+            minimized_account_set.len() + num_accounts_per_slot
+        ); // snapshot slot is untouched, so still has all 300 accounts
+    }
+
+    #[test]
     fn test_select_candidates_by_total_usage_no_candidates() {
         // no input candidates -- none should be selected
         solana_logger::setup();
