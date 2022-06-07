@@ -155,24 +155,18 @@ pub struct BlockstoreRocksFifoOptions {
     pub shred_code_cf_size: u64,
 }
 
-// Maximum size of cf::DataShred.  Used when `shred_storage_type`
-// is set to ShredStorageType::RocksFifo.  The default value is set
-// to 125GB, assuming 500GB total storage for ledger and 25% is
-// used by data shreds.
-const DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE: u64 = 125 * 1024 * 1024 * 1024;
-// Maximum size of cf::CodeShred.  Used when `shred_storage_type`
-// is set to ShredStorageType::RocksFifo.  The default value is set
-// to 100GB, assuming 500GB total storage for ledger and 20% is
-// used by coding shreds.
-const DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE: u64 = 100 * 1024 * 1024 * 1024;
+// The default storage size for storing shreds when `rocksdb-shred-compaction`
+// is set to `fifo` in the validator arguments.  This amount of storage size
+// in bytes will equally allocated to both data shreds and coding shreds.
+pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
 
 impl Default for BlockstoreRocksFifoOptions {
     fn default() -> Self {
         Self {
             // Maximum size of cf::ShredData.
-            shred_data_cf_size: DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE,
+            shred_data_cf_size: DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES / 2,
             // Maximum size of cf::ShredCode.
-            shred_code_cf_size: DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE,
+            shred_code_cf_size: DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES / 2,
         }
     }
 }
