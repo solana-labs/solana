@@ -10,16 +10,24 @@ pub const TURBINE_MERKLE_PROOF_LENGTH_FEC64: usize = 6;
 pub const TURBINE_MERKLE_PROOF_BYTES_FEC64: usize =
     TURBINE_MERKLE_HASH_BYTES * TURBINE_MERKLE_PROOF_LENGTH_FEC64;
 
+// https://en.wikipedia.org/wiki/Merkle_tree#Second_preimage_attack
+const LEAF_PREFIX: &[u8] = &[0];
+const INTERMEDIATE_PREFIX: &[u8] = &[1];
+
 #[repr(transparent)]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TurbineMerkleHash([u8; TURBINE_MERKLE_HASH_BYTES]);
 
 impl TurbineMerkleHash {
-    pub fn hash<T>(bufs: &[T]) -> TurbineMerkleHash
+    pub fn hash<T, U>(bufs: &[T], prefix: Option<U>) -> TurbineMerkleHash
     where
         T: AsRef<[u8]> + Sync,
+        U: AsRef<[u8]> + Sync,
     {
         let mut hasher = Sha256::new();
+        if let Some(prefix) = prefix {
+            hasher.update(prefix);
+        }
         bufs.iter().for_each(|b| hasher.update(b));
         let h = hasher.finalize();
         let mut ret = TurbineMerkleHash::default();
@@ -27,16 +35,48 @@ impl TurbineMerkleHash {
         ret
     }
 
-    fn _hash_raw<T>(bufs: &[T]) -> [u8; TURBINE_MERKLE_HASH_BYTES]
+    pub fn hash_leaf<T>(bufs: &[T]) -> TurbineMerkleHash
+    where
+        T: AsRef<[u8]> + Sync
+    {
+        Self::hash(bufs, Some(LEAF_PREFIX))
+    }
+
+    pub fn hash_intermediate<T>(bufs: &[T]) -> TurbineMerkleHash
+    where
+        T: AsRef<[u8]> + Sync
+    {
+        Self::hash(bufs, Some(INTERMEDIATE_PREFIX))
+    }
+
+    fn _hash_raw<T, U>(bufs: &[T], prefix: Option<U>) -> [u8; TURBINE_MERKLE_HASH_BYTES]
     where
         T: AsRef<[u8]> + Sync,
+        U: AsRef<[u8]> + Sync,
     {
         let mut hasher = Sha256::new();
+        if let Some(prefix) = prefix {
+            hasher.update(prefix);
+        }
         bufs.iter().for_each(|b| hasher.update(b));
         let h = hasher.finalize();
         let mut buf = [0u8; TURBINE_MERKLE_HASH_BYTES];
         buf.copy_from_slice(&h.as_slice()[0..TURBINE_MERKLE_HASH_BYTES]);
         buf
+    }
+
+    fn _hash_leaf_raw<T>(bufs: &[T]) -> [u8; TURBINE_MERKLE_HASH_BYTES]
+    where
+        T: AsRef<[u8]> + Sync,
+    {
+        Self::_hash_raw(bufs, Some(LEAF_PREFIX))
+    }
+
+    fn _hash_intermediate_raw<T>(bufs: &[T]) -> [u8; TURBINE_MERKLE_HASH_BYTES]
+    where
+        T: AsRef<[u8]> + Sync,
+    {
+        Self::_hash_raw(bufs, Some(INTERMEDIATE_PREFIX))
     }
 }
 
@@ -80,9 +120,9 @@ impl TurbineMerkleProof {
         let mut idx = leaf_index;
         for elem in proof {
             hash = if idx & 1 == 0 {
-                TurbineMerkleHash::hash(&[&hash.0, &elem.0])
+                TurbineMerkleHash::hash_intermediate(&[&hash.0, &elem.0])
             } else {
-                TurbineMerkleHash::hash(&[&elem.0, &hash.0])
+                TurbineMerkleHash::hash_intermediate(&[&elem.0, &hash.0])
             };
             idx >>= 1;
         }
@@ -101,9 +141,9 @@ impl TurbineMerkleProof {
         let mut idx = leaf_index;
         proof.chunks_exact(TURBINE_MERKLE_HASH_BYTES).for_each(|b| {
             hash = if idx & 1 == 0 {
-                TurbineMerkleHash::_hash_raw(&[&hash[..], b])
+                TurbineMerkleHash::_hash_intermediate_raw(&[&hash[..], b])
             } else {
-                TurbineMerkleHash::_hash_raw(&[b, &hash[..]])
+                TurbineMerkleHash::_hash_intermediate_raw(&[b, &hash[..]])
             };
             idx >>= 1;
         });
@@ -211,7 +251,7 @@ impl TurbineMerkleTree {
         let mut level_leaves = leaves.len();
         while level_leaves > 1 {
             for i in (0..level_leaves).step_by(2) {
-                let hash = TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                let hash = TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
                 tree.push(hash);
             }
             base += level_leaves;
@@ -228,7 +268,7 @@ impl TurbineMerkleTree {
         // TODO assert bufs.len() is power of 2 or pad to power of 2
         let leaves: Vec<_> = bufs
             .iter()
-            .map(|b| TurbineMerkleHash::hash(&[b.as_ref()]))
+            .map(|b| TurbineMerkleHash::hash_leaf(&[b.as_ref()]))
             .collect();
         Self::new_from_leaves(&leaves)
     }
@@ -245,13 +285,13 @@ impl TurbineMerkleTree {
                 let mut tree = Vec::with_capacity(chunk * 2 - 1);
                 slice
                     .iter()
-                    .for_each(|v: &Vec<T>| tree.push(TurbineMerkleHash::hash(v)));
+                    .for_each(|v: &Vec<T>| tree.push(TurbineMerkleHash::hash_leaf(v)));
                 let mut base = 0;
                 let mut level_leaves = slice.len();
                 while level_leaves > 1 {
                     for i in (0..level_leaves).step_by(2) {
                         let hash =
-                            TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                            TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
                         tree.push(hash);
                     }
                     base += level_leaves;
@@ -280,7 +320,7 @@ impl TurbineMerkleTree {
         base = (chunk * 2 - 1) * level_nodes - level_nodes;
         while level_nodes > 1 {
             for i in (0..level_nodes).step_by(2) {
-                let hash = TurbineMerkleHash::hash(&[&tree[base + i].0, &tree[base + i + 1].0]);
+                let hash = TurbineMerkleHash::hash_intermediate(&[&tree[base + i].0, &tree[base + i + 1].0]);
                 tree.push(hash);
             }
             base += level_nodes;
@@ -353,12 +393,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_merkle() {
         let packets = create_random_packets(16);
         let leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[p]))
+            .map(|p| TurbineMerkleHash::hash_leaf(&[p]))
             .collect();
 
         let tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -374,7 +413,7 @@ mod tests {
         let packets = create_random_packets(64);
         let leaves: Vec<TurbineMerkleHash> = packets
             .iter()
-            .map(|p| TurbineMerkleHash::hash(&[p]))
+            .map(|p| TurbineMerkleHash::hash_leaf(&[p]))
             .collect();
 
         let tree = TurbineMerkleTree::new_from_leaves(&leaves);
@@ -395,7 +434,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_merkle_from_buf_vecs_par() {
         let packets = create_random_packets(64);
         let ref_tree = TurbineMerkleTree::new_from_bufs(&packets[..]);
