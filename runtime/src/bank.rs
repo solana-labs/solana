@@ -124,7 +124,7 @@ use {
         },
         native_loader,
         native_token::sol_to_lamports,
-        nonce::{self, state::DurableNonce},
+        nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
@@ -3744,6 +3744,7 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
+<<<<<<< HEAD
     fn check_message_for_nonce(
         &self,
         message: &SanitizedMessage,
@@ -3757,6 +3758,28 @@ impl Bank {
             .filter(|(_, nonce_account)| {
                 nonce_account::verify_nonce_account(nonce_account, message.recent_blockhash())
             })
+=======
+    fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
+        let nonce_address =
+            message.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))?;
+        let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
+        let nonce_data =
+            nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash())?;
+
+        if self
+            .feature_set
+            .is_active(&feature_set::nonce_must_be_authorized::ID)
+        {
+            let nonce_is_authorized = message
+                .get_ix_signers(NONCED_TX_MARKER_IX_INDEX as usize)
+                .any(|signer| signer == &nonce_data.authority);
+            if !nonce_is_authorized {
+                return None;
+            }
+        }
+
+        Some((*nonce_address, nonce_account))
+>>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 
     fn check_transaction_for_nonce(
@@ -12162,22 +12185,16 @@ pub(crate) mod tests {
         let initial_custodian_balance = custodian_account.lamports();
         assert_eq!(
             bank.process_transaction(&nonce_tx),
-            Err(TransactionError::InstructionError(
-                0,
-                InstructionError::MissingRequiredSignature,
-            ))
+            Err(TransactionError::BlockhashNotFound),
         );
-        /* Check fee charged and nonce has *not* advanced */
+        /* Check fee was *not* charged and nonce has *not* advanced */
         let mut recent_message = nonce_tx.message;
         recent_message.recent_blockhash = bank.last_blockhash();
         assert_eq!(
             bank.get_balance(&custodian_pubkey),
             initial_custodian_balance
-                - bank
-                    .get_fee_for_message(&recent_message.try_into().unwrap())
-                    .unwrap()
         );
-        assert_ne!(
+        assert_eq!(
             nonce_hash,
             get_nonce_blockhash(&bank, &nonce_pubkey).unwrap()
         );
