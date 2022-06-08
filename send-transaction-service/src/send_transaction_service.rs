@@ -605,7 +605,7 @@ impl SendTransactionService {
                     .last_sent_time
                     .map(|last| now.duration_since(last) >= retry_rate)
                     .unwrap_or(false);
-                if !nonce_account::verify_nonce_account(&nonce_account, &durable_nonce)
+                if nonce_account::verify_nonce_account(&nonce_account, &durable_nonce).is_none()
                     && signature_status.is_none()
                     && expired
                 {
