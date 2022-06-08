@@ -1356,15 +1356,11 @@ mod test {
         set_invoke_context_blockhash!(invoke_context, 0);
         let authorized = *nonce_account.get_key();
         drop(nonce_account);
-<<<<<<< HEAD
         invoke_context.get_keyed_accounts().unwrap()[1 + NONCE_ACCOUNT_INDEX]
             .initialize_nonce_account(&authorized, &Rent::free(), &invoke_context)
             .unwrap();
         set_invoke_context_blockhash!(invoke_context, 1);
-        assert!(!verify_nonce_account(
-=======
         assert!(verify_nonce_account(
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
             &transaction_context
                 .get_account_at_index(NONCE_ACCOUNT_INDEX)
                 .unwrap()
