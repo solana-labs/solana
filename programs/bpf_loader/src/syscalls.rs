@@ -250,7 +250,7 @@ pub fn register_syscalls(
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
-        b"sol_curve25519_point_validation",
+        b"sol_curve25519_group_operations",
         SyscallCurveGroupOps::init,
         SyscallCurveGroupOps::call,
     )?;
