@@ -28,6 +28,7 @@ struct Config<'a> {
     generate_child_script_on_failure: bool,
     no_default_features: bool,
     offline: bool,
+    remap_cwd: bool,
     verbose: bool,
     workspace: bool,
     jobs: Option<String>,
@@ -51,6 +52,7 @@ impl Default for Config<'_> {
             generate_child_script_on_failure: false,
             no_default_features: false,
             offline: false,
+            remap_cwd: true,
             verbose: false,
             workspace: false,
             jobs: None,
@@ -515,11 +517,14 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
 
+    let rustflags = env::var("RUSTFLAGS").ok();
+    let rustflags = rustflags.as_deref().unwrap_or_default();
+    if config.remap_cwd {
+        let rustflags = format!("{} -Zremap-cwd-prefix=", &rustflags);
+        env::set_var("RUSTFLAGS", &rustflags);
+    }
     if config.verbose {
-        debug!(
-            "RUSTFLAGS={}",
-            env::var("RUSTFLAGS").ok().as_deref().unwrap_or("")
-        );
+        debug!("RUSTFLAGS={}", &rustflags);
     };
 
     let cargo_build = PathBuf::from("cargo");
@@ -745,6 +750,12 @@ fn main() {
                 .last(true),
         )
         .arg(
+            Arg::new("remap_cwd")
+                .long("disable-remap-cwd")
+                .takes_value(false)
+                .help("Disable remap of cwd prefix and preserve full path strings in binaries"),
+        )
+        .arg(
             Arg::new("dump")
                 .long("dump")
                 .takes_value(false)
@@ -838,6 +849,7 @@ fn main() {
         features: matches.values_of_t("features").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
+        remap_cwd: !matches.is_present("remap_cwd"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
