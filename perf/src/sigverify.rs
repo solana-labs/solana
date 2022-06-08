@@ -642,7 +642,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     // Current design targets max 8ms verify latency assuming 500us per packet.
     match packet_count {
         0..=16 => {
-            batches.into_iter().for_each(|batch| {
+            batches.iter_mut().for_each(|batch| {
                 batch.iter_mut().for_each(|packet| {
                     if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                         packet.meta.set_discard(true);
