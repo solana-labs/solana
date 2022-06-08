@@ -21,8 +21,6 @@ use consts::*;
 //---- Constants
 
 mod consts {
-    use static_assertions::const_assert_eq;
-
     /// Input length for the add operation.
     pub const ALT_BN128_ADDITION_INPUT_LEN: usize = 128;
 
@@ -47,10 +45,6 @@ mod consts {
     /// Size of the EC point. `alt_bn128` point contains
     /// the consistently united x and y fields as 64 bytes.
     pub const ALT_BN128_POINT_SIZE: usize = 64;
-
-    // COMPIlE TIME TEST: the length of a point must be twice the length of the field.
-    #[cfg(not(target_arch = "bpf"))]
-    const_assert_eq!(ALT_BN128_POINT_SIZE, ALT_BN128_FIELD_SIZE * 2);
 
     /// Internal representation of the EC field (32 bytes).
     pub type FieldBytes = [u8; ALT_BN128_FIELD_SIZE];
@@ -154,11 +148,11 @@ impl TryFrom<&[u8]> for AltBn128Field {
 impl TryFrom<(&[u8], usize)> for AltBn128Field {
     type Error = AltBn128Error;
     fn try_from((input, pos): (&[u8], usize)) -> Result<Self, Self::Error> {
-        if input.len() < pos + ALT_BN128_FIELD_SIZE {
+        if input.len() < pos.saturating_add(ALT_BN128_FIELD_SIZE) {
             return Err(AltBn128Error::SliceOutOfBounds);
         }
         let mut buf = [0; ALT_BN128_FIELD_SIZE];
-        buf.copy_from_slice(&input[pos..(pos + ALT_BN128_FIELD_SIZE)]);
+        buf.copy_from_slice(&input[pos..(pos.saturating_add(ALT_BN128_FIELD_SIZE))]);
         Ok(AltBn128Field::from(buf))
     }
 }
@@ -304,8 +298,8 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
 
         let px = &AltBn128Field::try_from((input.as_slice(), 0))?;
         let py = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE))?;
-        let qx = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE * 2))?;
-        let qy = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE * 3))?;
+        let qx = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE.saturating_mul(2)))?;
+        let qy = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE.saturating_mul(3)))?;
 
         let p = G1::try_from(FqPair::new(Fq::try_from(px)?, Fq::try_from(py)?))?;
         let q = G1::try_from(FqPair::new(Fq::try_from(qx)?, Fq::try_from(qy)?))?;
@@ -355,7 +349,7 @@ pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> 
 
         let px = &AltBn128Field::try_from((input.as_slice(), 0))?;
         let py = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE))?;
-        let fr = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE * 2))?;
+        let fr = &AltBn128Field::try_from((input.as_slice(), ALT_BN128_FIELD_SIZE.saturating_mul(2)))?;
 
         let p = G1::try_from(FqPair::new(Fq::try_from(px)?, Fq::try_from(py)?))?;
         let fr = Fr::try_from(fr)?;
@@ -382,7 +376,7 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
             fn sol_alt_bn128_pairing(input: *const u8, input_size: u64, result: *mut u8) -> u64;
         }
 
-        if input.len() % consts::ALT_BN128_PAIRING_ELEMENT_LEN != 0 {
+        if input.len().checked_rem(consts::ALT_BN128_PAIRING_ELEMENT_LEN).unwrap() != 0 {
             return Err(AltBn128Error::InvalidInputData);
         }
         let mut result_buffer = [0u8; 32];
@@ -403,10 +397,10 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         fn read_one(s: &[u8]) -> Result<(G1, G2), AltBn128Error> {
             let ax = Fq::try_from(&AltBn128Field::try_from((s, 0))?)?;
             let ay = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE))?)?;
-            let bay = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE * 2))?)?;
-            let bax = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE * 3))?)?;
-            let bby = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE * 4))?)?;
-            let bbx = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE * 5))?)?;
+            let bay = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE.saturating_mul(2)))?)?;
+            let bax = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE.saturating_mul(3)))?)?;
+            let bby = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE.saturating_mul(4)))?)?;
+            let bbx = Fq::try_from(&AltBn128Field::try_from((s, ALT_BN128_FIELD_SIZE.saturating_mul(5)))?)?;
 
             let ba = Fq2::new(bax, bay);
             let bb = Fq2::new(bbx, bby);
@@ -420,12 +414,12 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
             Ok((a, b))
         }
 
-        let ele_len = input.len() / ALT_BN128_PAIRING_ELEMENT_LEN;
+        let ele_len = input.len().saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN);
         let mut acc = Gt::one();
         for i in 0..ele_len {
             let (a, b) = read_one(
-                &input[i * ALT_BN128_PAIRING_ELEMENT_LEN
-                    ..i * ALT_BN128_PAIRING_ELEMENT_LEN + ALT_BN128_PAIRING_ELEMENT_LEN],
+                &input[i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN)
+                    ..i.saturating_mul(ALT_BN128_PAIRING_ELEMENT_LEN).saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
             )?;
             acc = acc * pairing(a, b);
         }
@@ -553,7 +547,6 @@ fn alt_bn128_addition_test() {
     struct TestCase {
         input: String,
         expected: String,
-        name: String,
     }
 
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
@@ -691,7 +684,6 @@ fn alt_bn128_multiplication_test() {
     struct TestCase {
         input: String,
         expected: String,
-        name: String,
     }
 
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
@@ -805,7 +797,6 @@ fn alt_bn128_pairing_test() {
     struct TestCase {
         input: String,
         expected: String,
-        name: String,
     }
 
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
