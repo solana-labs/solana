@@ -3757,6 +3757,10 @@ impl Bank {
                 .feature_set
                 .is_active(&feature_set::enable_durable_nonce::id());
         let hash_queue = self.blockhash_queue.read().unwrap();
+        let last_blockhash = hash_queue.last_hash();
+        let next_durable_nonce =
+            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
+
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
@@ -3764,9 +3768,11 @@ impl Bank {
                     let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
                     if hash_age == Some(true) {
                         (Ok(()), None)
-                    } else if let Some((address, account)) =
-                        self.check_transaction_for_nonce(tx, enable_durable_nonce)
-                    {
+                    } else if let Some((address, account)) = self.check_transaction_for_nonce(
+                        tx,
+                        enable_durable_nonce,
+                        &next_durable_nonce,
+                    ) {
                         (Ok(()), Some(NoncePartial::new(address, account)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
@@ -3849,10 +3855,16 @@ impl Bank {
         &self,
         tx: &SanitizedTransaction,
         enable_durable_nonce: bool,
+        next_durable_nonce: &DurableNonce,
     ) -> Option<TransactionAccount> {
-        (enable_durable_nonce
+        let durable_nonces_enabled = enable_durable_nonce
             || self.slot() <= 135986379
-            || self.cluster_type() != ClusterType::MainnetBeta)
+            || self.cluster_type() != ClusterType::MainnetBeta;
+        let nonce_must_be_advanceable = self
+            .feature_set
+            .is_active(&feature_set::nonce_must_be_advanceable::ID);
+        let nonce_is_advanceable = tx.message().recent_blockhash() != next_durable_nonce.as_hash();
+        (durable_nonces_enabled && (nonce_is_advanceable || !nonce_must_be_advanceable))
             .then(|| self.check_message_for_nonce(tx.message()))
             .flatten()
     }
@@ -11825,7 +11837,24 @@ pub(crate) mod tests {
             nonce_lamports,
             nonce_authority,
         )?;
+
+        // The setup nonce is not valid to be used until the next bank
+        // so wait one more block
+        goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+        bank = Arc::new(new_from_parent(&bank));
+
         Ok((bank, mint_keypair, custodian_keypair, nonce_keypair))
+    }
+
+    impl Bank {
+        fn next_durable_nonce(&self) -> DurableNonce {
+            let separate_nonce_from_blockhash = self
+                .feature_set
+                .is_active(&feature_set::separate_nonce_from_blockhash::id());
+            let hash_queue = self.blockhash_queue.read().unwrap();
+            let last_blockhash = hash_queue.last_hash();
+            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+        }
     }
 
     #[test]
@@ -11853,6 +11882,7 @@ pub(crate) mod tests {
             bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             ),
             Some((nonce_pubkey, nonce_account))
         );
@@ -11882,6 +11912,7 @@ pub(crate) mod tests {
             .check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx,),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             )
             .is_none());
     }
@@ -11911,6 +11942,7 @@ pub(crate) mod tests {
             .check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             )
             .is_none());
     }
@@ -11941,6 +11973,7 @@ pub(crate) mod tests {
             .check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             )
             .is_none());
     }
@@ -11968,6 +12001,7 @@ pub(crate) mod tests {
             .check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             )
             .is_none());
     }
@@ -11997,6 +12031,36 @@ pub(crate) mod tests {
             InstructionError::ModifiedProgramId,
         ));
         assert_eq!(bank.process_transaction(&tx), expect);
+    }
+
+    #[test]
+    fn test_nonce_must_be_advanceable() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
+        let bank = Arc::new(bank);
+        let nonce_keypair = Keypair::new();
+        let nonce_authority = nonce_keypair.pubkey();
+        let durable_nonce =
+            DurableNonce::from_blockhash(&bank.last_blockhash(), true /* separate domains */);
+        let nonce_account = AccountSharedData::new_data(
+            42_424_242,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::new(nonce_authority, durable_nonce, 5000),
+            )),
+            &system_program::id(),
+        )
+        .unwrap();
+        bank.store_account(&nonce_keypair.pubkey(), &nonce_account);
+
+        let ix =
+            system_instruction::advance_nonce_account(&nonce_keypair.pubkey(), &nonce_authority);
+        let message = Message::new(&[ix], Some(&nonce_keypair.pubkey()));
+        let tx = Transaction::new(&[&nonce_keypair], message, *durable_nonce.as_hash());
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::BlockhashNotFound)
+        );
     }
 
     #[test]
@@ -12637,6 +12701,7 @@ pub(crate) mod tests {
             bank.check_transaction_for_nonce(
                 &SanitizedTransaction::from_transaction_for_tests(tx),
                 true, // enable_durable_nonce
+                &bank.next_durable_nonce(),
             ),
             None
         );
