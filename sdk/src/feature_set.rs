@@ -470,12 +470,8 @@ lazy_static! {
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
-<<<<<<< HEAD
         (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
-=======
-        (vote_state_update_credit_per_dequeue::id(), "Calculate vote credits for VoteStateUpdate per vote dequeue to match credit awards for Vote instruction"),
         (quick_bail_on_panic::id(), "quick bail on panic"),
->>>>>>> ff68bf6c2 (quick bail on panic (#25804))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
