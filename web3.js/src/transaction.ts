@@ -142,6 +142,11 @@ export type TransactionCtorFields_DEPRECATED = {
   recentBlockhash?: Blockhash;
 };
 
+// For backward compatibility; an unfortunate consequence of being
+// forced to over-export types by the documentation generator.
+// See https://github.com/solana-labs/solana/pull/25820
+export type TransactionCtorFields = TransactionCtorFields_DEPRECATED;
+
 /**
  * List of Transaction object fields that may be initialized at construction
  */
@@ -403,8 +408,8 @@ export class Transaction {
         // Writable accounts always come before read-only accounts
         return x.isWritable ? -1 : 1;
       }
-      // Otherwise, sort by pubkey.
-      return x.pubkey._bn.cmp(y.pubkey._bn);
+      // Otherwise, sort by pubkey, stringwise.
+      return x.pubkey.toBase58().localeCompare(y.pubkey.toBase58());
     });
 
     // Move fee payer to the front

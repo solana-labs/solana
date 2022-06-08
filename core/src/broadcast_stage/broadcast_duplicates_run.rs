@@ -169,25 +169,38 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         if let Some(index) = coding_shreds.iter().map(Shred::index).max() {
             self.next_code_index = index + 1;
         }
-        let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
-            let (original_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
-
-            let (partition_last_data_shred, _) =
-                // Don't mark the last shred as last so that validators won't know that
-                // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
-
-                let sigs: Vec<_> = partition_last_data_shred.iter().map(|s| (s.signature(), s.index())).collect();
+        let last_shreds =
+            last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
+                let (original_last_data_shred, _) = shredder.entries_to_shreds(
+                    keypair,
+                    &[original_last_entry],
+                    true,
+                    self.next_shred_index,
+                    self.next_code_index,
+                );
+                // Don't mark the last shred as last so that validators won't
+                // know that they've gotten all the shreds, and will continue
+                // trying to repair.
+                let (partition_last_data_shred, _) = shredder.entries_to_shreds(
+                    keypair,
+                    &duplicate_extra_last_entries,
+                    true,
+                    self.next_shred_index,
+                    self.next_code_index,
+                );
+                let sigs: Vec<_> = partition_last_data_shred
+                    .iter()
+                    .map(|s| (s.signature(), s.index()))
+                    .collect();
                 info!(
                     "duplicate signatures for slot {}, sigs: {:?}",
                     bank.slot(),
                     sigs,
                 );
 
-            self.next_shred_index += 1;
-            (original_last_data_shred, partition_last_data_shred)
-        });
+                self.next_shred_index += 1;
+                (original_last_data_shred, partition_last_data_shred)
+            });
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;

@@ -33,8 +33,8 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         static_analysis::Analysis,
-        verifier::{self, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter},
+        verifier::{RequisiteVerifier, VerifierError},
+        vm::{Config, EbpfVm, InstructionMeter, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -57,7 +57,7 @@ use {
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
         transaction_context::{InstructionContext, TransactionContext},
     },
-    std::{cell::RefCell, fmt::Debug, pin::Pin, rc::Rc, sync::Arc},
+    std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
     thiserror::Error,
 };
 
@@ -158,7 +158,7 @@ pub fn create_executor(
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-    let mut executable = {
+    let executable = {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let programdata = instruction_context
@@ -170,7 +170,6 @@ pub fn create_executor(
                 .get_data()
                 .get(programdata_offset..)
                 .ok_or(InstructionError::AccountDataTooSmall)?,
-            None,
             config,
             syscall_registry,
         );
@@ -183,10 +182,12 @@ pub fn create_executor(
         executable
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    let text_bytes = executable.get_text_bytes().1;
     let mut verify_code_time = Measure::start("verify_code_time");
-    verifier::check(text_bytes, &config)
-        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
+            executable,
+        )
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
@@ -195,8 +196,7 @@ pub fn create_executor(
         .saturating_add(create_executor_metrics.verify_code_us);
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
-        let jit_compile_result =
-            Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable);
+        let jit_compile_result = verified_executable.jit_compile();
         jit_compile_time.stop();
         create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
         invoke_context.timings.create_executor_jit_compile_us = invoke_context
@@ -210,7 +210,7 @@ pub fn create_executor(
     }
     create_executor_metrics.submit_datapoint();
     Ok(Arc::new(BpfExecutor {
-        executable,
+        verified_executable,
         use_jit,
     }))
 }
@@ -250,11 +250,11 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the BPF virtual machine
 pub fn create_vm<'a, 'b>(
-    program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    program: &'a VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     if invoke_context
@@ -1157,7 +1157,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    executable: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    verified_executable: VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
     use_jit: bool,
 }
 
@@ -1190,7 +1190,7 @@ impl Executor for BpfExecutor {
         let mut execute_time;
         let execution_result = {
             let mut vm = match create_vm(
-                &self.executable,
+                &self.verified_executable,
                 parameter_bytes.as_slice_mut(),
                 account_lengths,
                 invoke_context,
@@ -1222,7 +1222,8 @@ impl Executor for BpfExecutor {
             );
             if log_enabled!(Trace) {
                 let mut trace_buffer = Vec::<u8>::new();
-                let analysis = Analysis::from_executable(&self.executable).unwrap();
+                let analysis =
+                    Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
                 vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
@@ -1305,7 +1306,7 @@ mod tests {
         super::*,
         rand::Rng,
         solana_program_runtime::invoke_context::mock_process_instruction,
-        solana_rbpf::vm::SyscallRegistry,
+        solana_rbpf::{verifier::Verifier, vm::SyscallRegistry},
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             account::{
@@ -1374,6 +1375,13 @@ mod tests {
         program_account
     }
 
+    struct TautologyVerifier {}
+    impl Verifier for TautologyVerifier {
+        fn verify(_prog: &[u8], _config: &Config) -> std::result::Result<(), VerifierError> {
+            Ok(())
+        }
+    }
+
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(31, 10)")]
     fn test_bpf_loader_non_terminating_program() {
@@ -1395,18 +1403,21 @@ mod tests {
             "entrypoint",
         )
         .unwrap();
-        let program = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
+        let executable = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
             program,
-            None,
             config,
             syscall_registry,
             bpf_functions,
         )
         .unwrap();
+        let verified_executable = VerifiedExecutable::<
+            TautologyVerifier,
+            BpfError,
+            TestInstructionMeter,
+        >::from_executable(executable)
+        .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        let mut vm =
-            EbpfVm::<BpfError, TestInstructionMeter>::new(&program, &mut [], vec![input_region])
-                .unwrap();
+        let mut vm = EbpfVm::new(&verified_executable, &mut [], vec![input_region]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
@@ -1418,7 +1429,7 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        verifier::check(prog, &Config::default()).unwrap();
+        RequisiteVerifier::verify(prog, &Config::default()).unwrap();
     }
 
     #[test]

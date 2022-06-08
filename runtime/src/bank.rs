@@ -80,7 +80,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
@@ -1282,10 +1282,10 @@ pub struct Bank {
 
     /// Deprecated, do not use
     /// Latest transaction fees for transactions processed by this bank
-    fee_calculator: FeeCalculator,
+    pub(crate) fee_calculator: FeeCalculator,
 
     /// Track cluster signature throughput and adjust fee rate
-    fee_rate_governor: FeeRateGovernor,
+    pub(crate) fee_rate_governor: FeeRateGovernor,
 
     /// Rent that has been collected
     collected_rent: AtomicU64,
@@ -1703,8 +1703,8 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_time) = Measure::this(
-            |_| BankRc {
+        let (rc, bank_rc_time) = measure!(
+            BankRc {
                 accounts: Arc::new(Accounts::new_from_parent(
                     &parent.rc.accounts,
                     slot,
@@ -1714,20 +1714,18 @@ impl Bank {
                 slot,
                 bank_id_generator: parent.rc.bank_id_generator.clone(),
             },
-            (),
             "bank_rc_creation",
         );
 
-        let (src, status_cache_rc_time) = Measure::this(
-            |_| StatusCacheRc {
+        let (src, status_cache_rc_time) = measure!(
+            StatusCacheRc {
                 status_cache: parent.src.status_cache.clone(),
             },
-            (),
             "status_cache_rc_creation",
         );
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time) = Measure::this(
-            |_| {
+        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
+            {
                 let fee_rate_governor = FeeRateGovernor::new_derived(
                     &parent.fee_rate_governor,
                     parent.signature_count(),
@@ -1741,65 +1739,54 @@ impl Bank {
                 };
                 (fee_rate_governor, fee_calculator)
             },
-            (),
             "fee_components_creation",
         );
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
-        let (blockhash_queue, blockhash_queue_time) = Measure::this(
-            |_| RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
-            (),
+        let (blockhash_queue, blockhash_queue_time) = measure!(
+            RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
             "blockhash_queue_creation",
         );
 
-        let (stakes_cache, stakes_cache_time) = Measure::this(
-            |_| StakesCache::new(parent.stakes_cache.stakes().clone()),
-            (),
+        let (stakes_cache, stakes_cache_time) = measure!(
+            StakesCache::new(parent.stakes_cache.stakes().clone()),
             "stakes_cache_creation",
         );
 
         let (epoch_stakes, epoch_stakes_time) =
-            Measure::this(|_| parent.epoch_stakes.clone(), (), "epoch_stakes_creation");
+            measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
 
-        let (builtin_programs, builtin_programs_time) = Measure::this(
-            |_| parent.builtin_programs.clone(),
-            (),
-            "builtin_programs_creation",
-        );
+        let (builtin_programs, builtin_programs_time) =
+            measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
 
-        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = Measure::this(
-            |_| parent.rewards_pool_pubkeys.clone(),
-            (),
+        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
+            parent.rewards_pool_pubkeys.clone(),
             "rewards_pool_pubkeys_creation",
         );
 
-        let (cached_executors, cached_executors_time) = Measure::this(
-            |_| {
+        let (cached_executors, cached_executors_time) = measure!(
+            {
                 let parent_bank_executors = parent.cached_executors.read().unwrap();
                 RwLock::new(CachedExecutors::new_from_parent_bank_executors(
                     &parent_bank_executors,
                     epoch,
                 ))
             },
-            (),
             "cached_executors_creation",
         );
 
-        let (transaction_debug_keys, transaction_debug_keys_time) = Measure::this(
-            |_| parent.transaction_debug_keys.clone(),
-            (),
+        let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
+            parent.transaction_debug_keys.clone(),
             "transation_debug_keys_creation",
         );
 
-        let (transaction_log_collector_config, transaction_log_collector_config_time) =
-            Measure::this(
-                |_| parent.transaction_log_collector_config.clone(),
-                (),
-                "transaction_log_collector_config_creation",
-            );
+        let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
+            parent.transaction_log_collector_config.clone(),
+            "transaction_log_collector_config_creation",
+        );
 
         let (feature_set, feature_set_time) =
-            Measure::this(|_| parent.feature_set.clone(), (), "feature_set_creation");
+            measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
@@ -1878,8 +1865,8 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
         };
 
-        let (_, ancestors_time) = Measure::this(
-            |_| {
+        let (_, ancestors_time) = measure!(
+            {
                 let mut ancestors = Vec::with_capacity(1 + new.parents().len());
                 ancestors.push(new.slot());
                 new.parents().iter().for_each(|p| {
@@ -1887,48 +1874,43 @@ impl Bank {
                 });
                 new.ancestors = Ancestors::from(ancestors);
             },
-            (),
             "ancestors_creation",
         );
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
-        let (_, update_epoch_time) = Measure::this(
-            |_| {
+        let (_, update_epoch_time) = measure!(
+            {
                 if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = Measure::this(
-                        |_| ThreadPoolBuilder::new().build().unwrap(),
-                        (),
+                    let (thread_pool, thread_pool_time) = measure!(
+                        ThreadPoolBuilder::new().build().unwrap(),
                         "thread_pool_creation",
                     );
 
-                    let (_, apply_feature_activations_time) = Measure::this(
-                        |_| new.apply_feature_activations(false, false),
-                        (),
+                    let (_, apply_feature_activations_time) = measure!(
+                        new.apply_feature_activations(false, false),
                         "apply_feature_activation",
                     );
 
                     // Add new entry to stakes.stake_history, set appropriate epoch and
                     // update vote accounts with warmed up stakes before saving a
                     // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) = Measure::this(
-                        |_| new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                        (),
+                    let (_, activate_epoch_time) = measure!(
+                        new.stakes_cache.activate_epoch(epoch, &thread_pool),
                         "activate_epoch",
                     );
 
                     // Save a snapshot of stakes for use in consensus and stake weighted networking
                     let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) = Measure::this(
-                        |_| new.update_epoch_stakes(leader_schedule_epoch),
-                        (),
+                    let (_, update_epoch_stakes_time) = measure!(
+                        new.update_epoch_stakes(leader_schedule_epoch),
                         "update_epoch_stakes",
                     );
 
                     let mut metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = Measure::this(
-                        |_| {
+                    let (_, update_rewards_with_thread_pool_time) = measure!(
+                        {
                             new.update_rewards_with_thread_pool(
                                 parent_epoch,
                                 reward_calc_tracer,
@@ -1936,7 +1918,6 @@ impl Bank {
                                 &mut metrics,
                             )
                         },
-                        (),
                         "update_rewards_with_thread_pool",
                     );
 
@@ -2004,27 +1985,22 @@ impl Bank {
                     new.update_epoch_stakes(leader_schedule_epoch);
                 }
             },
-            (),
             "update_epoch",
         );
 
         // Update sysvars before processing transactions
-        let (_, update_sysvars_time) = Measure::this(
-            |_| {
+        let (_, update_sysvars_time) = measure!(
+            {
                 new.update_slot_hashes();
                 new.update_stake_history(Some(parent_epoch));
                 new.update_clock(Some(parent_epoch));
                 new.update_fees();
             },
-            (),
             "update_sysvars",
         );
 
-        let (_, fill_sysvar_cache_time) = Measure::this(
-            |_| new.fill_missing_sysvar_cache_entries(),
-            (),
-            "fill_sysvar_cache",
-        );
+        let (_, fill_sysvar_cache_time) =
+            measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
 
         time.stop();
 
@@ -5240,31 +5216,39 @@ impl Bank {
         }
     }
 
+    /// Collect rent from `accounts`
+    ///
+    /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
+    /// any code that causes contention on shared memory/data (i.e. do not update atomic metrics).
+    ///
+    /// The return value is a struct of computed values that `collect_rent_in_partition()` will
+    /// reduce at the end of its parallel loop.  If possible, place data/computation that cause
+    /// contention/take locks in the return struct and process them in
+    /// `collect_rent_from_partition()` after reducing the parallel loop.
     fn collect_rent_from_accounts(
         &self,
         mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
-        metrics: &RentMetrics,
         just_rewrites: bool,
-    ) {
+    ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
-        let mut total_collected = CollectedInfo::default();
+        let mut total_rent_collected_info = CollectedInfo::default();
         let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
         let mut accounts_to_store =
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
-        let mut collect_us = 0;
-        let mut hash_skipped_rewrites_us = 0;
+        let mut time_collecting_rent_us = 0;
+        let mut time_hashing_skipped_rewrites_us = 0;
+        let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         for (pubkey, account, loaded_slot) in accounts.iter_mut() {
-            let old_rent_epoch = account.rent_epoch();
-            let mut time = Measure::start("collect");
-            let collected = self.rent_collector.collect_from_existing_account(
-                pubkey,
-                account,
-                self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-            );
-            time.stop();
-            collect_us += time.as_us();
+            let (rent_collected_info, measure) =
+                measure!(self.rent_collector.collect_from_existing_account(
+                    pubkey,
+                    account,
+                    self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                ));
+            time_collecting_rent_us += measure.as_us();
+
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
@@ -5273,48 +5257,45 @@ impl Bank {
             if can_skip_rewrites
                 && Self::skip_rewrite(
                     bank_slot,
-                    collected.rent_amount,
+                    rent_collected_info.rent_amount,
                     *loaded_slot,
-                    old_rent_epoch,
+                    account.rent_epoch(),
                     account,
                 )
             {
                 // this would have been rewritten previously. Now we skip it.
                 // calculate the hash that we would have gotten if we did the rewrite.
                 // This will be needed to calculate the bank's hash.
-                let mut time = Measure::start("hash_account");
-                let hash =
-                    crate::accounts_db::AccountsDb::hash_account(self.slot(), account, pubkey);
-                time.stop();
-                hash_skipped_rewrites_us += time.as_us();
+                let (hash, measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
+                    self.slot(),
+                    account,
+                    pubkey
+                ));
+                time_hashing_skipped_rewrites_us += measure.as_us();
                 rewrites_skipped.push((*pubkey, hash));
-                assert_eq!(collected, CollectedInfo::default());
+                assert_eq!(rent_collected_info, CollectedInfo::default());
             } else if !just_rewrites {
-                total_collected += collected;
+                total_rent_collected_info += rent_collected_info;
                 accounts_to_store.push((pubkey, account));
             }
-            rent_debits.insert(pubkey, collected.rent_amount, account.lamports());
+            rent_debits.insert(pubkey, rent_collected_info.rent_amount, account.lamports());
         }
-        metrics.collect_us.fetch_add(collect_us, Relaxed);
-        metrics.hash_us.fetch_add(hash_skipped_rewrites_us, Relaxed);
 
         if !accounts_to_store.is_empty() {
-            let mut time = Measure::start("store_account");
-            self.store_accounts(&accounts_to_store);
-            time.stop();
-            metrics.store_us.fetch_add(time.as_us(), Relaxed);
+            // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
+            // and have `collect_rent_in_partition()` perform all the stores.
+            let (_, measure) = measure!(self.store_accounts(&accounts_to_store));
+            time_storing_accounts_us += measure.as_us();
         }
 
-        self.remember_skipped_rewrites(rewrites_skipped);
-        self.collected_rent
-            .fetch_add(total_collected.rent_amount, Relaxed);
-        self.rewards
-            .write()
-            .unwrap()
-            .extend(rent_debits.into_unordered_rewards_iter());
-        self.update_accounts_data_size_delta_off_chain(
-            -(total_collected.account_data_len_reclaimed as i64),
-        );
+        CollectRentFromAccountsInfo {
+            rent_collected_info: total_rent_collected_info,
+            rent_rewards: rent_debits.into_unordered_rewards_iter().collect(),
+            rewrites_skipped,
+            time_collecting_rent_us,
+            time_hashing_skipped_rewrites_us,
+            time_storing_accounts_us,
+        }
     }
 
     /// load accounts with pubkeys in 'partition'
@@ -5348,10 +5329,9 @@ impl Bank {
             let end_prefix_inclusive = Self::prefix_from_pubkey(subrange_full.end());
             let range = end_prefix_inclusive - start_prefix;
             let increment = range / num_threads;
-            for thread_metrics in (0..num_threads)
+            let mut results = (0..num_threads)
                 .into_par_iter()
                 .map(|chunk| {
-                    let metrics = RentMetrics::default();
                     let offset = |chunk| start_prefix + chunk * increment;
                     let start = offset(chunk);
                     let last = chunk == num_threads - 1;
@@ -5360,8 +5340,7 @@ impl Bank {
                         bound
                     };
                     let start = merge_prefix(start, *subrange_full.start());
-                    let mut load = Measure::start("load");
-                    let accounts = if last {
+                    let (accounts, measure_load_accounts) = measure!(if last {
                         let end = *subrange_full.end();
                         let subrange = start..=end; // IN-clusive
                         self.rc
@@ -5373,32 +5352,44 @@ impl Bank {
                         self.rc
                             .accounts
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
-                    };
-                    load.stop();
-                    metrics.load_us.fetch_add(load.as_us(), Relaxed);
-
-                    self.collect_rent_from_accounts(accounts, &metrics, just_rewrites);
-                    metrics
+                    });
+                    CollectRentInPartitionInfo::new(
+                        self.collect_rent_from_accounts(accounts, just_rewrites),
+                        Duration::from_nanos(measure_load_accounts.as_ns()),
+                    )
                 })
-                .collect::<Vec<_>>()
-            {
-                metrics
-                    .load_us
-                    .fetch_add(thread_metrics.load_us.load(Relaxed), Relaxed);
-                metrics
-                    .store_us
-                    .fetch_add(thread_metrics.store_us.load(Relaxed), Relaxed);
-                metrics
-                    .hash_us
-                    .fetch_add(thread_metrics.hash_us.load(Relaxed), Relaxed);
-                metrics
-                    .collect_us
-                    .fetch_add(thread_metrics.collect_us.load(Relaxed), Relaxed);
-            }
+                .reduce(
+                    CollectRentInPartitionInfo::default,
+                    CollectRentInPartitionInfo::reduce,
+                );
 
             self.rc
                 .accounts
                 .hold_range_in_memory(&subrange_full, false, thread_pool);
+
+            self.collected_rent
+                .fetch_add(results.rent_collected, Relaxed);
+            self.update_accounts_data_size_delta_off_chain(
+                -(results.accounts_data_size_reclaimed as i64),
+            );
+            self.rewards
+                .write()
+                .unwrap()
+                .append(&mut results.rent_rewards);
+            self.remember_skipped_rewrites(results.rewrites_skipped);
+
+            metrics
+                .load_us
+                .fetch_add(results.time_loading_accounts_us, Relaxed);
+            metrics
+                .collect_us
+                .fetch_add(results.time_collecting_rent_us, Relaxed);
+            metrics
+                .hash_us
+                .fetch_add(results.time_hashing_skipped_rewrites_us, Relaxed);
+            metrics
+                .store_us
+                .fetch_add(results.time_storing_accounts_us, Relaxed);
         });
     }
 
@@ -7479,6 +7470,81 @@ impl Bank {
     }
 }
 
+/// Return the computed values from `collect_rent_from_accounts()`
+///
+/// Since `collect_rent_from_accounts()` is running in parallel, instead of updating the
+/// atomics/shared data inside this function, return those values in this struct for the caller to
+/// process later.
+#[derive(Debug, Default)]
+struct CollectRentFromAccountsInfo {
+    rent_collected_info: CollectedInfo,
+    rent_rewards: Vec<(Pubkey, RewardInfo)>,
+    rewrites_skipped: Vec<(Pubkey, Hash)>,
+    time_collecting_rent_us: u64,
+    time_hashing_skipped_rewrites_us: u64,
+    time_storing_accounts_us: u64,
+}
+
+/// Return the computed values—of each iteration in the parallel loop inside
+/// `collect_rent_in_partition()`—and then perform a reduce on all of them.
+#[derive(Debug, Default)]
+struct CollectRentInPartitionInfo {
+    rent_collected: u64,
+    accounts_data_size_reclaimed: u64,
+    rent_rewards: Vec<(Pubkey, RewardInfo)>,
+    rewrites_skipped: Vec<(Pubkey, Hash)>,
+    time_loading_accounts_us: u64,
+    time_collecting_rent_us: u64,
+    time_hashing_skipped_rewrites_us: u64,
+    time_storing_accounts_us: u64,
+}
+
+impl CollectRentInPartitionInfo {
+    /// Create a new `CollectRentInPartitionInfo` from the results of loading accounts and
+    /// collecting rent on them.
+    #[must_use]
+    fn new(info: CollectRentFromAccountsInfo, time_loading_accounts: Duration) -> Self {
+        Self {
+            rent_collected: info.rent_collected_info.rent_amount,
+            accounts_data_size_reclaimed: info.rent_collected_info.account_data_len_reclaimed,
+            rent_rewards: info.rent_rewards,
+            rewrites_skipped: info.rewrites_skipped,
+            time_loading_accounts_us: time_loading_accounts.as_micros() as u64,
+            time_collecting_rent_us: info.time_collecting_rent_us,
+            time_hashing_skipped_rewrites_us: info.time_hashing_skipped_rewrites_us,
+            time_storing_accounts_us: info.time_storing_accounts_us,
+        }
+    }
+
+    /// Reduce (i.e. 'combine') two `CollectRentInPartitionInfo`s into one.
+    ///
+    /// This fn is used by `collect_rent_in_partition()` as the reduce step (of map-reduce) in its
+    /// parallel loop of rent collection.
+    #[must_use]
+    fn reduce(lhs: Self, rhs: Self) -> Self {
+        Self {
+            rent_collected: lhs.rent_collected.saturating_add(rhs.rent_collected),
+            accounts_data_size_reclaimed: lhs
+                .accounts_data_size_reclaimed
+                .saturating_add(rhs.accounts_data_size_reclaimed),
+            rent_rewards: [lhs.rent_rewards, rhs.rent_rewards].concat(),
+            rewrites_skipped: [lhs.rewrites_skipped, rhs.rewrites_skipped].concat(),
+            time_loading_accounts_us: lhs
+                .time_loading_accounts_us
+                .saturating_add(rhs.time_loading_accounts_us),
+            time_collecting_rent_us: lhs
+                .time_collecting_rent_us
+                .saturating_add(rhs.time_collecting_rent_us),
+            time_hashing_skipped_rewrites_us: lhs
+                .time_hashing_skipped_rewrites_us
+                .saturating_add(rhs.time_hashing_skipped_rewrites_us),
+            time_storing_accounts_us: lhs
+                .time_storing_accounts_us
+                .saturating_add(rhs.time_storing_accounts_us),
+        }
+    }
+}
+
 /// Struct to collect stats when scanning all accounts in `get_total_accounts_stats()`
 #[derive(Debug, Default, Copy, Clone)]
 pub struct TotalAccountsStats {
@@ -7570,6 +7636,7 @@ pub(crate) mod tests {
             hash,
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
             message::{Message, MessageHeader},
+            native_token::LAMPORTS_PER_SOL,
             nonce,
             poh_config::PohConfig,
             program::MAX_RETURN_DATA,
@@ -17391,7 +17458,6 @@ pub(crate) mod tests {
         const INITIAL_ACCOUNTS_DATA_SIZE: u64 =
             MAX_ACCOUNTS_DATA_LEN - REMAINING_ACCOUNTS_DATA_SIZE;
 
-        solana_logger::setup();
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
@@ -17408,13 +17474,19 @@ pub(crate) mod tests {
                 &solana_sdk::system_program::id(),
             );
 
+            let accounts_data_size_before = bank.load_accounts_data_size();
             let result = bank.process_transaction(&txn);
-            assert!(bank.load_accounts_data_size() <= MAX_ACCOUNTS_DATA_LEN);
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert!(accounts_data_size_after <= MAX_ACCOUNTS_DATA_LEN);
             if result.is_err() {
                 assert_eq!(i, NUM_ACCOUNTS);
                 break result;
             }
 
+            assert_eq!(
+                accounts_data_size_after - accounts_data_size_before,
+                ACCOUNT_SIZE,
+            );
             assert!(
                 i <= NUM_ACCOUNTS,
                 "test must complete within bounded limits"
@@ -17429,6 +17501,83 @@ pub(crate) mod tests {
                 solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded,
             ))
         ));
+    }
+
+    /// Test processing a good transaction correctly modifies the accounts data size
+    #[test]
+    fn test_accounts_data_size_with_good_transaction() {
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        let transaction = system_transaction::create_account(
+            &mint_keypair,
+            &Keypair::new(),
+            bank.last_blockhash(),
+            LAMPORTS_PER_SOL,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+
+        let accounts_data_size_before = bank.load_accounts_data_size();
+        let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
+        let accounts_data_size_delta_on_chain_before =
+            bank.load_accounts_data_size_delta_on_chain();
+        let result = bank.process_transaction(&transaction);
+        let accounts_data_size_after = bank.load_accounts_data_size();
+        let accounts_data_size_delta_after = bank.load_accounts_data_size_delta();
+        let accounts_data_size_delta_on_chain_after = bank.load_accounts_data_size_delta_on_chain();
+
+        assert!(result.is_ok());
+        assert_eq!(
+            accounts_data_size_after - accounts_data_size_before,
+            ACCOUNT_SIZE,
+        );
+        assert_eq!(
+            accounts_data_size_delta_after - accounts_data_size_delta_before,
+            ACCOUNT_SIZE as i64,
+        );
+        assert_eq!(
+            accounts_data_size_delta_on_chain_after - accounts_data_size_delta_on_chain_before,
+            ACCOUNT_SIZE as i64,
+        );
+    }
+
+    /// Test processing a bad transaction correctly modifies the accounts data size
+    #[test]
+    fn test_accounts_data_size_with_bad_transaction() {
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        let transaction = system_transaction::create_account(
+            &Keypair::new(),
+            &Keypair::new(),
+            bank.last_blockhash(),
+            LAMPORTS_PER_SOL,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+
+        let accounts_data_size_before = bank.load_accounts_data_size();
+        let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
+        let accounts_data_size_delta_on_chain_before =
+            bank.load_accounts_data_size_delta_on_chain();
+        let result = bank.process_transaction(&transaction);
+        let accounts_data_size_after = bank.load_accounts_data_size();
+        let accounts_data_size_delta_after = bank.load_accounts_data_size_delta();
+        let accounts_data_size_delta_on_chain_after = bank.load_accounts_data_size_delta_on_chain();
+
+        assert!(result.is_err());
+        assert_eq!(accounts_data_size_after, accounts_data_size_before,);
+        assert_eq!(
+            accounts_data_size_delta_after,
+            accounts_data_size_delta_before,
+        );
+        assert_eq!(
+            accounts_data_size_delta_on_chain_after,
+            accounts_data_size_delta_on_chain_before,
+        );
     }
 
     #[test]

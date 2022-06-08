@@ -700,6 +700,7 @@ fn build_sbf(config: Config, manifest_path: Option<PathBuf>) {
 }
 
 fn main() {
+    solana_logger::setup();
     let default_config = Config::default();
     let default_sbf_sdk = format!("{}", default_config.sbf_sdk.display());
 

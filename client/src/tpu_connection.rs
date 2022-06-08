@@ -1,7 +1,5 @@
 use {
-    crate::{
-        connection_cache::Connection, quic_client::QuicTpuConnection, udp_client::UdpTpuConnection,
-    },
+    crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
     enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_metrics::MovingStat,
@@ -26,6 +24,12 @@ pub struct ClientStats {
 }
 
 #[enum_dispatch]
+pub enum Connection {
+    UdpTpuConnection,
+    QuicTpuConnection,
+}
+
+#[enum_dispatch(Connection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 

@@ -30,12 +30,9 @@ use {
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
-    solana_ledger::{
-        blockstore_db::DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-        blockstore_options::{
-            BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-            LedgerColumnOptions, ShredStorageType,
-        },
+    solana_ledger::blockstore_options::{
+        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -967,6 +964,11 @@ pub fn main() {
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .help("Disable reporting of OS network statistics.")
+        )
+        .arg(
+            Arg::with_name("no_os_cpu_stats_reporting")
+                .long("no-os-cpu-stats-reporting")
+                .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
@@ -2532,6 +2534,7 @@ pub fn main() {
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
+        no_os_cpu_stats_reporting: matches.is_present("no_os_cpu_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
@@ -2768,10 +2771,7 @@ pub fn main() {
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
+                    ShredStorageType::rocks_fifo(shred_storage_size)
                 }
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",

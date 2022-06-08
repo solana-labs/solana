@@ -1048,7 +1048,7 @@ impl ProgramTestContext {
 
         let epoch = bank.epoch();
         for _ in 0..number_of_credits {
-            vote_state.increment_credits(epoch);
+            vote_state.increment_credits(epoch, 1);
         }
         let versioned = VoteStateVersions::new_current(vote_state);
         VoteState::to(&versioned, &mut vote_account).unwrap();
