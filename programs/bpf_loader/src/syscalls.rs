@@ -26,9 +26,9 @@ use {
             check_physical_overlapping, disable_fees_sysvar, do_support_realloc,
             executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
-            secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
-            syscall_saturated_math, update_syscall_base_costs,
+            prevent_calling_precompiles_as_programs, quick_bail_on_panic,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -713,6 +713,9 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallPanic<'a, 'b> {
         if !invoke_context
             .feature_set
             .is_active(&update_syscall_base_costs::id())
+            || invoke_context
+                .feature_set
+                .is_active(&quick_bail_on_panic::id())
         {
             question_mark!(invoke_context.get_compute_meter().consume(len), result);
         }
