@@ -3051,15 +3051,6 @@ export class Connection {
       }
     });
 
-    const checkBlockHeight = async () => {
-      try {
-        const blockHeight = await this.getBlockHeight(commitment);
-        return blockHeight;
-      } catch (_e) {
-        return -1;
-      }
-    };
-
     const expiryPromise = new Promise<
       | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
       | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
@@ -3088,6 +3079,14 @@ export class Connection {
       } else {
         let config =
           strategy as BlockheightBasedTransactionConfirmationStrategy;
+        const checkBlockHeight = async () => {
+          try {
+            const blockHeight = await this.getBlockHeight(commitment);
+            return blockHeight;
+          } catch (_e) {
+            return -1;
+          }
+        };
         (async () => {
           let currentBlockHeight = await checkBlockHeight();
           if (done) return;
