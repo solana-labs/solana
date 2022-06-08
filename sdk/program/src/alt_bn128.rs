@@ -390,7 +390,7 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        if input.len() % consts::ALT_BN128_PAIRING_ELEMENT_LEN != 0 {
+        if input.len().checked_rem(consts::ALT_BN128_PAIRING_ELEMENT_LEN).unwrap() != 0 {
             return Err(AltBn128Error::InvalidInputData);
         }
 
