@@ -8710,6 +8710,7 @@ pub(crate) mod tests {
         let (genesis_config, _) = create_genesis_config(1_000_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
+        let non_program_id = solana_sdk::pubkey::new_rand();
         let program_id = solana_sdk::pubkey::new_rand();
         let programdata_address = solana_sdk::pubkey::new_rand();
 
@@ -8717,16 +8718,26 @@ pub(crate) mod tests {
             programdata_address,
         };
 
+        let non_program_acount = AccountSharedData::new(1, 0, &non_program_id);
         let mut program_account =
             AccountSharedData::new_data(40, &program, &bpf_loader_upgradeable::id()).unwrap();
         program_account.set_executable(true);
 
+        bank.store_account(&non_program_id, &non_program_acount);
         bank.store_account(&program_id, &program_account);
 
+        // Non-program account does not add any additional keys
         let programdata_accounts = DashSet::new();
-        programdata_accounts.insert(program_id);
-
+        programdata_accounts.insert(non_program_id);
         bank.minimization_add_programdata_accounts(&programdata_accounts);
+        assert_eq!(programdata_accounts.len(), 1);
+        assert!(programdata_accounts.contains(&non_program_id));
+
+        // Programdata account adds the programdata address to the set
+        programdata_accounts.insert(program_id);
+        bank.minimization_add_programdata_accounts(&programdata_accounts);
+        assert_eq!(programdata_accounts.len(), 3);
+        assert!(programdata_accounts.contains(&non_program_id));
         assert!(programdata_accounts.contains(&program_id));
         assert!(programdata_accounts.contains(&programdata_address));
     }
