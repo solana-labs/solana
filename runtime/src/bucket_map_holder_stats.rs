@@ -67,29 +67,34 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn insert_or_delete(&self, insert: bool, _bin: usize) {
-        if insert {
-            self.inserts.fetch_add(1, Ordering::Relaxed);
-            self.count.fetch_add(1, Ordering::Relaxed);
-        } else {
-            self.deletes.fetch_add(1, Ordering::Relaxed);
-            self.count.fetch_sub(1, Ordering::Relaxed);
-        }
+    pub fn inc_insert(&self, _bin: usize) {
+        self.inserts.fetch_add(1, Ordering::Relaxed);
+        self.count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
-        self.insert_or_delete_mem_count(insert, bin, 1)
+    pub fn inc_delete(&self, _bin: usize) {
+        self.deletes.fetch_add(1, Ordering::Relaxed);
+        self.count.fetch_sub(1, Ordering::Relaxed);
     }
 
-    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: usize) {
+    pub fn inc_mem_count(&self, bin: usize) {
+        self.add_mem_count(bin, 1);
+    }
+
+    pub fn dec_mem_count(&self, bin: usize) {
+        self.sub_mem_count(bin, 1);
+    }
+
+    pub fn add_mem_count(&self, bin: usize, count: usize) {
         let per_bucket = self.per_bucket_count.get(bin);
-        if insert {
-            self.count_in_mem.fetch_add(count, Ordering::Relaxed);
-            per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
-        } else {
-            self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
-            per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
-        }
+        self.count_in_mem.fetch_add(count, Ordering::Relaxed);
+        per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
+    }
+
+    pub fn sub_mem_count(&self, bin: usize, count: usize) {
+        let per_bucket = self.per_bucket_count.get(bin);
+        self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
+        per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {

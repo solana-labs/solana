@@ -247,7 +247,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let (add_to_cache, rt) = callback(Some(&disk_entry));
 
                         if add_to_cache {
-                            stats.insert_or_delete_mem(true, self.bin);
+                            stats.inc_mem_count(self.bin);
                             vacant.insert(disk_entry);
                         }
                         rt
@@ -259,7 +259,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
         if slot_list.is_empty() {
-            self.stats().insert_or_delete(false, self.bin);
+            self.stats().inc_delete(self.bin);
             true
         } else {
             false
@@ -408,7 +408,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 previous_slot_entry_was_cached,
                             );
                             if !already_existed {
-                                self.stats().insert_or_delete(true, self.bin);
+                                self.stats().inc_insert(self.bin);
                             }
                         } else {
                             // go to in-mem cache first
@@ -425,12 +425,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 disk_entry
                             } else {
                                 // not on disk, so insert new thing
-                                self.stats().insert_or_delete(true, self.bin);
+                                self.stats().inc_insert(self.bin);
                                 new_value.into_account_map_entry(&self.storage)
                             };
                             assert!(new_value.dirty());
                             vacant.insert(new_value);
-                            self.stats().insert_or_delete_mem(true, self.bin);
+                            self.stats().inc_mem_count(self.bin);
                         }
                     }
                 }
@@ -623,7 +623,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     (false, already_existed)
                 } else {
                     let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                    self.stats().insert_or_delete_mem(true, self.bin);
+                    self.stats().inc_mem_count(self.bin);
                     if let Some(disk_entry) = disk_entry {
                         let (slot, account_info) = new_entry.into();
                         InMemAccountsIndex::lock_and_update_slot_list(
@@ -655,7 +655,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.update_entry_stats(m, found_in_mem);
         let stats = self.stats();
         if !already_existed {
-            stats.insert_or_delete(true, self.bin);
+            stats.inc_insert(self.bin);
         } else {
             Self::update_stat(&stats.updates_in_mem, 1);
         }
@@ -706,7 +706,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             existed
         } else {
             // not using disk, so insert into mem
-            self.stats().insert_or_delete_mem(true, self.bin);
+            self.stats().inc_mem_count(self.bin);
             let new_entry: AccountMapEntry<T> = new_entry.into_account_map_entry(&self.storage);
             assert!(new_entry.dirty());
             vacant.insert(new_entry);
@@ -863,8 +863,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
             }
         }
-        self.stats()
-            .insert_or_delete_mem_count(true, self.bin, added_to_mem);
+        self.stats().add_mem_count(self.bin, added_to_mem);
 
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
@@ -1208,8 +1207,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 map.shrink_to_fit();
             }
         }
-        self.stats()
-            .insert_or_delete_mem_count(false, self.bin, evicted);
+        self.stats().sub_mem_count(self.bin, evicted);
         Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
         Self::update_stat(&self.stats().failed_to_evict, failed as u64);
     }
