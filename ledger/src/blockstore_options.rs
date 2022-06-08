@@ -133,6 +133,15 @@ impl Default for ShredStorageType {
     }
 }
 
+impl ShredStorageType {
+    /// Returns ShredStorageType::RocksFifo where the specified
+    /// `shred_storage_size` is equally allocated to shred_data_cf_size
+    /// and shred_code_cf_size.
+    pub fn rocks_fifo(shred_storage_size: u64) -> ShredStorageType {
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(shred_storage_size))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlockstoreRocksFifoOptions {
     // The maximum storage size for storing data shreds in column family
@@ -155,24 +164,22 @@ pub struct BlockstoreRocksFifoOptions {
     pub shred_code_cf_size: u64,
 }
 
-// Maximum size of cf::DataShred.  Used when `shred_storage_type`
-// is set to ShredStorageType::RocksFifo.  The default value is set
-// to 125GB, assuming 500GB total storage for ledger and 25% is
-// used by data shreds.
-const DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE: u64 = 125 * 1024 * 1024 * 1024;
-// Maximum size of cf::CodeShred.  Used when `shred_storage_type`
-// is set to ShredStorageType::RocksFifo.  The default value is set
-// to 100GB, assuming 500GB total storage for ledger and 20% is
-// used by coding shreds.
-const DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE: u64 = 100 * 1024 * 1024 * 1024;
+// The default storage size for storing shreds when `rocksdb-shred-compaction`
+// is set to `fifo` in the validator arguments.  This amount of storage size
+// in bytes will equally allocated to both data shreds and coding shreds.
+pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
 
 impl Default for BlockstoreRocksFifoOptions {
     fn default() -> Self {
+        BlockstoreRocksFifoOptions::new(DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)
+    }
+}
+
+impl BlockstoreRocksFifoOptions {
+    fn new(shred_storage_size: u64) -> Self {
         Self {
-            // Maximum size of cf::ShredData.
-            shred_data_cf_size: DEFAULT_FIFO_COMPACTION_DATA_CF_SIZE,
-            // Maximum size of cf::ShredCode.
-            shred_code_cf_size: DEFAULT_FIFO_COMPACTION_CODING_CF_SIZE,
+            shred_data_cf_size: shred_storage_size / 2,
+            shred_code_cf_size: shred_storage_size / 2,
         }
     }
 }

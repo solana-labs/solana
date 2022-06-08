@@ -15,6 +15,7 @@ use {
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
     },
     solana_client::{
+        connection_cache::ConnectionCache,
         rpc_cache::LargestAccountsCache,
         rpc_config::*,
         rpc_custom_error::RpcCustomError,
@@ -76,7 +77,7 @@ use {
         },
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
+        send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
     solana_storage_bigtable::Error as StorageError,
@@ -337,7 +338,11 @@ impl JsonRpcRequestProcessor {
     }
 
     // Useful for unit testing
-    pub fn new_from_bank(bank: &Arc<Bank>, socket_addr_space: SocketAddrSpace) -> Self {
+    pub fn new_from_bank(
+        bank: &Arc<Bank>,
+        socket_addr_space: SocketAddrSpace,
+        connection_cache: Arc<ConnectionCache>,
+    ) -> Self {
         let genesis_hash = bank.hash();
         let bank_forks = Arc::new(RwLock::new(BankForks::new_from_banks(
             &[bank.clone()],
@@ -357,9 +362,9 @@ impl JsonRpcRequestProcessor {
             &bank_forks,
             None,
             receiver,
+            &connection_cache,
             1000,
             1,
-            DEFAULT_TPU_USE_QUIC,
         );
 
         Self {
@@ -4927,8 +4932,12 @@ pub mod tests {
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         bank.transfer(20, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
-        let request_processor =
-            JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let request_processor = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
         assert_eq!(
             request_processor
                 .get_transaction_count(RpcContextConfig::default())
@@ -4942,7 +4951,12 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
@@ -4970,7 +4984,12 @@ pub mod tests {
         let genesis = create_genesis_config(20);
         let mint_pubkey = genesis.mint_keypair.pubkey();
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
@@ -5077,7 +5096,12 @@ pub mod tests {
         bank.transfer(4, &genesis.mint_keypair, &bob_pubkey)
             .unwrap();
 
-        let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
@@ -6200,7 +6224,12 @@ pub mod tests {
     fn test_rpc_send_bad_tx() {
         let genesis = create_genesis_config(100);
         let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
-        let meta = JsonRpcRequestProcessor::new_from_bank(&bank, SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
 
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_full::FullImpl.to_delegate());
@@ -6250,14 +6279,15 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
+        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
             None,
             receiver,
+            &connection_cache,
             1000,
             1,
-            DEFAULT_TPU_USE_QUIC,
         );
 
         let mut bad_transaction = system_transaction::transfer(
@@ -6516,14 +6546,15 @@ pub mod tests {
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
         );
+        let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
             None,
             receiver,
+            &connection_cache,
             1000,
             1,
-            DEFAULT_TPU_USE_QUIC,
         );
         assert_eq!(
             request_processor.get_block_commitment(0),

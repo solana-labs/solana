@@ -83,7 +83,6 @@ Alternatively use the Github UI.
 1. After the new branch has been created and pushed, update the Cargo.toml files on **master** to the next semantic version (e.g. 0.9.0 -> 0.10.0) with:
      ```
      $ scripts/increment-cargo-version.sh minor
-     $ ./scripts/cargo-for-all-lock-files.sh update
      ```
 1. Push all the changed Cargo.toml and Cargo.lock files to the `master` branch with something like:
     ```

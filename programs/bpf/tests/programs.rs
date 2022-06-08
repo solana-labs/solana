@@ -25,7 +25,8 @@ use {
     solana_rbpf::{
         elf::Executable,
         static_analysis::Analysis,
-        vm::{Config, Tracer},
+        verifier::RequisiteVerifier,
+        vm::{Config, Tracer, VerifiedExecutable},
     },
     solana_runtime::{
         bank::{
@@ -222,14 +223,20 @@ fn run_program(name: &str) -> u64 {
             reject_broken_elfs: true,
             ..Config::default()
         };
-        let mut executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
             &data,
-            None,
             config,
             register_syscalls(invoke_context, true /* no sol_alloc_free */).unwrap(),
         )
         .unwrap();
-        Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
+
+        let mut verified_executable = VerifiedExecutable::<
+            RequisiteVerifier,
+            BpfError,
+            ThisInstructionMeter,
+        >::from_executable(executable)
+        .unwrap();
+        verified_executable.jit_compile().unwrap();
 
         let mut instruction_count = 0;
         let mut tracer = None;
@@ -247,7 +254,7 @@ fn run_program(name: &str) -> u64 {
             let mut parameter_bytes = parameter_bytes.clone();
             {
                 let mut vm = create_vm(
-                    &executable,
+                    &verified_executable,
                     parameter_bytes.as_slice_mut(),
                     account_lengths.clone(),
                     invoke_context,
@@ -266,7 +273,9 @@ fn run_program(name: &str) -> u64 {
                 if config.enable_instruction_tracing {
                     if i == 1 {
                         if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
-                            let analysis = Analysis::from_executable(&executable).unwrap();
+                            let analysis =
+                                Analysis::from_executable(verified_executable.get_executable())
+                                    .unwrap();
                             let stdout = std::io::stdout();
                             println!("TRACE (interpreted):");
                             tracer
@@ -280,7 +289,9 @@ fn run_program(name: &str) -> u64 {
                                 .unwrap();
                             assert!(false);
                         } else if log_enabled!(Trace) {
-                            let analysis = Analysis::from_executable(&executable).unwrap();
+                            let analysis =
+                                Analysis::from_executable(verified_executable.get_executable())
+                                    .unwrap();
                             let mut trace_buffer = Vec::<u8>::new();
                             tracer
                                 .as_ref()

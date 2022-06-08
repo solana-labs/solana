@@ -18,7 +18,7 @@ use {
         RequestMiddlewareAction, ServerBuilder,
     },
     regex::Regex,
-    solana_client::rpc_cache::LargestAccountsCache,
+    solana_client::{connection_cache::ConnectionCache, rpc_cache::LargestAccountsCache},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
@@ -352,6 +352,7 @@ impl JsonRpcService {
         send_transaction_service_config: send_transaction_service::Config,
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
+        connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
     ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
@@ -464,6 +465,7 @@ impl JsonRpcService {
             &bank_forks,
             leader_info,
             receiver,
+            &connection_cache,
             send_transaction_service_config,
         ));
 
@@ -610,6 +612,7 @@ mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
+        let connection_cache = Arc::new(ConnectionCache::default());
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
@@ -632,6 +635,7 @@ mod tests {
             },
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
+            connection_cache,
             Arc::new(AtomicU64::default()),
         )
         .unwrap();
