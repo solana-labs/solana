@@ -3779,14 +3779,9 @@ impl Bank {
         &self,
         tx: &SanitizedTransaction,
         enable_durable_nonce: bool,
-<<<<<<< HEAD
-    ) -> Option<(Pubkey, AccountSharedData)> {
-        (enable_durable_nonce
-=======
         next_durable_nonce: &DurableNonce,
-    ) -> Option<TransactionAccount> {
+    ) -> Option<(Pubkey, AccountSharedData)> {
         let durable_nonces_enabled = enable_durable_nonce
->>>>>>> 6a7edc02c6 (Reject durable nonce txs that don't use an advanceable nonce (#25832))
             || self.slot() <= 135986379
             || self.cluster_type() != ClusterType::MainnetBeta;
         let nonce_must_be_advanceable = self
