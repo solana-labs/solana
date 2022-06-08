@@ -41,9 +41,29 @@ const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 
 lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_{}", ix))
+    static ref PAR_THREAD_POOL_XSMALL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .thread_name(|ix| format!("sigverify_xs_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_SMALL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .thread_name(|ix| format!("sigverify_s_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_MEDIUM: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(8)
+        .thread_name(|ix| format!("sigverify_m_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_LARGE: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(16)
+        .thread_name(|ix| format!("sigverify_l_{}", ix))
+        .build()
+        .unwrap();
+    static ref PAR_THREAD_POOL_XLARGE: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(std::cmp::max(16, get_thread_count()))
+        .thread_name(|ix| format!("sigverify_xl_{}", ix))
         .build()
         .unwrap();
 }
@@ -608,15 +628,34 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
-    PAR_THREAD_POOL.install(|| {
-        batches.into_par_iter().for_each(|batch| {
-            batch.par_iter_mut().for_each(|packet| {
+    // Only tap enough threads to get the job done to conserve CPU for rest of the system.
+    // Current design targets max 8ms verify latency assuming 500us per packet.
+    if packet_count <= 16 {
+        batches.into_iter().for_each(|batch| {
+            batch.iter_mut().for_each(|packet| {
                 if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                     packet.meta.set_discard(true);
                 }
             })
         });
-    });
+    } else {
+        let thread_pool = match packet_count {
+            0..=32 => PAR_THREAD_POOL_XSMALL,
+            33..=64 => PAR_THREAD_POOL_SMALL,
+            65..=128 => PAR_THREAD_POOL_MEDIUM,
+            129..=256 => PAR_THREAD_POOL_LARGE,
+            _ => PAR_THREAD_POOL_XLARGE,
+        };
+        thread_pool.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch.par_iter_mut().for_each(|packet| {
+                    if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                        packet.meta.set_discard(true);
+                    }
+                })
+            });
+        });
+    }
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
