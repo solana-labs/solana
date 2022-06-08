@@ -8584,6 +8584,8 @@ pub(crate) mod tests {
         let (genesis_config, _) = create_genesis_config(1_000_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
+        // Slots correspond to subrange: A52Kf8KJNVhs1y61uhkzkSF82TXCLxZekqmFwiFXLnHu..=ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9NE
+        // Initially, there are no existing keys in this range
         let rent_collection_accounts = DashSet::new();
         bank.get_rent_collection_accounts_between_slots(
             &rent_collection_accounts,
@@ -8596,6 +8598,7 @@ pub(crate) mod tests {
             rent_collection_accounts.len()
         );
 
+        // Add a key in the subrange
         let pubkey: Pubkey = "ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9ND"
             .parse()
             .unwrap();
@@ -8613,6 +8616,20 @@ pub(crate) mod tests {
             rent_collection_accounts.len()
         );
         assert!(rent_collection_accounts.contains(&pubkey));
+
+        // Slots correspond to subrange: ChXFtoKuDvQum4HvtgiqGWrgUYbtP1ZzGFGMnT8FuGaB..=FKzRYCFeCC8e48jP9kSW4xM77quv1BPrdEMktpceXWSa
+        // The previous key is not contained in this range, so is not added
+        rent_collection_accounts.clear();
+        bank.get_rent_collection_accounts_between_slots(
+            &rent_collection_accounts,
+            110_001,
+            120_000,
+        );
+        assert!(
+            rent_collection_accounts.is_empty(),
+            "rent collection accounts should be empty: len={}",
+            rent_collection_accounts.len()
+        );
     }
 
     #[test]
