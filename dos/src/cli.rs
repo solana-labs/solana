@@ -50,6 +50,13 @@ pub struct DosClientParameters {
 
     #[clap(flatten)]
     pub transaction_params: TransactionParams,
+
+    #[clap(
+        long,
+        conflicts_with("skip-gossip"),
+        help = "Submit transactions via QUIC"
+    )]
+    pub tpu_use_quic: bool,
 }
 
 #[derive(Args, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
@@ -210,7 +217,8 @@ mod tests {
                 data_input: Some(pubkey),
                 skip_gossip: false,
                 allow_private_addr: false,
-                transaction_params: TransactionParams::default()
+                transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
     }
@@ -228,6 +236,7 @@ mod tests {
             "--valid-signatures",
             "--num-signatures",
             "8",
+            "--tpu-use-quic",
         ])
         .unwrap();
         assert_eq!(
@@ -248,6 +257,7 @@ mod tests {
                     transaction_type: None,
                     num_instructions: None,
                 },
+                tpu_use_quic: true,
             },
         );
     }
@@ -287,6 +297,7 @@ mod tests {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
+                tpu_use_quic: false,
             },
         );
 
@@ -341,6 +352,7 @@ mod tests {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
+                tpu_use_quic: false,
             },
         );
     }
@@ -378,6 +390,7 @@ mod tests {
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
+                tpu_use_quic: false,
             },
         );
     }

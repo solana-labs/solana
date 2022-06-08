@@ -3820,6 +3820,7 @@ dependencies = [
  "crossbeam-channel",
  "futures 0.3.21",
  "solana-banks-interface",
+ "solana-client",
  "solana-runtime",
  "solana-sdk 1.11.0",
  "solana-send-transaction-service",

@@ -6,6 +6,7 @@ use {
         Banks, BanksRequest, BanksResponse, BanksTransactionResultWithSimulation,
         TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
     },
+    solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
@@ -24,7 +25,7 @@ use {
         transaction::{self, SanitizedTransaction, Transaction},
     },
     solana_send_transaction_service::{
-        send_transaction_service::{SendTransactionService, TransactionInfo, DEFAULT_TPU_USE_QUIC},
+        send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
     std::{
@@ -393,6 +394,7 @@ pub async fn start_tcp_server(
     tpu_addr: SocketAddr,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+    connection_cache: Arc<ConnectionCache>,
 ) -> io::Result<()> {
     // Note: These settings are copied straight from the tarpc example.
     let server = tcp::listen(listen_addr, Bincode::default)
@@ -417,9 +419,9 @@ pub async fn start_tcp_server(
                 &bank_forks,
                 None,
                 receiver,
+                &connection_cache,
                 5_000,
                 0,
-                DEFAULT_TPU_USE_QUIC,
             );
 
             let server = BanksServer::new(
