@@ -6,8 +6,9 @@ use {
         cli::Config,
     },
     solana_client::{
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
-        thin_client::create_client,
+        thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_core::validator::ValidatorConfig,
@@ -58,10 +59,18 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
+<<<<<<< HEAD
     let client = Arc::new(create_client((
         cluster.entry_point_info.rpc,
         cluster.entry_point_info.tpu,
     )));
+=======
+    let client = Arc::new(ThinClient::new(
+        cluster.entry_point_info.rpc,
+        cluster.entry_point_info.tpu,
+        cluster.connection_cache.clone(),
+    ));
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
     let lamports_per_account = 100;
 
@@ -96,9 +105,17 @@ fn test_bench_tps_test_validator(config: Config) {
         CommitmentConfig::processed(),
     ));
     let websocket_url = test_validator.rpc_pubsub_url();
+    let connection_cache = Arc::new(ConnectionCache::default());
 
-    let client =
-        Arc::new(TpuClient::new(rpc_client, &websocket_url, TpuClientConfig::default()).unwrap());
+    let client = Arc::new(
+        TpuClient::new_with_connection_cache(
+            rpc_client,
+            &websocket_url,
+            TpuClientConfig::default(),
+            connection_cache,
+        )
+        .unwrap(),
+    );
 
     let lamports_per_account = 100;
 

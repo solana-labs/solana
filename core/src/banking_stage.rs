@@ -18,7 +18,7 @@ use {
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_client::{
-        connection_cache::get_connection, tpu_connection::TpuConnection,
+        connection_cache::ConnectionCache, tpu_connection::TpuConnection,
         udp_client::UdpTpuConnection,
     },
     solana_entry::entry::hash_transactions,
@@ -410,6 +410,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -421,6 +422,7 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             cost_model,
+            connection_cache,
         )
     }
 
@@ -435,6 +437,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -466,6 +469,7 @@ impl BankingStage {
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let data_budget = data_budget.clone();
                 let cost_model = cost_model.clone();
+                let connection_cache = connection_cache.clone();
                 Builder::new()
                     .name(format!("solana-banking-stage-tx-{}", i))
                     .spawn(move || {
@@ -481,6 +485,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             &data_budget,
                             cost_model,
+                            connection_cache,
                         );
                     })
                     .unwrap()
@@ -506,6 +511,7 @@ impl BankingStage {
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
     fn forward_buffered_packets(
+        connection_cache: &ConnectionCache,
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
@@ -570,7 +576,7 @@ impl BankingStage {
                 banking_stage_stats
                     .forwarded_transaction_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                get_connection(&addr)
+                connection_cache.get_connection(&addr)
             };
             let res = conn.send_wire_transaction_batch_async(packet_vec);
 
@@ -882,6 +888,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        connection_cache: &ConnectionCache,
     ) {
         let (decision, make_decision_time) = Measure::this(
             |_| {
@@ -944,6 +951,7 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
             BufferedPacketsDecision::Forward => {
+<<<<<<< HEAD
                 let (_, forward_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -958,11 +966,26 @@ impl BankingStage {
                         )
                     },
                     (),
+=======
+                let (_, forward_time) = measure!(
+                    Self::handle_forwarding(
+                        forward_option,
+                        cluster_info,
+                        buffered_packet_batches,
+                        poh_recorder,
+                        false,
+                        data_budget,
+                        slot_metrics_tracker,
+                        banking_stage_stats,
+                        connection_cache,
+                    ),
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
                     "forward",
                 );
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
             }
             BufferedPacketsDecision::ForwardAndHold => {
+<<<<<<< HEAD
                 let (_, forward_and_hold_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -977,6 +1000,20 @@ impl BankingStage {
                         )
                     },
                     (),
+=======
+                let (_, forward_and_hold_time) = measure!(
+                    Self::handle_forwarding(
+                        forward_option,
+                        cluster_info,
+                        buffered_packet_batches,
+                        poh_recorder,
+                        true,
+                        data_budget,
+                        slot_metrics_tracker,
+                        banking_stage_stats,
+                        connection_cache,
+                    ),
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
                     "forward_and_hold",
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
@@ -994,6 +1031,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         banking_stage_stats: &BankingStageStats,
+        connection_cache: &ConnectionCache,
     ) {
         if let ForwardOption::NotForward = forward_option {
             if !hold {
@@ -1006,6 +1044,7 @@ impl BankingStage {
             Self::filter_valid_packets_for_forwarding(buffered_packet_batches.iter());
         let forwardable_packets_len = forwardable_packets.len();
         let (_forward_result, sucessful_forwarded_packets_count) = Self::forward_buffered_packets(
+            connection_cache,
             forward_option,
             cluster_info,
             poh_recorder,
@@ -1052,6 +1091,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         data_budget: &DataBudget,
         cost_model: Arc<RwLock<CostModel>>,
+        connection_cache: Arc<ConnectionCache>,
     ) {
         let recorder = poh_recorder.lock().unwrap().recorder();
         let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
@@ -1064,6 +1104,7 @@ impl BankingStage {
         loop {
             let my_pubkey = cluster_info.id();
             if !buffered_packet_batches.is_empty() {
+<<<<<<< HEAD
                 let (_, process_buffered_packets_time) = Measure::this(
                     |_| {
                         Self::process_buffered_packets(
@@ -1082,6 +1123,24 @@ impl BankingStage {
                         )
                     },
                     (),
+=======
+                let (_, process_buffered_packets_time) = measure!(
+                    Self::process_buffered_packets(
+                        &my_pubkey,
+                        poh_recorder,
+                        cluster_info,
+                        &mut buffered_packet_batches,
+                        &forward_option,
+                        transaction_status_sender.clone(),
+                        &gossip_vote_sender,
+                        &banking_stage_stats,
+                        &recorder,
+                        data_budget,
+                        &qos_service,
+                        &mut slot_metrics_tracker,
+                        &connection_cache,
+                    ),
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
                     "process_buffered_packets",
                 );
                 slot_metrics_tracker
@@ -2347,6 +2406,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                Arc::new(ConnectionCache::default()),
             );
             drop(verified_sender);
             drop(gossip_verified_vote_sender);
@@ -2396,6 +2456,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                Arc::new(ConnectionCache::default()),
             );
             trace!("sending bank");
             drop(verified_sender);
@@ -2470,6 +2531,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                Arc::new(ConnectionCache::default()),
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2621,6 +2683,7 @@ mod tests {
                     None,
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
+                    Arc::new(ConnectionCache::default()),
                 );
 
                 // wait for banking_stage to eat the packets
@@ -4101,6 +4164,7 @@ mod tests {
                 ("budget-available", DataBudget::default(), 1),
             ];
 
+            let connection_cache = ConnectionCache::default();
             for (name, data_budget, expected_num_forwarded) in test_cases {
                 let mut unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(
@@ -4117,6 +4181,7 @@ mod tests {
                     &data_budget,
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
+                    &connection_cache,
                 );
 
                 recv_socket
@@ -4189,6 +4254,7 @@ mod tests {
             let local_node = Node::new_localhost_with_pubkey(validator_pubkey);
             let cluster_info = new_test_cluster_info(local_node.info);
             let recv_socket = &local_node.sockets.tpu_forwards[0];
+            let connection_cache = ConnectionCache::default();
 
             let test_cases = vec![
                 ("not-forward", ForwardOption::NotForward, true, vec![], 2),
@@ -4226,6 +4292,7 @@ mod tests {
                     &DataBudget::default(),
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
+                    &connection_cache,
                 );
 
                 recv_socket

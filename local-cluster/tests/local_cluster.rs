@@ -11,7 +11,7 @@ use {
         rpc_client::RpcClient,
         rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
         rpc_response::RpcSignatureResult,
-        thin_client::{create_client, ThinClient},
+        thin_client::ThinClient,
     },
     solana_core::{
         broadcast_stage::BroadcastStageType,
@@ -109,6 +109,7 @@ fn test_spend_and_verify_all_nodes_1() {
         num_nodes,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 
@@ -126,6 +127,7 @@ fn test_spend_and_verify_all_nodes_2() {
         num_nodes,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 
@@ -143,6 +145,7 @@ fn test_spend_and_verify_all_nodes_3() {
         num_nodes,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 
@@ -162,7 +165,13 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
+<<<<<<< HEAD
     let tx_client = create_client(non_bootstrap_info.client_facing_addr());
+=======
+    let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
+    let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
@@ -234,6 +243,7 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
         num_nodes,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &local.connection_cache,
     );
 }
 
@@ -327,7 +337,13 @@ fn test_forwarding() {
         .unwrap();
 
     // Confirm that transactions were forwarded to and processed by the leader.
-    cluster_tests::send_many_transactions(validator_info, &cluster.funding_keypair, 10, 20);
+    cluster_tests::send_many_transactions(
+        validator_info,
+        &cluster.funding_keypair,
+        &cluster.connection_cache,
+        10,
+        20,
+    );
 }
 
 #[test]
@@ -367,6 +383,7 @@ fn test_restart_node() {
     cluster_tests::send_many_transactions(
         &cluster.entry_point_info,
         &cluster.funding_keypair,
+        &cluster.connection_cache,
         10,
         1,
     );
@@ -396,7 +413,12 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
+<<<<<<< HEAD
     let client = create_client(cluster.entry_point_info.client_facing_addr());
+=======
+    let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
+    let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
     // Programs that are available at epoch 0
     for program_id in [
@@ -1138,6 +1160,7 @@ fn test_snapshot_restart_tower() {
         1,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &cluster.connection_cache,
     );
 }
 
@@ -1295,6 +1318,7 @@ fn test_snapshots_restart_validity() {
         let new_balances = cluster_tests::send_many_transactions(
             &cluster.entry_point_info,
             &cluster.funding_keypair,
+            &cluster.connection_cache,
             10,
             10,
         );
@@ -1321,7 +1345,11 @@ fn test_snapshots_restart_validity() {
 
         // Verify account balances on validator
         trace!("Verifying balances");
-        cluster_tests::verify_balances(expected_balances.clone(), &cluster.entry_point_info);
+        cluster_tests::verify_balances(
+            expected_balances.clone(),
+            &cluster.entry_point_info,
+            cluster.connection_cache.clone(),
+        );
 
         // Check that we can still push transactions
         trace!("Spending and verifying");
@@ -1331,6 +1359,7 @@ fn test_snapshots_restart_validity() {
             1,
             HashSet::new(),
             SocketAddrSpace::Unspecified,
+            &cluster.connection_cache,
         );
     }
 }
@@ -1557,6 +1586,7 @@ fn test_optimistic_confirmation_violation_detection() {
     cluster_tests::check_for_new_roots(
         16,
         &[cluster.get_contact_info(&entry_point_id).unwrap().clone()],
+        &cluster.connection_cache,
         "test_optimistic_confirmation_violation",
     );
 }

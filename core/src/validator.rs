@@ -22,6 +22,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -667,6 +668,8 @@ impl Validator {
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic));
+
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
             json_rpc_service,
@@ -700,6 +703,36 @@ impl Validator {
             } else {
                 None
             };
+<<<<<<< HEAD
+=======
+
+            let json_rpc_service = JsonRpcService::new(
+                rpc_addr,
+                config.rpc_config.clone(),
+                config.snapshot_config.clone(),
+                bank_forks.clone(),
+                block_commitment_cache.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                Some(poh_recorder.clone()),
+                genesis_config.hash(),
+                ledger_path,
+                config.validator_exit.clone(),
+                config.known_validators.clone(),
+                rpc_override_health_check.clone(),
+                optimistically_confirmed_bank.clone(),
+                config.send_transaction_service_config.clone(),
+                max_slots.clone(),
+                leader_schedule_cache.clone(),
+                connection_cache.clone(),
+                max_complete_transaction_status_slot,
+            )
+            .unwrap_or_else(|s| {
+                error!("Failed to create JSON RPC Service: {}", s);
+                abort();
+            });
+
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
@@ -938,8 +971,13 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
+<<<<<<< HEAD
             pruned_banks_receiver,
             use_quic,
+=======
+            accounts_background_request_sender,
+            &connection_cache,
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         );
 
         let tpu = Tpu::new(
@@ -971,6 +1009,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &connection_cache,
             &identity_keypair,
         );
 
@@ -1827,6 +1866,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -1862,7 +1902,7 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
@@ -1957,7 +1997,7 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    false, // use_quic
+                    DEFAULT_TPU_USE_QUIC,
                 )
             })
             .collect();

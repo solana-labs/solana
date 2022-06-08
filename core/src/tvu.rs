@@ -28,6 +28,7 @@ use {
         warm_quic_cache_service::WarmQuicCacheService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -154,8 +155,13 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
+<<<<<<< HEAD
         pruned_banks_receiver: DroppedSlotsReceiver,
         use_quic: bool,
+=======
+        accounts_background_request_sender: AbsRequestSender,
+        connection_cache: &Arc<ConnectionCache>,
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -295,8 +301,9 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if use_quic {
+        let warm_quic_cache_service = if connection_cache.get_use_quic() {
             Some(WarmQuicCacheService::new(
+                connection_cache.clone(),
                 cluster_info.clone(),
                 poh_recorder.clone(),
                 exit.clone(),
@@ -539,8 +546,13 @@ pub mod tests {
             None,
             None,
             None,
+<<<<<<< HEAD
             pruned_banks_receiver,
             false, // use_quic
+=======
+            AbsRequestSender::default(),
+            &Arc::new(ConnectionCache::default()),
+>>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

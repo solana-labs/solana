@@ -2,6 +2,7 @@ use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
+    solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
@@ -77,7 +78,7 @@ impl Default for Config {
             target_slots_per_epoch: 0,
             target_node: None,
             external_client_type: ExternalClientType::default(),
-            use_quic: false,
+            use_quic: DEFAULT_TPU_USE_QUIC,
         }
     }
 }
