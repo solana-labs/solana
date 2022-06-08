@@ -229,6 +229,18 @@ impl Shred for ShredData {
             .ok_or(Error::InvalidPayloadSize(self.payload.len()))
     }
 
+    fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error> {
+        if self.payload.len() != Self::SIZE_OF_PAYLOAD {
+            return Err(Error::InvalidPayloadSize(self.payload.len()));
+        }
+        let proof_size = self.proof_size()?;
+        let data_buffer_size = Self::capacity(proof_size)?;
+        let payload_len = self.payload.len();
+        self.payload
+            .get_mut(SIZE_OF_SIGNATURE..SIZE_OF_DATA_SHRED_HEADERS + data_buffer_size)
+            .ok_or(Error::InvalidPayloadSize(payload_len))
+    }
+
     fn sanitize(&self) -> Result<(), Error> {
         match self.common_header.shred_variant {
             ShredVariant::MerkleData(proof_size) => {
@@ -310,6 +322,18 @@ impl Shred for ShredCode {
         self.payload
             .get(SIZE_OF_CODING_SHRED_HEADERS..SIZE_OF_CODING_SHRED_HEADERS + shard_size)
             .ok_or(Error::InvalidPayloadSize(self.payload.len()))
+    }
+
+    fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error> {
+        if self.payload.len() != Self::SIZE_OF_PAYLOAD {
+            return Err(Error::InvalidPayloadSize(self.payload.len()));
+        }
+        let proof_size = self.proof_size()?;
+        let shard_size = Self::size_of_erasure_encoded_slice(proof_size)?;
+        let payload_len = self.payload.len();
+        self.payload
+            .get_mut(SIZE_OF_CODING_SHRED_HEADERS..SIZE_OF_CODING_SHRED_HEADERS + shard_size)
+            .ok_or(Error::InvalidPayloadSize(payload_len))
     }
 
     fn sanitize(&self) -> Result<(), Error> {
