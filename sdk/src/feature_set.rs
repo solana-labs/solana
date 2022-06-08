@@ -331,6 +331,10 @@ pub mod enable_durable_nonce {
     solana_sdk::declare_id!("4EJQtF2pkRyawwcTVfQutzq4Sa5hRhibF6QAK1QXhtEX");
 }
 
+pub mod nonce_must_be_authorized {
+    solana_sdk::declare_id!("HxrEu1gXuH7iD3Puua1ohd5n4iUKJyFNtNxk9DVJkvgr");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -408,6 +412,7 @@ lazy_static! {
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
+        (nonce_must_be_authorized::id(), "nonce must be authorized"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -237,7 +237,7 @@ impl SendTransactionService {
             }
             if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
                 let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
-                if !nonce_account::verify_nonce_account(&nonce_account, &durable_nonce)
+                if nonce_account::verify_nonce_account(&nonce_account, &durable_nonce).is_none()
                     && working_bank.get_signature_status_slot(signature).is_none()
                 {
                     info!("Dropping expired durable-nonce transaction: {}", signature);

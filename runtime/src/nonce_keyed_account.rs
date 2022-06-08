@@ -1098,17 +1098,17 @@ mod test {
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
                 get_durable_nonce(&invoke_context).as_hash(),
-            ));
+            )
+            .is_some());
         });
     }
 
     #[test]
     fn verify_nonce_bad_acc_state_fail() {
         with_test_keyed_account(42, true, |nonce_account| {
-            assert!(!verify_nonce_account(
-                &nonce_account.account.borrow(),
-                &Hash::default()
-            ));
+            assert!(
+                verify_nonce_account(&nonce_account.account.borrow(), &Hash::default()).is_none()
+            );
         });
     }
 
@@ -1126,10 +1126,11 @@ mod test {
                 .initialize_nonce_account(authorized, &Rent::free(), &invoke_context)
                 .unwrap();
             let invoke_context = create_invoke_context_with_blockhash(1);
-            assert!(!verify_nonce_account(
+            assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
                 get_durable_nonce(&invoke_context).as_hash(),
-            ));
+            )
+            .is_none());
         });
     }
 }
