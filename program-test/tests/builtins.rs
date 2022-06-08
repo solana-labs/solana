@@ -8,7 +8,7 @@ use {
 };
 
 #[tokio::test]
-async fn test_bpf_loader_upgradable_present() {
+async fn test_bpf_loader_upgradeable_present() {
     // Arrange
     let (mut banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
 

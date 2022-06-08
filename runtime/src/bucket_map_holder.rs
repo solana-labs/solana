@@ -446,7 +446,7 @@ pub mod tests {
         let bins = 1;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let threads = 2;
-        let time = AGE_MS * 5 / 2;
+        let time = AGE_MS * 8 / 3;
         let expected = (time / AGE_MS) as Age;
         let now = Instant::now();
         test.bucket_flushed_at_current_age(); // done with age 0

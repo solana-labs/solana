@@ -6,7 +6,10 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::thin_client::{create_client, ThinClient},
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_USE_QUIC},
+        thin_client::ThinClient,
+    },
     solana_core::{
         tower_storage::FileTowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -76,6 +79,7 @@ pub struct ClusterConfig {
     pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
     pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
+    pub tpu_use_quic: bool,
 }
 
 impl Default for ClusterConfig {
@@ -95,6 +99,7 @@ impl Default for ClusterConfig {
             poh_config: PohConfig::default(),
             skip_warmup_slots: false,
             additional_accounts: vec![],
+            tpu_use_quic: DEFAULT_TPU_USE_QUIC,
         }
     }
 }
@@ -106,6 +111,7 @@ pub struct LocalCluster {
     pub entry_point_info: ContactInfo,
     pub validators: HashMap<Pubkey, ClusterValidatorInfo>,
     pub genesis_config: GenesisConfig,
+    pub connection_cache: Arc<ConnectionCache>,
 }
 
 impl LocalCluster {
@@ -248,7 +254,7 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let mut validators = HashMap::new();
@@ -271,6 +277,7 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
+            connection_cache: Arc::new(ConnectionCache::new(config.tpu_use_quic)),
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
@@ -390,7 +397,7 @@ impl LocalCluster {
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
         let (rpc, tpu) = self.entry_point_info.client_facing_addr();
-        let client = create_client(rpc, tpu);
+        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -442,7 +449,7 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
 
         let validator_pubkey = validator_keypair.pubkey();
@@ -476,7 +483,7 @@ impl LocalCluster {
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
         let (rpc, tpu) = self.entry_point_info.client_facing_addr();
-        let client = create_client(rpc, tpu);
+        let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -501,7 +508,12 @@ impl LocalCluster {
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
         info!("{} looking for new roots on all nodes", test_name);
-        cluster_tests::check_for_new_roots(num_new_roots, &alive_node_contact_infos, test_name);
+        cluster_tests::check_for_new_roots(
+            num_new_roots,
+            &alive_node_contact_infos,
+            &self.connection_cache,
+            test_name,
+        );
         info!("{} done waiting for roots", test_name);
     }
 
@@ -526,7 +538,12 @@ impl LocalCluster {
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
         info!("{} making sure no new roots on any nodes", test_name);
-        cluster_tests::check_no_new_roots(num_slots_to_wait, &alive_node_contact_infos, test_name);
+        cluster_tests::check_no_new_roots(
+            num_slots_to_wait,
+            &alive_node_contact_infos,
+            &self.connection_cache,
+            test_name,
+        );
         info!("{} done waiting for roots", test_name);
     }
 
@@ -700,7 +717,7 @@ impl Cluster for LocalCluster {
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
             let (rpc, tpu) = f.info.contact_info.client_facing_addr();
-            create_client(rpc, tpu)
+            ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
     }
 
@@ -779,7 +796,7 @@ impl Cluster for LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
         );
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info

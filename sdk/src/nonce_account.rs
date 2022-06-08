@@ -3,7 +3,10 @@ use {
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
         hash::Hash,
-        nonce::{state::Versions, State},
+        nonce::{
+            state::{Data, Versions},
+            State,
+        },
     },
     std::cell::RefCell,
 };
@@ -21,13 +24,13 @@ pub fn create_account(lamports: u64) -> RefCell<AccountSharedData> {
 }
 
 // TODO: Consider changing argument from Hash to DurableNonce.
-pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> bool {
+pub fn verify_nonce_account(acc: &AccountSharedData, hash: &Hash) -> Option<Data> {
     if acc.owner() != &crate::system_program::id() {
-        return false;
+        return None;
     }
     match StateMut::<Versions>::state(acc).map(|v| v.convert_to_current()) {
-        Ok(State::Initialized(ref data)) => hash == &data.blockhash(),
-        _ => false,
+        Ok(State::Initialized(data)) => (hash == &data.blockhash()).then(|| data),
+        _ => None,
     }
 }
 
@@ -56,6 +59,6 @@ mod tests {
             &program_id,
         )
         .expect("nonce_account");
-        assert!(!verify_nonce_account(&account, &Hash::default()));
+        assert!(verify_nonce_account(&account, &Hash::default()).is_none());
     }
 }
