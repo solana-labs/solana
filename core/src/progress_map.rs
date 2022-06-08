@@ -41,6 +41,7 @@ impl ReplaySlotStats {
         slot: Slot,
         num_entries: usize,
         num_shreds: u64,
+        num_transactions: usize,
         bank_complete_time_us: u64,
     ) {
         datapoint_info!(
@@ -70,6 +71,7 @@ impl ReplaySlotStats {
             ),
             ("total_entries", num_entries as i64, i64),
             ("total_shreds", num_shreds as i64, i64),
+            ("total_transactions", num_transactions as i64, i64),
             (
                 "check_us",
                 *self

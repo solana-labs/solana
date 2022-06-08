@@ -2353,6 +2353,7 @@ impl ReplayStage {
                     bank.slot(),
                     bank_progress.replay_progress.num_entries,
                     bank_progress.replay_progress.num_shreds,
+                    bank_progress.replay_progress.num_txs,
                     bank_complete_time.as_us(),
                 );
             } else {
