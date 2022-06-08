@@ -1313,7 +1313,8 @@ mod test {
                 .unwrap()
                 .borrow(),
             get_durable_nonce(&invoke_context).as_hash(),
-        ));
+        )
+        .is_some());
     }
 
     #[test]
@@ -1325,13 +1326,14 @@ mod test {
             _instruction_context,
             instruction_accounts
         );
-        assert!(!verify_nonce_account(
+        assert!(verify_nonce_account(
             &transaction_context
                 .get_account_at_index(NONCE_ACCOUNT_INDEX)
                 .unwrap()
                 .borrow(),
             &Hash::default()
-        ));
+        )
+        .is_none());
     }
 
     #[test]
@@ -1358,12 +1360,13 @@ mod test {
             .initialize_nonce_account(&authorized, &Rent::free(), &invoke_context)
             .unwrap();
         set_invoke_context_blockhash!(invoke_context, 1);
-        assert!(!verify_nonce_account(
+        assert!(verify_nonce_account(
             &transaction_context
                 .get_account_at_index(NONCE_ACCOUNT_INDEX)
                 .unwrap()
                 .borrow(),
             get_durable_nonce(&invoke_context).as_hash(),
-        ));
+        )
+        .is_none());
     }
 }
