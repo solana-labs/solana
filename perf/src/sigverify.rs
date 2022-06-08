@@ -628,34 +628,44 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
-    // Only tap enough threads to get the job done to conserve CPU for rest of the system.
-    // Current design targets max 8ms verify latency assuming 500us per packet.
-    if packet_count <= 16 {
-        batches.into_iter().for_each(|batch| {
-            batch.iter_mut().for_each(|packet| {
+    let par_iter_verify = || {
+        batches.into_par_iter().for_each(|batch| {
+            batch.par_iter_mut().for_each(|packet| {
                 if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                     packet.meta.set_discard(true);
                 }
             })
         });
-    } else {
-        let thread_pool = match packet_count {
-            0..=32 => PAR_THREAD_POOL_XSMALL,
-            33..=64 => PAR_THREAD_POOL_SMALL,
-            65..=128 => PAR_THREAD_POOL_MEDIUM,
-            129..=256 => PAR_THREAD_POOL_LARGE,
-            _ => PAR_THREAD_POOL_XLARGE,
-        };
-        thread_pool.install(|| {
-            batches.into_par_iter().for_each(|batch| {
-                batch.par_iter_mut().for_each(|packet| {
+    };
+
+    // Only tap enough threads to get the job done to conserve CPU for rest of the system.
+    // Current design targets max 8ms verify latency assuming 500us per packet.
+    match packet_count {
+        0..=16 => {
+            batches.into_iter().for_each(|batch| {
+                batch.iter_mut().for_each(|packet| {
                     if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                         packet.meta.set_discard(true);
                     }
                 })
             });
-        });
-    }
+        }
+        17..=32 => {
+            PAR_THREAD_POOL_XSMALL.install(par_iter_verify);
+        }
+        33..=64 => {
+            PAR_THREAD_POOL_SMALL.install(par_iter_verify);
+        }
+        65..=128 => {
+            PAR_THREAD_POOL_MEDIUM.install(par_iter_verify);
+        }
+        129..=256 => {
+            PAR_THREAD_POOL_LARGE.install(par_iter_verify);
+        }
+        _ => {
+            PAR_THREAD_POOL_XLARGE.install(par_iter_verify);
+        }
+    };
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
