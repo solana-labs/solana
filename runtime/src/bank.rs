@@ -4036,12 +4036,26 @@ impl Bank {
                 .feature_set
                 .is_active(&feature_set::enable_durable_nonce::id());
         let hash_queue = self.blockhash_queue.read().unwrap();
+        let last_blockhash = hash_queue.last_hash();
+        let next_durable_nonce =
+            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
+        let uses_invalid_durable_nonce_hash = |blockhash: &Hash| -> bool {
+            let nonce_must_be_advanceable = self
+                .feature_set
+                .is_active(&feature_set::nonce_must_be_advanceable::ID);
+            enable_durable_nonce
+                && nonce_must_be_advanceable
+                && blockhash == next_durable_nonce.as_hash()
+        };
+
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
                     let recent_blockhash = tx.message().recent_blockhash();
                     if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
                         (Ok(()), None)
+                    } else if uses_invalid_durable_nonce_hash(recent_blockhash) {
+                        (Err(TransactionError::BlockhashNotFound), None)
                     } else if let Some((address, account)) =
                         self.check_transaction_for_nonce(tx, enable_durable_nonce)
                     {
@@ -12663,6 +12677,36 @@ pub(crate) mod tests {
             InstructionError::ModifiedProgramId,
         ));
         assert_eq!(bank.process_transaction(&tx), expect);
+    }
+
+    #[test]
+    fn test_nonce_must_be_advanceable() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(100_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
+        let bank = Arc::new(bank);
+        let nonce_keypair = Keypair::new();
+        let nonce_authority = nonce_keypair.pubkey();
+        let durable_nonce =
+            DurableNonce::from_blockhash(&bank.last_blockhash(), true /* separate domains */);
+        let nonce_account = AccountSharedData::new_data(
+            42_424_242,
+            &nonce::state::Versions::new_current(nonce::State::Initialized(
+                nonce::state::Data::new(nonce_authority, durable_nonce, 5000),
+            )),
+            &system_program::id(),
+        )
+        .unwrap();
+        bank.store_account(&nonce_keypair.pubkey(), &nonce_account);
+
+        let ix =
+            system_instruction::advance_nonce_account(&nonce_keypair.pubkey(), &nonce_authority);
+        let message = Message::new(&[ix], Some(&nonce_keypair.pubkey()));
+        let tx = Transaction::new(&[&nonce_keypair], message, *durable_nonce.as_hash());
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::BlockhashNotFound)
+        );
     }
 
     #[test]
