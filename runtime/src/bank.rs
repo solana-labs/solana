@@ -3744,22 +3744,10 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
-<<<<<<< HEAD
     fn check_message_for_nonce(
         &self,
         message: &SanitizedMessage,
     ) -> Option<(Pubkey, AccountSharedData)> {
-        message
-            .get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))
-            .and_then(|nonce_address| {
-                self.get_account_with_fixed_root(nonce_address)
-                    .map(|nonce_account| (*nonce_address, nonce_account))
-            })
-            .filter(|(_, nonce_account)| {
-                nonce_account::verify_nonce_account(nonce_account, message.recent_blockhash())
-            })
-=======
-    fn check_message_for_nonce(&self, message: &SanitizedMessage) -> Option<TransactionAccount> {
         let nonce_address =
             message.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
@@ -3779,7 +3767,6 @@ impl Bank {
         }
 
         Some((*nonce_address, nonce_account))
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 
     fn check_transaction_for_nonce(

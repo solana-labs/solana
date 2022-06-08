@@ -272,7 +272,7 @@ impl SanitizedMessage {
                     .copied()
                     .map(usize::from)
                     .filter(|index| self.is_signer(*index))
-                    .filter_map(|signer_index| self.account_keys().get(signer_index))
+                    .filter_map(|signer_index| self.get_account_key(signer_index))
             })
     }
 
@@ -307,17 +307,14 @@ impl SanitizedMessage {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
     use {
         super::*,
         crate::{
             instruction::{AccountMeta, Instruction},
             message::v0,
         },
+        std::collections::HashSet,
     };
-=======
-    use {super::*, crate::message::v0, std::collections::HashSet};
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
 
     #[test]
     fn test_try_from_message() {
@@ -399,7 +396,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn test_try_compile_instruction() {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
@@ -480,7 +476,9 @@ mod tests {
                 .try_compile_instruction(&invalid_account_key_instruction)
                 .is_none());
         }
-=======
+    }
+
+    #[test]
     fn test_get_ix_signers() {
         let signer0 = Pubkey::new_unique();
         let signer1 = Pubkey::new_unique();
@@ -518,6 +516,5 @@ mod tests {
             message.get_ix_signers(3).collect::<HashSet<_>>(),
             HashSet::default()
         );
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 }

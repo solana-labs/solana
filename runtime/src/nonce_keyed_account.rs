@@ -1084,7 +1084,6 @@ mod test {
 
     #[test]
     fn verify_nonce_ok() {
-<<<<<<< HEAD
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap());
@@ -1099,70 +1098,22 @@ mod test {
             assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
                 get_durable_nonce(&invoke_context).as_hash(),
-            ));
+            )
+            .is_some());
         });
-=======
-        prepare_mockup!(invoke_context, instruction_accounts, rent);
-        push_instruction_context!(
-            invoke_context,
-            transaction_context,
-            instruction_context,
-            instruction_accounts
-        );
-        let mut nonce_account = instruction_context
-            .try_borrow_instruction_account(transaction_context, NONCE_ACCOUNT_INDEX)
-            .unwrap();
-        let mut signers = HashSet::new();
-        signers.insert(nonce_account.get_key());
-        let state: State = nonce_account.get_state().unwrap();
-        // New is in Uninitialzed state
-        assert_eq!(state, State::Uninitialized);
-        set_invoke_context_blockhash!(invoke_context, 0);
-        let authorized = *nonce_account.get_key();
-        initialize_nonce_account(&mut nonce_account, &authorized, &rent, &invoke_context).unwrap();
-        drop(nonce_account);
-        assert!(verify_nonce_account(
-            &transaction_context
-                .get_account_at_index(NONCE_ACCOUNT_INDEX)
-                .unwrap()
-                .borrow(),
-            get_durable_nonce(&invoke_context).as_hash(),
-        )
-        .is_some());
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 
     #[test]
     fn verify_nonce_bad_acc_state_fail() {
-<<<<<<< HEAD
         with_test_keyed_account(42, true, |nonce_account| {
-            assert!(!verify_nonce_account(
-                &nonce_account.account.borrow(),
-                &Hash::default()
-            ));
+            assert!(
+                verify_nonce_account(&nonce_account.account.borrow(), &Hash::default()).is_none()
+            );
         });
-=======
-        prepare_mockup!(invoke_context, instruction_accounts, rent);
-        push_instruction_context!(
-            invoke_context,
-            transaction_context,
-            _instruction_context,
-            instruction_accounts
-        );
-        assert!(verify_nonce_account(
-            &transaction_context
-                .get_account_at_index(NONCE_ACCOUNT_INDEX)
-                .unwrap()
-                .borrow(),
-            &Hash::default()
-        )
-        .is_none());
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 
     #[test]
     fn verify_nonce_bad_query_hash_fail() {
-<<<<<<< HEAD
         with_test_keyed_account(42, true, |nonce_account| {
             let mut signers = HashSet::new();
             signers.insert(nonce_account.signer_key().unwrap());
@@ -1175,46 +1126,11 @@ mod test {
                 .initialize_nonce_account(authorized, &Rent::free(), &invoke_context)
                 .unwrap();
             let invoke_context = create_invoke_context_with_blockhash(1);
-            assert!(!verify_nonce_account(
+            assert!(verify_nonce_account(
                 &nonce_account.account.borrow(),
                 get_durable_nonce(&invoke_context).as_hash(),
-            ));
+            )
+            .is_none());
         });
-=======
-        prepare_mockup!(invoke_context, instruction_accounts, rent);
-        push_instruction_context!(
-            invoke_context,
-            transaction_context,
-            instruction_context,
-            instruction_accounts
-        );
-        let mut nonce_account = instruction_context
-            .try_borrow_instruction_account(transaction_context, NONCE_ACCOUNT_INDEX)
-            .unwrap();
-        let mut signers = HashSet::new();
-        signers.insert(nonce_account.get_key());
-        let state: State = nonce_account.get_state().unwrap();
-        // New is in Uninitialzed state
-        assert_eq!(state, State::Uninitialized);
-        set_invoke_context_blockhash!(invoke_context, 0);
-        let authorized = *nonce_account.get_key();
-        initialize_nonce_account(
-            &mut nonce_account,
-            &authorized,
-            &Rent::free(),
-            &invoke_context,
-        )
-        .unwrap();
-        set_invoke_context_blockhash!(invoke_context, 1);
-        drop(nonce_account);
-        assert!(verify_nonce_account(
-            &transaction_context
-                .get_account_at_index(NONCE_ACCOUNT_INDEX)
-                .unwrap()
-                .borrow(),
-            get_durable_nonce(&invoke_context).as_hash(),
-        )
-        .is_none());
->>>>>>> b2b426d4b (Reject durable nonce transactions not signed by authority (#25831))
     }
 }
