@@ -427,7 +427,10 @@ mod tests {
         };
         let nonce_account = Account::new_data_with_space(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(data)),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(data),
+                true, // separate_domains
+            ),
             nonce::State::size(),
             &system_program::id(),
         )
