@@ -22,12 +22,12 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            check_physical_overlapping, check_slice_translation_size, curve25519_syscall_enabled,
-            disable_fees_sysvar, do_support_realloc, executables_incur_cpi_data_cost,
-            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            quick_bail_on_panic, return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
+            blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
+            curve25519_syscall_enabled, disable_fees_sysvar, do_support_realloc,
+            executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            prevent_calling_precompiles_as_programs, quick_bail_on_panic,
+            return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
             sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
             zk_token_sdk_enabled,
         },
@@ -152,9 +152,6 @@ pub fn register_syscalls(
     let sol_log_data_syscall_enabled = invoke_context
         .feature_set
         .is_active(&sol_log_data_syscall_enabled::id());
-    let add_get_processed_sibling_instruction_syscall = invoke_context
-        .feature_set
-        .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
     let mut syscall_registry = SyscallRegistry::default();
 
@@ -364,18 +361,14 @@ pub fn register_syscalls(
     )?;
 
     // Processed sibling instructions
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
+    syscall_registry.register_syscall_by_name(
         b"sol_get_processed_sibling_instruction",
         SyscallGetProcessedSiblingInstruction::init,
         SyscallGetProcessedSiblingInstruction::call,
     )?;
 
     // Stack height
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
+    syscall_registry.register_syscall_by_name(
         b"sol_get_stack_height",
         SyscallGetStackHeight::init,
         SyscallGetStackHeight::call,
