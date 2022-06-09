@@ -884,51 +884,46 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        let result = self
-            .push(instruction_accounts, program_indices, instruction_data)
-            .and_then(|_| {
-                let mut process_executable_chain_time =
-                    Measure::start("process_executable_chain_time");
-                self.transaction_context
-                    .set_return_data(program_id, Vec::new())?;
-                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                let execution_result = self.process_executable_chain();
-                let post_remaining_units = self.compute_meter.borrow().get_remaining();
-                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-                process_executable_chain_time.stop();
+        self.push(instruction_accounts, program_indices, instruction_data)?;
 
-                // Verify the called program has not misbehaved
-                let mut verify_callee_time = Measure::start("verify_callee_time");
-                let result = execution_result.and_then(|_| {
-                    if is_top_level_instruction {
-                        self.verify(instruction_accounts, program_indices)
-                    } else {
-                        self.verify_and_update(instruction_accounts, false)
-                    }
-                });
-                verify_callee_time.stop();
+        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
+        self.transaction_context
+            .set_return_data(program_id, Vec::new())?;
+        let pre_remaining_units = self.compute_meter.borrow().get_remaining();
+        let mut result = self.process_executable_chain();
+        let post_remaining_units = self.compute_meter.borrow().get_remaining();
+        *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+        process_executable_chain_time.stop();
 
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .process_executable_chain_us,
-                    process_executable_chain_time.as_us()
-                );
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .verify_callee_us,
-                    verify_callee_time.as_us()
-                );
+        // Verify the called program has not misbehaved
+        let mut verify_callee_time = Measure::start("verify_callee_time");
+        result = result.and_then(|_| {
+            if is_top_level_instruction {
+                self.verify(instruction_accounts, program_indices)
+            } else {
+                self.verify_and_update(instruction_accounts, false)
+            }
+        });
+        verify_callee_time.stop();
 
-                result
-            });
+        saturating_add_assign!(
+            timings
+                .execute_accessories
+                .process_instructions
+                .process_executable_chain_us,
+            process_executable_chain_time.as_us()
+        );
+        saturating_add_assign!(
+            timings
+                .execute_accessories
+                .process_instructions
+                .verify_callee_us,
+            verify_callee_time.as_us()
+        );
 
-        // Pop the invoke_stack to restore previous state
-        let _ = self.pop();
-        result
+        // Pop if and only if `push` succeeded, independed of `result`.
+        // Thus, the `.and()` instead of an `.and_then()`.
+        result.and(self.pop())
     }
 
     /// Calls the instruction's program entrypoint method
