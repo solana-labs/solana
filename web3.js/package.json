@@ -67,7 +67,7 @@
     "fast-stable-stringify": "^1.0.0",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
-    "node-fetch": "2",
+    "node-fetch": "3",
     "rpc-websockets": "^7.4.2",
     "secp256k1": "^4.0.2",
     "superstruct": "^0.14.2",
