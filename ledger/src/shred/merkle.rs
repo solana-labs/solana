@@ -503,15 +503,14 @@ mod test {
             size: u16::try_from(SIZE_OF_DATA_SHRED_HEADERS + capacity).unwrap(),
         };
         let mut payload = vec![0u8; ShredData::SIZE_OF_PAYLOAD];
-        for i in 0..payload.len() {
-            payload[i] = u8::try_from(i % 256).unwrap();
+        for (i, b) in payload.iter_mut().enumerate() {
+            *b = u8::try_from(i % 256).unwrap();
         }
-        let shred = ShredData {
+        ShredData {
             common_header,
             data_header,
             payload,
-        };
-        shred
+        }
     }
 
     #[test]
