@@ -61,12 +61,8 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             return;
         }
         let random_keypair = Keypair::new();
-<<<<<<< HEAD
-        let client = create_client(ingress_node.client_facing_addr());
-=======
         let (rpc, tpu) = ingress_node.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         let bal = client
             .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
@@ -87,12 +83,8 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             if ignore_nodes.contains(&validator.id) {
                 continue;
             }
-<<<<<<< HEAD
-            let client = create_client(validator.client_facing_addr());
-=======
             let (rpc, tpu) = validator.client_facing_addr();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
     });
@@ -103,12 +95,8 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     node: &ContactInfo,
     connection_cache: Arc<ConnectionCache>,
 ) {
-<<<<<<< HEAD
-    let client = create_client(node.client_facing_addr());
-=======
     let (rpc, tpu) = node.client_facing_addr();
     let client = ThinClient::new(rpc, tpu, connection_cache);
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     for (pk, b) in expected_balances {
         let bal = client
             .poll_get_balance_with_commitment(&pk, CommitmentConfig::processed())
@@ -124,12 +112,8 @@ pub fn send_many_transactions(
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
-<<<<<<< HEAD
-    let client = create_client(node.client_facing_addr());
-=======
     let (rpc, tpu) = node.client_facing_addr();
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
         let random_keypair = Keypair::new();
@@ -221,13 +205,9 @@ pub fn kill_entry_and_spend_and_verify_rest(
     let cluster_nodes =
         discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
-<<<<<<< HEAD
-    let client = create_client(entry_point_info.client_facing_addr());
-=======
     let (rpc, tpu) = entry_point_info.client_facing_addr();
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
 
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     // sleep long enough to make sure we are in epoch 3
     let first_two_epoch_slots = MINIMUM_SLOTS_PER_EPOCH * (3 + 1);
 
@@ -255,12 +235,8 @@ pub fn kill_entry_and_spend_and_verify_rest(
             continue;
         }
 
-<<<<<<< HEAD
-        let client = create_client(ingress_node.client_facing_addr());
-=======
         let (rpc, tpu) = ingress_node.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         let balance = client
             .poll_get_balance_with_commitment(
                 &funding_keypair.pubkey(),
@@ -342,12 +318,8 @@ pub fn check_for_new_roots(
         assert!(loop_start.elapsed() < loop_timeout);
 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
-<<<<<<< HEAD
-            let client = create_client(ingress_node.client_facing_addr());
-=======
             let (rpc, tpu) = ingress_node.client_facing_addr();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             let root_slot = client
                 .get_slot_with_commitment(CommitmentConfig::finalized())
                 .unwrap_or(0);
@@ -379,12 +351,8 @@ pub fn check_no_new_roots(
         .iter()
         .enumerate()
         .map(|(i, ingress_node)| {
-<<<<<<< HEAD
-            let client = create_client(ingress_node.client_facing_addr());
-=======
             let (rpc, tpu) = ingress_node.client_facing_addr();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             let initial_root = client
                 .get_slot()
                 .unwrap_or_else(|_| panic!("get_slot for {} failed", ingress_node.id));
@@ -402,12 +370,8 @@ pub fn check_no_new_roots(
     let mut reached_end_slot = false;
     loop {
         for contact_info in contact_infos {
-<<<<<<< HEAD
-            let client = create_client(contact_info.client_facing_addr());
-=======
             let (rpc, tpu) = contact_info.client_facing_addr();
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             current_slot = client
                 .get_slot_with_commitment(CommitmentConfig::processed())
                 .unwrap_or_else(|_| panic!("get_slot for {} failed", contact_infos[0].id));
@@ -429,12 +393,8 @@ pub fn check_no_new_roots(
     }
 
     for (i, ingress_node) in contact_infos.iter().enumerate() {
-<<<<<<< HEAD
-        let client = create_client(ingress_node.client_facing_addr());
-=======
         let (rpc, tpu) = ingress_node.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         assert_eq!(
             client
                 .get_slot()
@@ -455,12 +415,8 @@ fn poll_all_nodes_for_signature(
         if validator.id == entry_point_info.id {
             continue;
         }
-<<<<<<< HEAD
-        let client = create_client(validator.client_facing_addr());
-=======
         let (rpc, tpu) = validator.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         client.poll_for_signature_confirmation(sig, confs)?;
     }
 

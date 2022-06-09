@@ -59,18 +59,11 @@ fn test_bench_tps_local_cluster(config: Config) {
 
     cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
 
-<<<<<<< HEAD
-    let client = Arc::new(create_client((
-        cluster.entry_point_info.rpc,
-        cluster.entry_point_info.tpu,
-    )));
-=======
     let client = Arc::new(ThinClient::new(
         cluster.entry_point_info.rpc,
         cluster.entry_point_info.tpu,
         cluster.connection_cache.clone(),
     ));
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
     let lamports_per_account = 100;
 

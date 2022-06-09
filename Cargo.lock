@@ -5651,6 +5651,7 @@ dependencies = [
  "rand 0.7.3",
  "serial_test",
  "solana-clap-utils",
+ "solana-client",
  "solana-core",
  "solana-download-utils",
  "solana-genesis-utils",

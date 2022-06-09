@@ -19,17 +19,15 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
-<<<<<<< HEAD
 #[enum_dispatch(TpuConnection)]
 pub enum Connection {
     UdpTpuConnection,
     QuicTpuConnection,
 }
-=======
+
 /// Used to decide whether the TPU and underlying connection cache should use
 /// QUIC connections.
 pub const DEFAULT_TPU_USE_QUIC: bool = false;
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
 #[derive(Default)]
 pub struct ConnectionCacheStats {
@@ -388,140 +386,6 @@ struct GetConnectionResult {
     eviction_timing_ms: u64,
 }
 
-<<<<<<< HEAD
-fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
-    let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
-    let map = (*CONNECTION_MAP).read().unwrap();
-    get_connection_map_lock_measure.stop();
-
-    let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
-
-    let report_stats = map
-        .last_stats
-        .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
-
-    let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
-
-    let (connection, cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
-        match map.map.get(addr) {
-            Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
-            None => {
-                // Upgrade to write access by dropping read lock and acquire write lock
-                drop(map);
-                let mut get_connection_map_lock_measure =
-                    Measure::start("get_connection_map_lock_measure");
-                let mut map = (*CONNECTION_MAP).write().unwrap();
-                get_connection_map_lock_measure.stop();
-
-                lock_timing_ms =
-                    lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
-
-                // Read again, as it is possible that between read lock dropped and the write lock acquired
-                // another thread could have setup the connection.
-                match map.map.get(addr) {
-                    Some(connection) => (connection.clone(), true, map.stats.clone(), 0, 0),
-                    None => {
-                        let connection: Connection = if map.use_quic {
-                            QuicTpuConnection::new(*addr, map.stats.clone()).into()
-                        } else {
-                            UdpTpuConnection::new(*addr, map.stats.clone()).into()
-                        };
-
-                        let connection = Arc::new(connection);
-
-                        // evict a connection if the cache is reaching upper bounds
-                        let mut num_evictions = 0;
-                        let mut get_connection_cache_eviction_measure =
-                            Measure::start("get_connection_cache_eviction_measure");
-                        while map.map.len() >= MAX_CONNECTIONS {
-                            let mut rng = thread_rng();
-                            let n = rng.gen_range(0, MAX_CONNECTIONS);
-                            map.map.swap_remove_index(n);
-                            num_evictions += 1;
-                        }
-                        get_connection_cache_eviction_measure.stop();
-
-                        map.map.insert(*addr, connection.clone());
-                        (
-                            connection,
-                            false,
-                            map.stats.clone(),
-                            num_evictions,
-                            get_connection_cache_eviction_measure.as_ms(),
-                        )
-                    }
-                }
-            }
-        };
-
-    get_connection_map_measure.stop();
-
-    GetConnectionResult {
-        connection,
-        cache_hit,
-        report_stats,
-        map_timing_ms: get_connection_map_measure.as_ms(),
-        lock_timing_ms,
-        connection_cache_stats,
-        num_evictions,
-        eviction_timing_ms,
-    }
-}
-
-// TODO: see https://github.com/solana-labs/solana/issues/23661
-// remove lazy_static and optimize and refactor this
-pub fn get_connection(addr: &SocketAddr) -> Arc<Connection> {
-    let mut get_connection_measure = Measure::start("get_connection_measure");
-    let GetConnectionResult {
-        connection,
-        cache_hit,
-        report_stats,
-        map_timing_ms,
-        lock_timing_ms,
-        connection_cache_stats,
-        num_evictions,
-        eviction_timing_ms,
-    } = get_or_add_connection(addr);
-
-    if report_stats {
-        connection_cache_stats.report();
-    }
-
-    if cache_hit {
-        connection_cache_stats
-            .cache_hits
-            .fetch_add(1, Ordering::Relaxed);
-        connection_cache_stats
-            .get_connection_hit_ms
-            .fetch_add(map_timing_ms, Ordering::Relaxed);
-    } else {
-        connection_cache_stats
-            .cache_misses
-            .fetch_add(1, Ordering::Relaxed);
-        connection_cache_stats
-            .get_connection_miss_ms
-            .fetch_add(map_timing_ms, Ordering::Relaxed);
-        connection_cache_stats
-            .cache_evictions
-            .fetch_add(num_evictions, Ordering::Relaxed);
-        connection_cache_stats
-            .eviction_time_ms
-            .fetch_add(eviction_timing_ms, Ordering::Relaxed);
-    }
-
-    get_connection_measure.stop();
-    connection_cache_stats
-        .get_connection_lock_ms
-        .fetch_add(lock_timing_ms, Ordering::Relaxed);
-    connection_cache_stats
-        .get_connection_ms
-        .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
-
-    connection
-}
-
-=======
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 #[cfg(test)]
 mod tests {
     use {

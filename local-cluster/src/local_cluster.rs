@@ -396,12 +396,8 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-<<<<<<< HEAD
-        let client = create_client(self.entry_point_info.client_facing_addr());
-=======
         let (rpc, tpu) = self.entry_point_info.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
         // Must have enough tokens to fund vote account and set delegate
         let should_create_vote_pubkey = voting_keypair.is_none();
@@ -486,12 +482,8 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-<<<<<<< HEAD
-        let client = create_client(self.entry_point_info.client_facing_addr());
-=======
         let (rpc, tpu) = self.entry_point_info.client_facing_addr();
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
 
@@ -723,16 +715,10 @@ impl Cluster for LocalCluster {
     }
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
-<<<<<<< HEAD
-        self.validators
-            .get(pubkey)
-            .map(|f| create_client(f.info.contact_info.client_facing_addr()))
-=======
         self.validators.get(pubkey).map(|f| {
             let (rpc, tpu) = f.info.contact_info.client_facing_addr();
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     }
 
     fn exit_node(&mut self, pubkey: &Pubkey) -> ClusterValidatorInfo {

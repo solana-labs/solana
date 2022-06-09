@@ -1,12 +1,7 @@
 use {
     crate::{
-<<<<<<< HEAD
         client_error::ClientError,
-        connection_cache::get_connection,
-=======
-        client_error::{ClientError, Result as ClientResult},
         connection_cache::ConnectionCache,
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         pubsub_client::{PubsubClient, PubsubClientError, PubsubClientSubscription},
         rpc_client::RpcClient,
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,

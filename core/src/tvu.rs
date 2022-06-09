@@ -155,13 +155,8 @@ impl Tvu {
         last_full_snapshot_slot: Option<Slot>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
-<<<<<<< HEAD
         pruned_banks_receiver: DroppedSlotsReceiver,
-        use_quic: bool,
-=======
-        accounts_background_request_sender: AbsRequestSender,
         connection_cache: &Arc<ConnectionCache>,
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -546,13 +541,8 @@ pub mod tests {
             None,
             None,
             None,
-<<<<<<< HEAD
             pruned_banks_receiver,
-            false, // use_quic
-=======
-            AbsRequestSender::default(),
             &Arc::new(ConnectionCache::default()),
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

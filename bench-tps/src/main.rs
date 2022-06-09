@@ -9,7 +9,6 @@ use {
     solana_client::{
         connection_cache::ConnectionCache,
         rpc_client::RpcClient,
-        thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_genesis::Base64Account,
@@ -101,17 +100,15 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-<<<<<<< HEAD
             let nodes = discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
+            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
             let client = if *multi_client {
-                let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
+                let (client, num_clients) =
+                    get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
                 if nodes.len() < num_clients {
                     eprintln!(
                         "Error: Insufficient nodes discovered.  Expecting {} or more",
@@ -125,71 +122,24 @@ fn main() {
                 let mut target_client = None;
                 for node in nodes {
                     if node.id == *target_node {
-                        target_client =
-                            Some(Arc::new(get_client(&[node], &SocketAddrSpace::Unspecified)));
+                        target_client = Some(Arc::new(get_client(
+                            &[node],
+                            &SocketAddrSpace::Unspecified,
+                            connection_cache,
+                        )));
                         break;
                     }
-=======
-            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
-            let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
-                let rpc = rpc_addr.parse().unwrap_or_else(|e| {
-                    eprintln!("RPC address should parse as socketaddr {:?}", e);
-                    exit(1);
-                });
-                let tpu = value_t!(matches, "tpu_addr", String)
-                    .unwrap()
-                    .parse()
-                    .unwrap_or_else(|e| {
-                        eprintln!("TPU address should parse to a socket: {:?}", e);
-                        exit(1);
-                    });
-
-                ThinClient::new(rpc, tpu, connection_cache)
-            } else {
-                let nodes =
-                    discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
-                        .unwrap_or_else(|err| {
-                            eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
-                            exit(1);
-                        });
-                if *multi_client {
-                    let (client, num_clients) =
-                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
-                    if nodes.len() < num_clients {
-                        eprintln!(
-                            "Error: Insufficient nodes discovered.  Expecting {} or more",
-                            num_nodes
-                        );
-                        exit(1);
-                    }
-                    client
-                } else if let Some(target_node) = target_node {
-                    info!("Searching for target_node: {:?}", target_node);
-                    let mut target_client = None;
-                    for node in nodes {
-                        if node.id == *target_node {
-                            target_client = Some(get_client(
-                                &[node],
-                                &SocketAddrSpace::Unspecified,
-                                connection_cache,
-                            ));
-                            break;
-                        }
-                    }
-                    target_client.unwrap_or_else(|| {
-                        eprintln!("Target node {} not found", target_node);
-                        exit(1);
-                    })
-                } else {
-                    get_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache)
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
                 }
                 target_client.unwrap_or_else(|| {
                     eprintln!("Target node {} not found", target_node);
                     exit(1);
                 })
             } else {
-                Arc::new(get_client(&nodes, &SocketAddrSpace::Unspecified))
+                Arc::new(get_client(
+                    &nodes,
+                    &SocketAddrSpace::Unspecified,
+                    connection_cache,
+                ))
             };
             let keypairs = get_keypairs(
                 client.clone(),

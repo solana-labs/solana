@@ -31,13 +31,8 @@ use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     log::*,
     rand::{thread_rng, Rng},
-<<<<<<< HEAD
     serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
-=======
-    solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{connection_cache::ConnectionCache, rpc_client::RpcClient},
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     solana_core::serve_repair::RepairProtocol,
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::{
@@ -465,26 +460,8 @@ fn main() {
             );
             exit(1);
         });
-<<<<<<< HEAD
         nodes = gossip_nodes;
     }
-=======
-
-        let connection_cache = Arc::new(ConnectionCache::new(cmd_params.tpu_use_quic));
-        let (client, num_clients) =
-            get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
-        if validators.len() < num_clients {
-            eprintln!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                validators.len()
-            );
-            exit(1);
-        }
-        (gossip_nodes, Some(Arc::new(client)))
-    } else {
-        (vec![], None)
-    };
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
     info!("done found {} nodes", nodes.len());
     let payer = cmd_params
@@ -503,19 +480,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
-<<<<<<< HEAD
         solana_local_cluster::{cluster::Cluster, local_cluster::LocalCluster},
-=======
-        solana_client::thin_client::ThinClient,
-        solana_core::validator::ValidatorConfig,
-        solana_faucet::faucet::run_local_faucet,
-        solana_local_cluster::{
-            cluster::Cluster,
-            local_cluster::{ClusterConfig, LocalCluster},
-            validator_configs::make_identical_validator_configs,
-        },
-        solana_rpc::rpc::JsonRpcConfig,
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         solana_sdk::timing::timestamp,
     };
 
@@ -540,7 +505,6 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
             },
         );
 
@@ -557,7 +521,6 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
             },
         );
 
@@ -574,28 +537,8 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
             },
         );
-<<<<<<< HEAD
-=======
-
-        run_dos_no_client(
-            &nodes,
-            1,
-            DosClientParameters {
-                entrypoint_addr,
-                mode: Mode::Rpc,
-                data_size: 0,
-                data_type: DataType::GetAccountInfo,
-                data_input: Some(Pubkey::default()),
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
-            },
-        );
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     }
 
     #[test]
@@ -624,26 +567,11 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
-                tpu_use_quic: false,
             },
         );
 
-<<<<<<< HEAD
         // send transactions to TPU with 2 random signatures
         // will be filtered on dedup (because transactions are not unique)
-=======
-        let nodes = cluster.get_node_pubkeys();
-        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
-        let nodes_slice = [node];
-
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc,
-            cluster.entry_point_info.tpu,
-            cluster.connection_cache.clone(),
-        ));
-
-        // creates one transaction with 8 valid signatures and sends it 10 times
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         run_dos(
             &nodes_slice,
             1,
@@ -663,7 +591,6 @@ pub mod test {
                     unique_transactions: false,
                     payer_filename: None,
                 },
-                tpu_use_quic: false,
             },
         );
 
@@ -687,95 +614,10 @@ pub mod test {
                     valid_blockhash: false,
                     valid_signatures: false,
                     unique_transactions: true,
-<<<<<<< HEAD
                     payer_filename: None,
-=======
-                    transaction_type: None,
-                    num_instructions: None,
                 },
-                tpu_use_quic: false,
             },
         );
-
-        // creates and sends unique transactions which have valid signatures
-        run_dos(
-            &nodes_slice,
-            10,
-            Some(client),
-            DosClientParameters {
-                entrypoint_addr: cluster.entry_point_info.gossip,
-                mode: Mode::Tpu,
-                data_size: 0, // irrelevant
-                data_type: DataType::Transaction,
-                data_input: None,
-                skip_gossip: false,
-                allow_private_addr: false,
-                transaction_params: TransactionParams {
-                    num_signatures: Some(8),
-                    valid_blockhash: false,
-                    valid_signatures: true,
-                    unique_transactions: true,
-                    transaction_type: None,
-                    num_instructions: None,
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
-                },
-                tpu_use_quic: false,
-            },
-        );
-<<<<<<< HEAD
-=======
-    }
-
-    fn run_dos_with_blockhash_and_payer(tpu_use_quic: bool) {
-        solana_logger::setup();
-
-        // 1. Create faucet thread
-        let faucet_keypair = Keypair::new();
-        let faucet_pubkey = faucet_keypair.pubkey();
-        let faucet_addr = run_local_faucet(faucet_keypair, None);
-        let mut validator_config = ValidatorConfig::default_for_test();
-        validator_config.rpc_config = JsonRpcConfig {
-            faucet_addr: Some(faucet_addr),
-            ..JsonRpcConfig::default_for_test()
-        };
-
-        // 2. Create a local cluster which is aware of faucet
-        let num_nodes = 1;
-        let native_instruction_processors = vec![];
-        let cluster = LocalCluster::new(
-            &mut ClusterConfig {
-                node_stakes: vec![999_990; num_nodes],
-                cluster_lamports: 200_000_000,
-                validator_configs: make_identical_validator_configs(
-                    &ValidatorConfig {
-                        rpc_config: JsonRpcConfig {
-                            faucet_addr: Some(faucet_addr),
-                            ..JsonRpcConfig::default_for_test()
-                        },
-                        ..ValidatorConfig::default_for_test()
-                    },
-                    num_nodes,
-                ),
-                native_instruction_processors,
-                ..ClusterConfig::default()
-            },
-            SocketAddrSpace::Unspecified,
-        );
-        assert_eq!(cluster.validators.len(), num_nodes);
-
-        // 3. Transfer funds to faucet account
-        cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
-
-        let nodes = cluster.get_node_pubkeys();
-        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
-        let nodes_slice = [node];
-
-        let client = Arc::new(ThinClient::new(
-            cluster.entry_point_info.rpc,
-            cluster.entry_point_info.tpu,
-            cluster.connection_cache.clone(),
-        ));
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
         // send unique transactions to TPU with 2 random signatures
         // will be discarded on banking stage in legacy.rs (A program cannot be a payer)
@@ -800,7 +642,6 @@ pub mod test {
                     unique_transactions: true,
                     payer_filename: None,
                 },
-                tpu_use_quic,
             },
         );
 
@@ -825,7 +666,6 @@ pub mod test {
                     unique_transactions: true,
                     payer_filename: None,
                 },
-                tpu_use_quic,
             },
         );
 
@@ -850,7 +690,6 @@ pub mod test {
                     unique_transactions: true,
                     payer_filename: None,
                 },
-                tpu_use_quic,
             },
         );
     }
@@ -886,18 +725,7 @@ pub mod test {
                     unique_transactions: true,
                     payer_filename: None,
                 },
-                tpu_use_quic,
             },
         );
-    }
-
-    #[test]
-    fn test_dos_with_blockhash_and_payer() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
-    }
-
-    #[test]
-    fn test_dos_with_blockhash_and_payer_and_quic() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
     }
 }

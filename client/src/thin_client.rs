@@ -608,32 +608,16 @@ impl SyncClient for ThinClient {
 }
 
 impl AsyncClient for ThinClient {
-<<<<<<< HEAD
     fn async_send_transaction(&self, transaction: Transaction) -> TransportResult<Signature> {
         let transaction = VersionedTransaction::from(transaction);
-        let conn = get_connection(self.tpu_addr());
-=======
-    fn async_send_versioned_transaction(
-        &self,
-        transaction: VersionedTransaction,
-    ) -> TransportResult<Signature> {
         let conn = self.connection_cache.get_connection(self.tpu_addr());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         conn.serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
 
-<<<<<<< HEAD
     fn async_send_batch(&self, batch: Vec<Transaction>) -> TransportResult<()> {
         let batch: Vec<VersionedTransaction> = batch.into_iter().map(Into::into).collect();
-        let conn = get_connection(self.tpu_addr());
-=======
-    fn async_send_versioned_transaction_batch(
-        &self,
-        batch: Vec<VersionedTransaction>,
-    ) -> TransportResult<()> {
         let conn = self.connection_cache.get_connection(self.tpu_addr());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
     }
@@ -669,20 +653,6 @@ impl AsyncClient for ThinClient {
     }
 }
 
-<<<<<<< HEAD
-pub fn create_client((rpc, tpu): (SocketAddr, SocketAddr)) -> ThinClient {
-    ThinClient::new(rpc, tpu)
-}
-
-pub fn create_client_with_timeout(
-    (rpc, tpu): (SocketAddr, SocketAddr),
-    timeout: Duration,
-) -> ThinClient {
-    ThinClient::new_socket_with_timeout(rpc, tpu, timeout)
-}
-
-=======
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 #[cfg(test)]
 mod tests {
     use {super::*, rayon::prelude::*};

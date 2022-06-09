@@ -2,6 +2,7 @@ use {
     crate::accountsdb_repl_service::AccountsDbReplService,
     crossbeam_channel::unbounded,
     log::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_download_utils::download_snapshot_archive,
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -222,6 +223,7 @@ fn start_client_rpc_services(
         .write()
         .unwrap()
         .register_exit(Box::new(move || trigger.cancel()));
+    let connection_cache = Arc::new(ConnectionCache::default());
 
     let (_bank_notification_sender, bank_notification_receiver) = unbounded();
     (
@@ -247,6 +249,7 @@ fn start_client_rpc_services(
             },
             max_slots,
             leader_schedule_cache.clone(),
+            connection_cache,
             max_complete_transaction_status_slot,
         )),
         Some(pubsub_service),

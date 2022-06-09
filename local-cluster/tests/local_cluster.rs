@@ -165,13 +165,9 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-<<<<<<< HEAD
-    let tx_client = create_client(non_bootstrap_info.client_facing_addr());
-=======
     let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
     let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
     let (blockhash, _) = tx_client
         .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
         .unwrap();
@@ -413,12 +409,8 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-<<<<<<< HEAD
-    let client = create_client(cluster.entry_point_info.client_facing_addr());
-=======
     let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
 
     // Programs that are available at epoch 0
     for program_id in [

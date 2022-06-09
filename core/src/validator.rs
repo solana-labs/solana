@@ -703,36 +703,6 @@ impl Validator {
             } else {
                 None
             };
-<<<<<<< HEAD
-=======
-
-            let json_rpc_service = JsonRpcService::new(
-                rpc_addr,
-                config.rpc_config.clone(),
-                config.snapshot_config.clone(),
-                bank_forks.clone(),
-                block_commitment_cache.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                Some(poh_recorder.clone()),
-                genesis_config.hash(),
-                ledger_path,
-                config.validator_exit.clone(),
-                config.known_validators.clone(),
-                rpc_override_health_check.clone(),
-                optimistically_confirmed_bank.clone(),
-                config.send_transaction_service_config.clone(),
-                max_slots.clone(),
-                leader_schedule_cache.clone(),
-                connection_cache.clone(),
-                max_complete_transaction_status_slot,
-            )
-            .unwrap_or_else(|s| {
-                error!("Failed to create JSON RPC Service: {}", s);
-                abort();
-            });
-
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
@@ -752,6 +722,7 @@ impl Validator {
                     config.send_transaction_service_config.clone(),
                     max_slots.clone(),
                     leader_schedule_cache.clone(),
+                    connection_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
                 if !config.rpc_config.full_api {
@@ -971,13 +942,8 @@ impl Validator {
             last_full_snapshot_slot,
             block_metadata_notifier,
             config.wait_to_vote_slot,
-<<<<<<< HEAD
             pruned_banks_receiver,
-            use_quic,
-=======
-            accounts_background_request_sender,
             &connection_cache,
->>>>>>> 79a8ecd0a (client: Remove static connection cache, plumb it instead (#25667))
         );
 
         let tpu = Tpu::new(
