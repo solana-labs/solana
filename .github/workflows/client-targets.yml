@@ -54,6 +54,12 @@ jobs:
       - name: Install cargo-ndk
         if: ${{ matrix.platform == 'android' }}
         run: cargo install cargo-ndk
+      - name: Install gcc
+        if: ${{ matrix.platform == 'android' }}
+        run: sudo apt install -y gcc-multilib
+      - name: Install gcc
+        if: ${{ matrix.platform == 'ios' }}
+        run: brew install gcc
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.platform == 'android' }}
         with:
