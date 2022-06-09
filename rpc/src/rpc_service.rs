@@ -307,7 +307,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                     .body(hyper::Body::from(self.health_check()))
                     .unwrap()
                     .into(),
-                "/prometheus" => hyper::Response::builder()
+                "/metrics" => hyper::Response::builder()
                     .status(hyper::StatusCode::OK)
                     .header("Content-Type", "text/plain; version=0.0.4; charset=UTF-8")
                     .body(hyper::Body::from(render_prometheus(
