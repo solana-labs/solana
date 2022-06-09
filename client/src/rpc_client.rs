@@ -42,7 +42,7 @@ use {
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
         UiConfirmedBlock, UiTransactionEncoding,
     },
-    std::{net::SocketAddr, str::FromStr, time::Duration},
+    std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration},
 };
 
 #[derive(Default)]
@@ -151,7 +151,7 @@ pub struct GetConfirmedSignaturesForAddress2Config {
 /// [`ClientErrorKind`]: crate::client_error::ClientErrorKind
 /// [`ClientErrorKind::Reqwest`]: crate::client_error::ClientErrorKind::Reqwest
 pub struct RpcClient {
-    rpc_client: nonblocking::rpc_client::RpcClient,
+    rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
     runtime: Option<tokio::runtime::Runtime>,
 }
 
@@ -173,7 +173,9 @@ impl RpcClient {
         config: RpcClientConfig,
     ) -> Self {
         Self {
-            rpc_client: nonblocking::rpc_client::RpcClient::new_sender(sender, config),
+            rpc_client: Arc::new(nonblocking::rpc_client::RpcClient::new_sender(
+                sender, config,
+            )),
             runtime: Some(
                 tokio::runtime::Builder::new_current_thread()
                     .thread_name("rpc-client")
@@ -183,6 +185,10 @@ impl RpcClient {
                     .unwrap(),
             ),
         }
+    }
+
+    pub fn get_nonblocking_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
+        self.rpc_client.clone()
     }
 
     /// Create an HTTP `RpcClient`.
