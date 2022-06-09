@@ -286,6 +286,14 @@ impl LeaderSlotMetrics {
 }
 
 #[derive(Debug)]
+pub(crate) enum MetricsTrackerAction {
+    Noop,
+    ReportAndResetTracker,
+    NewTracker(Option<LeaderSlotMetrics>),
+    ReportAndNewTracker(Option<LeaderSlotMetrics>),
+}
+
+#[derive(Debug)]
 pub struct LeaderSlotMetricsTracker {
     // Only `Some` if BankingStage detects it's time to construct our leader slot,
     // otherwise `None`
@@ -301,48 +309,67 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    // Returns reported slot if metrics were reported
-    pub(crate) fn update_on_leader_slot_boundary(
-        &mut self,
+    // check leader slot, return MetricsTrackerAction to be applied by apply_action()
+    pub(crate) fn check_leader_slot_boundary(
+        &self,
         bank_start: &Option<BankStart>,
-    ) -> Option<Slot> {
-        match (self.leader_slot_metrics.as_mut(), bank_start) {
-            (None, None) => None,
+    ) -> MetricsTrackerAction {
+        match (self.leader_slot_metrics.as_ref(), bank_start) {
+            (None, None) => MetricsTrackerAction::Noop,
 
-            (Some(leader_slot_metrics), None) => {
-                leader_slot_metrics.report();
-                // Ensure tests catch that `report()` method was called
-                let reported_slot = leader_slot_metrics.reported_slot();
-                // Slot has ended, time to report metrics
-                self.leader_slot_metrics = None;
-                reported_slot
-            }
+            (Some(_), None) => MetricsTrackerAction::ReportAndResetTracker,
 
-            (None, Some(bank_start)) => {
                 // Our leader slot has begain, time to create a new slot tracker
-                self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+            (None, Some(bank_start)) => MetricsTrackerAction::NewTracker(
+                Some(LeaderSlotMetrics::new(
                     self.id,
                     bank_start.working_bank.slot(),
                     &bank_start.bank_creation_time,
-                ));
-                self.leader_slot_metrics.as_ref().unwrap().reported_slot()
-            }
+                ))),
 
             (Some(leader_slot_metrics), Some(bank_start)) => {
                 if leader_slot_metrics.slot != bank_start.working_bank.slot() {
                     // Last slot has ended, new slot has began
-                    leader_slot_metrics.report();
-                    // Ensure tests catch that `report()` method was called
-                    let reported_slot = leader_slot_metrics.reported_slot();
-                    self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+                    MetricsTrackerAction::ReportAndNewTracker(
+                    Some(LeaderSlotMetrics::new(
                         self.id,
                         bank_start.working_bank.slot(),
                         &bank_start.bank_creation_time,
-                    ));
-                    reported_slot
+                    )))
                 } else {
-                    leader_slot_metrics.reported_slot()
+                    MetricsTrackerAction::Noop
                 }
+            }
+        }
+    }
+
+    pub(crate) fn apply_action(
+        &mut self,
+        action: MetricsTrackerAction,
+    ) -> Option<Slot> {
+        match action {
+            MetricsTrackerAction::Noop => None,
+            MetricsTrackerAction::ReportAndResetTracker => {
+                let mut reported_slot = None;
+                if let Some(leader_slot_metrics) = self.leader_slot_metrics.as_mut() {
+                    leader_slot_metrics.report();
+                    reported_slot = leader_slot_metrics.reported_slot();
+                }
+                self.leader_slot_metrics = None;
+                reported_slot
+            }
+            MetricsTrackerAction::NewTracker(new_slot_metrics) => {
+                self.leader_slot_metrics = new_slot_metrics;
+                self.leader_slot_metrics.as_ref().unwrap().reported_slot()
+            }
+            MetricsTrackerAction::ReportAndNewTracker(new_slot_metrics) => {
+                let mut reported_slot = None;
+                if let Some(leader_slot_metrics) = self.leader_slot_metrics.as_mut() {
+                    leader_slot_metrics.report();
+                    reported_slot = leader_slot_metrics.reported_slot();
+                }
+                self.leader_slot_metrics = new_slot_metrics;
+                reported_slot
             }
         }
     }
