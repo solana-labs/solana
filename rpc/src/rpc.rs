@@ -5466,6 +5466,7 @@ pub mod tests {
         assert!(contains_slot);
 
         // Set up nonce accounts to test filters
+<<<<<<< HEAD
         let nonce_keypair0 = Keypair::new();
         let instruction = system_instruction::create_nonce_account(
             &alice.pubkey(),
@@ -5523,6 +5524,53 @@ pub mod tests {
             }}"#,
             system_program::id(),
             bs58::encode(vec![1]).into_string(),
+=======
+        let nonce_authorities = (0..2)
+            .map(|_| {
+                let pubkey = Pubkey::new_unique();
+                let authority = Pubkey::new_unique();
+                let account = AccountSharedData::new_data(
+                    42,
+                    &nonce::state::Versions::new(
+                        nonce::State::new_initialized(&authority, DurableNonce::default(), 1000),
+                        true, // separate_domains
+                    ),
+                    &system_program::id(),
+                )
+                .unwrap();
+                bank.store_account(&pubkey, &account);
+                authority
+            })
+            .collect::<Vec<_>>();
+
+        // Test memcmp filter; filter on Initialized state
+        let request = create_test_request(
+            "getProgramAccounts",
+            Some(json!([
+                system_program::id().to_string(),
+                {"filters": [{
+                    "memcmp": {
+                        "offset": 4,
+                        "bytes": bs58::encode(vec![1, 0, 0, 0]).into_string(),
+                    },
+                }]},
+            ])),
+        );
+        let result: Vec<RpcKeyedAccount> = parse_success_result(rpc.handle_request_sync(request));
+        assert_eq!(result.len(), 2);
+
+        let request = create_test_request(
+            "getProgramAccounts",
+            Some(json!([
+                system_program::id().to_string(),
+                {"filters": [{
+                    "memcmp": {
+                        "offset": 4,
+                        "bytes": bs58::encode(vec![0, 0, 0, 0]).into_string(),
+                    },
+                }]},
+            ])),
+>>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();

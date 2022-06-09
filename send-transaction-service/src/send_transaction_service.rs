@@ -237,9 +237,23 @@ impl SendTransactionService {
             }
             if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
                 let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
+<<<<<<< HEAD
                 if nonce_account::verify_nonce_account(&nonce_account, &durable_nonce).is_none()
                     && working_bank.get_signature_status_slot(signature).is_none()
                 {
+=======
+                let now = Instant::now();
+                let expired = transaction_info
+                    .last_sent_time
+                    .map(|last| now.duration_since(last) >= retry_rate)
+                    .unwrap_or(false);
+                let verify_nonce_account = nonce_account::verify_nonce_account(
+                    &nonce_account,
+                    &durable_nonce,
+                    working_bank.separate_nonce_from_blockhash(),
+                );
+                if verify_nonce_account.is_none() && signature_status.is_none() && expired {
+>>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
                     info!("Dropping expired durable-nonce transaction: {}", signature);
                     result.expired += 1;
                     inc_new_counter_info!("send_transaction_service-expired", 1);
@@ -635,9 +649,14 @@ mod test {
         let nonce_address = Pubkey::new_unique();
         let durable_nonce =
             DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
-        let nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Data::new(Pubkey::default(), durable_nonce, 42),
-        ));
+        let nonce_state = nonce::state::Versions::new(
+            nonce::State::Initialized(nonce::state::Data::new(
+                Pubkey::default(),
+                durable_nonce,
+                42,
+            )),
+            true, // separate_domains
+        );
         let nonce_account =
             AccountSharedData::new_data(43, &nonce_state, &system_program::id()).unwrap();
         root_bank.store_account(&nonce_address, &nonce_account);
@@ -865,9 +884,14 @@ mod test {
         // Advance nonce
         let new_durable_nonce =
             DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
-        let new_nonce_state = nonce::state::Versions::new_current(nonce::State::Initialized(
-            nonce::state::Data::new(Pubkey::default(), new_durable_nonce, 42),
-        ));
+        let new_nonce_state = nonce::state::Versions::new(
+            nonce::State::Initialized(nonce::state::Data::new(
+                Pubkey::default(),
+                new_durable_nonce,
+                42,
+            )),
+            true, // separate_domains
+        );
         let nonce_account =
             AccountSharedData::new_data(43, &new_nonce_state, &system_program::id()).unwrap();
         working_bank.store_account(&nonce_address, &nonce_account);

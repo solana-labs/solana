@@ -3663,6 +3663,11 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
+    pub fn separate_nonce_from_blockhash(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::separate_nonce_from_blockhash::id())
+    }
+
     fn check_age<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -3670,9 +3675,7 @@ impl Bank {
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
-        let separate_nonce_from_blockhash = self
-            .feature_set
-            .is_active(&feature_set::separate_nonce_from_blockhash::id());
+        let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
         let enable_durable_nonce = separate_nonce_from_blockhash
             && self
                 .feature_set
@@ -3757,8 +3760,11 @@ impl Bank {
         let nonce_address =
             message.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
-        let nonce_data =
-            nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash())?;
+        let nonce_data = nonce_account::verify_nonce_account(
+            &nonce_account,
+            message.recent_blockhash(),
+            self.separate_nonce_from_blockhash(),
+        )?;
 
         if self
             .feature_set
@@ -4520,10 +4526,10 @@ impl Bank {
 
         let mut write_time = Measure::start("write_time");
         let durable_nonce = {
-            let separate_nonce_from_blockhash = self
-                .feature_set
-                .is_active(&feature_set::separate_nonce_from_blockhash::id());
-            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+            let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
+            let durable_nonce =
+                DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
+            (durable_nonce, separate_nonce_from_blockhash)
         };
         self.rc.accounts.store_cached(
             self.slot(),
@@ -6941,9 +6947,14 @@ pub(crate) mod tests {
             DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
         let nonce_account = AccountSharedData::new_data(
             43,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::new(Pubkey::default(), durable_nonce, lamports_per_signature),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::new(
+                    Pubkey::default(),
+                    durable_nonce,
+                    lamports_per_signature,
+                )),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -9467,9 +9478,10 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             min_balance + 42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::default()),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -11638,14 +11650,12 @@ pub(crate) mod tests {
     }
 
     fn get_nonce_blockhash(bank: &Bank, nonce_pubkey: &Pubkey) -> Option<Hash> {
-        bank.get_account(nonce_pubkey).and_then(|acc| {
-            let state =
-                StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
-            match state {
-                Ok(nonce::State::Initialized(ref data)) => Some(data.blockhash()),
-                _ => None,
-            }
-        })
+        let account = bank.get_account(nonce_pubkey)?;
+        let nonce_versions = StateMut::<nonce::state::Versions>::state(&account);
+        match nonce_versions.ok()?.state() {
+            nonce::State::Initialized(ref data) => Some(data.blockhash()),
+            _ => None,
+        }
     }
 
     fn nonce_setup(
@@ -11888,9 +11898,10 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::default()),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -11920,9 +11931,14 @@ pub(crate) mod tests {
             DurableNonce::from_blockhash(&bank.last_blockhash(), true /* separate domains */);
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::new(nonce_authority, durable_nonce, 5000),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::new(
+                    nonce_authority,
+                    durable_nonce,
+                    5000,
+                )),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -12401,10 +12417,9 @@ pub(crate) mod tests {
         let (stored_nonce_hash, stored_fee_calculator) = bank
             .get_account(&nonce_pubkey)
             .and_then(|acc| {
-                let state =
-                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
-                match state {
-                    Ok(nonce::State::Initialized(ref data)) => {
+                let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
+                match nonce_versions.ok()?.state() {
+                    nonce::State::Initialized(ref data) => {
                         Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
@@ -12438,10 +12453,9 @@ pub(crate) mod tests {
         let (nonce_hash, fee_calculator) = bank
             .get_account(&nonce_pubkey)
             .and_then(|acc| {
-                let state =
-                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
-                match state {
-                    Ok(nonce::State::Initialized(ref data)) => {
+                let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
+                match nonce_versions.ok()?.state() {
+                    nonce::State::Initialized(ref data) => {
                         Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
@@ -12471,10 +12485,9 @@ pub(crate) mod tests {
         let (stored_nonce_hash, stored_fee_calculator) = bank
             .get_account(&nonce_pubkey)
             .and_then(|acc| {
-                let state =
-                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
-                match state {
-                    Ok(nonce::State::Initialized(ref data)) => {
+                let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
+                match nonce_versions.ok()?.state() {
+                    nonce::State::Initialized(ref data) => {
                         Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
@@ -12508,10 +12521,9 @@ pub(crate) mod tests {
         let (nonce_hash, fee_calculator) = bank
             .get_account(&nonce_pubkey)
             .and_then(|acc| {
-                let state =
-                    StateMut::<nonce::state::Versions>::state(&acc).map(|v| v.convert_to_current());
-                match state {
-                    Ok(nonce::State::Initialized(ref data)) => {
+                let nonce_versions = StateMut::<nonce::state::Versions>::state(&acc);
+                match nonce_versions.ok()?.state() {
+                    nonce::State::Initialized(ref data) => {
                         Some((data.blockhash(), data.fee_calculator))
                     }
                     _ => None,
