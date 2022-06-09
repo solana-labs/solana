@@ -1826,6 +1826,11 @@ const GetLatestBlockhashRpcResult = jsonRpcResultAndContext(
   }),
 );
 
+/**
+ * Expected JSON RPC response for the "isBlockhashValid" message
+ */
+const IsBlockhashValidRpcResult = jsonRpcResult(boolean());
+
 const PerfSampleResult = pick({
   slot: number(),
   numTransactions: number(),
@@ -3355,6 +3360,25 @@ export class Connection {
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
     if ('error' in res) {
       throw new Error('failed to get latest blockhash: ' + res.error.message);
+    }
+    return res.result;
+  }
+
+  /**
+   * Check whether a blockhash is still valid or not
+   */
+  async isBlockhashValid(
+    blockhash: string,
+    commitment?: Commitment,
+    minContextSlot?: number
+  ): Promise<boolean> {
+    const args = this._buildArgs([blockhash], commitment, minContextSlot);
+    const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
+    const res = create(unsafeRes, jsonRpcResult(boolean()));
+    if ('error' in res) {
+      throw new Error(
+        'failed to check if blockhash is valid: ' + res.error.message,
+      );
     }
     return res.result;
   }
