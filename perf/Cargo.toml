@@ -22,6 +22,7 @@ log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.3"
 serde = "1.0.137"
+sha2 = "0.10.2"
 solana-metrics = { path = "../metrics", version = "=1.11.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }

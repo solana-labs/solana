@@ -4787,6 +4787,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde",
+ "sha2 0.10.2",
  "solana-metrics",
  "solana-rayon-threadlimit",
  "solana-sdk 1.11.0",

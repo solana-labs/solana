@@ -8,6 +8,7 @@ pub mod recycler_cache;
 pub mod sigverify;
 pub mod test_tx;
 pub mod thread;
+pub mod turbine_merkle;
 
 #[macro_use]
 extern crate lazy_static;
