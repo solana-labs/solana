@@ -26,9 +26,8 @@ use {
             curve25519_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             executables_incur_cpi_data_cost, fixed_memcpy_nonoverlapping_check,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, quick_bail_on_panic,
-            secp256k1_recover_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
-            zk_token_sdk_enabled,
+            prevent_calling_precompiles_as_programs, quick_bail_on_panic, syscall_saturated_math,
+            update_syscall_base_costs, zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -130,9 +129,6 @@ pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
-    let secp256k1_recover_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&secp256k1_recover_syscall_enabled::id());
     let blake3_syscall_enabled = invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id());
@@ -203,9 +199,7 @@ pub fn register_syscalls(
     )?;
 
     // Secp256k1 Recover
-    register_feature_gated_syscall!(
-        syscall_registry,
-        secp256k1_recover_syscall_enabled,
+    syscall_registry.register_syscall_by_name(
         b"sol_secp256k1_recover",
         SyscallSecp256k1Recover::init,
         SyscallSecp256k1Recover::call,
