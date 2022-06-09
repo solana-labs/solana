@@ -75,12 +75,12 @@ impl From<Versions> for State {
 mod tests {
     use {
         super::*,
-        crate::{fee_calculator::FeeCalculator, pubkey::Pubkey},
+        crate::{fee_calculator::FeeCalculator, hash::hashv, pubkey::Pubkey},
     };
 
     #[test]
     fn test_verify_recent_blockhash() {
-        let blockhash = Hash::from([171; 32]);
+        let blockhash: Hash = hashv(&[&[171u8; 32]]);
         let versions = Versions::Legacy(Box::new(State::Uninitialized));
         for separate_domains in [false, true] {
             assert_eq!(

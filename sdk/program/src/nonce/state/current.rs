@@ -82,7 +82,10 @@ impl State {
         Self::Initialized(Data::new(*authority, durable_nonce, lamports_per_signature))
     }
     pub fn size() -> usize {
-        let data = Versions::new_current(State::Initialized(Data::default()));
+        let data = Versions::new(
+            State::Initialized(Data::default()),
+            true, // separate_domains
+        );
         bincode::serialized_size(&data).unwrap() as usize
     }
 }
@@ -95,17 +98,4 @@ mod test {
     fn default_is_uninitialized() {
         assert_eq!(State::default(), State::Uninitialized)
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_nonce_state_size() {
-        let data = Versions::new(
-            State::Initialized(Data::default()),
-            true, // separate_domains
-        );
-        let size = bincode::serialized_size(&data).unwrap();
-        assert_eq!(State::size() as u64, size);
-    }
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
 }
