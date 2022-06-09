@@ -25,7 +25,7 @@ use {
             add_get_processed_sibling_instruction_syscall, alt_bn128_syscall_enabled,
             blake3_syscall_enabled, disable_fees_sysvar, do_support_realloc,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            prevent_calling_precompiles_as_programs,  return_data_syscall_enabled,
+            prevent_calling_precompiles_as_programs, return_data_syscall_enabled,
             secp256k1_recover_syscall_enabled, sol_log_data_syscall_enabled,
             update_syscall_base_costs,
         },
@@ -195,11 +195,16 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_alloc_free_", SyscallAllocFree::call)?;
 
     // alt_bn128
-    if invoke_context.feature_set.is_active(&alt_bn128_syscall_enabled::id()) {
+    if invoke_context
+        .feature_set
+        .is_active(&alt_bn128_syscall_enabled::id())
+    {
         syscall_registry
             .register_syscall_by_name(b"sol_alt_bn128_addition", SyscallAltBn128Addition::call)?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_alt_bn128_multiplication", SyscallAltBn128Multiplication::call)?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_alt_bn128_multiplication",
+            SyscallAltBn128Multiplication::call,
+        )?;
         syscall_registry
             .register_syscall_by_name(b"sol_alt_bn128_pairing", SyscallAltBn128Pairing::call)?;
     }
@@ -393,30 +398,30 @@ pub fn bind_syscall_context_objects<'a, 'b>(
 
     // alt_bn128 addition
     bind_feature_gated_syscall_context_object!(
-         vm,
-         is_alt_bn128_syscall_active,
-         Box::new(SyscallAltBn128Addition {
-             invoke_context: invoke_context.clone(),
-         }),
-     );
+        vm,
+        is_alt_bn128_syscall_active,
+        Box::new(SyscallAltBn128Addition {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
 
     // alt_bn128 multiplication
     bind_feature_gated_syscall_context_object!(
-         vm,
-         is_alt_bn128_syscall_active,
-         Box::new(SyscallAltBn128Multiplication {
-             invoke_context: invoke_context.clone(),
-         }),
-     );
+        vm,
+        is_alt_bn128_syscall_active,
+        Box::new(SyscallAltBn128Multiplication {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
 
     // alt_bn128 pairing
     bind_feature_gated_syscall_context_object!(
-         vm,
-         is_alt_bn128_syscall_active,
-         Box::new(SyscallAltBn128Pairing {
-             invoke_context: invoke_context.clone(),
-         }),
-     );
+        vm,
+        is_alt_bn128_syscall_active,
+        Box::new(SyscallAltBn128Pairing {
+            invoke_context: invoke_context.clone(),
+        }),
+    );
 
     vm.bind_syscall_context_object(
         Box::new(SyscallGetClockSysvar {
@@ -1871,33 +1876,33 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAltBn128Addition<'a, 'b> {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
-             self.invoke_context
-                 .try_borrow()
-                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-             result
-         );
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
         let cost = invoke_context.get_compute_budget().alt_bn128_addition_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let loader_id = question_mark!(
-             invoke_context
-                 .get_loader()
-                 .map_err(SyscallError::InstructionError),
-             result
-         );
+            invoke_context
+                .get_loader()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
         let input = question_mark!(
-             translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
-             result
-         );
+            translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
+            result
+        );
         let call_result = question_mark!(
-             translate_slice_mut::<u8>(
-                 memory_mapping,
-                 result_addr,
-                 ALT_BN128_ADDITION_OUTPUT_LEN as u64,
-                 &loader_id,
-             ),
-             result
-         );
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_ADDITION_OUTPUT_LEN as u64,
+                &loader_id,
+            ),
+            result
+        );
 
         let result_point = match alt_bn128_addition(input) {
             Ok(result_point) => result_point,
@@ -1934,33 +1939,35 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAltBn128Multiplication<'a, 'b> {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
-             self.invoke_context
-                 .try_borrow()
-                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-             result
-         );
-        let cost = invoke_context.get_compute_budget().alt_bn128_multiplication_cost;
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let cost = invoke_context
+            .get_compute_budget()
+            .alt_bn128_multiplication_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let loader_id = question_mark!(
-             invoke_context
-                 .get_loader()
-                 .map_err(SyscallError::InstructionError),
-             result
-         );
+            invoke_context
+                .get_loader()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
         let input = question_mark!(
-             translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
-             result
-         );
+            translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
+            result
+        );
         let call_result = question_mark!(
-             translate_slice_mut::<u8>(
-                 memory_mapping,
-                 result_addr,
-                 ALT_BN128_MULTIPLICATION_OUTPUT_LEN as u64,
-                 &loader_id,
-             ),
-             result
-         );
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_MULTIPLICATION_OUTPUT_LEN as u64,
+                &loader_id,
+            ),
+            result
+        );
 
         let result_point = match alt_bn128_multiplication(input) {
             Ok(result_point) => result_point,
@@ -1998,11 +2005,11 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAltBn128Pairing<'a, 'b> {
         result: &mut Result<u64, EbpfError<BpfError>>,
     ) {
         let invoke_context = question_mark!(
-             self.invoke_context
-                 .try_borrow()
-                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-             result
-         );
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
         let ele_len = input_size / ALT_BN128_PAIRING_ELEMENT_LEN as u64;
         let cost = invoke_context.get_compute_budget().mem_op_base_cost.max(
             invoke_context
@@ -2013,24 +2020,24 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAltBn128Pairing<'a, 'b> {
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         let loader_id = question_mark!(
-             invoke_context
-                 .get_loader()
-                 .map_err(SyscallError::InstructionError),
-             result
-         );
+            invoke_context
+                .get_loader()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
         let input = question_mark!(
-             translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
-             result
-         );
+            translate_slice::<u8>(memory_mapping, input_addr, input_size, &loader_id),
+            result
+        );
         let call_result = question_mark!(
-             translate_slice_mut::<u8>(
-                 memory_mapping,
-                 result_addr,
-                 ALT_BN128_PAIRING_OUTPUT_LEN as u64,
-                 &loader_id,
-             ),
-             result
-         );
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                ALT_BN128_PAIRING_OUTPUT_LEN as u64,
+                &loader_id,
+            ),
+            result
+        );
 
         let result_point = match alt_bn128_pairing(input) {
             Ok(result_point) => result_point,
