@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use {
     rayon::{iter::ParallelIterator, prelude::*},
     serde::{Deserialize, Serialize},
