@@ -1545,16 +1545,10 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-<<<<<<< HEAD
-        let nonce_account = Rc::new(nonce_account::create_account(1_000_000));
+        let nonce_account = Rc::new(nonce_account::create_account(
+            1_000_000, /*separate_domains:*/ true,
+        ));
         process_instruction(
-=======
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        let accounts = process_instruction(
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
             &[
                 (true, true, nonce_address, nonce_account.clone()),
@@ -1676,7 +1670,9 @@ mod tests {
                         true,
                         false,
                         Pubkey::default(),
-                        Rc::new(nonce_account::create_account(1_000_000)),
+                        Rc::new(nonce_account::create_account(
+                            1_000_000, /*separate_domains:*/ true
+                        )),
                     ),
                     (true, false, Pubkey::default(), create_default_account()),
                     (
@@ -1695,7 +1691,6 @@ mod tests {
 
     #[test]
     fn test_process_withdraw_ix_ok() {
-<<<<<<< HEAD
         assert_eq!(
             process_instruction(
                 &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
@@ -1704,7 +1699,9 @@ mod tests {
                         true,
                         true,
                         Pubkey::new_unique(),
-                        Rc::new(nonce_account::create_account(1_000_000)),
+                        Rc::new(nonce_account::create_account(
+                            1_000_000, /*separate_domains:*/ true
+                        )),
                     ),
                     (true, false, Pubkey::default(), create_default_account()),
                     (
@@ -1722,44 +1719,6 @@ mod tests {
                     ),
                 ],
             ),
-=======
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        let pubkey = Pubkey::new_unique();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::WithdrawNonceAccount(42)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (pubkey, create_default_account()),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_rent_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             Ok(()),
         );
     }
@@ -1777,7 +1736,6 @@ mod tests {
 
     #[test]
     fn test_process_initialize_ix_only_nonce_acc_fail() {
-<<<<<<< HEAD
         assert_eq!(
             process_instruction(
                 &serialize(&SystemInstruction::InitializeNonceAccount(Pubkey::default())).unwrap(),
@@ -1785,22 +1743,11 @@ mod tests {
                     true,
                     false,
                     Pubkey::default(),
-                    Rc::new(nonce_account::create_account(1_000_000)),
+                    Rc::new(nonce_account::create_account(
+                        1_000_000, /*separate_domains:*/ true
+                    )),
                 )],
             ),
-=======
-        let nonce_address = Pubkey::new_unique();
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![(nonce_address, nonce_account)],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: true,
-                is_writable: true,
-            }],
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             Err(InstructionError::NotEnoughAccountKeys),
         );
     }
@@ -1815,7 +1762,9 @@ mod tests {
                         true,
                         false,
                         Pubkey::default(),
-                        Rc::new(nonce_account::create_account(1_000_000)),
+                        Rc::new(nonce_account::create_account(
+                            1_000_000, /*separate_domains:*/ true
+                        )),
                     ),
                     (
                         true,
@@ -1840,7 +1789,9 @@ mod tests {
                         true,
                         false,
                         Pubkey::default(),
-                        Rc::new(nonce_account::create_account(1_000_000)),
+                        Rc::new(nonce_account::create_account(
+                            1_000_000, /*separate_domains:*/ true
+                        )),
                     ),
                     (
                         false,
@@ -1859,7 +1810,6 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-<<<<<<< HEAD
         assert_eq!(
             process_instruction(
                 &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
@@ -1868,7 +1818,9 @@ mod tests {
                         true,
                         true,
                         nonce_address,
-                        Rc::new(nonce_account::create_account(1_000_000)),
+                        Rc::new(nonce_account::create_account(
+                            1_000_000, /*separate_domains:*/ true
+                        )),
                     ),
                     (
                         false,
@@ -1885,36 +1837,6 @@ mod tests {
                     ),
                 ],
             ),
-=======
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        process_instruction(
-            &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
-            vec![
-                (nonce_address, nonce_account),
-                (blockhash_id, create_default_recent_blockhashes_account()),
-                (sysvar::rent::id(), create_default_rent_account()),
-            ],
-            vec![
-                AccountMeta {
-                    pubkey: nonce_address,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: blockhash_id,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: sysvar::rent::id(),
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ],
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             Ok(()),
         );
     }
@@ -1922,16 +1844,10 @@ mod tests {
     #[test]
     fn test_process_authorize_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-<<<<<<< HEAD
-        let nonce_account = Rc::new(nonce_account::create_account(1_000_000));
+        let nonce_account = Rc::new(nonce_account::create_account(
+            1_000_000, /*separate_domains:*/ true,
+        ));
         process_instruction(
-=======
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        let accounts = process_instruction(
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
             &[
                 (true, true, nonce_address, nonce_account.clone()),
@@ -2033,12 +1949,9 @@ mod tests {
     #[test]
     fn test_nonce_initialize_with_empty_recent_blockhashes_fail() {
         let nonce_address = Pubkey::new_unique();
-<<<<<<< HEAD
-        let nonce_account = Rc::new(nonce_account::create_account(1_000_000));
-=======
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
+        let nonce_account = Rc::new(nonce_account::create_account(
+            1_000_000, /*separate_domains:*/ true,
+        ));
         #[allow(deprecated)]
         let new_recent_blockhashes_account = Rc::new(RefCell::new(
             solana_sdk::recent_blockhashes_account::create_account_with_data_for_test(
@@ -2072,16 +1985,10 @@ mod tests {
     #[test]
     fn test_nonce_advance_with_empty_recent_blockhashes_fail() {
         let nonce_address = Pubkey::new_unique();
-<<<<<<< HEAD
-        let nonce_account = Rc::new(nonce_account::create_account(1_000_000));
+        let nonce_account = Rc::new(nonce_account::create_account(
+            1_000_000, /*separate_domains:*/ true,
+        ));
         process_instruction(
-=======
-        let nonce_account =
-            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
-        #[allow(deprecated)]
-        let blockhash_id = sysvar::recent_blockhashes::id();
-        let accounts = process_instruction(
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
             &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
             &[
                 (true, true, nonce_address, nonce_account.clone()),

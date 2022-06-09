@@ -53,6 +53,7 @@ mod tests {
         super::*,
         crate::{
             fee_calculator::FeeCalculator,
+            hash::hashv,
             nonce::state::{Data, DurableNonce},
             pubkey::Pubkey,
             system_program,
@@ -89,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_verify_nonce_account() {
-        let blockhash = Hash::from([171; 32]);
+        let blockhash: Hash = hashv(&[&[171u8; 32]]);
         let versions = Versions::Legacy(Box::new(State::Uninitialized));
         let account = new_nonce_account(versions);
         for separate_domains in [false, true] {

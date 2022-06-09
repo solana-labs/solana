@@ -237,23 +237,14 @@ impl SendTransactionService {
             }
             if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
                 let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
-<<<<<<< HEAD
-                if nonce_account::verify_nonce_account(&nonce_account, &durable_nonce).is_none()
-                    && working_bank.get_signature_status_slot(signature).is_none()
-                {
-=======
-                let now = Instant::now();
-                let expired = transaction_info
-                    .last_sent_time
-                    .map(|last| now.duration_since(last) >= retry_rate)
-                    .unwrap_or(false);
                 let verify_nonce_account = nonce_account::verify_nonce_account(
                     &nonce_account,
                     &durable_nonce,
                     working_bank.separate_nonce_from_blockhash(),
                 );
-                if verify_nonce_account.is_none() && signature_status.is_none() && expired {
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
+                if verify_nonce_account.is_none()
+                    && working_bank.get_signature_status_slot(signature).is_none()
+                {
                     info!("Dropping expired durable-nonce transaction: {}", signature);
                     result.expired += 1;
                     inc_new_counter_info!("send_transaction_service-expired", 1);

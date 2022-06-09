@@ -948,14 +948,6 @@ mod tests {
 
         let invalid_durable_nonce =
             DurableNonce::from_blockhash(&hash(b"invalid"), /*separate_domains:*/ true);
-<<<<<<< HEAD
-        let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
-            nonce_pubkey,
-            invalid_durable_nonce,
-            0,
-        )));
-        let invalid_hash = Account::new_data(1, &data, &system_program::ID);
-=======
         let data = Versions::new(
             State::Initialized(nonce::state::Data::new(
                 nonce_pubkey,
@@ -964,31 +956,21 @@ mod tests {
             )),
             true, // separate_domains
         );
-        let invalid_hash = Account::new_data(1, &data, &system_program::ID).unwrap();
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
+        let invalid_hash = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
         {
             assert_eq!(err, Error::InvalidHash,);
         }
 
-<<<<<<< HEAD
-        let data = Versions::new_current(State::Initialized(nonce::state::Data::new(
-            solana_sdk::pubkey::new_rand(),
-            durable_nonce,
-            0,
-        )));
-=======
-        let new_nonce_authority = solana_sdk::pubkey::new_rand();
         let data = Versions::new(
             State::Initialized(nonce::state::Data::new(
-                new_nonce_authority,
+                solana_sdk::pubkey::new_rand(),
                 durable_nonce,
                 0,
             )),
             true, // separate_domains
         );
->>>>>>> 3c1ce3cc9 (permanently disables durable nonces with chain blockhash domain (#25788))
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
