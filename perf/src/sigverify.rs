@@ -611,7 +611,9 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
 
-    let thread_count = (packet_count + VERIFY_MIN_PACKETS_PER_THREAD) / VERIFY_MIN_PACKETS_PER_THREAD;
+    let thread_count = packet_count
+        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD - 1)
+        .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
     if thread_count >= get_thread_count() {
         // When using all available threads, skip the overhead of flatting, collecting, etc.
         PAR_THREAD_POOL.install(|| {
@@ -624,9 +626,10 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
             });
         });
     } else {
-        let packets_per_thread = packet_count / thread_count;
+        let packets_per_thread = packet_count.saturating_div(thread_count);
         PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter()
+            batches
+                .into_par_iter()
                 .flatten()
                 .collect::<Vec<&mut Packet>>()
                 .into_par_iter()
