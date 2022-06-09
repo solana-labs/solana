@@ -322,7 +322,7 @@ pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
         let is_tracer_packet =
             &packet.data[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
         if is_tracer_packet {
-            packet.meta.flags |= PacketFlags::TRACER_PACKET;
+            packet.meta.set_tracer(true);
         }
         is_tracer_packet
     } else {
