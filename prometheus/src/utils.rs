@@ -79,12 +79,6 @@ impl<'a> Metric<'a> {
         Metric::new(MetricValue::Nano(amount.0))
     }
 
-    /// Set the timestamp.
-    pub fn at(mut self, at: SystemTime) -> Metric<'a> {
-        self.timestamp = Some(at);
-        self
-    }
-
     pub fn with_label(mut self, label_key: &'a str, label_value: String) -> Metric<'a> {
         self.labels.push((label_key, label_value));
         self

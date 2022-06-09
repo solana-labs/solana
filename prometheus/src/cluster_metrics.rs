@@ -5,10 +5,9 @@ use crate::{
     token::Lamports,
     utils::{write_metric, Metric, MetricFamily},
 };
-use std::{io, sync::Arc, time::SystemTime};
+use std::{io, sync::Arc};
 
 pub fn write_cluster_metrics<W: io::Write>(
-    at: SystemTime,
     bank: &Arc<Bank>,
     cluster_info: &Arc<ClusterInfo>,
     out: &mut W,
@@ -24,9 +23,7 @@ pub fn write_cluster_metrics<W: io::Write>(
             name: "solana_cluster_identity_public_key_info",
             help: "The current node's identity",
             type_: "count",
-            metrics: vec![Metric::new(1)
-                .with_label("identity", identity_pubkey.to_string())
-                .at(at)],
+            metrics: vec![Metric::new(1).with_label("identity", identity_pubkey.to_string())],
         },
     )?;
 
@@ -37,7 +34,7 @@ pub fn write_cluster_metrics<W: io::Write>(
             name: "solana_cluster_identity_balance_total",
             help: "The current node's identity balance",
             type_: "gauge",
-            metrics: vec![Metric::new_sol(identity_balance).at(at)],
+            metrics: vec![Metric::new_sol(identity_balance)],
         },
     )?;
 
@@ -47,9 +44,7 @@ pub fn write_cluster_metrics<W: io::Write>(
             name: "solana_cluster_node_version_info",
             help: "The current Solana node's version",
             type_: "count",
-            metrics: vec![Metric::new(1)
-                .with_label("version", version.to_string())
-                .at(at)],
+            metrics: vec![Metric::new(1).with_label("version", version.to_string())],
         },
     )?;
 
