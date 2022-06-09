@@ -2,7 +2,7 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{connection_cache, tpu_connection::TpuConnection},
+    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -101,16 +101,12 @@ struct ProcessTransactionsResult {
     retained: u64,
 }
 
-pub const DEFAULT_TPU_USE_QUIC: bool = false;
-
 #[derive(Clone, Debug)]
 pub struct Config {
     pub retry_rate_ms: u64,
     pub leader_forward_count: u64,
     pub default_max_retries: Option<usize>,
     pub service_max_retries: usize,
-    /// Whether to use Quic protocol to send transactions
-    pub use_quic: bool,
     /// The batch size for sending transactions in batches
     pub batch_size: usize,
     /// How frequently batches are sent
@@ -124,7 +120,6 @@ impl Default for Config {
             leader_forward_count: DEFAULT_LEADER_FORWARD_COUNT,
             default_max_retries: None,
             service_max_retries: DEFAULT_SERVICE_MAX_RETRIES,
-            use_quic: DEFAULT_TPU_USE_QUIC,
             batch_size: DEFAULT_TRANSACTION_BATCH_SIZE,
             batch_send_rate_ms: DEFAULT_BATCH_SEND_RATE_MS,
         }
@@ -334,17 +329,23 @@ impl SendTransactionService {
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
+        connection_cache: &Arc<ConnectionCache>,
         retry_rate_ms: u64,
         leader_forward_count: u64,
-        use_quic: bool,
     ) -> Self {
         let config = Config {
             retry_rate_ms,
             leader_forward_count,
-            use_quic,
             ..Config::default()
         };
-        Self::new_with_config(tpu_address, bank_forks, leader_info, receiver, config)
+        Self::new_with_config(
+            tpu_address,
+            bank_forks,
+            leader_info,
+            receiver,
+            connection_cache,
+            config,
+        )
     }
 
     pub fn new_with_config<T: TpuInfo + std::marker::Send + 'static>(
@@ -352,6 +353,7 @@ impl SendTransactionService {
         bank_forks: &Arc<RwLock<BankForks>>,
         leader_info: Option<T>,
         receiver: Receiver<TransactionInfo>,
+        connection_cache: &Arc<ConnectionCache>,
         config: Config,
     ) -> Self {
         let stats_report = Arc::new(SendTransactionServiceStatsReport::default());
@@ -365,6 +367,7 @@ impl SendTransactionService {
             tpu_address,
             receiver,
             leader_info_provider.clone(),
+            connection_cache.clone(),
             config.clone(),
             retry_transactions.clone(),
             stats_report.clone(),
@@ -375,6 +378,7 @@ impl SendTransactionService {
             tpu_address,
             bank_forks.clone(),
             leader_info_provider,
+            connection_cache.clone(),
             config,
             retry_transactions,
             stats_report,
@@ -392,6 +396,7 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         receiver: Receiver<TransactionInfo>,
         leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
+        connection_cache: Arc<ConnectionCache>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         stats_report: Arc<SendTransactionServiceStatsReport>,
@@ -404,7 +409,6 @@ impl SendTransactionService {
             "Starting send-transaction-service::receive_txn_thread with config {:?}",
             config
         );
-        connection_cache::set_use_quic(config.use_quic);
         Builder::new()
             .name("send-tx-receive".to_string())
             .spawn(move || loop {
@@ -450,6 +454,7 @@ impl SendTransactionService {
                         &tpu_address,
                         &mut transactions,
                         leader_info_provider.lock().unwrap().get_leader_info(),
+                        &connection_cache,
                         &config,
                         stats,
                     );
@@ -494,6 +499,7 @@ impl SendTransactionService {
         tpu_address: SocketAddr,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_info_provider: Arc<Mutex<CurrentLeaderInfo<T>>>,
+        connection_cache: Arc<ConnectionCache>,
         config: Config,
         retry_transactions: Arc<Mutex<HashMap<Signature, TransactionInfo>>>,
         stats_report: Arc<SendTransactionServiceStatsReport>,
@@ -503,7 +509,6 @@ impl SendTransactionService {
             "Starting send-transaction-service::retry_thread with config {:?}",
             config
         );
-        connection_cache::set_use_quic(config.use_quic);
         Builder::new()
             .name("send-tx-retry".to_string())
             .spawn(move || loop {
@@ -534,6 +539,7 @@ impl SendTransactionService {
                         &tpu_address,
                         &mut transactions,
                         &leader_info_provider,
+                        &connection_cache,
                         &config,
                         stats,
                     );
@@ -548,6 +554,7 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info: Option<&T>,
+        connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) {
@@ -560,7 +567,7 @@ impl SendTransactionService {
             .collect::<Vec<&[u8]>>();
 
         for address in &addresses {
-            Self::send_transactions(address, &wire_transactions, stats);
+            Self::send_transactions(address, &wire_transactions, connection_cache, stats);
         }
     }
 
@@ -571,6 +578,7 @@ impl SendTransactionService {
         tpu_address: &SocketAddr,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         leader_info_provider: &Arc<Mutex<CurrentLeaderInfo<T>>>,
+        connection_cache: &Arc<ConnectionCache>,
         config: &Config,
         stats: &SendTransactionServiceStats,
     ) -> ProcessTransactionsResult {
@@ -684,7 +692,7 @@ impl SendTransactionService {
                 let addresses = Self::get_tpu_addresses(tpu_address, leader_info, config);
 
                 for address in &addresses {
-                    Self::send_transactions(address, chunk, stats);
+                    Self::send_transactions(address, chunk, connection_cache, stats);
                 }
             }
         }
@@ -694,30 +702,33 @@ impl SendTransactionService {
     fn send_transaction(
         tpu_address: &SocketAddr,
         wire_transaction: &[u8],
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Result<(), TransportError> {
-        let conn = connection_cache::get_connection(tpu_address);
+        let conn = connection_cache.get_connection(tpu_address);
         conn.send_wire_transaction_async(wire_transaction.to_vec())
     }
 
     fn send_transactions_with_metrics(
         tpu_address: &SocketAddr,
         wire_transactions: &[&[u8]],
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Result<(), TransportError> {
         let wire_transactions = wire_transactions.iter().map(|t| t.to_vec()).collect();
-        let conn = connection_cache::get_connection(tpu_address);
+        let conn = connection_cache.get_connection(tpu_address);
         conn.send_wire_transaction_batch_async(wire_transactions)
     }
 
     fn send_transactions(
         tpu_address: &SocketAddr,
         wire_transactions: &[&[u8]],
+        connection_cache: &Arc<ConnectionCache>,
         stats: &SendTransactionServiceStats,
     ) {
         let mut measure = Measure::start("send-us");
         let result = if wire_transactions.len() == 1 {
-            Self::send_transaction(tpu_address, wire_transactions[0])
+            Self::send_transaction(tpu_address, wire_transactions[0], connection_cache)
         } else {
-            Self::send_transactions_with_metrics(tpu_address, wire_transactions)
+            Self::send_transactions_with_metrics(tpu_address, wire_transactions, connection_cache)
         };
 
         if let Err(err) = result {
@@ -783,14 +794,15 @@ mod test {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = unbounded();
 
+        let connection_cache = Arc::new(ConnectionCache::default());
         let send_tranaction_service = SendTransactionService::new::<NullTpuInfo>(
             tpu_address,
             &bank_forks,
             None,
             receiver,
+            &connection_cache,
             1000,
             1,
-            DEFAULT_TPU_USE_QUIC,
         );
 
         drop(sender);
@@ -850,12 +862,14 @@ mod test {
                 Some(Instant::now()),
             ),
         );
+        let connection_cache = Arc::new(ConnectionCache::default());
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -886,6 +900,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -916,6 +931,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -946,6 +962,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -978,6 +995,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1020,6 +1038,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1038,6 +1057,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1120,12 +1140,14 @@ mod test {
         );
         let leader_info_provider = Arc::new(Mutex::new(CurrentLeaderInfo::new(None)));
         let stats = SendTransactionServiceStats::default();
+        let connection_cache = Arc::new(ConnectionCache::default());
         let result = SendTransactionService::process_transactions::<NullTpuInfo>(
             &working_bank,
             &root_bank,
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1155,6 +1177,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1186,6 +1209,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1215,6 +1239,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1245,6 +1270,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1275,6 +1301,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1307,6 +1334,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );
@@ -1342,6 +1370,7 @@ mod test {
             &tpu_address,
             &mut transactions,
             &leader_info_provider,
+            &connection_cache,
             &config,
             &stats,
         );

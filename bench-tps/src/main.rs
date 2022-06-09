@@ -7,7 +7,7 @@ use {
         keypairs::get_keypairs,
     },
     solana_client::{
-        connection_cache,
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -105,11 +105,10 @@ fn main() {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
+            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
             let client = if *multi_client {
-                let (client, num_clients) = get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
+                let (client, num_clients) =
+                    get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
                 if nodes.len() < num_clients {
                     eprintln!(
                         "Error: Insufficient nodes discovered.  Expecting {} or more",
@@ -123,8 +122,11 @@ fn main() {
                 let mut target_client = None;
                 for node in nodes {
                     if node.id == *target_node {
-                        target_client =
-                            Some(Arc::new(get_client(&[node], &SocketAddrSpace::Unspecified)));
+                        target_client = Some(Arc::new(get_client(
+                            &[node],
+                            &SocketAddrSpace::Unspecified,
+                            connection_cache,
+                        )));
                         break;
                     }
                 }
@@ -133,7 +135,11 @@ fn main() {
                     exit(1);
                 })
             } else {
-                Arc::new(get_client(&nodes, &SocketAddrSpace::Unspecified))
+                Arc::new(get_client(
+                    &nodes,
+                    &SocketAddrSpace::Unspecified,
+                    connection_cache,
+                ))
             };
             let keypairs = get_keypairs(
                 client.clone(),
@@ -150,15 +156,18 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
+            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
             let client = Arc::new(
-                TpuClient::new(rpc_client, websocket_url, TpuClientConfig::default())
-                    .unwrap_or_else(|err| {
-                        eprintln!("Could not create TpuClient {:?}", err);
-                        exit(1);
-                    }),
+                TpuClient::new_with_connection_cache(
+                    rpc_client,
+                    websocket_url,
+                    TpuClientConfig::default(),
+                    connection_cache,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Could not create TpuClient {:?}", err);
+                    exit(1);
+                }),
             );
             let keypairs = get_keypairs(
                 client.clone(),

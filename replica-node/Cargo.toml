@@ -15,6 +15,7 @@ crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.25" }
+solana-client = { path = "../client", version = "=1.10.25" }
 solana-download-utils = { path = "../download-utils", version = "=1.10.25" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.10.25" }
 solana-gossip = { path = "../gossip", version = "=1.10.25" }
