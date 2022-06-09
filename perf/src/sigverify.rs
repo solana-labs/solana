@@ -612,7 +612,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     debug!("CPU ECDSA for {}", packet_count);
 
     let thread_count = packet_count
-        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD - 1)
+        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
     if thread_count >= get_thread_count() {
         // When using all available threads, skip the overhead of flatting, collecting, etc.
