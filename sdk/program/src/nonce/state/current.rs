@@ -82,7 +82,10 @@ impl State {
         Self::Initialized(Data::new(*authority, durable_nonce, lamports_per_signature))
     }
     pub fn size() -> usize {
-        let data = Versions::new_current(State::Initialized(Data::default()));
+        let data = Versions::new(
+            State::Initialized(Data::default()),
+            true, // separate_domains
+        );
         bincode::serialized_size(&data).unwrap() as usize
     }
 }

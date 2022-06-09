@@ -5528,7 +5528,7 @@ pub mod tests {
         let json: Value = serde_json::from_str(&res.unwrap()).unwrap();
         let accounts: Vec<RpcKeyedAccount> = serde_json::from_value(json["result"].clone())
             .expect("actual response deserialization");
-        assert_eq!(accounts.len(), 0);
+        assert_eq!(accounts.len(), 2);
 
         // Test dataSize filter
         let req = format!(
