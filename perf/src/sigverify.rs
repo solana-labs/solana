@@ -39,6 +39,8 @@ const TRACER_KEY_BYTES: [u8; 32] = [
 ];
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
+// Empirically derived to achieve max verify latency of ~8ms at lower packet counts
+const VERIFY_MIN_PACKETS_PER_THREAD: usize = 16;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -608,15 +610,35 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
-    PAR_THREAD_POOL.install(|| {
-        batches.into_par_iter().for_each(|batch| {
-            batch.par_iter_mut().for_each(|packet| {
-                if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
-                    packet.meta.set_discard(true);
-                }
-            })
+
+    let thread_count = (packet_count + VERIFY_MIN_PACKETS_PER_THREAD) / VERIFY_MIN_PACKETS_PER_THREAD;
+    if thread_count >= get_thread_count() {
+        // When using all available threads, skip the overhead of flatting, collecting, etc.
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch.par_iter_mut().for_each(|packet| {
+                    if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                        packet.meta.set_discard(true);
+                    }
+                })
+            });
         });
-    });
+    } else {
+        let packets_per_thread = packet_count / thread_count;
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter()
+                .flatten()
+                .collect::<Vec<&mut Packet>>()
+                .into_par_iter()
+                .with_min_len(packets_per_thread)
+                .for_each(|packet| {
+                    if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                        packet.meta.set_discard(true);
+                    }
+                })
+        });
+    };
+
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
