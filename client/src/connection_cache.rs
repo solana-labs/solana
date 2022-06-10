@@ -231,7 +231,7 @@ struct ConnectionPool {
     connections: Vec<Arc<Connection>>,
 
     /// Connections in this pool share the same endpoint
-    endpoint: Arc<QuicLazyInitializedEndpoint>,
+    endpoint: Option<Arc<QuicLazyInitializedEndpoint>>,
 }
 
 impl ConnectionPool {
@@ -265,6 +265,14 @@ impl ConnectionCache {
         self.use_quic
     }
 
+    fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
+        if self.use_quic {
+            Some(Arc::new(QuicLazyInitializedEndpoint::new()))
+        } else {
+            None
+        }
+    }
+
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
     /// enough unsed connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
@@ -280,20 +288,24 @@ impl ConnectionCache {
         // Read again, as it is possible that between read lock dropped and the write lock acquired
         // another thread could have setup the connection.
 
-        let (to_create_connection, endpoint) = map.get(addr).map_or(
-            (true, Arc::new(QuicLazyInitializedEndpoint::new())),
-            |pool| {
-                (
-                    pool.need_new_connection(self.connection_pool_size),
-                    pool.endpoint.clone(),
-                )
-            },
-        );
+        let (to_create_connection, endpoint) =
+            map.get(addr)
+                .map_or((true, self.create_endpoint()), |pool| {
+                    (
+                        pool.need_new_connection(self.connection_pool_size),
+                        pool.endpoint.clone(),
+                    )
+                });
 
         let (cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
             if to_create_connection {
                 let connection: Connection = if self.use_quic {
-                    QuicTpuConnection::new(endpoint, *addr, self.stats.clone()).into()
+                    QuicTpuConnection::new(
+                        endpoint.as_ref().unwrap().clone(),
+                        *addr,
+                        self.stats.clone(),
+                    )
+                    .into()
                 } else {
                     UdpTpuConnection::new(*addr, self.stats.clone()).into()
                 };
@@ -320,7 +332,7 @@ impl ConnectionCache {
                     Entry::Vacant(entry) => {
                         entry.insert(ConnectionPool {
                             connections: vec![connection],
-                            endpoint: Arc::new(QuicLazyInitializedEndpoint::new()),
+                            endpoint,
                         });
                     }
                 }
