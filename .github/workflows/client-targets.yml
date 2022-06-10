@@ -1,0 +1,73 @@
+name: client_targets
+
+on:
+  pull_request:
+    branches:
+     - master
+    paths:
+      - "client/**"
+      - "sdk/**"
+      - ".github/workflows/client-targets.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check_compilation:
+    name: Client compilation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        target: [aarch64-apple-ios, x86_64-apple-ios, aarch64-apple-darwin, x86_64-apple-darwin, aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android]
+        include:
+          - target: aarch64-apple-ios
+            platform: ios
+            os: macos-latest
+          - target: x86_64-apple-ios
+            platform: ios
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            platform: ios
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            platform: ios
+            os: macos-latest
+          - target: aarch64-linux-android
+            platform: android
+            os: ubuntu-latest
+          - target: armv7-linux-androideabi
+            platform: android
+            os: ubuntu-latest
+          - target: i686-linux-android
+            platform: android
+            os: ubuntu-latest
+          - target: x86_64-linux-android
+            platform: android
+            os: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+      - name: Install cargo-ndk
+        if: ${{ matrix.platform == 'android' }}
+        run: cargo install cargo-ndk
+      - name: Set NDK 21 as default
+        if: ${{ matrix.platform == 'android' }}
+        run: |
+          ANDROID_ROOT=/usr/local/lib/android
+          ANDROID_SDK_ROOT=${ANDROID_ROOT}/sdk
+          ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk-bundle
+          ln -sfn $ANDROID_SDK_ROOT/ndk/21.4.7075529 $ANDROID_NDK_ROOT
+      - uses: actions-rs/cargo@v1
+        if: ${{ matrix.platform == 'android' }}
+        with:
+          command: ndk
+          args: --target ${{ matrix.target }} build -p solana-client
+      - uses: actions-rs/cargo@v1
+        if: ${{ matrix.platform == 'ios' }}
+        with:
+          command: build
+          args: -p solana-client --target ${{ matrix.target }}
