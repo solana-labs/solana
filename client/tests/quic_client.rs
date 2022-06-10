@@ -133,7 +133,9 @@ mod tests {
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
         let client = QuicTpuConnection::new(
             Arc::new(QuicLazyInitializedEndpoint::default()),
-            tpu_addr, connection_cache_stats);
+            tpu_addr,
+            connection_cache_stats,
+        );
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;

@@ -5,7 +5,10 @@ use {
     crate::{
         connection_cache::ConnectionCacheStats,
         nonblocking::{
-            quic_client::{QuicClient, QuicLazyInitializedEndpoint, QuicTpuConnection as NonblockingQuicTpuConnection},
+            quic_client::{
+                QuicClient, QuicLazyInitializedEndpoint,
+                QuicTpuConnection as NonblockingQuicTpuConnection,
+            },
             tpu_connection::TpuConnection as NonblockingTpuConnection,
         },
         tpu_connection::TpuConnection,
@@ -27,7 +30,11 @@ pub struct QuicTpuConnection {
     inner: NonblockingQuicTpuConnection,
 }
 impl QuicTpuConnection {
-    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self {
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        tpu_addr: SocketAddr,
+        connection_stats: Arc<ConnectionCacheStats>,
+    ) -> Self {
         let inner = NonblockingQuicTpuConnection::new(endpoint, tpu_addr, connection_stats);
         Self { inner }
     }

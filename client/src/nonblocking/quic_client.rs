@@ -17,9 +17,7 @@ use {
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
-        quic::{
-            QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS,
-        },
+        quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
         transport::Result as TransportResult,
     },
     std::{
@@ -440,7 +438,11 @@ impl QuicTpuConnection {
         self.client.stats()
     }
 
-    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self {
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        connection_stats: Arc<ConnectionCacheStats>,
+    ) -> Self {
         let client = Arc::new(QuicClient::new(endpoint, addr));
         Self::new_with_client(client, connection_stats)
     }
