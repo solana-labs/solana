@@ -117,6 +117,10 @@ impl LeaderSlotTimingMetrics {
         self.process_packets_timings.report(id, slot);
         self.execute_and_commit_timings.report(id, slot);
     }
+
+    pub(crate) fn slot_end_detected(&mut self) {
+        self.outer_loop_timings.slot_end_detected();
+    }
 }
 
 #[derive(Debug)]
@@ -138,6 +142,9 @@ pub(crate) struct OuterLoopTimings {
     // The number of times the function to receive and buffer new packets
     // was called
     pub receive_and_buffer_packets_invoked_count: u64,
+
+    // Elapsed time between bank was detected and slot end was detected
+    pub bank_detected_to_slot_end_detected_us: u64,
 }
 
 impl OuterLoopTimings {
@@ -149,23 +156,29 @@ impl OuterLoopTimings {
             slot_metrics_check_slot_boundary_us: 0,
             receive_and_buffer_packets_us: 0,
             receive_and_buffer_packets_invoked_count: 0,
+            bank_detected_to_slot_end_detected_us: 0,
         }
     }
 
+    /// Call when detected slot end to capture elapsed time, which might be reported later
+    fn slot_end_detected(&mut self) {
+        self.bank_detected_to_slot_end_detected_us =
+            self.bank_detected_time.elapsed().as_micros() as u64;
+    }
+
     fn report(&self, id: u32, slot: Slot) {
-        let bank_detected_to_now_us = self.bank_detected_time.elapsed().as_micros() as u64;
         datapoint_info!(
             "banking_stage-leader_slot_loop_timings",
             ("id", id as i64, i64),
             ("slot", slot as i64, i64),
             (
                 "bank_detected_to_slot_end_detected_us",
-                bank_detected_to_now_us,
+                self.bank_detected_to_slot_end_detected_us,
                 i64
             ),
             (
                 "bank_creation_to_slot_end_detected_us",
-                bank_detected_to_now_us + self.bank_detected_delay_us,
+                self.bank_detected_to_slot_end_detected_us + self.bank_detected_delay_us,
                 i64
             ),
             ("bank_detected_delay_us", self.bank_detected_delay_us, i64),

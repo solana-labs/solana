@@ -1148,9 +1148,9 @@ impl BankingStage {
                             let poh = poh_recorder.lock().unwrap();
                             poh.bank_start()
                         };
-                        slot_metrics_tracker.apply_action(
-                            slot_metrics_tracker.check_leader_slot_boundary(&current_poh_bank),
-                        );
+                        let metrics_action =
+                            slot_metrics_tracker.check_leader_slot_boundary(&current_poh_bank);
+                        slot_metrics_tracker.apply_action(metrics_action);
                     },
                     "slot_metrics_checker_check_slot_boundary",
                 );
