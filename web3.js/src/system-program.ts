@@ -528,7 +528,8 @@ export type SystemInstructionType =
   | 'InitializeNonceAccount'
   | 'Transfer'
   | 'TransferWithSeed'
-  | 'WithdrawNonceAccount';
+  | 'WithdrawNonceAccount'
+  | 'UpgradeNonceAccount';
 
 /**
  * An enumeration of valid system InstructionType's
@@ -630,6 +631,10 @@ export const SYSTEM_INSTRUCTION_LAYOUTS: {
       Layout.rustString('seed'),
       Layout.publicKey('programId'),
     ]),
+  },
+  UpgradeNonceAccount: {
+    index: 12,
+    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
 });
 
