@@ -14,11 +14,11 @@ use {
     },
     crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
-    solana_sdk::packet::Packet,
+    solana_sdk::{packet::Packet, saturating_add_assign},
 };
 
-#[derive(Debug, Default, Clone)]
-pub struct TransactionTracerPacketStats {
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SigverifyTracerPacketStats {
     pub total_removed_before_sigverify_stage: usize,
     pub total_tracer_packets_received_in_sigverify_stage: usize,
     pub total_tracer_packets_deduped: usize,
@@ -26,10 +26,39 @@ pub struct TransactionTracerPacketStats {
     pub total_tracker_packets_passed_sigverify: usize,
 }
 
+impl SigverifyTracerPacketStats {
+    pub fn is_default(&self) -> bool {
+        *self == SigverifyTracerPacketStats::default()
+    }
+
+    pub fn aggregate(&mut self, other: &SigverifyTracerPacketStats) {
+        saturating_add_assign!(
+            self.total_removed_before_sigverify_stage,
+            other.total_removed_before_sigverify_stage
+        );
+        saturating_add_assign!(
+            self.total_tracer_packets_received_in_sigverify_stage,
+            other.total_tracer_packets_received_in_sigverify_stage
+        );
+        saturating_add_assign!(
+            self.total_tracer_packets_deduped,
+            other.total_tracer_packets_deduped
+        );
+        saturating_add_assign!(
+            self.total_excess_tracer_packets,
+            other.total_excess_tracer_packets
+        );
+        saturating_add_assign!(
+            self.total_tracker_packets_passed_sigverify,
+            other.total_tracker_packets_passed_sigverify
+        );
+    }
+}
+
 #[derive(Clone)]
 pub struct TransactionSigVerifier {
     packet_sender: Sender<<Self as SigVerifier>::SendType>,
-    tracer_packet_stats: TransactionTracerPacketStats,
+    tracer_packet_stats: SigverifyTracerPacketStats,
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
@@ -46,7 +75,7 @@ impl TransactionSigVerifier {
         init();
         Self {
             packet_sender,
-            tracer_packet_stats: TransactionTracerPacketStats::default(),
+            tracer_packet_stats: SigverifyTracerPacketStats::default(),
             recycler: Recycler::warmed(50, 4096),
             recycler_out: Recycler::warmed(50, 4096),
             reject_non_vote: false,
@@ -98,7 +127,7 @@ impl SigVerifier for TransactionSigVerifier {
         &mut self,
         packet_batches: Vec<PacketBatch>,
     ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
-        let mut tracer_packet_stats_to_send = TransactionTracerPacketStats::default();
+        let mut tracer_packet_stats_to_send = SigverifyTracerPacketStats::default();
         std::mem::swap(
             &mut tracer_packet_stats_to_send,
             &mut self.tracer_packet_stats,
