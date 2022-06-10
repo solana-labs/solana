@@ -1879,7 +1879,10 @@ impl Bank {
                     );
 
                     let (_, apply_feature_activations_time) = measure!(
-                        new.apply_feature_activations(false, false),
+                        new.apply_feature_activations(
+                            ApplyFeatureActivationsCaller::NewFromParent,
+                            false
+                        ),
                         "apply_feature_activation",
                     );
 
@@ -2077,7 +2080,7 @@ impl Bank {
     pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
         let parent_timestamp = parent.clock().unix_timestamp;
         let mut new = Bank::new_from_parent(parent, collector_id, slot);
-        new.apply_feature_activations(true, false);
+        new.apply_feature_activations(ApplyFeatureActivationsCaller::WarpFromParent, false);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
 
@@ -6299,7 +6302,10 @@ impl Bank {
         }
         self.builtin_feature_transitions = Arc::new(builtins.feature_transitions);
 
-        self.apply_feature_activations(true, debug_do_not_add_builtins);
+        self.apply_feature_activations(
+            ApplyFeatureActivationsCaller::FinishInit,
+            debug_do_not_add_builtins,
+        );
 
         if self
             .feature_set
@@ -7212,10 +7218,16 @@ impl Bank {
     // The entire code path herein must be idempotent
     fn apply_feature_activations(
         &mut self,
-        init_finish_or_warp: bool,
+        caller: ApplyFeatureActivationsCaller,
         debug_do_not_add_builtins: bool,
     ) {
-        let new_feature_activations = self.compute_active_feature_set(!init_finish_or_warp);
+        use ApplyFeatureActivationsCaller::*;
+        let allow_new_activations = match caller {
+            FinishInit => false,
+            NewFromParent => true,
+            WarpFromParent => false,
+        };
+        let new_feature_activations = self.compute_active_feature_set(allow_new_activations);
 
         if new_feature_activations.contains(&feature_set::pico_inflation::id()) {
             *self.inflation.write().unwrap() = Inflation::pico();
@@ -7248,9 +7260,8 @@ impl Bank {
         }
 
         if !debug_do_not_add_builtins {
-            let apply_transitions_for_new_features = !init_finish_or_warp;
             self.apply_builtin_program_feature_transitions(
-                apply_transitions_for_new_features,
+                allow_new_activations,
                 &new_feature_activations,
             );
             self.reconfigure_token2_native_mint();
@@ -7492,6 +7503,15 @@ impl Bank {
 
         total_accounts_stats
     }
+}
+
+/// Since `apply_feature_activations()` has different behavior depending on its caller, enumerate
+/// those callers explicitly.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ApplyFeatureActivationsCaller {
+    FinishInit,
+    NewFromParent,
+    WarpFromParent,
 }
 
 /// Return the computed values from `collect_rent_from_accounts()`
