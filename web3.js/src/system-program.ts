@@ -531,60 +531,6 @@ export type SystemInstructionType =
   | 'WithdrawNonceAccount'
   | 'UpgradeNonceAccount';
 
-<<<<<<< HEAD
-=======
-type SystemInstructionInputData = {
-  AdvanceNonceAccount: IInstructionInputData;
-  Allocate: IInstructionInputData & {
-    space: number;
-  };
-  AllocateWithSeed: IInstructionInputData & {
-    base: Uint8Array;
-    programId: Uint8Array;
-    seed: string;
-    space: number;
-  };
-  Assign: IInstructionInputData & {
-    programId: Uint8Array;
-  };
-  AssignWithSeed: IInstructionInputData & {
-    base: Uint8Array;
-    seed: string;
-    programId: Uint8Array;
-  };
-  AuthorizeNonceAccount: IInstructionInputData & {
-    authorized: Uint8Array;
-  };
-  Create: IInstructionInputData & {
-    lamports: number;
-    programId: Uint8Array;
-    space: number;
-  };
-  CreateWithSeed: IInstructionInputData & {
-    base: Uint8Array;
-    lamports: number;
-    programId: Uint8Array;
-    seed: string;
-    space: number;
-  };
-  InitializeNonceAccount: IInstructionInputData & {
-    authorized: Uint8Array;
-  };
-  Transfer: IInstructionInputData & {
-    lamports: bigint;
-  };
-  TransferWithSeed: IInstructionInputData & {
-    lamports: bigint;
-    programId: Uint8Array;
-    seed: string;
-  };
-  WithdrawNonceAccount: IInstructionInputData & {
-    lamports: number;
-  };
-  UpgradeNonceAccount: IInstructionInputData;
-};
-
->>>>>>> b4190319a (feat(nonce): adds system instruction to upgrade legacy nonce versions (#25789))
 /**
  * An enumeration of valid system InstructionType's
  * @internal
@@ -688,9 +634,7 @@ export const SYSTEM_INSTRUCTION_LAYOUTS: {
   },
   UpgradeNonceAccount: {
     index: 12,
-    layout: BufferLayout.struct<
-      SystemInstructionInputData['UpgradeNonceAccount']
-    >([BufferLayout.u32('instruction')]),
+    layout: BufferLayout.struct([BufferLayout.u32('instruction')]),
   },
 });
 

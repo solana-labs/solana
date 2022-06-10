@@ -204,7 +204,7 @@ mod tests {
         let versions = Versions::Legacy(Box::new(State::Uninitialized));
         assert_eq!(versions.upgrade(), None);
         // Initialized
-        let blockhash = Hash::from([171; 32]);
+        let blockhash: Hash = hashv(&[&[171u8; 32]]);
         let durable_nonce =
             DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
         let data = Data {

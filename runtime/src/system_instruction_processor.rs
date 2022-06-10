@@ -513,11 +513,8 @@ mod tests {
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
         client::SyncClient,
-<<<<<<< HEAD
         feature_set::FeatureSet,
-=======
         fee_calculator::FeeCalculator,
->>>>>>> b4190319a (feat(nonce): adds system instruction to upgrade legacy nonce versions (#25789))
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
