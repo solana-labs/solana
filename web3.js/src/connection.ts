@@ -3375,7 +3375,7 @@ export class Connection {
   async isBlockhashValid(
     blockhash: string,
     configOrCommitment?: isBlockhashValidConfig | Commitment
-  ): Promise<boolean> {
+  ): Promise<RpcResponseAndContext<boolean>> {
     const extra: Pick<isBlockhashValidConfig, 'minContextSlot'> = {};
 
     let commitment;
@@ -3393,12 +3393,13 @@ export class Connection {
 
     const args = this._buildArgs(
       [blockhash],
-      commitment,
+      commitment || this._commitment || 'finalized',
+      'jsonParsed',
       extra,
     );
 
     const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
-    const res = create(unsafeRes, jsonRpcResult(boolean()));
+    const res = create(unsafeRes, jsonRpcResultAndContext(boolean()));
     if ('error' in res) {
       throw new Error(
         'Could not determine if blockhash ' + blockhash + ' was valid: ' + res.error.message,
