@@ -26,6 +26,7 @@ use {
         warm_quic_cache_service::WarmQuicCacheService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -132,8 +133,8 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
-        use_quic: bool,
         log_messages_bytes_limit: Option<usize>,
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -230,8 +231,9 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if use_quic {
+        let warm_quic_cache_service = if connection_cache.get_use_quic() {
             Some(WarmQuicCacheService::new(
+                connection_cache.clone(),
                 cluster_info.clone(),
                 poh_recorder.clone(),
                 exit.clone(),
@@ -453,8 +455,8 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
-            false, // use_quic
             None,
+            &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

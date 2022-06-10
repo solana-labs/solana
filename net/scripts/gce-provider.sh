@@ -199,7 +199,6 @@ cloud_CreateInstances() {
     --zone "$zone"
     --tags testnet
     --metadata "testnet=$networkName"
-    --image "$imageName"
     --maintenance-policy TERMINATE
     --restart-on-failure
     --scopes compute-rw

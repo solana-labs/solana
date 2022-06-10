@@ -67,6 +67,10 @@ pub trait Banks {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
+    async fn simulate_transaction_with_commitment_and_context(
+        transaction: Transaction,
+        commitment: CommitmentLevel,
+    ) -> BanksTransactionResultWithSimulation;
     async fn get_account_with_commitment_and_context(
         address: Pubkey,
         commitment: CommitmentLevel,

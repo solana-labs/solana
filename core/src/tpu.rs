@@ -16,6 +16,7 @@ use {
         staked_nodes_updater_service::StakedNodesUpdaterService,
     },
     crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -96,6 +97,7 @@ impl Tpu {
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
+        connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
     ) -> Self {
@@ -228,6 +230,7 @@ impl Tpu {
             replay_vote_sender,
             cost_model.clone(),
             log_messages_bytes_limit,
+            connection_cache.clone(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

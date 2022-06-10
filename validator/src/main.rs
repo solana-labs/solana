@@ -19,8 +19,8 @@ use {
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     solana_client::{
-        rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
-        rpc_request::MAX_MULTIPLE_ACCOUNTS,
+        connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE, rpc_client::RpcClient,
+        rpc_config::RpcLeaderScheduleConfig, rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
@@ -31,8 +31,8 @@ use {
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -468,6 +468,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_tpu_connection_pool_size = &DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1208,6 +1209,14 @@ pub fn main() {
                 .long("tpu-use-quic")
                 .takes_value(false)
                 .help("Use QUIC to send transactions."),
+        )
+        .arg(
+            Arg::with_name("tpu_connection_pool_size")
+                .long("tpu-connection-pool-size")
+                .takes_value(true)
+                .default_value(default_tpu_connection_pool_size)
+                .validator(is_parsable::<usize>)
+                .help("Controls the TPU connection pool size per remote addresss"),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
@@ -2222,6 +2231,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -2535,7 +2545,6 @@ pub fn main() {
                 "rpc_send_transaction_service_max_retries",
                 usize
             ),
-            use_quic: tpu_use_quic,
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
         },
@@ -2780,10 +2789,7 @@ pub fn main() {
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
+                    ShredStorageType::rocks_fifo(shred_storage_size)
                 }
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
@@ -2986,6 +2992,7 @@ pub fn main() {
         start_progress,
         socket_addr_space,
         tpu_use_quic,
+        tpu_connection_pool_size,
     );
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {

@@ -313,7 +313,6 @@ fn run_program(name: &str) -> u64 {
                     .unwrap(),
                 parameter_bytes.as_slice(),
                 &account_lengths,
-                true,
             )
             .unwrap();
         }

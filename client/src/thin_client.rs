@@ -5,7 +5,7 @@
 
 use {
     crate::{
-        connection_cache::get_connection, rpc_client::RpcClient,
+        connection_cache::ConnectionCache, rpc_client::RpcClient,
         rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
         tpu_connection::TpuConnection,
     },
@@ -33,7 +33,7 @@ use {
         net::SocketAddr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            RwLock,
+            Arc, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -123,34 +123,49 @@ pub struct ThinClient {
     rpc_clients: Vec<RpcClient>,
     tpu_addrs: Vec<SocketAddr>,
     optimizer: ClientOptimizer,
+    connection_cache: Arc<ConnectionCache>,
 }
 
 impl ThinClient {
     /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
     /// and the Tpu at `tpu_addr` over `transactions_socket` using Quic or UDP
     /// (currently hardcoded to UDP)
-    pub fn new(rpc_addr: SocketAddr, tpu_addr: SocketAddr) -> Self {
-        Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr)
+    pub fn new(
+        rpc_addr: SocketAddr,
+        tpu_addr: SocketAddr,
+        connection_cache: Arc<ConnectionCache>,
+    ) -> Self {
+        Self::new_from_client(RpcClient::new_socket(rpc_addr), tpu_addr, connection_cache)
     }
 
     pub fn new_socket_with_timeout(
         rpc_addr: SocketAddr,
         tpu_addr: SocketAddr,
         timeout: Duration,
+        connection_cache: Arc<ConnectionCache>,
     ) -> Self {
         let rpc_client = RpcClient::new_socket_with_timeout(rpc_addr, timeout);
-        Self::new_from_client(rpc_client, tpu_addr)
+        Self::new_from_client(rpc_client, tpu_addr, connection_cache)
     }
 
-    fn new_from_client(rpc_client: RpcClient, tpu_addr: SocketAddr) -> Self {
+    fn new_from_client(
+        rpc_client: RpcClient,
+        tpu_addr: SocketAddr,
+        connection_cache: Arc<ConnectionCache>,
+    ) -> Self {
         Self {
             rpc_clients: vec![rpc_client],
             tpu_addrs: vec![tpu_addr],
             optimizer: ClientOptimizer::new(0),
+            connection_cache,
         }
     }
 
-    pub fn new_from_addrs(rpc_addrs: Vec<SocketAddr>, tpu_addrs: Vec<SocketAddr>) -> Self {
+    pub fn new_from_addrs(
+        rpc_addrs: Vec<SocketAddr>,
+        tpu_addrs: Vec<SocketAddr>,
+        connection_cache: Arc<ConnectionCache>,
+    ) -> Self {
         assert!(!rpc_addrs.is_empty());
         assert_eq!(rpc_addrs.len(), tpu_addrs.len());
 
@@ -160,6 +175,7 @@ impl ThinClient {
             rpc_clients,
             tpu_addrs,
             optimizer,
+            connection_cache,
         }
     }
 
@@ -208,7 +224,7 @@ impl ThinClient {
                 bincode::serialize(&transaction).expect("transaction serialization failed");
             while now.elapsed().as_secs() < wait_time as u64 {
                 if num_confirmed == 0 {
-                    let conn = get_connection(self.tpu_addr());
+                    let conn = self.connection_cache.get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
                     conn.send_wire_transaction(&wire_transaction)?;
                 }
@@ -596,7 +612,7 @@ impl AsyncClient for ThinClient {
         &self,
         transaction: VersionedTransaction,
     ) -> TransportResult<Signature> {
-        let conn = get_connection(self.tpu_addr());
+        let conn = self.connection_cache.get_connection(self.tpu_addr());
         conn.serialize_and_send_transaction(&transaction)?;
         Ok(transaction.signatures[0])
     }
@@ -605,22 +621,10 @@ impl AsyncClient for ThinClient {
         &self,
         batch: Vec<VersionedTransaction>,
     ) -> TransportResult<()> {
-        let conn = get_connection(self.tpu_addr());
+        let conn = self.connection_cache.get_connection(self.tpu_addr());
         conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
     }
-}
-
-pub fn create_client(rpc: SocketAddr, tpu: SocketAddr) -> ThinClient {
-    ThinClient::new(rpc, tpu)
-}
-
-pub fn create_client_with_timeout(
-    rpc: SocketAddr,
-    tpu: SocketAddr,
-    timeout: Duration,
-) -> ThinClient {
-    ThinClient::new_socket_with_timeout(rpc, tpu, timeout)
 }
 
 #[cfg(test)]

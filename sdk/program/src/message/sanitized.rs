@@ -225,6 +225,21 @@ impl SanitizedMessage {
         }
     }
 
+    /// Get a list of signers for the instruction at the given index
+    pub fn get_ix_signers(&self, ix_index: usize) -> impl Iterator<Item = &Pubkey> {
+        self.instructions()
+            .get(ix_index)
+            .into_iter()
+            .flat_map(|ix| {
+                ix.accounts
+                    .iter()
+                    .copied()
+                    .map(usize::from)
+                    .filter(|index| self.is_signer(*index))
+                    .filter_map(|signer_index| self.account_keys().get(signer_index))
+            })
+    }
+
     /// If the message uses a durable nonce, return the pubkey of the nonce account
     pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
         self.instructions()
@@ -256,7 +271,7 @@ impl SanitizedMessage {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::message::v0};
+    use {super::*, crate::message::v0, std::collections::HashSet};
 
     #[test]
     fn test_try_from_message() {
@@ -335,5 +350,45 @@ mod tests {
         ));
 
         assert_eq!(v0_message.num_readonly_accounts(), 3);
+    }
+
+    #[test]
+    fn test_get_ix_signers() {
+        let signer0 = Pubkey::new_unique();
+        let signer1 = Pubkey::new_unique();
+        let non_signer = Pubkey::new_unique();
+        let loader_key = Pubkey::new_unique();
+        let instructions = vec![
+            CompiledInstruction::new(3, &(), vec![2, 0]),
+            CompiledInstruction::new(3, &(), vec![0, 1]),
+            CompiledInstruction::new(3, &(), vec![0, 0]),
+        ];
+
+        let message = SanitizedMessage::try_from(LegacyMessage::new_with_compiled_instructions(
+            2,
+            1,
+            2,
+            vec![signer0, signer1, non_signer, loader_key],
+            Hash::default(),
+            instructions,
+        ))
+        .unwrap();
+
+        assert_eq!(
+            message.get_ix_signers(0).collect::<HashSet<_>>(),
+            HashSet::from_iter([&signer0])
+        );
+        assert_eq!(
+            message.get_ix_signers(1).collect::<HashSet<_>>(),
+            HashSet::from_iter([&signer0, &signer1])
+        );
+        assert_eq!(
+            message.get_ix_signers(2).collect::<HashSet<_>>(),
+            HashSet::from_iter([&signer0])
+        );
+        assert_eq!(
+            message.get_ix_signers(3).collect::<HashSet<_>>(),
+            HashSet::default()
+        );
     }
 }

@@ -22,13 +22,11 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            add_get_processed_sibling_instruction_syscall, blake3_syscall_enabled,
-            check_physical_overlapping, check_slice_translation_size, curve25519_syscall_enabled,
-            disable_fees_sysvar, do_support_realloc, executables_incur_cpi_data_cost,
+            blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
+            curve25519_syscall_enabled, disable_fees_sysvar, executables_incur_cpi_data_cost,
             fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            quick_bail_on_panic, return_data_syscall_enabled, secp256k1_recover_syscall_enabled,
-            sol_log_data_syscall_enabled, syscall_saturated_math, update_syscall_base_costs,
+            quick_bail_on_panic, syscall_saturated_math, update_syscall_base_costs,
             zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
@@ -131,9 +129,6 @@ pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
-    let secp256k1_recover_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&secp256k1_recover_syscall_enabled::id());
     let blake3_syscall_enabled = invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id());
@@ -146,15 +141,6 @@ pub fn register_syscalls(
     let disable_fees_sysvar = invoke_context
         .feature_set
         .is_active(&disable_fees_sysvar::id());
-    let return_data_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&return_data_syscall_enabled::id());
-    let sol_log_data_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&sol_log_data_syscall_enabled::id());
-    let add_get_processed_sibling_instruction_syscall = invoke_context
-        .feature_set
-        .is_active(&add_get_processed_sibling_instruction_syscall::id());
 
     let mut syscall_registry = SyscallRegistry::default();
 
@@ -213,9 +199,7 @@ pub fn register_syscalls(
     )?;
 
     // Secp256k1 Recover
-    register_feature_gated_syscall!(
-        syscall_registry,
-        secp256k1_recover_syscall_enabled,
+    syscall_registry.register_syscall_by_name(
         b"sol_secp256k1_recover",
         SyscallSecp256k1Recover::init,
         SyscallSecp256k1Recover::call,
@@ -339,43 +323,33 @@ pub fn register_syscalls(
     )?;
 
     // Return data
-    register_feature_gated_syscall!(
-        syscall_registry,
-        return_data_syscall_enabled,
+    syscall_registry.register_syscall_by_name(
         b"sol_set_return_data",
         SyscallSetReturnData::init,
         SyscallSetReturnData::call,
     )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        return_data_syscall_enabled,
+    syscall_registry.register_syscall_by_name(
         b"sol_get_return_data",
         SyscallGetReturnData::init,
         SyscallGetReturnData::call,
     )?;
 
     // Log data
-    register_feature_gated_syscall!(
-        syscall_registry,
-        sol_log_data_syscall_enabled,
+    syscall_registry.register_syscall_by_name(
         b"sol_log_data",
         SyscallLogData::init,
         SyscallLogData::call,
     )?;
 
     // Processed sibling instructions
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
+    syscall_registry.register_syscall_by_name(
         b"sol_get_processed_sibling_instruction",
         SyscallGetProcessedSiblingInstruction::init,
         SyscallGetProcessedSiblingInstruction::call,
     )?;
 
     // Stack height
-    register_feature_gated_syscall!(
-        syscall_registry,
-        add_get_processed_sibling_instruction_syscall,
+    syscall_registry.register_syscall_by_name(
         b"sol_get_stack_height",
         SyscallGetStackHeight::init,
         SyscallGetStackHeight::call,
@@ -3118,9 +3092,6 @@ fn call<'a, 'b: 'a>(
     invoke_context
         .get_compute_meter()
         .consume(invoke_context.get_compute_budget().invoke_units)?;
-    let do_support_realloc = invoke_context
-        .feature_set
-        .is_active(&do_support_realloc::id());
 
     // Translate and verify caller's data
     let instruction =
@@ -3176,45 +3147,18 @@ fn call<'a, 'b: 'a>(
             *caller_account.owner = *callee_account.owner();
             let new_len = callee_account.data().len();
             if caller_account.data.len() != new_len {
-                if !do_support_realloc && !caller_account.data.is_empty() {
-                    // Only support for `CreateAccount` at this time.
-                    // Need a way to limit total realloc size across multiple CPI calls
-                    ic_msg!(
-                        invoke_context,
-                        "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                    );
-                    return Err(
-                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
-                    );
-                }
-                let data_overflow = if do_support_realloc {
-                    if invoke_context
-                        .feature_set
-                        .is_active(&syscall_saturated_math::id())
-                    {
-                        new_len
-                            > caller_account
-                                .original_data_len
-                                .saturating_add(MAX_PERMITTED_DATA_INCREASE)
-                    } else {
-                        #[allow(clippy::integer_arithmetic)]
-                        {
-                            new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
-                        }
-                    }
-                } else if invoke_context
+                let data_overflow = if invoke_context
                     .feature_set
                     .is_active(&syscall_saturated_math::id())
                 {
                     new_len
                         > caller_account
-                            .data
-                            .len()
+                            .original_data_len
                             .saturating_add(MAX_PERMITTED_DATA_INCREASE)
                 } else {
                     #[allow(clippy::integer_arithmetic)]
                     {
-                        new_len > caller_account.data.len() + MAX_PERMITTED_DATA_INCREASE
+                        new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
                     }
                 };
                 if data_overflow {

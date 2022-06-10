@@ -432,6 +432,14 @@ pub mod quick_bail_on_panic {
     solana_sdk::declare_id!("DpJREPyuMZ5nDfU6H3WTqSqUFSXAfw8u7xqmWtEwJDcP");
 }
 
+pub mod nonce_must_be_authorized {
+    solana_sdk::declare_id!("HxrEu1gXuH7iD3Puua1ohd5n4iUKJyFNtNxk9DVJkvgr");
+}
+
+pub mod nonce_must_be_advanceable {
+    solana_sdk::declare_id!("3u3Er5Vc2jVcwz4xr2GJeSAXT3fAj6ADHZ4BJMZiScFd");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -533,6 +541,8 @@ lazy_static! {
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
         (vote_state_update_credit_per_dequeue::id(), "Calculate vote credits for VoteStateUpdate per vote dequeue to match credit awards for Vote instruction"),
         (quick_bail_on_panic::id(), "quick bail on panic"),
+        (nonce_must_be_authorized::id(), "nonce must be authorized"),
+        (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

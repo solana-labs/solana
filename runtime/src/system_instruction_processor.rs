@@ -483,6 +483,28 @@ pub fn process_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             authorize_nonce_account(&mut me, &nonce_authority, &signers, invoke_context)
         }
+        SystemInstruction::UpgradeNonceAccount => {
+            let separate_nonce_from_blockhash = invoke_context
+                .feature_set
+                .is_active(&feature_set::separate_nonce_from_blockhash::id());
+            if !separate_nonce_from_blockhash {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            instruction_context.check_number_of_instruction_accounts(1)?;
+            let mut nonce_account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            if !system_program::check_id(nonce_account.get_owner()) {
+                return Err(InstructionError::InvalidAccountOwner);
+            }
+            if !nonce_account.is_writable() {
+                return Err(InstructionError::InvalidArgument);
+            }
+            let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
+            match nonce_versions.upgrade() {
+                None => Err(InstructionError::InvalidArgument),
+                Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
+            }
+        }
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
             let mut account = instruction_context
@@ -549,11 +571,10 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
         if account.data().is_empty() {
             Some(SystemAccountKind::System)
         } else if account.data().len() == nonce::State::size() {
-            match account.state().ok()? {
-                nonce::state::Versions::Current(state) => match *state {
-                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-                    _ => None,
-                },
+            let nonce_versions: nonce::state::Versions = account.state().ok()?;
+            match nonce_versions.state() {
+                nonce::State::Uninitialized => None,
+                nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
             }
         } else {
             None
@@ -569,11 +590,18 @@ mod tests {
     use solana_sdk::{
         account::{self, Account, AccountSharedData, ReadableAccount},
         client::SyncClient,
+        fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        nonce, nonce_account, recent_blockhashes_account,
+        nonce::{
+            self,
+            state::{
+                Data as NonceData, DurableNonce, State as NonceState, Versions as NonceVersions,
+            },
+        },
+        nonce_account, recent_blockhashes_account,
         signature::{Keypair, Signer},
         system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
@@ -1191,9 +1219,10 @@ mod tests {
         let nonce = Pubkey::new_unique();
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::default()),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -1482,10 +1511,13 @@ mod tests {
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_data(
             100,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
-                authority: from,
-                ..nonce::state::Data::default()
-            })),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data {
+                    authority: from,
+                    ..nonce::state::Data::default()
+                }),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -1764,7 +1796,8 @@ mod tests {
     #[test]
     fn test_process_nonce_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         let accounts = process_instruction(
@@ -1871,7 +1904,8 @@ mod tests {
     #[test]
     fn test_process_withdraw_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         let pubkey = Pubkey::new_unique();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
@@ -1924,7 +1958,8 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_only_nonce_acc_fail() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         process_instruction(
             &serialize(&SystemInstruction::InitializeNonceAccount(nonce_address)).unwrap(),
             vec![(nonce_address, nonce_account)],
@@ -1941,7 +1976,8 @@ mod tests {
     #[test]
     fn test_process_initialize_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         process_instruction(
@@ -1976,7 +2012,8 @@ mod tests {
     #[test]
     fn test_process_authorize_ix_ok() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         let accounts = process_instruction(
@@ -2045,9 +2082,10 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::default()),
+                true, // separate_domains
+            ),
             &system_program::id(),
         )
         .unwrap();
@@ -2060,7 +2098,9 @@ mod tests {
     #[test]
     fn test_get_system_account_kind_uninitialized_nonce_account_fail() {
         assert_eq!(
-            get_system_account_kind(&nonce_account::create_account(42).borrow()),
+            get_system_account_kind(
+                &nonce_account::create_account(42, /*separate_domains:*/ true).borrow()
+            ),
             None
         );
     }
@@ -2076,9 +2116,10 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_data_fail() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(nonce::state::Data::default()),
+                true, // separate_domains
+            ),
             &Pubkey::new_unique(),
         )
         .unwrap();
@@ -2088,7 +2129,8 @@ mod tests {
     #[test]
     fn test_nonce_initialize_with_empty_recent_blockhashes_fail() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         #[allow(deprecated)]
@@ -2128,7 +2170,8 @@ mod tests {
     #[test]
     fn test_nonce_advance_with_empty_recent_blockhashes_fail() {
         let nonce_address = Pubkey::new_unique();
-        let nonce_account = nonce_account::create_account(1_000_000).into_inner();
+        let nonce_account =
+            nonce_account::create_account(1_000_000, /*separate_domains:*/ true).into_inner();
         #[allow(deprecated)]
         let blockhash_id = sysvar::recent_blockhashes::id();
         let accounts = process_instruction(
@@ -2186,6 +2229,147 @@ mod tests {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
                 super::process_instruction(first_instruction_account, invoke_context)
             },
+        );
+    }
+
+    #[test]
+    fn test_nonce_account_upgrade_check_owner() {
+        let nonce_address = Pubkey::new_unique();
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Uninitialized));
+        let nonce_account = AccountSharedData::new_data(
+            1_000_000,             // lamports
+            &versions,             // state
+            &Pubkey::new_unique(), // owner
+        )
+        .unwrap();
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidAccountOwner),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+    }
+
+    fn new_nonce_account(versions: NonceVersions) -> AccountSharedData {
+        let nonce_account = AccountSharedData::new_data(
+            1_000_000,             // lamports
+            &versions,             // state
+            &system_program::id(), // owner
+        )
+        .unwrap();
+        assert_eq!(
+            nonce_account.deserialize_data::<NonceVersions>().unwrap(),
+            versions
+        );
+        nonce_account
+    }
+
+    #[test]
+    fn test_nonce_account_upgrade() {
+        let nonce_address = Pubkey::new_unique();
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Uninitialized));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let versions = NonceVersions::Current(Box::new(NonceState::Uninitialized));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let blockhash = Hash::from([171; 32]);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        let data = NonceData {
+            authority: Pubkey::new_unique(),
+            durable_nonce,
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 2718,
+            },
+        };
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Initialized(data.clone())));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: false, // Should fail!
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let mut accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account)],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Ok(()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        let nonce_account = accounts.remove(0);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ true);
+        assert_ne!(data.durable_nonce, durable_nonce);
+        let data = NonceData {
+            durable_nonce,
+            ..data
+        };
+        let upgraded_nonce_account =
+            NonceVersions::Current(Box::new(NonceState::Initialized(data)));
+        assert_eq!(
+            nonce_account.deserialize_data::<NonceVersions>().unwrap(),
+            upgraded_nonce_account
+        );
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account)],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(
+            accounts[0].deserialize_data::<NonceVersions>().unwrap(),
+            upgraded_nonce_account
         );
     }
 }

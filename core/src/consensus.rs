@@ -1038,7 +1038,7 @@ impl Tower {
     }
 
     pub fn is_stray_last_vote(&self) -> bool {
-        self.stray_restored_slot == self.last_voted_slot()
+        self.stray_restored_slot.is_some() && self.stray_restored_slot == self.last_voted_slot()
     }
 
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
@@ -3241,5 +3241,11 @@ pub mod test {
         assert_eq!(tower.root(), 12);
         assert_eq!(tower.voted_slots(), vec![13, 14]);
         assert_eq!(tower.stray_restored_slot, Some(14));
+    }
+
+    #[test]
+    fn test_default_tower_has_no_stray_last_vote() {
+        let tower = Tower::default();
+        assert!(!tower.is_stray_last_vote());
     }
 }
