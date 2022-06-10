@@ -236,6 +236,7 @@ pub enum SystemInstruction {
     /** 9 **/AllocateWithSeed {/**/},
     /** 10 **/AssignWithSeed {/**/},
     /** 11 **/TransferWithSeed {/**/},
+    /** 12 **/UpgradeNonceAccount,
 }
 ```
 
