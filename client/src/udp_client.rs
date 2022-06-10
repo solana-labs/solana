@@ -13,7 +13,7 @@ use {
 };
 
 pub struct UdpTpuConnection {
-    socket: UdpSocket,
+    socket: Arc<UdpSocket>,
     addr: SocketAddr,
 }
 
@@ -22,14 +22,15 @@ impl UdpTpuConnection {
         let socket =
             solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
                 .unwrap();
-        Self {
-            socket,
-            addr: tpu_addr,
-        }
+        Self::new_with_socket(tpu_addr, Arc::new(socket))
     }
 
     pub fn new(tpu_addr: SocketAddr, _connection_stats: Arc<ConnectionCacheStats>) -> Self {
         Self::new_from_addr(tpu_addr)
+    }
+
+    pub fn new_with_socket(addr: SocketAddr, socket: Arc<UdpSocket>) -> Self {
+        Self { socket, addr }
     }
 }
 

@@ -24,12 +24,12 @@ pub struct ClientStats {
 }
 
 #[enum_dispatch]
-pub enum Connection {
+pub enum BlockingConnection {
     UdpTpuConnection,
     QuicTpuConnection,
 }
 
-#[enum_dispatch(Connection)]
+#[enum_dispatch(BlockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 

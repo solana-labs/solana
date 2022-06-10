@@ -605,7 +605,7 @@ impl BankingStage {
                 banking_stage_stats
                     .forwarded_vote_count
                     .fetch_add(packet_vec_len, Ordering::Relaxed);
-                Arc::new(UdpTpuConnection::new_from_addr(addr).into())
+                UdpTpuConnection::new_from_addr(addr).into()
             } else {
                 // All other transactions can be forwarded using QUIC, get_connection() will use
                 // system wide setting to pick the correct connection object.
