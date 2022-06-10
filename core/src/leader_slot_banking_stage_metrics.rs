@@ -777,7 +777,7 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
         solana_sdk::pubkey::Pubkey,
-        std::sync::Arc,
+        std::{mem, sync::Arc},
     };
 
     struct TestSlotBoundaryComponents {
@@ -826,9 +826,12 @@ mod tests {
             ..
         } = setup_test_slot_boundary_banks();
         // Test that with no bank being tracked, and no new bank being tracked, nothing is reported
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&None)
-            .is_none());
+        let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+        assert_eq!(
+            mem::discriminant(&MetricsTrackerAction::Noop),
+            mem::discriminant(&action)
+        );
+        assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
     }
 
@@ -843,9 +846,13 @@ mod tests {
         // Test case where the thread has not detected a leader bank, and now sees a leader bank.
         // Metrics should not be reported because leader slot has not ended
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
+        let action =
+            leader_slot_metrics_tracker.check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+        assert_eq!(
+            mem::discriminant(&MetricsTrackerAction::NewTracker(None)),
+            mem::discriminant(&action)
+        );
+        assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
     }
 
@@ -861,19 +868,33 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's no more leader bank,
         // implying the slot has ended. Metrics should be reported for `first_bank.slot()`,
         // because that leader slot has just ended.
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&None)
-            .is_none());
+        {
+            // Setup first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
+        {
+            // Assert no-op if still no new bank
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::Noop),
+                mem::discriminant(&action)
+            );
+        }
     }
 
     #[test]
@@ -887,19 +908,35 @@ mod tests {
 
         // Test case where the thread has a leader bank, and now detects the same leader bank,
         // implying the slot is still running. Metrics should not be reported
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank.clone()))
-            .is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank.clone()));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert nop-op if same bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::Noop),
+                mem::discriminant(&action)
+            );
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 
     #[test]
@@ -915,22 +952,39 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's a new leader bank
         // for a bigger slot, implying the slot has ended. Metrics should be reported for the
         // smaller slot
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            next_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if new bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(next_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndNewTracker(None)),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                next_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 
     #[test]
@@ -945,21 +999,38 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's a new leader bank
         // for a samller slot, implying the slot has ended. Metrics should be reported for the
         // bigger slot
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-                .unwrap(),
-            next_bank.slot()
-        );
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with next_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(next_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if new bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndNewTracker(None)),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                next_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 }
