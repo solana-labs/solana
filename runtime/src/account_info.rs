@@ -65,7 +65,7 @@ pub struct AccountInfo {
     /// index identifying the append storage
     store_id: AppendVecId,
 
-    /// offset = 'reduced_offset' / ALIGN_BOUNDARY_OFFSET into the storage
+    /// offset = 'reduced_offset' * ALIGN_BOUNDARY_OFFSET into the storage
     /// Note this is a smaller type than 'Offset'
     reduced_offset: OffsetReduced,
 
