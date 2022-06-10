@@ -46,7 +46,6 @@ pub fn deserialize_parameters(
     instruction_context: &InstructionContext,
     buffer: &[u8],
     account_lengths: &[usize],
-    do_support_realloc: bool,
 ) -> Result<(), InstructionError> {
     let is_loader_deprecated = *instruction_context
         .try_borrow_program_account(transaction_context)?
@@ -65,7 +64,6 @@ pub fn deserialize_parameters(
             instruction_context,
             buffer,
             account_lengths,
-            do_support_realloc,
         )
     }
 }
@@ -291,7 +289,6 @@ pub fn deserialize_parameters_aligned(
     instruction_context: &InstructionContext,
     buffer: &[u8],
     account_lengths: &[usize],
-    do_support_realloc: bool,
 ) -> Result<(), InstructionError> {
     let mut start = size_of::<u64>(); // number of accounts
     for (index_in_instruction, pre_len) in (instruction_context.get_number_of_program_accounts()
@@ -328,22 +325,13 @@ pub fn deserialize_parameters_aligned(
                     .ok_or(InstructionError::InvalidArgument)?,
             ) as usize;
             start += size_of::<u64>(); // data length
-            let data_end = if do_support_realloc {
-                if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
-                    || post_len > MAX_PERMITTED_DATA_LENGTH as usize
-                {
-                    return Err(InstructionError::InvalidRealloc);
-                }
-                start + post_len
-            } else {
-                let mut data_end = start + *pre_len;
-                if post_len != *pre_len
-                    && (post_len.saturating_sub(*pre_len)) <= MAX_PERMITTED_DATA_INCREASE
-                {
-                    data_end = start + post_len;
-                }
-                data_end
-            };
+
+            if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
+                || post_len > MAX_PERMITTED_DATA_LENGTH as usize
+            {
+                return Err(InstructionError::InvalidRealloc);
+            }
+            let data_end = start + post_len;
             let _ = borrowed_account.set_data(
                 buffer
                     .get(start..data_end)
@@ -542,7 +530,6 @@ mod tests {
             instruction_context,
             serialized.as_slice(),
             &account_lengths,
-            true,
         )
         .unwrap();
         for (index_in_transaction, (_key, original_account)) in original_accounts.iter().enumerate()
@@ -608,7 +595,6 @@ mod tests {
             instruction_context,
             serialized.as_slice(),
             &account_lengths,
-            true,
         )
         .unwrap();
         for (index_in_transaction, (_key, original_account)) in original_accounts.iter().enumerate()
