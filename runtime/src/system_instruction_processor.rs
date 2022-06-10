@@ -6,7 +6,7 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::StateMut,
+        account_utils::{State as _, StateMut},
         feature_set,
         instruction::InstructionError,
         keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
@@ -408,16 +408,14 @@ pub fn process_instruction(
             if !separate_nonce_from_blockhash {
                 return Err(InstructionError::InvalidInstructionData);
             }
-            instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut nonce_account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            if !system_program::check_id(nonce_account.get_owner()) {
+            let nonce_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            if !system_program::check_id(&nonce_account.owner()?) {
                 return Err(InstructionError::InvalidAccountOwner);
             }
             if !nonce_account.is_writable() {
                 return Err(InstructionError::InvalidArgument);
             }
-            let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
+            let nonce_versions: nonce::state::Versions = nonce_account.state()?;
             match nonce_versions.upgrade() {
                 None => Err(InstructionError::InvalidArgument),
                 Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
@@ -496,7 +494,7 @@ mod tests {
         client::SyncClient,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
-        hash::{hash, Hash},
+        hash::{hash, hashv, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         nonce::{
@@ -2218,7 +2216,7 @@ mod tests {
         );
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0], nonce_account);
-        let blockhash = Hash::from([171; 32]);
+        let blockhash = hashv(&[&[171u8; 32]]);
         let durable_nonce =
             DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
         let data = NonceData {
