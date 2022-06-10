@@ -938,6 +938,16 @@ const BlockProductionResponseStruct = jsonRpcResultAndContext(
 );
 
 /**
+ * Configuration object for changing `isBlockhashValid` query behavior
+ */
+export type isBlockhashValidConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+}
+
+/**
  * A performance sample
  */
 export type PerfSample = {
@@ -1825,11 +1835,6 @@ const GetLatestBlockhashRpcResult = jsonRpcResultAndContext(
     lastValidBlockHeight: number(),
   }),
 );
-
-/**
- * Expected JSON RPC response for the "isBlockhashValid" message
- */
-const IsBlockhashValidRpcResult = jsonRpcResult(boolean());
 
 const PerfSampleResult = pick({
   slot: number(),
@@ -3369,15 +3374,34 @@ export class Connection {
    */
   async isBlockhashValid(
     blockhash: string,
-    commitment?: Commitment,
-    minContextSlot?: number
+    configOrCommitment?: isBlockhashValidConfig | Commitment
   ): Promise<boolean> {
-    const args = this._buildArgs([blockhash], commitment, minContextSlot);
+    const extra: Pick<isBlockhashValidConfig, 'minContextSlot'> = {};
+
+    let commitment;
+    if (configOrCommitment) {
+      if (typeof configOrCommitment === 'string') {
+        commitment = configOrCommitment;
+      } else {
+        commitment = configOrCommitment.commitment;
+
+        if (configOrCommitment.minContextSlot) {
+          extra.minContextSlot = configOrCommitment.minContextSlot;
+        }
+      }
+    }
+
+    const args = this._buildArgs(
+      [blockhash],
+      commitment,
+      extra,
+    );
+
     const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
     const res = create(unsafeRes, jsonRpcResult(boolean()));
     if ('error' in res) {
       throw new Error(
-        'failed to check if blockhash is valid: ' + res.error.message,
+        'Could not determine if blockhash ' + blockhash + ' was valid: ' + res.error.message,
       );
     }
     return res.result;
