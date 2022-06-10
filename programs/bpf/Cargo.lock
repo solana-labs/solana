@@ -4792,6 +4792,7 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-sdk 1.11.0",
  "solana-vote-program",
+ "thiserror",
 ]
 
 [[package]]
