@@ -45,6 +45,7 @@ use {
             State as NonceState,
         },
         pubkey::Pubkey,
+        signature::Signature,
         slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
@@ -1172,7 +1173,7 @@ impl Accounts {
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
     ) {
-        let accounts_to_store = self.collect_accounts_to_store(
+        let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
             res,
             loaded,
@@ -1181,14 +1182,20 @@ impl Accounts {
             lamports_per_signature,
             leave_nonce_on_success,
         );
-        self.accounts_db.store_cached(slot, &accounts_to_store);
+        self.accounts_db
+            .store_cached(slot, &accounts_to_store, Some(&txn_signatures));
     }
 
+<<<<<<< HEAD
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
         self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
+=======
+    pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        self.accounts_db.store_cached(slot, accounts, None)
+>>>>>>> 2251aa280 (Report transaction signature on update account (#25726))
     }
 
     /// Add a slot to root.  Root slots cannot be purged
@@ -1206,8 +1213,12 @@ impl Accounts {
         durable_nonce: &(DurableNonce, /*separate_domains:*/ bool),
         lamports_per_signature: u64,
         leave_nonce_on_success: bool,
-    ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
+    ) -> (
+        Vec<(&'a Pubkey, &'a AccountSharedData)>,
+        Vec<Option<&'a Signature>>,
+    ) {
         let mut accounts = Vec::with_capacity(load_results.len());
+        let mut signatures = Vec::with_capacity(load_results.len());
         for (i, ((tx_load_result, nonce), tx)) in load_results.iter_mut().zip(txs).enumerate() {
             if tx_load_result.is_err() {
                 // Don't store any accounts if tx failed to load
@@ -1276,11 +1287,12 @@ impl Accounts {
 
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
+                        signatures.push(Some(tx.signature()));
                     }
                 }
             }
         }
-        accounts
+        (accounts, signatures)
     }
 }
 
@@ -2940,6 +2952,7 @@ mod tests {
             (message.account_keys[1], account2.clone()),
         ];
         let tx0 = new_sanitized_tx(&[&keypair0], message, Hash::default());
+        let tx0_sign = *tx0.signature();
 
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
@@ -2955,6 +2968,7 @@ mod tests {
             (message.account_keys[1], account2),
         ];
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
+        let tx1_sign = *tx1.signature();
 
         let loaded0 = (
             Ok(LoadedTransaction {
@@ -2994,7 +3008,7 @@ mod tests {
         }
         let txs = vec![tx0, tx1];
         let execution_results = vec![new_execution_result(Ok(()), None); 2];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, txn_signatures) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
@@ -3010,6 +3024,14 @@ mod tests {
         assert!(collected_accounts
             .iter()
             .any(|(pubkey, _account)| *pubkey == &keypair1.pubkey()));
+
+        assert_eq!(txn_signatures.len(), 2);
+        assert!(txn_signatures
+            .iter()
+            .any(|signature| signature.unwrap().to_string().eq(&tx0_sign.to_string())));
+        assert!(txn_signatures
+            .iter()
+            .any(|signature| signature.unwrap().to_string().eq(&tx1_sign.to_string())));
 
         // Ensure readonly_lock reflects lock
         assert_eq!(
@@ -3493,7 +3515,7 @@ mod tests {
             )),
             nonce.as_ref(),
         )];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, _) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
@@ -3621,7 +3643,7 @@ mod tests {
             )),
             nonce.as_ref(),
         )];
-        let collected_accounts = accounts.collect_accounts_to_store(
+        let (collected_accounts, _) = accounts.collect_accounts_to_store(
             &txs,
             &execution_results,
             loaded.as_mut_slice(),
