@@ -4,7 +4,7 @@ use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::StateMut,
+        account_utils::{State as _, StateMut},
         feature_set,
         instruction::InstructionError,
         keyed_account::{from_keyed_account, get_signers, keyed_account_at_index, KeyedAccount},
@@ -427,16 +427,14 @@ pub fn process_instruction(
             if !separate_nonce_from_blockhash {
                 return Err(InstructionError::InvalidInstructionData);
             }
-            instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut nonce_account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            if !system_program::check_id(nonce_account.get_owner()) {
+            let nonce_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            if !system_program::check_id(&nonce_account.owner()?) {
                 return Err(InstructionError::InvalidAccountOwner);
             }
             if !nonce_account.is_writable() {
                 return Err(InstructionError::InvalidArgument);
             }
-            let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
+            let nonce_versions: nonce::state::Versions = nonce_account.state()?;
             match nonce_versions.upgrade() {
                 None => Err(InstructionError::InvalidArgument),
                 Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
@@ -516,7 +514,7 @@ mod tests {
         feature_set::FeatureSet,
         fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
-        hash::{hash, Hash},
+        hash::{hash, hashv, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
         nonce::{
@@ -2080,19 +2078,20 @@ mod tests {
             &Pubkey::new_unique(), // owner
         )
         .unwrap();
-        let accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account.clone())],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::InvalidAccountOwner),
-            super::process_instruction,
+        let keyed_accounts = vec![(
+            false,
+            true,
+            nonce_address,
+            Rc::new(RefCell::new(nonce_account.clone())),
+        )];
+        assert_eq!(
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
+            Err(InstructionError::InvalidAccountOwner)
         );
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0], nonce_account);
+        assert_eq!(*keyed_accounts[0].3.borrow(), nonce_account);
     }
 
     fn new_nonce_account(versions: NonceVersions) -> AccountSharedData {
@@ -2114,35 +2113,37 @@ mod tests {
         let nonce_address = Pubkey::new_unique();
         let versions = NonceVersions::Legacy(Box::new(NonceState::Uninitialized));
         let nonce_account = new_nonce_account(versions);
-        let accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account.clone())],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
+        let keyed_accounts = vec![(
+            false,
+            true,
+            nonce_address,
+            Rc::new(RefCell::new(nonce_account.clone())),
+        )];
+        assert_eq!(
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
+            Err(InstructionError::InvalidArgument)
         );
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0], nonce_account);
+        assert_eq!(*keyed_accounts[0].3.borrow(), nonce_account);
         let versions = NonceVersions::Current(Box::new(NonceState::Uninitialized));
         let nonce_account = new_nonce_account(versions);
-        let accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account.clone())],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
+        let keyed_accounts = vec![(
+            false,
+            true,
+            nonce_address,
+            Rc::new(RefCell::new(nonce_account.clone())),
+        )];
+        assert_eq!(
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
+            Err(InstructionError::InvalidArgument)
         );
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0], nonce_account);
-        let blockhash = Hash::from([171; 32]);
+        assert_eq!(*keyed_accounts[0].3.borrow(), nonce_account);
+        let blockhash = hashv(&[&[171u8; 32]]);
         let durable_nonce =
             DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
         let data = NonceData {
@@ -2154,32 +2155,33 @@ mod tests {
         };
         let versions = NonceVersions::Legacy(Box::new(NonceState::Initialized(data.clone())));
         let nonce_account = new_nonce_account(versions);
-        let accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account.clone())],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: false, // Should fail!
-            }],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
+        let keyed_accounts = vec![(
+            false,
+            false, // Should fail!
+            nonce_address,
+            Rc::new(RefCell::new(nonce_account.clone())),
+        )];
+        assert_eq!(
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
+            Err(InstructionError::InvalidArgument)
         );
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(accounts[0], nonce_account);
-        let mut accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account)],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: true,
-            }],
+        assert_eq!(*keyed_accounts[0].3.borrow(), nonce_account);
+        let keyed_accounts = vec![(
+            false,
+            true,
+            nonce_address,
+            Rc::new(RefCell::new(nonce_account)),
+        )];
+        assert_eq!(
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
             Ok(()),
-            super::process_instruction,
         );
-        assert_eq!(accounts.len(), 1);
-        let nonce_account = accounts.remove(0);
         let durable_nonce =
             DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ true);
         assert_ne!(data.durable_nonce, durable_nonce);
@@ -2187,27 +2189,17 @@ mod tests {
             durable_nonce,
             ..data
         };
-        let upgraded_nonce_account =
-            NonceVersions::Current(Box::new(NonceState::Initialized(data)));
+        let upgraded_nonce_account = new_nonce_account(NonceVersions::Current(Box::new(
+            NonceState::Initialized(data),
+        )));
+        assert_eq!(*keyed_accounts[0].3.borrow(), upgraded_nonce_account);
         assert_eq!(
-            nonce_account.deserialize_data::<NonceVersions>().unwrap(),
-            upgraded_nonce_account
+            process_instruction(
+                &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+                &keyed_accounts,
+            ),
+            Err(InstructionError::InvalidArgument)
         );
-        let accounts = process_instruction(
-            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
-            vec![(nonce_address, nonce_account)],
-            vec![AccountMeta {
-                pubkey: nonce_address,
-                is_signer: false,
-                is_writable: true,
-            }],
-            Err(InstructionError::InvalidArgument),
-            super::process_instruction,
-        );
-        assert_eq!(accounts.len(), 1);
-        assert_eq!(
-            accounts[0].deserialize_data::<NonceVersions>().unwrap(),
-            upgraded_nonce_account
-        );
+        assert_eq!(*keyed_accounts[0].3.borrow(), upgraded_nonce_account);
     }
 }
