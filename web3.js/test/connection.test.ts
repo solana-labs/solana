@@ -2952,6 +2952,57 @@ describe('Connection', function () {
     }
   });
 
+  describe.only('is blockhash valid', () => {
+    it('is blockhash valid - blockhash only (mock)', async () => {
+      const {blockhash} = await helpers.recentBlockhash({connection});
+
+      await mockRpcResponse({
+        method: 'isBlockhashValid',
+        params: [blockhash],
+        value: true,
+        withContext: true
+      });
+
+      const isValid = await connection.isBlockhashValid(blockhash);
+      expect(isValid.value).to.be.true;
+    });
+
+    it('is blockhash valid - blockhash and min slot (mock)', async () => {
+      const {blockhash} = await helpers.recentBlockhash({connection});
+
+      await mockRpcResponse({
+        method: 'isBlockhashValid',
+        params: [blockhash, {minContextSlot: 1140}],
+        value: true,
+        withContext: true
+      });
+
+      const isValid = await connection.isBlockhashValid(blockhash, {minContextSlot: 1140});
+      expect(isValid.value).to.be.true;
+    });
+
+    if (process.env.TEST_LIVE) {
+      it('is blockhash valid - blockhash only (live)', async () => {
+        const {blockhash} = await helpers.recentBlockhash({connection});
+        const isValid = await connection.isBlockhashValid(blockhash);
+        expect(isValid.value).to.be.true;
+      });
+
+      it('is blockhash valid - blockhash only and mint slot (live)', async () => {
+        const blockhash = (await connection.getLatestBlockhash('recent')).blockhash;
+        const currentSlot = await connection.getSlot('recent');
+
+        const isValid = await connection.isBlockhashValid(
+          blockhash,
+          {
+            commitment: 'recent',
+            minContextSlot: currentSlot-1
+          });
+        expect(isValid.value).to.be.false;
+      });
+    }
+  });
+
   it('get minimum ledger slot', async () => {
     await mockRpcResponse({
       method: 'minimumLedgerSlot',
