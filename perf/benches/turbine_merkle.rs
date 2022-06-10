@@ -79,7 +79,7 @@ fn bench_merkle_verify_proofs_96_single(b: &mut Bencher) {
     let proof = tree.prove(7);
 
     b.iter(|| {
-        proof.verify(&tree.root(), &tree.node(7), 7);
+        assert!(proof.verify(&tree.root(), &leaves[7], 7));
     });
 }
 
