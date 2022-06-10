@@ -164,6 +164,7 @@ fn execute_batch(
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_cost: u64,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -185,6 +186,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         timings,
+        log_messages_bytes_limit,
     );
 
     if bank
@@ -265,6 +267,7 @@ fn execute_batches_internal(
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_costs: &[u64],
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
@@ -282,6 +285,7 @@ fn execute_batches_internal(
                         &mut timings,
                         cost_capacity_meter.clone(),
                         tx_costs[index],
+                        log_messages_bytes_limit,
                     );
                     if let Some(entry_callback) = entry_callback {
                         entry_callback(bank);
@@ -323,6 +327,7 @@ fn execute_batches(
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let lock_results = batches
         .iter()
@@ -403,6 +408,7 @@ fn execute_batches(
         timings,
         cost_capacity_meter,
         &tx_batch_costs,
+        log_messages_bytes_limit,
     )
 }
 
@@ -437,6 +443,7 @@ pub fn process_entries_for_tests(
         None,
         &mut timings,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
+        None,
     );
 
     debug!("process_entries: {:?}", timings);
@@ -454,6 +461,7 @@ fn process_entries_with_callback(
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -478,6 +486,7 @@ fn process_entries_with_callback(
                         timings,
                         cost_capacity_meter.clone(),
                         &cost_model,
+                        log_messages_bytes_limit,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -536,6 +545,7 @@ fn process_entries_with_callback(
                             timings,
                             cost_capacity_meter.clone(),
                             &cost_model,
+                            log_messages_bytes_limit,
                         )?;
                         batches.clear();
                     }
@@ -552,6 +562,7 @@ fn process_entries_with_callback(
         timings,
         cost_capacity_meter,
         &cost_model,
+        log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -856,6 +867,7 @@ fn confirm_full_slot(
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
+        opts.runtime_config.log_messages_bytes_limit,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -924,6 +936,7 @@ pub fn confirm_slot(
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
+    log_messages_bytes_limit: Option<usize>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -952,6 +965,7 @@ pub fn confirm_slot(
         transaction_cost_metrics_sender,
         entry_callback,
         recyclers,
+        log_messages_bytes_limit,
     )
 }
 
@@ -967,6 +981,7 @@ fn confirm_slot_entries(
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
+    log_messages_bytes_limit: Option<usize>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1049,6 +1064,7 @@ fn confirm_slot_entries(
                 transaction_cost_metrics_sender,
                 &mut execute_timings,
                 cost_capacity_meter,
+                log_messages_bytes_limit,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -3502,6 +3518,7 @@ pub mod tests {
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
@@ -3880,6 +3897,7 @@ pub mod tests {
             None,
             None,
             &VerifyRecyclers::default(),
+            None,
         )
     }
 

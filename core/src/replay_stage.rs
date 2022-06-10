@@ -374,6 +374,7 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
+        log_messages_bytes_limit: Option<usize>,
     ) -> Self {
         let mut tower = tower.into();
         info!("Tower state: {:?}", tower);
@@ -500,6 +501,7 @@ impl ReplayStage {
                         block_metadata_notifier.clone(),
                         transaction_cost_metrics_sender.as_ref(),
                         &mut replay_timing,
+                        log_messages_bytes_limit
                     );
                     replay_active_banks_time.stop();
 
@@ -1673,6 +1675,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
+        log_messages_bytes_limit: Option<usize>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
         // All errors must lead to marking the slot as dead, otherwise,
@@ -1690,6 +1693,7 @@ impl ReplayStage {
             None,
             verify_recyclers,
             false,
+            log_messages_bytes_limit,
         )?;
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2185,6 +2189,7 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
+        log_messages_bytes_limit: Option<usize>,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2237,6 +2242,7 @@ impl ReplayStage {
                     replay_vote_sender,
                     transaction_cost_metrics_sender,
                     verify_recyclers,
+                    log_messages_bytes_limit,
                 );
                 replay_blockstore_time.stop();
                 replay_timing.replay_blockstore_us += replay_blockstore_time.as_us();
@@ -3860,6 +3866,7 @@ pub(crate) mod tests {
                 &replay_vote_sender,
                 None,
                 &VerifyRecyclers::default(),
+                None,
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(

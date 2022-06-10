@@ -97,6 +97,7 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
+        log_messages_bytes_limit: Option<usize>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -226,6 +227,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
+            log_messages_bytes_limit,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

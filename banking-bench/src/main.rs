@@ -212,6 +212,12 @@ fn main() {
                 .takes_value(true)
                 .help("Number of threads to use in the banking stage"),
         )
+        .arg(
+            Arg::new("log_messages_bytes_limit")
+                .long("log-messages-bytes-limit")
+                .takes_value(false)
+                .help("Maximum number of bytes written to the program log before truncation"),
+        )
         .get_matches();
 
     let num_banking_threads = matches
@@ -229,6 +235,7 @@ fn main() {
     let write_lock_contention = matches
         .value_of_t::<WriteLockContention>("write_lock_contention")
         .unwrap_or(WriteLockContention::None);
+    let log_messages_bytes_limit = matches.value_of_t::<usize>("log_messages_bytes_limit").ok();
 
     let mint_total = 1_000_000_000_000;
     let GenesisConfigInfo {
@@ -344,6 +351,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
+            log_messages_bytes_limit,
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 

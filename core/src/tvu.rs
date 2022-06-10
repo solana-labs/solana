@@ -133,6 +133,7 @@ impl Tvu {
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
         use_quic: bool,
+        log_messages_bytes_limit: Option<usize>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -276,6 +277,7 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             transaction_cost_metrics_sender,
+            log_messages_bytes_limit,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -452,6 +454,7 @@ pub mod tests {
             None,
             AbsRequestSender::default(),
             false, // use_quic
+            None,
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

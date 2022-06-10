@@ -973,6 +973,7 @@ impl Validator {
             config.wait_to_vote_slot,
             accounts_background_request_sender,
             use_quic,
+            config.runtime_config.log_messages_bytes_limit,
         );
 
         let tpu = Tpu::new(
@@ -1005,6 +1006,7 @@ impl Validator {
             cluster_confirmed_slot_sender,
             &cost_model,
             &identity_keypair,
+            config.runtime_config.log_messages_bytes_limit,
         );
 
         datapoint_info!(
