@@ -150,6 +150,8 @@ pub enum Error {
     InvalidShredVariant,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    TurbineMerkleError(#[from] solana_perf::turbine_merkle::Error),
 }
 
 #[repr(u8)]

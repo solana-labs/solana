@@ -79,7 +79,7 @@ fn bench_merkle_verify_proofs_96_single(b: &mut Bencher) {
     let proof = tree.prove(7);
 
     b.iter(|| {
-        proof.verify(&tree.root(), &tree.node(7), 7);
+        assert!(proof.verify(&tree.root(), &leaves[7], 7));
     });
 }
 
@@ -97,15 +97,8 @@ fn bench_merkle_verify_proofs_96_batch(b: &mut Bencher) {
 
     b.iter(|| {
         let _results: Vec<_> = (0..96)
-            .map(|i| proofs[i].verify(&tree.root(), &tree.node(i), i))
+            .map(|i| proofs[i].verify(&tree.root(), &leaves[i], i))
             .collect();
-    });
-}
-
-fn bench_merkle_create_tree_from_bufs(b: &mut Bencher, pkt_count: usize) {
-    let packets = create_random_packets(pkt_count);
-    b.iter(|| {
-        let _tree = TurbineMerkleTree::new_from_bufs(&packets);
     });
 }
 
@@ -115,11 +108,6 @@ fn bench_merkle_create_tree_from_bufs_vec_par(b: &mut Bencher, pkt_count: usize,
     b.iter(|| {
         let _tree = TurbineMerkleTree::new_from_bufs_vec_par(&packets_buf_vec, chunk);
     });
-}
-
-#[bench]
-fn bench_merkle_create_tree_from_bufs_vec_64(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs(b, 64);
 }
 
 #[ignore]
