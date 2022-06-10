@@ -566,7 +566,8 @@ export type SystemInstructionType =
   | 'InitializeNonceAccount'
   | 'Transfer'
   | 'TransferWithSeed'
-  | 'WithdrawNonceAccount';
+  | 'WithdrawNonceAccount'
+  | 'UpgradeNonceAccount';
 
 type SystemInstructionInputData = {
   AdvanceNonceAccount: IInstructionInputData;
@@ -616,6 +617,7 @@ type SystemInstructionInputData = {
   WithdrawNonceAccount: IInstructionInputData & {
     lamports: number;
   };
+  UpgradeNonceAccount: IInstructionInputData;
 };
 
 /**
@@ -723,6 +725,12 @@ export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze<{
         Layout.publicKey('programId'),
       ],
     ),
+  },
+  UpgradeNonceAccount: {
+    index: 12,
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['UpgradeNonceAccount']
+    >([BufferLayout.u32('instruction')]),
   },
 });
 

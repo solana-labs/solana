@@ -157,6 +157,10 @@ pub enum CliCommand {
         destination_account_pubkey: Pubkey,
         lamports: u64,
     },
+    UpgradeNonceAccount {
+        nonce_account: Pubkey,
+        memo: Option<String>,
+    },
     // Program Deployment
     Deploy {
         program_location: String,
@@ -633,6 +637,7 @@ pub fn parse_command(
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
+        ("upgrade-nonce-account", Some(matches)) => parse_upgrade_nonce_account(matches),
         // Program Deployment
         ("deploy", Some(matches)) => {
             let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
@@ -1019,6 +1024,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             destination_account_pubkey,
             *lamports,
         ),
+        // Upgrade nonce account out of blockhash domain.
+        CliCommand::UpgradeNonceAccount {
+            nonce_account,
+            memo,
+        } => process_upgrade_nonce_account(&rpc_client, config, *nonce_account, memo.as_ref()),
 
         // Program Deployment
 
