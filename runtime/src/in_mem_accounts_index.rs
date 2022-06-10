@@ -26,7 +26,6 @@ use {
 };
 type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
-pub type SlotT<T> = (Slot, T);
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
 
@@ -40,7 +39,7 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
 
-    bucket: Option<Arc<BucketApi<SlotT<T>>>>,
+    bucket: Option<Arc<BucketApi<(Slot, T)>>>,
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub(crate) cache_ranges_held: CacheRangesHeld,
