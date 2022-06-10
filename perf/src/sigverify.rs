@@ -611,11 +611,11 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
 
-    let thread_count = packet_count
+    let desired_thread_count = packet_count
         .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
-    if thread_count >= get_thread_count() {
-        // When using all available threads, skip the overhead of flatting, collecting, etc.
+    if desired_thread_count >= get_thread_count() {
+        // When using all available threads, skip the overhead of flattening, collecting, etc.
         PAR_THREAD_POOL.install(|| {
             batches.into_par_iter().for_each(|batch| {
                 batch.par_iter_mut().for_each(|packet| {
@@ -626,7 +626,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
             });
         });
     } else {
-        let packets_per_thread = packet_count.saturating_div(thread_count);
+        let packets_per_thread = packet_count.saturating_div(desired_thread_count);
         PAR_THREAD_POOL.install(|| {
             batches
                 .into_par_iter()
