@@ -17,7 +17,7 @@ use {
         vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
     solana_sdk::{
-        account::{ReadableAccount, WritableAccount},
+        account::WritableAccount,
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
@@ -2933,6 +2933,10 @@ fn get_translated_accounts<'a, T, F>(
 where
     F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
 {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .map_err(SyscallError::InstructionError)?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
 
     let program_account_index = program_indices
@@ -2946,26 +2950,28 @@ where
         if index_in_instruction != instruction_account.index_in_callee {
             continue; // Skip duplicate account
         }
-        let account = invoke_context
-            .transaction_context
-            .get_account_at_index(instruction_account.index_in_transaction)
+        let mut callee_account = instruction_context
+            .try_borrow_instruction_account(
+                transaction_context,
+                instruction_account.index_in_caller,
+            )
             .map_err(SyscallError::InstructionError)?;
         let account_key = invoke_context
             .transaction_context
             .get_key_of_account_at_index(instruction_account.index_in_transaction)
             .map_err(SyscallError::InstructionError)?;
-        if account.borrow().executable() {
+        if callee_account.is_executable() {
             // Use the known account
             if invoke_context
                 .feature_set
                 .is_active(&executables_incur_cpi_data_cost::id())
             {
                 invoke_context.get_compute_meter().consume(
-                    (account.borrow().data().len() as u64)
+                    (callee_account.get_data().len() as u64)
                         .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
                 )?;
             }
-            accounts.push((instruction_account.index_in_transaction, None));
+            accounts.push((instruction_account.index_in_caller, None));
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
@@ -2976,12 +2982,26 @@ where
                 invoke_context,
             )?;
             {
-                let mut account = account.borrow_mut();
-                account.copy_into_owner_from_slice(caller_account.owner.as_ref());
-                account.set_data_from_slice(caller_account.data);
-                account.set_lamports(*caller_account.lamports);
-                account.set_executable(caller_account.executable);
-                account.set_rent_epoch(caller_account.rent_epoch);
+                callee_account
+                    .set_lamports(*caller_account.lamports)
+                    .map_err(SyscallError::InstructionError)?;
+                callee_account
+                    .set_data(caller_account.data)
+                    .map_err(SyscallError::InstructionError)?;
+                callee_account
+                    .set_executable(caller_account.executable)
+                    .map_err(SyscallError::InstructionError)?;
+                callee_account
+                    .set_owner(caller_account.owner.as_ref())
+                    .map_err(SyscallError::InstructionError)?;
+                drop(callee_account);
+                let callee_account = invoke_context
+                    .transaction_context
+                    .get_account_at_index(instruction_account.index_in_transaction)
+                    .map_err(SyscallError::InstructionError)?;
+                callee_account
+                    .borrow_mut()
+                    .set_rent_epoch(caller_account.rent_epoch);
             }
             let caller_account = if instruction_account.is_writable {
                 let orig_data_lens = invoke_context
@@ -3001,7 +3021,7 @@ where
             } else {
                 None
             };
-            accounts.push((instruction_account.index_in_transaction, caller_account));
+            accounts.push((instruction_account.index_in_caller, caller_account));
         } else {
             ic_msg!(
                 invoke_context,
@@ -3136,16 +3156,18 @@ fn call<'a, 'b: 'a>(
         .map_err(SyscallError::InstructionError)?;
 
     // Copy results back to caller
-    for (callee_account_index, caller_account) in accounts.iter_mut() {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .map_err(SyscallError::InstructionError)?;
+    for (index_in_caller, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
-            let callee_account = invoke_context
-                .transaction_context
-                .get_account_at_index(*callee_account_index)
-                .map_err(SyscallError::InstructionError)?
-                .borrow();
-            *caller_account.lamports = callee_account.lamports();
-            *caller_account.owner = *callee_account.owner();
-            let new_len = callee_account.data().len();
+            let callee_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, *index_in_caller)
+                .map_err(SyscallError::InstructionError)?;
+            *caller_account.lamports = callee_account.get_lamports();
+            *caller_account.owner = *callee_account.get_owner();
+            let new_len = callee_account.get_data().len();
             if caller_account.data.len() != new_len {
                 let data_overflow = if invoke_context
                     .feature_set
@@ -3192,7 +3214,7 @@ fn call<'a, 'b: 'a>(
             }
             let to_slice = &mut caller_account.data;
             let from_slice = callee_account
-                .data()
+                .get_data()
                 .get(0..new_len)
                 .ok_or(SyscallError::InvalidLength)?;
             if to_slice.len() != from_slice.len() {
