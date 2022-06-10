@@ -3000,6 +3000,11 @@ describe('Connection', function () {
           });
         expect(isValid.value).to.be.false;
       });
+
+      it('is blockhash valid - junk blockhash (live)', async () => {
+        const isValid = await connection.isBlockhashValid('57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy');
+        expect(isValid.value).to.be.false;
+      });
     }
   });
 
