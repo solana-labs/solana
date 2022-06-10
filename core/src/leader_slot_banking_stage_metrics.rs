@@ -309,7 +309,7 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    // check leader slot, return MetricsTrackerAction to be applied by apply_action()
+    // Check leader slot, return MetricsTrackerAction to be applied by apply_action()
     pub(crate) fn check_leader_slot_boundary(
         &self,
         bank_start: &Option<BankStart>,
