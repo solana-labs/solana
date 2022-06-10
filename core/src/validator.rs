@@ -381,6 +381,7 @@ impl Validator {
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
+        tpu_connection_pool_size: usize,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -748,7 +749,7 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        let connection_cache = Arc::new(ConnectionCache::new(use_quic));
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
@@ -2047,7 +2048,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
-        solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
+        solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -2084,6 +2085,7 @@ mod tests {
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
@@ -2179,6 +2181,7 @@ mod tests {
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
                 )
             })
             .collect();

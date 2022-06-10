@@ -44,7 +44,10 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{connection_cache::ConnectionCache, rpc_client::RpcClient},
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        rpc_client::RpcClient,
+    },
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
     solana_gossip::{
@@ -598,7 +601,10 @@ fn main() {
             exit(1);
         });
 
-        let connection_cache = Arc::new(ConnectionCache::new(cmd_params.tpu_use_quic));
+        let connection_cache = Arc::new(ConnectionCache::new(
+            cmd_params.tpu_use_quic,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        ));
         let (client, num_clients) =
             get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
         if validators.len() < num_clients {
