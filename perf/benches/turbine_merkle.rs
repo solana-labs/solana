@@ -102,24 +102,12 @@ fn bench_merkle_verify_proofs_96_batch(b: &mut Bencher) {
     });
 }
 
-fn bench_merkle_create_tree_from_bufs(b: &mut Bencher, pkt_count: usize) {
-    let packets = create_random_packets(pkt_count);
-    b.iter(|| {
-        let _tree = TurbineMerkleTree::new_from_bufs(&packets);
-    });
-}
-
 fn bench_merkle_create_tree_from_bufs_vec_par(b: &mut Bencher, pkt_count: usize, chunk: usize) {
     let packets = create_random_packets(pkt_count);
     let packets_buf_vec: Vec<_> = packets.iter().map(|p| vec![&p[..100], &p[100..]]).collect();
     b.iter(|| {
         let _tree = TurbineMerkleTree::new_from_bufs_vec_par(&packets_buf_vec, chunk);
     });
-}
-
-#[bench]
-fn bench_merkle_create_tree_from_bufs_vec_64(b: &mut Bencher) {
-    bench_merkle_create_tree_from_bufs(b, 64);
 }
 
 #[ignore]

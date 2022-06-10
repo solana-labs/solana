@@ -3,6 +3,7 @@ use {
     rayon::{iter::ParallelIterator, prelude::*},
     serde::{Deserialize, Serialize},
     sha2::{Digest, Sha256},
+    thiserror::Error,
 };
 
 pub const TURBINE_MERKLE_HASH_BYTES: usize = 20;
@@ -12,6 +13,15 @@ pub const TURBINE_MERKLE_ROOT_BYTES: usize = TURBINE_MERKLE_HASH_BYTES;
 // https://en.wikipedia.org/wiki/Merkle_tree#Second_preimage_attack
 const LEAF_PREFIX: &[u8] = &[0];
 const INTERMEDIATE_PREFIX: &[u8] = &[1];
+
+#[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
+pub enum Error {
+    #[error(transparent)]
+    TryFromSliceError(#[from] std::array::TryFromSliceError),
+    #[error("Invalid proof buf size: {0}")]
+    InvalidProofBufSize(/*buf size*/ usize),
+}
 
 #[repr(transparent)]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -57,10 +67,10 @@ impl AsRef<[u8]> for TurbineMerkleHash {
     }
 }
 
-impl From<&[u8]> for TurbineMerkleHash {
-    fn from(buf: &[u8]) -> Self {
-        assert!(buf.len() == TURBINE_MERKLE_HASH_BYTES);
-        TurbineMerkleHash(buf.try_into().unwrap())
+impl TryFrom<&[u8]> for TurbineMerkleHash {
+    type Error = Error;
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
+        Ok(TurbineMerkleHash(buf.try_into()?))
     }
 }
 
@@ -149,14 +159,17 @@ impl TurbineMerkleProof {
     }
 }
 
-impl From<&[u8]> for TurbineMerkleProof {
-    fn from(buf: &[u8]) -> Self {
-        assert_eq!(buf.len() % TURBINE_MERKLE_HASH_BYTES, 0);
+impl TryFrom<&[u8]> for TurbineMerkleProof {
+    type Error = Error;
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
+        if buf.len() % TURBINE_MERKLE_HASH_BYTES != 0 {
+            return Err(Error::InvalidProofBufSize(buf.len()));
+        }
         let v: Vec<TurbineMerkleHash> = buf
             .chunks_exact(TURBINE_MERKLE_HASH_BYTES)
-            .map(|x| x.into())
+            .map(|x| x.try_into().unwrap())
             .collect();
-        TurbineMerkleProof(v)
+        Ok(TurbineMerkleProof(v))
     }
 }
 
@@ -195,25 +208,15 @@ impl TurbineMerkleTree {
         Self { tree }
     }
 
-    pub fn new_from_bufs<T>(bufs: &[T]) -> Self
-    where
-        T: Sync + AsRef<[u8]>,
-    {
-        let leaves: Vec<_> = bufs
-            .iter()
-            .map(|b| TurbineMerkleHash::hash_leaf(&[b.as_ref()]))
-            .collect();
-        Self::new_from_leaves(&leaves)
-    }
-
     pub fn new_from_bufs_vec_par<T>(bufs_vec: &Vec<Vec<T>>, chunk: usize) -> Self
     where
         T: AsRef<[u8]> + Sync,
     {
         let base_width = bufs_vec.len().next_power_of_two();
-        assert!(chunk == chunk.next_power_of_two());
+        assert_eq!(chunk, chunk.next_power_of_two());
         assert_eq!(base_width % chunk, 0);
         assert!(chunk <= base_width);
+        assert_eq!(base_width / chunk, (base_width / chunk).next_power_of_two());
 
         let empty_vec = vec![];
         let mut expanded_bufs_vec = Vec::with_capacity(base_width);
@@ -294,10 +297,6 @@ impl TurbineMerkleTree {
         self.tree[self.tree.len() - 1]
     }
 
-    pub fn node(&self, index: usize) -> TurbineMerkleHash {
-        self.tree[index]
-    }
-
     pub fn prove(&self, leaf_index: usize) -> TurbineMerkleProof {
         let mut proof = Vec::new();
         let mut level_nodes = self.leaf_count();
@@ -316,20 +315,35 @@ impl TurbineMerkleTree {
         TurbineMerkleProof(proof)
     }
 
-    fn _print(&self) {
-        let mut base = 0;
+    pub fn prove_to_buf(&self, leaf_index: usize, proof_buf: &mut [u8]) -> Result<(), Error> {
         let mut level_nodes = self.leaf_count();
-        while level_nodes > 0 {
-            println!("{:?}", &self.tree[base..base + level_nodes]);
+        let mut i = leaf_index;
+        let mut base = 0;
+        let mut proof_idx = 0;
+        while level_nodes > 1 {
+            let proof_offset = proof_idx * TURBINE_MERKLE_HASH_BYTES;
+            let hash = if i & 1 == 0 {
+                &self.tree[base + i + 1]
+            } else {
+                &self.tree[base + i - 1]
+            };
+            let b = proof_buf.get_mut(proof_offset..proof_offset + TURBINE_MERKLE_HASH_BYTES);
+            if b.is_none() {
+                return Err(Error::InvalidProofBufSize(proof_buf.len()));
+            }
+            b.unwrap().copy_from_slice(hash.as_ref());
             base += level_nodes;
-            level_nodes /= 2;
+            i >>= 1;
+            level_nodes >>= 1;
+            proof_idx += 1;
         }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, matches::assert_matches};
 
     fn create_random_packets(npackets: usize) -> Vec<Vec<u8>> {
         let mut packets = Vec::default();
@@ -338,6 +352,17 @@ mod tests {
             packets.push(buf);
         }
         packets
+    }
+
+    fn new_from_bufs<T>(bufs: &[T]) -> TurbineMerkleTree
+    where
+        T: Sync + AsRef<[u8]>,
+    {
+        let leaves: Vec<_> = bufs
+            .iter()
+            .map(|b| TurbineMerkleHash::hash_leaf(&[b.as_ref()]))
+            .collect();
+        TurbineMerkleTree::new_from_leaves(&leaves)
     }
 
     #[test]
@@ -354,7 +379,7 @@ mod tests {
 
         for i in 0..npackets {
             let proof = tree.prove(i);
-            assert!(proof.verify(&root, &tree.node(i), i));
+            assert!(proof.verify(&root, &tree.tree[i], i));
         }
 
         for i in 0..npackets {
@@ -363,7 +388,7 @@ mod tests {
             assert!(TurbineMerkleProof::verify_buf(
                 &root,
                 &proof_buf,
-                &tree.node(i),
+                &tree.tree[i],
                 i
             ));
         }
@@ -371,7 +396,7 @@ mod tests {
 
     fn test_merkle_from_buf_vecs_par_width(leaf_count: usize, chunk: usize) {
         let packets = create_random_packets(leaf_count);
-        let ref_tree = TurbineMerkleTree::new_from_bufs(&packets[..]);
+        let ref_tree = new_from_bufs(&packets[..]);
         let bufs_vec: Vec<_> = packets.iter().map(|p| vec![&p[..20], &p[20..]]).collect();
         let tree = TurbineMerkleTree::new_from_bufs_vec_par(&bufs_vec, chunk);
         assert_eq!(&ref_tree, &tree);
@@ -380,7 +405,7 @@ mod tests {
     #[test]
     fn test_merkle_from_buf_vecs_par() {
         let packets = create_random_packets(64);
-        let ref_tree = TurbineMerkleTree::new_from_bufs(&packets[..]);
+        let ref_tree = new_from_bufs(&packets[..]);
         let bufs_vec: Vec<_> = packets.iter().map(|p| vec![&p[..20], &p[20..]]).collect();
         let mut chunk_width = 1;
         while chunk_width <= 64 {
@@ -398,6 +423,27 @@ mod tests {
                     test_merkle_from_buf_vecs_par_width(leaf_count, chunk);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_merkle_prove_verify() {
+        let packets = create_random_packets(64);
+        let tree = new_from_bufs(&packets[..]);
+        {
+            let mut buf = vec![0u8; 6 * TURBINE_MERKLE_HASH_BYTES];
+            assert_matches!(tree.prove_to_buf(5, &mut buf), Ok(()));
+            let mut buf = vec![0u8; 5 * TURBINE_MERKLE_HASH_BYTES];
+            assert_matches!(
+                tree.prove_to_buf(5, &mut buf),
+                Err(Error::InvalidProofBufSize(100))
+            );
+        }
+        {
+            let proof1 = tree.prove(11).to_bytes();
+            let mut proof2 = vec![0u8; 6 * TURBINE_MERKLE_HASH_BYTES];
+            tree.prove_to_buf(11, &mut proof2).unwrap();
+            assert_eq!(&proof1, &proof2);
         }
     }
 }

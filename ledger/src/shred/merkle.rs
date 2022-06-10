@@ -100,7 +100,7 @@ impl ShredData {
     }
 
     fn verify_merkle_proof(&self) -> Result<bool, Error> {
-        let root_hash = TurbineMerkleHash::from(self.merkle_root_slice()?);
+        let root_hash = TurbineMerkleHash::try_from(self.merkle_root_slice()?)?;
         Ok(TurbineMerkleProof::verify_buf(
             &root_hash,
             self.merkle_proof_slice()?,
@@ -162,7 +162,7 @@ impl ShredCode {
     }
 
     fn verify_merkle_proof(&self) -> Result<bool, Error> {
-        let root_hash = TurbineMerkleHash::from(self.merkle_root_slice()?);
+        let root_hash = TurbineMerkleHash::try_from(self.merkle_root_slice()?)?;
         Ok(TurbineMerkleProof::verify_buf(
             &root_hash,
             self.merkle_proof_slice()?,
@@ -460,7 +460,7 @@ mod test {
         let bytes: [u8; 32] = rng.gen();
         let hash = Hash::from(bytes);
         let entry = &hash.as_ref()[..TURBINE_MERKLE_HASH_BYTES];
-        let entry = TurbineMerkleHash::from(entry);
+        let entry = TurbineMerkleHash::try_from(entry).unwrap();
         assert_eq!(entry.as_ref(), &bytes[..TURBINE_MERKLE_HASH_BYTES]);
     }
 
