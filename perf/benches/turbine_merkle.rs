@@ -97,7 +97,7 @@ fn bench_merkle_verify_proofs_96_batch(b: &mut Bencher) {
 
     b.iter(|| {
         let _results: Vec<_> = (0..96)
-            .map(|i| proofs[i].verify(&tree.root(), &tree.node(i), i))
+            .map(|i| proofs[i].verify(&tree.root(), &leaves[i], i))
             .collect();
     });
 }
