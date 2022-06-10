@@ -533,6 +533,7 @@ pub fn start_verify_transactions(
                     &out_recycler,
                     false,
                     num_packets,
+                    None,
                 );
                 let verified = packet_batches
                     .iter()

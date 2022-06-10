@@ -64,6 +64,7 @@ impl SigVerifier for ShredSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         _valid_packets: usize,
+        _active_threads_hist: Option<&mut histogram::Histogram>,
     ) -> Vec<PacketBatch> {
         let r_bank = self.bank_forks.read().unwrap().working_bank();
         let slots: HashSet<u64> = Self::read_slots(&batches);
@@ -189,7 +190,7 @@ pub mod tests {
         batches[0][1].meta.size = shred.payload().len();
 
         let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
-        let rv = verifier.verify_batches(batches, num_packets);
+        let rv = verifier.verify_batches(batches, num_packets, None);
         assert!(!rv[0][0].meta.discard());
         assert!(rv[0][1].meta.discard());
 

@@ -17,6 +17,7 @@ curve25519-dalek = { version = "3" }
 dlopen = "0.1.8"
 dlopen_derive = "0.1.4"
 fnv = "1.0.7"
+histogram = "0.6.9"
 lazy_static = "1.4.0"
 log = "0.4.17"
 rand = "0.7.0"

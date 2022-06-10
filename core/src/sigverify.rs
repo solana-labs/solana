@@ -141,6 +141,7 @@ impl SigVerifier for TransactionSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         valid_packets: usize,
+        active_threads_hist: Option<&mut histogram::Histogram>,
     ) -> Vec<PacketBatch> {
         sigverify::ed25519_verify(
             &mut batches,
@@ -148,6 +149,7 @@ impl SigVerifier for TransactionSigVerifier {
             &self.recycler_out,
             self.reject_non_vote,
             valid_packets,
+            active_threads_hist,
         );
         batches
     }

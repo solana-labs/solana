@@ -606,17 +606,38 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
     batches.truncate(last_valid_batch);
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
+pub fn ed25519_verify_cpu(
+    batches: &mut [PacketBatch],
+    reject_non_vote: bool,
+    packet_count: usize,
+    active_threads_hist: Option<&mut histogram::Histogram>,
+) {
     debug!("CPU ECDSA for {}", packet_count);
+    let thread_in_use_multihot = AtomicU64::default();
     PAR_THREAD_POOL.install(|| {
         batches.into_par_iter().for_each(|batch| {
             batch.par_iter_mut().for_each(|packet| {
                 if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                     packet.meta.set_discard(true);
                 }
+                thread_in_use_multihot.fetch_or(
+                    1 << rayon::current_thread_index().unwrap(),
+                    Ordering::Relaxed,
+                );
             })
         });
     });
+    if let Some(active_threads_hist) = active_threads_hist {
+        let mut active_threads: usize = 0;
+        for i in 0..get_thread_count() {
+            if thread_in_use_multihot.load(Ordering::Relaxed) & (1 << i) > 0 {
+                active_threads = active_threads.saturating_add(1);
+            }
+        }
+        active_threads_hist
+            .increment(active_threads as u64)
+            .unwrap();
+    }
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
@@ -696,10 +717,16 @@ pub fn ed25519_verify(
     recycler_out: &Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
     valid_packet_count: usize,
+    active_threads_hist: Option<&mut histogram::Histogram>,
 ) {
     let api = perf_libs::api();
     if api.is_none() {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return ed25519_verify_cpu(
+            batches,
+            reject_non_vote,
+            valid_packet_count,
+            active_threads_hist,
+        );
     }
     let api = api.unwrap();
 
@@ -717,7 +744,12 @@ pub fn ed25519_verify(
             .wrapping_div(total_packet_count)
             < 90
     {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return ed25519_verify_cpu(
+            batches,
+            reject_non_vote,
+            valid_packet_count,
+            active_threads_hist,
+        );
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
@@ -1181,7 +1213,7 @@ mod tests {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         let packet_count = sigverify::count_packets_in_batches(batches);
-        sigverify::ed25519_verify(batches, &recycler, &recycler_out, false, packet_count);
+        sigverify::ed25519_verify(batches, &recycler, &recycler_out, false, packet_count, None);
     }
 
     #[test]
@@ -1285,8 +1317,15 @@ mod tests {
             // equivalent to the CPU verification pipeline.
             let mut batches_cpu = batches.clone();
             let packet_count = sigverify::count_packets_in_batches(&batches);
-            sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, packet_count);
-            ed25519_verify_cpu(&mut batches_cpu, false, packet_count);
+            sigverify::ed25519_verify(
+                &mut batches,
+                &recycler,
+                &recycler_out,
+                false,
+                packet_count,
+                None,
+            );
+            ed25519_verify_cpu(&mut batches_cpu, false, packet_count, None);
 
             // check result
             batches

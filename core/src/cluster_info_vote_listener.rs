@@ -296,6 +296,7 @@ impl ClusterInfoVoteListener {
             &mut packet_batches,
             /*reject_non_vote=*/ false,
             votes.len(),
+            None,
         );
         let root_bank = bank_forks.read().unwrap().root_bank();
         let epoch_schedule = root_bank.epoch_schedule();

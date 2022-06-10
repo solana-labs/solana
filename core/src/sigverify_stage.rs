@@ -56,7 +56,12 @@ pub struct SigVerifyStage {
 
 pub trait SigVerifier {
     type SendType: std::fmt::Debug;
-    fn verify_batches(&self, batches: Vec<PacketBatch>, valid_packets: usize) -> Vec<PacketBatch>;
+    fn verify_batches(
+        &self,
+        batches: Vec<PacketBatch>,
+        valid_packets: usize,
+        active_threads_hist: Option<&mut histogram::Histogram>,
+    ) -> Vec<PacketBatch>;
     fn process_received_packet(
         &mut self,
         _packet: &mut Packet,
@@ -80,6 +85,7 @@ struct SigVerifierStats {
     dedup_packets_pp_us_hist: histogram::Histogram, // per-packet time to call verify_batch
     batches_hist: histogram::Histogram,         // number of packet batches per verify call
     packets_hist: histogram::Histogram,         // number of packets per verify call
+    active_threads_hist: histogram::Histogram,  // number of threads verifying per verify call
     total_batches: usize,
     total_packets: usize,
     total_dedup: usize,
@@ -196,6 +202,26 @@ impl SigVerifierStats {
             ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
             ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
             ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
+            (
+                "active_threads_90pct",
+                self.active_threads_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "active_threads_min",
+                self.active_threads_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "active_threads_max",
+                self.active_threads_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "active_threads_mean",
+                self.active_threads_hist.mean().unwrap_or(0),
+                i64
+            ),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
@@ -222,6 +248,7 @@ impl SigVerifier for DisabledSigVerifier {
         &self,
         mut batches: Vec<PacketBatch>,
         _valid_packets: usize,
+        _active_threads_hist: Option<&mut histogram::Histogram>,
     ) -> Vec<PacketBatch> {
         sigverify::ed25519_verify_disabled(&mut batches);
         batches
@@ -346,7 +373,11 @@ impl SigVerifyStage {
         let (pre_shrink_time_us, pre_shrink_total) = Self::maybe_shrink_batches(&mut batches);
 
         let mut verify_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_packets_to_verify);
+        let mut batches = verifier.verify_batches(
+            batches,
+            num_packets_to_verify,
+            Some(&mut stats.active_threads_hist),
+        );
         let num_valid_packets = count_valid_packets(
             &batches,
             #[inline(always)]
