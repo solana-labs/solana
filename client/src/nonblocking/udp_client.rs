@@ -14,7 +14,7 @@ pub struct UdpTpuConnection {
 }
 
 impl UdpTpuConnection {
-    pub fn new(tpu_addr: SocketAddr, socket: std::net::UdpSocket) -> Self {
+    pub fn new_from_addr(socket: std::net::UdpSocket, tpu_addr: SocketAddr) -> Self {
         socket.set_nonblocking(true).unwrap();
         let socket = UdpSocket::from_std(socket).unwrap();
         Self {

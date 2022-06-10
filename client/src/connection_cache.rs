@@ -1,9 +1,10 @@
 use {
     crate::{
-        nonblocking::quic_client::QuicLazyInitializedEndpoint,
-        quic_client::QuicTpuConnection,
-        tpu_connection::{ClientStats, Connection},
-        udp_client::UdpTpuConnection,
+        nonblocking::{
+            quic_client::{QuicClient, QuicLazyInitializedEndpoint},
+            tpu_connection::NonblockingConnection,
+        },
+        tpu_connection::{BlockingConnection, ClientStats},
     },
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
@@ -318,55 +319,46 @@ impl ConnectionCache {
                     )
                 });
 
-        let (cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
-            if to_create_connection {
-                let connection: Connection = match &self.use_quic {
-                    UseQUIC::Yes => QuicTpuConnection::new(
-                        endpoint.as_ref().unwrap().clone(),
-                        *addr,
-                        self.stats.clone(),
-                    )
-                    .into(),
-                    UseQUIC::No(socket) => {
-                        UdpTpuConnection::new(socket.clone(), *addr, self.stats.clone()).into()
-                    }
-                };
-
-                let connection = Arc::new(connection);
-
-                // evict a connection if the cache is reaching upper bounds
-                let mut num_evictions = 0;
-                let mut get_connection_cache_eviction_measure =
-                    Measure::start("get_connection_cache_eviction_measure");
-                while map.len() >= MAX_CONNECTIONS {
-                    let mut rng = thread_rng();
-                    let n = rng.gen_range(0, MAX_CONNECTIONS);
-                    map.swap_remove_index(n);
-                    num_evictions += 1;
-                }
-                get_connection_cache_eviction_measure.stop();
-
-                match map.entry(*addr) {
-                    Entry::Occupied(mut entry) => {
-                        let pool = entry.get_mut();
-                        pool.connections.push(connection);
-                    }
-                    Entry::Vacant(entry) => {
-                        entry.insert(ConnectionPool {
-                            connections: vec![connection],
-                            endpoint,
-                        });
-                    }
-                }
-                (
-                    false,
-                    self.stats.clone(),
-                    num_evictions,
-                    get_connection_cache_eviction_measure.as_ms(),
-                )
-            } else {
-                (true, self.stats.clone(), 0, 0)
+        let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
+            let connection = match &self.use_quic {
+                UseQUIC::Yes => Connection::Quic(Arc::new(QuicClient::new(endpoint.as_ref().unwrap().clone(), *addr))),
+                UseQUIC::No(socket) => Connection::Udp(socket.clone())
             };
+
+            let connection = Arc::new(connection);
+
+            // evict a connection if the cache is reaching upper bounds
+            let mut num_evictions = 0;
+            let mut get_connection_cache_eviction_measure =
+                Measure::start("get_connection_cache_eviction_measure");
+            while map.len() >= MAX_CONNECTIONS {
+                let mut rng = thread_rng();
+                let n = rng.gen_range(0, MAX_CONNECTIONS);
+                map.swap_remove_index(n);
+                num_evictions += 1;
+            }
+            get_connection_cache_eviction_measure.stop();
+
+            match map.entry(*addr) {
+                Entry::Occupied(mut entry) => {
+                    let pool = entry.get_mut();
+                    pool.connections.push(connection);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(ConnectionPool {
+                        connections: vec![connection],
+                        endpoint,
+                    });
+                }
+            }
+            (
+                false,
+                num_evictions,
+                get_connection_cache_eviction_measure.as_ms(),
+            )
+        } else {
+            (true, 0, 0)
+        };
 
         let pool = map.get(addr).unwrap();
         let connection = pool.borrow_connection();
@@ -374,7 +366,7 @@ impl ConnectionCache {
         CreateConnectionResult {
             connection,
             cache_hit,
-            connection_cache_stats,
+            connection_cache_stats: self.stats.clone(),
             num_evictions,
             eviction_timing_ms,
         }
@@ -443,7 +435,10 @@ impl ConnectionCache {
         }
     }
 
-    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<Connection> {
+    fn get_connection_and_log_stats(
+        &self,
+        addr: &SocketAddr,
+    ) -> (Arc<Connection>, Arc<ConnectionCacheStats>) {
         let mut get_connection_measure = Measure::start("get_connection_measure");
         let GetConnectionResult {
             connection,
@@ -490,7 +485,17 @@ impl ConnectionCache {
             .get_connection_ms
             .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
 
-        connection
+        (connection, connection_cache_stats)
+    }
+
+    pub fn get_connection(&self, addr: &SocketAddr) -> BlockingConnection {
+        let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
+        connection.new_tpu_connection(*addr, connection_cache_stats)
+    }
+
+    pub fn get_nonblocking_connection(&self, addr: &SocketAddr) -> NonblockingConnection {
+        let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
+        connection.new_nonblocking_tpu_connection(*addr, connection_cache_stats)
     }
 }
 
@@ -503,6 +508,45 @@ impl Default for ConnectionCache {
             last_stats: AtomicInterval::default(),
             use_quic,
             connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        }
+    }
+}
+
+#[derive(Clone)]
+enum Connection {
+    Udp(Arc<UdpSocket>),
+    Quic(Arc<QuicClient>),
+}
+impl Connection {
+    fn new_tpu_connection(
+        &self,
+        addr: SocketAddr,
+        stats: Arc<ConnectionCacheStats>,
+    ) -> BlockingConnection {
+        use crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection};
+        match self {
+            Connection::Udp(udp_socket) => {
+                UdpTpuConnection::new_from_addr(udp_socket.clone(), addr).into()
+            }
+            Connection::Quic(quic_client) => {
+                QuicTpuConnection::new_with_client(quic_client.clone(), stats).into()
+            }
+        }
+    }
+
+    fn new_nonblocking_tpu_connection(
+        &self,
+        addr: SocketAddr,
+        stats: Arc<ConnectionCacheStats>,
+    ) -> NonblockingConnection {
+        use crate::nonblocking::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection};
+        match self {
+            Connection::Udp(udp_socket) => {
+                UdpTpuConnection::new_from_addr(udp_socket.try_clone().unwrap(), addr).into()
+            }
+            Connection::Quic(quic_client) => {
+                QuicTpuConnection::new_with_client(quic_client.clone(), stats).into()
+            }
         }
     }
 }
@@ -578,6 +622,7 @@ mod tests {
             assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
                 let conn = &map.get(a).expect("Address not found").connections[0];
+                let conn = conn.new_tpu_connection(*a, connection_cache.stats.clone());
                 assert!(a.ip() == conn.tpu_addr().ip());
             });
         }
