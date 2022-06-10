@@ -5702,6 +5702,7 @@ pub mod tests {
         let shreds: Vec<_> = (0..64)
             .map(|i| {
                 Shred::new_from_data(
+                    None, // legacy
                     slot,
                     (i * gap) as u32,
                     0,
@@ -5830,6 +5831,7 @@ pub mod tests {
         // may be used as signals (broadcast does so to indicate a slot was interrupted)
         // Reuse shred5's header values to avoid a false negative result
         let empty_shred = Shred::new_from_data(
+            None, // legacy
             shred5.slot(),
             shred5.index(),
             {
@@ -5937,6 +5939,7 @@ pub mod tests {
 
         let slot = 1;
         let coding_shred = Shred::new_from_parity_shard(
+            None, // legacy
             slot,
             11,  // index
             &[], // parity_shard
@@ -5995,6 +5998,7 @@ pub mod tests {
 
         let slot = 1;
         let mut coding_shred = Shred::new_from_parity_shard(
+            None, // legacy
             slot,
             11,  // index
             &[], // parity_shard
@@ -6236,6 +6240,7 @@ pub mod tests {
 
         // Insert an empty shred that won't deshred into entries
         let shreds = vec![Shred::new_from_data(
+            None, // legacy
             slot,
             next_shred_index as u32,
             1,

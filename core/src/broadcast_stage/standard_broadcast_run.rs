@@ -77,6 +77,7 @@ impl StandardBroadcastRun {
                     .unwrap_or(state.next_shred_index);
                 let fec_set_index = Shredder::fec_set_index(state.next_shred_index, fec_set_offset);
                 let mut shred = Shred::new_from_data(
+                    None, // legacy
                     state.slot,
                     state.next_shred_index,
                     parent_offset as u16,

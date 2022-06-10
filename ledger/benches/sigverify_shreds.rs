@@ -26,6 +26,7 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
     let slot = 0xdead_c0de;
     for p in packet_batch.iter_mut() {
         let shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,
@@ -57,6 +58,7 @@ fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
     packet_batch.resize(NUM_PACKETS, Packet::default());
     for p in packet_batch.iter_mut() {
         let shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,

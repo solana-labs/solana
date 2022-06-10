@@ -122,7 +122,17 @@ fn bench_deshredder(bencher: &mut Bencher) {
 fn bench_deserialize_hdr(bencher: &mut Bencher) {
     let data = vec![0; LEGACY_SHRED_DATA_CAPACITY];
 
-    let shred = Shred::new_from_data(2, 1, 1, &data, ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 1);
+    let shred = Shred::new_from_data(
+        None,
+        2,
+        1,
+        1,
+        &data,
+        ShredFlags::LAST_SHRED_IN_SLOT,
+        0,
+        0,
+        1,
+    );
 
     bencher.iter(|| {
         let payload = shred.payload().clone();

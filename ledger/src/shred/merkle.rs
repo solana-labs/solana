@@ -11,6 +11,7 @@ use {
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
+        pubkey::Pubkey,
         signature::Signature,
     },
     static_assertions::const_assert_eq,
@@ -65,6 +66,63 @@ struct MerkleBranch {
 }
 
 impl ShredData {
+    pub(super) fn new_from_data(
+        merkle_proof_size: u8,
+        slot: Slot,
+        index: u32,
+        parent_offset: u16,
+        data: &[u8],
+        flags: ShredFlags,
+        reference_tick: u8,
+        version: u16,
+        fec_set_index: u32,
+    ) -> Self {
+        let mut payload = vec![0; Self::SIZE_OF_PAYLOAD];
+        let common_header = ShredCommonHeader {
+            signature: Signature::default(),
+            shred_variant: ShredVariant::MerkleData(merkle_proof_size),
+            slot,
+            index,
+            version,
+            fec_set_index,
+        };
+        let size = (data.len() + SIZE_OF_DATA_SHRED_HEADERS) as u16;
+        let flags = flags
+            | unsafe {
+                ShredFlags::from_bits_unchecked(
+                    ShredFlags::SHRED_TICK_REFERENCE_MASK
+                        .bits()
+                        .min(reference_tick),
+                )
+            };
+        let data_header = DataShredHeader {
+            parent_offset,
+            flags,
+            size,
+        };
+        let mut cursor = Cursor::new(&mut payload[..]);
+        bincode::serialize_into(&mut cursor, &common_header).unwrap();
+        bincode::serialize_into(&mut cursor, &data_header).unwrap();
+        // TODO: Need to check if data is too large!
+        let offset = cursor.position() as usize;
+        debug_assert_eq!(offset, SIZE_OF_DATA_SHRED_HEADERS);
+        payload[offset..offset + data.len()].copy_from_slice(data);
+
+        // TODO directly reference merkle from payload
+        let root = MerkleRoot::default();
+        let proof: Vec<_> = repeat_with(MerkleProofEntry::default)
+            .take(merkle_proof_size as usize)
+            .collect();
+        let merkle_branch = MerkleBranch { root, proof };
+
+        Self {
+            common_header,
+            data_header,
+            merkle_branch,
+            payload,
+        }
+    }
+
     // proof_size is the number of proof entries in the merkle tree branch.
     fn proof_size(&self) -> Result<u8, Error> {
         match self.common_header.shred_variant {
@@ -107,6 +165,56 @@ impl ShredData {
 }
 
 impl ShredCode {
+    pub(super) fn new_from_parity_shard(
+        merkle_proof_size: u8,
+        slot: Slot,
+        index: u32,
+        parity_shard: &[u8],
+        fec_set_index: u32,
+        num_data_shreds: u16,
+        num_coding_shreds: u16,
+        position: u16,
+        version: u16,
+    ) -> Self {
+        let common_header = ShredCommonHeader {
+            signature: Signature::default(),
+            shred_variant: ShredVariant::MerkleCode(merkle_proof_size),
+            index,
+            slot,
+            version,
+            fec_set_index,
+        };
+        let coding_header = CodingShredHeader {
+            num_data_shreds,
+            num_coding_shreds,
+            position,
+        };
+        let mut payload = vec![0; Self::SIZE_OF_PAYLOAD];
+        let mut cursor = Cursor::new(&mut payload[..]);
+        bincode::serialize_into(&mut cursor, &common_header).unwrap();
+        bincode::serialize_into(&mut cursor, &coding_header).unwrap();
+        // Tests may have an empty parity_shard.
+        if !parity_shard.is_empty() {
+            let offset = cursor.position() as usize;
+            debug_assert_eq!(offset, SIZE_OF_CODING_SHRED_HEADERS);
+            payload[offset..].copy_from_slice(parity_shard);
+        }
+
+        // TODO directly reference merkle from payload
+        let root = MerkleRoot::default();
+        let proof: Vec<_> = repeat_with(MerkleProofEntry::default)
+            .take(merkle_proof_size as usize)
+            .collect();
+        let merkle_branch = MerkleBranch { root, proof };
+
+        Self {
+            common_header,
+            coding_header,
+            merkle_branch,
+            payload,
+        }
+    }
+
     // proof_size is the number of proof entries in the merkle tree branch.
     fn proof_size(&self) -> Result<u8, Error> {
         match self.common_header.shred_variant {
@@ -238,14 +346,22 @@ impl Shred for ShredData {
             }
             _ => return Err(Error::InvalidShredVariant),
         }
-        if !self.verify_merkle_proof()? {
-            return Err(Error::InvalidMerkleProof);
-        }
         shred_data::sanitize(self)
     }
 
     fn signed_message(&self) -> &[u8] {
         self.merkle_branch.root.as_ref()
+    }
+
+    fn verify(&self, pubkey: &Pubkey) -> bool {
+        let ret = self.verify_merkle_proof();
+        if ret.is_err() || !ret.unwrap() {
+            return false;
+        }
+        let message = self.signed_message();
+        self.common_header
+            .signature
+            .verify(pubkey.as_ref(), message)
     }
 }
 
@@ -321,14 +437,22 @@ impl Shred for ShredCode {
             }
             _ => return Err(Error::InvalidShredVariant),
         }
-        if !self.verify_merkle_proof()? {
-            return Err(Error::InvalidMerkleProof);
-        }
         shred_code::sanitize(self)
     }
 
     fn signed_message(&self) -> &[u8] {
         self.merkle_branch.root.as_ref()
+    }
+
+    fn verify(&self, pubkey: &Pubkey) -> bool {
+        let ret = self.verify_merkle_proof();
+        if ret.is_err() || !ret.unwrap() {
+            return false;
+        }
+        let message = self.signed_message();
+        self.common_header
+            .signature
+            .verify(pubkey.as_ref(), message)
     }
 }
 
@@ -435,7 +559,164 @@ fn make_merkle_branch(
 
 #[cfg(test)]
 mod test {
-    use {super::*, rand::Rng, std::iter::repeat_with};
+    use {
+        super::*, crate::shred::MAX_DATA_SHREDS_PER_SLOT, matches::assert_matches, rand::Rng,
+        solana_sdk::hash::Hash, std::iter::repeat_with,
+    };
+
+    #[test]
+    fn test_sanitize_merkle_data_shred() {
+        const MERKLE_PROOF_SIZE: u8 = 6;
+        const MAX_DATA_PAYLOAD: usize = ShredData::SIZE_OF_PAYLOAD
+            - (SIZE_OF_DATA_SHRED_HEADERS
+                + SIZE_OF_MERKLE_ROOT
+                + (MERKLE_PROOF_SIZE as usize) * SIZE_OF_MERKLE_PROOF_ENTRY);
+
+        assert_eq!(
+            MAX_DATA_PAYLOAD,
+            ShredData::capacity(MERKLE_PROOF_SIZE).unwrap()
+        );
+
+        let data = [0xa5u8; MAX_DATA_PAYLOAD];
+        let mut shred = ShredData::new_from_data(
+            MERKLE_PROOF_SIZE,
+            420, // slot
+            19,  // index
+            5,   // parent_offset
+            &data,
+            ShredFlags::DATA_COMPLETE_SHRED,
+            3,  // reference_tick
+            1,  // version
+            16, // fec_set_index
+        );
+        assert_matches!(shred.sanitize(), Ok(()));
+        // Corrupt shred by making it too large
+        {
+            let mut shred = shred.clone();
+            shred.payload.push(10u8);
+            assert_matches!(shred.sanitize(), Err(Error::InvalidPayloadSize(1204)));
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.size += 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 1064,
+                    payload: 1203,
+                })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.size = 0;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 0,
+                    payload: 1203,
+                })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidDataShredIndex(32768)));
+        }
+        {
+            let mut shred = shred.clone();
+            shred.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
+            assert_matches!(shred.sanitize(), Ok(()));
+            shred.data_header.flags &= !ShredFlags::DATA_COMPLETE_SHRED;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(131u8)));
+            shred.data_header.flags |= ShredFlags::SHRED_TICK_REFERENCE_MASK;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidShredFlags(191u8)));
+        }
+        {
+            shred.data_header.size = shred.payload.len() as u16 + 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidDataSize {
+                    size: 1204,
+                    payload: 1203,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn test_sanitize_merkle_coding_shred() {
+        const MERKLE_PROOF_SIZE: u8 = 6;
+        let mut shred = ShredCode::new_from_parity_shard(
+            MERKLE_PROOF_SIZE,
+            1,   // slot
+            12,  // index
+            &[], // parity_shard
+            11,  // fec_set_index
+            11,  // num_data_shreds
+            11,  // num_coding_shreds
+            8,   // position
+            0,   // version
+        );
+        assert_matches!(shred.sanitize(), Ok(()));
+        // index < position is invalid.
+        {
+            let mut shred = shred.clone();
+            let index = shred.common_header.index - shred.common_header.fec_set_index - 1;
+            shred.set_index(index as u32);
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureShardIndex { .. })
+            );
+        }
+        {
+            let mut shred = shred.clone();
+            shred.coding_header.num_coding_shreds = 0;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureShardIndex { .. })
+            );
+        }
+        // pos >= num_coding is invalid.
+        {
+            let mut shred = shred.clone();
+            let num_coding_shreds = shred.common_header.index - shred.common_header.fec_set_index;
+            shred.coding_header.num_coding_shreds = num_coding_shreds as u16;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureShardIndex { .. })
+            );
+        }
+        // set_index with num_coding that would imply the last
+        // shred has index > u32::MAX should fail.
+        {
+            let mut shred = shred.clone();
+            shred.common_header.fec_set_index = std::u32::MAX - 1;
+            shred.coding_header.num_data_shreds = 2;
+            shred.coding_header.num_coding_shreds = 4;
+            shred.coding_header.position = 1;
+            shred.common_header.index = std::u32::MAX - 1;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureShardIndex { .. })
+            );
+
+            shred.coding_header.num_coding_shreds = 2000;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidErasureShardIndex { .. })
+            );
+
+            // Decreasing the number of num_coding_shreds will put it within
+            // the allowed limit.
+            shred.coding_header.num_coding_shreds = 2;
+            assert_matches!(shred.sanitize(), Ok(()));
+        }
+        {
+            shred.coding_header.num_coding_shreds = u16::MAX;
+            assert_matches!(shred.sanitize(), Err(Error::InvalidNumCodingShreds(65535)));
+        }
+    }
 
     // Total size of a data shred including headers and merkle branch.
     fn shred_data_size_of_payload(proof_size: u8) -> usize {

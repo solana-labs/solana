@@ -874,7 +874,7 @@ mod tests {
                 nonce,
             );
             assert!(rv.is_none());
-            let shred = Shred::new_from_data(slot, 1, 1, &[], ShredFlags::empty(), 0, 2, 0);
+            let shred = Shred::new_from_data(None, slot, 1, 1, &[], ShredFlags::empty(), 0, 2, 0);
 
             blockstore
                 .insert_shreds(vec![shred], None, false)
@@ -1300,7 +1300,7 @@ mod tests {
     #[test]
     fn test_verify_shred_response() {
         fn new_test_data_shred(slot: Slot, index: u32) -> Shred {
-            Shred::new_from_data(slot, index, 1, &[], ShredFlags::empty(), 0, 0, 0)
+            Shred::new_from_data(None, slot, index, 1, &[], ShredFlags::empty(), 0, 0, 0)
         }
         let repair = ShredRepairType::Orphan(9);
         // Ensure new options are addded to this test

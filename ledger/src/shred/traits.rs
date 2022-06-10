@@ -1,6 +1,6 @@
 use {
     crate::shred::{CodingShredHeader, DataShredHeader, Error, ShredCommonHeader},
-    solana_sdk::{clock::Slot, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
 };
 
 pub(super) trait Shred: Sized {
@@ -26,6 +26,8 @@ pub(super) trait Shred: Sized {
 
     // Portion of the payload which is signed.
     fn signed_message(&self) -> &[u8];
+
+    fn verify(&self, pubkey: &Pubkey) -> bool;
 
     // Only for tests.
     fn set_index(&mut self, index: u32);

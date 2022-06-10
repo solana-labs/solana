@@ -5,7 +5,7 @@ use {
         traits::{Shred, ShredCode as ShredCodeTrait},
         CodingShredHeader, Error, ShredCommonHeader, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_NONCE,
     },
-    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
+    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, pubkey::Pubkey, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
@@ -32,12 +32,14 @@ impl ShredCode {
     dispatch!(pub(super) fn sanitize(&self) -> Result<(), Error>);
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
     dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
+    dispatch!(pub(super) fn verify(&self, pubkey: &Pubkey) -> bool);
 
     // Only for tests.
     dispatch!(pub(super) fn set_index(&mut self, index: u32));
     dispatch!(pub(super) fn set_slot(&mut self, slot: Slot));
 
     pub(super) fn new_from_parity_shard(
+        merkle_proof_size: Option<u8>,
         slot: Slot,
         index: u32,
         parity_shard: &[u8],
@@ -47,16 +49,30 @@ impl ShredCode {
         position: u16,
         version: u16,
     ) -> Self {
-        Self::from(legacy::ShredCode::new_from_parity_shard(
-            slot,
-            index,
-            parity_shard,
-            fec_set_index,
-            num_data_shreds,
-            num_coding_shreds,
-            position,
-            version,
-        ))
+        if let Some(merkle_proof_size) = merkle_proof_size {
+            Self::from(merkle::ShredCode::new_from_parity_shard(
+                merkle_proof_size,
+                slot,
+                index,
+                parity_shard,
+                fec_set_index,
+                num_data_shreds,
+                num_coding_shreds,
+                position,
+                version,
+            ))
+        } else {
+            Self::from(legacy::ShredCode::new_from_parity_shard(
+                slot,
+                index,
+                parity_shard,
+                fec_set_index,
+                num_data_shreds,
+                num_coding_shreds,
+                position,
+                version,
+            ))
+        }
     }
 
     pub(super) fn num_data_shreds(&self) -> u16 {

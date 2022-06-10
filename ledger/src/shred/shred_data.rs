@@ -7,7 +7,7 @@ use {
         DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredVariant,
         MAX_DATA_SHREDS_PER_SLOT,
     },
-    solana_sdk::{clock::Slot, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,12 +31,14 @@ impl ShredData {
     dispatch!(pub(super) fn set_last_in_slot(&mut self));
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
     dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
+    dispatch!(pub(super) fn verify(&self, pubkey: &Pubkey) -> bool);
 
     // Only for tests.
     dispatch!(pub(super) fn set_index(&mut self, index: u32));
     dispatch!(pub(super) fn set_slot(&mut self, slot: Slot));
 
     pub(super) fn new_from_data(
+        merkle_proof_size: Option<u8>,
         slot: Slot,
         index: u32,
         parent_offset: u16,
@@ -46,16 +48,30 @@ impl ShredData {
         version: u16,
         fec_set_index: u32,
     ) -> Self {
-        Self::from(legacy::ShredData::new_from_data(
-            slot,
-            index,
-            parent_offset,
-            data,
-            flags,
-            reference_tick,
-            version,
-            fec_set_index,
-        ))
+        if let Some(merkle_proof_size) = merkle_proof_size {
+            Self::from(merkle::ShredData::new_from_data(
+                merkle_proof_size,
+                slot,
+                index,
+                parent_offset,
+                data,
+                flags,
+                reference_tick,
+                version,
+                fec_set_index,
+            ))
+        } else {
+            Self::from(legacy::ShredData::new_from_data(
+                slot,
+                index,
+                parent_offset,
+                data,
+                flags,
+                reference_tick,
+                version,
+                fec_set_index,
+            ))
+        }
     }
 
     pub(super) fn last_in_slot(&self) -> bool {

@@ -431,6 +431,7 @@ mod tests {
         solana_logger::setup();
         let mut packet = Packet::default();
         let mut shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,
@@ -473,6 +474,7 @@ mod tests {
         solana_logger::setup();
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,
@@ -527,6 +529,7 @@ mod tests {
 
         let mut batches = [PacketBatch::default()];
         let mut shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,
@@ -595,6 +598,7 @@ mod tests {
 
         for (i, p) in packet_batch.iter_mut().enumerate() {
             let shred = Shred::new_from_data(
+                None, // legacy
                 slot,
                 0xc0de,
                 i as u16,
@@ -640,6 +644,7 @@ mod tests {
         let mut batches = [PacketBatch::default()];
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
+            None, // legacy
             slot,
             0xc0de,
             0xdead,

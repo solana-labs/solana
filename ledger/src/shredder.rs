@@ -128,6 +128,7 @@ impl Shredder {
             let parent_offset = self.slot - self.parent_slot;
             let fec_set_index = Self::fec_set_index(shred_index, fec_set_offset);
             let mut shred = Shred::new_from_data(
+                None, // legacy
                 self.slot,
                 shred_index,
                 parent_offset as u16,
@@ -255,6 +256,7 @@ impl Shredder {
             .map(|(i, parity)| {
                 let index = next_code_index + u32::try_from(i).unwrap();
                 Shred::new_from_parity_shard(
+                    None, // legacy
                     slot,
                     index,
                     parity,

@@ -3794,6 +3794,7 @@ pub(crate) mod tests {
             let gibberish = [0xa5u8; LEGACY_SHRED_DATA_CAPACITY];
             let parent_offset = bank.slot() - bank.parent_slot();
             let shred = Shred::new_from_data(
+                None, // legacy
                 bank.slot(),
                 0, // index,
                 parent_offset as u16,

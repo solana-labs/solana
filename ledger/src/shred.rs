@@ -290,6 +290,7 @@ impl Shred {
     dispatch!(pub fn into_payload(self) -> Vec<u8>);
     dispatch!(pub fn payload(&self) -> &Vec<u8>);
     dispatch!(pub fn sanitize(&self) -> Result<(), Error>);
+    dispatch!(pub fn verify(&self, pubkey: &Pubkey) -> bool);
 
     // Only for tests.
     dispatch!(pub fn set_index(&mut self, index: u32));
@@ -304,6 +305,7 @@ impl Shred {
 
     // TODO: Should this sanitize output?
     pub fn new_from_data(
+        merkle_proof_size: Option<u8>,
         slot: Slot,
         index: u32,
         parent_offset: u16,
@@ -314,6 +316,7 @@ impl Shred {
         fec_set_index: u32,
     ) -> Self {
         Self::from(ShredData::new_from_data(
+            merkle_proof_size,
             slot,
             index,
             parent_offset,
@@ -347,6 +350,7 @@ impl Shred {
     }
 
     pub fn new_from_parity_shard(
+        merkle_proof_size: Option<u8>,
         slot: Slot,
         index: u32,
         parity_shard: &[u8],
@@ -357,6 +361,7 @@ impl Shred {
         version: u16,
     ) -> Self {
         Self::from(ShredCode::new_from_parity_shard(
+            merkle_proof_size,
             slot,
             index,
             parity_shard,
@@ -491,11 +496,6 @@ impl Shred {
             Self::ShredCode(_) => ShredFlags::SHRED_TICK_REFERENCE_MASK.bits(),
             Self::ShredData(shred) => shred.reference_tick(),
         }
-    }
-
-    pub fn verify(&self, pubkey: &Pubkey) -> bool {
-        let message = self.signed_message();
-        self.signature().verify(pubkey.as_ref(), message)
     }
 
     // Returns true if the erasure coding of the two shreds mismatch.
@@ -855,7 +855,8 @@ mod tests {
 
     #[test]
     fn test_invalid_parent_offset() {
-        let shred = Shred::new_from_data(10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
+        let shred =
+            Shred::new_from_data(None, 10, 0, 1000, &[1, 2, 3], ShredFlags::empty(), 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
         let shred_res = Shred::new_from_serialized_shred(packet.data(..).unwrap().to_vec());
@@ -879,7 +880,8 @@ mod tests {
     fn test_shred_offsets() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
+        let shred =
+            Shred::new_from_data(None, 1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
         let ret = get_shred_slot_index_type(&packet, &mut stats);
@@ -910,14 +912,15 @@ mod tests {
         assert_eq!(stats.index_overrun, 4);
 
         let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data
-            4,   // num_code
-            1,   // position
-            200, // version
+            None, // legacy
+            8,    // slot
+            2,    // index
+            &[],  // parity_shard
+            10,   // fec_set_index
+            30,   // num_data
+            4,    // num_code
+            1,    // position
+            200,  // version
         );
         shred.copy_to_packet(&mut packet);
         assert_eq!(
@@ -926,6 +929,7 @@ mod tests {
         );
 
         let shred = Shred::new_from_data(
+            None, // legacy
             1,
             std::u32::MAX - 10,
             0,
@@ -940,14 +944,15 @@ mod tests {
         assert_eq!(1, stats.index_out_of_bounds);
 
         let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data_shreds
-            4,   // num_coding_shreds
-            3,   // position
-            200, // version
+            None, // legacy
+            8,    // slot
+            2,    // index
+            &[],  // parity_shard
+            10,   // fec_set_index
+            30,   // num_data_shreds
+            4,    // num_coding_shreds
+            3,    // position
+            200,  // version
         );
         shred.copy_to_packet(&mut packet);
         packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
@@ -1105,6 +1110,7 @@ mod tests {
         rng.fill(&mut data[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_data(
+            None,      // legacy
             141939602, // slot
             28685,     // index
             36390,     // parent_offset
@@ -1153,6 +1159,7 @@ mod tests {
         };
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_data(
+            None,      // legacy
             142076266, // slot
             21443,     // index
             51279,     // parent_offset
@@ -1200,6 +1207,7 @@ mod tests {
         rng.fill(&mut parity_shard[..]);
         let keypair = Keypair::generate(&mut rng);
         let mut shred = Shred::new_from_parity_shard(
+            None,      // legacy
             141945197, // slot
             23418,     // index
             &parity_shard,
@@ -1244,10 +1252,11 @@ mod tests {
                 ShredFlags::empty()
             };
             Shred::new_from_data(
-                0,   // slot
-                0,   // index
-                0,   // parent_offset
-                &[], // data
+                None, // legacy
+                0,    // slot
+                0,    // index
+                0,    // parent_offset
+                &[],  // data
                 flags,
                 reference_tick,
                 0, // version

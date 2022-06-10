@@ -8,7 +8,7 @@ use {
         SIZE_OF_SIGNATURE,
     },
     solana_perf::packet::deserialize_from_with_limit,
-    solana_sdk::{clock::Slot, signature::Signature},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
     static_assertions::const_assert_eq,
     std::{io::Cursor, ops::Range},
 };
@@ -111,6 +111,13 @@ impl Shred for ShredData {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
         &self.payload[SIZE_OF_SIGNATURE..]
     }
+
+    fn verify(&self, pubkey: &Pubkey) -> bool {
+        let message = self.signed_message();
+        self.common_header
+            .signature
+            .verify(pubkey.as_ref(), message)
+    }
 }
 
 impl Shred for ShredCode {
@@ -172,6 +179,13 @@ impl Shred for ShredCode {
     fn signed_message(&self) -> &[u8] {
         debug_assert_eq!(self.payload.len(), Self::SIZE_OF_PAYLOAD);
         &self.payload[SIZE_OF_SIGNATURE..]
+    }
+
+    fn verify(&self, pubkey: &Pubkey) -> bool {
+        let message = self.signed_message();
+        self.common_header
+            .signature
+            .verify(pubkey.as_ref(), message)
     }
 }
 
@@ -325,7 +339,7 @@ mod test {
     use {super::*, crate::shred::MAX_DATA_SHREDS_PER_SLOT, matches::assert_matches};
 
     #[test]
-    fn test_sanitize_data_shred() {
+    fn test_sanitize_legacy_data_shred() {
         let data = [0xa5u8; ShredData::CAPACITY];
         let mut shred = ShredData::new_from_data(
             420, // slot
@@ -393,7 +407,7 @@ mod test {
     }
 
     #[test]
-    fn test_sanitize_coding_shred() {
+    fn test_sanitize_legacy_coding_shred() {
         let mut shred = ShredCode::new_from_parity_shard(
             1,   // slot
             12,  // index

@@ -40,6 +40,7 @@ fn get_retransmit_peers_deterministic(
     for i in 0..num_simulated_shreds {
         let index = i as u32;
         let shred = Shred::new_from_data(
+            None, // legacy
             slot,
             index,
             parent_offset,
