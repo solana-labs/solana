@@ -1061,57 +1061,11 @@ mod tests {
             native_token::sol_to_lamports,
         },
         solana_streamer::socket::SocketAddrSpace,
+        std::{thread, time},
     };
 
-    fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
-        client: Arc<T>,
-        source: &Vec<&Keypair>,
-        dest: &VecDeque<&Keypair>,
-        nonce: &Vec<&Keypair>,
-        reclaim: bool,
-    ) -> Vec<(Transaction, u64)> {
-        let length = source.len();
-        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
-        for i in 0..length {
-            let nonce_account_pubkey = nonce[i].pubkey();
-            let nonce_account = client
-                .get_account(&nonce_account_pubkey)
-                .unwrap_or_else(|error| panic!("{:?}", error));
-            let nonce_data = nonce_utils::data_from_account(&nonce_account)
-                .unwrap_or_else(|error| panic!("{:?}", error));
-            let nonce_blockhash = nonce_data.blockhash;
-
-            let (from, to) = if !reclaim {
-                (source[i], dest[i])
-            } else {
-                (dest[i], source[i]) // should fail because there is no authority for dest
-            };
-
-            transactions.push((
-                system_transaction::nonced_transfer(
-                    from,
-                    &to.pubkey(),
-                    1,
-                    &nonce[i].pubkey(),
-                    from,
-                    nonce_blockhash,
-                ),
-                timestamp(),
-            ));
-        }
-        // current timestamp to avoid filtering out some transactions if they are too old
-        let t = timestamp();
-        for mut tx in &mut transactions {
-            tx.1 = t;
-        }
-        transactions
-    }
-
     #[test]
-    fn test_durable_nonce() {
-        /*let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
-        let bank = Bank::new_for_tests(&genesis_config);
-        let client = Arc::new(BankClient::new(bank));*/
+    fn test_create_durable_nonce_account() {
         solana_logger::setup();
 
         // 1. Create faucet thread
@@ -1162,47 +1116,289 @@ mod tests {
         ));
 
         let funding_keypair = &cluster.funding_keypair;
-        let tx_count = 10;
-        let keypair_multiplier = 8;
 
-        //let config = Config {
-        //    id: cluster.funding_keypair, //id,
-        //    tx_count: 10,
-        //    duration: Duration::from_secs(5),
-        //    ..Config::default()
-        //};
-
-        let keypair_count = tx_count * keypair_multiplier;
+        let keypair_count = 2;
         let keypairs =
-            generate_and_fund_keypairs(client.clone(), funding_keypair, keypair_count, 20).unwrap();
+            generate_and_fund_keypairs(client.clone(), funding_keypair, keypair_count, 100_000)
+                .unwrap();
 
+        let nonce_rent = client
+            .get_minimum_balance_for_rent_exemption(State::size())
+            .unwrap();
+        let nonce = Keypair::new();
+        let authority = &keypairs[0];
+
+        let client = client.rpc_client();
+
+        let from_balance = client
+            .get_balance_with_commitment(&authority.pubkey(), CommitmentConfig::confirmed())
+            .unwrap()
+            .value;
+
+        loop {
+            let res = client
+                .get_account_with_commitment(&authority.pubkey(), CommitmentConfig::finalized());
+            if let Ok(res) = res {
+                if let Some(res) = res.value {
+                    if res.lamports > 100_000 {
+                        break;
+                    }
+                }
+            }
+            thread::sleep(time::Duration::from_secs(10));
+        }
+
+        let instr = system_instruction::create_nonce_account(
+            &authority.pubkey(),
+            &nonce.pubkey(),
+            &authority.pubkey(), // Make the fee payer the nonce account authority
+            nonce_rent,
+        );
+
+        let mut tx = Transaction::new_with_payer(&instr, Some(&authority.pubkey()));
+        let blockhash = client.get_latest_blockhash().unwrap();
+        if tx.try_sign(&[&nonce, authority], blockhash).is_err() {
+            panic!("Signing failed");
+        }
+        let result = client.send_and_confirm_transaction(&tx);
+        if result.is_err() {
+            panic!("{:?}", result.err().unwrap());
+        }
+
+        let nonce_account = client
+            .get_account(&nonce.pubkey())
+            .unwrap_or_else(|error| panic!("{:?}", error));
+        let nonce_data = nonce_utils::data_from_account(&nonce_account)
+            .unwrap_or_else(|error| panic!("{:?}", error));
+        let nonce_blockhash = nonce_data.blockhash();
+
+        let from = &keypairs[0];
+        let to = &keypairs[1];
+
+        let tx = system_transaction::nonced_transfer(
+            from,
+            &to.pubkey(),
+            100,
+            &nonce.pubkey(),
+            from,
+            nonce_blockhash,
+        );
+
+        assert!(client.send_transaction(&tx).is_ok());
+
+        loop {
+            let res =
+                client.get_account_with_commitment(&to.pubkey(), CommitmentConfig::finalized());
+            if let Ok(res) = res {
+                if let Some(res) = res.value {
+                    info!("@{}", res.lamports);
+                    if res.lamports > 100_100 {
+                        break;
+                    }
+                }
+            }
+            thread::sleep(time::Duration::from_secs(10));
+        }
+    }
+
+    fn generate_durable_nonce_accounts(
+        client: Arc<ThinClient>,
+        authority_keypairs: &Vec<Keypair>,
+    ) -> Result<Vec<Keypair>> {
+        let nonce_rent = client
+            .get_minimum_balance_for_rent_exemption(State::size())
+            .unwrap();
+
+        //let client = client.rpc_client(); // TODO remove later, for now it gives better errors
+        let seed_keypair = &authority_keypairs[0];
+        let count = authority_keypairs.len();
+        let (nonce_keypairs, _extra) = generate_keypairs(&seed_keypair, count as u64);
+        for (authority, nonce) in authority_keypairs.iter().zip(nonce_keypairs.iter()) {
+            // make
+            let instr = system_instruction::create_nonce_account(
+                &authority.pubkey(),
+                &nonce.pubkey(),
+                &authority.pubkey(),
+                nonce_rent,
+            );
+
+            let mut tx = Transaction::new_with_payer(&instr, Some(&authority.pubkey()));
+            // sign
+            let blockhash = get_latest_blockhash(client.as_ref());
+            if tx.try_sign(&[&nonce, authority], blockhash).is_err() {
+                return Err(BenchTpsError::Custom("Signing has failed".to_string()));
+            }
+            // send
+            let result = client.send_transaction(tx)?;
+        }
+        Ok(nonce_keypairs)
+    }
+
+    fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+        client: Arc<T>,
+        source: &Vec<&Keypair>,
+        dest: &VecDeque<&Keypair>,
+        nonce: &Vec<&Keypair>,
+        reclaim: bool,
+    ) -> Vec<(Transaction, u64)> {
+        let length = source.len();
+        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
+        for i in 0..length {
+            let nonce_account_pubkey = nonce[i].pubkey();
+            let nonce_account = client
+                .get_account(&nonce_account_pubkey)
+                .unwrap_or_else(|error| panic!("{:?}", error));
+            let nonce_data = nonce_utils::data_from_account(&nonce_account)
+                .unwrap_or_else(|error| panic!("{:?}", error));
+            let nonce_blockhash = nonce_data.blockhash();
+
+            let (from, to) = if !reclaim {
+                (source[i], dest[i])
+            } else {
+                (dest[i], source[i]) // should fail because there is no authority for dest
+            };
+
+            transactions.push((
+                system_transaction::nonced_transfer(
+                    from,
+                    &to.pubkey(),
+                    1,
+                    &nonce[i].pubkey(),
+                    from,
+                    nonce_blockhash,
+                ),
+                timestamp(),
+            ));
+        }
+        // current timestamp to avoid filtering out some transactions if they are too old
+        let t = timestamp();
+        for mut tx in &mut transactions {
+            tx.1 = t;
+        }
+        transactions
+    }
+
+    // wait until all accounts creation is finalized
+    fn wait_for_commitment<T>(client: Arc<ThinClient>, keypairs: &Vec<Keypair>, predicate: T)
+    where
+        T: Fn(u64) -> bool,
+    {
+        use std::collections::HashSet;
+
+        let client = client.rpc_client();
+        let mut uncommitted = HashSet::<usize>::from_iter((0..keypairs.len()).into_iter());
+        let mut tobe_removed = Vec::<usize>::new();
+        while !uncommitted.is_empty() {
+            for index in &uncommitted {
+                let res = client.get_account_with_commitment(
+                    &keypairs[*index].pubkey(),
+                    CommitmentConfig::finalized(),
+                );
+                if let Ok(res) = res {
+                    if let Some(res) = res.value {
+                        if predicate(res.lamports) {
+                            tobe_removed.push(*index);
+                        }
+                    }
+                }
+            }
+            for index in &tobe_removed {
+                uncommitted.remove(index);
+            }
+            tobe_removed.clear();
+            thread::sleep(time::Duration::from_secs(1));
+        }
+    }
+
+    #[test]
+    fn test_durable_nonce() {
+        solana_logger::setup();
+
+        // 1. Create faucet thread
+        let faucet_keypair = Keypair::new();
+        let faucet_pubkey = faucet_keypair.pubkey();
+        let faucet_addr = run_local_faucet(faucet_keypair, None);
+        let mut validator_config = ValidatorConfig::default_for_test();
+        validator_config.rpc_config = JsonRpcConfig {
+            faucet_addr: Some(faucet_addr),
+            ..JsonRpcConfig::default_for_test()
+        };
+
+        // 2. Create a local cluster which is aware of faucet
+        let num_nodes = 1;
+        let native_instruction_processors = vec![];
+        let cluster = LocalCluster::new(
+            &mut ClusterConfig {
+                node_stakes: vec![999_990; num_nodes],
+                cluster_lamports: 200_000_000,
+                validator_configs: make_identical_validator_configs(
+                    &ValidatorConfig {
+                        rpc_config: JsonRpcConfig {
+                            faucet_addr: Some(faucet_addr),
+                            ..JsonRpcConfig::default_for_test()
+                        },
+                        ..ValidatorConfig::default_for_test()
+                    },
+                    num_nodes,
+                ),
+                native_instruction_processors,
+                ..ClusterConfig::default()
+            },
+            SocketAddrSpace::Unspecified,
+        );
+        assert_eq!(cluster.validators.len(), num_nodes);
+
+        // 3. Transfer funds to faucet account
+        cluster.transfer(&cluster.funding_keypair, &faucet_pubkey, 100_000_000);
+
+        // 4. Create client
+        let nodes = cluster.get_node_pubkeys();
+        let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
+        let nodes_slice = [node];
+
+        let client = Arc::new(create_client(
+            cluster.entry_point_info.rpc,
+            cluster.entry_point_info.tpu,
+        ));
+
+        let funding_keypair = &cluster.funding_keypair;
+        let tx_count = 2;
+        let chunk_count = 1;
+        let keypair_count = tx_count * 2 * chunk_count;
+        let keypairs =
+            generate_and_fund_keypairs(client.clone(), funding_keypair, keypair_count, 100_000)
+                .unwrap();
+
+        wait_for_commitment(client.clone(), &keypairs, |lamports: u64| lamports > 10_000);
+
+        let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &keypairs)
+            .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
+
+        wait_for_commitment(client.clone(), &nonce_keypairs, |lamports: u64| {
+            lamports > 0
+        });
+
+        // TODO later move to a separate function
+        // split keypairs into source/dest chunks
         let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
         let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
         for chunk in keypairs.chunks_exact(2 * tx_count) {
             source_keypair_chunks.push(chunk[..tx_count].iter().collect());
             dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
         }
-
-        let nonce_accounts = generate_durable_nonce_accounts(
-            client.clone(),
-            funding_keypair,
-            &source_keypair_chunks,
-        )
-        .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
-
-        let mut nonce_account_chunks: Vec<Vec<&Keypair>> =
-            Vec::with_capacity(source_keypair_chunks.len());
-        for chunk in nonce_accounts.chunks_exact(tx_count) {
-            nonce_account_chunks.push(chunk.iter().collect());
+        // depending on the direction (src->dst or dst->src) we need one or another set
+        let mut source_nonce_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+        for chunk in nonce_keypairs.chunks_exact(2 * tx_count) {
+            source_nonce_keypair_chunks.push(chunk[..tx_count].iter().collect());
         }
 
         for (source, dest, nonce) in izip!(
             &source_keypair_chunks,
             &dest_keypair_chunks,
-            &nonce_account_chunks
+            &source_nonce_keypair_chunks
         ) {
             let transactions_with_timestamps =
-                generate_nonced_system_txs(client.clone(), source, &dest, &nonce, false);
+                generate_nonced_system_txs(client.clone(), source, dest, nonce, false);
             let mut transactions = Vec::with_capacity(transactions_with_timestamps.len());
             for (tx, _timestamp) in transactions_with_timestamps {
                 transactions.push(tx);
@@ -1210,6 +1406,47 @@ mod tests {
             if let Err(error) = client.send_batch(transactions) {
                 println!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
+        }
+
+        let client = client.rpc_client();
+
+        // Withdraw and close nonce accounts
+        for (nonce, authority) in izip!(&nonce_keypairs, &keypairs) {
+            let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
+            let instr = system_instruction::withdraw_nonce_account(
+                &nonce.pubkey(),
+                &authority.pubkey(),
+                &authority.pubkey(),
+                nonce_balance,
+            );
+
+            let mut tx = Transaction::new_with_payer(&[instr], Some(&authority.pubkey()));
+            //let blockhash = get_latest_blockhash(client.as_ref());
+            let blockhash = client.get_latest_blockhash().ok().unwrap();
+            assert!(tx.try_sign(&[authority], blockhash).is_ok());
+
+            //assert!(client.send_transaction(tx).is_ok());
+            let res = client.send_transaction(&tx);
+            if res.is_err() {
+                info!("@{:?}", res.err().unwrap());
+            }
+            thread::sleep(time::Duration::from_secs(1));
+        }
+        thread::sleep(time::Duration::from_secs(10));
+        // wait until these transactions are finalized
+        // otherwise create nonce transactions will fail
+        let mut total_committed = nonce_keypairs.len() as u64;
+        while total_committed > 0 {
+            for to in &nonce_keypairs {
+                let res =
+                    client.get_account_with_commitment(&to.pubkey(), CommitmentConfig::finalized());
+                if let Ok(res) = res {
+                    if res.value.is_none() {
+                        total_committed -= 1;
+                    }
+                }
+            }
+            thread::sleep(time::Duration::from_secs(2));
         }
     }
 
