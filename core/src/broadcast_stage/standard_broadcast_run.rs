@@ -236,13 +236,21 @@ impl StandardBroadcastRun {
             is_last_in_slot,
             &mut process_stats,
         );
-        // Insert the first shred so blockstore stores that the leader started this block
-        // This must be done before the blocks are sent out over the wire.
-        if !data_shreds.is_empty() && data_shreds[0].index() == 0 {
-            let first = vec![data_shreds[0].clone()];
-            blockstore
-                .insert_shreds(first, None, true)
-                .expect("Failed to insert shreds in blockstore");
+        // Insert the first data shred synchronously so that blockstore stores
+        // that the leader started this block. This must be done before the
+        // blocks are sent out over the wire. By contrast Self::insert skips
+        // the 1st data shred with index zero.
+        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L334-L339
+        if let Some(shred) = data_shreds.first() {
+            if shred.index() == 0 {
+                blockstore
+                    .insert_shreds(
+                        vec![shred.clone()],
+                        None, // leader_schedule
+                        true, // is_trusted
+                    )
+                    .expect("Failed to insert shreds in blockstore");
+            }
         }
         to_shreds_time.stop();
 
@@ -331,19 +339,24 @@ impl StandardBroadcastRun {
     ) {
         // Insert shreds into blockstore
         let insert_shreds_start = Instant::now();
-        // The first shred is inserted synchronously
-        let data_shreds = if !shreds.is_empty() && shreds[0].index() == 0 {
-            shreds[1..].to_vec()
-        } else {
-            shreds.to_vec()
-        };
+        let mut shreds = Arc::try_unwrap(shreds).unwrap_or_else(|shreds| (*shreds).clone());
+        // The first data shred is inserted synchronously.
+        // https://github.com/solana-labs/solana/blob/53695ecd2/core/src/broadcast_stage/standard_broadcast_run.rs#L239-L246
+        if let Some(shred) = shreds.first() {
+            if shred.is_data() && shred.index() == 0 {
+                shreds.swap_remove(0);
+            }
+        }
+        let num_shreds = shreds.len();
         blockstore
-            .insert_shreds(data_shreds, None, true)
+            .insert_shreds(
+                shreds, /*leader_schedule:*/ None, /*is_trusted:*/ true,
+            )
             .expect("Failed to insert shreds in blockstore");
         let insert_shreds_elapsed = insert_shreds_start.elapsed();
         let new_insert_shreds_stats = InsertShredsStats {
             insert_shreds_elapsed: duration_as_us(&insert_shreds_elapsed),
-            num_shreds: shreds.len(),
+            num_shreds,
         };
         self.update_insertion_metrics(&new_insert_shreds_stats, &broadcast_shred_batch_info);
     }
