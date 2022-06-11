@@ -24,19 +24,12 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     ]);
 
     msg!("validate_edwards");
-    assert!(edwards::validate_edwards(&edwards_identity));
     assert!(edwards::validate_edwards(&edwards_generator));
 
     msg!("add_edwards");
     assert_eq!(
         edwards_generator,
         edwards::add_edwards(&edwards_generator, &edwards_identity).expect("add_edwards")
-    );
-
-    msg!("subtract_edwards");
-    assert_eq!(
-        edwards_generator,
-        edwards::add_edwards(&edwards_generator, &edwards_identity).expect("subtract_edwards")
     );
 
     msg!("multiply_edwards");
@@ -56,20 +49,12 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     ]);
 
     msg!("validate_ristretto");
-    assert!(ristretto::validate_ristretto(&ristretto_identity));
     assert!(ristretto::validate_ristretto(&ristretto_generator));
 
     msg!("add_ristretto");
     assert_eq!(
         ristretto_generator,
         ristretto::add_ristretto(&ristretto_generator, &ristretto_identity).expect("add_ristretto")
-    );
-
-    msg!("subtract_ristretto");
-    assert_eq!(
-        ristretto_generator,
-        ristretto::subtract_ristretto(&ristretto_generator, &ristretto_identity)
-            .expect("subtract_ristretto")
     );
 
     msg!("multiply_ristretto");
