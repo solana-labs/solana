@@ -336,6 +336,7 @@ fn process_transaction_and_record_inner(
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         )
         .0;
     let result = results
@@ -378,6 +379,7 @@ fn execute_transactions(
         true,
         true,
         &mut timings,
+        None,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
 

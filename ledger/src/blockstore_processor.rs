@@ -451,6 +451,7 @@ pub fn process_entries_for_tests(
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
+#[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [EntryType],

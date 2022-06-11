@@ -99,6 +99,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
                 10,
+                None,
             );
         });
 
@@ -231,6 +232,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
+            None,
             Arc::new(ConnectionCache::default()),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
