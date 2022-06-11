@@ -2,12 +2,15 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
-        in_mem_accounts_index::{InMemAccountsIndex, SlotT},
+        in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
-    solana_sdk::{clock::SLOT_MS, timing::AtomicInterval},
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        timing::AtomicInterval,
+    },
     std::{
         fmt::Debug,
         sync::{
@@ -25,7 +28,7 @@ const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
 
 pub struct BucketMapHolder<T: IndexValue> {
-    pub disk: Option<BucketMap<SlotT<T>>>,
+    pub disk: Option<BucketMap<(Slot, T)>>,
 
     pub count_buckets_flushed: AtomicUsize,
     pub age: AtomicU8,
