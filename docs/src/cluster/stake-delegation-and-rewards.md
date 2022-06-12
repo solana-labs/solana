@@ -48,6 +48,13 @@ Updates the account with a new authorized voter or withdrawer, according to the 
 - `account[0]` - RW - The VoteState.
   `VoteState::authorized_voter` or `authorized_withdrawer` is set to `Pubkey`.
 
+### VoteInstruction::AuthorizeWithSeed\(VoteAuthorizeWithSeedArgs\)
+
+Updates the account with a new authorized voter or withdrawer, according to the VoteAuthorize parameter \(`Voter` or `Withdrawer`\). Unlike `VoteInstruction::Authorize` this instruction is for use when the Vote account's current `authorized_voter` or `authorized_withdrawer` is a derived key. The transaction must be signed by someone who can sign for the base key of that derived key.
+
+- `account[0]` - RW - The VoteState.
+  `VoteState::authorized_voter` or `authorized_withdrawer` is set to `Pubkey`.
+
 ### VoteInstruction::Vote\(Vote\)
 
 - `account[0]` - RW - The VoteState.
