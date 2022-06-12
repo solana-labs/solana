@@ -128,7 +128,7 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("AUTHORIZED_KEYPAIR")
                         .required(true)
                         .validator(is_valid_signer)
-                        .help("Current authorized vote signer."),
+                        .help("Current authorized vote signer or withdrawer."),
                 )
                 .arg(
                     pubkey!(Arg::with_name("new_authorized_pubkey")
@@ -136,6 +136,21 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("NEW_AUTHORIZED_PUBKEY")
                         .required(true),
                         "New authorized vote signer. "),
+                )
+                .arg(
+                    pubkey!(Arg::with_name("authorized_owner")
+                        .value_name("AUTHORIZED_OWNER")
+                        .required(false)
+                        .requires("authorized_seed"),
+                        "Owner of current authorized vote signer or withdrawer's derived key. "),
+                )
+                .arg(
+                    Arg::with_name("authorized_seed")
+                        .value_name("AUTHORIZED_SEED")
+                        .required(false)
+                        .requires("authorized_owner")
+                        .validator(is_derived_address_seed)
+                        .help("Seed of current authorized vote signer or withdrawer's derived key."),
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -166,6 +181,21 @@ impl VoteSubCommands for App<'_, '_> {
                         .value_name("AUTHORIZED_PUBKEY")
                         .required(true),
                         "New authorized withdrawer. "),
+                )
+                .arg(
+                    pubkey!(Arg::with_name("authorized_owner")
+                        .value_name("AUTHORIZED_OWNER")
+                        .required(false)
+                        .requires("authorized_seed"),
+                        "Owner of current authorized withdrawer's derived key. "),
+                )
+                .arg(
+                    Arg::with_name("authorized_seed")
+                        .value_name("AUTHORIZED_SEED")
+                        .required(false)
+                        .requires("authorized_owner")
+                        .validator(is_derived_address_seed)
+                        .help("Seed of current authorized withdrawer's derived key."),
                 )
                 .offline_args()
                 .nonce_args(false)
@@ -511,6 +541,19 @@ pub fn parse_vote_authorize(
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
 
+    let authorized_owner = pubkey_of(matches, "authorized_owner");
+    let authorized_seed = matches
+        .value_of("authorized_seed")
+        .map(|seed| seed.to_string());
+    if authorized_owner.is_some() != authorized_seed.is_some() {
+        // This should never happen, because the CLI config is already
+        // supposed to enforce that either both or neither of these exist.
+        return Err(CliError::BadParameter(
+            "Supply either both an `--authorized_seed` and an `--authorized_owner`, or neither"
+                .to_string(),
+        ));
+    }
+
     Ok(CliCommandInfo {
         command: CliCommand::VoteAuthorize {
             vote_account_pubkey,
@@ -529,6 +572,8 @@ pub fn parse_vote_authorize(
             } else {
                 None
             },
+            derived_address_seed: authorized_seed,
+            derived_address_program_id: authorized_owner,
         },
         signers: signer_info.signers,
     })
@@ -889,8 +934,17 @@ pub fn process_vote_authorize(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    derived_address_seed: Option<&String>,
+    derived_address_program_id: Option<Pubkey>,
 ) -> ProcessResult {
     let authorized = config.signers[authorized];
+    let provided_current_authority = match (derived_address_seed, derived_address_program_id) {
+        (Some(seed), Some(owner)) => {
+            Pubkey::create_with_seed(&authorized.pubkey(), seed.as_str(), &owner)
+                .unwrap_or_else(|_| authorized.pubkey())
+        }
+        _ => authorized.pubkey(),
+    };
     let new_authorized_signer = new_authorized.map(|index| config.signers[index]);
 
     let vote_state = if !sign_only {
@@ -912,7 +966,7 @@ pub fn process_vote_authorize(
                     })?;
                 check_current_authority(
                     &[current_authorized_voter, vote_state.authorized_withdrawer],
-                    &authorized.pubkey(),
+                    &provided_current_authority,
                 )?;
                 if let Some(signer) = new_authorized_signer {
                     if signer.is_interactive() {
@@ -930,17 +984,36 @@ pub fn process_vote_authorize(
                 (new_authorized_pubkey, "new_authorized_pubkey".to_string()),
             )?;
             if let Some(vote_state) = vote_state {
-                check_current_authority(&[vote_state.authorized_withdrawer], &authorized.pubkey())?
+                check_current_authority(
+                    &[vote_state.authorized_withdrawer],
+                    &provided_current_authority,
+                )?
             }
         }
     }
 
     let vote_ix = if new_authorized_signer.is_some() {
+        if derived_address_seed.is_some() && derived_address_program_id.is_some() {
+            return Err(
+                CliError::BadParameter(
+                    String::from("It is not possible to authorize a new authority in checked mode when you supply a seed. Derived keys can't sign transactions."),
+                ).into(),
+            );
+        }
         vote_instruction::authorize_checked(
             vote_account_pubkey,   // vote account to update
             &authorized.pubkey(),  // current authorized
             new_authorized_pubkey, // new vote signer/withdrawer
             vote_authorize,        // vote or withdraw
+        )
+    } else if derived_address_seed.is_some() && derived_address_program_id.is_some() {
+        vote_instruction::authorize_with_seed(
+            vote_account_pubkey,                    // vote account to update
+            &authorized.pubkey(),                   // Base key of current authority's derived key
+            &derived_address_program_id.unwrap(),   // Owner of current authority's derived key
+            derived_address_seed.unwrap().as_str(), // Seed of current authority's derived key
+            new_authorized_pubkey,                  // new vote signer/withdrawer
+            vote_authorize,                         // vote or withdraw
         )
     } else {
         vote_instruction::authorize(
@@ -1450,6 +1523,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 0,
                     new_authorized: None,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -1482,6 +1557,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 1,
                     new_authorized: None,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1516,6 +1593,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 1,
                     new_authorized: None,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1564,6 +1643,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 1,
                     new_authorized: None,
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     Presigner::new(&pubkey2, &sig2).into(),
@@ -1600,6 +1681,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 0,
                     new_authorized: Some(1),
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -1631,6 +1714,8 @@ mod tests {
                     fee_payer: 0,
                     authorized: 1,
                     new_authorized: Some(2),
+                    derived_address_seed: None,
+                    derived_address_program_id: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),

@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     solana_cli::{
         check_balance,
@@ -14,6 +15,7 @@ use {
     solana_sdk::{
         account_utils::StateMut,
         commitment_config::CommitmentConfig,
+        pubkey::Pubkey,
         signature::{Keypair, NullSigner, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -43,13 +45,18 @@ fn test_vote_authorize_and_withdraw() {
     // Create vote account
     let vote_account_keypair = Keypair::new();
     let vote_account_pubkey = vote_account_keypair.pubkey();
+    let authority_seed = "AUTHORITY_SEED";
+    let authority_owner = Pubkey::new_unique();
+    let initial_authorized_withdrawer =
+        Pubkey::create_with_seed(&default_signer.pubkey(), authority_seed, &authority_owner)
+            .unwrap();
     config.signers = vec![&default_signer, &vote_account_keypair];
     config.command = CliCommand::CreateVoteAccount {
         vote_account: 1,
         seed: None,
         identity_account: 0,
         authorized_voter: None,
-        authorized_withdrawer: config.signers[0].pubkey(),
+        authorized_withdrawer: initial_authorized_withdrawer,
         commission: 0,
         sign_only: false,
         dump_transaction_message: false,
@@ -65,7 +72,7 @@ fn test_vote_authorize_and_withdraw() {
         .unwrap();
     let vote_state: VoteStateVersions = vote_account.state().unwrap();
     let authorized_withdrawer = vote_state.convert_to_current().authorized_withdrawer;
-    assert_eq!(authorized_withdrawer, config.signers[0].pubkey());
+    assert_eq!(authorized_withdrawer, initial_authorized_withdrawer);
     let expected_balance = rpc_client
         .get_minimum_balance_for_rent_exemption(VoteState::size_of())
         .unwrap()
@@ -110,6 +117,8 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
+        derived_address_seed: Some(authority_seed.to_string()),
+        derived_address_program_id: Some(authority_owner),
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -135,6 +144,8 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 1,
         new_authorized: Some(1),
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     process_command(&config).unwrap_err(); // unsigned by new authority should fail
     config.signers = vec![
@@ -155,6 +166,8 @@ fn test_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 1,
         new_authorized: Some(2),
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     process_command(&config).unwrap();
     let vote_account = rpc_client
@@ -329,6 +342,8 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -351,6 +366,8 @@ fn test_offline_vote_authorize_and_withdraw() {
         fee_payer: 0,
         authorized: 0,
         new_authorized: None,
+        derived_address_seed: None,
+        derived_address_program_id: None,
     };
     process_command(&config_payer).unwrap();
     let vote_account = rpc_client

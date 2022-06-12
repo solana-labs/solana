@@ -351,6 +351,8 @@ pub enum CliCommand {
         fee_payer: SignerIndex,
         authorized: SignerIndex,
         new_authorized: Option<SignerIndex>,
+        derived_address_seed: Option<String>, // Seed of current authority's derived key
+        derived_address_program_id: Option<Pubkey>, // Owner of current authority's derived key
     },
     VoteUpdateValidator {
         vote_account_pubkey: Pubkey,
@@ -1418,6 +1420,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             fee_payer,
             authorized,
             new_authorized,
+            derived_address_seed,
+            derived_address_program_id,
         } => process_vote_authorize(
             &rpc_client,
             config,
@@ -1433,6 +1437,8 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
+            derived_address_seed.as_ref(),
+            *derived_address_program_id,
         ),
         CliCommand::VoteUpdateValidator {
             vote_account_pubkey,
@@ -2032,6 +2038,8 @@ mod tests {
             fee_payer: 0,
             authorized: 0,
             new_authorized: None,
+            derived_address_seed: None,
+            derived_address_program_id: None,
         };
         let result = process_command(&vote_config);
         assert!(result.is_ok());
@@ -2249,6 +2257,8 @@ mod tests {
             fee_payer: 0,
             authorized: 0,
             new_authorized: None,
+            derived_address_seed: None,
+            derived_address_program_id: None,
         };
         assert!(process_command(&config).is_err());
 
