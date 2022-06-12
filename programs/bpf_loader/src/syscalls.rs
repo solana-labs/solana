@@ -190,10 +190,8 @@ pub fn register_syscalls(
             b"sol_curve_validate_point",
             SyscallCurvePointValidation::call,
         )?;
-        syscall_registry.register_syscall_by_name(
-            b"sol_curve_group_op",
-            SyscallCurveGroupOps::call,
-        )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_curve_group_op", SyscallCurveGroupOps::call)?;
     }
 
     syscall_registry
