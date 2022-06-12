@@ -183,17 +183,17 @@ impl BigTableConnection {
                     Ok(proxy_uri) => {
                         let proxy = hyper_proxy::Proxy::new(
                             hyper_proxy::Intercept::All,
-                            proxy_uri.parse::<http::Uri>()
+                            proxy_uri
+                                .parse::<http::Uri>()
                                 .map_err(|err| Error::InvalidUri(proxy_uri, err.to_string()))?,
                         );
-                        let mut proxy_connector = hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
+                        let mut proxy_connector =
+                            hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
                         // tonic handles TLS as a separate layer
                         proxy_connector.set_tls(None);
                         endpoint.connect_with_connector_lazy(proxy_connector)
                     }
-                    _ => {
-                        endpoint.connect_with_connector_lazy(http)
-                    }
+                    _ => endpoint.connect_with_connector_lazy(http),
                 };
 
                 Ok(Self {
