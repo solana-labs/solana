@@ -751,7 +751,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdbfe11fe19ff083c48923cf179540e8cd0535903dc35e178a1fdeeb59aef51f"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils",
+ "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -761,8 +761,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-epoch",
- "crossbeam-utils",
+ "crossbeam-epoch 0.9.5",
+ "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "crossbeam-deque"
+version = "0.8.990"
+source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-epoch 0.9.995",
+ "crossbeam-utils 0.8.5 (git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200)",
 ]
 
 [[package]]
@@ -772,7 +782,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec02e091aa634e2c3ada4a392989e7c3116673ef0ac5b72232439094d73b7fd"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils",
+ "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static",
+ "memoffset",
+ "scopeguard",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.995"
+source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
+dependencies = [
+ "cfg-if 1.0.0",
+ "crossbeam-utils 0.8.5 (git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200)",
  "lazy_static",
  "memoffset",
  "scopeguard",
@@ -783,6 +805,15 @@ name = "crossbeam-utils"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d82cfc11ce7f2c3faef78d8a684447b40d503d9681acebed6cb728d45940c4db"
+dependencies = [
+ "cfg-if 1.0.0",
+ "lazy_static",
+]
+
+[[package]]
+name = "crossbeam-utils"
+version = "0.8.5"
+source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
 dependencies = [
  "cfg-if 1.0.0",
  "lazy_static",
@@ -845,7 +876,16 @@ checksum = "e77a43b28d0668df09411cb0bc9a8c2adc40f9a048afe863e05fd43251e8e39c"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",
- "rayon",
+]
+
+[[package]]
+name = "dashmap"
+version = "4.0.2"
+source = "git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8#589871553efed3082c7653bef3765b99bd5a3ee8"
+dependencies = [
+ "cfg-if 1.0.0",
+ "num_cpus",
+ "rayon 1.5.993",
 ]
 
 [[package]]
@@ -1480,7 +1520,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap",
+ "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab",
  "tokio",
  "tokio-util 0.6.4",
@@ -1710,7 +1750,22 @@ dependencies = [
  "bitmaps",
  "rand_core 0.6.3",
  "rand_xoshiro",
- "rayon",
+ "rayon 1.5.1",
+ "serde",
+ "sized-chunks",
+ "typenum",
+ "version_check",
+]
+
+[[package]]
+name = "im"
+version = "15.1.0"
+source = "git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb#a95a0a36861af7cc1efa3d41e5f47934e394e7cb"
+dependencies = [
+ "bitmaps",
+ "rand_core 0.6.3",
+ "rand_xoshiro",
+ "rayon 1.5.993",
  "serde",
  "sized-chunks",
  "typenum",
@@ -1731,7 +1786,16 @@ checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg",
  "hashbrown",
- "rayon",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.8.1"
+source = "git+https://github.com/ryoqun/indexmap?rev=01a57d0146f649caa0d2d2bbb97bf07201d629cb#01a57d0146f649caa0d2d2bbb97bf07201d629cb"
+dependencies = [
+ "autocfg",
+ "hashbrown",
+ "rayon 1.5.993",
 ]
 
 [[package]]
@@ -2660,7 +2724,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
 dependencies = [
  "fixedbitset",
- "indexmap",
+ "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3109,9 +3173,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c06aca804d41dbc8ba42dfd964f0d01334eceb64314b9ecf7c5fad5188a06d90"
 dependencies = [
  "autocfg",
- "crossbeam-deque",
+ "crossbeam-deque 0.8.1",
  "either",
- "rayon-core",
+ "rayon-core 1.9.1",
+]
+
+[[package]]
+name = "rayon"
+version = "1.5.993"
+source = "git+https://github.com/ryoqun/rayon?rev=4dc3a287e2248360d7dc6c8ae0acaa7831c839c5#4dc3a287e2248360d7dc6c8ae0acaa7831c839c5"
+dependencies = [
+ "autocfg",
+ "crossbeam-deque 0.8.990",
+ "either",
+ "rayon-core 1.9.993",
 ]
 
 [[package]]
@@ -3121,9 +3196,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d78120e2c850279833f1dd3582f730c4ab53ed95aeaaaa862a2a5c71b1656d8e"
 dependencies = [
  "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-utils",
+ "crossbeam-deque 0.8.1",
+ "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
+ "num_cpus",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.9.993"
+source = "git+https://github.com/ryoqun/rayon?rev=4dc3a287e2248360d7dc6c8ae0acaa7831c839c5#4dc3a287e2248360d7dc6c8ae0acaa7831c839c5"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-deque 0.8.990",
+ "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus",
 ]
 
@@ -3566,7 +3652,7 @@ version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a521f2940385c165a24ee286aa8599633d162077a54bdcae2a6fd5a7bfa7a0"
 dependencies = [
- "indexmap",
+ "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ryu",
  "serde",
  "yaml-rust",
@@ -3868,7 +3954,7 @@ dependencies = [
  "fnv",
  "log",
  "rand 0.7.3",
- "rayon",
+ "rayon 1.5.993",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -4346,7 +4432,7 @@ dependencies = [
  "enum_dispatch",
  "futures 0.3.21",
  "futures-util",
- "indexmap",
+ "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "indicatif",
  "itertools",
  "jsonrpc-core",
@@ -4357,7 +4443,7 @@ dependencies = [
  "quinn-proto",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon",
+ "rayon 1.5.993",
  "reqwest",
  "rustls 0.20.4",
  "semver 1.0.6",
@@ -4413,7 +4499,7 @@ dependencies = [
  "bs58",
  "chrono",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8)",
  "etcd-client",
  "fs_extra",
  "histogram",
@@ -4423,7 +4509,7 @@ dependencies = [
  "min-max-heap",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon",
+ "rayon 1.5.993",
  "retain_mut",
  "rustc_version 0.4.0",
  "serde",
@@ -4483,7 +4569,7 @@ dependencies = [
  "dlopen_derive",
  "log",
  "rand 0.7.3",
- "rayon",
+ "rayon 1.5.993",
  "serde",
  "solana-measure",
  "solana-merkle-tree",
@@ -4524,7 +4610,7 @@ dependencies = [
  "bs58",
  "bv",
  "generic-array 0.14.5",
- "im",
+ "im 15.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "log",
  "memmap2",
@@ -4544,7 +4630,7 @@ dependencies = [
  "bs58",
  "bv",
  "generic-array 0.14.5",
- "im",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb)",
  "lazy_static",
  "log",
  "memmap2",
@@ -4627,7 +4713,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "flate2",
- "indexmap",
+ "indexmap 1.8.1 (git+https://github.com/ryoqun/indexmap?rev=01a57d0146f649caa0d2d2bbb97bf07201d629cb)",
  "itertools",
  "log",
  "lru",
@@ -4635,7 +4721,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon",
+ "rayon 1.5.993",
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
@@ -4683,7 +4769,7 @@ dependencies = [
  "prost 0.10.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon",
+ "rayon 1.5.993",
  "reed-solomon-erasure",
  "rocksdb",
  "rustc_version 0.4.0",
@@ -4798,7 +4884,7 @@ dependencies = [
  "log",
  "nix",
  "rand 0.7.3",
- "rayon",
+ "rayon 1.5.993",
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -4998,7 +5084,7 @@ dependencies = [
  "bincode",
  "bs58",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -5007,7 +5093,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "libc",
  "log",
- "rayon",
+ "rayon 1.5.993",
  "regex",
  "serde",
  "serde_derive",
@@ -5051,11 +5137,11 @@ dependencies = [
  "byteorder 1.4.3",
  "bzip2",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8)",
  "dir-diff",
  "flate2",
  "fnv",
- "im",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb)",
  "index_list",
  "itertools",
  "lazy_static",
@@ -5067,7 +5153,7 @@ dependencies = [
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
- "rayon",
+ "rayon 1.5.993",
  "regex",
  "rustc_version 0.4.0",
  "serde",
@@ -6302,7 +6388,7 @@ checksum = "9a89fd63ad6adf737582df5db40d286574513c69a11dac5214dc3b5603d6713e"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap",
+ "indexmap 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project",
  "pin-project-lite",
  "rand 0.8.2",
