@@ -9,6 +9,12 @@
 //! zk-token-sdk or curve25519. It should be moved to a more general location in the future.
 //!
 
+// Functions are organized by the curve traits, which can be instantiated by multiple curve
+// representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run
+// the associated functions in the appropriate trait instantiation. The `curve_op` function
+// additionally takes in an `op_id` (e.g. `ADD`) that controls which associated functions to run in
+// `GroupOperations`.
+
 pub trait PointValidation {
     type Point;
 
@@ -77,13 +83,3 @@ pub const CURVE25519_RISTRETTO: u64 = 1;
 pub const ADD: u64 = 0;
 pub const SUB: u64 = 1;
 pub const MUL: u64 = 2;
-
-// Functions are organized by the curve traits, which can be instantiated by multiple curve
-// representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run
-// the associated functions in the appropriate trait instantiation. The `curve_op` function
-// additionally takes in an `op_id` (e.g. `ADD`) that controls which associated functions to run in
-// `GroupOperations`.
-#[cfg(target_os = "solana")]
-pub use solana_program::syscalls::{
-    sol_curve_multiscalar_mul, sol_curve_op, sol_curve_pairing_map, sol_curve_validate_point,
-};

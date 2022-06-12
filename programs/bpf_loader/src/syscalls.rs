@@ -243,14 +243,14 @@ pub fn register_syscalls(
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
-        b"sol_curve25519_point_validation",
+        b"sol_curve_validate_point",
         SyscallCurvePointValidation::init,
         SyscallCurvePointValidation::call,
     )?;
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
-        b"sol_curve25519_point_validation",
+        b"sol_curve_group_op",
         SyscallCurveGroupOps::init,
         SyscallCurveGroupOps::call,
     )?;
