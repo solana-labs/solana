@@ -3,8 +3,14 @@ use {
     solana_perf::packet::PacketBatch,
     solana_runtime::{bank::Bank, vote_transaction::VoteTransaction},
     solana_sdk::{
-        account::from_account, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
-        slot_hashes::SlotHashes, sysvar,
+        account::from_account,
+        clock::Slot,
+        feature_set::{allow_votes_to_directly_update_vote_state, FeatureSet},
+        hash::Hash,
+        pubkey::Pubkey,
+        signature::Signature,
+        slot_hashes::SlotHashes,
+        sysvar,
     },
     std::{
         collections::{BTreeMap, HashMap, HashSet},
@@ -61,6 +67,32 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
             previously_sent_to_bank_votes,
         }
     }
+
+    fn filter_vote(
+        &mut self,
+        slot: &Slot,
+        hash: &Hash,
+        packet: &PacketBatch,
+        tx_signature: &Signature,
+    ) -> Option<PacketBatch> {
+        // Don't send the same vote to the same bank multiple times
+        if self.previously_sent_to_bank_votes.contains(tx_signature) {
+            return None;
+        }
+        self.previously_sent_to_bank_votes.insert(*tx_signature);
+        // Filter out votes on the wrong fork (or too old to be)
+        // on this fork
+        if self
+            .slot_hashes
+            .get(slot)
+            .map(|found_hash| found_hash == hash)
+            .unwrap_or(false)
+        {
+            Some(packet.clone())
+        } else {
+            None
+        }
+    }
 }
 
 /// Each iteration returns all of the missing votes for a single validator, the votes
@@ -71,6 +103,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     type Item = Vec<PacketBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        use SingleValidatorVotes::*;
         // TODO: Maybe prioritize by stake weight
         while !self.vote_account_keys.is_empty() {
             let vote_account_key = self.vote_account_keys.pop().unwrap();
@@ -91,30 +124,20 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                             vote_account.vote_state().as_ref().ok().map(|vote_state| {
                                 let start_vote_slot =
                                     vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
-                                // Filter out the votes that are outdated
-                                validator_gossip_votes
-                                    .range((start_vote_slot, Hash::default())..)
-                                    .filter_map(|((slot, hash), (packet, tx_signature))| {
-                                        if self.previously_sent_to_bank_votes.contains(tx_signature)
-                                        {
-                                            return None;
-                                        }
-                                        // Don't send the same vote to the same bank multiple times
-                                        self.previously_sent_to_bank_votes.insert(*tx_signature);
-                                        // Filter out votes on the wrong fork (or too old to be)
-                                        // on this fork
-                                        if self
-                                            .slot_hashes
-                                            .get(slot)
-                                            .map(|found_hash| found_hash == hash)
-                                            .unwrap_or(false)
-                                        {
-                                            Some(packet.clone())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect::<Vec<PacketBatch>>()
+                                match validator_gossip_votes {
+                                    FullVote((slot, hash), (packet, tx_signature)) => self
+                                        .filter_vote(slot, hash, packet, tx_signature)
+                                        .map(|packet| vec![packet])
+                                        .unwrap_or_default(),
+                                    IncrementalVotes(validator_gossip_votes) => {
+                                        validator_gossip_votes
+                                            .range((start_vote_slot, Hash::default())..)
+                                            .filter_map(|((slot, hash), (packet, tx_signature))| {
+                                                self.filter_vote(slot, hash, packet, tx_signature)
+                                            })
+                                            .collect::<Vec<PacketBatch>>()
+                                    }
+                                }
                             })
                         })
                 });
@@ -128,7 +151,28 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
-pub type SingleValidatorVotes = BTreeMap<(Slot, Hash), (PacketBatch, Signature)>;
+pub enum SingleValidatorVotes {
+    FullVote((Slot, Hash), (PacketBatch, Signature)),
+    IncrementalVotes(BTreeMap<(Slot, Hash), (PacketBatch, Signature)>),
+}
+
+impl SingleValidatorVotes {
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        match self {
+            Self::IncrementalVotes(votes) => votes.len(),
+            _ => 1,
+        }
+    }
+
+    #[cfg(test)]
+    fn get_slot_from_full_vote(&self) -> Option<Slot> {
+        match self {
+            &Self::FullVote((slot, _), _) => Some(slot),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct VerifiedVotePackets(HashMap<Pubkey, SingleValidatorVotes>);
@@ -138,10 +182,17 @@ impl VerifiedVotePackets {
         &mut self,
         vote_packets_receiver: &VerifiedLabelVotePacketsReceiver,
         would_be_leader: bool,
+        feature_set: Option<Arc<FeatureSet>>,
     ) -> Result<()> {
+        use SingleValidatorVotes::*;
         const RECV_TIMEOUT: Duration = Duration::from_millis(200);
         let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
         let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
+        let mut new_style = false;
+        if let Some(feature_set) = feature_set {
+            new_style = feature_set.is_active(&allow_votes_to_directly_update_vote_state::id());
+        }
+
         for gossip_votes in vote_packets {
             if would_be_leader {
                 for verfied_vote_metadata in gossip_votes {
@@ -158,12 +209,39 @@ impl VerifiedVotePackets {
                     let slot = vote.last_voted_slot().unwrap();
                     let hash = vote.hash();
 
-                    let validator_votes = self.0.entry(vote_account_key).or_default();
-                    validator_votes.insert((slot, hash), (packet_batch, signature));
-
-                    if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
-                        let smallest_key = validator_votes.keys().next().cloned().unwrap();
-                        validator_votes.remove(&smallest_key).unwrap();
+                    if new_style {
+                        let latest_slot_sent_to_bank = match self.0.get(&vote_account_key) {
+                            Some(&FullVote((slot, _), _)) => slot,
+                            _ => 0,
+                        };
+                        // Since votes are not incremental, we keep only the latest vote
+                        if slot > latest_slot_sent_to_bank {
+                            self.0.insert(
+                                vote_account_key,
+                                FullVote((slot, hash), (packet_batch, signature)),
+                            );
+                        }
+                    } else {
+                        let validator_votes: &mut BTreeMap<(Slot, Hash), (PacketBatch, Signature)> =
+                            match self
+                                .0
+                                .entry(vote_account_key)
+                                .or_insert(IncrementalVotes(BTreeMap::new()))
+                            {
+                                IncrementalVotes(votes) => votes,
+                                _ => {
+                                    error!(
+                                        "Full votes are present without feature active for {}",
+                                        vote_account_key
+                                    );
+                                    continue;
+                                }
+                            };
+                        validator_votes.insert((slot, hash), (packet_batch, signature));
+                        if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
+                            let smallest_key = validator_votes.keys().next().cloned().unwrap();
+                            validator_votes.remove(&smallest_key).unwrap();
+                        }
                     }
                 }
             }
@@ -175,12 +253,13 @@ impl VerifiedVotePackets {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
+        super::{SingleValidatorVotes::*, *},
         crate::{result::Error, vote_simulator::VoteSimulator},
         crossbeam_channel::unbounded,
         solana_perf::packet::Packet,
         solana_sdk::slot_hashes::MAX_ENTRIES,
-        solana_vote_program::vote_state::Vote,
+        solana_vote_program::vote_state::{Lockout, Vote, VoteStateUpdate},
+        std::collections::VecDeque,
     };
 
     #[test]
@@ -203,7 +282,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -223,7 +302,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -245,7 +324,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -268,7 +347,7 @@ mod tests {
         }])
         .unwrap();
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -281,7 +360,7 @@ mod tests {
 
         // No new messages, should time out
         assert_matches!(
-            verified_vote_packets.receive_and_process_vote_packets(&r, true),
+            verified_vote_packets.receive_and_process_vote_packets(&r, true, None),
             Err(Error::RecvTimeout(_))
         );
     }
@@ -310,7 +389,7 @@ mod tests {
 
         // At most `MAX_VOTES_PER_VALIDATOR` should be stored per validator
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         assert_eq!(
             verified_vote_packets
@@ -348,7 +427,7 @@ mod tests {
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
 
         // Create tracker for previously sent bank votes
@@ -403,7 +482,7 @@ mod tests {
         // Ingest the votes into the buffer
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
 
         // Check we get two batches, one for each validator. Each batch
@@ -466,7 +545,7 @@ mod tests {
         .unwrap();
         // Ingest the votes into the buffer
         verified_vote_packets
-            .receive_and_process_vote_packets(&r, true)
+            .receive_and_process_vote_packets(&r, true, None)
             .unwrap();
         let mut gossip_votes_iterator = ValidatorGossipVotesIterator::new(
             my_leader_bank,
@@ -475,5 +554,158 @@ mod tests {
         );
         assert!(gossip_votes_iterator.next().is_some());
         assert!(gossip_votes_iterator.next().is_none());
+    }
+
+    #[test]
+    fn test_only_latest_vote_is_sent_with_feature() {
+        let (s, r) = unbounded();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
+
+        // Send three vote state updates that are out of order
+        let first_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
+        let second_vote = VoteStateUpdate::from(vec![(2, 4), (4, 3), (11, 1)]);
+        let third_vote = VoteStateUpdate::from(vec![(2, 5), (4, 4), (11, 3), (12, 2), (13, 1)]);
+
+        for vote in vec![second_vote.clone(), first_vote.clone()] {
+            s.send(vec![VerifiedVoteMetadata {
+                vote_account_key,
+                vote: VoteTransaction::from(vote),
+                packet_batch: PacketBatch::default(),
+                signature: Signature::new(&[1u8; 64]),
+            }])
+            .unwrap();
+        }
+
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        let feature_set = Some(Arc::new(feature_set));
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, feature_set.clone())
+            .unwrap();
+
+        // second_vote should be kept and first_vote ignored
+        let slot = verified_vote_packets
+            .0
+            .get(&vote_account_key)
+            .unwrap()
+            .get_slot_from_full_vote()
+            .unwrap();
+        assert_eq!(11, slot);
+
+        // Now send the third_vote, it should overwrite second_vote
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote: VoteTransaction::from(third_vote.clone()),
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, feature_set)
+            .unwrap();
+        let slot = verified_vote_packets
+            .0
+            .get(&vote_account_key)
+            .unwrap()
+            .get_slot_from_full_vote()
+            .unwrap();
+        assert_eq!(13, slot);
+
+        // Now send all three, but keep the feature off
+        for vote in vec![second_vote, first_vote, third_vote] {
+            s.send(vec![VerifiedVoteMetadata {
+                vote_account_key,
+                vote: VoteTransaction::from(vote),
+                packet_batch: PacketBatch::default(),
+                signature: Signature::new(&[1u8; 64]),
+            }])
+            .unwrap();
+        }
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+        let feature_set = FeatureSet::default();
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+
+        assert_eq!(
+            3,
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len()
+        );
+    }
+
+    #[test]
+    fn test_latest_vote_feature_upgrade() {
+        let (s, r) = unbounded();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
+
+        // Send incremental votes
+        for i in 0..100 {
+            let vote = VoteTransaction::from(Vote::new(vec![i], Hash::new_unique()));
+            s.send(vec![VerifiedVoteMetadata {
+                vote_account_key,
+                vote,
+                packet_batch: PacketBatch::default(),
+                signature: Signature::new(&[1u8; 64]),
+            }])
+            .unwrap();
+        }
+
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+        // Receive votes without the feature active
+        let feature_set = Some(Arc::new(FeatureSet::default()));
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, feature_set)
+            .unwrap();
+        assert_eq!(
+            100,
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .len()
+        );
+
+        // Now send some new votes
+        for i in 101..201 {
+            let slots = std::iter::zip((i - 30)..(i + 1), (1..32).rev())
+                .map(|(slot, confirmation_count)| Lockout {
+                    slot,
+                    confirmation_count,
+                })
+                .into_iter()
+                .collect::<VecDeque<Lockout>>();
+            let vote = VoteTransaction::from(VoteStateUpdate::new(
+                slots,
+                Some(i - 32),
+                Hash::new_unique(),
+            ));
+            s.send(vec![VerifiedVoteMetadata {
+                vote_account_key,
+                vote,
+                packet_batch: PacketBatch::default(),
+                signature: Signature::new(&[1u8; 64]),
+            }])
+            .unwrap();
+        }
+
+        // Receive votes with the feature active
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+        if let &FullVote((slot, _), (_, _)) =
+            verified_vote_packets.0.get(&vote_account_key).unwrap()
+        {
+            assert_eq!(200, slot);
+        } else {
+            panic!("Feature active but incremental votes are present");
+        }
     }
 }
