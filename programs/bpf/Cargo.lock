@@ -3959,6 +3959,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-curve25519"
+version = "1.10.25"
+dependencies = [
+ "solana-program 1.10.25",
+ "solana-zk-token-sdk 1.10.25",
+]
+
+[[package]]
 name = "solana-bpf-rust-custom-heap"
 version = "1.10.25"
 dependencies = [

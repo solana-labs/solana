@@ -129,8 +129,11 @@ mod target_arch {
 mod target_arch {
     use {
         super::*,
-        crate::curve25519::curve_syscall_traits::{
-            sol_curve_op, sol_curve_validate_point, ADD, CURVE25519_EDWARDS, MUL, SUB,
+        crate::curve25519::{
+            curve_syscall_traits::{
+                sol_curve_group_op, sol_curve_validate_point, ADD, CURVE25519_EDWARDS, MUL, SUB,
+            },
+            scalar::PodScalar,
         },
     };
 
@@ -152,7 +155,7 @@ mod target_arch {
     ) -> Option<PodEdwardsPoint> {
         let mut result_point = PodEdwardsPoint::zeroed();
         let result = unsafe {
-            sol_curve_op(
+            sol_curve_group_op(
                 CURVE25519_EDWARDS,
                 ADD,
                 &left_point.0 as *const u8,
@@ -174,7 +177,7 @@ mod target_arch {
     ) -> Option<PodEdwardsPoint> {
         let mut result_point = PodEdwardsPoint::zeroed();
         let result = unsafe {
-            sol_curve_op(
+            sol_curve_group_op(
                 CURVE25519_EDWARDS,
                 SUB,
                 &left_point.0 as *const u8,
@@ -191,16 +194,16 @@ mod target_arch {
     }
 
     pub fn multiply_edwards(
-        left_point: &PodEdwardsPoint,
-        right_point: &PodEdwardsPoint,
+        scalar: &PodScalar,
+        point: &PodEdwardsPoint,
     ) -> Option<PodEdwardsPoint> {
         let mut result_point = PodEdwardsPoint::zeroed();
         let result = unsafe {
-            sol_curve_op(
+            sol_curve_group_op(
                 CURVE25519_EDWARDS,
                 MUL,
-                &left_point.0 as *const u8,
-                &right_point.0 as *const u8,
+                &scalar.0 as *const u8,
+                &point.0 as *const u8,
                 &mut result_point.0 as *mut u8,
             )
         };

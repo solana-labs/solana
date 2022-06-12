@@ -187,9 +187,11 @@ pub fn register_syscalls(
         .is_active(&feature_set::curve25519_syscall_enabled::id())
     {
         syscall_registry.register_syscall_by_name(
-            b"sol_curve25519_point_validation",
+            b"sol_curve_validate_point",
             SyscallCurvePointValidation::call,
         )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_curve_group_op", SyscallCurveGroupOps::call)?;
     }
 
     syscall_registry
