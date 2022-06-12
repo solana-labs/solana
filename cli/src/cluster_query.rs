@@ -624,11 +624,12 @@ pub fn parse_show_stakes(
     let use_lamports_unit = matches.is_present("lamports");
     let vote_account_pubkeys =
         pubkeys_of_multiple_signers(matches, "vote_account_pubkeys", wallet_manager)?;
-
+    let withdrawer_pubkey : Option<String> = value_of<String>(matches, "withdrawer_pubkey");
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdrawer_pubkey,
         },
         signers: vec![],
     })
@@ -1749,6 +1750,7 @@ pub fn process_show_stakes(
     config: &CliConfig,
     use_lamports_unit: bool,
     vote_account_pubkeys: Option<&[Pubkey]>,
+    withdraw_authority_pubkey: Opetion<&Pubkey>,
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
 
@@ -1786,6 +1788,46 @@ pub fn process_show_stakes(
             ]);
         }
     }
+
+    if(let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey) {
+
+        match program_accounts_config.filters {
+            Some(filters) => {
+                // already filtered by stake by vote_accounts
+                filters.append(
+                    // Filter by withdrawer
+                    rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                    offset: 44,
+                        bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                            vote_account_pubkeys[0].to_string(),
+                        ),
+                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+                }),
+            )
+            },
+            None => {
+                program_accounts_config.filters = Some(vec![
+                    // Filter by `StakeState::Stake(_, _)`
+                    rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp{
+                        offset : 0,
+                        bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                            bs58::encode([2, 0, 0, 0]).into_string(),
+                        ),
+                        encoding: Some(rpc_filter::MemcmpEncoding::Binary)
+                    }),
+                    // Filter by withdrawer
+                    rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                        offset: 44,
+                            bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                                vote_account_pubkeys[0].to_string(),
+                            ),
+                        encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+                    }),
+                ]);
+            }
+        }
+    }
+
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
