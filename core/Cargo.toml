@@ -20,7 +20,7 @@ bincode = "1.3.3"
 bs58 = "0.4.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
-dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
+dashmap = { git = "https://github.com/ryoqun/dashmap", rev = "589871553efed3082c7653bef3765b99bd5a3ee8", features = ["rayon", "raw-api"] }
 etcd-client = { version = "0.8.1", features = ["tls"] }
 fs_extra = "1.2.0"
 histogram = "0.6.9"
@@ -30,7 +30,7 @@ lru = "0.7.5"
 min-max-heap = "1.3.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
-rayon = "1.5.3"
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
 retain_mut = "0.1.7"
 serde = "1.0.136"
 serde_derive = "1.0.103"

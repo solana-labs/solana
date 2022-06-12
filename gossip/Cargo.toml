@@ -15,7 +15,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 flate2 = "1.0"
-indexmap = { version = "1.8", features = ["rayon"] }
+indexmap = { git = "https://github.com/ryoqun/indexmap", rev = "01a57d0146f649caa0d2d2bbb97bf07201d629cb", features = ["rayon"] }
 itertools = "0.10.3"
 log = "0.4.14"
 lru = "0.7.5"
@@ -23,7 +23,7 @@ matches = "0.1.9"
 num-traits = "0.2"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
-rayon = "1.5.3"
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
 serde = "1.0.136"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"

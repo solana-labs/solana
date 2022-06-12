@@ -14,7 +14,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 fnv = "1.0.7"
 log = "0.4.14"
 rand = "0.7.0"
-rayon = "1.5.3"
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
 serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.24" }

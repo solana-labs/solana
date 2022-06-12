@@ -11,7 +11,7 @@ publish = false
 [dependencies]
 clap = "2.33.1"
 log = "0.4.14"
-rayon = "1.5.3"
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
 solana-logger = { path = "../logger", version = "=1.10.24" }
 solana-measure = { path = "../measure", version = "=1.10.24" }
 solana-runtime = { path = "../runtime", version = "=1.10.24" }

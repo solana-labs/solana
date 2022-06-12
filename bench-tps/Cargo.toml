@@ -12,7 +12,7 @@ publish = false
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 log = "0.4.14"
-rayon = "1.5.3"
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
 serde_json = "1.0.79"
 serde_yaml = "0.8.23"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.24" }
