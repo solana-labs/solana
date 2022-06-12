@@ -119,19 +119,7 @@ Alternatively use the Github UI.
 
 ### Update release branch with the next patch version
 
-1. After the new release has been tagged, update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1) with:
-     ```
-     $ scripts/increment-cargo-version.sh patch
-     $ ./scripts/cargo-for-all-lock-files.sh tree
-     ```
-1. Push all the changed Cargo.toml and Cargo.lock files to the **release branch** with something like:
-    ```
-    git co -b version_update origin/vX.Y
-    git add -u
-    git commit -m 'Bump version to X.Y.Z+1'
-    git push -u <user-remote> version_update
-    ```
-1. Open a PR against origin/vX.Y and then merge the PR after passing CI.
+[This action](https://github.com/solana-labs/solana/blob/master/.github/workflows/increment-cargo-version-on-release.yml) ensures that publishing a release will trigger the creation of a PR to update the Cargo.toml files on **release branch** to the next semantic version (e.g. 0.9.0 -> 0.9.1). Ensure that the created PR makes it through CI and gets submitted.
 
 ### Prepare for the next release
 1.  Go to [GitHub Releases](https://github.com/solana-labs/solana/releases) and create a new draft release for `X.Y.Z+1` with empty release notes.  This allows people to incrementally add new release notes until it's time for the next release
@@ -145,8 +133,8 @@ Verify that all of the build artifacts are present, then the uncheck **"This is 
 
 Build artifacts can take up to 60 minutes after creating the tag before
 appearing.  To check for progress:
-* The `solana-secondary` Buildkite pipeline handles creating the Linux release artifacts and updated crates.  Look for a job under the tag name of the release: https://buildkite.com/solana-labs/solana-secondary.
-* The macOS and Windows release artifacts are produced by Travis CI: https://travis-ci.com/github/solana-labs/solana/branches
+* The `solana-secondary` Buildkite pipeline handles creating the Linux and macOS release artifacts and updated crates.  Look for a job under the tag name of the release: https://buildkite.com/solana-labs/solana-secondary.
+* The Windows release artifacts are produced by GitHub Actions.  Look for a job under the tag name of the release: https://github.com/solana-labs/solana/actions.
 
 [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.  This can take 2-3 hours, and sometimes fails in the `solana-secondary` job.
 If this happens and the error is non-fatal, click "Retry" on the "publish crate" job
