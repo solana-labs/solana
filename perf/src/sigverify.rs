@@ -615,7 +615,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
     if desired_thread_count <= 1 {
         // When using single thread, skip rayon overhead.
-        batches.into_iter().for_each(|batch| {
+        batches.iter_mut().for_each(|batch| {
             batch.iter_mut().for_each(|packet| {
                 if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                     packet.meta.set_discard(true);
