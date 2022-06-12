@@ -131,7 +131,9 @@ mod target_arch {
     use {
         super::*,
         crate::curve25519::{
-            curve_syscall_traits::{ADD, CURVE25519_RISTRETTO, MUL, SUB},
+            curve_syscall_traits::{
+                sol_curve_group_op, sol_curve_validate_point, ADD, CURVE25519_RISTRETTO, MUL, SUB,
+            },
             scalar::PodScalar,
         },
     };
@@ -139,7 +141,7 @@ mod target_arch {
     pub fn validate_ristretto(point: &PodRistrettoPoint) -> bool {
         let mut validate_result = 0u8;
         let result = unsafe {
-            solana_program::syscalls::sol_curve_validate_point(
+            sol_curve_validate_point(
                 CURVE25519_RISTRETTO,
                 &point.0 as *const u8,
                 &mut validate_result,
@@ -155,7 +157,7 @@ mod target_arch {
     ) -> Option<PodRistrettoPoint> {
         let mut result_point = PodRistrettoPoint::zeroed();
         let result = unsafe {
-            solana_program::syscalls::sol_curve_group_op(
+            sol_curve_group_op(
                 CURVE25519_RISTRETTO,
                 ADD,
                 &left_point.0 as *const u8,
@@ -177,7 +179,7 @@ mod target_arch {
     ) -> Option<PodRistrettoPoint> {
         let mut result_point = PodRistrettoPoint::zeroed();
         let result = unsafe {
-            solana_program::syscalls::sol_curve_group_op(
+            sol_curve_group_op(
                 CURVE25519_RISTRETTO,
                 SUB,
                 &left_point.0 as *const u8,
@@ -199,7 +201,7 @@ mod target_arch {
     ) -> Option<PodRistrettoPoint> {
         let mut result_point = PodRistrettoPoint::zeroed();
         let result = unsafe {
-            solana_program::syscalls::sol_curve_group_op(
+            sol_curve_group_op(
                 CURVE25519_RISTRETTO,
                 MUL,
                 &scalar.0 as *const u8,

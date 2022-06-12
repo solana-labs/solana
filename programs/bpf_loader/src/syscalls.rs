@@ -182,35 +182,19 @@ pub fn register_syscalls(
         )?;
     }
 
-<<<<<<< HEAD
     if invoke_context
         .feature_set
         .is_active(&feature_set::curve25519_syscall_enabled::id())
     {
         syscall_registry.register_syscall_by_name(
-            b"sol_curve25519_point_validation",
+            b"sol_curve_validate_point",
             SyscallCurvePointValidation::call,
         )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_curve_group_op",
+            SyscallCurveGroupOps::call,
+        )?;
     }
-=======
-    // Elliptic Curve Point Validation
-    //
-    // TODO: add group operations and multiscalar multiplications
-    register_feature_gated_syscall!(
-        syscall_registry,
-        curve25519_syscall_enabled,
-        b"sol_curve_validate_point",
-        SyscallCurvePointValidation::init,
-        SyscallCurvePointValidation::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        curve25519_syscall_enabled,
-        b"sol_curve_group_op",
-        SyscallCurveGroupOps::init,
-        SyscallCurveGroupOps::call,
-    )?;
->>>>>>> 697a69cbe (Add syscall tests for curve25519 (#25634))
 
     syscall_registry
         .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;

@@ -83,7 +83,6 @@ pub const CURVE25519_RISTRETTO: u64 = 1;
 pub const ADD: u64 = 0;
 pub const SUB: u64 = 1;
 pub const MUL: u64 = 2;
-<<<<<<< HEAD
 
 // Functions are organized by the curve traits, which can be instantiated by multiple curve
 // representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run
@@ -93,7 +92,7 @@ pub const MUL: u64 = 2;
 extern "C" {
     pub fn sol_curve_validate_point(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 
-    pub fn sol_curve_op(
+    pub fn sol_curve_group_op(
         curve_id: u64,
         op_id: u64,
         left_point: *const u8,
@@ -110,5 +109,3 @@ extern "C" {
 
     pub fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64;
 }
-=======
->>>>>>> 697a69cbe (Add syscall tests for curve25519 (#25634))
