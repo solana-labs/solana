@@ -39,8 +39,8 @@ const TRACER_KEY_BYTES: [u8; 32] = [
 ];
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
-// Empirically derived to achieve max verify latency of ~8ms at lower packet counts
-const VERIFY_MIN_PACKETS_PER_THREAD: usize = 16;
+// Empirically derived to constrain max verify latency to ~8ms at lower packet counts
+const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -610,22 +610,20 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     debug!("CPU ECDSA for {}", packet_count);
-
     let desired_thread_count = packet_count
         .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
-    if desired_thread_count >= get_thread_count() {
-        // When using all available threads, skip the overhead of flattening, collecting, etc.
-        PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter().for_each(|batch| {
-                batch.par_iter_mut().for_each(|packet| {
-                    if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
-                        packet.meta.set_discard(true);
-                    }
-                })
-            });
+    if desired_thread_count <= 1 {
+        // When using single thread, skip rayon overhead.
+        batches.into_par_iter().for_each(|batch| {
+            batch.par_iter_mut().for_each(|packet| {
+                if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                    packet.meta.set_discard(true);
+                }
+            })
         });
-    } else {
+    } else if desired_thread_count < get_thread_count() {
+        // Dynamically compute minimum packet length to spread the load while minimizing threads.
         let packets_per_thread = packet_count.saturating_div(desired_thread_count);
         PAR_THREAD_POOL.install(|| {
             batches
@@ -640,8 +638,18 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                     }
                 })
         });
-    };
-
+    } else {
+        // When using all available threads, skip the overhead of flattening, collecting, etc.
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch.par_iter_mut().for_each(|packet| {
+                    if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                        packet.meta.set_discard(true);
+                    }
+                })
+            });
+        });
+    }
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
