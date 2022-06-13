@@ -121,6 +121,9 @@ impl BigTableConnection {
     ///
     /// The BIGTABLE_EMULATOR_HOST environment variable is also respected.
     ///
+    /// The BIGTABLE_PROXY environment variable is used to configure the gRPC connection through a
+    /// forward proxy (see HTTP_PROXY).
+    ///
     pub async fn new(
         instance_name: &str,
         read_only: bool,
@@ -179,7 +182,7 @@ impl BigTableConnection {
 
                 let mut http = hyper::client::HttpConnector::new();
                 http.enforce_http(false);
-                let channel = match std::env::var("BT_PROXY") {
+                let channel = match std::env::var("BIGTABLE_PROXY") {
                     Ok(proxy_uri) => {
                         let proxy = hyper_proxy::Proxy::new(
                             hyper_proxy::Intercept::All,
