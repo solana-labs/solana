@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2022 Chorus One AG
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: Apache-2.0
 
 //! Utilities for formatting Prometheus metrics.
 //!
