@@ -123,7 +123,7 @@ pub fn parse_system(
             })
         }
         SystemInstruction::AuthorizeNonceAccount(authority) => {
-            check_num_system_accounts(&instruction.accounts, 1)?;
+            check_num_system_accounts(&instruction.accounts, 2)?;
             Ok(ParsedInstructionEnum {
                 instruction_type: "authorizeNonce".to_string(),
                 info: json!({
@@ -609,13 +609,10 @@ mod test {
             &authorized_pubkey,
             &new_authority_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
+        let keys = message.account_keys.clone();
         assert_eq!(
-            parse_system(
-                &message.instructions[0],
-                &AccountKeys::new(&message.account_keys, None)
-            )
-            .unwrap(),
+            parse_system(&message.instructions[0], &AccountKeys::new(&keys, None)).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "authorizeNonce".to_string(),
                 info: json!({
@@ -627,8 +624,10 @@ mod test {
         );
         assert!(parse_system(
             &message.instructions[0],
-            &AccountKeys::new(&message.account_keys[0..1], None)
+            &AccountKeys::new(&keys[0..1], None)
         )
         .is_err());
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 }
