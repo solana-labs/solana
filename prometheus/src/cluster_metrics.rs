@@ -29,10 +29,10 @@ impl ValidatorVoteInfo {
                     return None;
                 }
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
-                    vote.slot
+                    Some(vote.slot)
                 } else {
-                    0
-                };
+                    None
+                }?;
                 let vote_balance = Lamports(bank.get_balance(&vote_pubkey));
                 Some(ValidatorVoteInfo {
                     vote_address: vote_pubkey,
