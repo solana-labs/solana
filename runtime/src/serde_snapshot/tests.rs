@@ -88,6 +88,7 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        false,
     )
     .map(|(accounts_db, _)| accounts_db)
 }
@@ -300,6 +301,7 @@ fn test_bank_serialize_style(
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        false,
     )
     .unwrap();
     dbank.src = ref_sc;
@@ -415,6 +417,7 @@ fn test_extra_fields_eof() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        false,
     )
     .unwrap();
 
@@ -536,6 +539,7 @@ fn test_blank_extra_fields() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        false,
     )
     .unwrap();
 
