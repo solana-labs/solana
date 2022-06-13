@@ -636,8 +636,8 @@ pub mod vote {
     }
 }
 
-/// A vector of all Solana SDK Program IDs
-pub mod program_ids {
+/// A vector of Solana SDK IDs
+pub mod sdk_ids {
     use {
         crate::{
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
@@ -648,8 +648,8 @@ pub mod program_ids {
     };
 
     lazy_static! {
-        pub static ref SKD_PROGRAM_IDS: Vec<Pubkey> = {
-            let mut program_ids = vec![
+        pub static ref SDK_IDS: Vec<Pubkey> = {
+            let mut sdk_ids = vec![
                 ed25519_program::id(),
                 secp256k1_program::id(),
                 system_program::id(),
@@ -663,8 +663,8 @@ pub mod program_ids {
                 bpf_loader_deprecated::id(),
                 stake::config::id(),
             ];
-            program_ids.extend(sysvar::ALL_IDS.iter());
-            program_ids
+            sdk_ids.extend(sysvar::ALL_IDS.iter());
+            sdk_ids
         };
     }
 }
