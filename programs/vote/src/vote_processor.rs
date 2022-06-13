@@ -212,6 +212,17 @@ mod tests {
         std::{collections::HashSet, str::FromStr},
     };
 
+    struct VoteAccountTestFixtureWithAuthorities {
+        vote_account: AccountSharedData,
+        vote_pubkey: Pubkey,
+        voter_base_key: Pubkey,
+        voter_owner: Pubkey,
+        voter_seed: String,
+        withdrawer_base_key: Pubkey,
+        withdrawer_owner: Pubkey,
+        withdrawer_seed: String,
+    }
+
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
     }
@@ -338,6 +349,41 @@ mod tests {
                 100,
             ),
         )
+    }
+
+    fn create_test_account_with_authorized_from_seed() -> VoteAccountTestFixtureWithAuthorities {
+        let vote_pubkey = Pubkey::new_unique();
+        let voter_base_key = Pubkey::new_unique();
+        let voter_owner = Pubkey::new_unique();
+        let voter_seed = String::from("VOTER_SEED");
+        let withdrawer_base_key = Pubkey::new_unique();
+        let withdrawer_owner = Pubkey::new_unique();
+        let withdrawer_seed = String::from("WITHDRAWER_SEED");
+        let authorized_voter =
+            Pubkey::create_with_seed(&voter_base_key, voter_seed.as_str(), &voter_owner).unwrap();
+        let authorized_withdrawer = Pubkey::create_with_seed(
+            &withdrawer_base_key,
+            withdrawer_seed.as_str(),
+            &withdrawer_owner,
+        )
+        .unwrap();
+
+        VoteAccountTestFixtureWithAuthorities {
+            vote_account: vote_state::create_account_with_authorized(
+                &Pubkey::new_unique(),
+                &authorized_voter,
+                &authorized_withdrawer,
+                0,
+                100,
+            ),
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+        }
     }
 
     fn create_test_account_with_epoch_credits(
