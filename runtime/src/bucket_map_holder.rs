@@ -67,7 +67,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
-        // this should happen before the age.fetch_add
+        // this should happen before the age.fetch_add. Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
         let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
@@ -128,11 +128,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.age.load(Ordering::Acquire)
     }
 
-    pub fn bucket_flushed_at_current_age(&self) {
+    pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
         let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
-        self.maybe_advance_age_internal(
-            self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
-        );
+        if can_advance_age {
+            self.maybe_advance_age_internal(
+                self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
+            );
+        }
     }
 
     /// have all buckets been flushed at the current age?
@@ -293,7 +295,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     // intended to execute in a bg thread
-    pub fn background(&self, exit: Arc<AtomicBool>, in_mem: Vec<Arc<InMemAccountsIndex<T>>>) {
+    pub fn background(
+        &self,
+        exit: Arc<AtomicBool>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
+        can_advance_age: bool,
+    ) {
         let bins = in_mem.len();
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
@@ -308,6 +315,10 @@ impl<T: IndexValue> BucketMapHolder<T> {
                         .remaining_until_next_interval(self.age_interval_ms()),
                     self.stats.remaining_until_next_interval(),
                 );
+                if !can_advance_age {
+                    // if this thread cannot advance age, then make sure we don't sleep 0
+                    wait = wait.max(1);
+                }
                 if let Some(throttling_wait_ms) = throttling_wait_ms {
                     self.stats
                         .bg_throttling_wait_us
@@ -323,7 +334,9 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     .bg_waiting_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
                 // likely some time has elapsed. May have been waiting for age time interval to elapse.
-                self.maybe_advance_age();
+                if can_advance_age {
+                    self.maybe_advance_age();
+                }
             }
             throttling_wait_ms = None;
 
@@ -335,7 +348,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             for _ in 0..bins {
                 if flush {
                     let index = self.next_bucket_to_flush();
-                    in_mem[index].flush();
+                    in_mem[index].flush(can_advance_age);
                 }
                 self.stats.report_stats(self);
                 if self.all_buckets_flushed_at_current_age() {
@@ -449,11 +462,11 @@ pub mod tests {
         let time = AGE_MS * 5 / 2;
         let expected = (time / AGE_MS) as Age;
         let now = Instant::now();
-        test.bucket_flushed_at_current_age(); // done with age 0
+        test.bucket_flushed_at_current_age(true); // done with age 0
         (0..threads).into_par_iter().for_each(|_| {
             while now.elapsed().as_millis() < (time as u128) {
                 if test.maybe_advance_age() {
-                    test.bucket_flushed_at_current_age();
+                    test.bucket_flushed_at_current_age(true);
                 }
             }
         });
@@ -468,7 +481,7 @@ pub mod tests {
         assert_eq!(test.current_age(), 0);
         for _ in 0..bins {
             assert!(!test.all_buckets_flushed_at_current_age());
-            test.bucket_flushed_at_current_age();
+            test.bucket_flushed_at_current_age(true);
         }
         std::thread::sleep(std::time::Duration::from_millis(AGE_MS * 2));
         test.maybe_advance_age();

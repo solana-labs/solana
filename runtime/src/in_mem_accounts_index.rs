@@ -72,7 +72,6 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, Option<AccountMapEntry<T>>)>,
 }
 
-#[allow(dead_code)] // temporary during staging
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
         Self {
@@ -101,9 +100,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     /// called after flush scans this bucket at the current age
-    fn set_has_aged(&self, age: Age) {
+    fn set_has_aged(&self, age: Age, can_advance_age: bool) {
         self.last_age_flushed.store(age, Ordering::Release);
-        self.storage.bucket_flushed_at_current_age();
+        self.storage.bucket_flushed_at_current_age(can_advance_age);
     }
 
     fn last_age_flushed(&self) -> Age {
@@ -880,9 +879,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.stop_evictions_changes.load(Ordering::Acquire)
     }
 
-    pub(crate) fn flush(&self) {
+    pub(crate) fn flush(&self, can_advance_age: bool) {
         if let Some(flush_guard) = FlushGuard::lock(&self.flushing_active) {
-            self.flush_internal(&flush_guard)
+            self.flush_internal(&flush_guard, can_advance_age)
         }
     }
 
@@ -987,7 +986,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     /// synchronize the in-mem index with the disk index
-    fn flush_internal(&self, flush_guard: &FlushGuard) {
+    fn flush_internal(&self, flush_guard: &FlushGuard, can_advance_age: bool) {
         let current_age = self.storage.current_age();
         let iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
@@ -1097,7 +1096,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             if iterate_for_age {
                 // completed iteration of the buckets at the current age
                 assert_eq!(current_age, self.storage.current_age());
-                self.set_has_aged(current_age);
+                self.set_has_aged(current_age, can_advance_age);
             }
         }
     }
@@ -1494,13 +1493,13 @@ mod tests {
         let test = new_for_test::<u64>();
         assert!(test.get_should_age(test.storage.current_age()));
         assert_eq!(test.storage.count_buckets_flushed(), 0);
-        test.set_has_aged(0);
+        test.set_has_aged(0, true);
         assert!(!test.get_should_age(test.storage.current_age()));
         assert_eq!(test.storage.count_buckets_flushed(), 1);
         // simulate rest of buckets aging
         for _ in 1..BINS_FOR_TESTING {
             assert!(!test.storage.all_buckets_flushed_at_current_age());
-            test.storage.bucket_flushed_at_current_age();
+            test.storage.bucket_flushed_at_current_age(true);
         }
         assert!(test.storage.all_buckets_flushed_at_current_age());
         // advance age
