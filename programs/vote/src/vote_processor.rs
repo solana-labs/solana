@@ -6,7 +6,11 @@ use {
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
-    solana_sdk::{feature_set, instruction::InstructionError, program_utils::limited_deserialize},
+    solana_sdk::{
+        feature_set, instruction::InstructionError, program_utils::limited_deserialize,
+        pubkey::Pubkey,
+    },
+    std::collections::HashSet,
 };
 
 pub fn process_instruction(
@@ -48,8 +52,29 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-        VoteInstruction::AuthorizeWithSeed(_args) => {
-            unimplemented!("VoteInstruction::AuthorizeWithSeed")
+        VoteInstruction::AuthorizeWithSeed(args) => {
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
+            let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
+            let authority_base_key_index = first_instruction_account + 2;
+            if instruction_context.is_signer(authority_base_key_index)? {
+                let base_pubkey = transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_in_transaction(authority_base_key_index)?,
+                )?;
+                expected_authority_keys.insert(Pubkey::create_with_seed(
+                    base_pubkey,
+                    args.current_authority_derived_key_seed.as_str(),
+                    &args.current_authority_derived_key_owner,
+                )?);
+            };
+            vote_state::authorize(
+                &mut me,
+                &args.new_authority,
+                args.authorization_type,
+                &expected_authority_keys,
+                &clock,
+                &invoke_context.feature_set,
+            )
         }
         VoteInstruction::UpdateValidatorIdentity => {
             instruction_context.check_number_of_instruction_accounts(2)?;
