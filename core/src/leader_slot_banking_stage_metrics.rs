@@ -616,18 +616,6 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_slot_metrics_check_slot_boundary_us(&mut self, us: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .timing_metrics
-                    .outer_loop_timings
-                    .slot_metrics_check_slot_boundary_us,
-                us
-            );
-        }
-    }
-
     pub(crate) fn increment_receive_and_buffer_packets_us(&mut self, us: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(

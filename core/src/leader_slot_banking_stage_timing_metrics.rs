@@ -133,9 +133,6 @@ pub(crate) struct OuterLoopTimings {
     // Time spent processing buffered packets
     pub process_buffered_packets_us: u64,
 
-    // Time spent checking for slot boundary and reporting leader slot metrics
-    pub slot_metrics_check_slot_boundary_us: u64,
-
     // Time spent processing new incoming packets to the banking thread
     pub receive_and_buffer_packets_us: u64,
 
@@ -153,7 +150,6 @@ impl OuterLoopTimings {
             bank_detected_time: Instant::now(),
             bank_detected_delay_us: bank_creation_time.elapsed().as_micros() as u64,
             process_buffered_packets_us: 0,
-            slot_metrics_check_slot_boundary_us: 0,
             receive_and_buffer_packets_us: 0,
             receive_and_buffer_packets_invoked_count: 0,
             bank_detected_to_slot_end_detected_us: 0,
@@ -185,11 +181,6 @@ impl OuterLoopTimings {
             (
                 "process_buffered_packets_us",
                 self.process_buffered_packets_us,
-                i64
-            ),
-            (
-                "slot_metrics_check_slot_boundary_us",
-                self.slot_metrics_check_slot_boundary_us,
                 i64
             ),
             (

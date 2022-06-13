@@ -1115,7 +1115,9 @@ impl BankingStage {
 
         loop {
             let my_pubkey = cluster_info.id();
-            if !buffered_packet_batches.is_empty() {
+            if !buffered_packet_batches.is_empty()
+                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
+            {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
                         &my_pubkey,
@@ -1137,29 +1139,10 @@ impl BankingStage {
                 );
                 slot_metrics_tracker
                     .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
+                last_metrics_update = Instant::now();
             }
 
             tracer_packet_stats.report(1000);
-
-            if last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD {
-                let (_, slot_metrics_checker_check_slot_boundary_time) = measure!(
-                    {
-                        let current_poh_bank = {
-                            let poh = poh_recorder.lock().unwrap();
-                            poh.bank_start()
-                        };
-                        let metrics_action =
-                            slot_metrics_tracker.check_leader_slot_boundary(&current_poh_bank);
-                        slot_metrics_tracker.apply_action(metrics_action);
-                    },
-                    "slot_metrics_checker_check_slot_boundary",
-                );
-                slot_metrics_tracker.increment_slot_metrics_check_slot_boundary_us(
-                    slot_metrics_checker_check_slot_boundary_time.as_us(),
-                );
-
-                last_metrics_update = Instant::now();
-            }
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
