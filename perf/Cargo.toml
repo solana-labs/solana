@@ -20,6 +20,7 @@ fnv = "1.0.7"
 histogram = "0.6.9"
 lazy_static = "1.4.0"
 log = "0.4.17"
+num-traits = { version = "0.2" }
 rand = "0.7.0"
 rayon = "1.5.3"
 serde = "1.0.137"

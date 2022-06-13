@@ -31,7 +31,14 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
     let recycler_out = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets, None);
+        sigverify::ed25519_verify(
+            &mut batches,
+            &recycler,
+            &recycler_out,
+            false,
+            num_packets,
+            None,
+        );
     })
 }
 
@@ -78,7 +85,14 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
     let recycler_out = Recycler::default();
     // verify packets
     bencher.iter(|| {
-        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets, None);
+        sigverify::ed25519_verify(
+            &mut batches,
+            &recycler,
+            &recycler_out,
+            false,
+            num_packets,
+            None,
+        );
     })
 }
 

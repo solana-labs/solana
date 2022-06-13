@@ -11,6 +11,7 @@ use {
         recycler::Recycler,
     },
     ahash::AHasher,
+    num_traits::CheckedShl,
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     solana_metrics::inc_new_counter_debug,
@@ -620,20 +621,17 @@ pub fn ed25519_verify_cpu(
                 if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
                     packet.meta.set_discard(true);
                 }
-                thread_in_use_multihot.fetch_or(
-                    1 << rayon::current_thread_index().unwrap(),
-                    Ordering::Relaxed,
-                );
+                if let Some(thread_mask) = CheckedShl::checked_shl(
+                    &1,
+                    rayon::current_thread_index().unwrap().try_into().unwrap(),
+                ) {
+                    thread_in_use_multihot.fetch_or(thread_mask, Ordering::Relaxed);
+                }
             })
         });
     });
     if let Some(active_threads_hist) = active_threads_hist {
-        let mut active_threads: usize = 0;
-        for i in 0..get_thread_count() {
-            if thread_in_use_multihot.load(Ordering::Relaxed) & (1 << i) > 0 {
-                active_threads = active_threads.saturating_add(1);
-            }
-        }
+        let active_threads = thread_in_use_multihot.load(Ordering::Relaxed).count_ones();
         active_threads_hist
             .increment(active_threads as u64)
             .unwrap();

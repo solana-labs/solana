@@ -5399,6 +5399,7 @@ dependencies = [
  "log",
  "matches",
  "nix",
+ "num-traits",
  "rand 0.7.3",
  "rayon",
  "serde",
