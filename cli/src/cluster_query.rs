@@ -1790,35 +1790,38 @@ pub fn process_show_stakes(
     }
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
-
         match program_accounts_config.filters {
             Some(filters) => {
-
-                program_accounts_config.filters = Some([filters, // Filter by withdrawer
-                    vec![rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 44,
-                        bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                            withdraw_authority_pubkey.to_string(),
-                        ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                })]].concat())
-            },
+                program_accounts_config.filters = Some(
+                    [
+                        filters, // Filter by withdrawer
+                        vec![rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                            offset: 44,
+                            bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                                withdraw_authority_pubkey.to_string(),
+                            ),
+                            encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+                        })],
+                    ]
+                    .concat(),
+                )
+            }
             None => {
                 program_accounts_config.filters = Some(vec![
                     // Filter by `StakeState::Stake(_, _)`
-                    rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp{
-                        offset : 0,
+                    rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+                        offset: 0,
                         bytes: rpc_filter::MemcmpEncodedBytes::Base58(
                             bs58::encode([2, 0, 0, 0]).into_string(),
                         ),
-                        encoding: Some(rpc_filter::MemcmpEncoding::Binary)
+                        encoding: Some(rpc_filter::MemcmpEncoding::Binary),
                     }),
                     // Filter by withdrawer
                     rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
                         offset: 44,
-                            bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                                withdraw_authority_pubkey.to_string(),
-                            ),
+                        bytes: rpc_filter::MemcmpEncodedBytes::Base58(
+                            withdraw_authority_pubkey.to_string(),
+                        ),
                         encoding: Some(rpc_filter::MemcmpEncoding::Binary),
                     }),
                 ]);
