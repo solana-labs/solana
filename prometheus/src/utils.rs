@@ -9,7 +9,7 @@ use std::io;
 use std::io::Write;
 use std::time::SystemTime;
 
-use crate::token::Lamports;
+use crate::Lamports;
 
 pub struct MetricFamily<'a> {
     /// Name of the metric, e.g. [`goats_teleported_total`](https://crbug.com/31482).

@@ -2,8 +2,8 @@ use solana_gossip::cluster_info::ClusterInfo;
 use solana_runtime::bank::Bank;
 
 use crate::{
-    token::Lamports,
     utils::{write_metric, Metric, MetricFamily},
+    Lamports,
 };
 use std::{io, sync::Arc};
 

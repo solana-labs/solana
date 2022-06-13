@@ -1,11 +1,12 @@
 mod bank_metrics;
 mod cluster_metrics;
-mod token;
 mod utils;
 
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_runtime::bank_forks::BankForks;
 use std::sync::{Arc, RwLock};
+
+pub struct Lamports(pub u64);
 
 pub fn render_prometheus(
     bank_forks: &Arc<RwLock<BankForks>>,
