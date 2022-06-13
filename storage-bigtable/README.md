@@ -21,7 +21,7 @@ Depending on what operation mode is required, either the
 `https://www.googleapis.com/auth/bigtable.data.readonly` OAuth scope will be
 requested using the provided credentials.
 
-### Forward proxy
+#### Forward proxy
 Export `BIGTABLE_PROXY` environment variable for the forward proxy as you would
 for `HTTP_PROXY`. This will establish a tunnel through the forward proxy for
 gRPC traffic (the tunneled traffic will still use TLS as normal).
