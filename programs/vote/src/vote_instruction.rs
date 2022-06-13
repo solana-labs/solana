@@ -3,7 +3,9 @@
 use {
     crate::{
         id,
-        vote_state::{Vote, VoteAuthorize, VoteInit, VoteState, VoteStateUpdate},
+        vote_state::{
+            Vote, VoteAuthorize, VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
+        },
     },
     serde_derive::{Deserialize, Serialize},
     solana_sdk::{
@@ -99,6 +101,16 @@ pub enum VoteInstruction {
     ///   0. `[Write]` Vote account to vote with
     ///   1. `[SIGNER]` Vote authority
     UpdateVoteStateSwitch(VoteStateUpdate, Hash),
+
+    /// Given that the current Voter or Withdrawer authority is a derived key,
+    /// this instruction allows someone who can sign for that derived key's
+    /// base key to authorize a new Voter or Withdrawer for a vote account.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to be updated
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
+    AuthorizeWithSeed(VoteAuthorizeWithSeedArgs),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -186,6 +198,32 @@ pub fn authorize_checked(
     Instruction::new_with_bincode(
         id(),
         &VoteInstruction::AuthorizeChecked(vote_authorize),
+        account_metas,
+    )
+}
+
+pub fn authorize_with_seed(
+    vote_pubkey: &Pubkey,
+    current_authority_base_key: &Pubkey,
+    current_authority_derived_key_owner: &Pubkey,
+    current_authority_derived_key_seed: &str,
+    new_authority: &Pubkey,
+    authorization_type: VoteAuthorize,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*current_authority_base_key, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::AuthorizeWithSeed(VoteAuthorizeWithSeedArgs {
+            authorization_type,
+            current_authority_derived_key_owner: *current_authority_derived_key_owner,
+            current_authority_derived_key_seed: current_authority_derived_key_seed.to_string(),
+            new_authority: *new_authority,
+        }),
         account_metas,
     )
 }

@@ -240,6 +240,14 @@ pub enum VoteAuthorize {
     Withdrawer,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct VoteAuthorizeWithSeedArgs {
+    pub authorization_type: VoteAuthorize,
+    pub current_authority_derived_key_owner: Pubkey,
+    pub current_authority_derived_key_seed: String,
+    pub new_authority: Pubkey,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct BlockTimestamp {
     pub slot: Slot,
