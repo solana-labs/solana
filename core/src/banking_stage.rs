@@ -917,7 +917,7 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
     ) {
-        let (decision, make_decision_time) = measure!(
+        let ((metrics_action, decision), make_decision_time) = measure!(
             {
                 let bank_start;
                 let (
@@ -938,13 +938,16 @@ impl BankingStage {
                         ),
                     )
                 };
-                slot_metrics_tracker.update_on_leader_slot_boundary(&bank_start);
-                Self::consume_or_forward_packets(
-                    my_pubkey,
-                    leader_at_slot_offset,
-                    bank_still_processing_txs,
-                    would_be_leader,
-                    would_be_leader_shortly,
+
+                (
+                    slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
+                    Self::consume_or_forward_packets(
+                        my_pubkey,
+                        leader_at_slot_offset,
+                        bank_still_processing_txs,
+                        would_be_leader,
+                        would_be_leader_shortly,
+                    ),
                 )
             },
             "make_decision",
@@ -953,6 +956,11 @@ impl BankingStage {
 
         match decision {
             BufferedPacketsDecision::Consume(max_tx_ingestion_ns) => {
+                // Take metrics action before consume packets (potentially resetting the
+                // slot metrics tracker to the next slot) so that we don't count the
+                // packet processing metrics from the next slot towards the metrics
+                // of the previous slot
+                slot_metrics_tracker.apply_action(metrics_action);
                 let (_, consume_buffered_packets_time) = measure!(
                     Self::consume_buffered_packets(
                         my_pubkey,
@@ -990,6 +998,9 @@ impl BankingStage {
                     "forward",
                 );
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
+                // Take metrics action after forwarding packets to include forwarded
+                // metrics into current slot
+                slot_metrics_tracker.apply_action(metrics_action);
             }
             BufferedPacketsDecision::ForwardAndHold => {
                 let (_, forward_and_hold_time) = measure!(
@@ -1008,6 +1019,8 @@ impl BankingStage {
                     "forward_and_hold",
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
+                // Take metrics action after forwarding packets
+                slot_metrics_tracker.apply_action(metrics_action);
             }
             _ => (),
         }
@@ -1102,7 +1115,9 @@ impl BankingStage {
 
         loop {
             let my_pubkey = cluster_info.id();
-            if !buffered_packet_batches.is_empty() {
+            if !buffered_packet_batches.is_empty()
+                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
+            {
                 let (_, process_buffered_packets_time) = measure!(
                     Self::process_buffered_packets(
                         &my_pubkey,
@@ -1124,27 +1139,10 @@ impl BankingStage {
                 );
                 slot_metrics_tracker
                     .increment_process_buffered_packets_us(process_buffered_packets_time.as_us());
+                last_metrics_update = Instant::now();
             }
 
             tracer_packet_stats.report(1000);
-
-            if last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD {
-                let (_, slot_metrics_checker_check_slot_boundary_time) = measure!(
-                    {
-                        let current_poh_bank = {
-                            let poh = poh_recorder.lock().unwrap();
-                            poh.bank_start()
-                        };
-                        slot_metrics_tracker.update_on_leader_slot_boundary(&current_poh_bank);
-                    },
-                    "slot_metrics_checker_check_slot_boundary",
-                );
-                slot_metrics_tracker.increment_slot_metrics_check_slot_boundary_us(
-                    slot_metrics_checker_check_slot_boundary_time.as_us(),
-                );
-
-                last_metrics_update = Instant::now();
-            }
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
