@@ -940,14 +940,9 @@ fn minimize_bank_for_snapshot(
 
     minimized_account_set.extend(bank.feature_set.active.iter().map(|(pubkey, _)| *pubkey));
     minimized_account_set.extend(bank.feature_set.inactive.iter().cloned());
-    minimized_account_set.extend(solana_sdk::sysvar::ALL_IDS.iter().cloned());
     minimized_account_set.extend(solana_runtime::builtins::get_pubkeys());
-    minimized_account_set.insert(solana_sdk::bpf_loader::id());
-    minimized_account_set.insert(solana_sdk::bpf_loader_deprecated::id());
-    minimized_account_set.insert(solana_sdk::bpf_loader_upgradeable::id());
-    minimized_account_set.insert(solana_sdk::ed25519_program::id());
-    minimized_account_set.insert(solana_sdk::secp256k1_program::id());
-    minimized_account_set.insert(solana_runtime::inline_spl_token::native_mint::id());
+    minimized_account_set.extend(solana_runtime::static_ids::STATIC_IDS.iter().cloned());
+    minimized_account_set.extend(solana_sdk::sdk_ids::SDK_IDS.iter().cloned());
 
     bank.minimize_bank_for_snapshot(minimized_account_set, snapshot_slot, ending_slot);
     bank.force_flush_accounts_cache();
