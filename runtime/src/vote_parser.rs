@@ -83,6 +83,7 @@ fn parse_vote_instruction_data(
         VoteInstruction::Authorize(_, _)
         | VoteInstruction::AuthorizeChecked(_)
         | VoteInstruction::AuthorizeWithSeed(_)
+        | VoteInstruction::AuthorizeCheckedWithSeed(_)
         | VoteInstruction::InitializeAccount(_)
         | VoteInstruction::UpdateCommission(_)
         | VoteInstruction::UpdateValidatorIdentity

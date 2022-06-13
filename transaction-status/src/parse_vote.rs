@@ -67,6 +67,9 @@ pub fn parse_vote(
                 }),
             })
         }
+        VoteInstruction::AuthorizeCheckedWithSeed(_args) => {
+            unimplemented!("VoteInstruction::AuthorizeCheckedWithSeed")
+        }
         VoteInstruction::Vote(vote) => {
             check_num_vote_accounts(&instruction.accounts, 4)?;
             let vote = json!({

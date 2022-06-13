@@ -4,7 +4,8 @@ use {
     crate::{
         id,
         vote_state::{
-            Vote, VoteAuthorize, VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
+            Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs,
+            VoteInit, VoteState, VoteStateUpdate,
         },
     },
     serde_derive::{Deserialize, Serialize},
@@ -111,6 +112,20 @@ pub enum VoteInstruction {
     ///   1. `[]` Clock sysvar
     ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
     AuthorizeWithSeed(VoteAuthorizeWithSeedArgs),
+
+    /// Given that the current Voter or Withdrawer authority is a derived key,
+    /// this instruction allows someone who can sign for that derived key's
+    /// base key to authorize a new Voter or Withdrawer for a vote account.
+    ///
+    /// This instruction behaves like `AuthorizeWithSeed` with the additional requirement
+    /// that the new vote or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to be updated
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
+    ///   3. `[SIGNER]` New vote or withdraw authority
+    AuthorizeCheckedWithSeed(VoteAuthorizeCheckedWithSeedArgs),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -223,6 +238,32 @@ pub fn authorize_with_seed(
             current_authority_derived_key_owner: *current_authority_derived_key_owner,
             current_authority_derived_key_seed: current_authority_derived_key_seed.to_string(),
             new_authority: *new_authority,
+        }),
+        account_metas,
+    )
+}
+
+pub fn authorize_checked_with_seed(
+    vote_pubkey: &Pubkey,
+    current_authority_base_key: &Pubkey,
+    current_authority_derived_key_owner: &Pubkey,
+    current_authority_derived_key_seed: &str,
+    new_authority: &Pubkey,
+    authorization_type: VoteAuthorize,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(*current_authority_base_key, true),
+        AccountMeta::new_readonly(*new_authority, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::AuthorizeCheckedWithSeed(VoteAuthorizeCheckedWithSeedArgs {
+            authorization_type,
+            current_authority_derived_key_owner: *current_authority_derived_key_owner,
+            current_authority_derived_key_seed: current_authority_derived_key_seed.to_string(),
         }),
         account_metas,
     )

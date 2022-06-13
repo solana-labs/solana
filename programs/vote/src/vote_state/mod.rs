@@ -248,6 +248,13 @@ pub struct VoteAuthorizeWithSeedArgs {
     pub new_authority: Pubkey,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct VoteAuthorizeCheckedWithSeedArgs {
+    pub authorization_type: VoteAuthorize,
+    pub current_authority_derived_key_owner: Pubkey,
+    pub current_authority_derived_key_seed: String,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct BlockTimestamp {
     pub slot: Slot,

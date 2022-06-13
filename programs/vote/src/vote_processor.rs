@@ -82,6 +82,9 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
+        VoteInstruction::AuthorizeCheckedWithSeed(_args) => {
+            unimplemented!("VoteInstruction::AuthorizeCheckedWithSeed")
+        }
         VoteInstruction::UpdateValidatorIdentity => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let node_pubkey = transaction_context.get_key_of_account_at_index(
