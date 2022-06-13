@@ -1551,7 +1551,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     if bank_snapshots.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
     }
-    bank_snapshots.sort_unstable();
     let root_paths = bank_snapshots
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
