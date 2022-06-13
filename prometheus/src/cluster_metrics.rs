@@ -43,16 +43,14 @@ impl ValidatorVoteInfo {
             .next()
     }
 
-    fn write_prometheus<W: io::Write>(&self, out: &mut W, at: SystemTime) -> io::Result<()> {
+    fn write_prometheus<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_cluster_vote_public_key_info",
+                name: "solana_node_vote_public_key_info",
                 help: "The current Solana node's vote public key",
                 type_: "count",
-                metrics: vec![Metric::new(1)
-                    .with_label("vote", self.vote_address.to_string())
-                    .at(at)],
+                metrics: vec![Metric::new(1).with_label("vote", self.vote_address.to_string())],
             },
         )?;
         // We can use this metric to track if the validator is making progress
@@ -60,10 +58,13 @@ impl ValidatorVoteInfo {
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_cluster_last_vote_slot_count",
-                help: "The last slot that the validator voted on",
+                name: "solana_node_last_vote_slot",
+                help:
+                    "The voted-on slot of the validator's last vote that got included in the chain",
                 type_: "gauge",
-                metrics: vec![Metric::new(self.last_vote).at(at)],
+                metrics: vec![
+                    Metric::new(self.last_vote).with_label("pubkey", self.vote_address.to_string())
+                ],
             },
         )?;
         // Validator rewards go to vote account, we use this to track our own
@@ -71,10 +72,10 @@ impl ValidatorVoteInfo {
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_cluster_vote_balance_total",
+                name: "solana_node_vote_balance_sol",
                 help: "The current node's vote account balance",
                 type_: "gauge",
-                metrics: vec![Metric::new_sol(self.balance).at(at)],
+                metrics: vec![Metric::new_sol(self.balance)],
             },
         )
     }
@@ -127,7 +128,7 @@ pub fn write_cluster_metrics<W: io::Write>(
 
     let validator_vote_info = ValidatorVoteInfo::new_from_bank(bank, &identity_pubkey);
     if let Some(vote_info) = validator_vote_info {
-        vote_info.write_prometheus(out, at)?;
+        vote_info.write_prometheus(out)?;
     }
 
     Ok(())

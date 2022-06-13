@@ -251,7 +251,7 @@ mod test {
                 name: "goats_teleported_total",
                 help: "Number of goats teleported since launch.",
                 type_: "counter",
-                metrics: vec![Metric::new(10).at(t)],
+                metrics: vec![Metric::new(10)],
             },
         )
         .unwrap();
