@@ -11,7 +11,8 @@
 email to security@solana.com and provide your github username so we can add you
 to a new draft security advisory for further discussion.
 
-DO NOT include attachments or provide detail sufficient for exploitation regarding the security issue in this email. 
+For security reasons, DO NOT include attachments or provide detail sufficient for exploitation regarding the security issue in this email. Instead, wait for the advisory to be created, and provide any sensitive details in the advisory.
+
 DO send the email from an email domain that is less likely to get flagged for spam by gmail. 
 
 Expect a response as fast as possible, typically within 72 hours.
