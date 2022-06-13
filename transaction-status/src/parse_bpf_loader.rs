@@ -22,20 +22,26 @@ pub fn parse_bpf_loader(
         ));
     }
     match bpf_loader_instruction {
-        LoaderInstruction::Write { offset, bytes } => Ok(ParsedInstructionEnum {
-            instruction_type: "write".to_string(),
-            info: json!({
-                "offset": offset,
-                "bytes": base64::encode(bytes),
-                "account": account_keys[instruction.accounts[0] as usize].to_string(),
-            }),
-        }),
-        LoaderInstruction::Finalize => Ok(ParsedInstructionEnum {
-            instruction_type: "finalize".to_string(),
-            info: json!({
-                "account": account_keys[instruction.accounts[0] as usize].to_string(),
-            }),
-        }),
+        LoaderInstruction::Write { offset, bytes } => {
+            check_num_bpf_loader_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "write".to_string(),
+                info: json!({
+                    "offset": offset,
+                    "bytes": base64::encode(bytes),
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
+        LoaderInstruction::Finalize => {
+            check_num_bpf_loader_accounts(&instruction.accounts, 2)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "finalize".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 
@@ -147,6 +153,10 @@ pub fn parse_bpf_upgradeable_loader(
     }
 }
 
+fn check_num_bpf_loader_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstructionError> {
+    check_num_accounts(accounts, num, ParsableProgram::BpfLoader)
+}
+
 fn check_num_bpf_upgradeable_loader_accounts(
     accounts: &[u8],
     num: usize,
@@ -183,7 +193,7 @@ mod test {
             offset,
             bytes.clone(),
         );
-        let message = Message::new(&[instruction], Some(&fee_payer));
+        let mut message = Message::new(&[instruction], Some(&fee_payer));
         assert_eq!(
             parse_bpf_loader(
                 &message.instructions[0],
@@ -204,9 +214,15 @@ mod test {
             &AccountKeys::new(&missing_account_keys, None)
         )
         .is_err());
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&account_keys, None)
+        )
+        .is_err());
 
         let instruction = solana_sdk::loader_instruction::finalize(&account_pubkey, &program_id);
-        let message = Message::new(&[instruction], Some(&fee_payer));
+        let mut message = Message::new(&[instruction], Some(&fee_payer));
         assert_eq!(
             parse_bpf_loader(
                 &message.instructions[0],
@@ -223,6 +239,12 @@ mod test {
         assert!(parse_bpf_loader(
             &message.instructions[0],
             &AccountKeys::new(&missing_account_keys, None)
+        )
+        .is_err());
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&account_keys, None)
         )
         .is_err());
 
