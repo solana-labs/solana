@@ -223,8 +223,21 @@ pub enum SnapshotError {
 
     #[error("snapshot has mismatch: deserialized bank: {:?}, snapshot archive info: {:?}", .0, .1)]
     MismatchedSlotHash((Slot, Hash), (Slot, Hash)),
+
+    #[error("snapshot slot deltas are invalid: {0}")]
+    VerifySlotDeltas(#[from] VerifySlotDeltasError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
+
+/// Errors that can happen in `verify_slot_deltas()`
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum VerifySlotDeltasError {
+    #[error("slot {0} is not a root")]
+    SlotIsNotRoot(Slot),
+
+    #[error("slot {0} is greater than bank slot {1}")]
+    SlotGreaterThanMaxRoot(Slot, Slot),
+}
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
@@ -1736,12 +1749,36 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
+    verify_slot_deltas(slot_deltas.as_slice(), bank.slot())?;
+
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
     bank.prepare_rewrites_for_hash();
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
+}
+
+/// Verify that the snapshot's slot deltas are not corrupt/invalid
+fn verify_slot_deltas(
+    slot_deltas: &[BankSlotDelta],
+    bank_slot: Slot,
+) -> std::result::Result<(), VerifySlotDeltasError> {
+    for (slot, is_root, _) in slot_deltas {
+        // all entries should be roots
+        if !is_root {
+            return Err(VerifySlotDeltasError::SlotIsNotRoot(*slot));
+        }
+
+        // all entries should be for slots less than or equal to the bank's slot
+        if *slot > bank_slot {
+            return Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
+                *slot, bank_slot,
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
@@ -2163,7 +2200,7 @@ fn can_submit_accounts_package(
 mod tests {
     use {
         super::*,
-        crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -3826,5 +3863,49 @@ mod tests {
                 can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
             assert_eq!(expected_result, actual_result);
         }
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_good() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, true, Status::default()),
+            (333, true, Status::default()),
+        ];
+
+        let bank_slot = 444;
+        let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_bad_slot_not_root() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, false, Status::default()),
+            (333, true, Status::default()),
+        ];
+
+        let bank_slot = 444;
+        let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(result, Err(VerifySlotDeltasError::SlotIsNotRoot(222)));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_bad_slot_greater_than_bank() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, true, Status::default()),
+            (555, true, Status::default()),
+        ];
+
+        let bank_slot = 444;
+        let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
+                555, bank_slot
+            ))
+        );
     }
 }
