@@ -286,7 +286,7 @@ mod test {
             max_data_len,
         )
         .unwrap();
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[1],
@@ -306,6 +306,14 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[1].accounts.pop();
+        message.instructions[1].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[1],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -321,7 +329,7 @@ mod test {
             offset,
             bytes.clone(),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -341,6 +349,13 @@ mod test {
         assert!(parse_bpf_upgradeable_loader(
             &message.instructions[0],
             &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
         )
         .is_err());
     }
@@ -367,7 +382,7 @@ mod test {
             max_data_len,
         )
         .unwrap();
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[1],
@@ -394,6 +409,13 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..7], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[1].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[1],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -413,7 +435,7 @@ mod test {
             &authority_address,
             &spill_address,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -438,6 +460,13 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..6], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -450,7 +479,7 @@ mod test {
             &current_authority_address,
             &new_authority_address,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -471,6 +500,14 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -487,7 +524,7 @@ mod test {
             &current_authority_address,
             Some(&new_authority_address),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -508,13 +545,21 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
 
         let instruction = bpf_loader_upgradeable::set_upgrade_authority(
             &program_address,
             &current_authority_address,
             None,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -535,6 +580,13 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -544,7 +596,7 @@ mod test {
         let authority_address = Pubkey::new_unique();
         let instruction =
             bpf_loader_upgradeable::close(&close_address, &recipient_address, &authority_address);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_bpf_upgradeable_loader(
                 &message.instructions[0],
@@ -563,6 +615,13 @@ mod test {
         assert!(parse_bpf_upgradeable_loader(
             &message.instructions[0],
             &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
         )
         .is_err());
     }
