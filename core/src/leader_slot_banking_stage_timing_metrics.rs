@@ -118,8 +118,8 @@ impl LeaderSlotTimingMetrics {
         self.execute_and_commit_timings.report(id, slot);
     }
 
-    pub(crate) fn slot_end_detected(&mut self) {
-        self.outer_loop_timings.slot_end_detected();
+    pub(crate) fn mark_slot_end_detected(&mut self) {
+        self.outer_loop_timings.mark_slot_end_detected();
     }
 }
 
@@ -161,7 +161,7 @@ impl OuterLoopTimings {
     }
 
     /// Call when detected slot end to capture elapsed time, which might be reported later
-    fn slot_end_detected(&mut self) {
+    fn mark_slot_end_detected(&mut self) {
         self.bank_detected_to_slot_end_detected_us =
             self.bank_detected_time.elapsed().as_micros() as u64;
     }
