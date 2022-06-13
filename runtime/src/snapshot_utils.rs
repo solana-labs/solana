@@ -342,7 +342,7 @@ pub fn archive_snapshot_package(
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
-            for dir in ["accounts", "snapshots"] {
+            for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
             archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
