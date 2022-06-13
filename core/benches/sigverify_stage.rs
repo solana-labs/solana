@@ -238,7 +238,7 @@ fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32)
             SigVerifyStage::maybe_shrink_batches(&mut batches);
 
         let mut verify_time = Measure::start("sigverify_batch_time");
-        let _batches = verifier.verify_batches(batches, num_valid_packets);
+        let _batches = verifier.verify_batches(batches, num_valid_packets, None);
         verify_time.stop();
 
         c += 1;
