@@ -71,6 +71,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
         // this should happen before the age.fetch_add
+        // Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
         let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
