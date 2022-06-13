@@ -92,9 +92,12 @@ mod target_arch {
 #[cfg(target_os = "solana")]
 #[allow(unused_variables)]
 mod target_arch {
-    use crate::{zk_token_elgamal::pod,
-            curve25519::{ristretto::{add_ristretto, subtract_ristretto, multiply_ristretto,
-            PodRistrettoPoint}, scalar::PodScalar},
+    use crate::{
+        curve25519::{
+            ristretto::{add_ristretto, multiply_ristretto, subtract_ristretto, PodRistrettoPoint},
+            scalar::PodScalar,
+        },
+        zk_token_elgamal::pod,
     };
 
     const SHIFT_BITS: usize = 16;
@@ -108,11 +111,15 @@ mod target_arch {
         left_ciphertext: &pod::ElGamalCiphertext,
         right_ciphertext: &pod::ElGamalCiphertext,
     ) -> Option<pod::ElGamalCiphertext> {
-        let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*left_ciphertext).into();
-        let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*right_ciphertext).into();
+        let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*left_ciphertext).into();
+        let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*right_ciphertext).into();
 
-        let result_commitment: pod::PedersenCommitment = add_ristretto(&left_commitment.into(), &right_commitment.into())?.into();
-        let result_handle: pod::DecryptHandle = add_ristretto(&left_handle.into(), &right_handle.into())?.into();
+        let result_commitment: pod::PedersenCommitment =
+            add_ristretto(&left_commitment.into(), &right_commitment.into())?.into();
+        let result_handle: pod::DecryptHandle =
+            add_ristretto(&left_handle.into(), &right_handle.into())?.into();
 
         Some((result_commitment, result_handle).into())
     }
@@ -132,12 +139,15 @@ mod target_arch {
         left_ciphertext: &pod::ElGamalCiphertext,
         right_ciphertext: &pod::ElGamalCiphertext,
     ) -> Option<pod::ElGamalCiphertext> {
-        let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*left_ciphertext).into();
-        let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*right_ciphertext).into();
+        let (left_commitment, left_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*left_ciphertext).into();
+        let (right_commitment, right_handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*right_ciphertext).into();
 
         let result_commitment: pod::PedersenCommitment =
             subtract_ristretto(&left_commitment.into(), &right_commitment.into())?.into();
-        let result_handle: pod::DecryptHandle = subtract_ristretto(&left_handle.into(), &right_handle.into())?.into();
+        let result_handle: pod::DecryptHandle =
+            subtract_ristretto(&left_handle.into(), &right_handle.into())?.into();
 
         Some((result_commitment, result_handle).into())
     }
@@ -153,14 +163,19 @@ mod target_arch {
         subtract(left_ciphertext, &combined_right_ciphertext)
     }
 
-    pub fn add_to(ciphertext: &pod::ElGamalCiphertext, amount: u64) -> Option<pod::ElGamalCiphertext> {
+    pub fn add_to(
+        ciphertext: &pod::ElGamalCiphertext,
+        amount: u64,
+    ) -> Option<pod::ElGamalCiphertext> {
         let amount_scalar = to_scalar(amount);
         let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
-        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*ciphertext).into();
         let commitment_point: PodRistrettoPoint = commitment.into();
 
-        let result_commitment: pod::PedersenCommitment = add_ristretto(&commitment_point, &amount_point)?.into();
+        let result_commitment: pod::PedersenCommitment =
+            add_ristretto(&commitment_point, &amount_point)?.into();
         Some((result_commitment, handle).into())
     }
 
@@ -171,10 +186,12 @@ mod target_arch {
         let amount_scalar = to_scalar(amount);
         let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
-        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*ciphertext).into();
         let commitment_point: PodRistrettoPoint = commitment.into();
 
-        let result_commitment: pod::PedersenCommitment = subtract_ristretto(&commitment_point, &amount_point)?.into();
+        let result_commitment: pod::PedersenCommitment =
+            subtract_ristretto(&commitment_point, &amount_point)?.into();
         Some((result_commitment, handle).into())
     }
 
@@ -184,13 +201,18 @@ mod target_arch {
         PodScalar(bytes)
     }
 
-    fn scalar_ciphertext(scalar: &PodScalar, ciphertext: &pod::ElGamalCiphertext) -> Option<pod::ElGamalCiphertext> {
-        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
+    fn scalar_ciphertext(
+        scalar: &PodScalar,
+        ciphertext: &pod::ElGamalCiphertext,
+    ) -> Option<pod::ElGamalCiphertext> {
+        let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) =
+            (*ciphertext).into();
 
         let commitment_point: PodRistrettoPoint = commitment.into();
         let handle_point: PodRistrettoPoint = handle.into();
 
-        let result_commitment: pod::PedersenCommitment = multiply_ristretto(scalar, &commitment_point)?.into();
+        let result_commitment: pod::PedersenCommitment =
+            multiply_ristretto(scalar, &commitment_point)?.into();
         let result_handle: pod::DecryptHandle = multiply_ristretto(scalar, &handle_point)?.into();
 
         Some((result_commitment, result_handle).into())
