@@ -45,7 +45,9 @@ fn gen_batches(
         let tx = test_tx();
         to_packet_batches(&vec![tx; total_packets], packets_per_batch)
     } else {
-        let txs: Vec<_> = (0..total_packets).map(|_| test_tx()).collect();
+        let txs: Vec<_> = std::iter::repeat_with(test_tx)
+            .take(total_packets)
+            .collect();
         to_packet_batches(&txs, packets_per_batch)
     }
 }
