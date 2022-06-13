@@ -40,7 +40,7 @@ const TRACER_KEY_BYTES: [u8; 32] = [
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 // Empirically derived to constrain max verify latency to ~8ms at lower packet counts
-const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
+pub const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
