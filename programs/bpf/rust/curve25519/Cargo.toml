@@ -1,5 +1,5 @@
 [package]
-name = "solana-bpf-rust-zk_token_elgamal"
+name = "solana-bpf-rust-curve25519"
 version = "1.11.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]

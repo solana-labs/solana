@@ -58,9 +58,6 @@ impl Bank {
         let require_rent_exempt_accounts = self
             .feature_set
             .is_active(&feature_set::require_rent_exempt_accounts::id());
-        let do_support_realloc = self
-            .feature_set
-            .is_active(&feature_set::do_support_realloc::id());
         let include_account_index_in_err = self
             .feature_set
             .is_active(&feature_set::include_account_index_in_rent_error::id());
@@ -72,7 +69,6 @@ impl Bank {
                 post_state_info.rent_state.as_ref(),
                 transaction_context,
                 i,
-                do_support_realloc,
                 include_account_index_in_err,
             ) {
                 // Feature gate only wraps the actual error return so that the metrics and debug

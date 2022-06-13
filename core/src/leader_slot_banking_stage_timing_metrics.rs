@@ -117,6 +117,10 @@ impl LeaderSlotTimingMetrics {
         self.process_packets_timings.report(id, slot);
         self.execute_and_commit_timings.report(id, slot);
     }
+
+    pub(crate) fn mark_slot_end_detected(&mut self) {
+        self.outer_loop_timings.mark_slot_end_detected();
+    }
 }
 
 #[derive(Debug)]
@@ -129,15 +133,15 @@ pub(crate) struct OuterLoopTimings {
     // Time spent processing buffered packets
     pub process_buffered_packets_us: u64,
 
-    // Time spent checking for slot boundary and reporting leader slot metrics
-    pub slot_metrics_check_slot_boundary_us: u64,
-
     // Time spent processing new incoming packets to the banking thread
     pub receive_and_buffer_packets_us: u64,
 
     // The number of times the function to receive and buffer new packets
     // was called
     pub receive_and_buffer_packets_invoked_count: u64,
+
+    // Elapsed time between bank was detected and slot end was detected
+    pub bank_detected_to_slot_end_detected_us: u64,
 }
 
 impl OuterLoopTimings {
@@ -146,37 +150,37 @@ impl OuterLoopTimings {
             bank_detected_time: Instant::now(),
             bank_detected_delay_us: bank_creation_time.elapsed().as_micros() as u64,
             process_buffered_packets_us: 0,
-            slot_metrics_check_slot_boundary_us: 0,
             receive_and_buffer_packets_us: 0,
             receive_and_buffer_packets_invoked_count: 0,
+            bank_detected_to_slot_end_detected_us: 0,
         }
     }
 
+    /// Call when detected slot end to capture elapsed time, which might be reported later
+    fn mark_slot_end_detected(&mut self) {
+        self.bank_detected_to_slot_end_detected_us =
+            self.bank_detected_time.elapsed().as_micros() as u64;
+    }
+
     fn report(&self, id: u32, slot: Slot) {
-        let bank_detected_to_now_us = self.bank_detected_time.elapsed().as_micros() as u64;
         datapoint_info!(
             "banking_stage-leader_slot_loop_timings",
             ("id", id as i64, i64),
             ("slot", slot as i64, i64),
             (
                 "bank_detected_to_slot_end_detected_us",
-                bank_detected_to_now_us,
+                self.bank_detected_to_slot_end_detected_us,
                 i64
             ),
             (
                 "bank_creation_to_slot_end_detected_us",
-                bank_detected_to_now_us + self.bank_detected_delay_us,
+                self.bank_detected_to_slot_end_detected_us + self.bank_detected_delay_us,
                 i64
             ),
             ("bank_detected_delay_us", self.bank_detected_delay_us, i64),
             (
                 "process_buffered_packets_us",
                 self.process_buffered_packets_us,
-                i64
-            ),
-            (
-                "slot_metrics_check_slot_boundary_us",
-                self.slot_metrics_check_slot_boundary_us,
                 i64
             ),
             (

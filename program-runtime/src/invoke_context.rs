@@ -16,7 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, do_support_realloc, neon_evm_compute_budget,
+            cap_accounts_data_len, neon_evm_compute_budget,
             record_instruction_in_transaction_context_push,
             reject_empty_instruction_without_program, requestable_heap_size, tx_wide_compute_cap,
             FeatureSet,
@@ -494,7 +494,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
-        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let instruction_context = self
             .transaction_context
@@ -544,7 +543,6 @@ impl<'a> InvokeContext<'a> {
                     &account,
                     &mut self.timings,
                     true,
-                    do_support_realloc,
                 )
                 .map_err(|err| {
                     ic_logger_msg!(
@@ -589,7 +587,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         before_instruction_context_push: bool,
     ) -> Result<(), InstructionError> {
-        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
         let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -638,7 +635,6 @@ impl<'a> InvokeContext<'a> {
                                 &account,
                                 &mut self.timings,
                                 false,
-                                do_support_realloc,
                             )
                             .map_err(|err| {
                                 ic_logger_msg!(
@@ -709,29 +705,6 @@ impl<'a> InvokeContext<'a> {
             &mut compute_units_consumed,
             &mut ExecuteTimings::default(),
         )?;
-
-        // Verify the called program has not misbehaved
-        let do_support_realloc = self.feature_set.is_active(&do_support_realloc::id());
-        for (account_index, prev_size) in prev_account_sizes.into_iter() {
-            if !do_support_realloc
-                && prev_size
-                    != self
-                        .transaction_context
-                        .get_account_at_index(account_index)?
-                        .borrow()
-                        .data()
-                        .len()
-                && prev_size != 0
-            {
-                // Only support for `CreateAccount` at this time.
-                // Need a way to limit total realloc size across multiple CPI calls
-                ic_msg!(
-                    self,
-                    "Inner instructions do not support realloc, only SystemProgram::CreateAccount",
-                );
-                return Err(InstructionError::InvalidRealloc);
-            }
-        }
 
         Ok(())
     }

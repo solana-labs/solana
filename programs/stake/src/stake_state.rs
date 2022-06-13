@@ -243,7 +243,7 @@ fn calculate_stake_points_and_credits(
             }
             // Don't adjust stake.activation_epoch for simplicity:
             //  - generally fast-forwarding stake.activation_epoch forcibly (for
-            //    artifical re-activation with re-warm-up) skews the stake
+            //    artificial re-activation with re-warm-up) skews the stake
             //    history sysvar. And properly handling all the cases
             //    regarding deactivation epoch/warm-up/cool-down without
             //    introducing incentive skew is hard.
@@ -256,7 +256,7 @@ fn calculate_stake_points_and_credits(
             //    effective stake calculation even while the vote account is
             //    missing for (indefinite) time or remains to be pre-remove
             //    credits score. It should be treated equally to staking with
-            //    delinquent validator with no differenciation.
+            //    delinquent validator with no differentiation.
 
             // hint with true to indicate some exceptional credits handling is needed
             return CalculatedStakePoints {

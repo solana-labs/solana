@@ -342,7 +342,7 @@ pub fn archive_snapshot_package(
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
-            for dir in ["accounts", "snapshots"] {
+            for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
             archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
@@ -1551,7 +1551,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     if bank_snapshots.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
     }
-    bank_snapshots.sort_unstable();
     let root_paths = bank_snapshots
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;

@@ -2,12 +2,15 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
-        in_mem_accounts_index::{InMemAccountsIndex, SlotT},
+        in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
-    solana_sdk::{clock::SLOT_MS, timing::AtomicInterval},
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        timing::AtomicInterval,
+    },
     std::{
         fmt::Debug,
         sync::{
@@ -25,7 +28,7 @@ const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
 
 pub struct BucketMapHolder<T: IndexValue> {
-    pub disk: Option<BucketMap<SlotT<T>>>,
+    pub disk: Option<BucketMap<(Slot, T)>>,
 
     pub count_buckets_flushed: AtomicUsize,
     pub age: AtomicU8,
@@ -68,6 +71,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
         // this should happen before the age.fetch_add
+        // Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
         let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.

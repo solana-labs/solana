@@ -43,9 +43,8 @@ use {
         feature_set::{
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
             disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
-            disable_deprecated_loader, do_support_realloc,
-            error_on_syscall_bpf_function_hash_collisions, reduce_required_deploy_balance,
-            reject_callx_r10, requestable_heap_size,
+            disable_deprecated_loader, error_on_syscall_bpf_function_hash_collisions,
+            reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -1277,9 +1276,6 @@ impl Executor for BpfExecutor {
                     .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
                 invoke_context.get_orig_account_lengths()?,
-                invoke_context
-                    .feature_set
-                    .is_active(&do_support_realloc::id()),
             )
         });
         deserialize_time.stop();

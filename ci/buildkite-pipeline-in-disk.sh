@@ -179,7 +179,7 @@ all_test_steps() {
     cat >> "$output_file" <<"EOF"
   - command: "ci/test-stable-bpf.sh"
     name: "stable-bpf"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
       - "queue=gcp"
@@ -262,7 +262,7 @@ EOF
              ^ci/test-coverage.sh \
              ^ci/test-bench.sh \
       ; then
-    command_step bench "ci/test-bench.sh" 30
+    command_step bench "ci/test-bench.sh" 40
   else
     annotate --style info --context test-bench \
       "Bench skipped as no .rs files were modified"
