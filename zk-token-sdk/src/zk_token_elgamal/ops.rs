@@ -92,85 +92,17 @@ mod target_arch {
 #[cfg(target_os = "solana")]
 #[allow(unused_variables)]
 mod target_arch {
-    use {super::*, bytemuck::Zeroable, crate::{zk_token_elgamal::pod,
+    use crate::{zk_token_elgamal::pod,
             curve25519::{ristretto::{add_ristretto, subtract_ristretto, multiply_ristretto,
             PodRistrettoPoint}, scalar::PodScalar},
-            instruction::transfer::TRANSFER_AMOUNT_LO_BITS,
-        }
     };
 
-    const ristretto_generator: PodRistrettoPoint = PodRistrettoPoint([
+    const SHIFT_BITS: usize = 16;
+
+    const G: PodRistrettoPoint = PodRistrettoPoint([
         226, 242, 174, 10, 106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11, 106,
         165, 130, 221, 141, 182, 166, 89, 69, 224, 141, 45, 118,
     ]);
-
-    fn op(
-        op: u64,
-        ct_0: &pod::ElGamalCiphertext,
-        ct_1: &pod::ElGamalCiphertext,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            solana_program::syscalls::sol_zk_token_elgamal_op(
-                op,
-                &ct_0.0 as *const u8,
-                &ct_1.0 as *const u8,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
-
-    fn op_with_lo_hi(
-        op: u64,
-        ct_0: &pod::ElGamalCiphertext,
-        ct_1_lo: &pod::ElGamalCiphertext,
-        ct_1_hi: &pod::ElGamalCiphertext,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            solana_program::syscalls::sol_zk_token_elgamal_op_with_lo_hi(
-                op,
-                &ct_0.0 as *const u8,
-                &ct_1_lo.0 as *const u8,
-                &ct_1_hi.0 as *const u8,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
-
-    fn op_with_scalar(
-        op: u64,
-        ct: &pod::ElGamalCiphertext,
-        scalar: u64,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            solana_program::syscalls::sol_zk_token_elgamal_op_with_scalar(
-                op,
-                &ct.0 as *const u8,
-                scalar,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
 
     pub fn add(
         left_ciphertext: &pod::ElGamalCiphertext,
@@ -190,7 +122,7 @@ mod target_arch {
         right_ciphertext_lo: &pod::ElGamalCiphertext,
         right_ciphertext_hi: &pod::ElGamalCiphertext,
     ) -> Option<pod::ElGamalCiphertext> {
-        let shift_scalar = to_scalar(1_u64 << TRANSFER_AMOUNT_LO_BITS);
+        let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
         let shifted_right_ciphertext_hi = scalar_ciphertext(&shift_scalar, &right_ciphertext_hi)?;
         let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
         add(left_ciphertext, &combined_right_ciphertext)
@@ -215,7 +147,7 @@ mod target_arch {
         right_ciphertext_lo: &pod::ElGamalCiphertext,
         right_ciphertext_hi: &pod::ElGamalCiphertext,
     ) -> Option<pod::ElGamalCiphertext> {
-        let shift_scalar = to_scalar(1_u64 << TRANSFER_AMOUNT_LO_BITS);
+        let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
         let shifted_right_ciphertext_hi = scalar_ciphertext(&shift_scalar, &right_ciphertext_hi)?;
         let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
         subtract(left_ciphertext, &combined_right_ciphertext)
@@ -223,7 +155,7 @@ mod target_arch {
 
     pub fn add_to(ciphertext: &pod::ElGamalCiphertext, amount: u64) -> Option<pod::ElGamalCiphertext> {
         let amount_scalar = to_scalar(amount);
-        let amount_point = multiply_ristretto(&amount_scalar, &ristretto_generator)?;
+        let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
         let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
         let commitment_point: PodRistrettoPoint = commitment.into();
@@ -237,7 +169,7 @@ mod target_arch {
         amount: u64,
     ) -> Option<pod::ElGamalCiphertext> {
         let amount_scalar = to_scalar(amount);
-        let amount_point = multiply_ristretto(&amount_scalar, &ristretto_generator)?;
+        let amount_point = multiply_ristretto(&amount_scalar, &G)?;
 
         let (commitment, handle): (pod::PedersenCommitment, pod::DecryptHandle) = (*ciphertext).into();
         let commitment_point: PodRistrettoPoint = commitment.into();
