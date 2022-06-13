@@ -23,7 +23,7 @@ thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
 generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"] }
-im = { git = "https://github.com/ryoqun/im", rev = "a95a0a36861af7cc1efa3d41e5f47934e394e7cb", features = ["rayon", "serde"] }
+im = { git = "https://github.com/ryoqun/im", rev = "2b9d48508ae80aaffbd7eecc18c9cd90b5697105", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
 
 [target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]

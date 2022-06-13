@@ -13,7 +13,7 @@ clap = {version = "3.1.5", features = ["derive", "cargo"]}
 crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
 solana-core = { path = "../core", version = "=1.10.24" }
 solana-gossip = { path = "../gossip", version = "=1.10.24" }
 solana-ledger = { path = "../ledger", version = "=1.10.24" }

@@ -881,11 +881,11 @@ dependencies = [
 [[package]]
 name = "dashmap"
 version = "4.0.2"
-source = "git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8#589871553efed3082c7653bef3765b99bd5a3ee8"
+source = "git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36#4d06815a13628f7c4315bc98f1ab5f65c91aaf36"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",
- "rayon 1.5.993",
+ "rayon 1.5.883",
 ]
 
 [[package]]
@@ -1760,12 +1760,12 @@ dependencies = [
 [[package]]
 name = "im"
 version = "15.1.0"
-source = "git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb#a95a0a36861af7cc1efa3d41e5f47934e394e7cb"
+source = "git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105#2b9d48508ae80aaffbd7eecc18c9cd90b5697105"
 dependencies = [
  "bitmaps",
  "rand_core 0.6.3",
  "rand_xoshiro",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "serde",
  "sized-chunks",
  "typenum",
@@ -1791,11 +1791,11 @@ dependencies = [
 [[package]]
 name = "indexmap"
 version = "1.8.1"
-source = "git+https://github.com/ryoqun/indexmap?rev=01a57d0146f649caa0d2d2bbb97bf07201d629cb#01a57d0146f649caa0d2d2bbb97bf07201d629cb"
+source = "git+https://github.com/ryoqun/indexmap?rev=bf4baf08b0a07af08af932c01caa46f2c9f63403#bf4baf08b0a07af08af932c01caa46f2c9f63403"
 dependencies = [
  "autocfg",
  "hashbrown",
- "rayon 1.5.993",
+ "rayon 1.5.883",
 ]
 
 [[package]]
@@ -3181,7 +3181,7 @@ dependencies = [
 [[package]]
 name = "rayon"
 version = "1.5.993"
-source = "git+https://github.com/ryoqun/rayon?rev=4dc3a287e2248360d7dc6c8ae0acaa7831c839c5#4dc3a287e2248360d7dc6c8ae0acaa7831c839c5"
+source = "git+https://github.com/ryoqun/rayon?rev=443200afa00c590a8324f3f31bc3c92f8f220b50#443200afa00c590a8324f3f31bc3c92f8f220b50"
 dependencies = [
  "autocfg",
  "crossbeam-deque 0.8.990",
@@ -3205,7 +3205,7 @@ dependencies = [
 [[package]]
 name = "rayon-core"
 version = "1.9.993"
-source = "git+https://github.com/ryoqun/rayon?rev=4dc3a287e2248360d7dc6c8ae0acaa7831c839c5#4dc3a287e2248360d7dc6c8ae0acaa7831c839c5"
+source = "git+https://github.com/ryoqun/rayon?rev=443200afa00c590a8324f3f31bc3c92f8f220b50#443200afa00c590a8324f3f31bc3c92f8f220b50"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque 0.8.990",
@@ -3954,7 +3954,7 @@ dependencies = [
  "fnv",
  "log",
  "rand 0.7.3",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -4443,7 +4443,7 @@ dependencies = [
  "quinn-proto",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "reqwest",
  "rustls 0.20.4",
  "semver 1.0.6",
@@ -4499,7 +4499,7 @@ dependencies = [
  "bs58",
  "chrono",
  "crossbeam-channel",
- "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8)",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36)",
  "etcd-client",
  "fs_extra",
  "histogram",
@@ -4509,7 +4509,7 @@ dependencies = [
  "min-max-heap",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "retain_mut",
  "rustc_version 0.4.0",
  "serde",
@@ -4569,7 +4569,7 @@ dependencies = [
  "dlopen_derive",
  "log",
  "rand 0.7.3",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "serde",
  "solana-measure",
  "solana-merkle-tree",
@@ -4630,7 +4630,7 @@ dependencies = [
  "bs58",
  "bv",
  "generic-array 0.14.5",
- "im 15.1.0 (git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb)",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105)",
  "lazy_static",
  "log",
  "memmap2",
@@ -4713,7 +4713,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "flate2",
- "indexmap 1.8.1 (git+https://github.com/ryoqun/indexmap?rev=01a57d0146f649caa0d2d2bbb97bf07201d629cb)",
+ "indexmap 1.8.1 (git+https://github.com/ryoqun/indexmap?rev=bf4baf08b0a07af08af932c01caa46f2c9f63403)",
  "itertools",
  "log",
  "lru",
@@ -4721,7 +4721,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
@@ -4769,7 +4769,7 @@ dependencies = [
  "prost 0.10.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "reed-solomon-erasure",
  "rocksdb",
  "rustc_version 0.4.0",
@@ -4884,7 +4884,7 @@ dependencies = [
  "log",
  "nix",
  "rand 0.7.3",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -5093,7 +5093,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "libc",
  "log",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "regex",
  "serde",
  "serde_derive",
@@ -5137,11 +5137,11 @@ dependencies = [
  "byteorder 1.4.3",
  "bzip2",
  "crossbeam-channel",
- "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=589871553efed3082c7653bef3765b99bd5a3ee8)",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36)",
  "dir-diff",
  "flate2",
  "fnv",
- "im 15.1.0 (git+https://github.com/ryoqun/im?rev=a95a0a36861af7cc1efa3d41e5f47934e394e7cb)",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105)",
  "index_list",
  "itertools",
  "lazy_static",
@@ -5153,7 +5153,7 @@ dependencies = [
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
- "rayon 1.5.993",
+ "rayon 1.5.883",
  "regex",
  "rustc_version 0.4.0",
  "serde",

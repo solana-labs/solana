@@ -12,7 +12,7 @@ publish = false
 clap = "2.33.1"
 log = "0.4.14"
 rand = "0.7.0"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.24" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.24" }
 solana-client = { path = "../client", version = "=1.10.24" }

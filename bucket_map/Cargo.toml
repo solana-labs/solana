@@ -21,7 +21,7 @@ tempfile = "3.3.0"
 
 [dev-dependencies]
 fs_extra = "1.2.0"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
 solana-logger = { path = "../logger", version = "=1.10.24" }
 
 [lib]

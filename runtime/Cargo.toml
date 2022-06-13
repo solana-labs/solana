@@ -18,11 +18,11 @@ bytemuck = "1.8.0"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
 crossbeam-channel = "0.5"
-dashmap = { git = "https://github.com/ryoqun/dashmap", rev = "589871553efed3082c7653bef3765b99bd5a3ee8", features = ["rayon", "raw-api"] }
+dashmap = { git = "https://github.com/ryoqun/dashmap", rev = "4d06815a13628f7c4315bc98f1ab5f65c91aaf36", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
 flate2 = "1.0.22"
 fnv = "1.0.7"
-im = { git = "https://github.com/ryoqun/im", rev = "a95a0a36861af7cc1efa3d41e5f47934e394e7cb", features = ["rayon", "serde"] }
+im = { git = "https://github.com/ryoqun/im", rev = "2b9d48508ae80aaffbd7eecc18c9cd90b5697105", features = ["rayon", "serde"] }
 index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
@@ -33,7 +33,7 @@ num-traits = { version = "0.2" }
 num_cpus = "1.13.1"
 ouroboros = "0.14.2"
 rand = "0.7.0"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "4dc3a287e2248360d7dc6c8ae0acaa7831c839c5" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
 regex = "1.5.4"
 serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
