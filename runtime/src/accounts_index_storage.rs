@@ -56,13 +56,16 @@ impl BgThreads {
         storage: &Arc<BucketMapHolder<T>>,
         in_mem: &[Arc<InMemAccountsIndex<T>>],
         threads: usize,
+        can_advance_age: bool,
     ) -> Self {
         // stop signal used for THIS batch of bg threads
         let exit = Arc::new(AtomicBool::default());
         let handles = Some(
             (0..threads)
                 .into_iter()
-                .map(|_| {
+                .map(|idx| {
+                    // the first thread we start is special
+                    let can_advance_age = can_advance_age && idx == 0;
                     let storage_ = Arc::clone(storage);
                     let exit_ = Arc::clone(&exit);
                     let in_mem_ = in_mem.to_vec();
@@ -71,7 +74,7 @@ impl BgThreads {
                     Builder::new()
                         .name("solana-idx-flusher".to_string())
                         .spawn(move || {
-                            storage_.background(exit_, in_mem_);
+                            storage_.background(exit_, in_mem_, can_advance_age);
                         })
                         .unwrap()
                 })
@@ -113,6 +116,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                 &self.storage,
                 &self.in_mem,
                 Self::num_threads(),
+                false, // cannot advance age from any of these threads
             ));
         }
         self.storage.set_startup(value);
@@ -157,7 +161,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
             .collect::<Vec<_>>();
 
         Self {
-            _bg_threads: BgThreads::new(&storage, &in_mem, threads),
+            _bg_threads: BgThreads::new(&storage, &in_mem, threads, true),
             storage,
             in_mem,
             startup_worker_threads: Mutex::default(),
