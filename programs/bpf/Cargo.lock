@@ -4780,6 +4780,7 @@ dependencies = [
  "dlopen",
  "dlopen_derive",
  "fnv",
+ "histogram",
  "lazy_static",
  "libc",
  "log",
