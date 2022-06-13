@@ -2663,18 +2663,37 @@ where
                 invoke_context,
             )?;
             {
-                callee_account
-                    .set_lamports(*caller_account.lamports)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_data(caller_account.data)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_executable(caller_account.executable)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_owner(caller_account.owner.as_ref())
-                    .map_err(SyscallError::InstructionError)?;
+                if callee_account.get_lamports() != *caller_account.lamports {
+                    callee_account
+                        .set_lamports(*caller_account.lamports)
+                        .map_err(SyscallError::InstructionError)?;
+                }
+                // The redundant check helps to avoid the expensive data comparison if we can
+                match callee_account
+                    .can_data_be_resized(caller_account.data.len())
+                    .and_then(|_| callee_account.can_data_be_changed())
+                {
+                    Ok(()) => callee_account
+                        .set_data(caller_account.data)
+                        .map_err(SyscallError::InstructionError)?,
+                    Err(err) if callee_account.get_data() != caller_account.data => {
+                        return Err(EbpfError::UserError(BpfError::SyscallError(
+                            SyscallError::InstructionError(err),
+                        )));
+                    }
+                    _ => {}
+                }
+                if callee_account.is_executable() != caller_account.executable {
+                    callee_account
+                        .set_executable(caller_account.executable)
+                        .map_err(SyscallError::InstructionError)?;
+                }
+                // Change the owner at the end so that we are allowed to change the lamports and data before
+                if callee_account.get_owner() != caller_account.owner {
+                    callee_account
+                        .set_owner(caller_account.owner.as_ref())
+                        .map_err(SyscallError::InstructionError)?;
+                }
                 drop(callee_account);
                 let callee_account = invoke_context
                     .transaction_context
