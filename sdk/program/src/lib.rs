@@ -636,6 +636,39 @@ pub mod vote {
     }
 }
 
+/// A vector of Solana SDK IDs
+pub mod sdk_ids {
+    use {
+        crate::{
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
+            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
+            system_program, sysvar, vote,
+        },
+        lazy_static::lazy_static,
+    };
+
+    lazy_static! {
+        pub static ref SDK_IDS: Vec<Pubkey> = {
+            let mut sdk_ids = vec![
+                ed25519_program::id(),
+                secp256k1_program::id(),
+                system_program::id(),
+                sysvar::id(),
+                bpf_loader::id(),
+                bpf_loader_upgradeable::id(),
+                incinerator::id(),
+                config::program::id(),
+                vote::program::id(),
+                feature::id(),
+                bpf_loader_deprecated::id(),
+                stake::config::id(),
+            ];
+            sdk_ids.extend(sysvar::ALL_IDS.iter());
+            sdk_ids
+        };
+    }
+}
+
 /// Same as [`declare_id`] except that it reports that this ID has been deprecated.
 pub use solana_sdk_macro::program_declare_deprecated_id as declare_deprecated_id;
 /// Convenience macro to declare a static public key and functions to interact with it.
