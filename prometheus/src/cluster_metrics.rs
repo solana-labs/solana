@@ -20,7 +20,7 @@ pub fn write_cluster_metrics<W: io::Write>(
     write_metric(
         out,
         &MetricFamily {
-            name: "solana_cluster_identity_public_key_info",
+            name: "solana_node_identity_public_key_info",
             help: "The current node's identity",
             type_: "count",
             metrics: vec![Metric::new(1).with_label("identity", identity_pubkey.to_string())],
@@ -31,7 +31,7 @@ pub fn write_cluster_metrics<W: io::Write>(
     write_metric(
         out,
         &MetricFamily {
-            name: "solana_cluster_identity_balance_total",
+            name: "solana_node_identity_balance_total",
             help: "The current node's identity balance",
             type_: "gauge",
             metrics: vec![Metric::new_sol(identity_balance)],
@@ -41,7 +41,7 @@ pub fn write_cluster_metrics<W: io::Write>(
     write_metric(
         out,
         &MetricFamily {
-            name: "solana_cluster_node_version_info",
+            name: "solana_node_version_info",
             help: "The current Solana node's version",
             type_: "count",
             metrics: vec![Metric::new(1).with_label("version", version.to_string())],
