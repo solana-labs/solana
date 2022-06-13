@@ -125,7 +125,7 @@ mod test {
             &convert_pubkey(mint),
         );
         let message = Message::new(&[create_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
@@ -145,6 +145,12 @@ mod test {
                 })
             }
         );
+        compiled_instruction.accounts.pop();
+        assert!(parse_associated_token(
+            &compiled_instruction,
+            &AccountKeys::new(&convert_account_keys(&message), None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -160,7 +166,7 @@ mod test {
             &convert_pubkey(mint),
         );
         let message = Message::new(&[create_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
@@ -179,5 +185,11 @@ mod test {
                 })
             }
         );
+        compiled_instruction.accounts.pop();
+        assert!(parse_associated_token(
+            &compiled_instruction,
+            &AccountKeys::new(&convert_account_keys(&message), None)
+        )
+        .is_err());
     }
 }
