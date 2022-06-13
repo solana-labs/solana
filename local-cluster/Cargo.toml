@@ -15,7 +15,7 @@ fs_extra = "1.2.0"
 itertools = "0.10.3"
 log = "0.4.14"
 rand = "0.7.0"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "48efe667f1a81167a1794369c7eee40b85192d8e" }
 solana-client = { path = "../client", version = "=1.10.24" }
 solana-config-program = { path = "../programs/config", version = "=1.10.24" }
 solana-core = { path = "../core", version = "=1.10.24" }

@@ -32,7 +32,7 @@ quinn = "0.8.0"
 quinn-proto = "0.8.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
-rayon = { git = "https://github.com/ryoqun/rayon", rev = "443200afa00c590a8324f3f31bc3c92f8f220b50" }
+rayon = { git = "https://github.com/ryoqun/rayon", rev = "48efe667f1a81167a1794369c7eee40b85192d8e" }
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
 semver = "1.0.6"

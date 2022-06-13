@@ -751,7 +751,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdbfe11fe19ff083c48923cf179540e8cd0535903dc35e178a1fdeeb59aef51f"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.5",
 ]
 
 [[package]]
@@ -762,17 +762,17 @@ checksum = "6455c0ca19f0d2fbf751b908d5c55c1f5cbc65e03c4225427254b46890bdde1e"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-epoch 0.9.5",
- "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.5",
 ]
 
 [[package]]
 name = "crossbeam-deque"
-version = "0.8.990"
-source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
+version = "0.8.991"
+source = "git+https://github.com/ryoqun/crossbeam?rev=7b65899259ad6fc0270ea2adaee98b42741eb94a#7b65899259ad6fc0270ea2adaee98b42741eb94a"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-epoch 0.9.995",
- "crossbeam-utils 0.8.5 (git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200)",
+ "crossbeam-epoch 0.9.998",
+ "crossbeam-utils 0.8.8",
 ]
 
 [[package]]
@@ -782,7 +782,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec02e091aa634e2c3ada4a392989e7c3116673ef0ac5b72232439094d73b7fd"
 dependencies = [
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.5",
  "lazy_static",
  "memoffset",
  "scopeguard",
@@ -790,13 +790,14 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.995"
-source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
+version = "0.9.998"
+source = "git+https://github.com/ryoqun/crossbeam?rev=7b65899259ad6fc0270ea2adaee98b42741eb94a#7b65899259ad6fc0270ea2adaee98b42741eb94a"
 dependencies = [
+ "autocfg",
  "cfg-if 1.0.0",
- "crossbeam-utils 0.8.5 (git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200)",
- "lazy_static",
+ "crossbeam-utils 0.8.8",
  "memoffset",
+ "once_cell",
  "scopeguard",
 ]
 
@@ -812,11 +813,11 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.5"
-source = "git+https://github.com/ryoqun/crossbeam?rev=79b156783b8a9616fc54183e936e153e1781c200#79b156783b8a9616fc54183e936e153e1781c200"
+version = "0.8.8"
+source = "git+https://github.com/ryoqun/crossbeam?rev=7b65899259ad6fc0270ea2adaee98b42741eb94a#7b65899259ad6fc0270ea2adaee98b42741eb94a"
 dependencies = [
  "cfg-if 1.0.0",
- "lazy_static",
+ "once_cell",
 ]
 
 [[package]]
@@ -881,11 +882,11 @@ dependencies = [
 [[package]]
 name = "dashmap"
 version = "4.0.2"
-source = "git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36#4d06815a13628f7c4315bc98f1ab5f65c91aaf36"
+source = "git+https://github.com/ryoqun/dashmap?rev=503003bfe6c1e02b0c1c6d03ded62aef5d41da9d#503003bfe6c1e02b0c1c6d03ded62aef5d41da9d"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",
- "rayon 1.5.883",
+ "rayon 1.5.993",
 ]
 
 [[package]]
@@ -1760,12 +1761,12 @@ dependencies = [
 [[package]]
 name = "im"
 version = "15.1.0"
-source = "git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105#2b9d48508ae80aaffbd7eecc18c9cd90b5697105"
+source = "git+https://github.com/ryoqun/im?rev=fc0d5a6b94075d80ec7d768a8c652c02f4b482a4#fc0d5a6b94075d80ec7d768a8c652c02f4b482a4"
 dependencies = [
  "bitmaps",
  "rand_core 0.6.3",
  "rand_xoshiro",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "serde",
  "sized-chunks",
  "typenum",
@@ -1791,11 +1792,11 @@ dependencies = [
 [[package]]
 name = "indexmap"
 version = "1.8.1"
-source = "git+https://github.com/ryoqun/indexmap?rev=bf4baf08b0a07af08af932c01caa46f2c9f63403#bf4baf08b0a07af08af932c01caa46f2c9f63403"
+source = "git+https://github.com/ryoqun/indexmap?rev=af6891e090f25a92fecc880d2eb756c8a8322a9a#af6891e090f25a92fecc880d2eb756c8a8322a9a"
 dependencies = [
  "autocfg",
  "hashbrown",
- "rayon 1.5.883",
+ "rayon 1.5.993",
 ]
 
 [[package]]
@@ -3181,10 +3182,10 @@ dependencies = [
 [[package]]
 name = "rayon"
 version = "1.5.993"
-source = "git+https://github.com/ryoqun/rayon?rev=443200afa00c590a8324f3f31bc3c92f8f220b50#443200afa00c590a8324f3f31bc3c92f8f220b50"
+source = "git+https://github.com/ryoqun/rayon?rev=48efe667f1a81167a1794369c7eee40b85192d8e#48efe667f1a81167a1794369c7eee40b85192d8e"
 dependencies = [
  "autocfg",
- "crossbeam-deque 0.8.990",
+ "crossbeam-deque 0.8.991",
  "either",
  "rayon-core 1.9.993",
 ]
@@ -3197,7 +3198,7 @@ checksum = "d78120e2c850279833f1dd3582f730c4ab53ed95aeaaaa862a2a5c71b1656d8e"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque 0.8.1",
- "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils 0.8.5",
  "lazy_static",
  "num_cpus",
 ]
@@ -3205,11 +3206,11 @@ dependencies = [
 [[package]]
 name = "rayon-core"
 version = "1.9.993"
-source = "git+https://github.com/ryoqun/rayon?rev=443200afa00c590a8324f3f31bc3c92f8f220b50#443200afa00c590a8324f3f31bc3c92f8f220b50"
+source = "git+https://github.com/ryoqun/rayon?rev=48efe667f1a81167a1794369c7eee40b85192d8e#48efe667f1a81167a1794369c7eee40b85192d8e"
 dependencies = [
  "crossbeam-channel",
- "crossbeam-deque 0.8.990",
- "crossbeam-utils 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-deque 0.8.991",
+ "crossbeam-utils 0.8.5",
  "num_cpus",
 ]
 
@@ -3954,7 +3955,7 @@ dependencies = [
  "fnv",
  "log",
  "rand 0.7.3",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
@@ -4443,7 +4444,7 @@ dependencies = [
  "quinn-proto",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "reqwest",
  "rustls 0.20.4",
  "semver 1.0.6",
@@ -4499,7 +4500,7 @@ dependencies = [
  "bs58",
  "chrono",
  "crossbeam-channel",
- "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36)",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=503003bfe6c1e02b0c1c6d03ded62aef5d41da9d)",
  "etcd-client",
  "fs_extra",
  "histogram",
@@ -4509,7 +4510,7 @@ dependencies = [
  "min-max-heap",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "retain_mut",
  "rustc_version 0.4.0",
  "serde",
@@ -4569,7 +4570,7 @@ dependencies = [
  "dlopen_derive",
  "log",
  "rand 0.7.3",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "serde",
  "solana-measure",
  "solana-merkle-tree",
@@ -4630,7 +4631,7 @@ dependencies = [
  "bs58",
  "bv",
  "generic-array 0.14.5",
- "im 15.1.0 (git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105)",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=fc0d5a6b94075d80ec7d768a8c652c02f4b482a4)",
  "lazy_static",
  "log",
  "memmap2",
@@ -4713,7 +4714,7 @@ dependencies = [
  "clap",
  "crossbeam-channel",
  "flate2",
- "indexmap 1.8.1 (git+https://github.com/ryoqun/indexmap?rev=bf4baf08b0a07af08af932c01caa46f2c9f63403)",
+ "indexmap 1.8.1 (git+https://github.com/ryoqun/indexmap?rev=af6891e090f25a92fecc880d2eb756c8a8322a9a)",
  "itertools",
  "log",
  "lru",
@@ -4721,7 +4722,7 @@ dependencies = [
  "num-traits",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
@@ -4769,7 +4770,7 @@ dependencies = [
  "prost 0.10.1",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "reed-solomon-erasure",
  "rocksdb",
  "rustc_version 0.4.0",
@@ -4884,7 +4885,7 @@ dependencies = [
  "log",
  "nix",
  "rand 0.7.3",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
@@ -5093,7 +5094,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "libc",
  "log",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "regex",
  "serde",
  "serde_derive",
@@ -5137,11 +5138,11 @@ dependencies = [
  "byteorder 1.4.3",
  "bzip2",
  "crossbeam-channel",
- "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=4d06815a13628f7c4315bc98f1ab5f65c91aaf36)",
+ "dashmap 4.0.2 (git+https://github.com/ryoqun/dashmap?rev=503003bfe6c1e02b0c1c6d03ded62aef5d41da9d)",
  "dir-diff",
  "flate2",
  "fnv",
- "im 15.1.0 (git+https://github.com/ryoqun/im?rev=2b9d48508ae80aaffbd7eecc18c9cd90b5697105)",
+ "im 15.1.0 (git+https://github.com/ryoqun/im?rev=fc0d5a6b94075d80ec7d768a8c652c02f4b482a4)",
  "index_list",
  "itertools",
  "lazy_static",
@@ -5153,7 +5154,7 @@ dependencies = [
  "num_cpus",
  "ouroboros",
  "rand 0.7.3",
- "rayon 1.5.883",
+ "rayon 1.5.993",
  "regex",
  "rustc_version 0.4.0",
  "serde",
