@@ -2952,7 +2952,7 @@ describe('Connection', function () {
     }
   });
 
-  describe.only('is blockhash valid', () => {
+  describe('is blockhash valid', () => {
     it('is blockhash valid - blockhash only (mock)', async () => {
       const {blockhash} = await helpers.recentBlockhash({connection});
 
@@ -2972,12 +2972,12 @@ describe('Connection', function () {
 
       await mockRpcResponse({
         method: 'isBlockhashValid',
-        params: [blockhash, {minContextSlot: 1140}],
+        params: [blockhash, {minContextSlot: 2}],
         value: true,
         withContext: true
       });
 
-      const isValid = await connection.isBlockhashValid(blockhash, {minContextSlot: 1140});
+      const isValid = await connection.isBlockhashValid(blockhash, {minContextSlot: 2});
       expect(isValid.value).to.be.true;
     });
 
@@ -2989,14 +2989,13 @@ describe('Connection', function () {
       });
 
       it('is blockhash valid - blockhash only and mint slot (live)', async () => {
-        const blockhash = (await connection.getLatestBlockhash('recent')).blockhash;
-        const currentSlot = await connection.getSlot('recent');
+        const blockhash = await connection.getLatestBlockhashAndContext('finalized');
 
         const isValid = await connection.isBlockhashValid(
-          blockhash,
+          blockhash.value.blockhash,
           {
-            commitment: 'recent',
-            minContextSlot: currentSlot-1
+            commitment: 'finalized',
+            minContextSlot: blockhash.context.slot+1
           });
         expect(isValid.value).to.be.false;
       });
