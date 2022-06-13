@@ -24,14 +24,10 @@ use {
     std::convert::TryInto,
 };
 
-#[cfg(not(target_os = "solana"))]
-const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
-#[cfg(not(target_os = "solana"))]
-const TRANSFER_AMOUNT_LO_BITS: usize = 16;
-#[cfg(not(target_os = "solana"))]
-const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
-#[cfg(not(target_os = "solana"))]
-const TRANSFER_AMOUNT_HI_BITS: usize = 32;
+pub const TRANSFER_SOURCE_AMOUNT_BITS: usize = 64;
+pub const TRANSFER_AMOUNT_LO_BITS: usize = 16;
+pub const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
+pub const TRANSFER_AMOUNT_HI_BITS: usize = 32;
 
 #[cfg(not(target_os = "solana"))]
 lazy_static::lazy_static! {
