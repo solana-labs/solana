@@ -638,30 +638,34 @@ pub mod vote {
 
 /// A vector of all Solana SDK Program IDs
 pub mod program_ids {
-    use crate::{
-        bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
-        feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
-        system_program, sysvar, vote,
+    use {
+        crate::{
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
+            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
+            system_program, sysvar, vote,
+        },
+        lazy_static::lazy_static,
     };
 
-    /// Returns a list of all sdk program ids
-    pub fn get_sdk_program_ids() -> Vec<Pubkey> {
-        let mut sdk_program_ids = vec![
-            ed25519_program::id(),
-            secp256k1_program::id(),
-            system_program::id(),
-            sysvar::id(),
-            bpf_loader::id(),
-            bpf_loader_upgradeable::id(),
-            incinerator::id(),
-            config::program::id(),
-            vote::program::id(),
-            feature::id(),
-            bpf_loader_deprecated::id(),
-            stake::config::id(),
-        ];
-        sdk_program_ids.extend(sysvar::ALL_IDS.iter());
-        sdk_program_ids
+    lazy_static! {
+        pub static ref SKD_PROGRAM_IDS: Vec<Pubkey> = {
+            let mut program_ids = vec![
+                ed25519_program::id(),
+                secp256k1_program::id(),
+                system_program::id(),
+                sysvar::id(),
+                bpf_loader::id(),
+                bpf_loader_upgradeable::id(),
+                incinerator::id(),
+                config::program::id(),
+                vote::program::id(),
+                feature::id(),
+                bpf_loader_deprecated::id(),
+                stake::config::id(),
+            ];
+            program_ids.extend(sysvar::ALL_IDS.iter());
+            program_ids
+        };
     }
 }
 
