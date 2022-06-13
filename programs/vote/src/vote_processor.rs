@@ -53,6 +53,12 @@ pub fn process_instruction(
             )
         }
         VoteInstruction::AuthorizeWithSeed(args) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_authorize_with_seed::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
             let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
@@ -1264,6 +1270,22 @@ mod tests {
                 VoteAuthorizeWithSeedArgs {
                     authorization_type,
                     current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // Should fail when the `vote_authorize_with_seed` feature is disabled
+        process_instruction_disabled_features(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
                     current_authority_derived_key_seed: current_authority_seed,
                     new_authority: new_authority_pubkey,
                 },
@@ -1271,7 +1293,7 @@ mod tests {
             .unwrap(),
             transaction_accounts,
             instruction_accounts,
-            Ok(()),
+            Err(InstructionError::InvalidInstructionData),
         );
     }
 
