@@ -31,10 +31,13 @@ impl From<PodU64> for u64 {
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
+<<<<<<< HEAD
 pub struct Scalar(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
+=======
+>>>>>>> 930fe8ad1 (Zk token ops using curve25519 syscalls (#25935))
 pub struct CompressedRistretto(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq)]

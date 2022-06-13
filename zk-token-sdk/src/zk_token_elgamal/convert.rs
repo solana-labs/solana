@@ -51,6 +51,7 @@ mod target_arch {
     use {
         super::pod,
         crate::{
+            curve25519::scalar::PodScalar,
             encryption::{
                 auth_encryption::AeCiphertext,
                 elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
@@ -74,14 +75,14 @@ mod target_arch {
         std::convert::TryFrom,
     };
 
-    impl From<Scalar> for pod::Scalar {
+    impl From<Scalar> for PodScalar {
         fn from(scalar: Scalar) -> Self {
             Self(scalar.to_bytes())
         }
     }
 
-    impl From<pod::Scalar> for Scalar {
-        fn from(pod: pod::Scalar) -> Self {
+    impl From<PodScalar> for Scalar {
+        fn from(pod: PodScalar) -> Self {
             Scalar::from_bits(pod.0)
         }
     }
