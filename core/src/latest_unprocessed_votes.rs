@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
@@ -7,7 +6,7 @@ use {
     },
     itertools::Itertools,
     rand::{thread_rng, Rng},
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
     solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
     solana_vote_program::vote_instruction::VoteInstruction,
@@ -56,7 +55,9 @@ impl LatestValidatorVotePacket {
 
         match limited_deserialize::<VoteInstruction>(&instruction.data) {
             Ok(VoteInstruction::UpdateVoteState(vote_state_update))
-            | Ok(VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _)) => {
+            | Ok(VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _))
+            | Ok(VoteInstruction::CompactUpdateVoteState(vote_state_update))
+            | Ok(VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _)) => {
                 let &pubkey = message
                     .message
                     .static_account_keys()
@@ -100,16 +101,6 @@ impl LatestValidatorVotePacket {
     pub fn take_vote(&mut self) -> Option<Arc<ImmutableDeserializedPacket>> {
         self.vote.take()
     }
-}
-
-pub fn deserialize_packets<'a>(
-    packet_batch: &'a PacketBatch,
-    packet_indexes: &'a [usize],
-    vote_source: VoteSource,
-) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
-    packet_indexes.iter().filter_map(move |packet_index| {
-        LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
-    })
 }
 
 // TODO: replace this with rand::seq::index::sample_weighted once we can update rand to 0.8+
@@ -329,7 +320,7 @@ mod tests {
         super::*,
         itertools::Itertools,
         rand::{thread_rng, Rng},
-        solana_perf::packet::{Packet, PacketFlags},
+        solana_perf::packet::{Packet, PacketBatch, PacketFlags},
         solana_runtime::{
             bank::Bank,
             genesis_utils::{self, ValidatorVoteKeypairs},
@@ -359,6 +350,16 @@ mod tests {
         let mut packet = Packet::from_data(None, vote_tx).unwrap();
         packet.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         LatestValidatorVotePacket::new(packet, vote_source).unwrap()
+    }
+
+    fn deserialize_packets<'a>(
+        packet_batch: &'a PacketBatch,
+        packet_indexes: &'a [usize],
+        vote_source: VoteSource,
+    ) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
+        packet_indexes.iter().filter_map(move |packet_index| {
+            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
+        })
     }
 
     #[test]

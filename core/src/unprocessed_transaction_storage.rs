@@ -1,18 +1,16 @@
-#![allow(dead_code)]
 use {
     crate::{
         banking_stage::{self, BankingStage, FilterForwardingResults, ForwardOption},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
-            self, LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
+            LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
             VoteSource,
         },
-        unprocessed_packet_batches::{self, DeserializedPacket, UnprocessedPacketBatches},
+        unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
     std::sync::Arc,
 };
@@ -24,6 +22,9 @@ pub enum UnprocessedTransactionStorage {
     VoteStorage(VoteStorage),
     LocalTransactionStorage(ThreadLocalUnprocessedPackets),
 }
+
+unsafe impl Send for UnprocessedTransactionStorage {}
+unsafe impl Sync for UnprocessedTransactionStorage {}
 
 #[derive(Debug)]
 pub struct ThreadLocalUnprocessedPackets {
@@ -51,7 +52,7 @@ pub struct InsertPacketBatchesSummary {
     pub(crate) num_dropped_tracer_packets: usize,
 }
 
-fn filter_processed_packets<'a, F>(
+pub(crate) fn filter_processed_packets<'a, F>(
     retryable_transaction_indexes: impl Iterator<Item = &'a usize>,
     mut f: F,
 ) where
@@ -145,17 +146,16 @@ impl UnprocessedTransactionStorage {
         }
     }
 
-    pub fn deserialize_and_insert_batch(
+    pub fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> InsertPacketBatchesSummary {
         match self {
             Self::VoteStorage(vote_storage) => {
                 let VoteBatchInsertionMetrics {
                     num_dropped_gossip,
                     num_dropped_tpu,
-                } = vote_storage.deserialize_and_insert_batch(packet_batch, packet_indexes);
+                } = vote_storage.insert_batch(deserialized_packets);
                 InsertPacketBatchesSummary {
                     num_dropped_packets: num_dropped_gossip + num_dropped_tpu,
                     num_dropped_gossip_vote_packets: num_dropped_gossip,
@@ -165,7 +165,7 @@ impl UnprocessedTransactionStorage {
             }
             Self::LocalTransactionStorage(transaction_storage) => {
                 let (num_dropped_packets, num_dropped_tracer_packets) =
-                    transaction_storage.deserialize_and_insert_batch(packet_batch, packet_indexes);
+                    transaction_storage.insert_batch(deserialized_packets);
                 InsertPacketBatchesSummary {
                     num_dropped_packets,
                     num_dropped_tracer_packets,
@@ -241,17 +241,22 @@ impl VoteStorage {
         self.latest_unprocessed_votes.clear_forwarded_packets();
     }
 
-    fn deserialize_and_insert_batch(
+    fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> VoteBatchInsertionMetrics {
         self.latest_unprocessed_votes
-            .insert_batch(latest_unprocessed_votes::deserialize_packets(
-                packet_batch,
-                packet_indexes,
-                self.vote_source,
-            ))
+            .insert_batch(
+                deserialized_packets
+                    .into_iter()
+                    .filter_map(|deserialized_packet| {
+                        LatestValidatorVotePacket::new_from_immutable(
+                            Rc::new(deserialized_packet),
+                            self.vote_source,
+                        )
+                        .ok()
+                    }),
+            )
     }
 
     fn filter_forwardable_packets_and_add_batches(
@@ -345,13 +350,14 @@ impl ThreadLocalUnprocessedPackets {
         self.unprocessed_packet_batches.clear();
     }
 
-    fn deserialize_and_insert_batch(
+    fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> (usize, usize) {
         self.unprocessed_packet_batches.insert_batch(
-            unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
+            deserialized_packets
+                .into_iter()
+                .map(DeserializedPacket::from_immutable_section),
         )
     }
 
@@ -360,12 +366,18 @@ impl ThreadLocalUnprocessedPackets {
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
-        BankingStage::filter_and_forward_with_account_limits(
+        let results = BankingStage::filter_and_forward_with_account_limits(
             &bank,
             &mut self.unprocessed_packet_batches,
             forward_packet_batches_by_accounts,
             banking_stage::UNPROCESSED_BUFFER_STEP_SIZE,
-        )
+        );
+
+        for deserialized_packet in self.unprocessed_packet_batches.iter_mut() {
+            // Mark so we don't forward again
+            deserialized_packet.forwarded = true;
+        }
+        results
     }
 
     fn process_packets<F>(&mut self, batch_size: usize, mut processing_function: F)
@@ -388,20 +400,11 @@ impl ThreadLocalUnprocessedPackets {
                 if let Some(retryable_transaction_indexes) =
                     processing_function(&packets_to_process)
                 {
-                    // Remove the non-retryable packets, packets that were either:
-                    // 1) Successfully processed
-                    // 2) Failed but not retryable
-                    filter_processed_packets(
-                        retryable_transaction_indexes
-                            .iter()
-                            .chain(std::iter::once(&packets_to_process.len())),
-                        |start, end| {
-                            for processed_packet in &packets_to_process[start..end] {
-                                self.unprocessed_packet_batches
-                                    .message_hash_to_transaction
-                                    .remove(processed_packet.message_hash());
-                            }
-                        },
+                    // TODO: move this function tree into this module
+                    BankingStage::remove_non_retained_packets(
+                        &mut self.unprocessed_packet_batches,
+                        &packets_to_process,
+                        &retryable_transaction_indexes,
                     );
                     retryable_transaction_indexes
                         .iter()
