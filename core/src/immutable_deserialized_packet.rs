@@ -28,6 +28,8 @@ pub enum DeserializedPacketError {
     SanitizeError(#[from] SanitizeError),
     #[error("transaction failed prioritization")]
     PrioritizationFailure,
+    #[error("vote transaction failure")]
+    VoteTransactionError,
 }
 
 #[derive(Debug, PartialEq, Eq)]
