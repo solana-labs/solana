@@ -620,8 +620,7 @@ pub fn ed25519_verify_cpu(
     let desired_thread_count = packet_count
         .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
-    let active_threads;
-    if desired_thread_count <= 1 {
+    let active_threads = if desired_thread_count <= 1 {
         // When using single thread, skip rayon overhead.
         batches.iter_mut().for_each(|batch| {
             batch.iter_mut().for_each(|packet| {
@@ -630,8 +629,20 @@ pub fn ed25519_verify_cpu(
                 }
             })
         });
-        active_threads = 1;
+        1
     } else {
+        let packet_verification_closure = |packet: &mut Packet| {
+            if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
+                packet.meta.set_discard(true);
+            }
+            if let Some(thread_mask) = CheckedShl::checked_shl(
+                &1,
+                rayon::current_thread_index().unwrap().try_into().unwrap(),
+            ) {
+                thread_in_use_multihot.fetch_or(thread_mask, Ordering::Relaxed);
+            }
+        };
+
         if desired_thread_count < get_thread_count() {
             // Dynamically compute minimum packet length to spread the load while minimizing threads.
             let packets_per_thread = packet_count.saturating_div(desired_thread_count);
@@ -642,45 +653,24 @@ pub fn ed25519_verify_cpu(
                     .collect::<Vec<&mut Packet>>()
                     .into_par_iter()
                     .with_min_len(packets_per_thread)
-                    .for_each(|packet: &mut Packet| {
-                        if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
-                            packet.meta.set_discard(true);
-                        }
-                        if let Some(thread_mask) = CheckedShl::checked_shl(
-                            &1,
-                            rayon::current_thread_index().unwrap().try_into().unwrap(),
-                        ) {
-                            thread_in_use_multihot.fetch_or(thread_mask, Ordering::Relaxed);
-                        }
-                    })
+                    .for_each(packet_verification_closure)
             });
         } else {
             // When using all available threads, skip the overhead of flattening, collecting, etc.
             PAR_THREAD_POOL.install(|| {
                 batches.into_par_iter().for_each(|batch: &mut PacketBatch| {
-                    batch.par_iter_mut().for_each(|packet: &mut Packet| {
-                        if !packet.meta.discard() && !verify_packet(packet, reject_non_vote) {
-                            packet.meta.set_discard(true);
-                        }
-                        if let Some(thread_mask) = CheckedShl::checked_shl(
-                            &1,
-                            rayon::current_thread_index().unwrap().try_into().unwrap(),
-                        ) {
-                            thread_in_use_multihot.fetch_or(thread_mask, Ordering::Relaxed);
-                        }
-                    })
+                    batch.par_iter_mut().for_each(packet_verification_closure)
                 });
             });
         }
-        active_threads = thread_in_use_multihot.load(Ordering::Relaxed).count_ones();
-    }
+        thread_in_use_multihot.load(Ordering::Relaxed).count_ones()
+    };
 
     if let Some(active_threads_hist) = active_threads_hist {
         active_threads_hist
             .increment(active_threads as u64)
             .unwrap();
     }
-
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
