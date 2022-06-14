@@ -119,27 +119,19 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     });
 }
 
-fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
-    let len = 4096;
-    let chunk_size = 1024;
+fn gen_batches(
+    use_same_tx: bool,
+    packets_per_batch: usize,
+    total_packets: usize,
+) -> Vec<PacketBatch> {
     if use_same_tx {
         let tx = test_tx();
-        to_packet_batches(&vec![tx; len], chunk_size)
+        to_packet_batches(&vec![tx; total_packets], packets_per_batch)
     } else {
-        let from_keypair = Keypair::new();
-        let to_keypair = Keypair::new();
-        let txs: Vec<_> = (0..len)
-            .map(|_| {
-                let amount = thread_rng().gen();
-                system_transaction::transfer(
-                    &from_keypair,
-                    &to_keypair.pubkey(),
-                    amount,
-                    Hash::default(),
-                )
-            })
+        let txs: Vec<_> = std::iter::repeat_with(test_tx)
+            .take(total_packets)
             .collect();
-        to_packet_batches(&txs, chunk_size)
+        to_packet_batches(&txs, packets_per_batch)
     }
 }
 
@@ -150,12 +142,18 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::new(verified_s);
+    let max_packets_per_verification_iteration = verifier.get_max_verify_batch();
     let stage = SigVerifyStage::new(packet_r, verifier, "bench");
 
-    let use_same_tx = true;
+    let use_same_tx = false;
+    let packets_per_batch = 128;
+    // This is important so that we don't discard any packets and fail asserts below about
+    // `total_excess_tracer_packets`
+    let total_packets = (1920).min(max_packets_per_verification_iteration);
+
     bencher.iter(move || {
         let now = Instant::now();
-        let mut batches = gen_batches(use_same_tx);
+        let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
@@ -179,6 +177,8 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
                 }
                 if use_same_tx || received >= sent_len {
                     break;
+                } else {
+                    trace!("received: {}", received);
                 }
             }
         }

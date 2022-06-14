@@ -17,12 +17,16 @@ use {
     },
 };
 
+// 50ms/(25us/packet) = 2000 packets
+const MAX_SIGVERIFY_BATCH_DEFAULT: usize = 2_000;
+
 #[derive(Clone)]
 pub struct ShredSigVerifier {
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_cache: RecyclerCache,
     packet_sender: Sender<Vec<PacketBatch>>,
+    max_verify_batch: usize,
 }
 
 impl ShredSigVerifier {
@@ -37,6 +41,7 @@ impl ShredSigVerifier {
             leader_schedule_cache,
             recycler_cache: RecyclerCache::warmed(),
             packet_sender,
+            max_verify_batch: MAX_SIGVERIFY_BATCH_DEFAULT,
         }
     }
     fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
@@ -81,6 +86,10 @@ impl SigVerifier for ShredSigVerifier {
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
         solana_perf::sigverify::mark_disabled(&mut batches, &r);
         batches
+    }
+
+    fn get_max_verify_batch(&self) -> usize {
+        self.max_verify_batch
     }
 }
 

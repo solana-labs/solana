@@ -13,9 +13,18 @@ use {
         sigverify_stage::{SigVerifier, SigVerifyServiceError},
     },
     crossbeam_channel::Sender,
-    solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
+    solana_perf::{
+        cuda_runtime::PinnedVec, packet::PacketBatch, perf_libs, recycler::Recycler, sigverify,
+    },
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{packet::Packet, saturating_add_assign},
 };
+
+const SIGVERIFY_TIME_BUDGET_US: usize = 50_000;
+// 50ms/(25us/packet) = 2000 packets
+const MAX_SIGVERIFY_BATCH_DEFAULT: usize = 2_000;
+// 1000 packets / 50ms = 20k TPS floor
+const MAX_SIGVERIFY_BATCH_MIN: usize = 1_000;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SigverifyTracerPacketStats {
@@ -62,6 +71,7 @@ pub struct TransactionSigVerifier {
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
+    max_verify_batch: usize,
 }
 
 impl TransactionSigVerifier {
@@ -79,6 +89,7 @@ impl TransactionSigVerifier {
             recycler: Recycler::warmed(50, 4096),
             recycler_out: Recycler::warmed(50, 4096),
             reject_non_vote: false,
+            max_verify_batch: MAX_SIGVERIFY_BATCH_DEFAULT,
         }
     }
 }
@@ -150,5 +161,29 @@ impl SigVerifier for TransactionSigVerifier {
             valid_packets,
         );
         batches
+    }
+
+    fn get_max_verify_batch(&self) -> usize {
+        warn!("max_verify_batch is {}", self.max_verify_batch);
+        self.max_verify_batch
+    }
+
+    fn update_max_verify_batch(
+        &mut self,
+        verify_time_us: usize,
+        packet_count: usize,
+        active_thread_count: usize,
+    ) {
+        let packets_per_iteration = packet_count * SIGVERIFY_TIME_BUDGET_US / verify_time_us;
+        let packets_per_iteration_max = if perf_libs::api().is_none() {
+            packets_per_iteration / active_thread_count.min(get_thread_count()) * get_thread_count()
+        } else {
+            // TODO: Scale this using number of GPU cores active during last iteration
+            packets_per_iteration.max(MAX_SIGVERIFY_BATCH_DEFAULT)
+        };
+        self.max_verify_batch -= self.max_verify_batch >> 5;
+        self.max_verify_batch += packets_per_iteration_max >> 5;
+        // Establish an absolute floor to avoid death spiral overly restricting verification packet count.
+        self.max_verify_batch = self.max_verify_batch.max(MAX_SIGVERIFY_BATCH_MIN);
     }
 }
