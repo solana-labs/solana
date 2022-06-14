@@ -100,82 +100,12 @@ mod target_arch {
         zk_token_elgamal::pod,
     };
 
-<<<<<<< HEAD
-    fn op(
-        op: u64,
-        ct_0: &pod::ElGamalCiphertext,
-        ct_1: &pod::ElGamalCiphertext,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            sol_zk_token_elgamal_op(
-                op,
-                &ct_0.0 as *const u8,
-                &ct_1.0 as *const u8,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
-
-    fn op_with_lo_hi(
-        op: u64,
-        ct_0: &pod::ElGamalCiphertext,
-        ct_1_lo: &pod::ElGamalCiphertext,
-        ct_1_hi: &pod::ElGamalCiphertext,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            sol_zk_token_elgamal_op_with_lo_hi(
-                op,
-                &ct_0.0 as *const u8,
-                &ct_1_lo.0 as *const u8,
-                &ct_1_hi.0 as *const u8,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
-
-    fn op_with_scalar(
-        op: u64,
-        ct: &pod::ElGamalCiphertext,
-        scalar: u64,
-    ) -> Option<pod::ElGamalCiphertext> {
-        let mut ct_result = pod::ElGamalCiphertext::zeroed();
-        let result = unsafe {
-            sol_zk_token_elgamal_op_with_scalar(
-                op,
-                &ct.0 as *const u8,
-                scalar,
-                &mut ct_result.0 as *mut u8,
-            )
-        };
-
-        if result == 0 {
-            Some(ct_result)
-        } else {
-            None
-        }
-    }
-=======
     const SHIFT_BITS: usize = 16;
 
     const G: PodRistrettoPoint = PodRistrettoPoint([
         226, 242, 174, 10, 106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11, 106,
         165, 130, 221, 141, 182, 166, 89, 69, 224, 141, 45, 118,
     ]);
->>>>>>> 930fe8ad1 (Zk token ops using curve25519 syscalls (#25935))
 
     pub fn add(
         left_ciphertext: &pod::ElGamalCiphertext,
