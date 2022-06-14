@@ -1408,6 +1408,76 @@ mod tests {
     }
 
     #[test]
+    fn test_poh_recorder_record_transaction_index() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+
+            poh_recorder.set_bank(&bank, true);
+            poh_recorder.tick();
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                0
+            );
+
+            let tx = test_tx();
+            let h1 = hash(b"hello world!");
+            let record_result = poh_recorder
+                .record(bank.slot(), h1, vec![tx.into()])
+                .unwrap();
+            assert_eq!(record_result, vec![0]);
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                1
+            );
+
+            let tx0 = test_tx();
+            let tx1 = test_tx();
+            let h2 = hash(b"foobar");
+            let record_result = poh_recorder
+                .record(bank.slot(), h2, vec![tx0.into(), tx1.into()])
+                .unwrap();
+            assert_eq!(record_result, vec![1, 2]);
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                3
+            );
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
     fn test_poh_cache_on_disconnect() {
         let ledger_path = get_tmp_ledger_path!();
         {
