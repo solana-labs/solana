@@ -324,14 +324,16 @@ fn execute_batches(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
 ) -> Result<()> {
-    let lock_results = batches
+    let (lock_results, sanitized_txs): (Vec<_>, Vec<_>) = batches
         .iter()
-        .flat_map(|batch| batch.lock_results().clone())
-        .collect::<Vec<_>>();
-    let sanitized_txs = batches
-        .iter()
-        .flat_map(|batch| batch.sanitized_transactions().to_vec())
-        .collect::<Vec<_>>();
+        .flat_map(|batch| {
+            batch
+                .lock_results()
+                .iter()
+                .cloned()
+                .zip(batch.sanitized_transactions().to_vec())
+        })
+        .unzip();
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
