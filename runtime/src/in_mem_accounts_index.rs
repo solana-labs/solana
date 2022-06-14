@@ -30,8 +30,7 @@ type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
 
-#[allow(dead_code)] // temporary during staging
-                    // one instance of this represents one bin of the accounts index.
+// one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
     last_age_flushed: AtomicU8,
 
