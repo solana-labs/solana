@@ -11,46 +11,31 @@ use {
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
+        feature_set::{self, FeatureSet},
         instruction::InstructionError,
-<<<<<<< HEAD
         keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        sysvar::rent::Rent,
-=======
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
->>>>>>> 45d11f3d2 (Implement `VoteInstruction::AuthorizeWithSeed` & `VoteInstruction::AuthorizeWithSeedChecked` (#25928))
+        sysvar::{clock::Clock, rent::Rent},
     },
     std::collections::HashSet,
 };
 
 fn process_authorize_with_seed_instruction(
-    invoke_context: &InvokeContext,
-    instruction_context: &InstructionContext,
-    transaction_context: &TransactionContext,
+    keyed_accounts: &[KeyedAccount],
     first_instruction_account: usize,
-    vote_account: &mut BorrowedAccount,
+    vote_account: &KeyedAccount,
     new_authority: &Pubkey,
     authorization_type: VoteAuthorize,
     current_authority_derived_key_owner: &Pubkey,
     current_authority_derived_key_seed: &str,
+    clock: &Clock,
+    feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
-    if !invoke_context
-        .feature_set
-        .is_active(&feature_set::vote_authorize_with_seed::id())
-    {
-        return Err(InstructionError::InvalidInstructionData);
-    }
-    let clock = get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
     let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
     let authority_base_key_index = first_instruction_account + 2;
-    if instruction_context.is_signer(authority_base_key_index)? {
-        let base_pubkey = transaction_context.get_key_of_account_at_index(
-            instruction_context.get_index_in_transaction(authority_base_key_index)?,
-        )?;
+    let base_account = keyed_account_at_index(keyed_accounts, authority_base_key_index)?;
+    if let Some(base_pubkey) = base_account.signer_key() {
         expected_authority_keys.insert(Pubkey::create_with_seed(
             base_pubkey,
             current_authority_derived_key_seed,
@@ -62,8 +47,8 @@ fn process_authorize_with_seed_instruction(
         new_authority,
         authorization_type,
         &expected_authority_keys,
-        &clock,
-        &invoke_context.feature_set,
+        clock,
+        feature_set,
     )
 }
 
@@ -110,56 +95,61 @@ pub fn process_instruction(
                 &invoke_context.feature_set,
             )
         }
-<<<<<<< HEAD
+        VoteInstruction::AuthorizeWithSeed(args) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_authorize_with_seed::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            process_authorize_with_seed_instruction(
+                keyed_accounts,
+                first_instruction_account,
+                me,
+                &args.new_authority,
+                args.authorization_type,
+                &args.current_authority_derived_key_owner,
+                args.current_authority_derived_key_seed.as_str(),
+                &clock,
+                &invoke_context.feature_set,
+            )
+        }
+        VoteInstruction::AuthorizeCheckedWithSeed(args) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_authorize_with_seed::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            let new_authority_index = first_instruction_account + 3;
+            let new_authority = &keyed_account_at_index(keyed_accounts, new_authority_index)?
+                .signer_key()
+                .ok_or(InstructionError::MissingRequiredSignature)?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            process_authorize_with_seed_instruction(
+                keyed_accounts,
+                first_instruction_account,
+                me,
+                new_authority,
+                args.authorization_type,
+                &args.current_authority_derived_key_owner,
+                args.current_authority_derived_key_seed.as_str(),
+                &clock,
+                &invoke_context.feature_set,
+            )
+        }
         VoteInstruction::UpdateValidatorIdentity => vote_state::update_validator_identity(
             me,
             keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?.unsigned_key(),
             &signers,
         ),
-=======
-        VoteInstruction::AuthorizeWithSeed(args) => {
-            instruction_context.check_number_of_instruction_accounts(3)?;
-            process_authorize_with_seed_instruction(
-                invoke_context,
-                instruction_context,
-                transaction_context,
-                first_instruction_account,
-                &mut me,
-                &args.new_authority,
-                args.authorization_type,
-                &args.current_authority_derived_key_owner,
-                args.current_authority_derived_key_seed.as_str(),
-            )
-        }
-        VoteInstruction::AuthorizeCheckedWithSeed(args) => {
-            instruction_context.check_number_of_instruction_accounts(4)?;
-            let new_authority_index = first_instruction_account + 3;
-            let new_authority = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(new_authority_index)?,
-            )?;
-            if !instruction_context.is_signer(new_authority_index)? {
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            process_authorize_with_seed_instruction(
-                invoke_context,
-                instruction_context,
-                transaction_context,
-                first_instruction_account,
-                &mut me,
-                new_authority,
-                args.authorization_type,
-                &args.current_authority_derived_key_owner,
-                args.current_authority_derived_key_seed.as_str(),
-            )
-        }
-        VoteInstruction::UpdateValidatorIdentity => {
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let node_pubkey = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
-            )?;
-            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
-        }
->>>>>>> 45d11f3d2 (Implement `VoteInstruction::AuthorizeWithSeed` & `VoteInstruction::AuthorizeWithSeedChecked` (#25928))
         VoteInstruction::UpdateCommission(commission) => {
             vote_state::update_commission(me, commission, &signers)
         }
