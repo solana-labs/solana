@@ -23,6 +23,7 @@ pub struct ProcessShredsStats {
     num_residual_data_shreds: [usize; 4],
     // If the blockstore already has shreds for the broadcast slot.
     pub num_extant_slots: u64,
+    pub(crate) data_buffer_residual: usize,
 }
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -70,6 +71,7 @@ impl ProcessShredsStats {
             ("sign_coding_time", self.sign_coding_elapsed, i64),
             ("coding_send_time", self.coding_send_elapsed, i64),
             ("num_extant_slots", self.num_extant_slots, i64),
+            ("data_buffer_residual", self.data_buffer_residual, i64),
             (
                 "residual_data_shreds_08",
                 self.num_residual_data_shreds[0],
@@ -137,6 +139,7 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
             get_leader_schedule_elapsed,
             num_residual_data_shreds,
             num_extant_slots,
+            data_buffer_residual,
         } = rhs;
         self.shredding_elapsed += shredding_elapsed;
         self.receive_elapsed += receive_elapsed;
@@ -147,6 +150,7 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
         self.coding_send_elapsed += coding_send_elapsed;
         self.get_leader_schedule_elapsed += get_leader_schedule_elapsed;
         self.num_extant_slots += num_extant_slots;
+        self.data_buffer_residual += data_buffer_residual;
         for (i, bucket) in self.num_residual_data_shreds.iter_mut().enumerate() {
             *bucket += num_residual_data_shreds[i];
         }
