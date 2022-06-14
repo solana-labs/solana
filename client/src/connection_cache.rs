@@ -20,19 +20,6 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
-<<<<<<< HEAD
-#[enum_dispatch(TpuConnection)]
-pub enum Connection {
-    UdpTpuConnection,
-    QuicTpuConnection,
-}
-
-/// Used to decide whether the TPU and underlying connection cache should use
-/// QUIC connections.
-pub const DEFAULT_TPU_USE_QUIC: bool = false;
-
-=======
->>>>>>> 67a11ce4b (client: Add nonblocking udp client and connection trait (#25775))
 #[derive(Default)]
 pub struct ConnectionCacheStats {
     cache_hits: AtomicU64,
