@@ -71,7 +71,6 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, Option<AccountMapEntry<T>>)>,
 }
 
-#[allow(dead_code)] // temporary during staging
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
         Self {
