@@ -1,6 +1,9 @@
 use {
     solana_sdk::timing::duration_as_ns,
-    std::{fmt, time::Instant},
+    std::{
+        fmt,
+        time::{Duration, Instant},
+    },
 };
 
 #[derive(Debug)]
@@ -38,6 +41,10 @@ impl Measure {
     pub fn as_s(&self) -> f32 {
         self.duration as f32 / (1000.0f32 * 1000.0f32 * 1000.0f32)
     }
+
+    pub fn as_duration(&self) -> Duration {
+        Duration::from_nanos(self.as_ns())
+    }
 }
 
 impl fmt::Display for Measure {
@@ -58,10 +65,7 @@ impl fmt::Display for Measure {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        std::{thread::sleep, time::Duration},
-    };
+    use {super::*, std::thread::sleep};
 
     #[test]
     fn test_measure() {
@@ -71,6 +75,10 @@ mod tests {
         assert!(measure.as_s() >= 0.99f32 && measure.as_s() <= 1.01f32);
         assert!(measure.as_ms() >= 990 && measure.as_ms() <= 1_010);
         assert!(measure.as_us() >= 999_000 && measure.as_us() <= 1_010_000);
+        assert!(
+            measure.as_duration() >= Duration::from_millis(990)
+                && measure.as_duration() <= Duration::from_millis(1_010)
+        );
     }
 
     #[test]
