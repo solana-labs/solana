@@ -51,6 +51,7 @@ fn check_num_associated_token_accounts(
 mod test {
     use {
         super::*,
+        solana_account_decoder::parse_token::pubkey_from_spl_token,
         spl_associated_token_account::{
             create_associated_token_account,
             solana_program::{
@@ -74,6 +75,14 @@ mod test {
         }
     }
 
+    fn convert_account_keys(message: &Message) -> Vec<Pubkey> {
+        message
+            .account_keys
+            .iter()
+            .map(pubkey_from_spl_token)
+            .collect()
+    }
+
     #[test]
     fn test_parse_associated_token() {
         let mut keys: Vec<Pubkey> = vec![];
@@ -87,7 +96,7 @@ mod test {
             &convert_pubkey(keys[2]),
         );
         let message = Message::new(&[create_ix], None);
-        let compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
         assert_eq!(
             parse_associated_token(&compiled_instruction, &keys).unwrap(),
             ParsedInstructionEnum {
@@ -102,6 +111,11 @@ mod test {
                     "rentSysvar": keys[6].to_string(),
                 })
             }
+        );
+        compiled_instruction.accounts.pop();
+        assert!(
+            parse_associated_token(&compiled_instruction, &convert_account_keys(&message),)
+                .is_err()
         );
     }
 }

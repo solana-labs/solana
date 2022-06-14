@@ -176,7 +176,7 @@ mod test {
             &vote_init,
             lamports,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_vote(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -193,6 +193,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[1], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -207,7 +210,7 @@ mod test {
             &new_authorized_pubkey,
             authority_type,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -222,6 +225,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -236,7 +242,7 @@ mod test {
         let vote_pubkey = Pubkey::new_unique();
         let authorized_voter_pubkey = Pubkey::new_unique();
         let instruction = vote_instruction::vote(&vote_pubkey, &authorized_voter_pubkey, vote);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -255,6 +261,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -269,7 +278,7 @@ mod test {
             lamports,
             &to_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -283,6 +292,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -295,7 +307,7 @@ mod test {
             &authorized_withdrawer_pubkey,
             &node_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -308,6 +320,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -320,7 +335,7 @@ mod test {
             &authorized_withdrawer_pubkey,
             commission,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -333,6 +348,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -349,7 +367,7 @@ mod test {
         let proof_hash = Hash::new_from_array([2; 32]);
         let instruction =
             vote_instruction::vote_switch(&vote_pubkey, &authorized_voter_pubkey, vote, proof_hash);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -369,6 +387,9 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -383,7 +404,7 @@ mod test {
             &new_authorized_pubkey,
             authority_type,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -398,5 +419,8 @@ mod test {
             }
         );
         assert!(parse_vote(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &keys).is_err());
     }
 }

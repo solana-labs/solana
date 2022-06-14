@@ -313,7 +313,7 @@ mod test {
             &lockup,
             lamports,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -334,6 +334,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[1], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -349,7 +352,7 @@ mod test {
             StakeAuthorize::Staker,
             None,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -364,6 +367,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let instruction = instruction::authorize(
             &stake_pubkey,
@@ -372,7 +379,7 @@ mod test {
             StakeAuthorize::Withdrawer,
             Some(&custodian_pubkey),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -388,6 +395,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -397,7 +408,7 @@ mod test {
         let vote_pubkey = Pubkey::new_unique();
         let instruction =
             instruction::delegate_stake(&stake_pubkey, &authorized_pubkey, &vote_pubkey);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -413,6 +424,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..5]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -427,7 +441,7 @@ mod test {
             lamports,
             &split_stake_pubkey,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(&message.instructions[2], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -441,6 +455,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[2], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -479,7 +496,7 @@ mod test {
             lamports,
             Some(&custodian_pubkey),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -496,6 +513,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..4]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -503,7 +524,7 @@ mod test {
         let stake_pubkey = Pubkey::new_unique();
         let authorized_pubkey = Pubkey::new_unique();
         let instruction = instruction::deactivate_stake(&stake_pubkey, &authorized_pubkey);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -516,6 +537,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -528,7 +552,7 @@ mod test {
             &source_stake_pubkey,
             &authorized_pubkey,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -543,6 +567,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..4]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -563,7 +590,7 @@ mod test {
             StakeAuthorize::Staker,
             None,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -580,6 +607,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let instruction = instruction::authorize_with_seed(
             &stake_pubkey,
@@ -590,7 +621,7 @@ mod test {
             StakeAuthorize::Withdrawer,
             Some(&custodian_pubkey),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -608,6 +639,11 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -670,7 +706,7 @@ mod test {
             custodian: Some(custodian),
         };
         let instruction = instruction::set_lockup(&keys[1], &lockup, &keys[0]);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
             ParsedInstructionEnum {
@@ -688,6 +724,9 @@ mod test {
         );
 
         assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let lockup = LockupArgs {
             unix_timestamp: Some(unix_timestamp),
@@ -716,7 +755,7 @@ mod test {
             custodian: None,
         };
         let instruction = instruction::set_lockup_checked(&keys[1], &lockup, &keys[0]);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..2]).unwrap(),
             ParsedInstructionEnum {
@@ -732,6 +771,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let lockup = LockupArgs {
             unix_timestamp: Some(unix_timestamp),
@@ -739,7 +781,7 @@ mod test {
             custodian: Some(keys[1]),
         };
         let instruction = instruction::set_lockup_checked(&keys[2], &lockup, &keys[0]);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &keys[0..3]).unwrap(),
             ParsedInstructionEnum {
@@ -756,6 +798,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -771,7 +817,7 @@ mod test {
 
         let instructions =
             instruction::create_account_checked(&from_pubkey, &stake_pubkey, &authorized, lamports);
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_stake(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -785,6 +831,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[1], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -801,7 +850,7 @@ mod test {
             StakeAuthorize::Staker,
             None,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -816,6 +865,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let instruction = instruction::authorize_checked(
             &stake_pubkey,
@@ -824,7 +877,7 @@ mod test {
             StakeAuthorize::Withdrawer,
             Some(&custodian_pubkey),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -840,6 +893,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..4]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -860,7 +917,7 @@ mod test {
             StakeAuthorize::Staker,
             None,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -877,6 +934,10 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
 
         let instruction = instruction::authorize_checked_with_seed(
             &stake_pubkey,
@@ -887,7 +948,7 @@ mod test {
             StakeAuthorize::Withdrawer,
             Some(&custodian_pubkey),
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_stake(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -905,5 +966,9 @@ mod test {
             }
         );
         assert!(parse_stake(&message.instructions[0], &message.account_keys[0..4]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_stake(&message.instructions[0], &keys).is_err());
     }
 }

@@ -122,7 +122,7 @@ pub fn parse_system(
             })
         }
         SystemInstruction::AuthorizeNonceAccount(authority) => {
-            check_num_system_accounts(&instruction.accounts, 1)?;
+            check_num_system_accounts(&instruction.accounts, 2)?;
             Ok(ParsedInstructionEnum {
                 instruction_type: "authorizeNonce".to_string(),
                 info: json!({
@@ -228,7 +228,7 @@ mod test {
             space,
             &owner_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -243,6 +243,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -250,7 +253,7 @@ mod test {
         let account_pubkey = Pubkey::new_unique();
         let owner_pubkey = Pubkey::new_unique();
         let instruction = system_instruction::assign(&account_pubkey, &owner_pubkey);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -262,6 +265,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &[]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -270,7 +276,7 @@ mod test {
         let from_pubkey = Pubkey::new_unique();
         let to_pubkey = Pubkey::new_unique();
         let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -283,6 +289,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -303,7 +312,7 @@ mod test {
             space,
             &owner_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -320,6 +329,10 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -327,7 +340,7 @@ mod test {
         let space = 128;
         let account_pubkey = Pubkey::new_unique();
         let instruction = system_instruction::allocate(&account_pubkey, space);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -339,6 +352,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &[]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -355,7 +371,7 @@ mod test {
             space,
             &owner_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -370,6 +386,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -384,7 +403,7 @@ mod test {
             seed,
             &owner_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -398,6 +417,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -416,7 +438,7 @@ mod test {
             &to_pubkey,
             lamports,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -432,6 +454,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -441,7 +466,7 @@ mod test {
 
         let instruction =
             system_instruction::advance_nonce_account(&nonce_pubkey, &authorized_pubkey);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -454,6 +479,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..2]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -469,7 +497,7 @@ mod test {
             &to_pubkey,
             lamports,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -485,6 +513,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..4]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -500,7 +531,7 @@ mod test {
             &authorized_pubkey,
             lamports,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_system(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -514,6 +545,9 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[1], &message.account_keys[0..3]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 
     #[test]
@@ -527,7 +561,7 @@ mod test {
             &authorized_pubkey,
             &new_authority_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_system(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -540,5 +574,8 @@ mod test {
             }
         );
         assert!(parse_system(&message.instructions[0], &message.account_keys[0..1]).is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_system(&message.instructions[0], &keys).is_err());
     }
 }
