@@ -1,21 +1,56 @@
 //! Vote program processor
 
 use {
-    crate::{id, vote_instruction::VoteInstruction, vote_state},
+    crate::{
+        id,
+        vote_instruction::VoteInstruction,
+        vote_state::{self, VoteAuthorize},
+    },
     log::*,
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
     solana_sdk::{
-        feature_set,
+        feature_set::{self, FeatureSet},
         instruction::InstructionError,
         keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
         program_utils::limited_deserialize,
         pubkey::Pubkey,
-        sysvar::rent::Rent,
+        sysvar::{clock::Clock, rent::Rent},
     },
     std::collections::HashSet,
 };
+
+fn process_authorize_with_seed_instruction(
+    keyed_accounts: &[KeyedAccount],
+    first_instruction_account: usize,
+    vote_account: &KeyedAccount,
+    new_authority: &Pubkey,
+    authorization_type: VoteAuthorize,
+    current_authority_derived_key_owner: &Pubkey,
+    current_authority_derived_key_seed: &str,
+    clock: &Clock,
+    feature_set: &FeatureSet,
+) -> Result<(), InstructionError> {
+    let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
+    let authority_base_key_index = first_instruction_account + 2;
+    let base_account = keyed_account_at_index(keyed_accounts, authority_base_key_index)?;
+    if let Some(base_pubkey) = base_account.signer_key() {
+        expected_authority_keys.insert(Pubkey::create_with_seed(
+            base_pubkey,
+            current_authority_derived_key_seed,
+            current_authority_derived_key_owner,
+        )?);
+    };
+    vote_state::authorize(
+        vote_account,
+        new_authority,
+        authorization_type,
+        &expected_authority_keys,
+        clock,
+        feature_set,
+    )
+}
 
 pub fn process_instruction(
     first_instruction_account: usize,
@@ -56,6 +91,56 @@ pub fn process_instruction(
                 &voter_pubkey,
                 vote_authorize,
                 &signers,
+                &clock,
+                &invoke_context.feature_set,
+            )
+        }
+        VoteInstruction::AuthorizeWithSeed(args) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_authorize_with_seed::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            process_authorize_with_seed_instruction(
+                keyed_accounts,
+                first_instruction_account,
+                me,
+                &args.new_authority,
+                args.authorization_type,
+                &args.current_authority_derived_key_owner,
+                args.current_authority_derived_key_seed.as_str(),
+                &clock,
+                &invoke_context.feature_set,
+            )
+        }
+        VoteInstruction::AuthorizeCheckedWithSeed(args) => {
+            if !invoke_context
+                .feature_set
+                .is_active(&feature_set::vote_authorize_with_seed::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+            let new_authority_index = first_instruction_account + 3;
+            let new_authority = &keyed_account_at_index(keyed_accounts, new_authority_index)?
+                .signer_key()
+                .ok_or(InstructionError::MissingRequiredSignature)?;
+            let clock = get_sysvar_with_account_check::clock(
+                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
+                invoke_context,
+            )?;
+            process_authorize_with_seed_instruction(
+                keyed_accounts,
+                first_instruction_account,
+                me,
+                new_authority,
+                args.authorization_type,
+                &args.current_authority_derived_key_owner,
+                args.current_authority_derived_key_seed.as_str(),
                 &clock,
                 &invoke_context.feature_set,
             )
@@ -186,8 +271,8 @@ mod tests {
                 vote_switch, withdraw, VoteInstruction,
             },
             vote_state::{
-                Lockout, Vote, VoteAuthorize, VoteInit, VoteState, VoteStateUpdate,
-                VoteStateVersions,
+                Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+                VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate, VoteStateVersions,
             },
         },
         bincode::serialize,
@@ -202,6 +287,17 @@ mod tests {
         },
         std::str::FromStr,
     };
+
+    struct VoteAccountTestFixtureWithAuthorities {
+        vote_account: AccountSharedData,
+        vote_pubkey: Pubkey,
+        voter_base_key: Pubkey,
+        voter_owner: Pubkey,
+        voter_seed: String,
+        withdrawer_base_key: Pubkey,
+        withdrawer_owner: Pubkey,
+        withdrawer_seed: String,
+    }
 
     fn create_default_account() -> AccountSharedData {
         AccountSharedData::new(0, 0, &Pubkey::new_unique())
@@ -334,6 +430,41 @@ mod tests {
                 100,
             ),
         )
+    }
+
+    fn create_test_account_with_authorized_from_seed() -> VoteAccountTestFixtureWithAuthorities {
+        let vote_pubkey = Pubkey::new_unique();
+        let voter_base_key = Pubkey::new_unique();
+        let voter_owner = Pubkey::new_unique();
+        let voter_seed = String::from("VOTER_SEED");
+        let withdrawer_base_key = Pubkey::new_unique();
+        let withdrawer_owner = Pubkey::new_unique();
+        let withdrawer_seed = String::from("WITHDRAWER_SEED");
+        let authorized_voter =
+            Pubkey::create_with_seed(&voter_base_key, voter_seed.as_str(), &voter_owner).unwrap();
+        let authorized_withdrawer = Pubkey::create_with_seed(
+            &withdrawer_base_key,
+            withdrawer_seed.as_str(),
+            &withdrawer_owner,
+        )
+        .unwrap();
+
+        VoteAccountTestFixtureWithAuthorities {
+            vote_account: vote_state::create_account_with_authorized(
+                &Pubkey::new_unique(),
+                &authorized_voter,
+                &authorized_withdrawer,
+                0,
+                100,
+            ),
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+        }
     }
 
     fn create_test_account_with_epoch_credits(
@@ -1117,6 +1248,515 @@ mod tests {
             transaction_accounts,
             instruction_accounts,
             Ok(()),
+        );
+    }
+
+    fn perform_authorize_with_seed_test(
+        authorization_type: VoteAuthorize,
+        vote_pubkey: Pubkey,
+        vote_account: AccountSharedData,
+        current_authority_base_key: Pubkey,
+        current_authority_seed: String,
+        current_authority_owner: Pubkey,
+        new_authority_pubkey: Pubkey,
+    ) {
+        let clock = Clock {
+            epoch: 1,
+            leader_schedule_epoch: 2,
+            ..Clock::default()
+        };
+        let clock_account = account::create_account_shared_data_for_test(&clock);
+        let transaction_accounts = vec![
+            (vote_pubkey, vote_account),
+            (sysvar::clock::id(), clock_account),
+            (current_authority_base_key, AccountSharedData::default()),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: vote_pubkey,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: current_authority_base_key,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // Can't change authority unless base key signs.
+        instruction_accounts[2].is_signer = false;
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[2].is_signer = true;
+
+        // Can't change authority if seed doesn't match.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: String::from("WRONG_SEED"),
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Can't change authority if owner doesn't match.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: Pubkey::new_unique(), // Wrong owner.
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Can change authority when base key signs for related derived key.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // Should fail when the `vote_authorize_with_seed` feature is disabled
+        process_instruction_disabled_features(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed,
+                    new_authority: new_authority_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InvalidInstructionData),
+        );
+    }
+
+    fn perform_authorize_checked_with_seed_test(
+        authorization_type: VoteAuthorize,
+        vote_pubkey: Pubkey,
+        vote_account: AccountSharedData,
+        current_authority_base_key: Pubkey,
+        current_authority_seed: String,
+        current_authority_owner: Pubkey,
+        new_authority_pubkey: Pubkey,
+    ) {
+        let clock = Clock {
+            epoch: 1,
+            leader_schedule_epoch: 2,
+            ..Clock::default()
+        };
+        let clock_account = account::create_account_shared_data_for_test(&clock);
+        let transaction_accounts = vec![
+            (vote_pubkey, vote_account),
+            (sysvar::clock::id(), clock_account),
+            (current_authority_base_key, AccountSharedData::default()),
+            (new_authority_pubkey, AccountSharedData::default()),
+        ];
+        let mut instruction_accounts = vec![
+            AccountMeta {
+                pubkey: vote_pubkey,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: current_authority_base_key,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: new_authority_pubkey,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+
+        // Can't change authority unless base key signs.
+        instruction_accounts[2].is_signer = false;
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[2].is_signer = true;
+
+        // Can't change authority unless new authority signs.
+        instruction_accounts[3].is_signer = false;
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+        instruction_accounts[3].is_signer = true;
+
+        // Can't change authority if seed doesn't match.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: String::from("WRONG_SEED"),
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Can't change authority if owner doesn't match.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: Pubkey::new_unique(), // Wrong owner.
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Can change authority when base key signs for related derived key and new authority signs.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed.clone(),
+                },
+            ))
+            .unwrap(),
+            transaction_accounts.clone(),
+            instruction_accounts.clone(),
+            Ok(()),
+        );
+
+        // Should fail when the `vote_authorize_with_seed` feature is disabled
+        process_instruction_disabled_features(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type,
+                    current_authority_derived_key_owner: current_authority_owner,
+                    current_authority_derived_key_seed: current_authority_seed,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::InvalidInstructionData),
+        );
+    }
+
+    #[test]
+    fn test_voter_base_key_can_authorize_new_voter() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_voter_pubkey = Pubkey::new_unique();
+        perform_authorize_with_seed_test(
+            VoteAuthorize::Voter,
+            vote_pubkey,
+            vote_account,
+            voter_base_key,
+            voter_seed,
+            voter_owner,
+            new_voter_pubkey,
+        );
+    }
+
+    #[test]
+    fn test_withdrawer_base_key_can_authorize_new_voter() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_voter_pubkey = Pubkey::new_unique();
+        perform_authorize_with_seed_test(
+            VoteAuthorize::Voter,
+            vote_pubkey,
+            vote_account,
+            withdrawer_base_key,
+            withdrawer_seed,
+            withdrawer_owner,
+            new_voter_pubkey,
+        );
+    }
+
+    #[test]
+    fn test_voter_base_key_can_not_authorize_new_withdrawer() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_withdrawer_pubkey = Pubkey::new_unique();
+        let clock = Clock {
+            epoch: 1,
+            leader_schedule_epoch: 2,
+            ..Clock::default()
+        };
+        let clock_account = account::create_account_shared_data_for_test(&clock);
+        let transaction_accounts = vec![
+            (vote_pubkey, vote_account),
+            (sysvar::clock::id(), clock_account),
+            (voter_base_key, AccountSharedData::default()),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: vote_pubkey,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: voter_base_key,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+        // Despite having Voter authority, you may not change the Withdrawer authority.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeWithSeed(
+                VoteAuthorizeWithSeedArgs {
+                    authorization_type: VoteAuthorize::Withdrawer,
+                    current_authority_derived_key_owner: voter_owner,
+                    current_authority_derived_key_seed: voter_seed,
+                    new_authority: new_withdrawer_pubkey,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
+    fn test_withdrawer_base_key_can_authorize_new_withdrawer() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_withdrawer_pubkey = Pubkey::new_unique();
+        perform_authorize_with_seed_test(
+            VoteAuthorize::Withdrawer,
+            vote_pubkey,
+            vote_account,
+            withdrawer_base_key,
+            withdrawer_seed,
+            withdrawer_owner,
+            new_withdrawer_pubkey,
+        );
+    }
+
+    #[test]
+    fn test_voter_base_key_can_authorize_new_voter_checked() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_voter_pubkey = Pubkey::new_unique();
+        perform_authorize_checked_with_seed_test(
+            VoteAuthorize::Voter,
+            vote_pubkey,
+            vote_account,
+            voter_base_key,
+            voter_seed,
+            voter_owner,
+            new_voter_pubkey,
+        );
+    }
+
+    #[test]
+    fn test_withdrawer_base_key_can_authorize_new_voter_checked() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_voter_pubkey = Pubkey::new_unique();
+        perform_authorize_checked_with_seed_test(
+            VoteAuthorize::Voter,
+            vote_pubkey,
+            vote_account,
+            withdrawer_base_key,
+            withdrawer_seed,
+            withdrawer_owner,
+            new_voter_pubkey,
+        );
+    }
+
+    #[test]
+    fn test_voter_base_key_can_not_authorize_new_withdrawer_checked() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            voter_base_key,
+            voter_owner,
+            voter_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_withdrawer_pubkey = Pubkey::new_unique();
+        let clock = Clock {
+            epoch: 1,
+            leader_schedule_epoch: 2,
+            ..Clock::default()
+        };
+        let clock_account = account::create_account_shared_data_for_test(&clock);
+        let transaction_accounts = vec![
+            (vote_pubkey, vote_account),
+            (sysvar::clock::id(), clock_account),
+            (voter_base_key, AccountSharedData::default()),
+            (new_withdrawer_pubkey, AccountSharedData::default()),
+        ];
+        let instruction_accounts = vec![
+            AccountMeta {
+                pubkey: vote_pubkey,
+                is_signer: false,
+                is_writable: true,
+            },
+            AccountMeta {
+                pubkey: sysvar::clock::id(),
+                is_signer: false,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: voter_base_key,
+                is_signer: true,
+                is_writable: false,
+            },
+            AccountMeta {
+                pubkey: new_withdrawer_pubkey,
+                is_signer: true,
+                is_writable: false,
+            },
+        ];
+        // Despite having Voter authority, you may not change the Withdrawer authority.
+        process_instruction(
+            &serialize(&VoteInstruction::AuthorizeCheckedWithSeed(
+                VoteAuthorizeCheckedWithSeedArgs {
+                    authorization_type: VoteAuthorize::Withdrawer,
+                    current_authority_derived_key_owner: voter_owner,
+                    current_authority_derived_key_seed: voter_seed,
+                },
+            ))
+            .unwrap(),
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::MissingRequiredSignature),
+        );
+    }
+
+    #[test]
+    fn test_withdrawer_base_key_can_authorize_new_withdrawer_checked() {
+        let VoteAccountTestFixtureWithAuthorities {
+            vote_pubkey,
+            withdrawer_base_key,
+            withdrawer_owner,
+            withdrawer_seed,
+            vote_account,
+            ..
+        } = create_test_account_with_authorized_from_seed();
+        let new_withdrawer_pubkey = Pubkey::new_unique();
+        perform_authorize_checked_with_seed_test(
+            VoteAuthorize::Withdrawer,
+            vote_pubkey,
+            vote_account,
+            withdrawer_base_key,
+            withdrawer_seed,
+            withdrawer_owner,
+            new_withdrawer_pubkey,
         );
     }
 
