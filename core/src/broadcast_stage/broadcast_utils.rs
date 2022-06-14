@@ -28,7 +28,6 @@ pub struct UnfinishedSlotInfo {
     // Data shreds buffered to make a batch of size
     // MAX_DATA_SHREDS_PER_FEC_BLOCK.
     pub(crate) data_shreds_buffer: Vec<Shred>,
-    pub(crate) fec_set_offset: u32, // See Shredder::fec_set_index.
 }
 
 /// This parameter tunes how many entries are received in one iteration of recv loop

@@ -2196,6 +2196,7 @@ fn main() {
                     Arc::clone(&exit_signal),
                     !no_os_memory_stats_reporting,
                     false,
+                    false,
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =

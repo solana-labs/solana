@@ -25,6 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -159,6 +160,7 @@ pub struct ValidatorConfig {
     pub no_poh_speed_test: bool,
     pub no_os_memory_stats_reporting: bool,
     pub no_os_network_stats_reporting: bool,
+    pub no_os_cpu_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
@@ -219,6 +221,7 @@ impl Default for ValidatorConfig {
             no_poh_speed_test: true,
             no_os_memory_stats_reporting: true,
             no_os_network_stats_reporting: true,
+            no_os_cpu_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: AccountSecondaryIndexes::default(),
@@ -378,6 +381,7 @@ impl Validator {
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
+        tpu_connection_pool_size: usize,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -497,6 +501,7 @@ impl Validator {
             Arc::clone(&exit),
             !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
+            !config.no_os_cpu_stats_reporting,
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
@@ -744,6 +749,8 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
+
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
             json_rpc_service,
@@ -788,6 +795,7 @@ impl Validator {
                 config.send_transaction_service_config.clone(),
                 max_slots.clone(),
                 leader_schedule_cache.clone(),
+                connection_cache.clone(),
                 max_complete_transaction_status_slot,
             )
             .unwrap_or_else(|s| {
@@ -969,7 +977,7 @@ impl Validator {
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
-            use_quic,
+            &connection_cache,
         );
 
         let tpu = Tpu::new(
@@ -1001,6 +1009,7 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &connection_cache,
             &identity_keypair,
         );
 
@@ -1765,13 +1774,6 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
         info!("Purging slots {} to {}", start_slot, end_slot);
         blockstore.purge_from_next_slots(start_slot, end_slot);
         blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        info!("Purging done, compacting db..");
-        if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
-            warn!(
-                "Error from compacting storage from {} to {}: {:?}",
-                start_slot, end_slot, e
-            );
-        }
         info!("done");
     }
     drop(blockstore);
@@ -2046,6 +2048,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -2081,7 +2084,8 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
@@ -2176,7 +2180,8 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    false, // use_quic
+                    DEFAULT_TPU_USE_QUIC,
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
                 )
             })
             .collect();

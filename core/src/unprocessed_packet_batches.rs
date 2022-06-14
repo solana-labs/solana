@@ -210,14 +210,23 @@ impl UnprocessedPacketBatches {
     pub fn insert_batch(
         &mut self,
         deserialized_packets: impl Iterator<Item = DeserializedPacket>,
-    ) -> usize {
+    ) -> (usize, usize) {
         let mut num_dropped_packets = 0;
+        let mut num_dropped_tracer_packets = 0;
         for deserialized_packet in deserialized_packets {
-            if self.push(deserialized_packet).is_some() {
+            if let Some(dropped_packet) = self.push(deserialized_packet) {
                 num_dropped_packets += 1;
+                if dropped_packet
+                    .immutable_section()
+                    .original_packet()
+                    .meta
+                    .is_tracer_packet()
+                {
+                    num_dropped_tracer_packets += 1;
+                }
             }
         }
-        num_dropped_packets
+        (num_dropped_packets, num_dropped_tracer_packets)
     }
 
     pub fn push(&mut self, deserialized_packet: DeserializedPacket) -> Option<DeserializedPacket> {

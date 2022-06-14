@@ -15,6 +15,7 @@ use {
 };
 
 const NUM: usize = 256;
+const LARGE_BATCH_PACKET_COUNT: usize = 128;
 
 #[bench]
 fn bench_sigverify_simple(bencher: &mut Bencher) {
@@ -27,6 +28,95 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
         128,
     );
 
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    // verify packets
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+fn gen_batches(
+    use_same_tx: bool,
+    packets_per_batch: usize,
+    total_packets: usize,
+) -> Vec<PacketBatch> {
+    if use_same_tx {
+        let tx = test_tx();
+        to_packet_batches(&vec![tx; total_packets], packets_per_batch)
+    } else {
+        let txs: Vec<_> = std::iter::repeat_with(test_tx)
+            .take(total_packets)
+            .collect();
+        to_packet_batches(&txs, packets_per_batch)
+    }
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
+    let mut batches = gen_batches(false, 1, num_packets);
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
+    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
+    let mut batches = gen_batches(false, 1, num_packets);
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
+    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
+    let mut batches = gen_batches(false, 1, num_packets);
+    let recycler = Recycler::default();
+    let recycler_out = Recycler::default();
+    bencher.iter(|| {
+        sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, num_packets);
+    })
+}
+
+#[bench]
+#[ignore]
+fn bench_sigverify_high_packets_large_batch(bencher: &mut Bencher) {
+    let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
+    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     // verify packets

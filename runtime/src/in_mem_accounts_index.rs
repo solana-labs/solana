@@ -6,6 +6,7 @@ use {
         },
         bucket_map_holder::{Age, BucketMapHolder},
         bucket_map_holder_stats::BucketMapHolderStats,
+        waitable_condvar::WaitableCondvar,
     },
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
@@ -26,12 +27,10 @@ use {
 };
 type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
-pub type SlotT<T> = (Slot, T);
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
 
-#[allow(dead_code)] // temporary during staging
-                    // one instance of this represents one bin of the accounts index.
+// one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
     last_age_flushed: AtomicU8,
 
@@ -40,7 +39,7 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     storage: Arc<BucketMapHolder<T>>,
     bin: usize,
 
-    bucket: Option<Arc<BucketApi<SlotT<T>>>>,
+    bucket: Option<Arc<BucketApi<(Slot, T)>>>,
 
     // pubkey ranges that this bin must hold in the cache while the range is present in this vec
     pub(crate) cache_ranges_held: CacheRangesHeld,
@@ -72,7 +71,6 @@ struct FlushScanResult<T> {
     evictions_random: Vec<(Pubkey, Option<AccountMapEntry<T>>)>,
 }
 
-#[allow(dead_code)] // temporary during staging
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
         Self {
@@ -147,10 +145,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn keys(&self) -> Vec<Pubkey> {
         Self::update_stat(&self.stats().keys, 1);
         // easiest implementation is to load evrything from disk into cache and return the keys
-        self.start_stop_evictions(true);
-        self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>);
+        let evictions_guard = EvictionsGuard::lock(self);
+        self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>, &evictions_guard);
         let keys = self.map().read().unwrap().keys().cloned().collect();
-        self.start_stop_evictions(false);
         keys
     }
 
@@ -247,7 +244,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let (add_to_cache, rt) = callback(Some(&disk_entry));
 
                         if add_to_cache {
-                            stats.insert_or_delete_mem(true, self.bin);
+                            stats.inc_mem_count(self.bin);
                             vacant.insert(disk_entry);
                         }
                         rt
@@ -259,7 +256,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
         if slot_list.is_empty() {
-            self.stats().insert_or_delete(false, self.bin);
+            self.stats().inc_delete(self.bin);
             true
         } else {
             false
@@ -282,10 +279,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // if someone else holds the arc,
                     //  then they think the item is still in the index and can make modifications.
                     // We have to have a write lock to the map here, which means nobody else can get
-                    //  the arc, but someone may already have retreived a clone of it.
+                    //  the arc, but someone may already have retrieved a clone of it.
                     // account index in_mem flushing is one such possibility
                     self.delete_disk_key(occupied.key());
-                    self.stats().insert_or_delete_mem(false, self.bin);
                     occupied.remove();
                 }
                 result
@@ -409,7 +405,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 previous_slot_entry_was_cached,
                             );
                             if !already_existed {
-                                self.stats().insert_or_delete(true, self.bin);
+                                self.stats().inc_insert(self.bin);
                             }
                         } else {
                             // go to in-mem cache first
@@ -426,12 +422,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 disk_entry
                             } else {
                                 // not on disk, so insert new thing
-                                self.stats().insert_or_delete(true, self.bin);
+                                self.stats().inc_insert(self.bin);
                                 new_value.into_account_map_entry(&self.storage)
                             };
                             assert!(new_value.dirty());
                             vacant.insert(new_value);
-                            self.stats().insert_or_delete_mem(true, self.bin);
+                            self.stats().inc_mem_count(self.bin);
                         }
                     }
                 }
@@ -624,7 +620,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     (false, already_existed)
                 } else {
                     let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                    self.stats().insert_or_delete_mem(true, self.bin);
+                    self.stats().inc_mem_count(self.bin);
                     if let Some(disk_entry) = disk_entry {
                         let (slot, account_info) = new_entry.into();
                         InMemAccountsIndex::lock_and_update_slot_list(
@@ -656,7 +652,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.update_entry_stats(m, found_in_mem);
         let stats = self.stats();
         if !already_existed {
-            stats.insert_or_delete(true, self.bin);
+            stats.inc_insert(self.bin);
         } else {
             Self::update_stat(&stats.updates_in_mem, 1);
         }
@@ -707,7 +703,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             existed
         } else {
             // not using disk, so insert into mem
-            self.stats().insert_or_delete_mem(true, self.bin);
+            self.stats().inc_mem_count(self.bin);
             let new_entry: AccountMapEntry<T> = new_entry.into_account_map_entry(&self.storage);
             assert!(new_entry.dirty());
             vacant.insert(new_entry);
@@ -719,17 +715,30 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ///  being held, then add 'range' to the currently held list AND return true
     /// If 'range' is NOT already included in what is being held, then return false
     ///  withOUT adding 'range' to the list of what is currently held
-    fn add_hold_range_in_memory_if_already_held<R>(&self, range: &R) -> bool
+    fn add_hold_range_in_memory_if_already_held<R>(
+        &self,
+        range: &R,
+        evictions_guard: &EvictionsGuard,
+    ) -> bool
     where
         R: RangeBounds<Pubkey>,
     {
         let start_holding = true;
         let only_add_if_already_held = true;
-        self.just_set_hold_range_in_memory_internal(range, start_holding, only_add_if_already_held)
+        self.just_set_hold_range_in_memory_internal(
+            range,
+            start_holding,
+            only_add_if_already_held,
+            evictions_guard,
+        )
     }
 
-    fn just_set_hold_range_in_memory<R>(&self, range: &R, start_holding: bool)
-    where
+    fn just_set_hold_range_in_memory<R>(
+        &self,
+        range: &R,
+        start_holding: bool,
+        evictions_guard: &EvictionsGuard,
+    ) where
         R: RangeBounds<Pubkey>,
     {
         let only_add_if_already_held = false;
@@ -737,6 +746,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             range,
             start_holding,
             only_add_if_already_held,
+            evictions_guard,
         );
     }
 
@@ -749,6 +759,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         range: &R,
         start_holding: bool,
         only_add_if_already_held: bool,
+        _evictions_guard: &EvictionsGuard,
     ) -> bool
     where
         R: RangeBounds<Pubkey>,
@@ -799,19 +810,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         already_held
     }
 
-    /// called with 'stop'=true to stop bg flusher from evicting any entries from in-mem idx
-    /// called with 'stop'=false to allow bg flusher to evict eligible (not in held ranges) entries from in-mem idx
-    fn start_stop_evictions(&self, stop: bool) {
-        if stop {
-            self.stop_evictions.fetch_add(1, Ordering::Release);
-        } else if 1 == self.stop_evictions.fetch_sub(1, Ordering::Release) {
-            // stop_evictions went to 0, so this bucket could now be ready to be aged
-            self.storage.wait_dirty_or_aged.notify_one();
-        }
-        // note that this value has changed
-        self.stop_evictions_changes.fetch_add(1, Ordering::Release);
-    }
-
     /// if 'start_holding'=true, then:
     ///  at the end of this function, cache_ranges_held will be updated to contain 'range'
     ///  and all pubkeys in that range will be in the in-mem cache
@@ -823,21 +821,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     where
         R: RangeBounds<Pubkey> + Debug,
     {
-        self.start_stop_evictions(true);
+        let evictions_guard = EvictionsGuard::lock(self);
 
-        if !start_holding || !self.add_hold_range_in_memory_if_already_held(range) {
+        if !start_holding || !self.add_hold_range_in_memory_if_already_held(range, &evictions_guard)
+        {
             if start_holding {
                 // put everything in the cache and it will be held there
-                self.put_range_in_cache(&Some(range));
+                self.put_range_in_cache(&Some(range), &evictions_guard);
             }
             // do this AFTER items have been put in cache - that way anyone who finds this range can know that the items are already in the cache
-            self.just_set_hold_range_in_memory(range, start_holding);
+            self.just_set_hold_range_in_memory(range, start_holding, &evictions_guard);
         }
-
-        self.start_stop_evictions(false);
     }
 
-    fn put_range_in_cache<R>(&self, range: &Option<&R>)
+    fn put_range_in_cache<R>(&self, range: &Option<&R>, _evictions_guard: &EvictionsGuard)
     where
         R: RangeBounds<Pubkey>,
     {
@@ -864,8 +861,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
             }
         }
-        self.stats()
-            .insert_or_delete_mem_count(true, self.bin, added_to_mem);
+        self.stats().add_mem_count(self.bin, added_to_mem);
 
         Self::update_time_stat(&self.stats().get_range_us, m);
     }
@@ -1209,8 +1205,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 map.shrink_to_fit();
             }
         }
-        self.stats()
-            .insert_or_delete_mem_count(false, self.bin, evicted);
+        self.stats().sub_mem_count(self.bin, evicted);
         Self::update_stat(&self.stats().flush_entries_evicted_from_mem, evicted as u64);
         Self::update_stat(&self.stats().failed_to_evict, failed as u64);
     }
@@ -1256,6 +1251,69 @@ impl<'a> FlushGuard<'a> {
 impl Drop for FlushGuard<'_> {
     fn drop(&mut self) {
         self.flushing.store(false, Ordering::Release);
+    }
+}
+
+/// Disable (and safely enable) the background flusher from evicting entries from the in-mem
+/// accounts index.  When disabled, no entries may be evicted.  When enabled, only eligible entries
+/// may be evicted (i.e. those not in a held range).
+///
+/// An RAII implementation of a scoped lock for the `stop_evictions` atomic flag/counter in
+/// `InMemAccountsIndex`.  When this structure is dropped (falls out of scope), the counter will
+/// decrement and conditionally notify its storage.
+///
+/// After successfully locking (calling `EvictionsGuard::lock()`), pass a reference to the
+/// `EvictionsGuard` instance to any function/code that requires `stop_evictions` to be
+/// incremented/decremented correctly.
+#[derive(Debug)]
+struct EvictionsGuard<'a> {
+    /// The number of active callers disabling evictions
+    stop_evictions: &'a AtomicU64,
+    /// The number of times that evictions have been disabled or enabled
+    num_state_changes: &'a AtomicU64,
+    /// Who will be notified after the evictions are re-enabled
+    storage_notifier: &'a WaitableCondvar,
+}
+
+impl<'a> EvictionsGuard<'a> {
+    #[must_use = "if unused, this evictions lock will be immediately unlocked"]
+    fn lock<T: IndexValue>(in_mem_accounts_index: &'a InMemAccountsIndex<T>) -> Self {
+        Self::lock_with(
+            &in_mem_accounts_index.stop_evictions,
+            &in_mem_accounts_index.stop_evictions_changes,
+            &in_mem_accounts_index.storage.wait_dirty_or_aged,
+        )
+    }
+
+    #[must_use = "if unused, this evictions lock will be immediately unlocked"]
+    fn lock_with(
+        stop_evictions: &'a AtomicU64,
+        num_state_changes: &'a AtomicU64,
+        storage_notifier: &'a WaitableCondvar,
+    ) -> Self {
+        num_state_changes.fetch_add(1, Ordering::Release);
+        stop_evictions.fetch_add(1, Ordering::Release);
+
+        Self {
+            stop_evictions,
+            num_state_changes,
+            storage_notifier,
+        }
+    }
+}
+
+impl Drop for EvictionsGuard<'_> {
+    fn drop(&mut self) {
+        let previous_value = self.stop_evictions.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(previous_value > 0);
+
+        let should_notify = previous_value == 1;
+        if should_notify {
+            // stop_evictions went to 0, so this bucket could now be ready to be aged
+            self.storage_notifier.notify_one();
+        }
+
+        self.num_state_changes.fetch_add(1, Ordering::Release);
     }
 }
 
@@ -1446,7 +1504,8 @@ mod tests {
                 vec![range.clone()]
             );
             {
-                assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+                let evictions_guard = EvictionsGuard::lock(&bucket);
+                assert!(bucket.add_hold_range_in_memory_if_already_held(&range, &evictions_guard));
                 bucket.hold_range_in_memory(&range, false);
             }
             bucket.hold_range_in_memory(&range, false);
@@ -1482,7 +1541,9 @@ mod tests {
             // hold all in mem first
             assert!(bucket.cache_ranges_held.read().unwrap().is_empty());
             bucket.hold_range_in_memory(&all, true);
-            assert!(bucket.add_hold_range_in_memory_if_already_held(&range));
+
+            let evictions_guard = EvictionsGuard::lock(&bucket);
+            assert!(bucket.add_hold_range_in_memory_if_already_held(&range, &evictions_guard));
             bucket.hold_range_in_memory(&range, false);
             bucket.hold_range_in_memory(&all, false);
         }

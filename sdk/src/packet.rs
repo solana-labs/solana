@@ -152,6 +152,11 @@ impl Meta {
     }
 
     #[inline]
+    pub fn set_tracer(&mut self, is_tracer: bool) {
+        self.flags.set(PacketFlags::TRACER_PACKET, is_tracer);
+    }
+
+    #[inline]
     pub fn forwarded(&self) -> bool {
         self.flags.contains(PacketFlags::FORWARDED)
     }

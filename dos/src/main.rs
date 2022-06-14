@@ -44,7 +44,10 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::rpc_client::RpcClient,
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        rpc_client::RpcClient,
+    },
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
     solana_gossip::{
@@ -598,7 +601,12 @@ fn main() {
             exit(1);
         });
 
-        let (client, num_clients) = get_multi_client(&validators, &SocketAddrSpace::Unspecified);
+        let connection_cache = Arc::new(ConnectionCache::new(
+            cmd_params.tpu_use_quic,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        ));
+        let (client, num_clients) =
+            get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
         if validators.len() < num_clients {
             eprintln!(
                 "Error: Insufficient nodes discovered.  Expecting {} or more",
@@ -620,7 +628,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
-        solana_client::thin_client::{create_client, ThinClient},
+        solana_client::thin_client::ThinClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
@@ -658,6 +666,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
 
@@ -673,6 +682,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
 
@@ -688,6 +698,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
 
@@ -703,6 +714,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
     }
@@ -733,6 +745,7 @@ pub mod test {
                 skip_gossip: false,
                 allow_private_addr: false,
                 transaction_params: TransactionParams::default(),
+                tpu_use_quic: false,
             },
         );
     }
@@ -749,9 +762,10 @@ pub mod test {
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
-        let client = Arc::new(create_client(
+        let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc,
             cluster.entry_point_info.tpu,
+            cluster.connection_cache.clone(),
         ));
 
         // creates one transaction with 8 valid signatures and sends it 10 times
@@ -775,6 +789,7 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
+                tpu_use_quic: false,
             },
         );
 
@@ -799,6 +814,7 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
+                tpu_use_quic: false,
             },
         );
 
@@ -823,12 +839,12 @@ pub mod test {
                     transaction_type: None,
                     num_instructions: None,
                 },
+                tpu_use_quic: false,
             },
         );
     }
 
-    #[test]
-    fn test_dos_with_blockhash_and_payer() {
+    fn run_dos_with_blockhash_and_payer(tpu_use_quic: bool) {
         solana_logger::setup();
 
         // 1. Create faucet thread
@@ -872,9 +888,10 @@ pub mod test {
         let node = cluster.get_contact_info(&nodes[0]).unwrap().clone();
         let nodes_slice = [node];
 
-        let client = Arc::new(create_client(
+        let client = Arc::new(ThinClient::new(
             cluster.entry_point_info.rpc,
             cluster.entry_point_info.tpu,
+            cluster.connection_cache.clone(),
         ));
 
         // creates one transaction and sends it 10 times
@@ -899,6 +916,7 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
+                tpu_use_quic,
             },
         );
 
@@ -925,6 +943,7 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(1),
                 },
+                tpu_use_quic,
             },
         );
         // creates and sends unique transactions of type Transfer
@@ -950,6 +969,7 @@ pub mod test {
                     transaction_type: Some(TransactionType::Transfer),
                     num_instructions: Some(8),
                 },
+                tpu_use_quic,
             },
         );
         // creates and sends unique transactions of type CreateAccount
@@ -975,7 +995,18 @@ pub mod test {
                     transaction_type: Some(TransactionType::AccountCreation),
                     num_instructions: None,
                 },
+                tpu_use_quic,
             },
         );
+    }
+
+    #[test]
+    fn test_dos_with_blockhash_and_payer() {
+        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
+    }
+
+    #[test]
+    fn test_dos_with_blockhash_and_payer_and_quic() {
+        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
     }
 }

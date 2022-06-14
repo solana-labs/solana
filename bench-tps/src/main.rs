@@ -8,8 +8,9 @@ use {
         keypairs::get_keypairs,
     },
     solana_client::{
-        connection_cache,
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
+        thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_genesis::Base64Account,
@@ -48,6 +49,7 @@ fn main() {
         target_node,
         external_client_type,
         use_quic,
+        tpu_connection_pool_size,
         ..
     } = &cli_config;
 
@@ -101,9 +103,9 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
+            let connection_cache =
+                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+
             let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
                     eprintln!("RPC address should parse as socketaddr {:?}", e);
@@ -117,7 +119,7 @@ fn main() {
                         exit(1);
                     });
 
-                solana_client::thin_client::create_client(rpc, tpu)
+                ThinClient::new(rpc, tpu, connection_cache)
             } else {
                 let nodes =
                     discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
@@ -127,7 +129,7 @@ fn main() {
                         });
                 if *multi_client {
                     let (client, num_clients) =
-                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified);
+                        get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
                     if nodes.len() < num_clients {
                         eprintln!(
                             "Error: Insufficient nodes discovered.  Expecting {} or more",
@@ -141,8 +143,11 @@ fn main() {
                     let mut target_client = None;
                     for node in nodes {
                         if node.id == *target_node {
-                            target_client =
-                                Some(get_client(&[node], &SocketAddrSpace::Unspecified));
+                            target_client = Some(get_client(
+                                &[node],
+                                &SocketAddrSpace::Unspecified,
+                                connection_cache,
+                            ));
                             break;
                         }
                     }
@@ -151,7 +156,7 @@ fn main() {
                         exit(1);
                     })
                 } else {
-                    get_client(&nodes, &SocketAddrSpace::Unspecified)
+                    get_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache)
                 }
             };
             let client = Arc::new(client);
@@ -170,15 +175,20 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            if *use_quic {
-                connection_cache::set_use_quic(true);
-            }
+            let connection_cache =
+                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+
             let client = Arc::new(
-                TpuClient::new(rpc_client, websocket_url, TpuClientConfig::default())
-                    .unwrap_or_else(|err| {
-                        eprintln!("Could not create TpuClient {:?}", err);
-                        exit(1);
-                    }),
+                TpuClient::new_with_connection_cache(
+                    rpc_client,
+                    websocket_url,
+                    TpuClientConfig::default(),
+                    connection_cache,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Could not create TpuClient {:?}", err);
+                    exit(1);
+                }),
             );
             let keypairs = get_keypairs(
                 client.clone(),

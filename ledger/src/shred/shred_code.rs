@@ -1,7 +1,7 @@
 use {
     crate::shred::{
         common::dispatch,
-        legacy,
+        legacy, merkle,
         traits::{Shred, ShredCode as ShredCodeTrait},
         CodingShredHeader, Error, ShredCommonHeader, MAX_DATA_SHREDS_PER_FEC_BLOCK, SIZE_OF_NONCE,
     },
@@ -14,6 +14,7 @@ const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ShredCode {
     Legacy(legacy::ShredCode),
+    Merkle(merkle::ShredCode),
 }
 
 impl ShredCode {
@@ -70,6 +71,8 @@ impl ShredCode {
     pub(super) fn erasure_mismatch(&self, other: &ShredCode) -> bool {
         match (self, other) {
             (Self::Legacy(shred), Self::Legacy(other)) => erasure_mismatch(shred, other),
+            (Self::Merkle(shred), Self::Merkle(other)) => shred.erasure_mismatch(other),
+            _ => true,
         }
     }
 }
@@ -77,6 +80,12 @@ impl ShredCode {
 impl From<legacy::ShredCode> for ShredCode {
     fn from(shred: legacy::ShredCode) -> Self {
         Self::Legacy(shred)
+    }
+}
+
+impl From<merkle::ShredCode> for ShredCode {
+    fn from(shred: merkle::ShredCode) -> Self {
+        Self::Merkle(shred)
     }
 }
 

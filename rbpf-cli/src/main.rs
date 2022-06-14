@@ -11,8 +11,8 @@ use {
         assembler::assemble,
         elf::Executable,
         static_analysis::Analysis,
-        verifier::check,
-        vm::{Config, DynamicAnalysis},
+        verifier::RequisiteVerifier,
+        vm::{Config, DynamicAnalysis, VerifiedExecutable},
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
@@ -153,12 +153,6 @@ native machine code before execting it in the virtual machine.",
                 .long("profile"),
         )
         .arg(
-            Arg::new("verify")
-                .help("Run the verifier before execution or disassembly")
-                .short('v')
-                .long("verify"),
-        )
-        .arg(
             Arg::new("output_format")
                 .help("Return information in specified output format")
                 .long("output")
@@ -250,30 +244,27 @@ native machine code before execting it in the virtual machine.",
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&mut invoke_context, true).unwrap();
-    let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(
-            &contents,
-            None,
-            config,
-            syscall_registry,
-        )
-        .map_err(|err| format!("Executable constructor failed: {:?}", err))
+    let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(&contents, config, syscall_registry)
+            .map_err(|err| format!("Executable constructor failed: {:?}", err))
     } else {
         assemble::<BpfError, ThisInstructionMeter>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
-            None,
             config,
             syscall_registry,
         )
     }
     .unwrap();
 
-    if matches.is_present("verify") {
-        let text_bytes = executable.get_text_bytes().1;
-        check(text_bytes, &config).unwrap();
-    }
-    Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
-    let mut analysis = LazyAnalysis::new(&executable);
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
+            executable,
+        )
+        .map_err(|err| format!("Executable verifier failed: {:?}", err))
+        .unwrap();
+
+    verified_executable.jit_compile().unwrap();
+    let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -293,7 +284,7 @@ native machine code before execting it in the virtual machine.",
     }
 
     let mut vm = create_vm(
-        &executable,
+        &verified_executable,
         parameter_bytes.as_slice_mut(),
         account_lengths,
         &mut invoke_context,

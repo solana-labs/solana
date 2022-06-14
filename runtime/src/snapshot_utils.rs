@@ -342,7 +342,7 @@ pub fn archive_snapshot_package(
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
-            for dir in ["accounts", "snapshots"] {
+            for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
             archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
@@ -821,6 +821,9 @@ pub fn bank_from_snapshot_archives(
         incremental_snapshot_archive_info,
     )?;
 
+    let accounts_db_skip_shrink =
+        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote();
+
     let parallel_divisions = std::cmp::min(
         PARALLEL_UNTAR_READERS_DEFAULT,
         std::cmp::max(1, num_cpus::get() / 4),
@@ -879,6 +882,7 @@ pub fn bank_from_snapshot_archives(
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        accounts_db_skip_shrink,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -886,7 +890,7 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
+        accounts_db_skip_shrink,
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -1551,7 +1555,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     if bank_snapshots.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
     }
-    bank_snapshots.sort_unstable();
     let root_paths = bank_snapshots
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
@@ -1576,6 +1579,7 @@ fn rebuild_bank_from_snapshots(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    accounts_db_skip_shrink: bool,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1624,6 +1628,7 @@ fn rebuild_bank_from_snapshots(
                     verify_index,
                     accounts_db_config,
                     accounts_update_notifier,
+                    accounts_db_skip_shrink,
                 ),
             }?,
         )

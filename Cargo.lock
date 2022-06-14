@@ -4341,6 +4341,7 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "rayon",
+ "solana-client",
  "solana-core",
  "solana-gossip",
  "solana-ledger",
@@ -4388,6 +4389,7 @@ dependencies = [
  "crossbeam-channel",
  "futures 0.3.21",
  "solana-banks-interface",
+ "solana-client",
  "solana-runtime",
  "solana-sdk 1.11.0",
  "solana-send-transaction-service",
@@ -4512,6 +4514,7 @@ dependencies = [
  "regex",
  "serial_test",
  "solana-download-utils",
+ "solana-logger 1.11.0",
  "solana-sdk 1.11.0",
  "tar",
 ]
@@ -6308,9 +6311,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.30"
+version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4df28dcb607dd56ab0022f99d3a9ff1ee0d87951315762c0b89e946c087ebbea"
+checksum = "80a28c5dfe7e8af38daa39d6561c8e8b9ed7a2f900951ebe7362ad6348d36c73"
 dependencies = [
  "byteorder",
  "combine",
