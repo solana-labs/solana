@@ -251,9 +251,20 @@ pub(crate) mod tests {
         },
     };
 
+    #[derive(Eq, Hash, PartialEq)]
+    struct TestNotifierKey {
+        slot: Slot,
+        transaction_index: usize,
+        signature: Signature,
+    }
+
+    struct TestNotification {
+        _meta: TransactionStatusMeta,
+        transaction: SanitizedTransaction,
+    }
+
     struct TestTransactionNotifier {
-        notifications:
-            DashMap<(Slot, usize, Signature), (TransactionStatusMeta, SanitizedTransaction)>,
+        notifications: DashMap<TestNotifierKey, TestNotification>,
     }
 
     impl TestTransactionNotifier {
@@ -274,8 +285,15 @@ pub(crate) mod tests {
             transaction: &SanitizedTransaction,
         ) {
             self.notifications.insert(
-                (slot, transaction_index, *signature),
-                (transaction_status_meta.clone(), transaction.clone()),
+                TestNotifierKey {
+                    slot,
+                    transaction_index,
+                    signature: *signature,
+                },
+                TestNotification {
+                    _meta: transaction_status_meta.clone(),
+                    transaction: transaction.clone(),
+                },
             );
         }
     }
@@ -429,14 +447,17 @@ pub(crate) mod tests {
         transaction_status_service.join().unwrap();
         let notifier = test_notifier.read().unwrap();
         assert_eq!(notifier.notifications.len(), 1);
-        assert!(notifier
-            .notifications
-            .contains_key(&(slot, transaction_index, signature)));
+        let key = TestNotifierKey {
+            slot,
+            transaction_index,
+            signature,
+        };
+        assert!(notifier.notifications.contains_key(&key));
 
-        let result = &*notifier
-            .notifications
-            .get(&(slot, transaction_index, signature))
-            .unwrap();
-        assert_eq!(expected_transaction.signature(), result.1.signature());
+        let result = &*notifier.notifications.get(&key).unwrap();
+        assert_eq!(
+            expected_transaction.signature(),
+            result.transaction.signature()
+        );
     }
 }
