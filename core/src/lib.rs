@@ -31,6 +31,7 @@ pub mod forward_packet_batches_by_accounts;
 pub mod gen_keys;
 pub mod heaviest_subtree_fork_choice;
 pub mod immutable_deserialized_packet;
+mod latest_unprocessed_votes;
 pub mod latest_validator_votes_for_frozen_banks;
 pub mod leader_slot_banking_stage_metrics;
 pub mod leader_slot_banking_stage_timing_metrics;

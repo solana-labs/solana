@@ -73,7 +73,7 @@ impl Ord for DeserializedPacket {
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
 /// PacketBatch's received from sigverify. Banking thread continuously scans the buffer
 /// to pick proper packets to add to the block.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct UnprocessedPacketBatches {
     pub packet_priority_queue: MinMaxHeap<Rc<ImmutableDeserializedPacket>>,
     pub message_hash_to_transaction: HashMap<Hash, DeserializedPacket>,

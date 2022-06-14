@@ -6,6 +6,7 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
+        latest_unprocessed_votes::{self, LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -22,6 +23,7 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
+    rand::{thread_rng, Rng},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
@@ -53,6 +55,7 @@ use {
             Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
+        feature_set::allow_votes_to_directly_update_vote_state,
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -378,11 +381,219 @@ pub enum ForwardOption {
     ForwardTransaction,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FilterForwardingResults {
     total_forwardable_packets: usize,
     total_tracer_packets_in_buffer: usize,
     total_forwardable_tracer_packets: usize,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum ThreadType {
+    Voting(VoteSource),
+    Transactions,
+}
+
+#[derive(Debug)]
+pub enum UnprocessedTransactionStorage {
+    VoteStorage(Arc<LatestUnprocessedVotes>, VoteSource),
+    TransactionStorage(UnprocessedPacketBatches, ThreadType),
+}
+
+impl UnprocessedTransactionStorage {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::VoteStorage(v, _) => v.is_empty(),
+            Self::TransactionStorage(t, _) => t.is_empty(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Self::VoteStorage(v, _) => v.len(),
+            Self::TransactionStorage(t, _) => t.len(),
+        }
+    }
+
+    pub fn capacity(&self) -> usize {
+        match self {
+            Self::VoteStorage(_, _) => usize::MAX,
+            Self::TransactionStorage(t, _) => t.capacity(),
+        }
+    }
+
+    pub fn should_not_process(&self) -> bool {
+        // The gossip vote thread does not need to process or forward any votes, that is
+        // handled by the tpu vote thread
+        matches!(self, Self::VoteStorage(_, VoteSource::Gossip))
+    }
+
+    #[cfg(test)]
+    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket> {
+        match self {
+            Self::TransactionStorage(t, _) => t.iter(),
+            _ => panic!(),
+        }
+    }
+
+    pub fn forward_option(&self) -> ForwardOption {
+        match self {
+            Self::TransactionStorage(_, ThreadType::Transactions) => {
+                ForwardOption::ForwardTransaction
+            }
+            Self::TransactionStorage(_, ThreadType::Voting(VoteSource::Tpu)) => {
+                ForwardOption::ForwardTpuVote
+            }
+            Self::TransactionStorage(_, ThreadType::Voting(VoteSource::Gossip)) => {
+                ForwardOption::NotForward
+            }
+            Self::VoteStorage(_, VoteSource::Tpu) => ForwardOption::ForwardTpuVote,
+            Self::VoteStorage(_, VoteSource::Gossip) => ForwardOption::NotForward,
+        }
+    }
+
+    pub fn clear_forwarded_packets(&mut self) {
+        match self {
+            Self::TransactionStorage(t, _) => t.clear(), // Since we set everything as forwarded this is the same
+            Self::VoteStorage(v, _) => v.clear_forwarded_packets(),
+        }
+    }
+
+    pub fn deserialize_and_insert_batch(
+        &mut self,
+        packet_batch: &PacketBatch,
+        packet_indexes: &[usize],
+    ) -> (usize, usize) {
+        match self {
+            Self::VoteStorage(v, vote_source) => {
+                v.insert_batch(latest_unprocessed_votes::deserialize_packets(
+                    packet_batch,
+                    packet_indexes,
+                    *vote_source,
+                ))
+            }
+            Self::TransactionStorage(t, _) => t.insert_batch(
+                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
+            ),
+        }
+    }
+
+    pub fn filter_forwardable_packets_and_add_batches(
+        &mut self,
+        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
+    ) -> FilterForwardingResults {
+        match self {
+            Self::TransactionStorage(t, _) => BankingStage::filter_valid_packets_for_forwarding(
+                t,
+                forward_packet_batches_by_accounts,
+            ),
+            Self::VoteStorage(v, VoteSource::Tpu) => {
+                let total_forwardable_packets =
+                    v.get_and_insert_forwardable_packets(forward_packet_batches_by_accounts);
+                FilterForwardingResults {
+                    total_forwardable_packets,
+                    ..FilterForwardingResults::default()
+                }
+            }
+            _ => FilterForwardingResults::default(),
+        }
+    }
+
+    pub fn process_packets<F>(
+        &mut self,
+        bank: Option<Arc<Bank>>,
+        batch_size: usize,
+        mut processing_function: F,
+    ) where
+        F: FnMut(
+            Option<&mut UnprocessedPacketBatches>,
+            Vec<Rc<ImmutableDeserializedPacket>>,
+        ) -> Vec<Rc<ImmutableDeserializedPacket>>,
+    {
+        match self {
+            Self::TransactionStorage(buffered_packet_batches, _) => {
+                let mut retryable_packets = {
+                    let capacity = buffered_packet_batches.capacity();
+                    std::mem::replace(
+                        &mut buffered_packet_batches.packet_priority_queue,
+                        MinMaxHeap::with_capacity(capacity),
+                    )
+                };
+                let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> =
+                    retryable_packets
+                        .drain_desc()
+                        .chunks(batch_size)
+                        .into_iter()
+                        .flat_map(|packets_to_process| {
+                            processing_function(
+                                Some(buffered_packet_batches),
+                                packets_to_process.into_iter().collect_vec(),
+                            )
+                        })
+                        .collect::<MinMaxHeap<_>>();
+
+                buffered_packet_batches.packet_priority_queue = retryable_packets;
+
+                // Assert unprocessed queue is still consistent
+                assert_eq!(
+                    buffered_packet_batches.packet_priority_queue.len(),
+                    buffered_packet_batches.message_hash_to_transaction.len()
+                );
+            }
+            Self::VoteStorage(latest_unprocessed_votes, VoteSource::Tpu) => {
+                // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
+                // from each validator using a weighted random sample based on stake.
+                //
+                // Efraimidis and Spirakis algo for weighted random sample without replacement
+                // TODO: Add proper error handling
+                let mut sorted_pubkeys: Vec<(f64, Pubkey)> = bank
+                    .unwrap()
+                    .staked_nodes()
+                    .iter()
+                    .filter_map(|(&pubkey, &stake)| {
+                        if stake == 0 {
+                            None // Ignore votes from unstaked validators
+                        } else {
+                            Some((thread_rng().gen::<f64>().powf(1.0 / (stake as f64)), pubkey))
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                sorted_pubkeys.sort_by(|(w1, _), (w2, _)| w1.partial_cmp(w2).unwrap());
+                let latest_votes_per_pubkey = latest_unprocessed_votes
+                    .latest_votes_per_pubkey
+                    .read()
+                    .unwrap();
+                // TODO: Decide whether we should retry vote txs
+                let _retryable_votes = sorted_pubkeys
+                    .into_iter()
+                    .filter_map(|(_, pubkey)| {
+                        if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
+                            if let Ok(latest_vote) = lock.write() {
+                                if let Ok(mut latest_vote) = latest_vote.try_borrow_mut() {
+                                    if !latest_vote.is_processed() {
+                                        let packet = latest_vote.get_vote_packet();
+                                        latest_vote.clear();
+                                        latest_unprocessed_votes
+                                            .size
+                                            .fetch_sub(1, Ordering::AcqRel);
+                                        return Some(packet);
+                                    }
+                                }
+                            }
+                        }
+                        None
+                    })
+                    .chunks(batch_size) // TODO: do we need to chunk votes or can we process them all at once
+                    .into_iter()
+                    .flat_map(|packets_to_process| {
+                        processing_function(None, packets_to_process.into_iter().collect_vec())
+                    });
+            }
+            Self::VoteStorage(_, VoteSource::Gossip) => {
+                panic!("Gossip vote thread should not be processing transactions")
+            }
+        }
+    }
 }
 
 impl BankingStage {
@@ -440,20 +651,38 @@ impl BankingStage {
         let data_budget = Arc::new(DataBudget::default());
         let batch_limit =
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
+        // Keeps track of extraneous vote transactions for the vote threads
+        let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+        let bank = poh_recorder.read().unwrap().bank();
+        let split_voting_threads = bank
+            .map(|bank| {
+                bank.feature_set
+                    .is_active(&allow_votes_to_directly_update_vote_state::id())
+            })
+            .unwrap_or(false);
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, forward_option) = match i {
+                let (verified_receiver, transaction_storage_options) = match i {
                     0 => {
                         // Disable forwarding of vote transactions
                         // from gossip. Note - votes can also arrive from tpu
-                        (verified_vote_receiver.clone(), ForwardOption::NotForward)
+                        (
+                            verified_vote_receiver.clone(),
+                            (
+                                split_voting_threads.then(|| latest_unprocessed_votes.clone()),
+                                ThreadType::Voting(VoteSource::Gossip),
+                            ),
+                        )
                     }
                     1 => (
                         tpu_verified_vote_receiver.clone(),
-                        ForwardOption::ForwardTpuVote,
+                        (
+                            split_voting_threads.then(|| latest_unprocessed_votes.clone()),
+                            ThreadType::Voting(VoteSource::Tpu),
+                        ),
                     ),
-                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
+                    _ => (verified_receiver.clone(), (None, ThreadType::Transactions)),
                 };
 
                 let poh_recorder = poh_recorder.clone();
@@ -473,7 +702,6 @@ impl BankingStage {
                             &poh_recorder,
                             &cluster_info,
                             &mut recv_start,
-                            forward_option,
                             i,
                             batch_limit,
                             transaction_status_sender,
@@ -483,6 +711,7 @@ impl BankingStage {
                             log_messages_bytes_limit,
                             connection_cache,
                             &bank_forks,
+                            transaction_storage_options,
                         );
                     })
                     .unwrap()
@@ -651,7 +880,7 @@ impl BankingStage {
         _my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
@@ -664,22 +893,15 @@ impl BankingStage {
     ) {
         let mut rebuffered_packet_count = 0;
         let mut consumed_buffered_packets_count = 0;
-        let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = false;
-        let mut retryable_packets = {
-            let capacity = buffered_packet_batches.capacity();
-            std::mem::replace(
-                &mut buffered_packet_batches.packet_priority_queue,
-                MinMaxHeap::with_capacity(capacity),
-            )
-        };
-        let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
-            .drain_desc()
-            .chunks(num_packets_to_process_per_iteration)
-            .into_iter()
-            .flat_map(|packets_to_process| {
-                let packets_to_process = packets_to_process.into_iter().collect_vec();
+        let num_packets_to_process = unprocessed_transaction_storage.len();
+        let bank = poh_recorder.read().unwrap().bank();
+
+        unprocessed_transaction_storage.process_packets(
+            bank,
+            num_packets_to_process_per_iteration,
+            |buffered_packet_batches: Option<&mut UnprocessedPacketBatches>, packets_to_process: Vec<Rc<ImmutableDeserializedPacket>>| {
                 // TODO: Right now we iterate through buffer and try the highest weighted transaction once
                 // but we should retry the highest weighted transactions more often.
                 let (bank_start, poh_recorder_lock_time) = measure!(
@@ -760,18 +982,20 @@ impl BankingStage {
                     // Remove the non-retryable packets, packets that were either:
                     // 1) Successfully processed
                     // 2) Failed but not retryable
-                    Self::filter_processed_packets(
-                        retryable_transaction_indexes
+                    if let Some(buffered_packet_batches) = buffered_packet_batches {
+                        Self::filter_processed_packets(
+                            retryable_transaction_indexes
                             .iter()
                             .chain(std::iter::once(&packets_to_process.len())),
-                        |start, end| {
-                            for processed_packet in &packets_to_process[start..end] {
-                                buffered_packet_batches
-                                    .message_hash_to_transaction
-                                    .remove(processed_packet.message_hash());
-                            }
-                        },
-                    );
+                            |start, end| {
+                                for processed_packet in &packets_to_process[start..end] {
+                                    buffered_packet_batches
+                                        .message_hash_to_transaction
+                                        .remove(processed_packet.message_hash());
+                                    }
+                            },
+                        );
+                    }
 
                     result
                 } else if reached_end_of_slot {
@@ -783,14 +1007,12 @@ impl BankingStage {
 
                     packets_to_process
                 }
-            })
-            .collect();
-
-        buffered_packet_batches.packet_priority_queue = retryable_packets;
+            });
 
         if reached_end_of_slot {
-            slot_metrics_tracker
-                .set_end_of_slot_unprocessed_buffer_len(buffered_packet_batches.len() as u64);
+            slot_metrics_tracker.set_end_of_slot_unprocessed_buffer_len(
+                unprocessed_transaction_storage.len() as u64,
+            );
 
             // We've hit the end of this slot, no need to perform more processing,
             // Packet filtering will be done at `forward_packet_batches_by_accounts.add_packet()`
@@ -800,17 +1022,12 @@ impl BankingStage {
         debug!(
             "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
             timestamp(),
-            buffered_packets_len,
+            num_packets_to_process,
             proc_start.as_ms(),
             consumed_buffered_packets_count,
             (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
-        // Assert unprocessed queue is still consistent
-        assert_eq!(
-            buffered_packet_batches.packet_priority_queue.len(),
-            buffered_packet_batches.message_hash_to_transaction.len()
-        );
         banking_stage_stats
             .consume_buffered_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
@@ -861,8 +1078,7 @@ impl BankingStage {
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
-        forward_option: &ForwardOption,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -875,6 +1091,9 @@ impl BankingStage {
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
+        if unprocessed_transaction_storage.should_not_process() {
+            return;
+        }
         let ((metrics_action, decision), make_decision_time) = measure!(
             {
                 let bank_start;
@@ -924,7 +1143,7 @@ impl BankingStage {
                         my_pubkey,
                         max_tx_ingestion_ns,
                         poh_recorder,
-                        buffered_packet_batches,
+                        unprocessed_transaction_storage,
                         transaction_status_sender,
                         gossip_vote_sender,
                         None::<Box<dyn Fn()>>,
@@ -943,9 +1162,8 @@ impl BankingStage {
             BufferedPacketsDecision::Forward => {
                 let (_, forward_time) = measure!(
                     Self::handle_forwarding(
-                        forward_option,
                         cluster_info,
-                        buffered_packet_batches,
+                        unprocessed_transaction_storage,
                         poh_recorder,
                         socket,
                         false,
@@ -966,9 +1184,8 @@ impl BankingStage {
             BufferedPacketsDecision::ForwardAndHold => {
                 let (_, forward_and_hold_time) = measure!(
                     Self::handle_forwarding(
-                        forward_option,
                         cluster_info,
-                        buffered_packet_batches,
+                        unprocessed_transaction_storage,
                         poh_recorder,
                         socket,
                         true,
@@ -991,9 +1208,8 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn handle_forwarding(
-        forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
@@ -1004,22 +1220,18 @@ impl BankingStage {
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
-        if let ForwardOption::NotForward = forward_option {
-            if !hold {
-                buffered_packet_batches.clear();
-            }
-            return;
-        }
+        let forward_option = unprocessed_transaction_storage.forward_option();
+        // The gossip thread should not even reach this point
+        assert!(!matches!(forward_option, ForwardOption::NotForward));
 
         // get current root bank from bank_forks, use it to sanitize transaction and
         // load all accounts from address loader;
         let current_bank = bank_forks.read().unwrap().root_bank();
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank);
-        let filter_forwarding_result = Self::filter_valid_packets_for_forwarding(
-            buffered_packet_batches,
-            &mut forward_packet_batches_by_accounts,
-        );
+        let filter_forwarding_result = unprocessed_transaction_storage
+            .filter_forwardable_packets_and_add_batches(&mut forward_packet_batches_by_accounts);
+
         forward_packet_batches_by_accounts
             .iter_batches()
             .filter(|&batch| !batch.is_empty())
@@ -1030,7 +1242,7 @@ impl BankingStage {
                 let (_forward_result, sucessful_forwarded_packets_count, leader_pubkey) =
                     Self::forward_buffered_packets(
                         connection_cache,
-                        forward_option,
+                        &forward_option,
                         cluster_info,
                         poh_recorder,
                         socket,
@@ -1063,8 +1275,12 @@ impl BankingStage {
             });
 
         if hold {
-            for deserialized_packet in buffered_packet_batches.iter_mut() {
-                deserialized_packet.forwarded = true;
+            if let UnprocessedTransactionStorage::TransactionStorage(buffered_packet_batches, _) =
+                unprocessed_transaction_storage
+            {
+                for deserialized_packet in buffered_packet_batches.iter_mut() {
+                    deserialized_packet.forwarded = true;
+                }
             }
         } else {
             slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
@@ -1073,7 +1289,7 @@ impl BankingStage {
             tracer_packet_stats.increment_total_cleared_from_buffer_after_forward(
                 filter_forwarding_result.total_tracer_packets_in_buffer,
             );
-            buffered_packet_batches.clear();
+            unprocessed_transaction_storage.clear_forwarded_packets();
         }
     }
 
@@ -1083,7 +1299,6 @@ impl BankingStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
-        forward_option: ForwardOption,
         id: u32,
         batch_limit: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -1093,10 +1308,10 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
+        transaction_storage_options: (Option<Arc<LatestUnprocessedVotes>>, ThreadType),
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(cost_model, id);
@@ -1104,9 +1319,19 @@ impl BankingStage {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
 
+        let mut unprocessed_transaction_storage = match transaction_storage_options {
+            (Some(latest_unprocessed_votes), ThreadType::Voting(vote_source)) => {
+                UnprocessedTransactionStorage::VoteStorage(latest_unprocessed_votes, vote_source)
+            }
+            (_, thread_type) => UnprocessedTransactionStorage::TransactionStorage(
+                UnprocessedPacketBatches::with_capacity(batch_limit),
+                thread_type,
+            ),
+        };
+
         loop {
             let my_pubkey = cluster_info.id();
-            if !buffered_packet_batches.is_empty()
+            if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
             {
                 let (_, process_buffered_packets_time) = measure!(
@@ -1115,8 +1340,7 @@ impl BankingStage {
                         &socket,
                         poh_recorder,
                         cluster_info,
-                        &mut buffered_packet_batches,
-                        &forward_option,
+                        &mut unprocessed_transaction_storage,
                         transaction_status_sender.clone(),
                         &gossip_vote_sender,
                         &banking_stage_stats,
@@ -1138,7 +1362,7 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            let recv_timeout = if !buffered_packet_batches.is_empty() {
+            let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
                 // packets. This prevents starving BankingStage::consume_buffered_packets due to
                 // buffered_packet_batches containing transactions that exceed the cost model for
@@ -1155,7 +1379,7 @@ impl BankingStage {
                     recv_start,
                     recv_timeout,
                     id,
-                    &mut buffered_packet_batches,
+                    &mut unprocessed_transaction_storage,
                     &mut banking_stage_stats,
                     &mut tracer_packet_stats,
                     &mut slot_metrics_tracker,
@@ -2040,7 +2264,7 @@ impl BankingStage {
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -2049,7 +2273,7 @@ impl BankingStage {
         let (packet_batches, new_sigverify_tracer_packet_stats_option) = Self::receive_until(
             verified_receiver,
             recv_timeout,
-            buffered_packet_batches.capacity() - buffered_packet_batches.len(),
+            unprocessed_transaction_storage.capacity() - unprocessed_transaction_storage.len(),
         )?;
 
         if let Some(new_sigverify_tracer_packet_stats) = &new_sigverify_tracer_packet_stats_option {
@@ -2078,7 +2302,7 @@ impl BankingStage {
             );
 
             Self::push_unprocessed(
-                buffered_packet_batches,
+                unprocessed_transaction_storage,
                 &packet_batch,
                 &packet_indexes,
                 &mut dropped_packets_count,
@@ -2104,16 +2328,16 @@ impl BankingStage {
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
         banking_stage_stats
             .current_buffered_packet_batches_count
-            .swap(buffered_packet_batches.len(), Ordering::Relaxed);
+            .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
         banking_stage_stats
             .current_buffered_packets_count
-            .swap(buffered_packet_batches.len(), Ordering::Relaxed);
+            .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
         *recv_start = Instant::now();
         Ok(())
     }
 
     fn push_unprocessed(
-        unprocessed_packet_batches: &mut UnprocessedPacketBatches,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         packet_batch: &PacketBatch,
         packet_indexes: &[usize],
         dropped_packets_count: &mut usize,
@@ -2132,9 +2356,8 @@ impl BankingStage {
                 .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
 
             let (number_of_dropped_packets, number_of_dropped_tracer_packets) =
-                unprocessed_packet_batches.insert_batch(
-                    unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
-                );
+                unprocessed_transaction_storage
+                    .deserialize_and_insert_batch(packet_batch, packet_indexes);
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
             slot_metrics_tracker.increment_exceeded_buffer_limit_dropped_packets_count(
@@ -3964,11 +4187,13 @@ mod tests {
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
                     .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
-            let mut buffered_packet_batches: UnprocessedPacketBatches =
+            let mut buffered_packet_batches = UnprocessedTransactionStorage::TransactionStorage(
                 UnprocessedPacketBatches::from_iter(
                     deserialized_packets.into_iter(),
                     num_conflicting_transactions,
-                );
+                ),
+                ThreadType::Transactions,
+            );
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -4061,10 +4286,13 @@ mod tests {
                         .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let num_packets_to_process_per_iteration = 1;
-                    let mut buffered_packet_batches: UnprocessedPacketBatches =
-                        UnprocessedPacketBatches::from_iter(
-                            deserialized_packets.clone().into_iter(),
-                            num_conflicting_transactions,
+                    let mut buffered_packet_batches =
+                        UnprocessedTransactionStorage::TransactionStorage(
+                            UnprocessedPacketBatches::from_iter(
+                                deserialized_packets.clone().into_iter(),
+                                num_conflicting_transactions,
+                            ),
+                            ThreadType::Transactions,
                         );
                     let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
                         .iter()
@@ -4173,16 +4401,18 @@ mod tests {
             let connection_cache = ConnectionCache::default();
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             for (name, data_budget, expected_num_forwarded) in test_cases {
-                let mut unprocessed_packet_batches: UnprocessedPacketBatches =
+                let unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(
                         vec![deserialized_packet.clone()].into_iter(),
                         1,
                     );
                 let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
-                    &ForwardOption::ForwardTransaction,
                     &cluster_info,
-                    &mut unprocessed_packet_batches,
+                    &mut UnprocessedTransactionStorage::TransactionStorage(
+                        unprocessed_packet_batches,
+                        ThreadType::Transactions,
+                    ),
                     &poh_recorder,
                     &socket,
                     true,
@@ -4233,11 +4463,13 @@ mod tests {
             DeserializedPacket::new(packet).unwrap()
         };
 
-        let mut unprocessed_packet_batches: UnprocessedPacketBatches =
+        let mut unprocessed_packet_batches = UnprocessedTransactionStorage::TransactionStorage(
             UnprocessedPacketBatches::from_iter(
                 vec![forwarded_packet, normal_packet].into_iter(),
                 2,
-            );
+            ),
+            ThreadType::Transactions,
+        );
 
         let genesis_config_info = create_slow_genesis_config(10_000);
         let GenesisConfigInfo {
@@ -4270,35 +4502,15 @@ mod tests {
             let connection_cache = ConnectionCache::default();
 
             let test_cases = vec![
-                ("not-forward", ForwardOption::NotForward, true, vec![], 2),
-                (
-                    "fwd-normal",
-                    ForwardOption::ForwardTransaction,
-                    true,
-                    vec![normal_block_hash],
-                    2,
-                ),
-                (
-                    "fwd-no-op",
-                    ForwardOption::ForwardTransaction,
-                    true,
-                    vec![],
-                    2,
-                ),
-                (
-                    "fwd-no-hold",
-                    ForwardOption::ForwardTransaction,
-                    false,
-                    vec![],
-                    0,
-                ),
+                ("fwd-normal", true, vec![normal_block_hash], 2),
+                ("fwd-no-op", true, vec![], 2),
+                ("fwd-no-hold", false, vec![], 0),
             ];
 
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            for (name, forward_option, hold, expected_ids, expected_num_unprocessed) in test_cases {
+            for (name, hold, expected_ids, expected_num_unprocessed) in test_cases {
                 let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
-                    &forward_option,
                     &cluster_info,
                     &mut unprocessed_packet_batches,
                     &poh_recorder,

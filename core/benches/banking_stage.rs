@@ -9,7 +9,9 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_core::{
-        banking_stage::{BankingStage, BankingStageStats},
+        banking_stage::{
+            BankingStage, BankingStageStats, ThreadType, UnprocessedTransactionStorage,
+        },
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
         unprocessed_packet_batches::*,
@@ -80,8 +82,10 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let transactions = vec![tx; 4194304];
         let batches = transactions_to_deserialized_packets(&transactions).unwrap();
         let batches_len = batches.len();
-        let mut transaction_buffer =
-            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len);
+        let mut transaction_buffer = UnprocessedTransactionStorage::TransactionStorage(
+            UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
+            ThreadType::Transactions,
+        );
         let (s, _r) = unbounded();
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.

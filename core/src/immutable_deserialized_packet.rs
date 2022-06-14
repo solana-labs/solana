@@ -28,6 +28,8 @@ pub enum DeserializedPacketError {
     SanitizeError(#[from] SanitizeError),
     #[error("transaction failed prioritization")]
     PrioritizationFailure,
+    #[error("vote transaction deserialization failure")]
+    VoteTransactionError,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -102,7 +104,7 @@ impl Ord for ImmutableDeserializedPacket {
 }
 
 /// Read the transaction message from packet data
-fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
+pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
     let (sig_len, sig_size) = packet
         .data(..)
         .and_then(|bytes| decode_shortu16_len(bytes).ok())

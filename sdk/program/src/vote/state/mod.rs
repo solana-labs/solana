@@ -155,6 +155,10 @@ impl VoteStateUpdate {
     pub fn compact(self) -> Option<CompactVoteStateUpdate> {
         CompactVoteStateUpdate::new(self.lockouts, self.root, self.hash, self.timestamp)
     }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.lockouts.back().map(|l| l.slot)
+    }
 }
 
 /// Ignoring overhead, in a full `VoteStateUpdate` the lockouts take up
