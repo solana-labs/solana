@@ -6820,9 +6820,21 @@ impl Bank {
         last_full_snapshot_slot: Option<Slot>,
     ) -> bool {
         let mut clean_time = Measure::start("clean");
-        if !accounts_db_skip_shrink && self.slot() > 0 {
-            info!("cleaning..");
-            self.clean_accounts(true, true, last_full_snapshot_slot);
+        if !accounts_db_skip_shrink {
+            if self.slot() > 0 {
+                info!("cleaning..");
+                self.clean_accounts(true, true, last_full_snapshot_slot);
+            }
+        } else {
+            // if we are skipping shrink, there should be no uncleaned_roots deferred to later
+            assert_eq!(
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .accounts_index
+                    .uncleaned_roots_len(),
+                0
+            );
         }
         clean_time.stop();
 
