@@ -50,7 +50,8 @@ use {
             Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
-        feature_set,
+        feature_set::{self, allow_votes_to_directly_update_vote_state},
+        program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -62,6 +63,7 @@ use {
     solana_transaction_status::token_balances::{
         collect_token_balances, TransactionTokenBalancesSet,
     },
+    solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         cmp,
         collections::HashMap,
@@ -1883,6 +1885,61 @@ impl BankingStage {
         }
     }
 
+    /// This function filters extraneous consensus transactions. Given that votes are not
+    /// incremental, it suffices to only process the latest vote for each validator.
+    fn filter_extraneous_votes(
+        transactions: &[SanitizedTransaction],
+        transaction_to_packet_indexes: &[usize],
+    ) -> Vec<usize> {
+        // Store the latest vote for each validator
+        let mut vote_ixs_by_pubkey: HashMap<Pubkey, (Slot, usize)> = HashMap::new();
+        let non_votes = transactions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, tx)| {
+                if tx.message().instructions().len() == 1 {
+                    let (program_pubkey, instruction) =
+                        tx.message().program_instructions_iter().next().unwrap();
+                    if program_pubkey == &solana_vote_program::id() {
+                        if let Ok(vote_instruction) =
+                            limited_deserialize::<VoteInstruction>(&instruction.data)
+                        {
+                            match vote_instruction {
+                                VoteInstruction::UpdateVoteState(vote_state_update)
+                                | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
+                                    // Only filter the full votes
+                                    let &vote_account_key = tx
+                                        .message()
+                                        .account_keys()
+                                        .get(0)
+                                        .expect("Vote account pubkey is missing");
+                                    let slot = vote_state_update.last_voted_slot().unwrap();
+                                    let cur_latest_slot = vote_ixs_by_pubkey
+                                        .get(&vote_account_key)
+                                        .map(|&(slot, _)| slot)
+                                        .unwrap_or_default();
+                                    if slot > cur_latest_slot {
+                                        // Only  keep the latest vote by slot
+                                        vote_ixs_by_pubkey.insert(vote_account_key, (slot, i));
+                                    }
+                                    return None;
+                                }
+                                _ => (),
+                            };
+                        }
+                    }
+                }
+                Some(i)
+            })
+            .collect_vec();
+        vote_ixs_by_pubkey
+            .into_iter()
+            .map(|(_, (_, i))| i)
+            .chain(non_votes.into_iter())
+            .map(|i| transaction_to_packet_indexes[i])
+            .collect_vec()
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn process_packets_transactions<'a>(
         bank: &'a Arc<Bank>,
@@ -1896,7 +1953,7 @@ impl BankingStage {
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
     ) -> ProcessTransactionsSummary {
         // Convert packets to transactions
-        let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
+        let ((mut transactions, transaction_to_packet_indexes), packet_conversion_time): (
             (Vec<SanitizedTransaction>, Vec<usize>),
             _,
         ) = measure!(
@@ -1914,6 +1971,31 @@ impl BankingStage {
                 .unzip(),
             "packet_conversion",
         );
+
+        // Filter out extraneous consensus transactions
+        let (filtered_extraneous_votes_indexes, _filter_extraneous_votes_time) = measure!({
+            if bank
+                .feature_set
+                .is_active(&allow_votes_to_directly_update_vote_state::id())
+            {
+                let indexes =
+                    Self::filter_extraneous_votes(&transactions, &transaction_to_packet_indexes);
+                let mut indexes_ix = 0; // Index for indexes
+                let mut transactions_ix = 0; // Index for transations
+                transactions.retain(|_| {
+                    let to_retain =
+                        indexes_ix < indexes.len() && indexes[indexes_ix] == transactions_ix;
+                    if to_retain {
+                        indexes_ix += 1;
+                    }
+                    transactions_ix += 1;
+                    to_retain
+                });
+                indexes
+            } else {
+                transaction_to_packet_indexes
+            }
+        });
 
         let packet_conversion_us = packet_conversion_time.as_us();
         slot_metrics_tracker.increment_transactions_from_packets_us(packet_conversion_us);
@@ -1958,7 +2040,7 @@ impl BankingStage {
             Self::filter_pending_packets_from_pending_txs(
                 bank,
                 &transactions,
-                &transaction_to_packet_indexes,
+                &filtered_extraneous_votes_indexes,
                 retryable_transaction_indexes,
             ),
             "filter_pending_packets_time",

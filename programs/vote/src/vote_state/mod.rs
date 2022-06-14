@@ -106,7 +106,7 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.last().copied(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => {
-                Some(vote_state_update.lockouts.back()?.slot)
+                vote_state_update.last_voted_slot()
             }
         }
     }
@@ -223,6 +223,10 @@ impl VoteStateUpdate {
 
     pub fn slots(&self) -> Vec<Slot> {
         self.lockouts.iter().map(|lockout| lockout.slot).collect()
+    }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.lockouts.back().map(|l| l.slot)
     }
 }
 
