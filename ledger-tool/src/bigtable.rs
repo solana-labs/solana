@@ -579,7 +579,7 @@ impl BigTableSubCommand for App<'_, '_> {
 
 fn get_global_subcommand_arg<T: FromStr>(
     matches: &ArgMatches<'_>,
-    sub_matches: std::option::Option<&clap::ArgMatches>,
+    sub_matches: Option<&clap::ArgMatches>,
     name: &str,
     default: &str,
 ) -> T {
