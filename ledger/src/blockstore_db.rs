@@ -519,7 +519,12 @@ impl Rocks {
     fn drop_cf(path: &Path, cf_name: &str) -> Result<()> {
         let mut options = Options::default();
         options.set_disable_auto_compactions(true);
-        let mut db = DB::open(&options, path)?;
+        let cf_names = DB::list_cf(&options, path)?;
+        let cf_descriptors: Vec<_> = cf_names
+            .iter()
+            .map(|name| ColumnFamilyDescriptor::new(name, options.clone()))
+            .collect();
+        let mut db = DB::open_cf_descriptors(&options, path, cf_descriptors)?;
         db.drop_cf(cf_name)?;
         Ok(())
     }
