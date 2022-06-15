@@ -1,8 +1,9 @@
 use {
     crate::{
-        quic_client::QuicTpuConnection, tpu_connection::ClientStats, udp_client::UdpTpuConnection,
+        quic_client::QuicTpuConnection,
+        tpu_connection::{ClientStats, Connection},
+        udp_client::UdpTpuConnection,
     },
-    enum_dispatch::enum_dispatch,
     indexmap::map::IndexMap,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -18,12 +19,6 @@ use {
 
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
-
-#[enum_dispatch(TpuConnection)]
-pub enum Connection {
-    UdpTpuConnection,
-    QuicTpuConnection,
-}
 
 /// Used to decide whether the TPU and underlying connection cache should use
 /// QUIC connections.
