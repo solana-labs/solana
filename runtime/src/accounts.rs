@@ -1026,7 +1026,7 @@ impl Accounts {
         range: R,
     ) -> Vec<PubkeyAccountSlot> {
         self.accounts_db.range_scan_accounts(
-            "load_to_collect_rent_eagerly_scan_elapsed",
+            "", // disable logging of this. We now parallelize it and this results in multiple parallel logs
             ancestors,
             range,
             &ScanConfig::new(true),
