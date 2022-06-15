@@ -191,20 +191,22 @@ impl LedgerCleanupService {
     /// already has fewer than `max_ledger_shreds`; otherwise, the cleanup will
     /// purge enough slots to get the ledger size below `max_ledger_shreds`.
     ///
-    /// [`new_root_receiver`]: signal receiver which contains the information
+    /// # Arguments
+    ///
+    /// - `new_root_receiver`: signal receiver which contains the information
     ///   about what `Slot` is the current root.
-    /// [`max_ledger_shreds`]: the number of shreds to keep since the new root.
-    /// [`last_purge_slot`]: an both an input and output parameter indicating
+    /// - `max_ledger_shreds`: the number of shreds to keep since the new root.
+    /// - `last_purge_slot`: an both an input and output parameter indicating
     ///   the id of the last purged slot.  As an input parameter, it works
     ///   together with `purge_interval` on whether it is too early to perform
     ///   ledger cleanup.  As an output parameter, it will be updated if this
     ///   function actually performs the ledger cleanup.
-    /// [`purge_interval`]: the minimum slot interval between two ledger
+    /// - `purge_interval`: the minimum slot interval between two ledger
     ///   cleanup.  When the root derived from `new_root_receiver` minus
     ///   `last_purge_slot` is fewer than `purge_interval`, the function will
     ///   simply return `Ok` without actually running the ledger cleanup.
     ///   In this case, `purge_interval` will remain unchanged.
-    /// [`last_compact_slot`]: an output value which indicates the most recent
+    /// - `last_compact_slot`: an output value which indicates the most recent
     ///   slot which has been cleaned up after this call.  If this parameter is
     ///   updated after this function call, it means the ledger cleanup has
     ///   been performed.

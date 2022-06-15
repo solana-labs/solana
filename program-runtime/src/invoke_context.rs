@@ -17,9 +17,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
             cap_accounts_data_len, neon_evm_compute_budget,
-            record_instruction_in_transaction_context_push,
-            reject_empty_instruction_without_program, requestable_heap_size, tx_wide_compute_cap,
-            FeatureSet,
+            record_instruction_in_transaction_context_push, requestable_heap_size,
+            tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -335,20 +334,11 @@ impl<'a> InvokeContext<'a> {
             return Err(InstructionError::CallDepth);
         }
 
-        let program_id = program_indices
-            .last()
-            .map(|account_index| {
-                self.transaction_context
-                    .get_key_of_account_at_index(*account_index)
-            })
-            .transpose()?;
-        if program_id.is_none()
-            && self
-                .feature_set
-                .is_active(&reject_empty_instruction_without_program::id())
-        {
-            return Err(InstructionError::UnsupportedProgramId);
-        }
+        let program_id = self.transaction_context.get_key_of_account_at_index(
+            *program_indices
+                .last()
+                .ok_or(InstructionError::UnsupportedProgramId)?,
+        )?;
         if self
             .transaction_context
             .get_instruction_context_stack_height()
@@ -357,14 +347,14 @@ impl<'a> InvokeContext<'a> {
             let mut compute_budget = self.compute_budget;
             if !self.feature_set.is_active(&tx_wide_compute_cap::id())
                 && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == Some(&crate::neon_evm_program::id())
+                && program_id == &crate::neon_evm_program::id()
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
             }
             if !self.feature_set.is_active(&requestable_heap_size::id())
                 && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == Some(&crate::neon_evm_program::id())
+                && program_id == &crate::neon_evm_program::id()
             {
                 // Bump the compute budget for neon_evm
                 compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
@@ -410,8 +400,8 @@ impl<'a> InvokeContext<'a> {
                         .and_then(|instruction_context| {
                             instruction_context.try_borrow_program_account(self.transaction_context)
                         })
-                        .map(|program_account| Some(program_account.get_key()) == program_id)
-                        .unwrap_or_else(|_| program_id.is_none())
+                        .map(|program_account| program_account.get_key() == program_id)
+                        .unwrap_or(false)
                 });
             let is_last = self
                 .transaction_context
@@ -419,8 +409,8 @@ impl<'a> InvokeContext<'a> {
                 .and_then(|instruction_context| {
                     instruction_context.try_borrow_program_account(self.transaction_context)
                 })
-                .map(|program_account| Some(program_account.get_key()) == program_id)
-                .unwrap_or_else(|_| program_id.is_none());
+                .map(|program_account| program_account.get_key() == program_id)
+                .unwrap_or(false);
             if contains && !is_last {
                 // Reentrancy not allowed unless caller is calling itself
                 return Err(InstructionError::ReentrancyNotAllowed);

@@ -7691,7 +7691,6 @@ pub(crate) mod tests {
             compute_budget::ComputeBudgetInstruction,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
             feature::Feature,
-            feature_set::reject_empty_instruction_without_program,
             genesis_config::create_genesis_config,
             hash,
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
@@ -17537,10 +17536,6 @@ pub(crate) mod tests {
         let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
 
         let bank = Bank::new_for_tests(&genesis_config);
-        bank.process_transaction(&tx).unwrap();
-
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.activate_feature(&reject_empty_instruction_without_program::id());
         assert_eq!(
             bank.process_transaction(&tx).unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId),
