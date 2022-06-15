@@ -12,6 +12,8 @@ pub struct BlockstoreOptions {
 
 impl Default for BlockstoreOptions {
     /// The default options are the values used by [`Blockstore::open`].
+    ///
+    /// [`Blockstore::open`]: crate::blockstore::Blockstore::open
     fn default() -> Self {
         Self {
             access_type: AccessType::Primary,
