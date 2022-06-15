@@ -28,7 +28,7 @@ pub fn write_bank_metrics<W: io::Write>(bank: &Arc<Bank>, out: &mut W) -> io::Re
         out,
         &MetricFamily {
             name: "solana_block_timestamp_seconds",
-            help: "The block's timestamp",
+            help: "The block's UNIX timestamp, in seconds since epoch, UTC",
             type_: "gauge",
             metrics: vec![Metric::new(clock.unix_timestamp as u64)],
         },
