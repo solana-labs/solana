@@ -3312,9 +3312,11 @@ impl AccountsDb {
                 let minimized_slot_set = DashSet::new();
                 minimized_account_set.par_iter().for_each(|pubkey| {
                     if let Some(read_entry) = self.accounts_index.get_account_read_entry(&pubkey) {
-                        read_entry.slot_list().iter().for_each(|(slot, _)| {
-                            minimized_slot_set.insert(*slot);
-                        });
+                        if let Some(max_slot) =
+                            read_entry.slot_list().iter().map(|(slot, _)| *slot).max()
+                        {
+                            minimized_slot_set.insert(max_slot);
+                        }
                     }
                 });
                 minimized_slot_set
