@@ -1510,6 +1510,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // offset bin 0 in the 'binned' array by a random amount.
         // This results in calls to insert_new_entry_if_missing_with_lock from different threads starting at different bins.
         let random_offset = thread_rng().gen_range(0, bins);
+        let use_disk = self.storage.storage.disk.is_some();
         let mut binned = (0..bins)
             .into_iter()
             .map(|mut pubkey_bin| {
@@ -1541,7 +1542,22 @@ impl<T: IndexValue> AccountsIndex<T> {
         binned.into_iter().for_each(|(pubkey_bin, items)| {
             let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
-            w_account_maps.startup_insert_only(slot, items.into_iter());
+            if use_disk {
+                w_account_maps.startup_insert_only(slot, items.into_iter());
+            } else {
+                // not using disk buckets, so just write to in-mem
+                // this is no longer the default case
+                items.into_iter().for_each(|(pubkey, account_info)| {
+                    let new_entry = PreAllocatedAccountMapEntry::new(
+                        slot,
+                        account_info,
+                        &self.storage.storage,
+                        use_disk,
+                    );
+                    w_account_maps
+                        .insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                });
+            }
             insert_time.stop();
             insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
         });
@@ -2479,6 +2495,7 @@ pub mod tests {
         account_infos: [T; 2],
         is_cached: bool,
         upsert: bool,
+        use_disk: bool,
     ) {
         if is_cached && !upsert {
             // This is an illegal combination when we are using queued lazy inserts.
@@ -2491,7 +2508,13 @@ pub mod tests {
         let slot1 = 1;
         let key = Keypair::new().pubkey();
 
-        let index = AccountsIndex::<T>::default_for_tests();
+        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
+        config.index_limit_mb = if use_disk {
+            IndexLimitMb::Limit(10_000)
+        } else {
+            IndexLimitMb::InMemOnly // in-mem only
+        };
+        let index = AccountsIndex::<T>::new(Some(config));
         let mut gc = Vec::new();
 
         if upsert {
@@ -2592,12 +2615,14 @@ pub mod tests {
 
     #[test]
     fn test_new_entry_and_update_code_paths() {
-        for is_upsert in &[false, true] {
-            // account_info type that IS cached
-            test_new_entry_code_paths_helper([1.0, 2.0], true, *is_upsert);
+        for use_disk in [false, true] {
+            for is_upsert in &[false, true] {
+                // account_info type that IS cached
+                test_new_entry_code_paths_helper([1.0, 2.0], true, *is_upsert, use_disk);
 
-            // account_info type that is NOT cached
-            test_new_entry_code_paths_helper([true, false], false, *is_upsert);
+                // account_info type that is NOT cached
+                test_new_entry_code_paths_helper([true, false], false, *is_upsert, use_disk);
+            }
         }
     }
 

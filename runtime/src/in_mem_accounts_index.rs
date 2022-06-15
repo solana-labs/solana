@@ -593,6 +593,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// This is very fast and requires no lookups or disk access.
     pub fn startup_insert_only(&self, slot: Slot, items: impl Iterator<Item = (Pubkey, T)>) {
         assert!(self.storage.get_startup());
+        assert!(self.bucket.is_some());
+
         let insert = &mut self.startup_info.write().unwrap().insert;
         items
             .into_iter()
