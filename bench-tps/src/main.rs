@@ -47,6 +47,7 @@ fn main() {
         target_node,
         external_client_type,
         use_quic,
+        tpu_connection_pool_size,
         ..
     } = &cli_config;
 
@@ -105,7 +106,8 @@ fn main() {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
-            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
+            let connection_cache =
+                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
             let client = if *multi_client {
                 let (client, num_clients) =
                     get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
@@ -156,7 +158,9 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
+            let connection_cache =
+                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+
             let client = Arc::new(
                 TpuClient::new_with_connection_cache(
                     rpc_client,

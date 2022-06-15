@@ -9,6 +9,7 @@ use {
     async_mutex::Mutex,
     futures::future::join_all,
     itertools::Itertools,
+    log::*,
     quinn::{
         ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
     },
@@ -18,8 +19,10 @@ use {
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
+        thread,
         time::Duration,
     },
+    tokio::sync::RwLock,
 };
 
 struct SkipServerVerification;
@@ -44,18 +47,19 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-/// A wrapper over NewConnection with additional capability to create the endpoint as part
-/// of creating a new connection.
-#[derive(Clone)]
-struct QuicNewConnection {
-    endpoint: Endpoint,
-    connection: Arc<NewConnection>,
+/// A lazy-initialized Quic Endpoint
+pub struct QuicLazyInitializedEndpoint {
+    endpoint: RwLock<Option<Arc<Endpoint>>>,
 }
 
-impl QuicNewConnection {
-    /// Create a QuicNewConnection given the remote address 'addr'.
-    async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
-        let mut make_connection_measure = Measure::start("make_connection_measure");
+impl QuicLazyInitializedEndpoint {
+    pub fn new() -> Self {
+        Self {
+            endpoint: RwLock::new(None),
+        }
+    }
+
+    fn create_endpoint() -> Endpoint {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
@@ -78,6 +82,56 @@ impl QuicNewConnection {
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
         endpoint.set_default_client_config(config);
+        endpoint
+    }
+
+    async fn get_endpoint(&self) -> Arc<Endpoint> {
+        let lock = self.endpoint.read().await;
+        let endpoint = lock.as_ref();
+
+        match endpoint {
+            Some(endpoint) => endpoint.clone(),
+            None => {
+                drop(lock);
+                let mut lock = self.endpoint.write().await;
+                let endpoint = lock.as_ref();
+
+                match endpoint {
+                    Some(endpoint) => endpoint.clone(),
+                    None => {
+                        let connection = Arc::new(Self::create_endpoint());
+                        *lock = Some(connection.clone());
+                        connection
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Default for QuicLazyInitializedEndpoint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A wrapper over NewConnection with additional capability to create the endpoint as part
+/// of creating a new connection.
+#[derive(Clone)]
+struct QuicNewConnection {
+    endpoint: Arc<Endpoint>,
+    connection: Arc<NewConnection>,
+}
+
+impl QuicNewConnection {
+    /// Create a QuicNewConnection given the remote address 'addr'.
+    async fn make_connection(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        stats: &ClientStats,
+    ) -> Result<Self, WriteError> {
+        let mut make_connection_measure = Measure::start("make_connection_measure");
+        let endpoint = endpoint.get_endpoint().await;
 
         let connecting = endpoint.connect(addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
@@ -132,14 +186,16 @@ impl QuicNewConnection {
 }
 
 pub struct QuicClient {
+    endpoint: Arc<QuicLazyInitializedEndpoint>,
     connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
 }
 
 impl QuicClient {
-    pub fn new(addr: SocketAddr) -> Self {
+    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr) -> Self {
         Self {
+            endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
@@ -165,63 +221,131 @@ impl QuicClient {
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        let connection = {
-            let mut conn_guard = self.connection.lock().await;
+        let mut connection_try_count = 0;
+        let mut last_connection_id = 0;
+        let mut last_error = None;
 
-            let maybe_conn = conn_guard.clone();
-            match maybe_conn {
-                Some(conn) => {
-                    stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
-                    conn.connection.clone()
+        while connection_try_count < 2 {
+            let connection = {
+                let mut conn_guard = self.connection.lock().await;
+
+                let maybe_conn = conn_guard.as_mut();
+                match maybe_conn {
+                    Some(conn) => {
+                        if conn.connection.connection.stable_id() == last_connection_id {
+                            // this is the problematic connection we had used before, create a new one
+                            let conn = conn.make_connection_0rtt(self.addr, stats).await;
+                            match conn {
+                                Ok(conn) => {
+                                    info!(
+                                        "Made 0rtt connection to {} with id {} try_count {}, last_connection_id: {}, last_error: {:?}",
+                                        self.addr,
+                                        conn.connection.stable_id(),
+                                        connection_try_count,
+                                        last_connection_id,
+                                        last_error,
+                                    );
+                                    connection_try_count += 1;
+                                    conn
+                                }
+                                Err(err) => {
+                                    info!(
+                                        "Cannot make 0rtt connection to {}, error {:}",
+                                        self.addr, err
+                                    );
+                                    return Err(err);
+                                }
+                            }
+                        } else {
+                            stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                            conn.connection.clone()
+                        }
+                    }
+                    None => {
+                        let conn = QuicNewConnection::make_connection(
+                            self.endpoint.clone(),
+                            self.addr,
+                            stats,
+                        )
+                        .await;
+                        match conn {
+                            Ok(conn) => {
+                                *conn_guard = Some(conn.clone());
+                                info!(
+                                    "Made connection to {} id {} try_count {}",
+                                    self.addr,
+                                    conn.connection.connection.stable_id(),
+                                    connection_try_count
+                                );
+                                connection_try_count += 1;
+                                conn.connection.clone()
+                            }
+                            Err(err) => {
+                                info!("Cannot make connection to {}, error {:}", self.addr, err);
+                                return Err(err);
+                            }
+                        }
+                    }
                 }
-                None => {
-                    let conn = QuicNewConnection::make_connection(self.addr, stats).await?;
-                    *conn_guard = Some(conn.clone());
-                    conn.connection.clone()
+            };
+
+            let new_stats = connection.connection.stats();
+
+            connection_stats
+                .total_client_stats
+                .congestion_events
+                .update_stat(
+                    &self.stats.congestion_events,
+                    new_stats.path.congestion_events,
+                );
+
+            connection_stats
+                .total_client_stats
+                .tx_streams_blocked_uni
+                .update_stat(
+                    &self.stats.tx_streams_blocked_uni,
+                    new_stats.frame_tx.streams_blocked_uni,
+                );
+
+            connection_stats
+                .total_client_stats
+                .tx_data_blocked
+                .update_stat(&self.stats.tx_data_blocked, new_stats.frame_tx.data_blocked);
+
+            connection_stats
+                .total_client_stats
+                .tx_acks
+                .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
+
+            last_connection_id = connection.connection.stable_id();
+            match Self::_send_buffer_using_conn(data, &connection).await {
+                Ok(()) => {
+                    return Ok(connection);
                 }
-            }
-        };
-
-        let new_stats = connection.connection.stats();
-
-        connection_stats
-            .total_client_stats
-            .congestion_events
-            .update_stat(
-                &self.stats.congestion_events,
-                new_stats.path.congestion_events,
-            );
-
-        connection_stats
-            .total_client_stats
-            .tx_streams_blocked_uni
-            .update_stat(
-                &self.stats.tx_streams_blocked_uni,
-                new_stats.frame_tx.streams_blocked_uni,
-            );
-
-        connection_stats
-            .total_client_stats
-            .tx_data_blocked
-            .update_stat(&self.stats.tx_data_blocked, new_stats.frame_tx.data_blocked);
-
-        connection_stats
-            .total_client_stats
-            .tx_acks
-            .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
-
-        match Self::_send_buffer_using_conn(data, &connection).await {
-            Ok(()) => Ok(connection),
-            _ => {
-                let connection = {
-                    let mut conn_guard = self.connection.lock().await;
-                    let conn = conn_guard.as_mut().unwrap();
-                    conn.make_connection_0rtt(self.addr, stats).await?
-                };
-                Self::_send_buffer_using_conn(data, &connection).await?;
-                Ok(connection)
+                Err(err) => match err {
+                    WriteError::ConnectionLost(_) => {
+                        last_error = Some(err);
+                    }
+                    _ => {
+                        info!(
+                            "Error sending to {} with id {}, error {:?} thread: {:?}",
+                            self.addr,
+                            connection.connection.stable_id(),
+                            err,
+                            thread::current().id(),
+                        );
+                        return Err(err);
+                    }
+                },
             }
         }
+
+        // if we come here, that means we have exhausted maximum retries, return the error
+        info!(
+            "Ran into an error sending transactions {:?}, exhausted retries to {}",
+            last_error, self.addr
+        );
+        Err(last_error.unwrap())
     }
 
     pub async fn send_buffer<T>(

@@ -4,12 +4,12 @@
 use {
     crate::{
         connection_cache::ConnectionCacheStats,
-        nonblocking::quic_client::QuicClient,
+        nonblocking::quic_client::{QuicClient, QuicLazyInitializedEndpoint},
         tpu_connection::{ClientStats, TpuConnection},
     },
     lazy_static::lazy_static,
     log::*,
-    solana_sdk::{quic::QUIC_PORT_OFFSET, transport::Result as TransportResult},
+    solana_sdk::transport::Result as TransportResult,
     std::{net::SocketAddr, sync::Arc},
     tokio::runtime::Runtime,
 };
@@ -31,9 +31,12 @@ impl QuicTpuConnection {
         self.client.stats()
     }
 
-    pub fn new(tpu_addr: SocketAddr, connection_stats: Arc<ConnectionCacheStats>) -> Self {
-        let tpu_addr = SocketAddr::new(tpu_addr.ip(), tpu_addr.port() + QUIC_PORT_OFFSET);
-        let client = Arc::new(QuicClient::new(tpu_addr));
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        tpu_addr: SocketAddr,
+        connection_stats: Arc<ConnectionCacheStats>,
+    ) -> Self {
+        let client = Arc::new(QuicClient::new(endpoint, tpu_addr));
 
         Self {
             client,
@@ -74,7 +77,11 @@ impl TpuConnection for QuicTpuConnection {
             let send_buffer =
                 client.send_buffer(wire_transaction, &stats, connection_stats.clone());
             if let Err(e) = send_buffer.await {
-                warn!("Failed to send transaction async to {:?}", e);
+                warn!(
+                    "Failed to send transaction async to {}, error: {:?} ",
+                    client.tpu_addr(),
+                    e
+                );
                 datapoint_warn!("send-wire-async", ("failure", 1, i64),);
                 connection_stats.add_client_stats(&stats, 1, false);
             } else {
