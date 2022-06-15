@@ -21,7 +21,7 @@ use {
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-            Arc, RwLock, RwLockWriteGuard,
+            Arc, Mutex, RwLock, RwLockWriteGuard,
         },
     },
 };
@@ -51,7 +51,7 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     flushing_active: AtomicBool,
 
     /// info to streamline initial index generation
-    startup_info: RwLock<StartupInfo<T>>,
+    startup_info: Mutex<StartupInfo<T>>,
 }
 
 impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
@@ -99,7 +99,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
             last_age_flushed: AtomicU8::new(Age::MAX),
-            startup_info: RwLock::default(),
+            startup_info: Mutex::default(),
         }
     }
 
@@ -595,7 +595,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         assert!(self.storage.get_startup());
         assert!(self.bucket.is_some());
 
-        let insert = &mut self.startup_info.write().unwrap().insert;
+        let insert = &mut self.startup_info.lock().unwrap().insert;
         items
             .into_iter()
             .for_each(|(k, v)| insert.push((slot, k, v)));
@@ -1009,7 +1009,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn write_startup_info_to_disk(&self) {
         let mut insert = vec![];
         {
-            let mut lock = self.startup_info.write().unwrap();
+            let mut lock = self.startup_info.lock().unwrap();
             std::mem::swap(&mut insert, &mut lock.insert);
         }
         if insert.is_empty() {
@@ -1057,7 +1057,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             });
         });
         self.startup_info
-            .write()
+            .lock()
             .unwrap()
             .duplicates
             .append(&mut duplicates);
@@ -1067,7 +1067,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// duplicate pubkeys have a slot list with len > 1
     /// These were collected for this bin when we did batch inserts in the bg flush threads.
     pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
-        let mut write = self.startup_info.write().unwrap();
+        let mut write = self.startup_info.lock().unwrap();
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(write.insert.is_empty());
 

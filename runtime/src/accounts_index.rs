@@ -1554,8 +1554,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         &self.storage.storage,
                         use_disk,
                     );
-                    w_account_maps
-                        .insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
                 });
             }
             insert_time.stop();
