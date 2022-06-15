@@ -1530,8 +1530,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                let info = account_info;
-                binned[binned_index].1.push((pubkey, info));
+                binned[binned_index].1.push((pubkey, account_info));
                 result
             })
             .collect::<Vec<_>>();
@@ -1550,12 +1549,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
     }
 
-    pub fn get_startup_duplicates(&self) -> Vec<Vec<(Slot, Pubkey)>> {
+    /// return Vec<Vec<>> because the internal vecs are already allocated per bin
+    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<Vec<(Slot, Pubkey)>> {
         (0..self.bins())
             .into_iter()
             .map(|pubkey_bin| {
                 let r_account_maps = self.account_maps[pubkey_bin].read().unwrap();
-                r_account_maps.get_startup_duplicates()
+                r_account_maps.retrieve_duplicate_keys_from_startup()
             })
             .collect()
     }

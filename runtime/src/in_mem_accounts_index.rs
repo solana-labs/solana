@@ -1061,9 +1061,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             .append(&mut duplicates);
     }
 
-    /// pull out all duplicates from 'startup_info'
-    pub fn get_startup_duplicates(&self) -> Vec<(Slot, Pubkey)> {
+    /// pull out all duplicate pubkeys from 'startup_info'
+    /// duplicate pubkeys have a slot list with len > 1
+    /// These were collected for this bin when we did batch inserts in the bg flush threads.
+    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
         let mut write = self.startup_info.write().unwrap();
+        // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(write.insert.is_empty());
 
         let write = &mut write.duplicates;

@@ -8229,7 +8229,7 @@ impl AccountsDb {
                 // get duplicate keys from acct idx. We have to wait until we've finished flushing.
                 for (slot, key) in self
                     .accounts_index
-                    .get_startup_duplicates()
+                    .retrieve_duplicate_keys_from_startup()
                     .into_iter()
                     .flatten()
                 {
