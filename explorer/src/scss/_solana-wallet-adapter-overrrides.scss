@@ -1,18 +1,82 @@
 .wallet-adapter-button {
-    border: none;
-    color: #1DD79B;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    font-size: 16px;
-    font-weight: 600;
-    height: 48px;
-    line-height: 48px;
-    padding: 0 24px;
-    border-radius: 4px;
+  border: none;
+  color: #1dd79b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-weight: 600;
+  height: 48px;
+  line-height: 48px;
+  padding: 0 24px;
+  border-radius: 4px;
 }
 
 .globe {
-    margin-left: 8px;
-    font-size: 20px;
+  margin-left: 8px;
+  font-size: 20px;
+  color: white;
+}
+
+.sidenav {
+  display: flex;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: fixed;
+  flex-direction: column;
+  top: 0;
+  right: 0;
+  z-index: 50;
+  height: 100vh;
+  background-color: #1e2423;
+  width: 300px;
+}
+
+.sidenav:focus {
+  outline: none;
+}
+
+.close {
+  font-size: 25px;
+  color: white;
+  cursor: pointer;
+  padding-top: 15px;
+  padding-left: 15px;
+}
+
+.sidenav-body {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sidenav-item button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 1px solid white;
+  background-color: transparent;
+  width: 190px;
+  border-radius: 4px;
+  font-size: 20px;
+  padding: 3px;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.sidenav-item button span {
+  font-size: 28px;
+  padding-right: 8px;
+}
+
+.sidenav-body hr {
+  color: white;
+  height: 1.5px;
+  width: 280px;
+}
+
+.sidenav-item-disconnect {
+  margin-top: 5px;
 }
