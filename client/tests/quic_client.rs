@@ -3,10 +3,11 @@ mod tests {
     use {
         crossbeam_channel::unbounded,
         solana_client::{
-            connection_cache::ConnectionCacheStats, quic_client::QuicTpuConnection,
+            connection_cache::ConnectionCacheStats,
+            nonblocking::quic_client::QuicLazyInitializedEndpoint, quic_client::QuicTpuConnection,
             tpu_connection::TpuConnection,
         },
-        solana_sdk::{packet::PACKET_DATA_SIZE, quic::QUIC_PORT_OFFSET, signature::Keypair},
+        solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::quic::{spawn_server, StreamStats},
         std::{
             collections::HashMap,
@@ -44,10 +45,14 @@ mod tests {
         .unwrap();
 
         let addr = s.local_addr().unwrap().ip();
-        let port = s.local_addr().unwrap().port() - QUIC_PORT_OFFSET;
+        let port = s.local_addr().unwrap().port();
         let tpu_addr = SocketAddr::new(addr, port);
         let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-        let client = QuicTpuConnection::new(tpu_addr, connection_cache_stats);
+        let client = QuicTpuConnection::new(
+            Arc::new(QuicLazyInitializedEndpoint::default()),
+            tpu_addr,
+            connection_cache_stats,
+        );
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;

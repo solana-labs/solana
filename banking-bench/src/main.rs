@@ -5,7 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -352,7 +352,10 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            Arc::new(ConnectionCache::new(tpu_use_quic)),
+            Arc::new(ConnectionCache::new(
+                tpu_use_quic,
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            )),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
