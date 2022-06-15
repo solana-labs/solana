@@ -577,7 +577,12 @@ impl BigTableSubCommand for App<'_, '_> {
     }
 }
 
-fn get_global_subcommand_arg<T: FromStr>(matches: &ArgMatches<'_>, name: &str, default: &str) -> T {
+fn get_global_subcommand_arg<T: FromStr>(
+    matches: &ArgMatches<'_>,
+    sub_matches: std::option::Option<&clap::ArgMatches>,
+    name: &str,
+    default: &str,
+) -> T {
     // this is kinda stupid, but there seems to be a bug in clap when a subcommand
     // arg is marked both `global(true)` and `default_value("default_value")`.
     // despite the "global", when the arg is specified on the subcommand, its value
@@ -587,7 +592,6 @@ fn get_global_subcommand_arg<T: FromStr>(matches: &ArgMatches<'_>, name: &str, d
     // again resulting in the default value. the arg having declared a
     // `default_value()` obviates `is_present(...)` tests since they will always
     // return true. so we consede and compare against the expected default. :/
-    let (_, sub_matches) = matches.subcommand();
     let on_command = matches
         .value_of(name)
         .map(|v| v != default)
@@ -609,11 +613,13 @@ pub fn bigtable_process_command(ledger_path: &Path, matches: &ArgMatches<'_>) {
     let (subcommand, sub_matches) = matches.subcommand();
     let instance_name = get_global_subcommand_arg(
         matches,
+        sub_matches,
         "rpc_bigtable_instance_name",
         solana_storage_bigtable::DEFAULT_INSTANCE_NAME,
     );
     let app_profile_id = get_global_subcommand_arg(
         matches,
+        sub_matches,
         "rpc_bigtable_app_profile_id",
         solana_storage_bigtable::DEFAULT_APP_PROFILE_ID,
     );
