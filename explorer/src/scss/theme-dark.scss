@@ -40,3 +40,6 @@ $path-to-fonts: "/fonts" !default;
 
 // Dark mode overrides
 @import 'solana-dark-overrides';
+
+// Custom overrides for Wallet connector
+@import 'solana-wallet-adapter-overrrides';

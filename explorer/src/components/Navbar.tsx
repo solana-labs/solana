@@ -1,12 +1,15 @@
-import React from "react";
+import React, { useCallback } from "react";
 import Logo from "img/logos-solana/dark-explorer-logo.svg";
 import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 export function Navbar() {
   // TODO: use `collapsing` to animate collapsible navbar
   const [collapse, setCollapse] = React.useState(false);
+  const { connected } = useWallet();
 
   return (
     <nav className="navbar navbar-expand-md navbar-light">
@@ -24,9 +27,8 @@ export function Navbar() {
         </button>
 
         <div
-          className={`collapse navbar-collapse ms-auto me-4 ${
-            collapse ? "show" : ""
-          }`}
+          className={`collapse navbar-collapse ms-auto me-4 ${collapse ? "show" : ""
+            }`}
         >
           <ul className="navbar-nav me-auto">
             <li className="nav-item">
@@ -44,8 +46,22 @@ export function Navbar() {
                 Inspector
               </NavLink>
             </li>
+            <li className="nav-item">
+              <WalletMultiButton className="btn btn-primary" />
+            </li>
+            <li className="nav-item">
+              {connected ? (
+                <span className="fe fe-globe btn btn-primary globe"></span>
+              ) : null}
+            </li>
           </ul>
         </div>
+
+        {/* <div>
+        {connected ? (
+                <span className="fe fe-globe btn btn-primary globe"></span>
+              ) : null}
+        </div> */}
 
         <div className="d-none d-md-block">
           <ClusterStatusButton />

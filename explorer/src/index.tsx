@@ -13,6 +13,7 @@ import { EpochProvider } from "./providers/epoch";
 import { ScrollAnchorProvider } from "providers/scroll-anchor";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
+import { Context } from "./providers/context";
 
 if (process.env.NODE_ENV === "production") {
   Sentry.init({
@@ -33,7 +34,9 @@ root.render(
                   <EpochProvider>
                     <MintsProvider>
                       <TransactionsProvider>
-                        <App />
+                        <Context>
+                          <App />
+                        </Context>
                       </TransactionsProvider>
                     </MintsProvider>
                   </EpochProvider>
