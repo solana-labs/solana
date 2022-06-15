@@ -5209,7 +5209,7 @@ impl Bank {
         );
     }
 
-    // Used to get stake accounts in `minimized_bank_for_snapshot`
+    /// Used to get stake accounts in `minimized_bank_for_snapshot`
     fn minimization_add_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
         let (_, stake_accounts_measure) = measure!(
@@ -5235,7 +5235,7 @@ impl Bank {
         );
     }
 
-    // Used to get owner accounts in `minimize_bank_for_snapshot`
+    /// Used to get owner accounts in `minimize_bank_for_snapshot`
     fn minimization_add_owner_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
         let (_, owner_accounts_measure) = measure!(
@@ -5260,7 +5260,7 @@ impl Bank {
         );
     }
 
-    // Used to get owner accounts in `minimize_bank_for_snapshot`
+    /// Used to get owner accounts in `minimize_bank_for_snapshot`
     fn minimization_add_programdata_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         let initial_accounts_len = minimized_account_set.len();
         let (_, programdata_accounts_measure) = measure!(
@@ -5296,7 +5296,7 @@ impl Bank {
         );
     }
 
-    // Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
+    /// Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
     fn get_rent_collection_accounts_between_slots(
         &self,
         minimized_account_set: &DashSet<Pubkey>,
