@@ -12,7 +12,7 @@ pub fn write_bank_metrics<W: io::Write>(bank: &Arc<Bank>, out: &mut W) -> io::Re
             name: "solana_block_slot",
             help: "Current Slot",
             type_: "gauge",
-            metrics: vec![Metric::new(clock.slot)],
+            metrics: vec![Metric::new(clock.slot).with_label("commitment_level", "finalized")],
         },
     )?;
     write_metric(
