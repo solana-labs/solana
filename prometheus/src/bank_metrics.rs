@@ -27,24 +27,6 @@ pub fn write_bank_metrics<W: io::Write>(bank: &Arc<Bank>, out: &mut W) -> io::Re
     write_metric(
         out,
         &MetricFamily {
-            name: "solana_block_successful_transaction_count",
-            help: "Number of transactions in the block that executed successfully",
-            type_: "gauge",
-            metrics: vec![Metric::new(bank.transaction_count())],
-        },
-    )?;
-    write_metric(
-        out,
-        &MetricFamily {
-            name: "solana_block_error_transaction_count",
-            help: "Number of transactions in the block that executed with error",
-            type_: "gauge",
-            metrics: vec![Metric::new(bank.transaction_error_count())],
-        },
-    )?;
-    write_metric(
-        out,
-        &MetricFamily {
             name: "solana_block_timestamp_seconds",
             help: "The block's timestamp",
             type_: "gauge",
