@@ -162,9 +162,9 @@ impl StandardBroadcastRun {
         keypair: &Keypair,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receive_results: ReceiveResults,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         let (bsend, brecv) = unbounded();
         let (ssend, srecv) = unbounded();
@@ -184,7 +184,7 @@ impl StandardBroadcastRun {
     fn process_receive_results(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         receive_results: ReceiveResults,
@@ -316,7 +316,7 @@ impl StandardBroadcastRun {
 
     fn insert(
         &mut self,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
     ) {
@@ -354,7 +354,7 @@ impl StandardBroadcastRun {
         cluster_info: &ClusterInfo,
         shreds: Arc<Vec<Shred>>,
         broadcast_shred_batch_info: Option<BroadcastShredBatchInfo>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         trace!("Broadcasting {:?} shreds", shreds.len());
         let mut transmit_stats = TransmitShredsStats::default();
@@ -458,7 +458,7 @@ impl BroadcastRun for StandardBroadcastRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -476,19 +476,15 @@ impl BroadcastRun for StandardBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         let (shreds, batch_info) = receiver.lock().unwrap().recv()?;
         self.broadcast(sock, cluster_info, shreds, batch_info, bank_forks)
     }
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         let (shreds, slot_start_ts) = receiver.lock().unwrap().recv()?;
         self.insert(blockstore, shreds, slot_start_ts);
         Ok(())
