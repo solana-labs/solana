@@ -5156,12 +5156,47 @@ impl Bank {
         let count = partitions.len();
         let rent_metrics = RentMetrics::default();
         // partitions will usually be 1, but could be more if we skip slots
-        let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
-        thread_pool.install(|| {
-            partitions.into_par_iter().for_each(|partition| {
+        let mut parallel = count > 1;
+        if parallel {
+            let ranges = partitions
+                .iter()
+                .map(|partition| Self::pubkey_range_from_partition(*partition))
+                .collect::<Vec<_>>();
+            // test every range to make sure ranges are not overlapping
+            // some tests collect rent from overlapping ranges
+            // example: [(0, 31, 32), (0, 0, 128), (0, 27, 128)]
+            // read-modify-write of an account for rent collection cannot be done in parallel
+            'outer: for i in 0..ranges.len() {
+                for j in 0..ranges.len() {
+                    if i == j {
+                        continue;
+                    }
+
+                    let i = &ranges[i];
+                    let j = &ranges[j];
+                    // make sure i doesn't contain j
+                    if i.contains(j.start()) || i.contains(j.end()) {
+                        parallel = false;
+                        break 'outer;
+                    }
+                }
+            }
+
+            if parallel {
+                let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
+                thread_pool.install(|| {
+                    ranges.into_par_iter().for_each(|range| {
+                        self.collect_rent_in_range(range, just_rewrites, &rent_metrics)
+                    });
+                });
+            }
+        }
+        if !parallel {
+            // collect serially
+            partitions.into_iter().for_each(|partition| {
                 self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
             });
-        });
+        }
         measure.stop();
         datapoint_info!(
             "collect_rent_eagerly",
@@ -5292,11 +5327,7 @@ impl Bank {
         }
     }
 
-    /// load accounts with pubkeys in 'partition'
-    /// collect rent
-    /// store accounts, whether rent was collected or not
-    /// update bank's rewrites set for all rewrites that were skipped
-    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts
+    /// convert 'partition' to a pubkey range and 'collect_rent_in_range'
     fn collect_rent_in_partition(
         &self,
         partition: Partition,
@@ -5304,7 +5335,21 @@ impl Bank {
         metrics: &RentMetrics,
     ) {
         let subrange_full = Self::pubkey_range_from_partition(partition);
+        self.collect_rent_in_range(subrange_full, just_rewrites, metrics)
+    }
 
+    /// load accounts with pubkeys in 'subrange_full'
+    /// collect rent and update 'account.rent_epoch' as necessary
+    /// store accounts, whether rent was collected or not (depending on whether we skipping rewrites is enabled)
+    /// update bank's rewrites set for all rewrites that were skipped
+    /// if 'just_rewrites', function will only update bank's rewrites set and not actually store any accounts.
+    ///  This flag is used when restoring from a snapshot to calculate and verify the initial bank's delta hash.
+    fn collect_rent_in_range(
+        &self,
+        subrange_full: RangeInclusive<Pubkey>,
+        just_rewrites: bool,
+        metrics: &RentMetrics,
+    ) {
         let mut hold_range = Measure::start("hold_range");
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
         thread_pool.install(|| {
