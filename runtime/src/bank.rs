@@ -91,6 +91,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
     },
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{
             create_account_shared_data_with_fields as create_account, from_account, Account,
@@ -1879,8 +1880,15 @@ impl Bank {
         let (_, update_epoch_time) = measure!(
             {
                 if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = measure!(
-                        ThreadPoolBuilder::new().build().unwrap(),
+                    let num_threads = get_thread_count();
+                    let (thread_pool, thread_pool_time) = Measure::this(
+                        |_| {
+                            ThreadPoolBuilder::new()
+                                .num_threads(num_threads)
+                                .build()
+                                .unwrap()
+                        },
+                        (),
                         "thread_pool_creation",
                     );
 
