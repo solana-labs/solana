@@ -3340,19 +3340,19 @@ impl AccountsDb {
         stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
-        let remove_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let total_bytes_collect = AtomicUsize::new(0);
         const CHUNK_SIZE: usize = 50;
         stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
             let mut chunk_bytes = 0;
             let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
-            let mut remove_pubkeys = Vec::with_capacity(CHUNK_SIZE);
+            let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
             chunk.iter().for_each(|(pubkey, account)| {
                 if minimized_account_set.contains(pubkey) {
                     chunk_bytes += account.account_size;
                     keep_accounts.push((pubkey, account));
                 } else if self.accounts_index.get_account_read_entry(pubkey).is_some() {
-                    remove_pubkeys.push(pubkey);
+                    purge_pubkeys.push(pubkey);
                 }
             });
 
@@ -3360,22 +3360,22 @@ impl AccountsDb {
                 .lock()
                 .unwrap()
                 .append(&mut keep_accounts);
-            remove_pubkeys_collect
+            purge_pubkeys_collect
                 .lock()
                 .unwrap()
-                .append(&mut remove_pubkeys);
+                .append(&mut purge_pubkeys);
             total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
         });
 
         let keep_accounts = keep_accounts_collect.into_inner().unwrap();
-        let remove_pubkeys = remove_pubkeys_collect.into_inner().unwrap();
+        let remove_pubkeys = purge_pubkeys_collect.into_inner().unwrap();
         let total_bytes = total_bytes_collect.load(Ordering::Relaxed);
 
-        let remove_pubkeys: Vec<_> = remove_pubkeys
+        let purge_pubkeys: Vec<_> = remove_pubkeys
             .into_iter()
             .map(|pubkey| (*pubkey, slot))
             .collect();
-        self.purge_keys_exact(remove_pubkeys.iter());
+        self.purge_keys_exact(purge_pubkeys.iter());
 
         let aligned_total: u64 = Self::page_align(total_bytes as u64);
         let dead_storages_original_length = dead_storages.len();
