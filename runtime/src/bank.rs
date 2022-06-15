@@ -18943,7 +18943,7 @@ pub(crate) mod tests {
             let accounts_data_size_after = bank.load_accounts_data_size();
             assert_eq!(
                 accounts_data_size_after,
-                accounts_data_size_before + account_grow_size as u64,
+                accounts_data_size_before.saturating_add(account_grow_size as u64),
             );
         }
 
