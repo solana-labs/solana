@@ -46,7 +46,9 @@ impl ValidatorVoteInfo {
                 name: "solana_node_vote_public_key_info",
                 help: "The current Solana node's vote public key",
                 type_: "count",
-                metrics: vec![Metric::new(1).with_label("vote", self.vote_address.to_string())],
+                metrics: vec![
+                    Metric::new(1).with_label("vote_account", self.vote_address.to_string())
+                ],
             },
         )?;
         // We can use this metric to track if the validator is making progress
