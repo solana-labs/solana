@@ -7,15 +7,10 @@ use {
     console::style,
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
-<<<<<<< HEAD
     solana_cli_output::{QuietDisplay, VerboseDisplay},
-    solana_client::{client_error::ClientError, rpc_client::RpcClient},
-=======
-    solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
     solana_client::{
         client_error::ClientError, rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
->>>>>>> d4c4e28b5 (Paginate rpc query to get feature accounts (#25978))
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::Account,
