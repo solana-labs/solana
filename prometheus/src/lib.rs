@@ -7,6 +7,7 @@ use banks_with_commitments::BanksWithCommitments;
 use solana_gossip::cluster_info::ClusterInfo;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Lamports(pub u64);
 
 pub fn render_prometheus(

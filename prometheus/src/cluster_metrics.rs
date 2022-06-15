@@ -71,7 +71,7 @@ impl ValidatorVoteInfo {
                 name: "solana_node_vote_balance_sol",
                 help: "The current node's vote account balance",
                 type_: "gauge",
-                metrics: vec![Metric::new_sol(self.balance)],
+                metrics: vec![Metric::new_sol(self.balance.clone())],
             },
         )
     }
