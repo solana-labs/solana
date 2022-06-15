@@ -3,10 +3,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::timing::timestamp,
-    solana_streamer::{
-        nonblocking::quic::StakedNodes,
-        streamer::{self, StreamerError},
-    },
+    solana_streamer::streamer::{self, StakedNodes, StreamerError},
     std::{
         collections::HashMap,
         net::IpAddr,
@@ -108,7 +105,7 @@ impl FindPacketSenderStakeStage {
                             Measure::start("apply_sender_stakes_time");
                         let mut apply_stake = || {
                             let ip_to_stake = staked_nodes.read().unwrap();
-                            Self::apply_sender_stakes(&mut batches, &ip_to_stake.0 .1);
+                            Self::apply_sender_stakes(&mut batches, &ip_to_stake.stake_map);
                         };
                         apply_stake();
                         apply_sender_stakes_time.stop();

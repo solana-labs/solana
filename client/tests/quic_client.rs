@@ -9,8 +9,8 @@ mod tests {
         },
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{
-            nonblocking::quic::StakedNodes,
             quic::{spawn_server, StreamStats},
+            streamer::StakedNodes,
         },
         std::{
             net::{SocketAddr, UdpSocket},

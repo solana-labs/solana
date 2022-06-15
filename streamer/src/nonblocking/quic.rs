@@ -1,5 +1,8 @@
 use {
-    crate::quic::{configure_server, QuicServerError, StreamStats},
+    crate::{
+        quic::{configure_server, QuicServerError, StreamStats},
+        streamer::StakedNodes,
+    },
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
     quinn::{Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection, VarInt},
@@ -21,10 +24,6 @@ use {
     },
     tokio::{task::JoinHandle, time::timeout},
 };
-
-// Total stake and nodes => stake map
-#[derive(Default)]
-pub struct StakedNodes(pub (f64, HashMap<IpAddr, u64>));
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
 
@@ -104,9 +103,9 @@ pub async fn run_server(
 
                 let (mut connection_table_l, stake) = {
                     let staked_nodes = staked_nodes.read().unwrap();
-                    if let Some(stake) = staked_nodes.0 .1.get(&remote_addr.ip()) {
+                    if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
                         let stake = *stake;
-                        let total_stake = staked_nodes.0 .0;
+                        let total_stake = staked_nodes.total_stake;
                         drop(staked_nodes);
                         let mut connection_table_l = staked_connection_table.lock().unwrap();
                         let num_pruned = connection_table_l.prune_oldest(max_staked_connections);

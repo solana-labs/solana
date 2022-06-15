@@ -1,7 +1,7 @@
 use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_runtime::bank_forks::BankForks,
-    solana_streamer::nonblocking::quic::StakedNodes,
+    solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashMap,
         net::IpAddr,
@@ -42,8 +42,8 @@ impl StakedNodesUpdaterService {
                         &cluster_info,
                     ) {
                         let mut shared = shared_staked_nodes.write().unwrap();
-                        shared.0 .0 = total_stake as f64;
-                        shared.0 .1 = new_ip_to_stake;
+                        shared.total_stake = total_stake as f64;
+                        shared.stake_map = new_ip_to_stake;
                     }
                 }
             })

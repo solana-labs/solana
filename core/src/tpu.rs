@@ -31,8 +31,8 @@ use {
     },
     solana_sdk::signature::Keypair,
     solana_streamer::{
-        nonblocking::quic::StakedNodes,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        streamer::StakedNodes,
     },
     std::{
         net::UdpSocket,

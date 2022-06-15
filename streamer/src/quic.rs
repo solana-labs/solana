@@ -1,5 +1,5 @@
 use {
-    crate::nonblocking::quic::StakedNodes,
+    crate::streamer::StakedNodes,
     crossbeam_channel::Sender,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
