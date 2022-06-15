@@ -17797,8 +17797,6 @@ pub(crate) mod tests {
                 INITIAL_RENT_EPOCH + 1,
             ),
         );
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.add_builtin(
@@ -17886,9 +17884,6 @@ pub(crate) mod tests {
         let mock_program_id = Pubkey::new_unique();
         let account_data_size = 100;
         let rent_exempt_minimum = genesis_config.rent.minimum_balance(account_data_size);
-
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.add_builtin(
@@ -18031,8 +18026,6 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
         genesis_config.rent = Rent::default();
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
 
         let validator_pubkey = solana_sdk::pubkey::new_rand();
         let validator_stake_lamports = sol_to_lamports(1.);
@@ -18113,9 +18106,6 @@ pub(crate) mod tests {
             recipient,
             Account::new(rent_exempt_minimum, 0, &system_program::id()),
         );
-
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
 
         let bank = Bank::new_for_tests(&genesis_config);
         let recent_blockhash = bank.last_blockhash();
@@ -18347,9 +18337,6 @@ pub(crate) mod tests {
         genesis_config.rent = Rent::default();
         let rent_exempt_minimum = genesis_config.rent.minimum_balance(0);
 
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
-
         let bank = Bank::new_for_tests(&genesis_config);
 
         for amount in [rent_exempt_minimum - 1, rent_exempt_minimum] {
@@ -18366,8 +18353,6 @@ pub(crate) mod tests {
             ..
         } = create_genesis_config_with_leader(sol_to_lamports(100.), &Pubkey::new_unique(), 42);
         genesis_config.rent = Rent::default();
-        // Activate features, including require_rent_exempt_accounts
-        activate_all_features(&mut genesis_config);
 
         let bank = Bank::new_for_tests(&genesis_config);
         let recipient = Pubkey::new_unique();
