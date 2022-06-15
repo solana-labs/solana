@@ -236,9 +236,9 @@ impl Tpu {
             cluster_info.clone(),
             entry_receiver,
             retransmit_slots_receiver,
-            exit,
-            blockstore,
-            &bank_forks,
+            exit.clone(),
+            blockstore.clone(),
+            bank_forks,
             shred_version,
         );
 
