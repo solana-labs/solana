@@ -250,15 +250,8 @@ impl BroadcastStage {
         bank_forks: Arc<RwLock<BankForks>>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
-<<<<<<< HEAD
-        let btree = blockstore.clone();
-        let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = channel();
         let (blockstore_sender, blockstore_receiver) = channel();
-=======
-        let (socket_sender, socket_receiver) = unbounded();
-        let (blockstore_sender, blockstore_receiver) = unbounded();
->>>>>>> fe3c1d3d4 (removes erroneous uses of &Arc<...> from broadcast-stage (#25962))
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
