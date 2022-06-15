@@ -40,7 +40,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -139,28 +139,24 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         let (shreds, _) = receiver.lock().unwrap().recv()?;
         broadcast_shreds(
             sock,
             &shreds,
             &self.cluster_nodes_cache,
-            &Arc::new(AtomicInterval::default()),
+            &AtomicInterval::default(),
             &mut TransmitShredsStats::default(),
             cluster_info,
             bank_forks,
             cluster_info.socket_addr_space(),
         )
     }
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
         blockstore
             .insert_shreds(all_shreds.to_vec(), None, true)

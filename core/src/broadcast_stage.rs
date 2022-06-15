@@ -80,9 +80,9 @@ impl BroadcastStageType {
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        exit_sender: &Arc<AtomicBool>,
-        blockstore: &Arc<Blockstore>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        exit_sender: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
+        bank_forks: Arc<RwLock<BankForks>>,
         shred_version: u16,
     ) -> BroadcastStage {
         match self {
@@ -137,23 +137,19 @@ trait BroadcastRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()>;
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()>;
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()>;
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()>;
 }
 
 // Implement a destructor for the BroadcastStage thread to signal it exited
@@ -182,7 +178,7 @@ impl BroadcastStage {
     #[allow(clippy::too_many_arguments)]
     fn run(
         cluster_info: Arc<ClusterInfo>,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -243,19 +239,18 @@ impl BroadcastStage {
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
-        exit_sender: &Arc<AtomicBool>,
-        blockstore: &Arc<Blockstore>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        exit: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
+        bank_forks: Arc<RwLock<BankForks>>,
         broadcast_stage_run: impl BroadcastRun + Send + 'static + Clone,
     ) -> Self {
-        let btree = blockstore.clone();
-        let exit = exit_sender.clone();
         let (socket_sender, socket_receiver) = unbounded();
         let (blockstore_sender, blockstore_receiver) = unbounded();
         let bs_run = broadcast_stage_run.clone();
 
         let socket_sender_ = socket_sender.clone();
         let thread_hdl = {
+            let blockstore = blockstore.clone();
             let cluster_info = cluster_info.clone();
             Builder::new()
                 .name("solana-broadcaster".to_string())
@@ -263,7 +258,7 @@ impl BroadcastStage {
                     let _finalizer = Finalizer::new(exit);
                     Self::run(
                         cluster_info,
-                        &btree,
+                        &blockstore,
                         &receiver,
                         &socket_sender_,
                         &blockstore_sender,
@@ -310,7 +305,6 @@ impl BroadcastStage {
             thread_hdls.push(t);
         }
 
-        let blockstore = blockstore.clone();
         let retransmit_thread = Builder::new()
             .name("solana-broadcaster-retransmit".to_string())
             .spawn(move || loop {
@@ -382,7 +376,7 @@ impl BroadcastStage {
 
 fn update_peer_stats(
     cluster_nodes: &ClusterNodes<BroadcastStage>,
-    last_datapoint_submit: &Arc<AtomicInterval>,
+    last_datapoint_submit: &AtomicInterval,
 ) {
     if last_datapoint_submit.should_update(1000) {
         let now = timestamp();
@@ -402,10 +396,10 @@ pub fn broadcast_shreds(
     s: &UdpSocket,
     shreds: &[Shred],
     cluster_nodes_cache: &ClusterNodesCache<BroadcastStage>,
-    last_datapoint_submit: &Arc<AtomicInterval>,
+    last_datapoint_submit: &AtomicInterval,
     transmit_stats: &mut TransmitShredsStats,
     cluster_info: &ClusterInfo,
-    bank_forks: &Arc<RwLock<BankForks>>,
+    bank_forks: &RwLock<BankForks>,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
     let mut result = Ok(());
@@ -623,9 +617,9 @@ pub mod test {
             cluster_info,
             entry_receiver,
             retransmit_slots_receiver,
-            &exit_sender,
-            &blockstore,
-            &bank_forks,
+            exit_sender,
+            blockstore.clone(),
+            bank_forks,
             StandardBroadcastRun::new(0),
         );
 
