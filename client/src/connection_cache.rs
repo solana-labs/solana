@@ -20,6 +20,10 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
+/// Used to decide whether the TPU and underlying connection cache should use
+/// QUIC connections.
+pub const DEFAULT_TPU_USE_QUIC: bool = false;
+
 #[derive(Default)]
 pub struct ConnectionCacheStats {
     cache_hits: AtomicU64,
