@@ -60,9 +60,8 @@ impl ValidatorVoteInfo {
                 help:
                     "The voted-on slot of the validator's last vote that got included in the chain",
                 type_: "gauge",
-                metrics: vec![
-                    Metric::new(self.last_vote).with_label("pubkey", self.vote_address.to_string())
-                ],
+                metrics: vec![Metric::new(self.last_vote)
+                    .with_label("vote_account", self.vote_address.to_string())],
             },
         )?;
         // Validator rewards go to vote account, we use this to track our own
@@ -73,7 +72,8 @@ impl ValidatorVoteInfo {
                 name: "solana_node_vote_balance_sol",
                 help: "The current node's vote account balance",
                 type_: "gauge",
-                metrics: vec![Metric::new_sol(self.balance.clone())],
+                metrics: vec![Metric::new_sol(self.balance.clone())
+                    .with_label("vote_account", self.vote_address.to_string())],
             },
         )
     }
