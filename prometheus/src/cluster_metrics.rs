@@ -28,11 +28,7 @@ impl ValidatorVoteInfo {
                 if identity_pubkey != &vote_state.node_pubkey {
                     return None;
                 }
-                let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
-                    Some(vote.slot)
-                } else {
-                    None
-                }?;
+                let last_vote = vote_state.votes.back()?.slot;
                 let vote_balance = Lamports(bank.get_balance(&vote_pubkey));
                 Some(ValidatorVoteInfo {
                     vote_address: vote_pubkey,
