@@ -232,6 +232,7 @@ pub(crate) fn get() -> Builtins {
     }
 }
 
+/// Returns the addresses of all builtin programs.
 pub fn get_pubkeys() -> Vec<Pubkey> {
     let builtins = get();
 
