@@ -20,6 +20,10 @@ The key may be one of:
 
 The address of the program that owns the account. Only the owning program is capable of modifying the account.
 
+## airdrop
+
+A way to ask testnet/devnet to put Sol into a wallet for testing purposes. 
+
 ## app
 
 A front-end application that interacts with a Solana cluster.
