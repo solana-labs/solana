@@ -56,7 +56,7 @@ pub trait MultiScalarMultiplication {
     /// complications in computing the cost for the syscall. The computational costs should only
     /// depend on the length of the vectors (and the curve), so it would be ideal to support
     /// variable length inputs and compute the syscall cost as is done in eip-197:
-    /// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md#gas-costs. If not, then we can
+    /// <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md#gas-costs>. If not, then we can
     /// consider bounding the length of the input and assigning worst-case cost.
     fn multiscalar_multiply(
         scalars: &[Self::Scalar],
