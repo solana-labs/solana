@@ -1144,6 +1144,8 @@ pub struct AccountsDb {
     // lower passes = faster total time, higher dynamic memory usage
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
+
+    log_dead_slots: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -1948,6 +1950,7 @@ impl AccountsDb {
             filler_accounts_config: FillerAccountsConfig::default(),
             filler_account_suffix: None,
             num_hash_scan_passes,
+            log_dead_slots: AtomicBool::new(true),
         }
     }
 
@@ -3289,11 +3292,12 @@ impl AccountsDb {
             }
         }
 
+        self.log_dead_slots.store(false, Ordering::Relaxed);
         let (_, purge_slots_measure) = measure!(
             self.purge_slots_from_cache_and_store(
                 dead_slots.iter(),
                 &self.external_purge_slots_stats,
-                true,
+                false, // prevent excessive logging - accounts
             ),
             "purge slots"
         );
@@ -3304,6 +3308,7 @@ impl AccountsDb {
             "drop or recycle stores"
         );
         info!("{drop_or_recycle_stores_measure}");
+        self.log_dead_slots.store(true, Ordering::Relaxed);
     }
 
     fn get_minimized_slot_set(&self, minimized_account_set: &DashSet<Pubkey>) -> DashSet<Slot> {
@@ -7488,7 +7493,9 @@ impl AccountsDb {
             .collect();
         measure.stop();
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
-        info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+        if self.log_dead_slots.load(Ordering::Relaxed) {
+            info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+        }
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
