@@ -112,6 +112,8 @@ impl Shredder {
 
         let mut gen_data_time = Measure::start("shred_gen_data_time");
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+        process_stats.data_buffer_residual +=
+            (data_buffer_size - serialized_shreds.len() % data_buffer_size) % data_buffer_size;
         // Integer division to ensure we have enough shreds to fit all the data
         let num_shreds = (serialized_shreds.len() + data_buffer_size - 1) / data_buffer_size;
         let last_shred_index = next_shred_index + num_shreds as u32 - 1;
