@@ -1145,7 +1145,7 @@ pub struct AccountsDb {
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
 
-    log_dead_slots: AtomicBool,
+    pub(crate) log_dead_slots: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -3035,7 +3035,7 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    fn get_unique_accounts_from_storages<'a, I>(
+    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
     ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
@@ -3325,7 +3325,8 @@ impl AccountsDb {
         minimized_slot_set
     }
 
-    fn filter_storages(
+    /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
+    pub(crate) fn filter_storages(
         &self,
         storages: Vec<Arc<AccountStorageEntry>>,
         minimized_account_set: &DashSet<Pubkey>,
@@ -3405,6 +3406,33 @@ impl AccountsDb {
         self.mark_dirty_dead_stores(slot, &mut dead_storages.lock().unwrap(), |store| {
             !append_vec_set.contains(&store.append_vec_id())
         });
+    }
+
+    /// Remove dead slots and storages
+    pub(crate) fn remove_dead_slots_and_storages(
+        &self,
+        dead_slots: Vec<Slot>,
+        dead_storages: Vec<Arc<AccountStorageEntry>>,
+    ) {
+        self.log_dead_slots.store(false, Ordering::Relaxed);
+        let (_, purge_slots_measure) = measure!(
+            self.purge_slots_from_cache_and_store(
+                dead_slots.iter(),
+                &self.external_purge_slots_stats,
+                false, // prevent excessive logging - accounts
+            ),
+            "purge slots"
+        );
+        info!("{purge_slots_measure}");
+
+        let (_, drop_or_recycle_stores_measure) = measure!(
+            {
+                self.drop_or_recycle_stores(dead_storages);
+            },
+            "drop or recycle stores"
+        );
+        info!("{drop_or_recycle_stores_measure}");
+        self.log_dead_slots.store(true, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'

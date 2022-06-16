@@ -1,8 +1,17 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use dashmap::DashSet;
 use log::info;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::{
+    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSlice,
+};
 use solana_measure::measure;
 use solana_sdk::{
     account::ReadableAccount,
@@ -12,7 +21,7 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-use crate::{accounts_index::ScanConfig, bank::Bank};
+use crate::{accounts_db::AccountStorageEntry, accounts_index::ScanConfig, bank::Bank};
 
 struct SnapshotMinimizer {
     bank: Arc<Bank>,
@@ -139,6 +148,79 @@ impl SnapshotMinimizer {
         programdata_accounts.into_par_iter().for_each(|pubkey| {
             self.minimized_account_set.insert(pubkey);
         });
+    }
+
+    /// Remove accounts from accounts_db
+    fn minimize_accounts_db(&self) {
+        let minimized_slot_set = self.get_minimized_slot_set();
+
+        let dead_slots = Mutex::new(Vec::new());
+        let dead_storages = Mutex::new(Vec::new());
+
+        let (_, total_filter_storages_measure) = measure!(
+            {
+                let snapshot_storages = self
+                    .bank
+                    .accounts()
+                    .accounts_db
+                    .get_snapshot_storages(self.starting_slot, None, None)
+                    .0;
+                snapshot_storages.into_par_iter().for_each(|storages| {
+                    let slot = storages.first().unwrap().slot();
+
+                    if slot != self.starting_slot {
+                        if minimized_slot_set.contains(&slot) {
+                            self.bank.accounts().accounts_db.filter_storages(
+                                storages,
+                                &self.minimized_account_set,
+                                &dead_storages,
+                            );
+                        } else {
+                            dead_slots.lock().unwrap().push(slot);
+                        }
+                    }
+                })
+            },
+            "filter storages total"
+        );
+        info!("{total_filter_storages_measure}");
+
+        self.bank
+            .accounts()
+            .accounts_db
+            .remove_dead_slots_and_storages(
+                dead_slots.into_inner().unwrap(),
+                dead_storages.into_inner().unwrap(),
+            );
+    }
+
+    /// Determines minimum set of slots that accounts in `minimized_account_set` are in
+    fn get_minimized_slot_set(&self) -> DashSet<Slot> {
+        let (minimized_slot_set, measure) = measure!(
+            {
+                let minimized_slot_set = DashSet::new();
+                self.minimized_account_set.par_iter().for_each(|pubkey| {
+                    if let Some(read_entry) = self
+                        .bank
+                        .accounts()
+                        .accounts_db
+                        .accounts_index
+                        .get_account_read_entry(&pubkey)
+                    {
+                        if let Some(max_slot) =
+                            read_entry.slot_list().iter().map(|(slot, _)| *slot).max()
+                        {
+                            minimized_slot_set.insert(max_slot);
+                        }
+                    }
+                });
+                minimized_slot_set
+            },
+            "generate minimized slot set"
+        );
+        info!("{measure}");
+
+        minimized_slot_set
     }
 }
 
