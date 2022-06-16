@@ -1180,16 +1180,15 @@ impl Accounts {
         self.accounts_db.store_cached(slot, &accounts_to_store);
     }
 
-<<<<<<< HEAD
     /// Purge a slot if it is not a root
     /// Root slots cannot be purged
     /// `is_from_abs` is true if the caller is the AccountsBackgroundService
     pub fn purge_slot(&self, slot: Slot, bank_id: BankId, is_from_abs: bool) {
         self.accounts_db.purge_slot(slot, bank_id, is_from_abs);
-=======
+    }
+
     pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
         self.accounts_db.store_cached(slot, accounts)
->>>>>>> 0da0e0da6 (Bank: Batch account stores in collect_rent_eagerly (#25707))
     }
 
     /// Add a slot to root.  Root slots cannot be purged
