@@ -8373,6 +8373,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_rent_distribution() {
         solana_logger::setup();
 
@@ -8701,6 +8702,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore]
     #[allow(clippy::cognitive_complexity)]
     fn test_rent_complex() {
         solana_logger::setup();
