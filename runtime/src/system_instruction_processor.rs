@@ -158,8 +158,8 @@ fn create_account(
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
-        let mut to =
-            instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+        let mut to = instruction_context
+            .try_borrow_instruction_account(transaction_context, to_account_index)?;
         if to.get_lamports() > 0 {
             ic_msg!(
                 invoke_context,
@@ -189,8 +189,8 @@ fn transfer_verified(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    let mut from =
-        instruction_context.try_borrow_account(transaction_context, from_account_index)?;
+    let mut from = instruction_context
+        .try_borrow_instruction_account(transaction_context, from_account_index)?;
     if !from.get_data().is_empty() {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
@@ -207,7 +207,8 @@ fn transfer_verified(
 
     from.checked_sub_lamports(lamports)?;
     drop(from);
-    let mut to = instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    let mut to = instruction_context
+        .try_borrow_instruction_account(transaction_context, to_account_index)?;
     to.checked_add_lamports(lamports)?;
     Ok(())
 }
@@ -228,12 +229,13 @@ fn transfer(
         return Ok(());
     }
 
-    if !instruction_context.is_signer(from_account_index)? {
+    if !instruction_context.is_instruction_account_signer(from_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: `from` account {} must sign",
             transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(from_account_index)?,
+                instruction_context
+                    .get_index_of_instruction_account_in_transaction(from_account_index)?,
             )?,
         );
         return Err(InstructionError::MissingRequiredSignature);
@@ -268,26 +270,28 @@ fn transfer_with_seed(
         return Ok(());
     }
 
-    if !instruction_context.is_signer(from_base_account_index)? {
+    if !instruction_context.is_instruction_account_signer(from_base_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: 'from' account {:?} must sign",
             transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(from_base_account_index)?,
+                instruction_context
+                    .get_index_of_instruction_account_in_transaction(from_base_account_index)?,
             )?,
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
     let address_from_seed = Pubkey::create_with_seed(
         transaction_context.get_key_of_account_at_index(
-            instruction_context.get_index_in_transaction(from_base_account_index)?,
+            instruction_context
+                .get_index_of_instruction_account_in_transaction(from_base_account_index)?,
         )?,
         from_seed,
         from_owner,
     )?;
 
     let from_key = transaction_context.get_key_of_account_at_index(
-        instruction_context.get_index_in_transaction(from_account_index)?,
+        instruction_context.get_index_of_instruction_account_in_transaction(from_account_index)?,
     )?;
     if *from_key != address_from_seed {
         ic_msg!(
@@ -310,7 +314,7 @@ fn transfer_with_seed(
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -330,14 +334,14 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             let to_address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(1)?,
                 )?,
                 None,
                 invoke_context,
             )?;
             create_account(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &to_address,
                 lamports,
                 space,
@@ -358,14 +362,14 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             let to_address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(1)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
             create_account(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &to_address,
                 lamports,
                 space,
@@ -378,11 +382,11 @@ pub fn process_instruction(
         }
         SystemInstruction::Assign { owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 None,
                 invoke_context,
@@ -392,8 +396,8 @@ pub fn process_instruction(
         SystemInstruction::Transfer { lamports } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             transfer(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 lamports,
                 invoke_context,
                 transaction_context,
@@ -407,11 +411,11 @@ pub fn process_instruction(
         } => {
             instruction_context.check_number_of_instruction_accounts(3)?;
             transfer_with_seed(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &from_seed,
                 &from_owner,
-                first_instruction_account + 2,
+                2,
                 lamports,
                 invoke_context,
                 transaction_context,
@@ -447,9 +451,9 @@ pub fn process_instruction(
             )?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
             withdraw_nonce_account(
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &rent,
                 &signers,
                 invoke_context,
@@ -507,11 +511,11 @@ pub fn process_instruction(
         }
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 None,
                 invoke_context,
@@ -525,11 +529,11 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,
@@ -545,11 +549,11 @@ pub fn process_instruction(
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,

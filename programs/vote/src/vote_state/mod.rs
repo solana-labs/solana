@@ -1309,8 +1309,8 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     rent_sysvar: Option<&Rent>,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
-    let mut vote_account =
-        instruction_context.try_borrow_account(transaction_context, vote_account_index)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, vote_account_index)?;
     let vote_state: VoteState = vote_account
         .get_state::<VoteStateVersions>()?
         .convert_to_current();
@@ -1351,8 +1351,8 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
     vote_account.checked_sub_lamports(lamports)?;
     drop(vote_account);
-    let mut to_account =
-        instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    let mut to_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, to_account_index)?;
     to_account.checked_add_lamports(lamports)?;
     Ok(())
 }

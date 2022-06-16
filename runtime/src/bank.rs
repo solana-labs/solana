@@ -770,13 +770,20 @@ pub fn inner_instructions_list_from_instruction_trace(
                 .skip(1)
                 .map(|instruction_context| {
                     CompiledInstruction::new_from_raw_parts(
-                        instruction_context.get_program_id_index() as u8,
-                        instruction_context.get_instruction_data().to_vec(),
-                        (instruction_context.get_number_of_program_accounts()
-                            ..instruction_context.get_number_of_accounts())
-                            .map(|index_in_instruction| {
+                        instruction_context
+                            .get_index_of_program_account_in_transaction(
                                 instruction_context
-                                    .get_index_in_transaction(index_in_instruction)
+                                    .get_number_of_program_accounts()
+                                    .saturating_sub(1),
+                            )
+                            .unwrap_or_default() as u8,
+                        instruction_context.get_instruction_data().to_vec(),
+                        (0..instruction_context.get_number_of_instruction_accounts())
+                            .map(|instruction_account_index| {
+                                instruction_context
+                                    .get_index_of_instruction_account_in_transaction(
+                                        instruction_account_index,
+                                    )
                                     .unwrap_or_default() as u8
                             })
                             .collect(),
@@ -12207,7 +12214,7 @@ pub(crate) mod tests {
         ) -> std::result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
-            let program_id = instruction_context.get_program_key(transaction_context)?;
+            let program_id = instruction_context.get_last_program_key(transaction_context)?;
             if mock_vote_program_id() != *program_id {
                 return Err(InstructionError::IncorrectProgramId);
             }
@@ -14108,7 +14115,7 @@ pub(crate) mod tests {
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let _ = instruction_context
-                .try_borrow_account(transaction_context, 1)?
+                .try_borrow_program_account(transaction_context, 1)?
                 .checked_add_lamports(1);
             Ok(())
         }

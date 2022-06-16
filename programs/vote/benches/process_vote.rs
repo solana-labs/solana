@@ -81,10 +81,10 @@ fn create_accounts() -> (
         (authority_pubkey, AccountSharedData::default()),
     ];
     let mut instruction_accounts = (0..4)
-        .map(|index_in_instruction| InstructionAccount {
-            index_in_transaction: 1usize.saturating_add(index_in_instruction),
-            index_in_caller: index_in_instruction,
-            index_in_callee: index_in_instruction,
+        .map(|index_in_callee| InstructionAccount {
+            index_in_transaction: 1usize.saturating_add(index_in_callee),
+            index_in_caller: index_in_callee,
+            index_in_callee,
             is_signer: false,
             is_writable: false,
         })
