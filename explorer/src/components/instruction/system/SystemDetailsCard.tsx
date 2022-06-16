@@ -18,6 +18,7 @@ import { NonceAdvanceDetailsCard } from "./NonceAdvanceDetailsCard";
 import { NonceWithdrawDetailsCard } from "./NonceWithdrawDetailsCard";
 import { NonceAuthorizeDetailsCard } from "./NonceAuthorizeDetailsCard";
 import { TransferWithSeedDetailsCard } from "./TransferWithSeedDetailsCard";
+import { UpgradeNonceDetailsCard } from "./UpgradeNonceDetailsCard";
 import { ParsedInfo } from "src/validators";
 import { create } from "superstruct";
 import { reportError } from "src/utils/sentry";
