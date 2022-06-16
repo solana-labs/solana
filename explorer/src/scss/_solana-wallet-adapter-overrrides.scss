@@ -29,7 +29,7 @@
   z-index: 50;
   height: 100vh;
   background-color: #1e2423;
-  width: 300px;
+  width: 25%;
 }
 
 .sidenav:focus {
@@ -49,6 +49,7 @@
   align-items: center;
   flex-direction: column;
   width: 100%;
+  padding-top: 20px;
 }
 
 .sidenav-item button {
@@ -56,14 +57,19 @@
   align-items: center;
   justify-content: center;
   color: white;
-  border: 1px solid white;
+  border: 1.5px solid #333935;
   background-color: transparent;
-  width: 190px;
-  border-radius: 4px;
-  font-size: 20px;
+  width: 100%;
+  border-radius: 7px;
+  font-size: 18px;
   padding: 3px;
   margin-top: 10px;
   margin-bottom: 5px;
+}
+
+.sidenav-item {
+  // background-color: red;
+  width: 80%;
 }
 
 .sidenav-item button span {
@@ -72,11 +78,18 @@
 }
 
 .sidenav-body hr {
-  color: white;
+  color: #333935;
   height: 1.5px;
-  width: 280px;
+  width: 80%;
 }
 
 .sidenav-item-disconnect {
-  margin-top: 5px;
+  // background-color: red;
+  height: 20%;
+  display: flex;
+}
+
+.disconnect-btn{
+  z-index: 3;
+  opacity: 0;
 }

@@ -5,6 +5,7 @@ import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
 import { WalletMultiButton, WalletDisconnectButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
+import thunderLogo from '../img/logos-solana/thunder_logo.png';
 
 export function Navbar() {
   // TODO: use `collapsing` to animate collapsible navbar
@@ -70,8 +71,11 @@ export function Navbar() {
                       <button><span className="fe fe-repeat"></span>Swap Tokens</button>
                     </div>
                     <hr />
-                    <div className="sidenav-item-disconnect">
-                      <WalletDisconnectButton className="btn btn-primary"/>
+                    <div className="sidenav-item-disconnect sidenav-item">
+                      <button  style={{
+                        border: '1px solid #1dd79b', color: '#1dd79b',height: '6%',width:'80%',position:'absolute'
+                      }}>Disconnect</button>
+                      <WalletDisconnectButton className="disconnect-btn"/>
                     </div>
                   </div>
                 </div>)
