@@ -221,12 +221,7 @@ fn execute_batch(
         ..
     } = tx_results;
 
-    if bank
-        .feature_set
-        .is_active(&feature_set::cap_accounts_data_len::id())
-    {
-        check_accounts_data_size(&execution_results)?;
-    }
+    check_accounts_data_size(bank, &execution_results)?;
 
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
@@ -1555,11 +1550,45 @@ pub fn fill_blockstore_slot_with_ticks(
     last_entry_hash
 }
 
-/// Check the transaction execution results to see if any instruction errored by exceeding the max
-/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
+/// Check to see if the transactions exceeded the accounts data size limits
 fn check_accounts_data_size<'a>(
+    bank: &Bank,
     execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
 ) -> Result<()> {
+    check_accounts_data_block_size(bank)?;
+    check_accounts_data_total_size(bank, execution_results)
+}
+
+/// Check to see if transactions exceeded the accounts data size limit per block
+fn check_accounts_data_block_size(bank: &Bank) -> Result<()> {
+    if !bank
+        .feature_set
+        .is_active(&feature_set::cap_accounts_data_size_per_block::id())
+    {
+        return Ok(());
+    }
+
+    debug_assert!(MAX_ACCOUNT_DATA_BLOCK_LEN <= i64::MAX as u64);
+    if bank.load_accounts_data_size_delta_on_chain() > MAX_ACCOUNT_DATA_BLOCK_LEN as i64 {
+        Err(TransactionError::WouldExceedAccountDataBlockLimit)
+    } else {
+        Ok(())
+    }
+}
+
+/// Check the transaction execution results to see if any instruction errored by exceeding the max
+/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
+fn check_accounts_data_total_size<'a>(
+    bank: &Bank,
+    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
+) -> Result<()> {
+    if !bank
+        .feature_set
+        .is_active(&feature_set::cap_accounts_data_len::id())
+    {
+        return Ok(());
+    }
+
     if let Some(result) = execution_results
         .into_iter()
         .map(|execution_result| execution_result.flattened_result())
@@ -1589,16 +1618,29 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
+<<<<<<< HEAD
         solana_runtime::genesis_utils::{
             self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+=======
+        solana_program_runtime::{
+            accounts_data_meter::MAX_ACCOUNTS_DATA_LEN, invoke_context::InvokeContext,
+        },
+        solana_runtime::{
+            genesis_utils::{
+                self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
+            },
+            vote_account::VoteAccount,
+>>>>>>> b4b191e44 (Enforce accounts data size limit per block in ReplayStage (#25524))
         },
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
             hash::Hash,
+            instruction::InstructionError,
+            native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
-            system_instruction::SystemError,
+            system_instruction::{SystemError, MAX_PERMITTED_DATA_LENGTH},
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
@@ -3934,4 +3976,322 @@ pub mod tests {
         assert!(batch.needs_unlock());
         assert!(!batch2.needs_unlock());
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_confirm_slot_entries_with_fix() {
+        const HASHES_PER_TICK: u64 = 10;
+        const TICKS_PER_SLOT: u64 = 2;
+
+        let collector_id = Pubkey::new_unique();
+
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10_000);
+        genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
+        genesis_config.ticks_per_slot = TICKS_PER_SLOT;
+        let genesis_hash = genesis_config.hash();
+
+        let slot_0_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(slot_0_bank.slot(), 0);
+        assert_eq!(slot_0_bank.tick_height(), 0);
+        assert_eq!(slot_0_bank.max_tick_height(), 2);
+        assert_eq!(slot_0_bank.last_blockhash(), genesis_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(0));
+
+        let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
+        let slot_0_hash = slot_0_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
+        assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
+        assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
+        assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
+        assert_eq!(slot_0_bank.get_hash_age(&slot_0_hash), Some(0));
+
+        let slot_2_bank = Arc::new(Bank::new_from_parent(&slot_0_bank, &collector_id, 2));
+        assert_eq!(slot_2_bank.slot(), 2);
+        assert_eq!(slot_2_bank.tick_height(), 2);
+        assert_eq!(slot_2_bank.max_tick_height(), 6);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
+
+        let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
+        let slot_1_hash = slot_1_entries.last().unwrap().hash;
+        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
+        assert_eq!(slot_2_bank.tick_height(), 4);
+        assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
+        assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(1));
+        assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(0));
+
+        struct TestCase {
+            recent_blockhash: Hash,
+            expected_result: result::Result<(), BlockstoreProcessorError>,
+        }
+
+        let test_cases = [
+            TestCase {
+                recent_blockhash: slot_1_hash,
+                expected_result: Err(BlockstoreProcessorError::InvalidTransaction(
+                    TransactionError::BlockhashNotFound,
+                )),
+            },
+            TestCase {
+                recent_blockhash: slot_0_hash,
+                expected_result: Ok(()),
+            },
+        ];
+
+        // Check that slot 2 transactions can only use hashes for completed blocks.
+        for TestCase {
+            recent_blockhash,
+            expected_result,
+        } in test_cases
+        {
+            let slot_2_entries = {
+                let to_pubkey = Pubkey::new_unique();
+                let mut prev_entry_hash = slot_1_hash;
+                let mut remaining_entry_hashes = HASHES_PER_TICK;
+
+                let tx =
+                    system_transaction::transfer(&mint_keypair, &to_pubkey, 1, recent_blockhash);
+                remaining_entry_hashes = remaining_entry_hashes.checked_sub(1).unwrap();
+                let mut entries = vec![next_entry_mut(&mut prev_entry_hash, 1, vec![tx])];
+
+                entries.push(next_entry_mut(
+                    &mut prev_entry_hash,
+                    remaining_entry_hashes,
+                    vec![],
+                ));
+                entries.push(next_entry_mut(
+                    &mut prev_entry_hash,
+                    HASHES_PER_TICK,
+                    vec![],
+                ));
+
+                entries
+            };
+
+            let slot_2_hash = slot_2_entries.last().unwrap().hash;
+            let result =
+                confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash);
+            match (result, expected_result) {
+                (Ok(()), Ok(())) => {
+                    assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
+                    assert_eq!(slot_2_bank.last_blockhash(), slot_2_hash);
+                    assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(2));
+                    assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(1));
+                    assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+                }
+                (
+                    Err(BlockstoreProcessorError::InvalidTransaction(err)),
+                    Err(BlockstoreProcessorError::InvalidTransaction(expected_err)),
+                ) => {
+                    assert_eq!(err, expected_err);
+                }
+                (result, expected_result) => {
+                    panic!(
+                        "actual result {:?} != expected result {:?}",
+                        result, expected_result
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_check_accounts_data_block_size() {
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        const NUM_ACCOUNTS: u64 = MAX_ACCOUNT_DATA_BLOCK_LEN / ACCOUNT_SIZE;
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Arc::new(bank);
+        assert!(bank
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_size_per_block::id()));
+
+        for _ in 0..NUM_ACCOUNTS {
+            let transaction = system_transaction::create_account(
+                &mint_keypair,
+                &Keypair::new(),
+                bank.last_blockhash(),
+                LAMPORTS_PER_SOL,
+                ACCOUNT_SIZE,
+                &solana_sdk::system_program::id(),
+            );
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+        }
+
+        let transaction = system_transaction::create_account(
+            &mint_keypair,
+            &Keypair::new(),
+            bank.last_blockhash(),
+            LAMPORTS_PER_SOL,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+        assert_eq!(
+            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            Err(TransactionError::WouldExceedAccountDataBlockLimit)
+        );
+    }
+
+    #[test]
+    fn test_check_accounts_data_total_size() {
+        const REMAINING_ACCOUNTS_DATA_SIZE: u64 =
+            MAX_ACCOUNT_DATA_BLOCK_LEN - MAX_PERMITTED_DATA_LENGTH;
+        const INITIAL_ACCOUNTS_DATA_SIZE: u64 =
+            MAX_ACCOUNTS_DATA_LEN - REMAINING_ACCOUNTS_DATA_SIZE;
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        const SHRINK_SIZE: u64 = 5678;
+        const ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION: u64 = ACCOUNT_SIZE - SHRINK_SIZE;
+        const NUM_ITERATIONS: u64 =
+            REMAINING_ACCOUNTS_DATA_SIZE / ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION;
+        const ACCOUNT_BALANCE: u64 = 70 * LAMPORTS_PER_SOL; // rent exempt amount for a 10MB account is a little less than 70 SOL
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config((1_000_000 + NUM_ITERATIONS + 1) * ACCOUNT_BALANCE);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mock_realloc_program_id = Pubkey::new_unique();
+        bank.add_builtin(
+            "mock_realloc_program",
+            &mock_realloc_program_id,
+            mock_realloc::process_instruction,
+        );
+        bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
+        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
+        assert!(bank
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_len::id()));
+
+        for _ in 0..NUM_ITERATIONS {
+            let accounts_data_size_before = bank.load_accounts_data_size();
+
+            // Create a new account, with the full size
+            let new_account = Keypair::new();
+            let transaction = system_transaction::create_account(
+                &mint_keypair,
+                &new_account,
+                bank.last_blockhash(),
+                ACCOUNT_BALANCE,
+                ACCOUNT_SIZE,
+                &mock_realloc_program_id,
+            );
+
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after - accounts_data_size_before,
+                ACCOUNT_SIZE,
+            );
+
+            // Resize the account to be smaller
+            let new_size = ACCOUNT_SIZE - SHRINK_SIZE;
+            let transaction = mock_realloc::create_transaction(
+                &mint_keypair,
+                &new_account.pubkey(),
+                new_size as usize,
+                mock_realloc_program_id,
+                bank.last_blockhash(),
+            );
+
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after - accounts_data_size_before,
+                new_size,
+            );
+        }
+
+        let transaction = system_transaction::create_account(
+            &mint_keypair,
+            &Keypair::new(),
+            bank.last_blockhash(),
+            ACCOUNT_BALANCE,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+        assert!(matches!(
+            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            Err(TransactionError::InstructionError(
+                _,
+                InstructionError::MaxAccountsDataSizeExceeded,
+            ))
+        ));
+    }
+
+    mod mock_realloc {
+        use {
+            super::*,
+            serde::{Deserialize, Serialize},
+        };
+
+        #[derive(Debug, Serialize, Deserialize)]
+        enum Instruction {
+            Realloc { new_size: usize },
+        }
+
+        pub fn process_instruction(
+            _first_instruction_account: usize,
+            invoke_context: &mut InvokeContext,
+        ) -> result::Result<(), InstructionError> {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
+                match instruction {
+                    Instruction::Realloc { new_size } => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .set_data_length(new_size),
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
+        pub fn create_transaction(
+            payer: &Keypair,
+            reallocd: &Pubkey,
+            new_size: usize,
+            mock_realloc_program_id: Pubkey,
+            recent_blockhash: Hash,
+        ) -> Transaction {
+            let account_metas = vec![solana_sdk::instruction::AccountMeta::new(*reallocd, false)];
+            let instruction = solana_sdk::instruction::Instruction::new_with_bincode(
+                mock_realloc_program_id,
+                &Instruction::Realloc { new_size },
+                account_metas,
+            );
+            Transaction::new_signed_with_payer(
+                &[instruction],
+                Some(&payer.pubkey()),
+                &[payer],
+                recent_blockhash,
+            )
+        }
+    }
+>>>>>>> b4b191e44 (Enforce accounts data size limit per block in ReplayStage (#25524))
 }
