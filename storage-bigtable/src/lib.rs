@@ -574,13 +574,13 @@ impl LedgerStorage {
         }
 
         // Fetch blocks and extract transactions
+        let slots_ref = &slots;
         let keys = slots.keys().copied().collect::<Vec<_>>();
         let data = self
             .get_confirmed_blocks_with_data(&keys)
             .await?
-            .zip(std::iter::repeat(&slots))
-            .filter_map(move |((slot, block), slots)| {
-                slots.get(&slot).map(move |block_txs| {
+            .filter_map(move |(slot, block)| {
+                slots_ref.get(&slot).map(move |block_txs| {
                     let block_time = block.block_time;
                     block.transactions.into_iter().enumerate().filter_map(
                         move |(index, tx_with_meta)| {
