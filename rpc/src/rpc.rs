@@ -174,15 +174,18 @@ impl JsonRpcConfig {
 pub struct RpcBigtableConfig {
     pub enable_bigtable_ledger_upload: bool,
     pub bigtable_instance_name: String,
+    pub bigtable_app_profile_id: String,
     pub timeout: Option<Duration>,
 }
 
 impl Default for RpcBigtableConfig {
     fn default() -> Self {
         let bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        let bigtable_app_profile_id = solana_storage_bigtable::DEFAULT_APP_PROFILE_ID.to_string();
         Self {
             enable_bigtable_ledger_upload: false,
             bigtable_instance_name,
+            bigtable_app_profile_id,
             timeout: None,
         }
     }
