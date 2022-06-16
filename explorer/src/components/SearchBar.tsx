@@ -26,8 +26,6 @@ interface SearchOptions {
   }[];
 }
 
-const isSSR = typeof window === 'undefined'
-
 export function SearchBar() {
   const [search, setSearch] = React.useState("");
   const searchRef = React.useRef("");
