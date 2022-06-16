@@ -1,15 +1,35 @@
-.wallet-adapter-button {
-  border: none;
-  color: #1dd79b;
-  cursor: pointer;
+.nav-item .button {
   display: flex;
   align-items: center;
-  font-size: 16px;
-  font-weight: 600;
-  height: 48px;
-  line-height: 48px;
-  padding: 0 24px;
-  border-radius: 4px;
+  justify-content: center;
+  color: black;
+  background-color: #1dd79b;
+  border: none;
+  border-radius: 7px;
+  font-size: 15px;
+  padding: 3px 12px;
+  z-index: 2;
+}
+
+.nav-item button span {
+  font-size: 25px;
+  padding-right: 8px;
+}
+
+.nav-item .button-hidden {
+  display: none;
+}
+
+.button-hidden .user-address {
+  position: absolute;
+  top: 5px;
+}
+
+.connect-btn {
+  opacity: 0;
+  z-index: 1;
+  position: absolute;
+  top: 5px;
 }
 
 .globe {
@@ -68,7 +88,6 @@
 }
 
 .sidenav-item {
-  // background-color: red;
   width: 80%;
 }
 
@@ -84,12 +103,31 @@
 }
 
 .sidenav-item-disconnect {
-  // background-color: red;
-  height: 20%;
-  display: flex;
+  width: 80%;
 }
 
-.disconnect-btn{
+.sidenav-item-disconnect button span {
+  font-size: 28px;
+  padding-right: 8px;
+}
+
+.sidenav-item-disconnect button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1dd79b;
+  border: 1.5px solid #1dd79b;
+  background-color: transparent;
+  width: 80%;
+  border-radius: 7px;
+  font-size: 18px;
+  padding: 5px;
+  margin-top: 10px;
+  margin-bottom: 5px;
+  position: absolute;
+}
+
+.disconnect-btn {
   z-index: 3;
   opacity: 0;
 }

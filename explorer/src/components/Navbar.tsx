@@ -3,14 +3,15 @@ import Logo from "img/logos-solana/dark-explorer-logo.svg";
 import { clusterPath } from "utils/url";
 import { Link, NavLink } from "react-router-dom";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
-import { WalletMultiButton, WalletDisconnectButton } from "@solana/wallet-adapter-react-ui";
+import { WalletDisconnectButton, WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
-import thunderLogo from '../img/logos-solana/thunder_logo.png';
 
 export function Navbar() {
   // TODO: use `collapsing` to animate collapsible navbar
   const [showSidebar, setShowSidebar] = React.useState(false);
   const [collapse, setCollapse] = React.useState(false);
+  // find user address from wallet
+
   const { connected } = useWallet();
 
   return (
@@ -49,7 +50,8 @@ export function Navbar() {
               </NavLink>
             </li>
             <li className="nav-item">
-              <WalletMultiButton className="btn btn-primary" />
+              <button className={connected ? 'button-hidden' : 'button'}><span className="fe fe-zap"></span>Connect Wallet</button>
+              <WalletMultiButton className={connected ? 'user-address btn btn-primary' : 'connect-btn'} />
             </li>
             <li className="nav-item">
               {connected ? (
@@ -71,11 +73,9 @@ export function Navbar() {
                       <button><span className="fe fe-repeat"></span>Swap Tokens</button>
                     </div>
                     <hr />
-                    <div className="sidenav-item-disconnect sidenav-item">
-                      <button  style={{
-                        border: '1px solid #1dd79b', color: '#1dd79b',height: '6%',width:'80%',position:'absolute'
-                      }}>Disconnect</button>
-                      <WalletDisconnectButton className="disconnect-btn"/>
+                    <div className="sidenav-item-disconnect">
+                      <button><span className="fe fe-zap-off"></span>Disconnect</button>
+                      <WalletDisconnectButton className="disconnect-btn" onClick={() => setShowSidebar(false)} />
                     </div>
                   </div>
                 </div>)
