@@ -930,9 +930,7 @@ fn minimize_bank_for_snapshot(
     ending_slot: Slot,
 ) {
     let (mut minimized_account_set, transaction_accounts_measure) = measure!(
-        blockstore
-            .get_accounts_used_in_range(snapshot_slot, ending_slot)
-            .unwrap(),
+        blockstore.get_accounts_used_in_range(snapshot_slot, ending_slot),
         "get transaction accounts"
     );
     let total_accounts_len = minimized_account_set.len();

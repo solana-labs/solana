@@ -2738,21 +2738,22 @@ impl Blockstore {
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
-    ) -> Result<DashSet<Pubkey>> {
+    ) -> DashSet<Pubkey> {
         let result = DashSet::new();
 
         for slot in starting_slot..=ending_slot {
-            let entries = self.get_slot_entries(slot, 0)?;
-            entries.par_iter().for_each(|entry| {
-                entry.transactions.iter().for_each(|tx| {
-                    tx.message.static_account_keys().iter().for_each(|pubkey| {
-                        result.insert(*pubkey);
+            if let Ok(entries) = self.get_slot_entries(slot, 0) {
+                entries.par_iter().for_each(|entry| {
+                    entry.transactions.iter().for_each(|tx| {
+                        tx.message.static_account_keys().iter().for_each(|pubkey| {
+                            result.insert(*pubkey);
+                        });
                     });
                 });
-            });
+            }
         }
 
-        Ok(result)
+        result
     }
 
     fn get_completed_ranges(
