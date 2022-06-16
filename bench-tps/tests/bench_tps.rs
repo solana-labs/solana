@@ -136,3 +136,12 @@ fn test_bench_tps_tpu_client() {
         ..Config::default()
     });
 }
+
+#[test]
+fn test_bench_tps_tpu_durable_client() {
+    let mut config = Config::default();
+    config.tx_count = 10;
+    config.duration = Duration::from_secs(10);
+    config.use_durable_nonce = true;
+    test_bench_tps_local_cluster(config);
+}

@@ -1,3 +1,5 @@
+use rayon::iter::split;
+
 use {
     crate::{
         bench_tps_client::*,
@@ -6,6 +8,7 @@ use {
     },
     log::*,
     rayon::prelude::*,
+    solana_client::nonce_utils,
     solana_core::gen_keys::GenKeys,
     solana_measure::measure::Measure,
     solana_metrics::{self, datapoint_info},
@@ -30,6 +33,7 @@ use {
             atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
         },
+        thread,
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -52,6 +56,20 @@ fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
             }
         };
     }
+}
+
+/// Split input vector of keypairs into two sets of chunks of given size
+fn split_into_source_destination(
+    keypairs: &Vec<Keypair>,
+    chunk_size: usize,
+) -> (Vec<Vec<&Keypair>>, Vec<VecDeque<&Keypair>>) {
+    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+    for chunk in keypairs.chunks_exact(2 * chunk_size) {
+        source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
+        dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+    }
+    (source_keypair_chunks, dest_keypair_chunks)
 }
 
 fn wait_for_target_slots_per_epoch<T>(target_slots_per_epoch: u64, client: &Arc<T>)
@@ -100,13 +118,15 @@ where
         .unwrap()
 }
 
-fn generate_chunked_transfers(
+fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
     source_keypair_chunks: Vec<Vec<&Keypair>>,
     dest_keypair_chunks: &mut [VecDeque<&Keypair>],
-    nonce_account_chunks: Option<Vec<Vec<&Keypair>>>,
+    source_nonce_keypair_chunks: Vec<Vec<&Keypair>>,
+    dest_nonce_keypair_chunks: &mut [VecDeque<&Keypair>],
     threads: usize,
     duration: Duration,
     sustained: bool,
@@ -119,18 +139,17 @@ fn generate_chunked_transfers(
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
-        let nonce_chunk: Option<&[&Keypair]> =
-            if let Some(ref nonce_account_chunks) = nonce_account_chunks {
-                Some(&nonce_account_chunks[chunk_index])
-            } else {
-                None
-            };
+        let source_nonce_chunk = &source_nonce_keypair_chunks[chunk_index];
+        let dest_nonce_chunk: &VecDeque<&Keypair> = &dest_nonce_keypair_chunks[chunk_index];
         generate_txs(
+            client.clone(), // TODO(klykov) any need in clonning?
             shared_txs,
             &recent_blockhash,
             &source_keypair_chunks[chunk_index],
             &dest_keypair_chunks[chunk_index],
-            nonce_chunk,
+            source_nonce_chunk,
+            dest_nonce_chunk,
+            true, // TODO(klykov) for now always
             threads,
             reclaim_lamports_back_to_source_account,
         );
@@ -164,6 +183,7 @@ fn generate_chunked_transfers(
         // Rotate destination keypairs so that the next round of transactions will have different
         // transaction signatures even when blockhash is reused.
         dest_keypair_chunks[chunk_index].rotate_left(1);
+        dest_nonce_keypair_chunks[chunk_index].rotate_left(1); // TODO(klykov): refactor later
 
         // Move on to next chunk
         chunk_index = (chunk_index + 1) % keypair_chunks;
@@ -211,51 +231,74 @@ where
         .collect()
 }
 
+// wait until all accounts creation is finalized
+fn wait_for_commitment<T, Predicate>(client: Arc<T>, keypairs: &Vec<Keypair>, predicate: Predicate)
+where
+    T: 'static + BenchTpsClient + Send + Sync,
+    Predicate: Fn(u64) -> bool,
+{
+    use std::collections::HashSet;
+
+    //let client = client.rpc_client();
+    let mut uncommitted = HashSet::<usize>::from_iter((0..keypairs.len()).into_iter());
+    let mut tobe_removed = Vec::<usize>::new();
+    while !uncommitted.is_empty() {
+        for index in &uncommitted {
+            let res = client.get_balance_with_commitment(
+                &keypairs[*index].pubkey(),
+                CommitmentConfig::finalized(),
+            );
+            //let res = client.get_account_with_commitment(
+            //    &keypairs[*index].pubkey(),
+            //    CommitmentConfig::finalized(),
+            //);
+            if let Ok(res) = res {
+                if predicate(res) {
+                    tobe_removed.push(*index);
+                }
+            }
+        }
+        for index in &tobe_removed {
+            uncommitted.remove(index);
+        }
+        tobe_removed.clear();
+        info!("@ num uncommitted: {}", uncommitted.len());
+        thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
 fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
     client: Arc<T>,
-    funding_key: &Keypair,
-    authority_account_chunks: &Vec<Vec<&Keypair>>,
+    authority_keypairs: &Vec<Keypair>,
 ) -> Result<Vec<Keypair>> {
-    // Do we need to check that authority has enough money to pay for durable transaction?
-
-    let account_count = authority_account_chunks.len() * authority_account_chunks[0].len();
     let nonce_rent = client
         .get_minimum_balance_for_rent_exemption(State::size())
         .unwrap();
-    // Can't I just use random keypair as funding_key here?
-    let funding_key = Keypair::new();
-    let (nonce_accounts, _extra) = generate_keypairs(&funding_key, account_count as u64);
-    for (i, authority_account) in authority_account_chunks
-        .iter()
-        .flat_map(<_>::into_iter)
-        .enumerate()
-    {
-        let nonce_account = &nonce_accounts[i];
 
+    //let client = client.rpc_client(); // TODO remove later, for now it gives better errors
+    let seed_keypair = &authority_keypairs[0];
+    let count = authority_keypairs.len();
+    let (mut nonce_keypairs, _extra) = generate_keypairs(&seed_keypair, count as u64);
+    nonce_keypairs.truncate(count);
+    for (authority, nonce) in authority_keypairs.iter().zip(nonce_keypairs.iter()) {
+        // make
         let instr = system_instruction::create_nonce_account(
-            &authority_account.pubkey(),
-            &nonce_account.pubkey(),
-            &authority_account.pubkey(), // Make the fee payer the nonce account authority
+            &authority.pubkey(),
+            &nonce.pubkey(),
+            &authority.pubkey(),
             nonce_rent,
         );
 
-        let mut tx = Transaction::new_with_payer(&instr, Some(&authority_account.pubkey()));
-
-        let blockhash = client.get_latest_blockhash().unwrap();
-        if tx
-            .try_sign(&[nonce_account, authority_account], blockhash)
-            .is_err()
-        {
+        let mut tx = Transaction::new_with_payer(&instr, Some(&authority.pubkey()));
+        // sign
+        let blockhash = get_latest_blockhash(client.as_ref());
+        if tx.try_sign(&[&nonce, authority], blockhash).is_err() {
             return Err(BenchTpsError::Custom("Signing has failed".to_string()));
         }
-
-        let _sign = client.send_transaction(tx)?;
-        let ac = client.get_account(&nonce_account.pubkey());
-        if ac.is_err() {
-            panic!("{:?}", ac.err().unwrap());
-        }
+        // send
+        let result = client.send_transaction(tx)?;
     }
-    Ok(nonce_accounts)
+    Ok(nonce_keypairs)
 }
 
 pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
@@ -273,32 +316,22 @@ where
         ..
     } = config;
 
-    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
     assert!(gen_keypairs.len() >= 2 * tx_count);
-    for chunk in gen_keypairs.chunks_exact(2 * tx_count) {
-        source_keypair_chunks.push(chunk[..tx_count].iter().collect());
-        dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
-    }
+    assert!(config.use_durable_nonce); // TODO(klykov) for now, later move to structure
+    let (source_keypair_chunks, mut dest_keypair_chunks) =
+        split_into_source_destination(&gen_keypairs, tx_count);
 
-    let mut nonce_accounts = if config.use_durable_nonce {
-        Some(
-            generate_durable_nonce_accounts(client.clone(), &id, &source_keypair_chunks)
-                .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error)),
-        )
-    } else {
-        None
-    };
+    let nonce_keypairs =
+        generate_durable_nonce_accounts(client.clone(), &gen_keypairs)
+            .unwrap_or_else(|error| panic!("Failed to generate durable accounts: {:?}", error));
+    let (source_nonce_keypair_chunks, mut dest_nonce_keypair_chunks) =
+        split_into_source_destination(&nonce_keypairs, tx_count);
 
-    let nonce_account_chunks = if config.use_durable_nonce {
-        let mut nonce_account_chunks = Vec::with_capacity(source_keypair_chunks.len());
-        for chunk in nonce_accounts.as_mut().unwrap().chunks_exact(tx_count) {
-            nonce_account_chunks.push(chunk.iter().collect());
-        }
-        Some(nonce_account_chunks)
-    } else {
-        None
-    };
+    info!("BEFORE");
+    wait_for_commitment(client.clone(), &nonce_keypairs, |lamports: u64| {
+        lamports > 0
+    });
+    info!("AFTER");
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
@@ -325,7 +358,7 @@ where
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
     let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
-    // if we use durable nonce, we don't need
+    // if we use durable nonce, we don't need blockhash
     let blockhash_thread = if !config.use_durable_nonce {
         let exit_signal = exit_signal.clone();
         let blockhash = blockhash.clone();
@@ -358,12 +391,14 @@ where
     let start = Instant::now();
 
     generate_chunked_transfers(
+        client.clone(), // TODO(klykov): this is needed only for nonce, move later to a struct
         blockhash,
         &shared_txs,
         shared_tx_active_thread_count,
         source_keypair_chunks,
         &mut dest_keypair_chunks,
-        nonce_account_chunks,
+        source_nonce_keypair_chunks,
+        &mut dest_nonce_keypair_chunks,
         threads,
         duration,
         sustained,
@@ -417,7 +452,6 @@ fn metrics_submit_lamport_balance(lamport_balance: u64) {
 fn generate_system_txs(
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
-    nonce_account_chunk: Option<&[&Keypair]>,
     reclaim: bool,
     blockhash: &Hash,
 ) -> Vec<(Transaction, u64)> {
@@ -438,12 +472,75 @@ fn generate_system_txs(
         .collect()
 }
 
-fn generate_txs(
+// TODO(klykov): use Result later
+fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    nonce_account_pubkey: Pubkey,
+) -> Hash {
+    let nonce_account = client
+        .get_account(&nonce_account_pubkey)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    let nonce_data = nonce_utils::data_from_account(&nonce_account)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    nonce_data.blockhash()
+}
+
+fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    source: &[&Keypair],
+    dest: &VecDeque<&Keypair>,
+    source_nonce: &[&Keypair],
+    dest_nonce: &VecDeque<&Keypair>,
+    reclaim: bool,
+) -> Vec<(Transaction, u64)> {
+    let length = source.len();
+    let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
+    for i in 0..length {
+        let (from, to, nonce, nonce_blockhash) = if !reclaim {
+            (
+                source[i],
+                dest[i],
+                source_nonce[i],
+                get_nonce_blockhash(client.clone(), source_nonce[i].pubkey()),
+            )
+        } else {
+            (
+                dest[i],
+                source[i],
+                dest_nonce[i],
+                get_nonce_blockhash(client.clone(), dest_nonce[i].pubkey()),
+            )
+        };
+
+        transactions.push((
+            system_transaction::nonced_transfer(
+                from,
+                &to.pubkey(),
+                1,
+                &nonce.pubkey(),
+                from,
+                nonce_blockhash,
+            ),
+            timestamp(),
+        ));
+    }
+    // current timestamp to avoid filtering out some transactions if they are too old
+    let t = timestamp();
+    for mut tx in &mut transactions {
+        tx.1 = t;
+    }
+    transactions
+}
+
+fn generate_txs<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
     shared_txs: &SharedTransactions,
     blockhash: &Arc<RwLock<Hash>>,
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
-    nonce_account_chunk: Option<&[&Keypair]>,
+    source_nonce: &[&Keypair],
+    dest_nonce: &VecDeque<&Keypair>,
+    durable_nonce: bool,
     threads: usize,
     reclaim: bool,
 ) {
@@ -455,7 +552,11 @@ fn generate_txs(
     );
     let signing_start = Instant::now();
 
-    let transactions = generate_system_txs(source, dest, nonce_account_chunk, reclaim, &blockhash);
+    let transactions = if durable_nonce {
+        generate_nonced_system_txs(client, source, dest, source_nonce, dest_nonce, reclaim)
+    } else {
+        generate_system_txs(source, dest, reclaim, &blockhash)
+    };
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -1042,6 +1143,8 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
 
 #[cfg(test)]
 mod tests {
+    use std::slice::SplitInclusive;
+
     use {
         super::*,
         itertools::izip,
@@ -1201,113 +1304,33 @@ mod tests {
         }
     }
 
-    fn generate_durable_nonce_accounts(
-        client: Arc<ThinClient>,
-        authority_keypairs: &Vec<Keypair>,
-    ) -> Result<Vec<Keypair>> {
-        let nonce_rent = client
-            .get_minimum_balance_for_rent_exemption(State::size())
-            .unwrap();
-
-        //let client = client.rpc_client(); // TODO remove later, for now it gives better errors
-        let seed_keypair = &authority_keypairs[0];
-        let count = authority_keypairs.len();
-        let (nonce_keypairs, _extra) = generate_keypairs(&seed_keypair, count as u64);
-        for (authority, nonce) in authority_keypairs.iter().zip(nonce_keypairs.iter()) {
-            // make
-            let instr = system_instruction::create_nonce_account(
-                &authority.pubkey(),
+    fn withdraw_nonce_account<T: 'static + BenchTpsClient + Send + Sync>(
+        client: Arc<T>,
+        keypairs: &Vec<Keypair>,
+        nonce_keypairs: &Vec<Keypair>
+    ) { 
+        // Withdraw and close nonce accounts
+        for (nonce, authority) in izip!(nonce_keypairs, keypairs) {
+            let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
+            let instr = system_instruction::withdraw_nonce_account(
                 &nonce.pubkey(),
                 &authority.pubkey(),
-                nonce_rent,
+                &authority.pubkey(),
+                nonce_balance,
             );
 
-            let mut tx = Transaction::new_with_payer(&instr, Some(&authority.pubkey()));
-            // sign
+            let mut tx = Transaction::new_with_payer(&[instr], Some(&authority.pubkey()));
             let blockhash = get_latest_blockhash(client.as_ref());
-            if tx.try_sign(&[&nonce, authority], blockhash).is_err() {
-                return Err(BenchTpsError::Custom("Signing has failed".to_string()));
+            //let blockhash = client.get_latest_blockhash().ok().unwrap();
+            tx.try_sign(&[authority], blockhash);
+
+            let res = client.send_transaction(tx);
+            if res.is_err() {
+                info!("@{:?}", res.err().unwrap());
             }
-            // send
-            let result = client.send_transaction(tx)?;
-        }
-        Ok(nonce_keypairs)
-    }
-
-    fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
-        client: Arc<T>,
-        source: &Vec<&Keypair>,
-        dest: &VecDeque<&Keypair>,
-        nonce: &Vec<&Keypair>,
-        reclaim: bool,
-    ) -> Vec<(Transaction, u64)> {
-        let length = source.len();
-        let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
-        for i in 0..length {
-            let nonce_account_pubkey = nonce[i].pubkey();
-            let nonce_account = client
-                .get_account(&nonce_account_pubkey)
-                .unwrap_or_else(|error| panic!("{:?}", error));
-            let nonce_data = nonce_utils::data_from_account(&nonce_account)
-                .unwrap_or_else(|error| panic!("{:?}", error));
-            let nonce_blockhash = nonce_data.blockhash();
-
-            let (from, to) = if !reclaim {
-                (source[i], dest[i])
-            } else {
-                (dest[i], source[i]) // should fail because there is no authority for dest
-            };
-
-            transactions.push((
-                system_transaction::nonced_transfer(
-                    from,
-                    &to.pubkey(),
-                    1,
-                    &nonce[i].pubkey(),
-                    from,
-                    nonce_blockhash,
-                ),
-                timestamp(),
-            ));
-        }
-        // current timestamp to avoid filtering out some transactions if they are too old
-        let t = timestamp();
-        for mut tx in &mut transactions {
-            tx.1 = t;
-        }
-        transactions
-    }
-
-    // wait until all accounts creation is finalized
-    fn wait_for_commitment<T>(client: Arc<ThinClient>, keypairs: &Vec<Keypair>, predicate: T)
-    where
-        T: Fn(u64) -> bool,
-    {
-        use std::collections::HashSet;
-
-        let client = client.rpc_client();
-        let mut uncommitted = HashSet::<usize>::from_iter((0..keypairs.len()).into_iter());
-        let mut tobe_removed = Vec::<usize>::new();
-        while !uncommitted.is_empty() {
-            for index in &uncommitted {
-                let res = client.get_account_with_commitment(
-                    &keypairs[*index].pubkey(),
-                    CommitmentConfig::finalized(),
-                );
-                if let Ok(res) = res {
-                    if let Some(res) = res.value {
-                        if predicate(res.lamports) {
-                            tobe_removed.push(*index);
-                        }
-                    }
-                }
-            }
-            for index in &tobe_removed {
-                uncommitted.remove(index);
-            }
-            tobe_removed.clear();
             thread::sleep(time::Duration::from_secs(1));
         }
+        thread::sleep(time::Duration::from_secs(10));
     }
 
     #[test]
@@ -1378,27 +1401,27 @@ mod tests {
             lamports > 0
         });
 
-        // TODO later move to a separate function
-        // split keypairs into source/dest chunks
-        let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-        let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
-        for chunk in keypairs.chunks_exact(2 * tx_count) {
-            source_keypair_chunks.push(chunk[..tx_count].iter().collect());
-            dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
-        }
-        // depending on the direction (src->dst or dst->src) we need one or another set
-        let mut source_nonce_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-        for chunk in nonce_keypairs.chunks_exact(2 * tx_count) {
-            source_nonce_keypair_chunks.push(chunk[..tx_count].iter().collect());
-        }
+        let (source_keypair_chunks, dest_keypair_chunks) =
+            split_into_source_destination(&keypairs, tx_count);
 
-        for (source, dest, nonce) in izip!(
+        // depending on the direction (src->dst or dst->src) we need one or another set
+        let (source_nonce_keypair_chunks, dest_nonce_keypair_chunk) =
+            split_into_source_destination(&nonce_keypairs, tx_count);
+
+        for (source, dest, source_nonce, dest_nonce) in izip!(
             &source_keypair_chunks,
             &dest_keypair_chunks,
-            &source_nonce_keypair_chunks
+            &source_nonce_keypair_chunks,
+            &dest_nonce_keypair_chunk
         ) {
-            let transactions_with_timestamps =
-                generate_nonced_system_txs(client.clone(), source, dest, nonce, false);
+            let transactions_with_timestamps = generate_nonced_system_txs(
+                client.clone(),
+                source,
+                dest,
+                source_nonce,
+                dest_nonce,
+                false,
+            );
             let mut transactions = Vec::with_capacity(transactions_with_timestamps.len());
             for (tx, _timestamp) in transactions_with_timestamps {
                 transactions.push(tx);
@@ -1407,9 +1430,10 @@ mod tests {
                 println!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
         }
+        withdraw_nonce_account(client.clone(), &keypairs, &nonce_keypairs);
 
-        let client = client.rpc_client();
-
+        /*let client = client.rpc_client();
+        
         // Withdraw and close nonce accounts
         for (nonce, authority) in izip!(&nonce_keypairs, &keypairs) {
             let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
@@ -1432,7 +1456,9 @@ mod tests {
             }
             thread::sleep(time::Duration::from_secs(1));
         }
+        */
         thread::sleep(time::Duration::from_secs(10));
+        let client = client.rpc_client();
         // wait until these transactions are finalized
         // otherwise create nonce transactions will fail
         let mut total_committed = nonce_keypairs.len() as u64;
