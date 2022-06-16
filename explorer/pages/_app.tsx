@@ -68,14 +68,18 @@ function ExplorerApp({ Component, pageProps }: AppProps) {
 
 function SharedLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="main-content pb-4">
-			<Navbar />
-			<MessageBanner />
-			<ClusterStatusBanner />
-			<SearchBar />
+		<>
+			<ClusterModal />
 
-			{children}
-		</div>
+			<div className="main-content pb-4">
+				<Navbar />
+				<MessageBanner />
+				<ClusterStatusBanner />
+				<SearchBar />
+
+				{children}
+			</div>
+		</>
 	)
 }
 
