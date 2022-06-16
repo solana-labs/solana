@@ -1421,6 +1421,7 @@ impl ClusterInfo {
         Vec<(SocketAddr, Ping)>,     // Ping packets.
         Vec<(SocketAddr, Protocol)>, // Pull requests
     ) {
+        info!("greg_new_pull_request()");
         let now = timestamp();
         let mut pings = Vec::new();
         let mut pulls = {
@@ -1478,6 +1479,7 @@ impl ClusterInfo {
         }
     }
     fn new_push_requests(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
+        info!("greg_new_push_request()");
         let self_id = self.id();
         let mut push_messages = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
@@ -1556,6 +1558,7 @@ impl ClusterInfo {
         sender: &PacketBatchSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
+        info!("greg_run_gossip()");
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
