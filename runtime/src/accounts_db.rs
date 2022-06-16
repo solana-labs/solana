@@ -3268,6 +3268,8 @@ impl AccountsDb {
         let snapshot_storages = self.get_snapshot_storages(snapshot_slot, None, None).0;
         let num_slots = snapshot_storages.len();
 
+        const REPORT_INTERVAL_SECONDS: u64 = 1u64;
+        let mut start = Instant::now();
         for storages in snapshot_storages {
             let slot = storages.first().unwrap().slot();
             if slot == snapshot_slot {
@@ -3284,7 +3286,9 @@ impl AccountsDb {
             }
 
             count += 1;
-            if count % 1000 == 0 {
+            let now = Instant::now();
+            if now.duration_since(start).as_secs() > REPORT_INTERVAL_SECONDS {
+                start = now;
                 info!(
                     "filtering storages took {filter_storages_us}us progress {count}/{num_slots}"
                 );
