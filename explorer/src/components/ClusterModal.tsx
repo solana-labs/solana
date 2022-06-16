@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from "react";
+import React, { ChangeEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useDebounceCallback } from "@react-hook/debounce";
@@ -20,7 +20,7 @@ import { dummyUrl } from "src/constants/urls";
 export function ClusterModal() {
   const [show, setShow] = useClusterModal();
   const onClose = () => setShow(false);
-  const showDeveloperSettings = localStorageIsAvailable();
+  const [showDeveloperSettings, setDeveloperSetingsDisplay] = useState(false);
   const enableCustomUrl =
     showDeveloperSettings && localStorage.getItem("enableCustomUrl") !== null;
   const onToggleCustomUrlFeature = (e: ChangeEvent<HTMLInputElement>) => {
@@ -30,6 +30,10 @@ export function ClusterModal() {
       localStorage.removeItem("enableCustomUrl");
     }
   };
+
+  useEffect(() => {
+    setDeveloperSetingsDisplay(localStorageIsAvailable())
+  }, [])
 
   return (
     <>
