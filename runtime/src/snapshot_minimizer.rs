@@ -23,7 +23,7 @@ use solana_sdk::{
 
 use crate::{accounts_db::AccountStorageEntry, accounts_index::ScanConfig, bank::Bank};
 
-struct SnapshotMinimizer {
+pub struct SnapshotMinimizer {
     bank: Arc<Bank>,
     starting_slot: Slot,
     ending_slot: Slot,
@@ -48,6 +48,12 @@ impl SnapshotMinimizer {
         minimizer.add_accounts(Self::get_stake_accounts, "stake accounts");
         minimizer.add_accounts(Self::get_owner_accounts, "owner accounts");
         minimizer.add_accounts(Self::get_programdata_accounts, "programdata accounts");
+
+        minimizer.minimize_accounts_db();
+
+        // Update accounts_cache and capitalization
+        minimizer.bank.force_flush_accounts_cache();
+        minimizer.bank.set_capitalization();
     }
 
     /// Create a minimizer - used in tests

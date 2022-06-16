@@ -44,6 +44,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
+        snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -942,9 +943,7 @@ fn minimize_bank_for_snapshot(
     minimized_account_set.extend(solana_runtime::static_ids::STATIC_IDS.iter().cloned());
     minimized_account_set.extend(solana_sdk::sdk_ids::SDK_IDS.iter().cloned());
 
-    bank.minimize_bank_for_snapshot(minimized_account_set, snapshot_slot, ending_slot);
-    bank.force_flush_accounts_cache();
-    bank.set_capitalization();
+    SnapshotMinimizer::minimize(bank, snapshot_slot, ending_slot, minimized_account_set);
 }
 
 fn assert_capitalization(bank: &Bank) {
