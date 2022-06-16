@@ -3407,7 +3407,6 @@ impl AccountsDb {
             new_storage.flush().unwrap();
         }
 
-        self.shrink_candidate_slots.lock().unwrap().remove(&slot);
         let append_vec_set: HashSet<_> = storages
             .iter()
             .map(|storage| storage.append_vec_id())
