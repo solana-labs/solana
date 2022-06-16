@@ -10,14 +10,26 @@
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
 # Greg Gossip
-#### Updated 6/16/22 @4pm MDT
+#### Updated 6/16/22 @5:45pm MDT
 1) Run first node that launches the cluster entry point:
 ```
-cargo run --bin gossip-only
+cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --gossip-port=<available-port-to-run-gossip>
 ```
-2) Run the second node that connects to the cluster entry point as a full gossip node
+Note: the `--gossip-port` is optional and the module will find an available port if not provided
+
+Example:
 ```
-cargo run --bin gossip-only-n2 -- --entrypoint="127.0.0.1:8001"
+cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --gossip-port=8001
+```
+
+2) Run any number of other nodes that connect to the cluster entry point as a full gossip node
+```
+cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --entrypoint=<IP and Port of cluster to join>
+
+```
+Example:
+```
+cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --entrypoint="127.0.0.1:8001" 
 ```
 
 # Building

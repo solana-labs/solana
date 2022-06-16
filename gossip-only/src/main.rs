@@ -2,12 +2,17 @@
 #[cfg(not(target_env = "msvc"))]
 use {
     log::*,
+    clap::{
+        crate_description, crate_name, value_t, values_t, App, Arg, ArgMatches,
+    },
     solana_gossip::{
         cluster_info::{
             ClusterInfo, Node,
         },
         gossip_service::GossipService,
+        contact_info::ContactInfo,
     },
+    rand::{seq::SliceRandom, thread_rng},
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
         accounts_db,
@@ -24,15 +29,56 @@ use {
         },
         net::{SocketAddr,IpAddr},
         str::FromStr,
+        process::exit,
+        collections::HashSet,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_sdk::signature::{Keypair, Signer},
     tempfile::TempDir,
 };
 
+fn parse_matches() -> ArgMatches<'static> {
+    // let shred_version_arg = Arg::with_name("shred_version")
+    //     .long("shred-version")
+    //     .value_name("VERSION")
+    //     .takes_value(true)
+    //     .default_value("0")
+    //     .help("Filter gossip nodes by this shred version");
+
+    App::new(crate_name!())
+        .about(crate_description!())
+        .version(solana_version::version!())
+        .arg(
+            Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help("Gossip DNS name or IP address for the validator to advertise in gossip \
+                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+        )
+        .arg(
+            Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("Gossip port number for the validator"),
+        )
+        .arg(
+            Arg::with_name("entrypoint")
+                .short("n")
+                .long("entrypoint")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Rendezvous with the cluster at this entrypoint"),
+        )
+        .get_matches()
+}
 
 pub fn main() {
     solana_logger::setup_with_default("solana=info");
+    let matches = parse_matches();
 
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
@@ -42,16 +88,77 @@ pub fn main() {
             .expect("invalid dynamic_port_range");
             
     let socket_addr_space = SocketAddrSpace::Unspecified;
-    let exit = Arc::new(AtomicBool::new(false));
+    let exit_gossip = Arc::new(AtomicBool::new(false));
 
     let identity_keypair = Keypair::new();
-    let gossip_addr = "127.0.0.1:8001";
-    let gossip_addr : SocketAddr = gossip_addr
-        .parse()
-        .expect("Unable to parse socket address");
+    let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
+
+    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entrypoint| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+                eprintln!("failed to parse entrypoint address: {}", e);
+                exit(1);
+            })
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let gossip_host: IpAddr = matches
+        .value_of("gossip_host")
+        .map(|gossip_host| {
+            solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
+                eprintln!("Failed to parse --gossip-host: {}", err);
+                exit(1);
+            })
+        })
+        .unwrap_or_else(|| {
+            if !entrypoint_addrs.is_empty() {
+                let mut order: Vec<_> = (0..entrypoint_addrs.len()).collect();
+                order.shuffle(&mut thread_rng());
+
+                let gossip_host = order.into_iter().find_map(|i| {
+                    let entrypoint_addr = &entrypoint_addrs[i];
+                    info!(
+                        "Contacting {} to determine the validator's public IP address",
+                        entrypoint_addr
+                    );
+                    solana_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
+                        |err| {
+                            eprintln!(
+                                "Failed to contact cluster entrypoint {}: {}",
+                                entrypoint_addr, err
+                            );
+                            None
+                        },
+                        Some,
+                    )
+                });
+
+                gossip_host.unwrap_or_else(|| {
+                    eprintln!("Unable to determine the validator's public IP address");
+                    exit(1);
+                })
+            } else {
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+            }
+        });
+
+    let gossip_addr = SocketAddr::new(
+        gossip_host,
+        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
+            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+                |err| {
+                    eprintln!("Unable to find an available gossip port: {}", err);
+                    exit(1);
+                },
+            )
+        }),
+    );
 
     info!("gossip_addr: {:?}", gossip_addr);
-    let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
 
     let node = Node::new_with_external_ip(
         &identity_keypair.pubkey(),
@@ -68,8 +175,14 @@ pub fn main() {
         socket_addr_space,
     );
 
+    let cluster_entrypoints = entrypoint_addrs
+        .iter()
+        .map(ContactInfo::new_gossip_entry_point)
+        .collect::<Vec<_>>();
 
-    cluster_info.set_entrypoints(vec![]);
+    // cluster_info.set_entrypoints(vec![]);
+    cluster_info.set_entrypoints(cluster_entrypoints);
+
     let cluster_info = Arc::new(cluster_info);
     let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
@@ -104,7 +217,7 @@ pub fn main() {
         true,   //should check dup instance
         Some(stats_reporter_sender.clone()),
 
-        &exit,
+        &exit_gossip,
     );
     gossip_service.join().unwrap();
 
