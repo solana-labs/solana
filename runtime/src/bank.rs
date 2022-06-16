@@ -7687,7 +7687,7 @@ pub(crate) mod tests {
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
             genesis_utils::{
-                activate_all_features, bootstrap_validator_stake_lamports,
+                self, activate_all_features, bootstrap_validator_stake_lamports,
                 create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
@@ -7706,6 +7706,7 @@ pub(crate) mod tests {
             bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
             clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
             compute_budget::ComputeBudgetInstruction,
+            entrypoint::MAX_PERMITTED_DATA_INCREASE,
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
             feature::Feature,
             genesis_config::create_genesis_config,
@@ -18854,5 +18855,132 @@ pub(crate) mod tests {
                 .unwrap()
                 .lamports()
         );
+    }
+
+    /// Ensure that accounts data size is updated correctly on resize transactions
+    #[test]
+    fn test_accounts_data_size_and_resize_transactions() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mock_program_id = Pubkey::new_unique();
+        bank.add_builtin(
+            "mock_realloc_program",
+            &mock_program_id,
+            mock_realloc_process_instruction,
+        );
+        let recent_blockhash = bank.last_blockhash();
+
+        let funding_keypair = Keypair::new();
+        bank.store_account(
+            &funding_keypair.pubkey(),
+            &AccountSharedData::new(10 * LAMPORTS_PER_SOL, 0, &mock_program_id),
+        );
+
+        let mut rng = rand::thread_rng();
+
+        // Test case: Grow account
+        {
+            let account_pubkey = Pubkey::new_unique();
+            let account_balance = LAMPORTS_PER_SOL;
+            let account_size = rng.gen_range(1, MAX_PERMITTED_DATA_LENGTH) as usize;
+            let account_data =
+                AccountSharedData::new(account_balance, account_size, &mock_program_id);
+            bank.store_account(&account_pubkey, &account_data);
+
+            let accounts_data_size_before = bank.load_accounts_data_size();
+            let account_grow_size = rng.gen_range(1, MAX_PERMITTED_DATA_INCREASE);
+            let transaction = create_mock_realloc_tx(
+                &mint_keypair,
+                &funding_keypair,
+                &account_pubkey,
+                account_size + account_grow_size,
+                account_balance,
+                mock_program_id,
+                recent_blockhash,
+            );
+            let result = bank.process_transaction(&transaction);
+            assert!(result.is_ok());
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after,
+                accounts_data_size_before.saturating_add(account_grow_size as u64),
+            );
+        }
+
+        // Test case: Shrink account
+        {
+            let account_pubkey = Pubkey::new_unique();
+            let account_balance = LAMPORTS_PER_SOL;
+            let account_size =
+                rng.gen_range(MAX_PERMITTED_DATA_LENGTH / 2, MAX_PERMITTED_DATA_LENGTH) as usize;
+            let account_data =
+                AccountSharedData::new(account_balance, account_size, &mock_program_id);
+            bank.store_account(&account_pubkey, &account_data);
+
+            let accounts_data_size_before = bank.load_accounts_data_size();
+            let account_shrink_size = rng.gen_range(1, account_size);
+            let transaction = create_mock_realloc_tx(
+                &mint_keypair,
+                &funding_keypair,
+                &account_pubkey,
+                account_size - account_shrink_size,
+                account_balance,
+                mock_program_id,
+                recent_blockhash,
+            );
+            let result = bank.process_transaction(&transaction);
+            assert!(result.is_ok());
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after,
+                accounts_data_size_before.saturating_sub(account_shrink_size as u64),
+            );
+        }
+    }
+
+    /// Ensure that accounts data size is updated correctly by rent collection
+    #[test]
+    fn test_accounts_data_size_and_rent_collection() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = genesis_utils::create_genesis_config(100 * LAMPORTS_PER_SOL);
+        genesis_config.rent = Rent::default();
+        activate_all_features(&mut genesis_config);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let slot = years_as_slots(
+            genesis_config.rent.exemption_threshold,
+            &genesis_config.poh_config.target_tick_duration,
+            genesis_config.ticks_per_slot,
+        ) as u64;
+        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+
+        // Store an account into the bank that is rent-paying and has data
+        let data_size = 123;
+        let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
+        let keypair = Keypair::new();
+        bank.store_account(&keypair.pubkey(), &account);
+
+        // Ensure if we collect rent from the account that it will be reclaimed
+        {
+            let info = bank.rent_collector.collect_from_existing_account(
+                &keypair.pubkey(),
+                &mut account,
+                None,
+            );
+            assert_eq!(info.account_data_len_reclaimed, data_size as u64);
+        }
+
+        // Collect rent for real
+        bank.collect_rent_eagerly(false);
+
+        // Ensure the account is reclaimed by rent collection
+        // NOTE: Use `<=` here (instead of `==`) since other accounts could
+        // also be reclaimed by rent collection.
+        assert!(bank.load_accounts_data_size_delta() <= -(data_size as i64));
     }
 }
