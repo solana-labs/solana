@@ -86,7 +86,6 @@ members = [
     "watchtower",
     "zk-token-sdk",
     "gossip-only",
-    "gossip-only-n2",
 ]
 
 exclude = [

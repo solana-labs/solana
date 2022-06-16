@@ -93,6 +93,7 @@ pub fn main() {
     let identity_keypair = Keypair::new();
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
 
+    //Get Gossip Entry Point if passed in 
     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
         .unwrap_or_default()
         .into_iter()
@@ -106,6 +107,7 @@ pub fn main() {
         .into_iter()
         .collect::<Vec<_>>();
 
+    //Setup Gossip IP
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
@@ -146,6 +148,7 @@ pub fn main() {
             }
         });
 
+    //Setup Gossip IP:Port
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
@@ -160,6 +163,7 @@ pub fn main() {
 
     info!("gossip_addr: {:?}", gossip_addr);
 
+    //Setup Node
     let node = Node::new_with_external_ip(
         &identity_keypair.pubkey(),
         &gossip_addr,
@@ -180,9 +184,7 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point)
         .collect::<Vec<_>>();
 
-    // cluster_info.set_entrypoints(vec![]);
     cluster_info.set_entrypoints(cluster_entrypoints);
-
     let cluster_info = Arc::new(cluster_info);
     let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
