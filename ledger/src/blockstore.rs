@@ -1,6 +1,8 @@
 //! The `blockstore` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
+
+use rayon::iter::IntoParallelIterator;
 use {
     crate::{
         ancestor_iterator::AncestorIterator,
@@ -2741,17 +2743,19 @@ impl Blockstore {
     ) -> DashSet<Pubkey> {
         let result = DashSet::new();
 
-        for slot in starting_slot..=ending_slot {
-            if let Ok(entries) = self.get_slot_entries(slot, 0) {
-                entries.par_iter().for_each(|entry| {
-                    entry.transactions.iter().for_each(|tx| {
-                        tx.message.static_account_keys().iter().for_each(|pubkey| {
-                            result.insert(*pubkey);
+        (starting_slot..=ending_slot)
+            .into_par_iter()
+            .for_each(|slot| {
+                if let Ok(entries) = self.get_slot_entries(slot, 0) {
+                    entries.par_iter().for_each(|entry| {
+                        entry.transactions.iter().for_each(|tx| {
+                            tx.message.static_account_keys().iter().for_each(|pubkey| {
+                                result.insert(*pubkey);
+                            });
                         });
                     });
-                });
-            }
-        }
+                }
+            });
 
         result
     }
