@@ -5297,7 +5297,7 @@ impl Bank {
     }
 
     /// Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
-    fn get_rent_collection_accounts_between_slots(
+    pub(crate) fn get_rent_collection_accounts_between_slots(
         &self,
         minimized_account_set: &DashSet<Pubkey>,
         starting_slot: Slot,
