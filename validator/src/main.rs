@@ -2879,6 +2879,8 @@ pub fn main() {
         }),
     );
 
+    info!("greg_main_gossip_addr: {:?}", gossip_addr);
+
     let overwrite_tpu_addr = matches.value_of("tpu_host_addr").map(|tpu_addr| {
         solana_net_utils::parse_host_port(tpu_addr).unwrap_or_else(|err| {
             eprintln!("Failed to parse --overwrite-tpu-addr: {}", err);
@@ -2891,6 +2893,7 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point)
         .collect::<Vec<_>>();
 
+    info!("greg_bind_address: {:?}", bind_address);
     let mut node = Node::new_with_external_ip(
         &identity_keypair.pubkey(),
         &gossip_addr,
