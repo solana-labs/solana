@@ -664,6 +664,34 @@ pub mod tests {
     }
 
     #[test]
+    fn test_stakes_batch() {
+        for i in 0..4 {
+            let stakes_cache = StakesCache::new(Stakes {
+                epoch: i,
+                ..Stakes::default()
+            });
+
+            let ((vote_pubkey, vote_account), (stake_pubkey, stake_account)) =
+                create_staked_node_accounts(10);
+
+            stakes_cache.check_and_store_batch(&[
+                (&vote_pubkey, &vote_account),
+                (&stake_pubkey, &stake_account),
+            ]);
+            let stake = stake_state::stake_from(&stake_account).unwrap();
+            {
+                let stakes = stakes_cache.stakes();
+                let vote_accounts = stakes.vote_accounts();
+                assert!(vote_accounts.get(&vote_pubkey).is_some());
+                assert_eq!(
+                    vote_accounts.get(&vote_pubkey).unwrap().0,
+                    stake.stake(i, None)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_stakes_highest() {
         let stakes_cache = StakesCache::default();
 
