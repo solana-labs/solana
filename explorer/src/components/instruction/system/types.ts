@@ -94,6 +94,11 @@ export const TransferWithSeedInfo = type({
   sourceOwner: PublicKeyFromString,
 });
 
+export type UpgradeNonceInfo = Infer<typeof UpgradeNonceInfo>;
+export const UpgradeNonceInfo = type({
+  nonceAccount: PublicKeyFromString,
+});
+
 export type SystemInstructionType = Infer<typeof SystemInstructionType>;
 export const SystemInstructionType = enums([
   "createAccount",
