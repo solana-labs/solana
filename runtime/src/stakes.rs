@@ -125,6 +125,60 @@ impl StakesCache {
         }
     }
 
+    pub fn check_and_store_batch(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
+        let mut stakes = self.0.write().unwrap();
+
+        for (pubkey, account) in accounts {
+            // TODO: If the account is already cached as a vote or stake account
+            // but the owner changes, then this needs to evict the account from
+            // the cache. see:
+            // https://github.com/solana-labs/solana/pull/24200#discussion_r849935444
+            let pubkey = *pubkey;
+            let account = *account;
+            let owner = account.owner();
+            // Zero lamport accounts are not stored in accounts-db
+            // and so should be removed from cache as well.
+            if account.lamports() == 0 {
+                if solana_vote_program::check_id(owner) {
+                    stakes.remove_vote_account(pubkey);
+                } else if solana_stake_program::check_id(owner) {
+                    stakes.remove_stake_delegation(pubkey);
+                }
+                continue;
+            }
+            debug_assert_ne!(account.lamports(), 0u64);
+            if solana_vote_program::check_id(owner) {
+                if VoteState::is_correct_size_and_initialized(account.data()) {
+                    match VoteAccount::try_from(account.clone()) {
+                        Ok(vote_account) => {
+                            {
+                                // Called to eagerly deserialize vote state
+                                let _res = vote_account.vote_state();
+                            }
+                            let mut stakes = self.0.write().unwrap();
+                            stakes.upsert_vote_account(pubkey, vote_account);
+                        }
+                        Err(_) => {
+                            let mut stakes = self.0.write().unwrap();
+                            stakes.remove_vote_account(pubkey)
+                        }
+                    }
+                } else {
+                    stakes.remove_vote_account(pubkey)
+                };
+            } else if solana_stake_program::check_id(owner) {
+                match StakeAccount::try_from(account.clone()) {
+                    Ok(stake_account) => {
+                        stakes.upsert_stake_delegation(*pubkey, stake_account);
+                    }
+                    Err(_) => {
+                        stakes.remove_stake_delegation(pubkey);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let mut stakes = self.0.write().unwrap();
         stakes.activate_epoch(next_epoch, thread_pool)
