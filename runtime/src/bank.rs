@@ -1959,6 +1959,11 @@ impl Bank {
                         ),
                         ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
                         (
+                            "redeem_rewards_us",
+                            metrics.redeem_rewards_us.load(Relaxed),
+                            i64
+                        ),
+                        (
                             "store_stake_accounts_us",
                             metrics.store_stake_accounts_us.load(Relaxed),
                             i64
@@ -3049,6 +3054,7 @@ impl Bank {
             vote_with_stake_delegations_map
         };
 
+        // TODO (hyi): sharding on vote_pubkey over the slots
         let mut m = Measure::start("calculate_points");
         let points: u128 = thread_pool.install(|| {
             vote_with_stake_delegations_map
@@ -3081,6 +3087,7 @@ impl Bank {
             return 0.0;
         }
 
+        // TODO (hyi): sharding on vote_pubkey over the slots
         // pay according to point value
         let point_value = PointValue { rewards, points };
         let vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)> =
@@ -3102,6 +3109,7 @@ impl Bank {
             },
         );
 
+        // TODO (hyi): sharding on stake_pubkey over the slots
         let mut m = Measure::start("redeem_rewards");
         let stake_rewards: Vec<StakeReward> = thread_pool.install(|| {
             stake_delegation_iterator
