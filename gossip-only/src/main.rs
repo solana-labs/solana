@@ -1,18 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
 #[cfg(not(target_env = "msvc"))]
-// use jemallocator::Jemalloc;
-///Try calling: make_gossip_node() in gossip_service.rs
-
-// extern crate log;
 use {
     log::*,
     solana_gossip::{
         cluster_info::{
-            ClusterInfo, Node, //DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS,
-            // DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS,
+            ClusterInfo, Node,
         },
-        // contact_info::ContactInfo,
-        // crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         gossip_service::GossipService,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
@@ -21,12 +14,12 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
         bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader, //GenesisConfigInfo},
+        genesis_utils::create_genesis_config_with_leader,
     },
     crossbeam_channel::unbounded,
     std::{
         sync::{
-            atomic::AtomicBool,// Ordering},
+            atomic::AtomicBool,
             Arc, RwLock,
         },
         net::{SocketAddr,IpAddr},
@@ -39,24 +32,24 @@ use {
 
 
 pub fn main() {
+    solana_logger::setup_with_default("solana=info");
+
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     
     let dynamic_port_range =
         solana_net_utils::parse_port_range(default_dynamic_port_range)
             .expect("invalid dynamic_port_range");
-    solana_logger::setup_with_default("solana=info");
+            
     let socket_addr_space = SocketAddrSpace::Unspecified;
     let exit = Arc::new(AtomicBool::new(false));
 
-    // let identity_keypair = Arc::new(Keypair::new());
     let identity_keypair = Keypair::new();
     let gossip_addr = "127.0.0.1:8001";
     let gossip_addr : SocketAddr = gossip_addr
         .parse()
         .expect("Unable to parse socket address");
 
-    // let gossip_addr = SocketAddr::new("127.0.0.1",8001);
     info!("gossip_addr: {:?}", gossip_addr);
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
 
@@ -68,7 +61,6 @@ pub fn main() {
         None,
     );
 
-    // let node = Node::new_localhost();
     let identity_keypair = Arc::new(identity_keypair);
     let cluster_info = ClusterInfo::new(
         node.info.clone(),
@@ -77,9 +69,7 @@ pub fn main() {
     );
 
 
-    // cluster_info.set_contact_debug_interval(config.contact_debug_interval);
     cluster_info.set_entrypoints(vec![]);
-    // cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
     let cluster_info = Arc::new(cluster_info);
     let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
@@ -89,6 +79,8 @@ pub fn main() {
         &solana_sdk::pubkey::new_rand(), // validator_pubkey
         1,                               // validator_stake_lamports
     );
+
+    //Generate bank forks
     let bank0 = Bank::new_with_paths_for_tests(
         &genesis_config_info.genesis_config,
         vec![accounts_dir.path().to_path_buf()],
@@ -103,15 +95,14 @@ pub fn main() {
     let bank_forks = BankForks::new(bank0);
     let bank_forks = Arc::new(RwLock::new(bank_forks));
    
+    // Run Gossip
     let gossip_service = GossipService::new(
         &cluster_info,
         Some(bank_forks.clone()),
         node.sockets.gossip,
-        // config.gossip_validators.clone(),
         None,
         true,   //should check dup instance
         Some(stats_reporter_sender.clone()),
-        // None,
 
         &exit,
     );
