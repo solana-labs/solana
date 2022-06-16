@@ -1,27 +1,21 @@
-use std::{
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, Mutex,
+use {
+    crate::{accounts_index::ScanConfig, bank::Bank},
+    dashmap::DashSet,
+    log::info,
+    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    solana_measure::measure,
+    solana_sdk::{
+        account::ReadableAccount,
+        account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+        clock::Slot,
+        pubkey::Pubkey,
+    },
+    std::{
+        collections::HashSet,
+        sync::{Arc, Mutex},
     },
 };
-
-use dashmap::DashSet;
-use log::info;
-use rayon::{
-    iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSlice,
-};
-use solana_measure::measure;
-use solana_sdk::{
-    account::ReadableAccount,
-    account_utils::StateMut,
-    bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-    clock::Slot,
-    pubkey::Pubkey,
-};
-
-use crate::{accounts_db::AccountStorageEntry, accounts_index::ScanConfig, bank::Bank};
 
 pub struct SnapshotMinimizer {
     bank: Arc<Bank>,
@@ -232,21 +226,20 @@ impl SnapshotMinimizer {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use dashmap::DashSet;
-    use solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
-        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        genesis_config::create_genesis_config,
-        pubkey::Pubkey,
-        signer::Signer,
-        stake,
-    };
-
-    use crate::{
-        bank::Bank, genesis_utils::create_genesis_config_with_leader,
-        snapshot_minimizer::SnapshotMinimizer,
+    use {
+        crate::{
+            bank::Bank, genesis_utils::create_genesis_config_with_leader,
+            snapshot_minimizer::SnapshotMinimizer,
+        },
+        dashmap::DashSet,
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount, WritableAccount},
+            bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+            genesis_config::create_genesis_config,
+            signer::Signer,
+            stake,
+        },
+        std::sync::Arc,
     };
 
     #[test]
