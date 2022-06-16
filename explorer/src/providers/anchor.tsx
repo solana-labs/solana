@@ -1,4 +1,4 @@
-import { Idl, Program, Provider } from "@project-serum/anchor";
+import { Idl, Program, AnchorProvider } from "@project-serum/anchor";
 import { Connection, Keypair } from "@solana/web3.js";
 import { NodeWallet } from "@metaplex/js";
 
@@ -19,7 +19,7 @@ export function useAnchorProgram(
   if (cacheEntry === undefined) {
     const promise = Program.at(
       programAddress,
-      new Provider(new Connection(url), new NodeWallet(Keypair.generate()), {})
+      new AnchorProvider(new Connection(url), new NodeWallet(Keypair.generate()), {})
     )
       .then((program) => {
         cachedAnchorProgramPromises[key] = {

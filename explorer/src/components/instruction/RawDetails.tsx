@@ -1,7 +1,7 @@
 import React from "react";
 import { TransactionInstruction } from "@solana/web3.js";
-import { Address } from "components/common/Address";
-import { HexData } from "components/common/HexData";
+import { Address } from "src/components/common/Address";
+import { HexData } from "src/components/common/HexData";
 
 export function RawDetails({ ix }: { ix: TransactionInstruction }) {
   return (

@@ -1,17 +1,17 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { LoadingCard } from "components/common/LoadingCard";
-import { ErrorCard } from "components/common/ErrorCard";
-import { Address } from "components/common/Address";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { Address } from "src/components/common/Address";
 import {
   useTokenLargestTokens,
   useFetchTokenLargestAccounts,
   TokenAccountBalancePairWithOwner,
-} from "providers/mints/largest";
-import { FetchStatus } from "providers/cache";
-import { useMintAccountInfo } from "providers/accounts";
-import { normalizeTokenAmount } from "utils";
-import { useTokenRegistry } from "providers/mints/token-registry";
+} from "src/providers/mints/largest";
+import { FetchStatus } from "src/providers/cache";
+import { useMintAccountInfo } from "src/providers/accounts";
+import { normalizeTokenAmount } from "src/utils";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 import BigNumber from "bignumber.js";
 
 export function TokenLargestAccountsCard({ pubkey }: { pubkey: PublicKey }) {

@@ -1,4 +1,4 @@
-import { Cluster } from "providers/cluster";
+import { Cluster } from "src/providers/cluster";
 
 const MARKET_REGISTRY: { [key: string]: string } = {
   "7kgkDyW7dmyMeP8KFXzbcUZz1R2WHsovDZ7n3ihZuNDS": "Serum: MSRM / USDC",

@@ -5,18 +5,18 @@ import {
   usePerformanceInfo,
   PERF_UPDATE_SEC,
   ClusterStatsStatus,
-} from "providers/stats/solanaClusterStats";
+} from "src/providers/stats/solanaClusterStats";
 import classNames from "classnames";
-import { TableCardBody } from "components/common/TableCardBody";
+import { TableCardBody } from "src/components/common/TableCardBody";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
-import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
-import { StatsNotReady } from "pages/ClusterStatsPage";
+import { PerformanceInfo } from "src/providers/stats/solanaPerformanceInfo";
+import { StatsNotReady } from "pages/index";
 import {
   PingInfo,
   PingRollupInfo,
   PingStatus,
   useSolanaPingInfo,
-} from "providers/stats/SolanaPingProvider";
+} from "src/providers/stats/SolanaPingProvider";
 
 type Series = "short" | "medium" | "long";
 type SetSeries = (series: Series) => void;

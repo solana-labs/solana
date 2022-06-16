@@ -1,7 +1,7 @@
 import React from "react";
-import { Cluster, clusterSlug, useCluster } from "providers/cluster";
+import { Cluster, clusterSlug, useCluster } from "src/providers/cluster";
 import { fetch } from "cross-fetch";
-import { useStatsProvider } from "providers/stats/solanaClusterStats";
+import { useStatsProvider } from "src/providers/stats/solanaClusterStats";
 
 const FETCH_PING_INTERVAL = 60 * 1000;
 

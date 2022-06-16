@@ -1,7 +1,7 @@
 import { Connection, VoteAccountStatus } from "@solana/web3.js";
-import { Cluster, useCluster } from "providers/cluster";
+import { Cluster, useCluster } from "src/providers/cluster";
 import React from "react";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 async function fetchVoteAccounts(
   cluster: Cluster,

@@ -1,60 +1,61 @@
 import React from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
   ParsedInstruction,
   PartiallyDecodedInstruction,
 } from "@solana/web3.js";
-import { CacheEntry, FetchStatus } from "providers/cache";
+import { CacheEntry, FetchStatus } from "src/providers/cache";
 import {
   useAccountHistories,
   useFetchAccountHistory,
-} from "providers/accounts/history";
+} from "src/providers/accounts/history";
 import {
   useAccountOwnedTokens,
   TokenInfoWithPubkey,
   TOKEN_PROGRAM_ID,
-} from "providers/accounts/tokens";
-import { ErrorCard } from "components/common/ErrorCard";
-import { LoadingCard } from "components/common/LoadingCard";
-import { Signature } from "components/common/Signature";
-import { Address } from "components/common/Address";
-import { Slot } from "components/common/Slot";
+} from "src/providers/accounts/tokens";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { Signature } from "src/components/common/Signature";
+import { Address } from "src/components/common/Address";
+import { Slot } from "src/components/common/Slot";
 import {
   Details,
   useFetchTransactionDetails,
   useTransactionDetailsCache,
-} from "providers/transactions/parsed";
-import { reportError } from "utils/sentry";
-import { intoTransactionInstruction, displayAddress } from "utils/tx";
+} from "src/providers/transactions/parsed";
+import { reportError } from "src/utils/sentry";
+import { intoTransactionInstruction, displayAddress } from "src/utils/tx";
 import {
   isTokenSwapInstruction,
   parseTokenSwapInstructionTitle,
-} from "components/instruction/token-swap/types";
+} from "src/components/instruction/token-swap/types";
 import {
   isTokenLendingInstruction,
   parseTokenLendingInstructionTitle,
-} from "components/instruction/token-lending/types";
+} from "src/components/instruction/token-lending/types";
 import {
   isSerumInstruction,
   parseSerumInstructionTitle,
-} from "components/instruction/serum/types";
+} from "src/components/instruction/serum/types";
 import {
   isBonfidaBotInstruction,
   parseBonfidaBotInstructionTitle,
-} from "components/instruction/bonfida-bot/types";
-import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
-import { useCluster, Cluster } from "providers/cluster";
-import { Link } from "react-router-dom";
-import { Location } from "history";
-import { useQuery } from "utils/url";
+} from "src/components/instruction/bonfida-bot/types";
+import { INNER_INSTRUCTIONS_START_SLOT } from "pages/tx/[signature]";
+import { useCluster, Cluster } from "src/providers/cluster";
+import { useQuery } from "src/utils/url";
 import { TokenInfoMap } from "@solana/spl-token-registry";
-import { useTokenRegistry } from "providers/mints/token-registry";
-import { getTokenProgramInstructionName } from "utils/instruction";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
+import { getTokenProgramInstructionName } from "src/utils/instruction";
 import {
   isMangoInstruction,
   parseMangoInstructionTitle,
-} from "components/instruction/mango/types";
+} from "src/components/instruction/mango/types";
+import { dummyUrl } from "src/constants/urls";
 
 const TRUNCATE_TOKEN_LENGTH = 10;
 const ALL_TOKENS = "";
@@ -305,18 +306,20 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   const { cluster } = useCluster();
   const { tokenRegistry } = useTokenRegistry();
+  const router = useRouter();
 
-  const buildLocation = (location: Location, filter: string) => {
+  const buildLocation = (filter: string) => {
+    const location = new URL(router.asPath, dummyUrl);
     const params = new URLSearchParams(location.search);
     if (filter === ALL_TOKENS) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    
+    return params.toString().length > 0
+      ? `${location.pathname}?${params.toString()}`
+      : location.pathname;
   };
 
   const filterOptions: string[] = [ALL_TOKENS];
@@ -349,15 +352,15 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
           return (
             <Link
               key={filterOption}
-              to={(location: Location) => buildLocation(location, filterOption)}
-              className={`dropdown-item${
-                filterOption === filter ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildLocation(filterOption)}
             >
-              {filterOption === ALL_TOKENS
-                ? "All Tokens"
-                : formatTokenName(filterOption, cluster, tokenRegistry)}
+              <span className={`dropdown-item${
+                filterOption === filter ? " active" : ""
+              }`} onClick={toggle}>
+                {filterOption === ALL_TOKENS
+                  ? "All Tokens"
+                  : formatTokenName(filterOption, cluster, tokenRegistry)}
+              </span>
             </Link>
           );
         })}
@@ -367,7 +370,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
 };
 
 const TokenTransactionRow = React.memo(
-  ({
+  function TokenTransactionRow ({
     mint,
     tx,
     details,
@@ -375,7 +378,7 @@ const TokenTransactionRow = React.memo(
     mint: PublicKey;
     tx: ConfirmedSignatureInfo;
     details: CacheEntry<Details> | undefined;
-  }) => {
+  }) {
     const fetchDetails = useFetchTransactionDetails();
     const { cluster } = useCluster();
 

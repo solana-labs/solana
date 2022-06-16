@@ -1,17 +1,17 @@
 import React from "react";
-import { TableCardBody } from "components/common/TableCardBody";
-import { SolBalance } from "utils";
-import { displayTimestampUtc } from "utils/date";
-import { Account, useFetchAccountInfo } from "providers/accounts";
-import { Address } from "components/common/Address";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { SolBalance } from "src/utils";
+import { displayTimestampUtc } from "src/utils/date";
+import { Account, useFetchAccountInfo } from "src/providers/accounts";
+import { Address } from "src/components/common/Address";
 import {
   StakeAccountInfo,
   StakeMeta,
   StakeAccountType,
-} from "validators/accounts/stake";
+} from "src/validators/accounts/stake";
 import BN from "bn.js";
 import { StakeActivationData } from "@solana/web3.js";
-import { Epoch } from "components/common/Epoch";
+import { Epoch } from "src/components/common/Epoch";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 

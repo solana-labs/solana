@@ -1,4 +1,4 @@
-import { SolanaPingProvider } from "providers/stats/SolanaPingProvider";
+import { SolanaPingProvider } from "src/providers/stats/SolanaPingProvider";
 import React from "react";
 import { SolanaClusterStatsProvider } from "./solanaClusterStats";
 

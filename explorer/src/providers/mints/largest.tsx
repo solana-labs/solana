@@ -1,17 +1,17 @@
 import React from "react";
-import { useCluster, Cluster } from "providers/cluster";
-import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
+import { useCluster, Cluster } from "src/providers/cluster";
+import * as Cache from "src/providers/cache";
+import { ActionType, FetchStatus } from "src/providers/cache";
 import {
   PublicKey,
   Connection,
   TokenAccountBalancePair,
   ParsedAccountData,
 } from "@solana/web3.js";
-import { TokenAccountInfo, TokenAccount } from "validators/accounts/token";
-import { ParsedInfo } from "validators";
+import { TokenAccountInfo, TokenAccount } from "src/validators/accounts/token";
+import { ParsedInfo } from "src/validators";
 import { create } from "superstruct";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 type LargestAccounts = {
   largest: TokenAccountBalancePairWithOwner[];

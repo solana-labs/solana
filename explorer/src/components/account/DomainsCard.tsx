@@ -1,9 +1,9 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useUserDomains, DomainInfo } from "../../utils/name-service";
-import { LoadingCard } from "components/common/LoadingCard";
-import { ErrorCard } from "components/common/ErrorCard";
-import { Address } from "components/common/Address";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { Address } from "src/components/common/Address";
 
 export function DomainsCard({ pubkey }: { pubkey: PublicKey }) {
   const [domains, domainsLoading] = useUserDomains(pubkey);

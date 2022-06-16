@@ -5,31 +5,31 @@ import {
   PartiallyDecodedInstruction,
   PublicKey,
 } from "@solana/web3.js";
-import { useAccountHistory } from "providers/accounts";
-import { useTokenRegistry } from "providers/mints/token-registry";
+import { useAccountHistory } from "src/providers/accounts";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 import { create } from "superstruct";
 import {
   TokenInstructionType,
   Transfer,
   TransferChecked,
-} from "components/instruction/token/types";
-import { InstructionContainer } from "utils/instruction";
-import { Signature } from "components/common/Signature";
-import { Address } from "components/common/Address";
-import { normalizeTokenAmount } from "utils";
+} from "src/components/instruction/token/types";
+import { InstructionContainer } from "src/utils/instruction";
+import { Signature } from "src/components/common/Signature";
+import { Address } from "src/components/common/Address";
+import { normalizeTokenAmount } from "src/utils";
 import {
   getTransactionRows,
   HistoryCardFooter,
   HistoryCardHeader,
 } from "../HistoryCardComponents";
-import { LoadingCard } from "components/common/LoadingCard";
-import { useFetchAccountHistory } from "providers/accounts/history";
-import { ErrorCard } from "components/common/ErrorCard";
-import { FetchStatus } from "providers/cache";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { useFetchAccountHistory } from "src/providers/accounts/history";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { FetchStatus } from "src/providers/cache";
 import Moment from "react-moment";
 import { extractMintDetails, MintDetails } from "./common";
-import { Cluster, useCluster } from "providers/cluster";
-import { reportError } from "utils/sentry";
+import { Cluster, useCluster } from "src/providers/cluster";
+import { reportError } from "src/utils/sentry";
 
 type IndexedTransfer = {
   index: number;

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redeclare */
-
 import {
   array,
   nullable,
@@ -9,7 +7,7 @@ import {
   string,
   Infer,
 } from "superstruct";
-import { PublicKeyFromString } from "validators/pubkey";
+import { PublicKeyFromString } from "src/validators/pubkey";
 
 export type InitializeInfo = Infer<typeof InitializeInfo>;
 export const InitializeInfo = type({

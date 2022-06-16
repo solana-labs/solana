@@ -8,9 +8,9 @@ import {
 import { useCluster, Cluster } from "../cluster";
 import { DetailsProvider } from "./parsed";
 import { RawDetailsProvider } from "./raw";
-import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
-import { reportError } from "utils/sentry";
+import * as Cache from "src/providers/cache";
+import { ActionType, FetchStatus } from "src/providers/cache";
+import { reportError } from "src/utils/sentry";
 export { useTransactionDetails } from "./parsed";
 
 export type Confirmations = number | "max";

@@ -1,6 +1,6 @@
 import React from "react";
-import { useCluster, Cluster } from "providers/cluster";
-import { displayTimestamp } from "utils/date";
+import { useCluster, Cluster } from "src/providers/cluster";
+import { displayTimestamp } from "src/utils/date";
 
 type Announcement = {
   message: string;

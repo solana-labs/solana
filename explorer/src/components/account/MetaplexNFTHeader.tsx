@@ -1,16 +1,16 @@
 import React from "react";
-import "bootstrap/dist/js/bootstrap.min.js";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   NFTData,
   useFetchAccountInfo,
   useMintAccountInfo,
-} from "providers/accounts";
+} from "src/providers/accounts";
 import { programs } from "@metaplex/js";
-import { ArtContent } from "components/common/NFTArt";
-import { InfoTooltip } from "components/common/InfoTooltip";
-import { clusterPath } from "utils/url";
-import { Link } from "react-router-dom";
-import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
+import { ArtContent } from "src/components/common/NFTArt";
+import { InfoTooltip } from "src/components/common/InfoTooltip";
+import { clusterPath } from "src/utils/url";
+import { EditionInfo } from "src/providers/accounts/utils/getEditionInfo";
 import { PublicKey } from "@solana/web3.js";
 
 export function NFTHeader({
@@ -23,6 +23,7 @@ export function NFTHeader({
   const collectionAddress = nftData.metadata.collection?.key;
   const collectionMintInfo = useMintAccountInfo(collectionAddress);
   const fetchAccountInfo = useFetchAccountInfo();
+  const router = useRouter();
 
   React.useEffect(() => {
     if (collectionAddress && !collectionMintInfo) {
@@ -72,7 +73,7 @@ export function NFTHeader({
             Creators
           </button>
           <div className="dropdown-menu mt-2">
-            {getCreatorDropdownItems(metadata.data.creators)}
+            {getCreatorDropdownItems(metadata.data.creators, router.asPath)}
           </div>
         </div>
       </div>
@@ -81,7 +82,7 @@ export function NFTHeader({
 }
 
 type Creator = programs.metadata.Creator;
-function getCreatorDropdownItems(creators: Creator[] | null) {
+function getCreatorDropdownItems(creators: Creator[] | null, routerPath: string) {
   const CreatorHeader = () => {
     const creatorTooltip =
       "Verified creators signed the metadata associated with this NFT when it was created.";
@@ -120,11 +121,10 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
         }
       >
         {getVerifiedIcon(creator.verified)}
-        <Link
-          className="dropdown-item font-monospace creator-dropdown-entry-address"
-          to={clusterPath(`/address/${creator.address}`)}
-        >
-          {creator.address}
+        <Link href={clusterPath(`/address/${creator.address}`, routerPath)}>
+          <span className="dropdown-item font-monospace creator-dropdown-entry-address">
+            {creator.address}
+          </span>
         </Link>
         <div className="me-3"> {`${creator.share}%`}</div>
       </div>

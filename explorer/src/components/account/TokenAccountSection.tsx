@@ -3,29 +3,29 @@ import {
   NFTData,
   TokenProgramData,
   useFetchAccountInfo,
-} from "providers/accounts";
+} from "src/providers/accounts";
 import {
   TokenAccount,
   MintAccountInfo,
   TokenAccountInfo,
   MultisigAccountInfo,
-} from "validators/accounts/token";
+} from "src/validators/accounts/token";
 import { create } from "superstruct";
-import { TableCardBody } from "components/common/TableCardBody";
-import { Address } from "components/common/Address";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { Address } from "src/components/common/Address";
 import { UnknownAccountCard } from "./UnknownAccountCard";
-import { Cluster, useCluster } from "providers/cluster";
-import { abbreviatedNumber, normalizeTokenAmount } from "utils";
-import { addressLabel } from "utils/tx";
-import { reportError } from "utils/sentry";
-import { useTokenRegistry } from "providers/mints/token-registry";
+import { Cluster, useCluster } from "src/providers/cluster";
+import { abbreviatedNumber, normalizeTokenAmount } from "src/utils";
+import { addressLabel } from "src/utils/tx";
+import { reportError } from "src/utils/sentry";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
-import { Copyable } from "components/common/Copyable";
-import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
-import { displayTimestampWithoutDate } from "utils/date";
-import { LoadingCard } from "components/common/LoadingCard";
+import { Copyable } from "src/components/common/Copyable";
+import { CoingeckoStatus, useCoinGecko } from "src/utils/coingecko";
+import { displayTimestampWithoutDate } from "src/utils/date";
+import { LoadingCard } from "src/components/common/LoadingCard";
 import { PublicKey } from "@solana/web3.js";
-import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
+import isMetaplexNFT from "src/providers/accounts/utils/isMetaplexNFT";
 
 const getEthAddress = (link?: string) => {
   let address = "";

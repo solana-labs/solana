@@ -17,8 +17,8 @@ import {
   Secp256k1Program,
   Ed25519Program,
 } from "@solana/web3.js";
-import { Cluster } from "providers/cluster";
-import { SerumMarketRegistry } from "serumMarketRegistry";
+import { Cluster } from "src/providers/cluster";
+import { SerumMarketRegistry } from "src/serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export enum PROGRAM_NAMES {

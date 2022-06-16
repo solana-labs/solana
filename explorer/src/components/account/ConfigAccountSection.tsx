@@ -1,18 +1,18 @@
 import React from "react";
-import { Account, useFetchAccountInfo } from "providers/accounts";
-import { TableCardBody } from "components/common/TableCardBody";
+import { Account, useFetchAccountInfo } from "src/providers/accounts";
+import { TableCardBody } from "src/components/common/TableCardBody";
 import {
   ConfigAccount,
   StakeConfigInfoAccount,
   ValidatorInfoAccount,
-} from "validators/accounts/config";
+} from "src/validators/accounts/config";
 import {
   AccountAddressRow,
   AccountBalanceRow,
   AccountHeader,
-} from "components/common/Account";
+} from "src/components/common/Account";
 import { PublicKey } from "@solana/web3.js";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 
 const MAX_SLASH_PENALTY = Math.pow(2, 8);
 

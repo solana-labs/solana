@@ -1,11 +1,11 @@
 import React, { useMemo } from "react";
-import { Account } from "providers/accounts";
-import { useCluster } from "providers/cluster";
+import { Account } from "src/providers/accounts";
+import { useCluster } from "src/providers/cluster";
 import { BorshAccountsCoder } from "@project-serum/anchor";
 import { IdlTypeDef } from "@project-serum/anchor/dist/cjs/idl";
-import { getAnchorProgramName, mapAccountToRows } from "utils/anchor";
-import { ErrorCard } from "components/common/ErrorCard";
-import { useAnchorProgram } from "providers/anchor";
+import { getAnchorProgramName, mapAccountToRows } from "src/utils/anchor";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { useAnchorProgram } from "src/providers/anchor";
 
 export function AnchorAccountCard({ account }: { account: Account }) {
   const { lamports } = account;

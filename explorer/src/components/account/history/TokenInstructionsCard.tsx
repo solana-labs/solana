@@ -5,17 +5,17 @@ import {
   PartiallyDecodedInstruction,
   PublicKey,
 } from "@solana/web3.js";
-import { useAccountHistory } from "providers/accounts";
-import { Signature } from "components/common/Signature";
+import { useAccountHistory } from "src/providers/accounts";
+import { Signature } from "src/components/common/Signature";
 import {
   getTokenInstructionName,
   InstructionContainer,
-} from "utils/instruction";
-import { Address } from "components/common/Address";
-import { LoadingCard } from "components/common/LoadingCard";
-import { ErrorCard } from "components/common/ErrorCard";
-import { FetchStatus } from "providers/cache";
-import { useFetchAccountHistory } from "providers/accounts/history";
+} from "src/utils/instruction";
+import { Address } from "src/components/common/Address";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { FetchStatus } from "src/providers/cache";
+import { useFetchAccountHistory } from "src/providers/accounts/history";
 import {
   getTransactionRows,
   HistoryCardFooter,

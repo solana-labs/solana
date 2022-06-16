@@ -1,7 +1,7 @@
 import { TransactionError } from "@solana/web3.js";
-import { Cluster } from "providers/cluster";
-import { getProgramName } from "utils/tx";
-import { getTransactionInstructionError } from "utils/program-err";
+import { Cluster } from "src/providers/cluster";
+import { getProgramName } from "src/utils/tx";
+import { getTransactionInstructionError } from "src/utils/program-err";
 
 export type LogMessage = {
   text: string;

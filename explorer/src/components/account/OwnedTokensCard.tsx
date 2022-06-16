@@ -1,20 +1,22 @@
 import React from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import Image from "next/image";
 import { PublicKey } from "@solana/web3.js";
-import { FetchStatus } from "providers/cache";
+import { FetchStatus } from "src/providers/cache";
 import {
   useFetchAccountOwnedTokens,
   useAccountOwnedTokens,
   TokenInfoWithPubkey,
-} from "providers/accounts/tokens";
-import { ErrorCard } from "components/common/ErrorCard";
-import { LoadingCard } from "components/common/LoadingCard";
-import { Address } from "components/common/Address";
-import { useQuery } from "utils/url";
-import { Link } from "react-router-dom";
-import { Location } from "history";
-import { useTokenRegistry } from "providers/mints/token-registry";
+} from "src/providers/accounts/tokens";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { Address } from "src/components/common/Address";
+import { useQuery } from "src/utils/url";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
-import { Identicon } from "components/common/Identicon";
+import { Identicon } from "src/components/common/Identicon";
+import { dummyUrl } from "src/constants/urls";
 
 type Display = "summary" | "detail" | null;
 
@@ -106,11 +108,13 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         {showLogos && (
           <td className="w-1 p-0 text-center">
             {tokenDetails?.logoURI ? (
-              <img
-                src={tokenDetails.logoURI}
-                alt="token icon"
-                className="token-icon rounded-circle border border-4 border-gray-dark"
-              />
+              <div className="position-relative token-icon rounded-circle border border-4 border-gray-dark">
+                <Image
+                  src={tokenDetails.logoURI}
+                  alt="token icon"
+                  layout="fill"
+                />
+              </div>
             ) : (
               <Identicon
                 address={address}
@@ -181,11 +185,13 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         {showLogos && (
           <td className="w-1 p-0 text-center">
             {tokenDetails?.logoURI ? (
-              <img
-                src={tokenDetails.logoURI}
-                alt="token icon"
-                className="token-icon rounded-circle border border-4 border-gray-dark"
-              />
+              <div className="position-relative token-icon rounded-circle border border-4 border-gray-dark">
+                <Image
+                  src={tokenDetails.logoURI}
+                  alt="token icon"
+                  layout="fill"
+                />
+              </div>
             ) : (
               <Identicon
                 address={mintAddress}
@@ -230,17 +236,20 @@ type DropdownProps = {
 };
 
 const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
-  const buildLocation = (location: Location, display: Display) => {
+  const router = useRouter()
+
+  const buildLocation = (display: Display) => {
+    const location = new URL(router.asPath, dummyUrl);
     const params = new URLSearchParams(location.search);
     if (display === null) {
       params.delete("display");
     } else {
       params.set("display", display);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+
+    return params.toString().length > 0
+      ? `${location.pathname}?${params.toString()}`
+      : location.pathname;
   };
 
   const DISPLAY_OPTIONS: Display[] = [null, "detail"];
@@ -258,13 +267,13 @@ const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
           return (
             <Link
               key={displayOption || "null"}
-              to={(location) => buildLocation(location, displayOption)}
-              className={`dropdown-item${
-                displayOption === display ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildLocation(displayOption)}
             >
-              {displayOption === "detail" ? "Detailed" : "Summary"}
+              <span className={`dropdown-item${
+                displayOption === display ? " active" : ""
+              }`} onClick={toggle}>
+                {displayOption === "detail" ? "Detailed" : "Summary"}
+              </span>
             </Link>
           );
         })}

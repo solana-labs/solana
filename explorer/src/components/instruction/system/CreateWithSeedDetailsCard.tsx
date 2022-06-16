@@ -4,10 +4,10 @@ import {
   SignatureResult,
   ParsedInstruction,
 } from "@solana/web3.js";
-import { SolBalance } from "utils";
+import { SolBalance } from "src/utils";
 import { InstructionCard } from "../InstructionCard";
-import { Copyable } from "components/common/Copyable";
-import { Address } from "components/common/Address";
+import { Copyable } from "src/components/common/Copyable";
+import { Address } from "src/components/common/Address";
 import { CreateAccountWithSeedInfo } from "./types";
 
 export function CreateWithSeedDetailsCard(props: {

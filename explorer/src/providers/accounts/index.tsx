@@ -1,30 +1,30 @@
 import React from "react";
-import { pubkeyToString } from "utils";
+import { pubkeyToString } from "src/utils";
 import { PublicKey, Connection, StakeActivationData } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
 import { TokensProvider } from "./tokens";
 import { create } from "superstruct";
-import { ParsedInfo } from "validators";
-import { StakeAccount } from "validators/accounts/stake";
+import { ParsedInfo } from "src/validators";
+import { StakeAccount } from "src/validators/accounts/stake";
 import {
   TokenAccount,
   MintAccountInfo,
   TokenAccountInfo,
-} from "validators/accounts/token";
-import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
-import { reportError } from "utils/sentry";
-import { VoteAccount } from "validators/accounts/vote";
-import { NonceAccount } from "validators/accounts/nonce";
-import { SysvarAccount } from "validators/accounts/sysvar";
-import { ConfigAccount } from "validators/accounts/config";
+} from "src/validators/accounts/token";
+import * as Cache from "src/providers/cache";
+import { ActionType, FetchStatus } from "src/providers/cache";
+import { reportError } from "src/utils/sentry";
+import { VoteAccount } from "src/validators/accounts/vote";
+import { NonceAccount } from "src/validators/accounts/nonce";
+import { SysvarAccount } from "src/validators/accounts/sysvar";
+import { ConfigAccount } from "src/validators/accounts/config";
 import { FlaggedAccountsProvider } from "./flagged-accounts";
 import {
   ProgramDataAccount,
   ProgramDataAccountInfo,
   UpgradeableLoaderAccount,
-} from "validators/accounts/upgradeable-program";
+} from "src/validators/accounts/upgradeable-program";
 import { RewardsProvider } from "./rewards";
 import { programs, MetadataJson } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";

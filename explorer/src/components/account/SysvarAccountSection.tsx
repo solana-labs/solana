@@ -1,5 +1,5 @@
 import React from "react";
-import { Account, useFetchAccountInfo } from "providers/accounts";
+import { Account, useFetchAccountInfo } from "src/providers/accounts";
 import {
   SysvarAccount,
   SysvarClockAccount,
@@ -11,16 +11,16 @@ import {
   SysvarSlotHashesAccount,
   SysvarSlotHistoryAccount,
   SysvarStakeHistoryAccount,
-} from "validators/accounts/sysvar";
-import { TableCardBody } from "components/common/TableCardBody";
+} from "src/validators/accounts/sysvar";
+import { TableCardBody } from "src/components/common/TableCardBody";
 import {
   AccountHeader,
   AccountAddressRow,
   AccountBalanceRow,
-} from "components/common/Account";
-import { displayTimestamp } from "utils/date";
-import { Slot } from "components/common/Slot";
-import { Epoch } from "components/common/Epoch";
+} from "src/components/common/Account";
+import { displayTimestamp } from "src/utils/date";
+import { Slot } from "src/components/common/Slot";
+import { Epoch } from "src/components/common/Epoch";
 
 export function SysvarAccountSection({
   account,

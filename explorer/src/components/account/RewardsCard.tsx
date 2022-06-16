@@ -1,14 +1,14 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { useFetchRewards, useRewards } from "providers/accounts/rewards";
-import { LoadingCard } from "components/common/LoadingCard";
-import { FetchStatus } from "providers/cache";
-import { ErrorCard } from "components/common/ErrorCard";
-import { Slot } from "components/common/Slot";
-import { lamportsToSolString } from "utils";
-import { useAccountInfo } from "providers/accounts";
+import { useFetchRewards, useRewards } from "src/providers/accounts/rewards";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { FetchStatus } from "src/providers/cache";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { Slot } from "src/components/common/Slot";
+import { lamportsToSolString } from "src/utils";
+import { useAccountInfo } from "src/providers/accounts";
 import BN from "bn.js";
-import { Epoch } from "components/common/Epoch";
+import { Epoch } from "src/components/common/Epoch";
 
 const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
 

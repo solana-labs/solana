@@ -5,11 +5,11 @@ import {
   SignatureResult,
   PublicKey,
 } from "@solana/web3.js";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { create, Struct } from "superstruct";
-import { camelToTitleCase } from "utils";
-import { reportError } from "utils/sentry";
-import { ParsedInfo } from "validators";
+import { camelToTitleCase } from "src/utils";
+import { reportError } from "src/utils/sentry";
+import { ParsedInfo } from "src/validators";
 import { InstructionCard } from "../InstructionCard";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import {

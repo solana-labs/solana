@@ -1,8 +1,8 @@
 import React from "react";
-import * as Cache from "providers/cache";
+import * as Cache from "src/providers/cache";
 import { Connection, EpochSchedule } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 export enum FetchStatus {
   Fetching,

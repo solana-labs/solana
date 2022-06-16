@@ -1,10 +1,10 @@
 import React from "react";
-import { Cluster, useCluster } from "providers/cluster";
-import * as Cache from "providers/cache";
+import { Cluster, useCluster } from "src/providers/cluster";
+import * as Cache from "src/providers/cache";
 import { Connection, InflationReward, PublicKey } from "@solana/web3.js";
-import { ActionType } from "providers/block";
-import { FetchStatus } from "providers/cache";
-import { reportError } from "utils/sentry";
+import { ActionType } from "src/providers/block";
+import { FetchStatus } from "src/providers/cache";
+import { reportError } from "src/utils/sentry";
 
 const REWARDS_AVAILABLE_EPOCH = new Map<Cluster, number>([
   [Cluster.MainnetBeta, 132],

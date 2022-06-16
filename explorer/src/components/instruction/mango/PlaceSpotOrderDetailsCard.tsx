@@ -1,7 +1,7 @@
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
-import { Address } from "components/common/Address";
-import { useCluster } from "providers/cluster";
+import { Address } from "src/components/common/Address";
+import { useCluster } from "src/providers/cluster";
 import { useEffect, useState } from "react";
 import { InstructionCard } from "../InstructionCard";
 import {

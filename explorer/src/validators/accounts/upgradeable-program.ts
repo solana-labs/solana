@@ -13,8 +13,8 @@ import {
   string,
   tuple,
 } from "superstruct";
-import { ParsedInfo } from "validators";
-import { PublicKeyFromString } from "validators/pubkey";
+import { ParsedInfo } from "src/validators";
+import { PublicKeyFromString } from "src/validators/pubkey";
 
 export type ProgramAccountInfo = Infer<typeof ProgramAccountInfo>;
 export const ProgramAccountInfo = type({

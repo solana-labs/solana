@@ -1,7 +1,7 @@
 import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { Prune } from "./types";
 
 export function PruneDetailsCard(props: {

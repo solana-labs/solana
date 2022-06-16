@@ -1,7 +1,7 @@
 import React from "react";
 import { PublicKey } from "@solana/web3.js";
 import { create, Struct } from "superstruct";
-import { ParsedInfo } from "validators";
+import { ParsedInfo } from "src/validators";
 import {
   UpdateCommissionInfo,
   UpdateValidatorInfo,
@@ -11,13 +11,13 @@ import {
   AuthorizeInfo,
 } from "./types";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
-import { displayTimestamp } from "utils/date";
+import { Address } from "src/components/common/Address";
+import { displayTimestamp } from "src/utils/date";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
-import { InstructionDetailsProps } from "components/transaction/InstructionsSection";
-import { camelToTitleCase } from "utils";
-import { useCluster } from "providers/cluster";
-import { reportError } from "utils/sentry";
+import { InstructionDetailsProps } from "src/components/transaction/InstructionsSection";
+import { camelToTitleCase } from "src/utils";
+import { useCluster } from "src/providers/cluster";
+import { reportError } from "src/utils/sentry";
 
 export function VoteDetailsCard(props: InstructionDetailsProps) {
   const { url } = useCluster();

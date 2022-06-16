@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Stream } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import {
@@ -8,8 +9,7 @@ import {
   MetadataJsonFile,
 } from "@metaplex/js";
 import ContentLoader from "react-content-loader";
-import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
-import { getLast } from "utils";
+import { getLast } from "src/utils";
 
 const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
@@ -27,7 +27,7 @@ const LoadingPlaceholder = () => (
 );
 
 const ErrorPlaceHolder = () => (
-  <img src={ErrorLogo} width="120" height="120" alt="Solana Logo" />
+  <Image src="/img/logos-solana/dark-solana-logo.svg" width={120} height={120} alt="Solana Logo" />
 );
 
 const ViewOriginalArtContentLink = ({ src }: { src: string }) => {
@@ -78,21 +78,20 @@ const CachedImageContent = ({ uri }: { uri?: string }) => {
         <>
           {isLoading && <LoadingPlaceholder />}
           <div className={`${isLoading ? "d-none" : "d-block"}`}>
-            <img
-              className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
-              src={cachedBlob}
-              alt={"nft"}
-              style={{
-                width: 150,
-                maxHeight: 200,
-              }}
-              onLoad={() => {
-                setIsLoading(false);
-              }}
-              onError={() => {
-                setShowError(true);
-              }}
-            />
+            <div className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}>
+              <Image
+                src={cachedBlob ?? ""}
+                alt={"nft"}
+                width={150}
+                height={200}
+                onLoad={() => {
+                  setIsLoading(false);
+                }}
+                onError={() => {
+                  setShowError(true);
+                }}
+              />
+            </div>
             {uri && <ViewOriginalArtContentLink src={uri} />}
           </div>
         </>
@@ -126,14 +125,10 @@ const VideoArtContent = ({
         <Stream
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
           loop={true}
-          height={180}
-          width={320}
+          height="180"
+          width="320"
           controls={false}
-          style={{ borderRadius: 12 }}
-          videoDimensions={{
-            videoWidth: 320,
-            videoHeight: 180,
-          }}
+          className="rounded"
           autoplay={true}
           muted={true}
         />

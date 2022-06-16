@@ -1,8 +1,8 @@
 import React from "react";
 import { TransactionInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
-import { useCluster } from "providers/cluster";
-import { reportError } from "utils/sentry";
+import { useCluster } from "src/providers/cluster";
+import { reportError } from "src/utils/sentry";
 import { parsWormholeInstructionTitle } from "./wormhole/types";
 
 export function WormholeDetailsCard({
