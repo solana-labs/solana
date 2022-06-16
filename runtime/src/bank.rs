@@ -18155,7 +18155,7 @@ pub(crate) mod tests {
         }
 
         // Collect rent for real
-        bank.collect_rent_eagerly(false);
+        bank.collect_rent_eagerly();
 
         // Ensure the account is reclaimed by rent collection
         // NOTE: Use `<=` here (instead of `==`) since other accounts could
