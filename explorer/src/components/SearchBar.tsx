@@ -1,20 +1,20 @@
 import React from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/router";
 import bs58 from "bs58";
-import { useHistory, useLocation } from "react-router-dom";
 import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
-import StateManager from "react-select";
 import {
   LOADER_IDS,
   PROGRAM_INFO_BY_ID,
   SPECIAL_IDS,
   SYSVAR_IDS,
   LoaderName,
-} from "utils/tx";
-import { Cluster, useCluster } from "providers/cluster";
-import { useTokenRegistry } from "providers/mints/token-registry";
+} from "src/utils/tx";
+import { Cluster, useCluster } from "src/providers/cluster";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
-import { getDomainInfo, hasDomainSyntax } from "utils/name-service";
+import { getDomainInfo, hasDomainSyntax } from "src/utils/name-service";
 
 interface SearchOptions {
   label: string;
@@ -32,9 +32,8 @@ export function SearchBar() {
   const [loadingSearch, setLoadingSearch] = React.useState<boolean>(false);
   const [loadingSearchMessage, setLoadingSearchMessage] =
     React.useState<string>("loading...");
-  const selectRef = React.useRef<StateManager<any> | null>(null);
-  const history = useHistory();
-  const location = useLocation();
+  const selectRef = React.useRef<any | null>(null);
+  const router = useRouter();
   const { tokenRegistry } = useTokenRegistry();
   const { url, cluster, clusterInfo } = useCluster();
 
@@ -43,7 +42,7 @@ export function SearchBar() {
     meta: ActionMeta<any>
   ) => {
     if (meta.action === "select-option") {
-      history.push({ ...location, pathname });
+      router.push(pathname);
       setSearch("");
     }
   };

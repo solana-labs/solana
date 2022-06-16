@@ -5,8 +5,8 @@ import {
   ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { Copyable } from "components/common/Copyable";
-import { Address } from "components/common/Address";
+import { Copyable } from "src/components/common/Copyable";
+import { Address } from "src/components/common/Address";
 import { AssignWithSeedInfo } from "./types";
 
 export function AssignWithSeedDetailsCard(props: {

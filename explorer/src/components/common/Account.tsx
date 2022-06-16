@@ -1,7 +1,7 @@
 import React from "react";
 import { Address } from "./Address";
-import { Account } from "providers/accounts";
-import { SolBalance } from "utils";
+import { Account } from "src/providers/accounts";
+import { SolBalance } from "src/utils";
 
 type AccountHeaderProps = {
   title: string;

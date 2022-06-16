@@ -1,7 +1,8 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { TransactionSignature } from "@solana/web3.js";
-import { clusterPath } from "utils/url";
+import { clusterPath } from "src/utils/url";
 import { Copyable } from "./Copyable";
 
 type Props = {
@@ -19,6 +20,7 @@ export function Signature({
   truncate,
   truncateChars,
 }: Props) {
+  const router = useRouter();
   let signatureLabel = signature;
 
   if (truncateChars) {
@@ -34,11 +36,10 @@ export function Signature({
       <Copyable text={signature} replaceText={!alignRight}>
         <span className="font-monospace">
           {link ? (
-            <Link
-              className={truncate ? "text-truncate signature-truncate" : ""}
-              to={clusterPath(`/tx/${signature}`)}
-            >
-              {signatureLabel}
+            <Link href={clusterPath(`/tx/${signature}`, router.asPath)}>
+              <span className={truncate ? "text-truncate signature-truncate" : ""}>
+                {signatureLabel}
+              </span>
             </Link>
           ) : (
             signatureLabel

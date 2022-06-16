@@ -5,8 +5,8 @@ import {
   ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
-import { getProgramName } from "utils/tx";
-import { useCluster } from "providers/cluster";
+import { getProgramName } from "src/utils/tx";
+import { useCluster } from "src/providers/cluster";
 
 export function UnknownDetailsCard({
   ix,

@@ -1,17 +1,18 @@
 import React, { Fragment, ReactNode, useState } from "react";
-import { Cluster } from "providers/cluster";
+import dynamic from "next/dynamic";
+import { Cluster } from "src/providers/cluster";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program, Idl } from "@project-serum/anchor";
-import { useAnchorProgram } from "providers/anchor";
-import { getProgramName } from "utils/tx";
-import { snakeToTitleCase, camelToTitleCase, numberWithSeparator } from "utils";
+import { useAnchorProgram } from "src/providers/anchor";
+import { getProgramName } from "src/utils/tx";
+import { snakeToTitleCase, camelToTitleCase, numberWithSeparator } from "src/utils";
 import {
   IdlInstruction,
   IdlType,
   IdlTypeDef,
 } from "@project-serum/anchor/dist/cjs/idl";
-import { Address } from "components/common/Address";
-import ReactJson from "react-json-view";
+import { Address } from "src/components/common/Address";
+const ReactJson = dynamic(() => import("react-json-view"), { ssr: false });
 
 export function getAnchorProgramName(
   program: Program | null

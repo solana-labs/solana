@@ -6,14 +6,14 @@ import {
 } from "@solana/web3.js";
 import { RawDetails } from "./RawDetails";
 import { RawParsedDetails } from "./RawParsedDetails";
-import { SignatureContext } from "../../pages/TransactionDetailsPage";
+import { SignatureContext } from "pages/tx/[signature]";
 import {
   useFetchRawTransaction,
   useRawTransactionDetails,
-} from "providers/transactions/raw";
-import { Address } from "components/common/Address";
-import { useScrollAnchor } from "providers/scroll-anchor";
-import getInstructionCardScrollAnchorId from "utils/get-instruction-card-scroll-anchor-id";
+} from "src/providers/transactions/raw";
+import { Address } from "src/components/common/Address";
+import { useScrollAnchor } from "src/providers/scroll-anchor";
+import getInstructionCardScrollAnchorId from "src/utils/get-instruction-card-scroll-anchor-id";
 
 type InstructionProps = {
   title: string;

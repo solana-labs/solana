@@ -8,7 +8,7 @@ import {
   performReverseLookup,
 } from "@bonfida/spl-name-service";
 import { useState, useEffect } from "react";
-import { Cluster, useCluster } from "providers/cluster";
+import { Cluster, useCluster } from "src/providers/cluster";
 
 // Address of the SOL TLD
 const SOL_TLD_AUTHORITY = new PublicKey(

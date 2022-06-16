@@ -1,5 +1,5 @@
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { InstructionCard } from "../InstructionCard";
 import { getSpotMarketFromInstruction } from "./types";
 

@@ -2,7 +2,7 @@ import React from "react";
 
 import { AccountBalancePair, Connection } from "@solana/web3.js";
 import { useCluster, ClusterStatus, Cluster } from "./cluster";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 export enum Status {
   Idle,

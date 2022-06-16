@@ -6,7 +6,7 @@ import {
   TokenListContainer,
   Strategy,
 } from "@solana/spl-token-registry";
-import { Cluster, clusterSlug, useCluster } from "providers/cluster";
+import { Cluster, clusterSlug, useCluster } from "src/providers/cluster";
 
 const TokenRegistryContext = React.createContext<TokenInfoMap>(new Map());
 

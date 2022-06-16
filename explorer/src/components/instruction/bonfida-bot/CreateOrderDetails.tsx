@@ -5,7 +5,7 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { CreateOrder } from "./types";
 
 export function CreateOrderDetailsCard(props: {

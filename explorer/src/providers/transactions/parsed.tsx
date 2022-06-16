@@ -5,9 +5,9 @@ import {
   ParsedConfirmedTransaction,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
-import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
-import { reportError } from "utils/sentry";
+import * as Cache from "src/providers/cache";
+import { ActionType, FetchStatus } from "src/providers/cache";
+import { reportError } from "src/utils/sentry";
 
 export interface Details {
   transaction?: ParsedConfirmedTransaction | null;

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-redeclare */
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import {
   enums,

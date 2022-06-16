@@ -4,7 +4,7 @@ import {
   ClusterStatus,
   Cluster,
   useClusterModal,
-} from "providers/cluster";
+} from "src/providers/cluster";
 
 export function ClusterStatusBanner() {
   const [, setShow] = useClusterModal();

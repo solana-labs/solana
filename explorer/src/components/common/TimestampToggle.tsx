@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { displayTimestampUtc, displayTimestamp } from "utils/date";
+import { displayTimestampUtc, displayTimestamp } from "src/utils/date";
 
 type State = "hide" | "show";
 

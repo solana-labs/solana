@@ -1,7 +1,7 @@
 import React from "react";
-import { NFTData } from "providers/accounts";
-import { LoadingCard } from "components/common/LoadingCard";
-import { ErrorCard } from "components/common/ErrorCard";
+import { NFTData } from "src/providers/accounts";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
 
 interface Attribute {
   trait_type: string;

@@ -6,11 +6,11 @@ import {
   TokenBalance,
 } from "@solana/web3.js";
 import { BigNumber } from "bignumber.js";
-import { Address } from "components/common/Address";
-import { BalanceDelta } from "components/common/BalanceDelta";
-import { SignatureProps } from "pages/TransactionDetailsPage";
-import { useTransactionDetails } from "providers/transactions";
-import { useTokenRegistry } from "providers/mints/token-registry";
+import { Address } from "src/components/common/Address";
+import { BalanceDelta } from "src/components/common/BalanceDelta";
+import { SignatureProps } from "pages/tx/[signature]";
+import { useTransactionDetails } from "src/providers/transactions";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 
 export type TokenBalanceRow = {
   account: PublicKey;

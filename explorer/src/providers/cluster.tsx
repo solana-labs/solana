@@ -6,9 +6,10 @@ import {
   EpochSchedule,
 } from "@solana/web3.js";
 import { useQuery } from "../utils/url";
-import { useHistory, useLocation } from "react-router-dom";
-import { reportError } from "utils/sentry";
-import { localStorageIsAvailable } from "utils";
+import { useRouter } from "next/router";
+import { reportError } from "src/utils/sentry";
+import { localStorageIsAvailable } from "src/utils";
+import { dummyUrl } from "src/constants/urls";
 
 export enum ClusterStatus {
   Connected,
@@ -147,14 +148,14 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
     localStorage.getItem("enableCustomUrl") !== null;
   const customUrl =
     (enableCustomUrl && query.get("customUrl")) || state.customUrl;
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
 
   // Remove customUrl param if dev setting is disabled
   React.useEffect(() => {
     if (!enableCustomUrl && query.has("customUrl")) {
+      const location = new URL(router.asPath, dummyUrl);
       query.delete("customUrl");
-      history.push({ ...location, search: query.toString() });
+      router.push(`${location.pathname}?${query.toString()}`);
     }
   }, [enableCustomUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 

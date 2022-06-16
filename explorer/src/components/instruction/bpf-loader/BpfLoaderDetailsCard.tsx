@@ -7,12 +7,12 @@ import {
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { create } from "superstruct";
-import { ParsedInfo } from "validators";
+import { ParsedInfo } from "src/validators";
 import { WriteInfo, FinalizeInfo } from "./types";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
-import { Address } from "components/common/Address";
-import { wrap } from "utils";
+import { Address } from "src/components/common/Address";
+import { wrap } from "src/utils";
 
 type DetailsProps = {
   tx: ParsedTransaction;

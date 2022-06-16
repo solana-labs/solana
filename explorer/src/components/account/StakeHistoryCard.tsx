@@ -1,11 +1,11 @@
 import React from "react";
-import { SolBalance } from "utils";
-import { Epoch } from "components/common/Epoch";
+import { SolBalance } from "src/utils";
+import { Epoch } from "src/components/common/Epoch";
 import {
   SysvarAccount,
   StakeHistoryInfo,
   StakeHistoryEntry,
-} from "validators/accounts/sysvar";
+} from "src/validators/accounts/sysvar";
 
 export function StakeHistoryCard({
   sysvarAccount,

@@ -1,4 +1,4 @@
-import { ProgramDataAccountInfo } from "validators/accounts/upgradeable-program";
+import { ProgramDataAccountInfo } from "src/validators/accounts/upgradeable-program";
 
 export type SecurityTXT = {
   name: string;

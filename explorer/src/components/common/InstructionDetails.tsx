@@ -3,7 +3,7 @@ import { ConfirmedSignatureInfo } from "@solana/web3.js";
 import {
   getTokenProgramInstructionName,
   InstructionType,
-} from "utils/instruction";
+} from "src/utils/instruction";
 
 export function InstructionDetails({
   instructionType,

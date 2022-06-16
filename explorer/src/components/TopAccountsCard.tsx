@@ -1,14 +1,15 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { Location } from "history";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { AccountBalancePair } from "@solana/web3.js";
-import { useRichList, useFetchRichList, Status } from "providers/richList";
+import { useRichList, useFetchRichList, Status } from "src/providers/richList";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { SolBalance } from "utils";
-import { useQuery } from "utils/url";
-import { useSupply } from "providers/supply";
+import { SolBalance } from "src/utils";
+import { useQuery } from "src/utils/url";
+import { useSupply } from "src/providers/supply";
 import { Address } from "./common/Address";
+import { dummyUrl } from "src/constants/urls";
 
 type Filter = "circulating" | "nonCirculating" | "all" | null;
 
@@ -177,17 +178,20 @@ type DropdownProps = {
 };
 
 const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
-  const buildLocation = (location: Location, filter: Filter) => {
+  const router = useRouter();
+
+  const buildLocation = (filter: Filter) => {
+    const location = new URL(router.asPath, dummyUrl);
     const params = new URLSearchParams(location.search);
     if (filter === null) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    
+    return params.toString().length > 0
+      ? `${location.pathname}?${params.toString()}`
+      : location.pathname;
   };
 
   const FILTERS: Filter[] = ["all", null, "nonCirculating"];
@@ -205,13 +209,13 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
           return (
             <Link
               key={filterOption || "null"}
-              to={(location) => buildLocation(location, filterOption)}
-              className={`dropdown-item${
-                filterOption === filter ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildLocation(filterOption)}
             >
-              {filterTitle(filterOption)}
+              <span className={`dropdown-item${
+                filterOption === filter ? " active" : ""
+              }`} onClick={toggle}>
+                {filterTitle(filterOption)}
+              </span>
             </Link>
           );
         })}

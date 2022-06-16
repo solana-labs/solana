@@ -1,6 +1,6 @@
 import React from "react";
 import { Connection } from "@solana/web3.js";
-import { useCluster, Cluster } from "providers/cluster";
+import { useCluster, Cluster } from "src/providers/cluster";
 import {
   DashboardInfo,
   DashboardInfoActionType,
@@ -11,7 +11,7 @@ import {
   PerformanceInfoActionType,
   performanceInfoReducer,
 } from "./solanaPerformanceInfo";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 export const PERF_UPDATE_SEC = 5;
 export const SAMPLE_HISTORY_HOURS = 6;

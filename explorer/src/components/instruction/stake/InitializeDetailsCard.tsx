@@ -6,10 +6,10 @@ import {
   ParsedInstruction,
 } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { InitializeInfo } from "./types";
-import { displayTimestampUtc } from "utils/date";
-import { Epoch } from "components/common/Epoch";
+import { displayTimestampUtc } from "src/utils/date";
+import { Epoch } from "src/components/common/Epoch";
 
 export function InitializeDetailsCard(props: {
   ix: ParsedInstruction;

@@ -1,15 +1,15 @@
 import React from "react";
-import { Account, useFetchAccountInfo } from "providers/accounts";
-import { TableCardBody } from "components/common/TableCardBody";
-import { Address } from "components/common/Address";
-import { VoteAccount } from "validators/accounts/vote";
-import { displayTimestamp } from "utils/date";
+import { Account, useFetchAccountInfo } from "src/providers/accounts";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { Address } from "src/components/common/Address";
+import { VoteAccount } from "src/validators/accounts/vote";
+import { displayTimestamp } from "src/utils/date";
 import {
   AccountHeader,
   AccountAddressRow,
   AccountBalanceRow,
-} from "components/common/Account";
-import { Slot } from "components/common/Slot";
+} from "src/components/common/Account";
+import { Slot } from "src/components/common/Slot";
 
 export function VoteAccountSection({
   account,

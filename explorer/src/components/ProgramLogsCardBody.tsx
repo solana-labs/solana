@@ -1,11 +1,13 @@
 import { Message, ParsedMessage } from "@solana/web3.js";
-import { Cluster } from "providers/cluster";
-import { TableCardBody } from "components/common/TableCardBody";
-import { InstructionLogs } from "utils/program-logs";
-import { ProgramName } from "utils/anchor";
+import { Cluster } from "src/providers/cluster";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { InstructionLogs } from "src/utils/program-logs";
+import { ProgramName } from "src/utils/anchor";
 import React from "react";
-import { Link } from "react-router-dom";
-import getInstructionCardScrollAnchorId from "utils/get-instruction-card-scroll-anchor-id";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import getInstructionCardScrollAnchorId from "src/utils/get-instruction-card-scroll-anchor-id";
+import { dummyUrl } from "src/constants/urls";
 
 const NATIVE_PROGRAMS_MISSING_INVOKE_LOG: string[] = [
   "AddressLookupTab1e1111111111111111111111111",
@@ -26,7 +28,14 @@ export function ProgramLogsCardBody({
   cluster: Cluster;
   url: string;
 }) {
+  const router = useRouter();
   let logIndex = 0;
+
+  const jumpToLocation = (index: number) => {
+    const location = new URL(router.asPath, dummyUrl)
+    return `${location.pathname}#${getInstructionCardScrollAnchorId([index + 1])}`
+  }
+
   return (
     <TableCardBody>
       {message.instructions.map((ix, index) => {
@@ -64,25 +73,21 @@ export function ProgramLogsCardBody({
         return (
           <tr key={index}>
             <td>
-              <Link
-                className="d-flex align-items-center"
-                to={(location) => ({
-                  ...location,
-                  hash: `#${getInstructionCardScrollAnchorId([index + 1])}`,
-                })}
-              >
-                <span className={`badge bg-${badgeColor}-soft me-2`}>
-                  #{index + 1}
-                </span>
-                <span className="program-log-instruction-name">
-                  <ProgramName
-                    programId={programId}
-                    cluster={cluster}
-                    url={url}
-                  />{" "}
-                  Instruction
-                </span>
-                <span className="fe fe-chevrons-up c-pointer px-2" />
+              <Link href={jumpToLocation(index)}>
+                <div className="d-flex align-items-center">
+                  <span className={`badge bg-${badgeColor}-soft me-2`}>
+                    #{index + 1}
+                  </span>
+                  <span className="program-log-instruction-name">
+                    <ProgramName
+                      programId={programId}
+                      cluster={cluster}
+                      url={url}
+                    />{" "}
+                    Instruction
+                  </span>
+                  <span className="fe fe-chevrons-up c-pointer px-2" />
+                </div>
               </Link>
               {programLogs && (
                 <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">

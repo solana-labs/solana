@@ -1,11 +1,11 @@
 import React from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
-import * as Cache from "providers/cache";
-import { ActionType, FetchStatus } from "providers/cache";
-import { TokenAccountInfo } from "validators/accounts/token";
+import * as Cache from "src/providers/cache";
+import { ActionType, FetchStatus } from "src/providers/cache";
+import { TokenAccountInfo } from "src/validators/accounts/token";
 import { useCluster, Cluster } from "../cluster";
 import { create } from "superstruct";
-import { reportError } from "utils/sentry";
+import { reportError } from "src/utils/sentry";
 
 export type TokenInfoWithPubkey = {
   info: TokenAccountInfo;

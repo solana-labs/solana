@@ -12,7 +12,7 @@ import {
   type,
   nullable,
 } from "superstruct";
-import { PublicKeyFromString } from "validators/pubkey";
+import { PublicKeyFromString } from "src/validators/pubkey";
 
 export type TokenAccountType = Infer<typeof TokenAccountType>;
 export const TokenAccountType = enums(["mint", "account", "multisig"]);

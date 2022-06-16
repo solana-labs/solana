@@ -1,24 +1,24 @@
 import React from "react";
-import { TableCardBody } from "components/common/TableCardBody";
-import { SolBalance } from "utils";
-import { Account, useFetchAccountInfo } from "providers/accounts";
-import { Address } from "components/common/Address";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { SolBalance } from "src/utils";
+import { Account, useFetchAccountInfo } from "src/providers/accounts";
+import { Address } from "src/components/common/Address";
 import {
   ProgramAccountInfo,
   ProgramBufferAccountInfo,
   ProgramDataAccountInfo,
   UpgradeableLoaderAccount,
-} from "validators/accounts/upgradeable-program";
-import { Slot } from "components/common/Slot";
-import { addressLabel } from "utils/tx";
-import { useCluster } from "providers/cluster";
-import { ErrorCard } from "components/common/ErrorCard";
-import { UnknownAccountCard } from "components/account/UnknownAccountCard";
-import { Downloadable } from "components/common/Downloadable";
-import { CheckingBadge, VerifiedBadge } from "components/common/VerifiedBadge";
-import { InfoTooltip } from "components/common/InfoTooltip";
-import { useVerifiableBuilds } from "utils/program-verification";
-import { SecurityTXTBadge } from "components/common/SecurityTXTBadge";
+} from "src/validators/accounts/upgradeable-program";
+import { Slot } from "src/components/common/Slot";
+import { addressLabel } from "src/utils/tx";
+import { useCluster } from "src/providers/cluster";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { UnknownAccountCard } from "src/components/account/UnknownAccountCard";
+import { Downloadable } from "src/components/common/Downloadable";
+import { CheckingBadge, VerifiedBadge } from "src/components/common/VerifiedBadge";
+import { InfoTooltip } from "src/components/common/InfoTooltip";
+import { useVerifiableBuilds } from "src/utils/program-verification";
+import { SecurityTXTBadge } from "src/components/common/SecurityTXTBadge";
 
 export function UpgradeableLoaderAccountSection({
   account,

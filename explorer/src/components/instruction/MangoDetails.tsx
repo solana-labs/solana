@@ -1,6 +1,6 @@
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
-import { useCluster } from "providers/cluster";
-import { reportError } from "utils/sentry";
+import { useCluster } from "src/providers/cluster";
+import { reportError } from "src/utils/sentry";
 import { InstructionCard } from "./InstructionCard";
 import { AddOracleDetailsCard } from "./mango/AddOracleDetailsCard";
 import { AddPerpMarketDetailsCard } from "./mango/AddPerpMarketDetailsCard";

@@ -1,5 +1,5 @@
 import React from "react";
-import { ErrorCard } from "components/common/ErrorCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
 import {
   ComputeBudgetProgram,
   ParsedInnerInstruction,
@@ -9,45 +9,45 @@ import {
   SignatureResult,
   TransactionSignature,
 } from "@solana/web3.js";
-import { BpfLoaderDetailsCard } from "components/instruction/bpf-loader/BpfLoaderDetailsCard";
-import { MemoDetailsCard } from "components/instruction/MemoDetailsCard";
-import { SerumDetailsCard } from "components/instruction/SerumDetailsCard";
-import { StakeDetailsCard } from "components/instruction/stake/StakeDetailsCard";
-import { SystemDetailsCard } from "components/instruction/system/SystemDetailsCard";
-import { TokenDetailsCard } from "components/instruction/token/TokenDetailsCard";
-import { TokenLendingDetailsCard } from "components/instruction/TokenLendingDetailsCard";
-import { TokenSwapDetailsCard } from "components/instruction/TokenSwapDetailsCard";
-import { WormholeDetailsCard } from "components/instruction/WormholeDetailsCard";
-import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
-import { BonfidaBotDetailsCard } from "components/instruction/BonfidaBotDetails";
+import { BpfLoaderDetailsCard } from "src/components/instruction/bpf-loader/BpfLoaderDetailsCard";
+import { MemoDetailsCard } from "src/components/instruction/MemoDetailsCard";
+import { SerumDetailsCard } from "src/components/instruction/SerumDetailsCard";
+import { StakeDetailsCard } from "src/components/instruction/stake/StakeDetailsCard";
+import { SystemDetailsCard } from "src/components/instruction/system/SystemDetailsCard";
+import { TokenDetailsCard } from "src/components/instruction/token/TokenDetailsCard";
+import { TokenLendingDetailsCard } from "src/components/instruction/TokenLendingDetailsCard";
+import { TokenSwapDetailsCard } from "src/components/instruction/TokenSwapDetailsCard";
+import { WormholeDetailsCard } from "src/components/instruction/WormholeDetailsCard";
+import { UnknownDetailsCard } from "src/components/instruction/UnknownDetailsCard";
+import { BonfidaBotDetailsCard } from "src/components/instruction/BonfidaBotDetails";
 import {
   INNER_INSTRUCTIONS_START_SLOT,
   SignatureProps,
-} from "pages/TransactionDetailsPage";
-import { intoTransactionInstruction } from "utils/tx";
-import { isSerumInstruction } from "components/instruction/serum/types";
-import { isTokenLendingInstruction } from "components/instruction/token-lending/types";
-import { isTokenSwapInstruction } from "components/instruction/token-swap/types";
-import { isBonfidaBotInstruction } from "components/instruction/bonfida-bot/types";
-import { useFetchTransactionDetails } from "providers/transactions/parsed";
+} from "pages/tx/[signature]";
+import { intoTransactionInstruction } from "src/utils/tx";
+import { isSerumInstruction } from "src/components/instruction/serum/types";
+import { isTokenLendingInstruction } from "src/components/instruction/token-lending/types";
+import { isTokenSwapInstruction } from "src/components/instruction/token-swap/types";
+import { isBonfidaBotInstruction } from "src/components/instruction/bonfida-bot/types";
+import { useFetchTransactionDetails } from "src/providers/transactions/parsed";
 import {
   useTransactionDetails,
   useTransactionStatus,
-} from "providers/transactions";
-import { Cluster, useCluster } from "providers/cluster";
-import { BpfUpgradeableLoaderDetailsCard } from "components/instruction/bpf-upgradeable-loader/BpfUpgradeableLoaderDetailsCard";
-import { VoteDetailsCard } from "components/instruction/vote/VoteDetailsCard";
-import { isWormholeInstruction } from "components/instruction/wormhole/types";
-import { AssociatedTokenDetailsCard } from "components/instruction/AssociatedTokenDetailsCard";
-import { MangoDetailsCard } from "components/instruction/MangoDetails";
-import { isPythInstruction } from "components/instruction/pyth/types";
-import { PythDetailsCard } from "components/instruction/pyth/PythDetailsCard";
+} from "src/providers/transactions";
+import { Cluster, useCluster } from "src/providers/cluster";
+import { BpfUpgradeableLoaderDetailsCard } from "src/components/instruction/bpf-upgradeable-loader/BpfUpgradeableLoaderDetailsCard";
+import { VoteDetailsCard } from "src/components/instruction/vote/VoteDetailsCard";
+import { isWormholeInstruction } from "src/components/instruction/wormhole/types";
+import { AssociatedTokenDetailsCard } from "src/components/instruction/AssociatedTokenDetailsCard";
+import { MangoDetailsCard } from "src/components/instruction/MangoDetails";
+import { isPythInstruction } from "src/components/instruction/pyth/types";
+import { PythDetailsCard } from "src/components/instruction/pyth/PythDetailsCard";
 import AnchorDetailsCard from "../instruction/AnchorDetailsCard";
 import { isMangoInstruction } from "../instruction/mango/types";
-import { useAnchorProgram } from "providers/anchor";
-import { LoadingCard } from "components/common/LoadingCard";
+import { useAnchorProgram } from "src/providers/anchor";
+import { LoadingCard } from "src/components/common/LoadingCard";
 import { ErrorBoundary } from "@sentry/react";
-import { ComputeBudgetDetailsCard } from "components/instruction/ComputeBudgetDetailsCard";
+import { ComputeBudgetDetailsCard } from "src/components/instruction/ComputeBudgetDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;

@@ -1,8 +1,8 @@
 import React from "react";
 import { ParsedInstruction, SignatureResult } from "@solana/web3.js";
 import { InstructionCard } from "./InstructionCard";
-import { wrap } from "utils";
-import { Address } from "components/common/Address";
+import { wrap } from "src/utils";
+import { Address } from "src/components/common/Address";
 
 export function MemoDetailsCard({
   ix,

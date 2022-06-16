@@ -12,8 +12,8 @@ import { AuthorizeDetailsCard } from "./AuthorizeDetailsCard";
 import { SplitDetailsCard } from "./SplitDetailsCard";
 import { WithdrawDetailsCard } from "./WithdrawDetailsCard";
 import { DeactivateDetailsCard } from "./DeactivateDetailsCard";
-import { ParsedInfo } from "validators";
-import { reportError } from "utils/sentry";
+import { ParsedInfo } from "src/validators";
+import { reportError } from "src/utils/sentry";
 import { create } from "superstruct";
 import {
   AuthorizeInfo,

@@ -1,7 +1,7 @@
-import { ErrorCard } from "components/common/ErrorCard";
-import { TableCardBody } from "components/common/TableCardBody";
-import { UpgradeableLoaderAccountData } from "providers/accounts";
-import { fromProgramData, SecurityTXT } from "utils/security-txt";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { TableCardBody } from "src/components/common/TableCardBody";
+import { UpgradeableLoaderAccountData } from "src/providers/accounts";
+import { fromProgramData, SecurityTXT } from "src/utils/security-txt";
 
 export function SecurityCard({ data }: { data: UpgradeableLoaderAccountData }) {
   if (!data.programData) {

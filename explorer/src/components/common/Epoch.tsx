@@ -1,6 +1,7 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { clusterPath } from "utils/url";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { clusterPath } from "src/utils/url";
 import { Copyable } from "./Copyable";
 
 type Props = {
@@ -8,11 +9,13 @@ type Props = {
   link?: boolean;
 };
 export function Epoch({ epoch, link }: Props) {
+  const router = useRouter();
+
   return (
     <span className="font-monospace">
       {link ? (
         <Copyable text={epoch.toString()}>
-          <Link to={clusterPath(`/epoch/${epoch}`)}>
+          <Link href={clusterPath(`/epoch/${epoch}`, router.asPath)}>
             {epoch.toLocaleString("en-US")}
           </Link>
         </Copyable>

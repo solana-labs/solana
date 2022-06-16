@@ -1,7 +1,7 @@
 import React from "react";
 import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import { SettleFunds } from "./types";
 
 export function SettleFundsDetailsCard(props: {
@@ -72,14 +72,14 @@ export function SettleFundsDetailsCard(props: {
       </tr>
 
       <tr>
-        <td>Bot's Coin Address</td>
+        <td>Bot&apos;s Coin Address</td>
         <td className="text-lg-end">
           <Address pubkey={info.coinPoolAssetKey} alignRight link />
         </td>
       </tr>
 
       <tr>
-        <td>Bot's Pc Address</td>
+        <td>Bot&apos;s Pc Address</td>
         <td className="text-lg-end">
           <Address pubkey={info.pcPoolAssetKey} alignRight link />
         </td>

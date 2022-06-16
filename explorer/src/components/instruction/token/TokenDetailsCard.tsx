@@ -9,22 +9,22 @@ import {
 
 import { UnknownDetailsCard } from "../UnknownDetailsCard";
 import { InstructionCard } from "../InstructionCard";
-import { Address } from "components/common/Address";
+import { Address } from "src/components/common/Address";
 import {
   IX_STRUCTS,
   TokenInstructionType,
   IX_TITLES,
   TokenAmountUi,
 } from "./types";
-import { ParsedInfo } from "validators";
+import { ParsedInfo } from "src/validators";
 import {
   useTokenAccountInfo,
   useMintAccountInfo,
   useFetchAccountInfo,
-} from "providers/accounts";
-import { normalizeTokenAmount } from "utils";
-import { reportError } from "utils/sentry";
-import { useTokenRegistry } from "providers/mints/token-registry";
+} from "src/providers/accounts";
+import { normalizeTokenAmount } from "src/utils";
+import { reportError } from "src/utils/sentry";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
 
 type DetailsProps = {
   tx: ParsedTransaction;

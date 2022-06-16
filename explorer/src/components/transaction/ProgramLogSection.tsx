@@ -1,9 +1,9 @@
 import React from "react";
-import { SignatureProps } from "pages/TransactionDetailsPage";
-import { useTransactionDetails } from "providers/transactions";
-import { ProgramLogsCardBody } from "components/ProgramLogsCardBody";
-import { parseProgramLogs } from "utils/program-logs";
-import { useCluster } from "providers/cluster";
+import { SignatureProps } from "pages/tx/[signature]";
+import { useTransactionDetails } from "src/providers/transactions";
+import { ProgramLogsCardBody } from "src/components/ProgramLogsCardBody";
+import { parseProgramLogs } from "src/utils/program-logs";
+import { useCluster } from "src/providers/cluster";
 
 export function ProgramLogSection({ signature }: SignatureProps) {
   const { cluster, url } = useCluster();
