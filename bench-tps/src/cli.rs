@@ -295,6 +295,11 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Submit transactions via QUIC; only affects ThinClient (default) \
                     or TpuClient sends"),
         )
+        .arg(
+            Arg::with_name("use_durable_nonce")
+                .long("use-durable-nonce")
+                .help(""),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -418,5 +423,8 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
             .expect("can't parse target slots per epoch");
     }
 
+    if matches.is_present("use_durable_nonce") {
+        args.use_durable_nonce = true;
+    }
     args
 }
