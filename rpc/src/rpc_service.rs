@@ -1,5 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
+use solana_sdk::commitment_config::CommitmentConfig;
+
 use {
     crate::{
         cluster_tpu_info::ClusterTpuInfo,
@@ -28,7 +30,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
-    solana_prometheus::render_prometheus,
+    solana_prometheus::{banks_with_commitments::BanksWithCommitments, render_prometheus},
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -75,6 +77,7 @@ struct RpcRequestMiddleware {
     snapshot_config: Option<SnapshotConfig>,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
+    rpc_processor: Option<JsonRpcRequestProcessor>,
 }
 
 impl RpcRequestMiddleware {
@@ -83,6 +86,7 @@ impl RpcRequestMiddleware {
         snapshot_config: Option<SnapshotConfig>,
         bank_forks: Arc<RwLock<BankForks>>,
         health: Arc<RpcHealth>,
+        rpc_processor: Option<JsonRpcRequestProcessor>,
     ) -> Self {
         Self {
             ledger_path,
@@ -97,6 +101,7 @@ impl RpcRequestMiddleware {
             snapshot_config,
             bank_forks,
             health,
+            rpc_processor,
         }
     }
 
@@ -307,15 +312,23 @@ impl RequestMiddleware for RpcRequestMiddleware {
                     .body(hyper::Body::from(self.health_check()))
                     .unwrap()
                     .into(),
-                "/metrics" => hyper::Response::builder()
-                    .status(hyper::StatusCode::OK)
-                    .header("Content-Type", "text/plain; version=0.0.4; charset=UTF-8")
-                    .body(hyper::Body::from(render_prometheus(
-                        &self.bank_forks,
-                        &self.health.cluster_info,
-                    )))
-                    .unwrap()
-                    .into(),
+                "/metrics" => {
+                    let rpc_processor = self.rpc_processor.as_ref().unwrap();
+                    let banks_with_commitment = BanksWithCommitments::new(
+                        rpc_processor.bank(Some(CommitmentConfig::finalized())),
+                        rpc_processor.bank(Some(CommitmentConfig::confirmed())),
+                        rpc_processor.bank(Some(CommitmentConfig::processed())),
+                    );
+                    hyper::Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .header("Content-Type", "text/plain; version=0.0.4; charset=UTF-8")
+                        .body(hyper::Body::from(render_prometheus(
+                            banks_with_commitment,
+                            &self.health.cluster_info,
+                        )))
+                        .unwrap()
+                        .into()
+                }
                 _ => request.into(),
             }
         }
@@ -521,6 +534,7 @@ impl JsonRpcService {
                     snapshot_config,
                     bank_forks.clone(),
                     health.clone(),
+                    Some(request_processor.clone()),
                 );
                 let server = ServerBuilder::with_meta_extractor(
                     io,
@@ -706,12 +720,14 @@ mod tests {
             None,
             bank_forks.clone(),
             RpcHealth::stub(),
+            None,
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
             Some(SnapshotConfig::default()),
             bank_forks,
             RpcHealth::stub(),
+            None,
         );
 
         assert!(rrm.is_file_get_path(DEFAULT_GENESIS_DOWNLOAD_PATH));
@@ -782,6 +798,7 @@ mod tests {
             None,
             create_bank_forks(),
             RpcHealth::stub(),
+            None,
         );
 
         // File does not exist => request should fail.
@@ -837,6 +854,7 @@ mod tests {
             None,
             create_bank_forks(),
             RpcHealth::stub(),
+            None,
         );
         assert_eq!(rm.health_check(), "ok");
     }
@@ -865,7 +883,8 @@ mod tests {
             startup_verification_complete,
         ));
 
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
+        let rm =
+            RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health, None);
 
         // No account hashes for this node or any known validators
         assert_eq!(rm.health_check(), "unknown");

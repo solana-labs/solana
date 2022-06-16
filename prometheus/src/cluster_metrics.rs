@@ -1,17 +1,18 @@
 use solana_gossip::cluster_info::ClusterInfo;
-use solana_runtime::bank::Bank;
 
 use crate::{
+    banks_with_commitments::BanksWithCommitments,
     utils::{write_metric, Metric, MetricFamily},
     Lamports,
 };
 use std::{io, sync::Arc};
 
 pub fn write_cluster_metrics<W: io::Write>(
-    bank: &Arc<Bank>,
+    banks_with_commitments: &BanksWithCommitments,
     cluster_info: &Arc<ClusterInfo>,
     out: &mut W,
 ) -> io::Result<()> {
+    let bank_finalized = &banks_with_commitments.finalized_bank;
     let identity_pubkey = cluster_info.id();
     let version = cluster_info
         .get_node_version(&identity_pubkey)
@@ -29,15 +30,16 @@ pub fn write_cluster_metrics<W: io::Write>(
         },
     )?;
 
-    let identity_balance = Lamports(bank.get_balance(&identity_pubkey));
+    let identity_balance = Lamports(bank_finalized.get_balance(&identity_pubkey));
     write_metric(
         out,
         &MetricFamily {
             name: "solana_node_identity_balance_sol",
-            help: "The node's current identity balance",
+            help: "The node's finalized identity balance",
             type_: "gauge",
             metrics: vec![Metric::new_sol(identity_balance)
-                .with_label("identity_account", identity_pubkey.to_string())],
+                .with_label("identity_account", identity_pubkey.to_string())
+                .with_label("commitment_level", "finalized".to_owned())],
         },
     )?;
 
