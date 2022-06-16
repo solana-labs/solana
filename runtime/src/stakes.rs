@@ -140,13 +140,9 @@ impl StakesCache {
                                 // Called to eagerly deserialize vote state
                                 let _res = vote_account.vote_state();
                             }
-                            let mut stakes = self.0.write().unwrap();
                             stakes.upsert_vote_account(pubkey, vote_account);
                         }
-                        Err(_) => {
-                            let mut stakes = self.0.write().unwrap();
-                            stakes.remove_vote_account(pubkey)
-                        }
+                        Err(_) => stakes.remove_vote_account(pubkey),
                     }
                 } else {
                     stakes.remove_vote_account(pubkey)
