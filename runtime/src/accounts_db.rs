@@ -3260,55 +3260,43 @@ impl AccountsDb {
     ) {
         let minimized_slot_set = self.get_minimized_slot_set(minimized_account_set);
 
-        let mut dead_slots = Vec::new();
-        let mut dead_storages = Vec::new();
-        let mut count = 0;
-        let mut filter_storages_us = 0;
+        let dead_slots = Mutex::new(Vec::new());
+        let dead_storages = Mutex::new(Vec::new());
 
-        let snapshot_storages = self.get_snapshot_storages(snapshot_slot, None, None).0;
-        let num_slots = snapshot_storages.len();
+        let (_, total_filter_storages_measure) = measure!(
+            {
+                let snapshot_storages = self.get_snapshot_storages(snapshot_slot, None, None).0;
+                snapshot_storages.into_par_iter().for_each(|storages| {
+                    let slot = storages.first().unwrap().slot();
 
-        const REPORT_INTERVAL_SECONDS: u64 = 1u64;
-        let mut start = Instant::now();
-        for storages in snapshot_storages {
-            let slot = storages.first().unwrap().slot();
-            if slot == snapshot_slot {
-                continue;
-            }
-            if minimized_slot_set.contains(&slot) {
-                let (_, filter_storages_measure) = measure!(
-                    self.filter_storages(storages, minimized_account_set, &mut dead_storages),
-                    "filter storages"
-                );
-                filter_storages_us += filter_storages_measure.as_us();
-            } else {
-                dead_slots.push(slot);
-            }
-
-            count += 1;
-            let now = Instant::now();
-            if now.duration_since(start).as_secs() > REPORT_INTERVAL_SECONDS {
-                start = now;
-                info!(
-                    "filtering storages took {filter_storages_us}us progress {count}/{num_slots}"
-                );
-                filter_storages_us = 0;
-            }
-        }
+                    if slot != snapshot_slot {
+                        if minimized_slot_set.contains(&slot) {
+                            self.filter_storages(storages, minimized_account_set, &dead_storages);
+                        } else {
+                            dead_slots.lock().unwrap().push(slot);
+                        }
+                    }
+                })
+            },
+            "filter storages total"
+        );
+        info!("{total_filter_storages_measure}");
 
         self.log_dead_slots.store(false, Ordering::Relaxed);
         let (_, purge_slots_measure) = measure!(
             self.purge_slots_from_cache_and_store(
-                dead_slots.iter(),
+                dead_slots.lock().unwrap().iter(),
                 &self.external_purge_slots_stats,
                 false, // prevent excessive logging - accounts
             ),
             "purge slots"
         );
         info!("{purge_slots_measure}");
-
         let (_, drop_or_recycle_stores_measure) = measure!(
-            self.drop_or_recycle_stores(dead_storages),
+            {
+                let dead_storages = dead_storages.into_inner().unwrap();
+                self.drop_or_recycle_stores(dead_storages);
+            },
             "drop or recycle stores"
         );
         info!("{drop_or_recycle_stores_measure}");
@@ -3341,7 +3329,7 @@ impl AccountsDb {
         &self,
         storages: Vec<Arc<AccountStorageEntry>>,
         minimized_account_set: &DashSet<Pubkey>,
-        dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
+        dead_storages: &Mutex<Vec<Arc<AccountStorageEntry>>>,
     ) {
         let slot = storages.first().unwrap().slot();
         let (stored_accounts, _, _) = self.get_unique_accounts_from_storages(storages.iter());
@@ -3387,7 +3375,6 @@ impl AccountsDb {
         self.purge_keys_exact(purge_pubkeys.iter());
 
         let aligned_total: u64 = Self::page_align(total_bytes as u64);
-        let dead_storages_original_length = dead_storages.len();
         if aligned_total > 0 {
             let mut accounts = Vec::with_capacity(keep_accounts.len());
             let mut hashes = Vec::with_capacity(keep_accounts.len());
@@ -3415,14 +3402,9 @@ impl AccountsDb {
             .iter()
             .map(|storage| storage.append_vec_id())
             .collect();
-        self.mark_dirty_dead_stores(slot, dead_storages, |store| {
+        self.mark_dirty_dead_stores(slot, &mut dead_storages.lock().unwrap(), |store| {
             !append_vec_set.contains(&store.append_vec_id())
         });
-
-        assert_eq!(
-            dead_storages.len() - dead_storages_original_length,
-            storages.len()
-        );
     }
 
     /// get stores for 'slot'
