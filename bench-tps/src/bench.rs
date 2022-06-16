@@ -301,6 +301,35 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
     Ok(nonce_keypairs)
 }
 
+    fn withdraw_nonce_account<T: 'static + BenchTpsClient + Send + Sync>(
+        client: Arc<T>,
+        keypairs: &Vec<Keypair>,
+        nonce_keypairs: &Vec<Keypair>
+    ) { 
+        // Withdraw and close nonce accounts
+        for (nonce, authority) in nonce_keypairs.iter().zip(keypairs.iter()) {
+            let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
+            let instr = system_instruction::withdraw_nonce_account(
+                &nonce.pubkey(),
+                &authority.pubkey(),
+                &authority.pubkey(),
+                nonce_balance,
+            );
+
+            let mut tx = Transaction::new_with_payer(&[instr], Some(&authority.pubkey()));
+            let blockhash = get_latest_blockhash(client.as_ref());
+            //let blockhash = client.get_latest_blockhash().ok().unwrap();
+            tx.try_sign(&[authority], blockhash);
+
+            let res = client.send_transaction(tx);
+            if res.is_err() {
+                info!("@{:?}", res.err().unwrap());
+            }
+            thread::sleep(std::time::Duration::from_secs(1));
+        }
+        thread::sleep(std::time::Duration::from_secs(10));
+    }
+
 pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
 where
     T: 'static + BenchTpsClient + Send + Sync,
@@ -426,6 +455,8 @@ where
             info!("  join() failed with: {:?}", err);
         }
     }
+
+    withdraw_nonce_account(client.clone(), &gen_keypairs, &nonce_keypairs);
 
     let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_lamport_balance(balance);
@@ -1304,34 +1335,6 @@ mod tests {
         }
     }
 
-    fn withdraw_nonce_account<T: 'static + BenchTpsClient + Send + Sync>(
-        client: Arc<T>,
-        keypairs: &Vec<Keypair>,
-        nonce_keypairs: &Vec<Keypair>
-    ) { 
-        // Withdraw and close nonce accounts
-        for (nonce, authority) in izip!(nonce_keypairs, keypairs) {
-            let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
-            let instr = system_instruction::withdraw_nonce_account(
-                &nonce.pubkey(),
-                &authority.pubkey(),
-                &authority.pubkey(),
-                nonce_balance,
-            );
-
-            let mut tx = Transaction::new_with_payer(&[instr], Some(&authority.pubkey()));
-            let blockhash = get_latest_blockhash(client.as_ref());
-            //let blockhash = client.get_latest_blockhash().ok().unwrap();
-            tx.try_sign(&[authority], blockhash);
-
-            let res = client.send_transaction(tx);
-            if res.is_err() {
-                info!("@{:?}", res.err().unwrap());
-            }
-            thread::sleep(time::Duration::from_secs(1));
-        }
-        thread::sleep(time::Duration::from_secs(10));
-    }
 
     #[test]
     fn test_durable_nonce() {
