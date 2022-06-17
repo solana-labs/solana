@@ -82,11 +82,24 @@ impl SnapshotMinimizer {
 
     /// Used to get rent collection accounts in `minimize`
     fn get_rent_collection_accounts(&self) {
-        self.bank.get_rent_collection_accounts_between_slots(
-            &self.minimized_account_set,
-            self.starting_slot,
-            self.ending_slot,
-        );
+        let partitions = if !self.bank.use_fixed_collection_cycle() {
+            self.bank
+                .variable_cycle_partitions_between_slots(self.starting_slot, self.ending_slot)
+        } else {
+            self.bank
+                .fixed_cycle_partitions_between_slots(self.starting_slot, self.ending_slot)
+        };
+
+        partitions.into_iter().for_each(|partition| {
+            let subrange = Bank::pubkey_range_from_partition(partition);
+            self.bank
+                .accounts()
+                .load_to_collect_rent_eagerly(&self.bank.ancestors, subrange)
+                .into_par_iter()
+                .for_each(|(pubkey, ..)| {
+                    self.minimized_account_set.insert(pubkey);
+                })
+        });
     }
 
     /// Used to get vote and node pubkeys in `minimize`
@@ -230,11 +243,61 @@ mod tests {
             account::{AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable::{self, UpgradeableLoaderState},
             genesis_config::create_genesis_config,
+            pubkey::Pubkey,
             signer::Signer,
             stake,
         },
         std::sync::Arc,
     };
+
+    #[test]
+    fn test_get_rent_collection_accounts() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        // Slots correspond to subrange: A52Kf8KJNVhs1y61uhkzkSF82TXCLxZekqmFwiFXLnHu..=ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9NE
+        // Initially, there are no existing keys in this range
+        {
+            let minimizer = SnapshotMinimizer::new(bank.clone(), 100_000, 110_000, DashSet::new());
+            minimizer.get_rent_collection_accounts();
+            assert!(
+                minimizer.minimized_account_set.is_empty(),
+                "rent collection accounts should be empty: len={}",
+                minimizer.minimized_account_set.len()
+            );
+        }
+
+        // Add a key in the subrange
+        let pubkey: Pubkey = "ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9ND"
+            .parse()
+            .unwrap();
+        bank.store_account(&pubkey, &AccountSharedData::new(1, 0, &Pubkey::default()));
+
+        {
+            let minimizer = SnapshotMinimizer::new(bank.clone(), 100_000, 110_000, DashSet::new());
+            minimizer.get_rent_collection_accounts();
+            assert_eq!(
+                1,
+                minimizer.minimized_account_set.len(),
+                "rent collection accounts should have len=1: len={}",
+                minimizer.minimized_account_set.len()
+            );
+            assert!(minimizer.minimized_account_set.contains(&pubkey));
+        }
+
+        // Slots correspond to subrange: ChXFtoKuDvQum4HvtgiqGWrgUYbtP1ZzGFGMnT8FuGaB..=FKzRYCFeCC8e48jP9kSW4xM77quv1BPrdEMktpceXWSa
+        // The previous key is not contained in this range, so is not added
+        {
+            let minimizer = SnapshotMinimizer::new(bank, 110_001, 120_000, DashSet::new());
+            assert!(
+                minimizer.minimized_account_set.is_empty(),
+                "rent collection accounts should be empty: len={}",
+                minimizer.minimized_account_set.len()
+            );
+        }
+    }
 
     #[test]
     fn test_minimization_get_vote_accounts() {

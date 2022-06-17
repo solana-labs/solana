@@ -5172,43 +5172,6 @@ impl Bank {
             });
     }
 
-    /// Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
-    pub(crate) fn get_rent_collection_accounts_between_slots(
-        &self,
-        minimized_account_set: &DashSet<Pubkey>,
-        starting_slot: Slot,
-        ending_slot: Slot,
-    ) {
-        let initial_accounts_len = minimized_account_set.len();
-        let (_, rent_collection_accounts_measure) = measure!(
-            {
-                let partitions = if !self.use_fixed_collection_cycle() {
-                    self.variable_cycle_partitions_between_slots(starting_slot, ending_slot)
-                } else {
-                    self.fixed_cycle_partitions_between_slots(starting_slot, ending_slot)
-                };
-
-                partitions.into_iter().for_each(|partition| {
-                    let subrange = Self::pubkey_range_from_partition(partition);
-                    self.accounts()
-                        .load_to_collect_rent_eagerly(&self.ancestors, subrange)
-                        .into_par_iter()
-                        .for_each(|(pubkey, ..)| {
-                            minimized_account_set.insert(pubkey);
-                        })
-                });
-            },
-            "get rent collection accounts"
-        );
-
-        let total_accounts_len = minimized_account_set.len();
-        let new_accounts_len = total_accounts_len - initial_accounts_len;
-        info!(
-            "Added {} rent collection accounts for total of {} accounts. {}",
-            new_accounts_len, total_accounts_len, rent_collection_accounts_measure
-        );
-    }
-
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
@@ -5747,7 +5710,7 @@ impl Bank {
         partitions
     }
 
-    fn fixed_cycle_partitions_between_slots(
+    pub(crate) fn fixed_cycle_partitions_between_slots(
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
@@ -5788,7 +5751,7 @@ impl Bank {
         )
     }
 
-    fn variable_cycle_partitions_between_slots(
+    pub(crate) fn variable_cycle_partitions_between_slots(
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
@@ -5997,7 +5960,7 @@ impl Bank {
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
-    fn use_fixed_collection_cycle(&self) -> bool {
+    pub(crate) fn use_fixed_collection_cycle(&self) -> bool {
         // Force normal behavior, disabling fixed collection cycle for manual local testing
         #[cfg(not(test))]
         if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
@@ -8451,61 +8414,6 @@ pub(crate) mod tests {
             |old, new| assert_eq!(old, new),
         );
         assert_eq!(account, bank.get_account(&pubkey).unwrap());
-    }
-
-    #[test]
-    fn test_get_rent_collection_accounts_between_slots() {
-        solana_logger::setup();
-
-        let (genesis_config, _) = create_genesis_config(1_000_000);
-        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-
-        // Slots correspond to subrange: A52Kf8KJNVhs1y61uhkzkSF82TXCLxZekqmFwiFXLnHu..=ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9NE
-        // Initially, there are no existing keys in this range
-        let rent_collection_accounts = DashSet::new();
-        bank.get_rent_collection_accounts_between_slots(
-            &rent_collection_accounts,
-            100_000,
-            110_000,
-        );
-        assert!(
-            rent_collection_accounts.is_empty(),
-            "rent collection accounts should be empty: len={}",
-            rent_collection_accounts.len()
-        );
-
-        // Add a key in the subrange
-        let pubkey: Pubkey = "ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9ND"
-            .parse()
-            .unwrap();
-        bank.store_account(&pubkey, &AccountSharedData::new(1, 0, &Pubkey::default()));
-
-        bank.get_rent_collection_accounts_between_slots(
-            &rent_collection_accounts,
-            100_000,
-            110_000,
-        );
-        assert_eq!(
-            1,
-            rent_collection_accounts.len(),
-            "rent collection accounts should have len=1: len={}",
-            rent_collection_accounts.len()
-        );
-        assert!(rent_collection_accounts.contains(&pubkey));
-
-        // Slots correspond to subrange: ChXFtoKuDvQum4HvtgiqGWrgUYbtP1ZzGFGMnT8FuGaB..=FKzRYCFeCC8e48jP9kSW4xM77quv1BPrdEMktpceXWSa
-        // The previous key is not contained in this range, so is not added
-        rent_collection_accounts.clear();
-        bank.get_rent_collection_accounts_between_slots(
-            &rent_collection_accounts,
-            110_001,
-            120_000,
-        );
-        assert!(
-            rent_collection_accounts.is_empty(),
-            "rent collection accounts should be empty: len={}",
-            rent_collection_accounts.len()
-        );
     }
 
     #[test]
