@@ -5153,6 +5153,25 @@ impl Bank {
         self.collect_rent_eagerly(true);
     }
 
+    /// Get stake and stake node accounts
+    pub(crate) fn get_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
+        self.stakes_cache
+            .stakes()
+            .stake_delegations()
+            .iter()
+            .for_each(|(pubkey, _)| {
+                minimized_account_set.insert(*pubkey);
+            });
+
+        self.stakes_cache
+            .stakes()
+            .staked_nodes()
+            .par_iter()
+            .for_each(|(pubkey, _)| {
+                minimized_account_set.insert(*pubkey);
+            });
+    }
+
     /// Used to get accounts that will be rent collected between `starting_slot` and `ending_slot` for `minimize_bank_for_snapshot`.
     pub(crate) fn get_rent_collection_accounts_between_slots(
         &self,

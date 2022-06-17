@@ -1,5 +1,5 @@
 use {
-    crate::{accounts_index::ScanConfig, bank::Bank},
+    crate::bank::Bank,
     dashmap::DashSet,
     log::info,
     rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
@@ -104,13 +104,7 @@ impl SnapshotMinimizer {
 
     /// Used to get stake accounts in `minimize`
     pub(self) fn get_stake_accounts(&self) {
-        self.bank
-            .get_program_accounts(&solana_sdk::stake::program::id(), &ScanConfig::default())
-            .unwrap()
-            .into_par_iter()
-            .for_each(|(pubkey, _)| {
-                self.minimized_account_set.insert(pubkey);
-            });
+        self.bank.get_stake_accounts(&self.minimized_account_set);
     }
 
     /// Used to get owner accounts in `minimize`
