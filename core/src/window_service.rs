@@ -14,7 +14,10 @@ use {
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+        blockstore::{
+            self, Blockstore, BlockstoreInsertionMetrics, RetransmitBatch, RetransmitSender,
+            MAX_DATA_SHREDS_PER_SLOT,
+        },
         leader_schedule_cache::LeaderScheduleCache,
         shred::{Nonce, Shred, ShredType},
     },
@@ -39,6 +42,8 @@ use {
 
 type DuplicateSlotSender = Sender<Slot>;
 pub(crate) type DuplicateSlotReceiver = Receiver<Slot>;
+type InsertShredSender = Sender<(Vec<Shred>, Vec<ParsedWindowShredMeta>)>;
+type InsertShredReceiver = Receiver<(Vec<Shred>, Vec<ParsedWindowShredMeta>)>;
 
 #[derive(Default)]
 struct WindowServiceMetrics {
@@ -239,36 +244,38 @@ fn run_check_duplicate(
 fn verify_repair(
     outstanding_requests: &mut OutstandingShredRepairs,
     shred: &Shred,
-    repair_meta: &Option<RepairMeta>,
+    parsed_window_shred_meta: &ParsedWindowShredMeta,
 ) -> bool {
-    repair_meta
-        .as_ref()
-        .map(|repair_meta| {
-            outstanding_requests
-                .register_response(
-                    repair_meta.nonce,
-                    shred,
-                    solana_sdk::timing::timestamp(),
-                    |_| (),
-                )
-                .is_some()
-        })
-        .unwrap_or(true)
+    match parsed_window_shred_meta {
+        ParsedWindowShredMeta::RepairMeta(repair_meta) => outstanding_requests
+            .register_response(
+                repair_meta.nonce,
+                shred,
+                solana_sdk::timing::timestamp(),
+                |_| (),
+            )
+            .is_some(),
+        ParsedWindowShredMeta::Turbine(_) => true,
+    }
 }
 
 fn prune_shreds_invalid_repair(
     shreds: &mut Vec<Shred>,
-    repair_infos: &mut Vec<Option<RepairMeta>>,
+    parsed_window_shred_metas: &mut Vec<ParsedWindowShredMeta>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
 ) {
-    assert_eq!(shreds.len(), repair_infos.len());
+    assert_eq!(shreds.len(), parsed_window_shred_metas.len());
     let mut i = 0;
     let mut removed = HashSet::new();
     {
         let mut outstanding_requests = outstanding_requests.write().unwrap();
         shreds.retain(|shred| {
             let should_keep = (
-                verify_repair(&mut outstanding_requests, shred, &repair_infos[i]),
+                verify_repair(
+                    &mut outstanding_requests,
+                    shred,
+                    &parsed_window_shred_metas[i],
+                ),
                 i += 1,
             )
                 .0;
@@ -279,19 +286,20 @@ fn prune_shreds_invalid_repair(
         });
     }
     i = 0;
-    repair_infos.retain(|_repair_info| (!removed.contains(&i), i += 1).0);
-    assert_eq!(shreds.len(), repair_infos.len());
+    parsed_window_shred_metas
+        .retain(|_parsed_window_shred_metas| (!removed.contains(&i), i += 1).0);
+    assert_eq!(shreds.len(), parsed_window_shred_metas.len());
 }
 
 fn run_insert<F>(
-    shred_receiver: &Receiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+    shred_receiver: &InsertShredReceiver,
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     handle_duplicate: F,
     metrics: &mut BlockstoreInsertionMetrics,
     ws_metrics: &mut WindowServiceMetrics,
     completed_data_sets_sender: &CompletedDataSetsSender,
-    retransmit_sender: &Sender<Vec<Shred>>,
+    retransmit_sender: &RetransmitSender,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
 ) -> Result<()>
 where
@@ -300,10 +308,10 @@ where
     ws_metrics.run_insert_count += 1;
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
     let timer = Duration::from_millis(200);
-    let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
-    while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
+    let (mut shreds, mut parsed_window_shred_metas) = shred_receiver.recv_timeout(timer)?;
+    while let Ok((more_shreds, more_parsed_window_shred_metas)) = shred_receiver.try_recv() {
         shreds.extend(more_shreds);
-        repair_infos.extend(more_repair_infos);
+        parsed_window_shred_metas.extend(more_parsed_window_shred_metas);
     }
     shred_receiver_elapsed.stop();
     ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
@@ -311,11 +319,15 @@ where
 
     let mut prune_shreds_elapsed = Measure::start("prune_shreds_elapsed");
     let num_shreds = shreds.len();
-    prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
+    prune_shreds_invalid_repair(
+        &mut shreds,
+        &mut parsed_window_shred_metas,
+        outstanding_requests,
+    );
     ws_metrics.num_shreds_pruned_invalid_repair = num_shreds - shreds.len();
-    let repairs: Vec<_> = repair_infos
+    let repairs: Vec<_> = parsed_window_shred_metas
         .iter()
-        .map(|repair_info| repair_info.is_some())
+        .map(|parsed_window_shred_meta| parsed_window_shred_meta.is_repair())
         .collect();
     prune_shreds_elapsed.stop();
     ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
@@ -330,7 +342,7 @@ where
         metrics,
     )?;
     for index in inserted_indices {
-        if repair_infos[index].is_some() {
+        if parsed_window_shred_metas[index].is_repair() {
             metrics.num_repair += 1;
         }
     }
@@ -342,9 +354,9 @@ where
 fn recv_window<F>(
     blockstore: &Blockstore,
     bank_forks: &RwLock<BankForks>,
-    insert_shred_sender: &Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+    insert_shred_sender: &InsertShredSender,
     verified_receiver: &Receiver<Vec<PacketBatch>>,
-    retransmit_sender: &Sender<Vec<Shred>>,
+    retransmit_sender: &RetransmitSender,
     shred_filter: F,
     thread_pool: &ThreadPool,
     stats: &mut ReceiveWindowStats,
@@ -368,39 +380,48 @@ where
         if !shred_filter(&shred, working_bank.clone(), last_root) {
             return None;
         }
-        if packet.meta.repair() {
-            let repair_info = RepairMeta {
+        let parsed_window_shred_meta = if packet.meta.repair() {
+            let repair_meta = RepairMeta {
                 _from_addr: packet.meta.socket_addr(),
                 // If can't parse the nonce, dump the packet.
                 nonce: repair_response::nonce(packet)?,
             };
-            Some((shred, Some(repair_info)))
+            ParsedWindowShredMeta::RepairMeta(repair_meta)
         } else {
-            Some((shred, None))
-        }
+            ParsedWindowShredMeta::Turbine(packet.meta.socket_addr())
+        };
+
+        Some((shred, parsed_window_shred_meta))
     };
-    let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+    let (shreds, parsed_window_shred_metas): (Vec<_>, Vec<_>) = thread_pool.install(|| {
         packet_batches
             .par_iter()
             .flat_map_iter(|packet_batch| packet_batch.iter().filter_map(handle_packet))
             .unzip()
     });
     // Exclude repair packets from retransmit.
-    let _ = retransmit_sender.send(
+    let _ = retransmit_sender.send(RetransmitBatch::Turbine(
         shreds
             .iter()
-            .zip(&repair_infos)
-            .filter(|(_, repair_info)| repair_info.is_none())
-            .map(|(shred, _)| shred)
-            .cloned()
+            .zip(&parsed_window_shred_metas)
+            .filter_map(|(shred, parsed_window_shred_meta)| {
+                if parsed_window_shred_meta.is_turbine() {
+                    Some((shred.clone(), parsed_window_shred_meta.sender_addr()))
+                } else {
+                    None
+                }
+            })
             .collect(),
-    );
-    stats.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
+    ));
+    stats.num_repairs += parsed_window_shred_metas
+        .iter()
+        .filter(|r| r.is_repair())
+        .count();
     stats.num_shreds += shreds.len();
     for shred in &shreds {
         *stats.slots.entry(shred.slot()).or_default() += 1;
     }
-    insert_shred_sender.send((shreds, repair_infos))?;
+    insert_shred_sender.send((shreds, parsed_window_shred_metas))?;
 
     stats.num_packets += packet_batches
         .iter()
@@ -415,6 +436,28 @@ where
     }
     stats.elapsed += now.elapsed();
     Ok(())
+}
+
+enum ParsedWindowShredMeta {
+    RepairMeta(RepairMeta),
+    Turbine(SocketAddr),
+}
+
+impl ParsedWindowShredMeta {
+    fn is_turbine(&self) -> bool {
+        matches!(self, ParsedWindowShredMeta::Turbine(..))
+    }
+
+    fn is_repair(&self) -> bool {
+        matches!(self, ParsedWindowShredMeta::RepairMeta(..))
+    }
+
+    fn sender_addr(&self) -> SocketAddr {
+        match self {
+            ParsedWindowShredMeta::RepairMeta(repair_meta) => repair_meta._from_addr,
+            ParsedWindowShredMeta::Turbine(sender_addr) => *sender_addr,
+        }
+    }
 }
 
 struct RepairMeta {
@@ -452,7 +495,7 @@ impl WindowService {
     pub(crate) fn new<F>(
         blockstore: Arc<Blockstore>,
         verified_receiver: Receiver<Vec<PacketBatch>>,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: RetransmitSender,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
@@ -564,10 +607,10 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        insert_receiver: Receiver<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+        insert_receiver: InsertShredReceiver,
         check_duplicate_sender: Sender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: RetransmitSender,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> JoinHandle<()> {
         let mut handle_timeout = || {};
@@ -623,11 +666,11 @@ impl WindowService {
         id: Pubkey,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
-        insert_sender: Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
+        insert_sender: InsertShredSender,
         verified_receiver: Receiver<Vec<PacketBatch>>,
         shred_filter: F,
         bank_forks: Arc<RwLock<BankForks>>,
-        retransmit_sender: Sender<Vec<Shred>>,
+        retransmit_sender: RetransmitSender,
     ) -> JoinHandle<()>
     where
         F: 'static

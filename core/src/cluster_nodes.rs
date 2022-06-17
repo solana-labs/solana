@@ -48,6 +48,15 @@ pub struct Node {
     stake: u64,
 }
 
+impl Node {
+    fn id(&self) -> Pubkey {
+        match &self.node {
+            NodeId::ContactInfo(contact_info) => contact_info.id,
+            NodeId::Pubkey(pk) => *pk,
+        }
+    }
+}
+
 pub struct ClusterNodes<T> {
     pubkey: Pubkey, // The local node itself.
     // All staked nodes + other known tvu-peers + the node itself;
@@ -87,6 +96,20 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
+    pub fn find_node_id_by_addr(&self, socket_addr: &SocketAddr) -> Option<Pubkey> {
+        let ip = socket_addr.ip();
+        self.nodes
+            .iter()
+            .find(|node| {
+                if let Some(contact_info) = node.contact_info() {
+                    contact_info.gossip.ip() == ip
+                } else {
+                    false
+                }
+            })
+            .map(|node| node.pubkey())
+    }
+
     pub(crate) fn num_peers(&self) -> usize {
         self.nodes.len().saturating_sub(1)
     }
@@ -178,11 +201,12 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
+        shred_sender_addr: Option<SocketAddr>,
         root_bank: &Bank,
         fanout: usize,
     ) -> (/*root_distance:*/ usize, Vec<SocketAddr>) {
         let (root_distance, neighbors, children) =
-            self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
+            self.get_retransmit_peers(slot_leader, shred, shred_sender_addr, root_bank, fanout);
         if neighbors.is_empty() {
             let peers = children.into_iter().filter_map(Node::contact_info);
             let addrs = peers.map(|peer| peer.tvu).collect();
@@ -214,6 +238,7 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
+        shred_sender_addr: Option<SocketAddr>,
         root_bank: &Bank,
         fanout: usize,
     ) -> (
@@ -260,6 +285,35 @@ impl ClusterNodes<RetransmitStage> {
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
+        if shred.is_data() {
+            if let Some(shred_sender_addr) = shred_sender_addr {
+                if rand::thread_rng().gen_ratio(1, 10_000) {
+                    let sender_pubkey = self.find_node_id_by_addr(&shred_sender_addr);
+                    // ~ once every 10_000 shreds
+                    // log leader's pubkey
+                    // log slot, shred index
+                    // log nodes pubkeys, self_index, peers
+                    info!(
+                        "turbine shred verifier,
+                    leader: {},
+                    slot: {}, shred_index: {},
+                    sender_addr: {:?},
+                    sender_pubkey: {:?},
+                    all cluster pubkeys: {:?}, self_index: {},
+                    neighbors: {:?}, children: {:?}",
+                        slot_leader,
+                        shred.slot(),
+                        shred.index(),
+                        shred_sender_addr,
+                        sender_pubkey,
+                        nodes.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
+                        self_index,
+                        neighbors.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
+                        children.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
+                    );
+                }
+            }
+        }
         (root_distance, neighbors, children)
     }
 }

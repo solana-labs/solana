@@ -22,7 +22,7 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::{
-        blockstore::Blockstore,
+        blockstore::{Blockstore, RetransmitReceiver},
         leader_schedule_cache::LeaderScheduleCache,
         shred::{Shred, ShredId},
     },
@@ -35,7 +35,7 @@ use {
     solana_streamer::sendmmsg::{multi_target_send, SendPktsError},
     std::{
         collections::{HashMap, HashSet},
-        net::UdpSocket,
+        net::{SocketAddr, UdpSocket},
         ops::AddAssign,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -173,7 +173,7 @@ fn retransmit(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    shreds_receiver: &Receiver<Vec<Shred>>,
+    shreds_receiver: &RetransmitReceiver,
     sockets: &[UdpSocket],
     stats: &mut RetransmitStats,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
@@ -184,9 +184,13 @@ fn retransmit(
     rpc_subscriptions: Option<&RpcSubscriptions>,
 ) -> Result<(), RecvTimeoutError> {
     const RECV_TIMEOUT: Duration = Duration::from_secs(1);
-    let mut shreds = shreds_receiver.recv_timeout(RECV_TIMEOUT)?;
+    let mut shreds: Vec<(Shred, Option<SocketAddr>)> =
+        shreds_receiver.recv_timeout(RECV_TIMEOUT)?.into();
     let mut timer_start = Measure::start("retransmit");
-    shreds.extend(shreds_receiver.try_iter().flatten());
+    shreds.extend(shreds_receiver.try_iter().flat_map(|retransmit_batch| {
+        let retransmit_batch: Vec<(Shred, Option<SocketAddr>)> = retransmit_batch.into();
+        retransmit_batch.into_iter()
+    }));
     stats.num_shreds += shreds.len();
     stats.total_batches += 1;
 
@@ -204,7 +208,7 @@ fn retransmit(
     stats.epoch_cache_update += epoch_cache_update.as_us();
 
     let socket_addr_space = cluster_info.socket_addr_space();
-    let retransmit_shred = |shred: &Shred, socket: &UdpSocket| {
+    let retransmit_shred = |shred: &Shred, sender_addr: Option<SocketAddr>, socket: &UdpSocket| {
         if should_skip_retransmit(shred, shreds_received, packet_hasher) {
             stats.num_shreds_skipped.fetch_add(1, Ordering::Relaxed);
             return None;
@@ -231,8 +235,13 @@ fn retransmit(
             };
         let cluster_nodes =
             cluster_nodes_cache.get(shred_slot, &root_bank, &working_bank, cluster_info);
-        let (root_distance, addrs) =
-            cluster_nodes.get_retransmit_addrs(slot_leader, shred, &root_bank, DATA_PLANE_FANOUT);
+        let (root_distance, addrs) = cluster_nodes.get_retransmit_addrs(
+            slot_leader,
+            shred,
+            sender_addr,
+            &root_bank,
+            DATA_PLANE_FANOUT,
+        );
         let addrs: Vec<_> = addrs
             .into_iter()
             .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
@@ -269,10 +278,10 @@ fn retransmit(
         shreds
             .into_par_iter()
             .with_min_len(4)
-            .filter_map(|shred| {
+            .filter_map(|(shred, sender_addr)| {
                 let index = thread_pool.current_thread_index().unwrap();
                 let socket = &sockets[index % sockets.len()];
-                Some((shred.slot(), retransmit_shred(&shred, socket)?))
+                Some((shred.slot(), retransmit_shred(&shred, sender_addr, socket)?))
             })
             .fold(
                 HashMap::<Slot, RetransmitSlotStats>::new,
@@ -305,7 +314,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    shreds_receiver: Receiver<Vec<Shred>>,
+    shreds_receiver: RetransmitReceiver,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> JoinHandle<()> {
