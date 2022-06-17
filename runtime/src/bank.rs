@@ -939,7 +939,7 @@ impl NonceInfo for NonceFull {
 // Sync fields with BankFieldsToSerialize! This is paired with it.
 // All members are made public to remain Bank's members private and to make versioned deserializer workable on this
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct BankFieldsToDeserialize {
+pub struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,
