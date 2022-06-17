@@ -3,7 +3,7 @@
 use {
     log::*,
     clap::{
-        crate_description, crate_name, value_t, values_t, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, values_t, value_t_or_exit, App, Arg, ArgMatches,
     },
     solana_gossip::{
         cluster_info::{
@@ -19,7 +19,11 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::Bank,
         bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader,
+        genesis_utils::{
+            create_genesis_config_with_leader, 
+            create_genesis_config_with_vote_accounts, 
+            ValidatorVoteKeypairs
+        },
     },
     crossbeam_channel::unbounded,
     std::{
@@ -73,11 +77,22 @@ fn parse_matches() -> ArgMatches<'static> {
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entrypoint"),
         )
+        .arg(
+            Arg::with_name("num_nodes")
+                .long("num-nodes")
+                .value_name("NODES")
+                .takes_value(true)
+                .default_value("1")
+                .help("Number of gossip nodes in cluster"),
+        )
         .get_matches()
 }
 
 pub fn main() {
-    solana_logger::setup_with_default("solana=info");
+    solana_logger::setup_with_default("solana=info,solana::gossip-only=info");
+    // solana_logger::setup(");
+
+    error!("greg_hey");
     let matches = parse_matches();
 
     let default_dynamic_port_range =
@@ -189,11 +204,29 @@ pub fn main() {
     let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
     let accounts_dir = TempDir::new().unwrap();
-    let genesis_config_info = create_genesis_config_with_leader(
-        10_000,                          // mint_lamports
-        &solana_sdk::pubkey::new_rand(), // validator_pubkey
-        1,                               // validator_stake_lamports
+    // let genesis_config_info = create_genesis_config_with_leader(
+    //     10_000,                          // mint_lamports
+    //     &solana_sdk::pubkey::new_rand(), // validator_pubkey
+    //     1,                               // validator_stake_lamports
+    // );
+
+    let num_nodes: usize = value_t_or_exit!(matches, "num_nodes", usize);
+
+    // let num_nodes: usize = std::env::var("NUM_NODES")
+    //     .unwrap_or_else(|_| "10".to_string())
+    //     .parse()
+    //     .expect("could not parse NUM_NODES as a number");
+
+    info!("greg_num_nodes: {}", num_nodes);
+    let vote_keypairs: Vec<_> = (0..num_nodes)
+        .map(|_| ValidatorVoteKeypairs::new_rand())
+        .collect();
+    let genesis_config_info = create_genesis_config_with_vote_accounts(
+        10_000,
+        &vote_keypairs,
+        vec![100; vote_keypairs.len()],
     );
+
 
     //Generate bank forks
     let bank0 = Bank::new_with_paths_for_tests(
