@@ -4105,6 +4105,8 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
 
         let txs = vec![
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
@@ -4119,22 +4121,40 @@ pub mod tests {
                 1,
                 genesis_config.hash(),
             )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                genesis_config.hash(),
+            )),
         ];
 
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
-        let transaction_indexes = vec![0, 1];
+        let transaction_indexes = vec![42, 43, 44];
 
         let batch2 = rebatch_transactions(
             batch.lock_results(),
             &bank,
             batch.sanitized_transactions(),
             0,
-            1,
+            0,
             &transaction_indexes,
         );
         assert!(batch.needs_unlock());
         assert!(!batch2.batch.needs_unlock());
+        assert_eq!(batch2.transaction_indexes, vec![42]);
+
+        let batch3 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            1,
+            2,
+            &transaction_indexes,
+        );
+        assert!(!batch3.batch.needs_unlock());
+        assert_eq!(batch3.transaction_indexes, vec![43, 44]);
     }
 
     #[test]
