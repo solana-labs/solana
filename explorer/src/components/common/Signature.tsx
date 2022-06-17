@@ -36,10 +36,10 @@ export function Signature({
       <Copyable text={signature} replaceText={!alignRight}>
         <span className="font-monospace">
           {link ? (
-            <Link href={clusterPath(`/tx/${signature}`, router.asPath)}>
-              <span className={truncate ? "text-truncate signature-truncate" : ""}>
+            <Link href={clusterPath(`/tx/${signature}`, router.asPath)} passHref>
+              <a className={truncate ? "text-truncate signature-truncate" : ""}>
                 {signatureLabel}
-              </span>
+              </a>
             </Link>
           ) : (
             signatureLabel

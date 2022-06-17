@@ -5,9 +5,7 @@ import { InstructionLogs } from "src/utils/program-logs";
 import { ProgramName } from "src/utils/anchor";
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/router";
 import getInstructionCardScrollAnchorId from "src/utils/get-instruction-card-scroll-anchor-id";
-import { dummyUrl } from "src/constants/urls";
 
 const NATIVE_PROGRAMS_MISSING_INVOKE_LOG: string[] = [
   "AddressLookupTab1e1111111111111111111111111",
@@ -28,13 +26,10 @@ export function ProgramLogsCardBody({
   cluster: Cluster;
   url: string;
 }) {
-  const router = useRouter();
   let logIndex = 0;
 
-  const jumpToLocation = (index: number) => {
-    const location = new URL(router.asPath, dummyUrl)
-    return `${location.pathname}#${getInstructionCardScrollAnchorId([index + 1])}`
-  }
+  const jumpToLocation = (index: number) =>
+    `#${getInstructionCardScrollAnchorId([index + 1])}`
 
   return (
     <TableCardBody>
@@ -73,21 +68,23 @@ export function ProgramLogsCardBody({
         return (
           <tr key={index}>
             <td>
-              <Link href={jumpToLocation(index)}>
-                <div className="d-flex align-items-center">
-                  <span className={`badge bg-${badgeColor}-soft me-2`}>
-                    #{index + 1}
-                  </span>
-                  <span className="program-log-instruction-name">
-                    <ProgramName
-                      programId={programId}
-                      cluster={cluster}
-                      url={url}
-                    />{" "}
-                    Instruction
-                  </span>
-                  <span className="fe fe-chevrons-up c-pointer px-2" />
-                </div>
+              <Link href={jumpToLocation(index)} passHref>
+                <a>
+                  <div className="d-flex align-items-center">
+                    <span className={`badge bg-${badgeColor}-soft me-2`}>
+                      #{index + 1}
+                    </span>
+                    <span className="program-log-instruction-name">
+                      <ProgramName
+                        programId={programId}
+                        cluster={cluster}
+                        url={url}
+                      />{" "}
+                      Instruction
+                    </span>
+                    <span className="fe fe-chevrons-up c-pointer px-2" />
+                  </div>
+                </a>
               </Link>
               {programLogs && (
                 <div className="d-flex align-items-start flex-column font-monospace p-2 font-size-sm">
