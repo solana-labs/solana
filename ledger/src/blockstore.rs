@@ -1131,8 +1131,13 @@ impl Blockstore {
             return false;
         }
 
-        self.slots_stats
-            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+        self.slots_stats.record_shred(
+            shred.slot(),
+            shred.index(),
+            shred.fec_set_index(),
+            shred_source,
+            None,
+        );
 
         // insert coding shred into rocks
         let result = self
@@ -1544,6 +1549,7 @@ impl Blockstore {
 
         self.slots_stats.record_shred(
             shred.slot(),
+            shred.index(),
             shred.fec_set_index(),
             shred_source,
             Some(slot_meta),

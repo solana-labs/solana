@@ -4,7 +4,7 @@ use {
     lru::LruCache,
     solana_sdk::clock::Slot,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         sync::{Mutex, MutexGuard},
     },
 };
@@ -34,6 +34,7 @@ pub struct SlotStats {
     num_recovered: usize,
     last_index: u64,
     flags: SlotFlags,
+    repaired_indexes: HashSet<u32>,
 }
 
 impl SlotStats {
@@ -93,6 +94,7 @@ impl SlotsStats {
     pub(crate) fn record_shred(
         &self,
         slot: Slot,
+        index: u32,
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
@@ -102,7 +104,10 @@ impl SlotsStats {
         let (mut slot_stats, evicted) = Self::get_or_default_with_eviction_check(&mut stats, slot);
         match source {
             ShredSource::Recovered => slot_stats.num_recovered += 1,
-            ShredSource::Repaired => slot_stats.num_repaired += 1,
+            ShredSource::Repaired => {
+                slot_stats.repaired_indexes.insert(index);
+                slot_stats.num_repaired += 1;
+            }
             ShredSource::Turbine => {
                 *slot_stats
                     .turbine_fec_set_index_counts
@@ -115,13 +120,16 @@ impl SlotsStats {
                 slot_stats.last_index = meta.last_index.unwrap_or_default();
                 if !slot_stats.flags.contains(SlotFlags::FULL) {
                     slot_stats.flags |= SlotFlags::FULL;
-                    slot_full_reporting_info =
-                        Some((slot_stats.num_repaired, slot_stats.num_recovered));
+                    slot_full_reporting_info = Some((
+                        slot_stats.num_repaired,
+                        slot_stats.num_recovered,
+                        slot_stats.repaired_indexes.clone(),
+                    ));
                 }
             }
         }
         drop(stats);
-        if let Some((num_repaired, num_recovered)) = slot_full_reporting_info {
+        if let Some((num_repaired, num_recovered, repaired_indexes)) = slot_full_reporting_info {
             let slot_meta = slot_meta.unwrap();
             let total_time_ms =
                 solana_sdk::timing::timestamp().saturating_sub(slot_meta.first_shred_timestamp);
@@ -129,6 +137,12 @@ impl SlotsStats {
                 .last_index
                 .and_then(|ix| i64::try_from(ix).ok())
                 .unwrap_or(-1);
+            info!(
+                "Repair blockstore insertion metrics slot: {},
+                repaired_indexes: {:?}
+                ",
+                slot, repaired_indexes,
+            );
             datapoint_info!(
                 "shred_insert_is_full",
                 ("total_time_ms", total_time_ms, i64),
