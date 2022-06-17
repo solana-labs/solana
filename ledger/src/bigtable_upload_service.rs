@@ -102,7 +102,7 @@ impl BigTableUploadService {
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 start_slot,
-                Some(end_slot),
+                end_slot,
                 config.clone(),
                 exit.clone(),
             ));

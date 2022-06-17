@@ -25,6 +25,7 @@ use {
         UiTransactionEncoding,
     },
     std::{
+        cmp::min,
         collections::HashSet,
         path::Path,
         process::exit,
@@ -50,23 +51,25 @@ async fn upload(
         ..ConfirmedBlockUploadConfig::default()
     };
     let blockstore = Arc::new(blockstore);
-    let mut last_slot_uploaded = 0;
 
-    loop {
-        if starting_slot > 0 && starting_slot == last_slot_uploaded {
-            break;
-        }
-        starting_slot = last_slot_uploaded;
-        last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
+    let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
+
+    while starting_slot <= ending_slot {
+        let current_ending_slot = min(
+            ending_slot,
+            starting_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
+        );
+        let last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
             blockstore.clone(),
             bigtable.clone(),
             starting_slot,
-            ending_slot,
+            current_ending_slot,
             config.clone(),
             Arc::new(AtomicBool::new(false)),
         )
         .await?;
         info!("last slot uploaded: {}", last_slot_uploaded);
+        starting_slot = last_slot_uploaded.saturating_add(1);
     }
     info!("No more blocks to upload.");
     Ok(())
