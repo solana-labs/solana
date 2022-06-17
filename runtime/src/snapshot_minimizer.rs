@@ -51,7 +51,7 @@ impl SnapshotMinimizer {
     }
 
     /// Create a minimizer - used in tests
-    pub(self) fn new(
+    fn new(
         bank: Arc<Bank>,
         starting_slot: Slot,
         ending_slot: Slot,
@@ -81,7 +81,7 @@ impl SnapshotMinimizer {
     }
 
     /// Used to get rent collection accounts in `minimize`
-    pub(self) fn get_rent_collection_accounts(&self) {
+    fn get_rent_collection_accounts(&self) {
         self.bank.get_rent_collection_accounts_between_slots(
             &self.minimized_account_set,
             self.starting_slot,
@@ -90,7 +90,7 @@ impl SnapshotMinimizer {
     }
 
     /// Used to get vote and node pubkeys in `minimize`
-    pub(self) fn get_vote_accounts(&self) {
+    fn get_vote_accounts(&self) {
         self.bank
             .vote_accounts()
             .par_iter()
@@ -103,12 +103,12 @@ impl SnapshotMinimizer {
     }
 
     /// Used to get stake accounts in `minimize`
-    pub(self) fn get_stake_accounts(&self) {
+    fn get_stake_accounts(&self) {
         self.bank.get_stake_accounts(&self.minimized_account_set);
     }
 
     /// Used to get owner accounts in `minimize`
-    pub(self) fn get_owner_accounts(&self) {
+    fn get_owner_accounts(&self) {
         let owner_accounts: HashSet<_> = self
             .minimized_account_set
             .par_iter()
@@ -121,7 +121,7 @@ impl SnapshotMinimizer {
     }
 
     /// Used to get program data accounts in `minimize`
-    pub(self) fn get_programdata_accounts(&self) {
+    fn get_programdata_accounts(&self) {
         let programdata_accounts: HashSet<_> = self
             .minimized_account_set
             .par_iter()
@@ -161,7 +161,6 @@ impl SnapshotMinimizer {
                     .0;
                 snapshot_storages.into_par_iter().for_each(|storages| {
                     let slot = storages.first().unwrap().slot();
-
                     if slot != self.starting_slot {
                         if minimized_slot_set.contains(&slot) {
                             self.bank.accounts().accounts_db.filter_storages(
@@ -222,7 +221,8 @@ impl SnapshotMinimizer {
 mod tests {
     use {
         crate::{
-            bank::Bank, genesis_utils::create_genesis_config_with_leader,
+            append_vec::AppendVecAccountsIter, bank::Bank,
+            genesis_utils::create_genesis_config_with_leader,
             snapshot_minimizer::SnapshotMinimizer,
         },
         dashmap::DashSet,
@@ -277,7 +277,7 @@ mod tests {
         let minimizer = SnapshotMinimizer::new(bank, 0, 0, DashSet::new());
         minimizer.get_stake_accounts();
 
-        let expected_stake_accounts: Vec<_> = genesis_config_info
+        let mut expected_stake_accounts: Vec<_> = genesis_config_info
             .genesis_config
             .accounts
             .iter()
@@ -285,6 +285,8 @@ mod tests {
                 stake::program::check_id(account.owner()).then(|| *pubkey)
             })
             .collect();
+        expected_stake_accounts.push(bootstrap_validator_pubkey);
+
         assert_eq!(
             minimizer.minimized_account_set.len(),
             expected_stake_accounts.len()
@@ -354,5 +356,62 @@ mod tests {
         assert!(minimizer
             .minimized_account_set
             .contains(&programdata_address));
+    }
+
+    #[test]
+    fn test_minimize_accounts_db() {
+        solana_logger::setup();
+
+        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let accounts = &bank.accounts().accounts_db;
+
+        let num_slots = 5;
+        let num_accounts_per_slot = 300;
+
+        let mut current_slot = 0;
+        let minimized_account_set = DashSet::new();
+        for _ in 0..num_slots {
+            let pubkeys: Vec<_> = (0..num_accounts_per_slot)
+                .map(|_| solana_sdk::pubkey::new_rand())
+                .collect();
+
+            let some_lamport = 223;
+            let no_data = 0;
+            let owner = *AccountSharedData::default().owner();
+            let account = AccountSharedData::new(some_lamport, no_data, &owner);
+
+            current_slot += 1;
+
+            for (index, pubkey) in pubkeys.iter().enumerate() {
+                accounts.store_uncached(current_slot, &[(pubkey, &account)]);
+
+                if current_slot % 2 == 0 && index % 100 == 0 {
+                    minimized_account_set.insert(*pubkey);
+                }
+            }
+            accounts.get_accounts_delta_hash(current_slot);
+            accounts.add_root(current_slot);
+        }
+
+        assert_eq!(minimized_account_set.len(), 6);
+        let minimizer =
+            SnapshotMinimizer::new(bank, current_slot, current_slot, minimized_account_set);
+        minimizer.minimize_accounts_db();
+
+        let snapshot_storages = accounts.get_snapshot_storages(current_slot, None, None).0;
+        assert_eq!(snapshot_storages.len(), 3);
+
+        let mut account_count = 0;
+        snapshot_storages.into_iter().for_each(|storages| {
+            storages.into_iter().for_each(|storage| {
+                account_count += AppendVecAccountsIter::new(&storage.accounts).count();
+            });
+        });
+
+        assert_eq!(
+            account_count,
+            minimizer.minimized_account_set.len() + num_accounts_per_slot
+        ); // snapshot slot is untouched, so still has all 300 accounts
     }
 }
