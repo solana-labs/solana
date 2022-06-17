@@ -19,8 +19,7 @@ pub struct UdpTpuConnection {
 impl UdpTpuConnection {
     pub fn new(tpu_addr: SocketAddr) -> Self {
         let socket =
-            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                .unwrap();
+            solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
         socket.set_nonblocking(true).unwrap();
         Self::new_with_std_socket(tpu_addr, socket)
     }
@@ -104,8 +103,7 @@ mod tests {
         let addr_str = "0.0.0.0:50101";
         let addr = addr_str.parse().unwrap();
         let socket =
-            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                .unwrap();
+            solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
         socket.set_nonblocking(true).unwrap();
         let connection = UdpTpuConnection::new_with_std_socket(addr, socket);
         let reader = UdpSocket::bind(addr_str).await.expect("bind");
