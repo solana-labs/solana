@@ -169,13 +169,6 @@ use {
     },
 };
 
-struct StakeReward {
-    pubkey: Pubkey,
-    reward: RewardInfo,
-    balance: u64,
-    account: AccountSharedData,
-}
-
 #[derive(Debug, Default)]
 struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
