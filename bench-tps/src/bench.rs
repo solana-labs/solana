@@ -5,6 +5,7 @@ use {
         bench_tps_client::*,
         cli::Config,
         perf_utils::{sample_txs, SampleStats},
+        create_nonce::*,
     },
     log::*,
     rayon::prelude::*,
@@ -46,17 +47,6 @@ pub const MAX_SPENDS_PER_TX: u64 = 4;
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
-fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
-    loop {
-        match client.get_latest_blockhash_with_commitment(CommitmentConfig::processed()) {
-            Ok((blockhash, _)) => return blockhash,
-            Err(err) => {
-                info!("Couldn't get last blockhash: {:?}", err);
-                sleep(Duration::from_secs(1));
-            }
-        };
-    }
-}
 
 /// Split input vector of keypairs into two sets of chunks of given size
 fn split_into_source_destination(
@@ -280,7 +270,20 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
     let count = authority_keypairs.len();
     let (mut nonce_keypairs, _extra) = generate_keypairs(&seed_keypair, count as u64);
     nonce_keypairs.truncate(count);
-    for (authority, nonce) in authority_keypairs.iter().zip(nonce_keypairs.iter()) {
+    let FUND_CHUNK_LEN = 1024; // TODO(klykov) use one everywhere instead
+
+    let to_fund: Vec<(&Keypair, &Keypair)> = authority_keypairs.iter().zip(nonce_keypairs.iter()).map(|pair| {
+        pair
+    }).collect();
+ 
+    to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+        Base::with_capacity(chunk.len()).create_accounts(
+                &client,
+                chunk,
+                nonce_rent,
+        );
+    });
+    /*for (authority, nonce) in authority_keypairs.iter().zip(nonce_keypairs.iter()) {
         // make
         let instr = system_instruction::create_nonce_account(
             &authority.pubkey(),
@@ -298,6 +301,7 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         // send
         let result = client.send_transaction(tx)?;
     }
+    */
     Ok(nonce_keypairs)
 }
 
@@ -762,20 +766,6 @@ fn do_tx_transfers<T: BenchTpsClient>(
             break;
         }
     }
-}
-
-fn verify_funding_transfer<T: BenchTpsClient>(
-    client: &Arc<T>,
-    tx: &Transaction,
-    amount: u64,
-) -> bool {
-    for a in &tx.message().account_keys[1..] {
-        match client.get_balance_with_commitment(a, CommitmentConfig::processed()) {
-            Ok(balance) => return balance >= amount,
-            Err(err) => error!("failed to get balance {:?}", err),
-        }
-    }
-    false
 }
 
 trait FundingTransactions<'a> {
@@ -1433,36 +1423,11 @@ mod tests {
         }
         withdraw_nonce_account(client.clone(), &keypairs, &nonce_keypairs);
 
-        /*let client = client.rpc_client();
-
-        // Withdraw and close nonce accounts
-        for (nonce, authority) in izip!(&nonce_keypairs, &keypairs) {
-            let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
-            let instr = system_instruction::withdraw_nonce_account(
-                &nonce.pubkey(),
-                &authority.pubkey(),
-                &authority.pubkey(),
-                nonce_balance,
-            );
-
-            let mut tx = Transaction::new_with_payer(&[instr], Some(&authority.pubkey()));
-            //let blockhash = get_latest_blockhash(client.as_ref());
-            let blockhash = client.get_latest_blockhash().ok().unwrap();
-            assert!(tx.try_sign(&[authority], blockhash).is_ok());
-
-            //assert!(client.send_transaction(tx).is_ok());
-            let res = client.send_transaction(&tx);
-            if res.is_err() {
-                info!("@{:?}", res.err().unwrap());
-            }
-            thread::sleep(time::Duration::from_secs(1));
-        }
-        */
         thread::sleep(time::Duration::from_secs(10));
         let client = client.rpc_client();
         // wait until these transactions are finalized
         // otherwise create nonce transactions will fail
-        let mut total_committed = nonce_keypairs.len() as u64;
+        let mut total_committed = nonce_keypairs.len() as i64;
         while total_committed > 0 {
             for to in &nonce_keypairs {
                 let res =
