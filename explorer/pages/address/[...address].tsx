@@ -230,11 +230,12 @@ export function AccountHeader({
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
             {token?.logoURI ? (
-              <div className="position-relative avatar-img rounded-circle border border-4 border-body">
+              <div className="position-relative avatar-img border border-4 border-body">
                 <Image
                   src={`/api/image-proxy?imageUrl=${token.logoURI}`}
                   alt="token logo"
-                  layout="fill"  
+                  layout="fill"
+                  className="rounded-circle"
                 />
               </div>
             ) : (
