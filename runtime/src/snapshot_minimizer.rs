@@ -1,8 +1,14 @@
 use {
-    crate::bank::Bank,
+    crate::{
+        accounts_db::{AccountStorageEntry, AccountsDb, PurgeStats},
+        bank::Bank,
+    },
     dashmap::DashSet,
     log::info,
-    rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    rayon::{
+        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        prelude::ParallelSlice,
+    },
     solana_measure::measure,
     solana_sdk::{
         account::ReadableAccount,
@@ -13,7 +19,10 @@ use {
     },
     std::{
         collections::HashSet,
-        sync::{Arc, Mutex},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
     },
 };
 
@@ -167,20 +176,14 @@ impl SnapshotMinimizer {
         let (_, total_filter_storages_measure) = measure!(
             {
                 let snapshot_storages = self
-                    .bank
-                    .accounts()
-                    .accounts_db
+                    .accounts_db()
                     .get_snapshot_storages(self.starting_slot, None, None)
                     .0;
                 snapshot_storages.into_par_iter().for_each(|storages| {
                     let slot = storages.first().unwrap().slot();
                     if slot != self.starting_slot {
                         if minimized_slot_set.contains(&slot) {
-                            self.bank.accounts().accounts_db.filter_storages(
-                                storages,
-                                &self.minimized_account_set,
-                                &dead_storages,
-                            );
+                            self.filter_storages(storages, &dead_storages);
                         } else {
                             dead_slots.lock().unwrap().push(slot);
                         }
@@ -191,13 +194,29 @@ impl SnapshotMinimizer {
         );
         info!("{total_filter_storages_measure}");
 
-        self.bank
-            .accounts()
-            .accounts_db
-            .remove_dead_slots_and_storages(
-                dead_slots.into_inner().unwrap(),
-                dead_storages.into_inner().unwrap(),
-            );
+        let purge_stats = PurgeStats::default();
+        self.accounts_db()
+            .log_dead_slots
+            .store(false, Ordering::Relaxed);
+        let (_, purge_slots_measure) = measure!(
+            self.accounts_db().purge_slots_from_cache_and_store(
+                dead_slots.into_inner().unwrap().iter(),
+                &purge_stats,
+                false, // prevent excessive logging - accounts
+            ),
+            "purge slots"
+        );
+        info!("{purge_slots_measure}");
+
+        let (_, drop_or_recycle_stores_measure) = measure!(
+            self.accounts_db()
+                .drop_or_recycle_stores(dead_storages.into_inner().unwrap()),
+            "drop or recycle stores"
+        );
+        info!("{drop_or_recycle_stores_measure}");
+        self.accounts_db()
+            .log_dead_slots
+            .store(true, Ordering::Relaxed);
     }
 
     /// Determines minimum set of slots that accounts in `minimized_account_set` are in
@@ -207,9 +226,7 @@ impl SnapshotMinimizer {
                 let minimized_slot_set = DashSet::new();
                 self.minimized_account_set.par_iter().for_each(|pubkey| {
                     if let Some(read_entry) = self
-                        .bank
-                        .accounts()
-                        .accounts_db
+                        .accounts_db()
                         .accounts_index
                         .get_account_read_entry(&pubkey)
                     {
@@ -227,6 +244,102 @@ impl SnapshotMinimizer {
         info!("{measure}");
 
         minimized_slot_set
+    }
+
+    /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
+    fn filter_storages(
+        &self,
+        storages: Vec<Arc<AccountStorageEntry>>,
+        dead_storages: &Mutex<Vec<Arc<AccountStorageEntry>>>,
+    ) {
+        let slot = storages.first().unwrap().slot();
+        let (stored_accounts, _, _) = self
+            .accounts_db()
+            .get_unique_accounts_from_storages(storages.iter());
+        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+        let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
+        let total_bytes_collect = AtomicUsize::new(0);
+        const CHUNK_SIZE: usize = 50;
+        stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
+            let mut chunk_bytes = 0;
+            let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
+            let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
+            chunk.iter().for_each(|(pubkey, account)| {
+                if self.minimized_account_set.contains(pubkey) {
+                    chunk_bytes += account.account_size;
+                    keep_accounts.push((pubkey, account));
+                } else if self
+                    .accounts_db()
+                    .accounts_index
+                    .get_account_read_entry(pubkey)
+                    .is_some()
+                {
+                    purge_pubkeys.push(pubkey);
+                }
+            });
+
+            keep_accounts_collect
+                .lock()
+                .unwrap()
+                .append(&mut keep_accounts);
+            purge_pubkeys_collect
+                .lock()
+                .unwrap()
+                .append(&mut purge_pubkeys);
+            total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
+        });
+
+        let keep_accounts = keep_accounts_collect.into_inner().unwrap();
+        let remove_pubkeys = purge_pubkeys_collect.into_inner().unwrap();
+        let total_bytes = total_bytes_collect.load(Ordering::Relaxed);
+
+        let purge_pubkeys: Vec<_> = remove_pubkeys
+            .into_iter()
+            .map(|pubkey| (*pubkey, slot))
+            .collect();
+        self.accounts_db().purge_keys_exact(purge_pubkeys.iter());
+
+        let aligned_total: u64 = AccountsDb::page_align(total_bytes as u64);
+        if aligned_total > 0 {
+            let mut accounts = Vec::with_capacity(keep_accounts.len());
+            let mut hashes = Vec::with_capacity(keep_accounts.len());
+            let mut write_versions = Vec::with_capacity(keep_accounts.len());
+
+            for (pubkey, alive_account) in keep_accounts {
+                accounts.push((pubkey, &alive_account.account));
+                hashes.push(alive_account.account.hash);
+                write_versions.push(alive_account.account.meta.write_version);
+            }
+
+            let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
+
+            self.accounts_db().store_accounts_frozen(
+                (slot, &accounts[..]),
+                Some(&hashes),
+                Some(&new_storage),
+                Some(Box::new(write_versions.into_iter())),
+            );
+
+            new_storage.flush().unwrap();
+        }
+
+        let append_vec_set: HashSet<_> = storages
+            .iter()
+            .map(|storage| storage.append_vec_id())
+            .collect();
+        self.accounts_db().mark_dirty_dead_stores(
+            slot,
+            &mut dead_storages.lock().unwrap(),
+            |store| !append_vec_set.contains(&store.append_vec_id()),
+        );
+    }
+
+    /// Convenience function for getting accounts_db
+    fn accounts_db(&self) -> &AccountsDb {
+        &self.bank.rc.accounts.accounts_db
     }
 }
 

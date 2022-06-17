@@ -64,7 +64,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::{measure, measure::Measure},
+    solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -1145,7 +1145,7 @@ pub struct AccountsDb {
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
 
-    log_dead_slots: AtomicBool,
+    pub(crate) log_dead_slots: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -1174,7 +1174,7 @@ pub struct AccountsStats {
 }
 
 #[derive(Debug, Default)]
-struct PurgeStats {
+pub(crate) struct PurgeStats {
     last_report: AtomicInterval,
     safety_checks_elapsed: AtomicU64,
     remove_cache_elapsed: AtomicU64,
@@ -2273,7 +2273,7 @@ impl AccountsDb {
         self.sender_bg_hasher = Some(sender);
     }
 
-    fn purge_keys_exact<'a, C: 'a>(
+    pub(crate) fn purge_keys_exact<'a, C: 'a>(
         &'a self,
         pubkey_to_slot_set: impl Iterator<Item = &'a (Pubkey, C)>,
     ) -> Vec<(u64, AccountInfo)>
@@ -3035,7 +3035,7 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    fn get_unique_accounts_from_storages<'a, I>(
+    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
     ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
@@ -3252,120 +3252,10 @@ impl AccountsDb {
         total_accounts_after_shrink
     }
 
-    /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
-    pub(crate) fn filter_storages(
-        &self,
-        storages: Vec<Arc<AccountStorageEntry>>,
-        minimized_account_set: &DashSet<Pubkey>,
-        dead_storages: &Mutex<Vec<Arc<AccountStorageEntry>>>,
-    ) {
-        let slot = storages.first().unwrap().slot();
-        let (stored_accounts, _, _) = self.get_unique_accounts_from_storages(storages.iter());
-        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-
-        let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
-        let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
-        let total_bytes_collect = AtomicUsize::new(0);
-        const CHUNK_SIZE: usize = 50;
-        stored_accounts.par_chunks(CHUNK_SIZE).for_each(|chunk| {
-            let mut chunk_bytes = 0;
-            let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
-            let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
-            chunk.iter().for_each(|(pubkey, account)| {
-                if minimized_account_set.contains(pubkey) {
-                    chunk_bytes += account.account_size;
-                    keep_accounts.push((pubkey, account));
-                } else if self.accounts_index.get_account_read_entry(pubkey).is_some() {
-                    purge_pubkeys.push(pubkey);
-                }
-            });
-
-            keep_accounts_collect
-                .lock()
-                .unwrap()
-                .append(&mut keep_accounts);
-            purge_pubkeys_collect
-                .lock()
-                .unwrap()
-                .append(&mut purge_pubkeys);
-            total_bytes_collect.fetch_add(chunk_bytes, Ordering::Relaxed);
-        });
-
-        let keep_accounts = keep_accounts_collect.into_inner().unwrap();
-        let remove_pubkeys = purge_pubkeys_collect.into_inner().unwrap();
-        let total_bytes = total_bytes_collect.load(Ordering::Relaxed);
-
-        let purge_pubkeys: Vec<_> = remove_pubkeys
-            .into_iter()
-            .map(|pubkey| (*pubkey, slot))
-            .collect();
-        self.purge_keys_exact(purge_pubkeys.iter());
-
-        let aligned_total: u64 = Self::page_align(total_bytes as u64);
-        if aligned_total > 0 {
-            let mut accounts = Vec::with_capacity(keep_accounts.len());
-            let mut hashes = Vec::with_capacity(keep_accounts.len());
-            let mut write_versions = Vec::with_capacity(keep_accounts.len());
-
-            for (pubkey, alive_account) in keep_accounts {
-                accounts.push((pubkey, &alive_account.account));
-                hashes.push(alive_account.account.hash);
-                write_versions.push(alive_account.account.meta.write_version);
-            }
-
-            let (new_storage, _time) = self.get_store_for_shrink(slot, aligned_total);
-
-            self.store_accounts_frozen(
-                (slot, &accounts[..]),
-                Some(&hashes),
-                Some(&new_storage),
-                Some(Box::new(write_versions.into_iter())),
-            );
-
-            new_storage.flush().unwrap();
-        }
-
-        let append_vec_set: HashSet<_> = storages
-            .iter()
-            .map(|storage| storage.append_vec_id())
-            .collect();
-        self.mark_dirty_dead_stores(slot, &mut dead_storages.lock().unwrap(), |store| {
-            !append_vec_set.contains(&store.append_vec_id())
-        });
-    }
-
-    /// Remove dead slots and storages
-    pub(crate) fn remove_dead_slots_and_storages(
-        &self,
-        dead_slots: Vec<Slot>,
-        dead_storages: Vec<Arc<AccountStorageEntry>>,
-    ) {
-        self.log_dead_slots.store(false, Ordering::Relaxed);
-        let (_, purge_slots_measure) = measure!(
-            self.purge_slots_from_cache_and_store(
-                dead_slots.iter(),
-                &self.external_purge_slots_stats,
-                false, // prevent excessive logging - accounts
-            ),
-            "purge slots"
-        );
-        info!("{purge_slots_measure}");
-
-        let (_, drop_or_recycle_stores_measure) = measure!(
-            {
-                self.drop_or_recycle_stores(dead_storages);
-            },
-            "drop or recycle stores"
-        );
-        info!("{drop_or_recycle_stores_measure}");
-        self.log_dead_slots.store(true, Ordering::Relaxed);
-    }
-
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
     /// for stores not retained, insert in 'dirty_stores' and 'dead_storages'
-    fn mark_dirty_dead_stores(
+    pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
         dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
@@ -3385,7 +3275,7 @@ impl AccountsDb {
         }
     }
 
-    fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+    pub(crate) fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         recycle_stores_write_elapsed.stop();
@@ -3411,7 +3301,7 @@ impl AccountsDb {
     }
 
     /// return a store that can contain 'aligned_total' bytes and the time it took to execute
-    fn get_store_for_shrink(
+    pub(crate) fn get_store_for_shrink(
         &self,
         slot: Slot,
         aligned_total: u64,
@@ -4855,7 +4745,7 @@ impl AccountsDb {
         store
     }
 
-    fn page_align(size: u64) -> u64 {
+    pub(crate) fn page_align(size: u64) -> u64 {
         (size + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
     }
 
@@ -5011,7 +4901,7 @@ impl AccountsDb {
 
     /// Purges every slot in `removed_slots` from both the cache and storage. This includes
     /// entries in the accounts index, cache entries, and any backing storage entries.
-    fn purge_slots_from_cache_and_store<'a>(
+    pub(crate) fn purge_slots_from_cache_and_store<'a>(
         &self,
         removed_slots: impl Iterator<Item = &'a Slot> + Clone,
         purge_stats: &PurgeStats,
@@ -7686,7 +7576,7 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
+    pub(crate) fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
