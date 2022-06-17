@@ -107,6 +107,10 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
+
+   --tpu-use-quic
+                                      - Use quic for tpu packet forwarding 
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -320,6 +324,7 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$useQuic\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -392,6 +397,7 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$useQuic\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -800,6 +806,7 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+useQuic=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -911,6 +918,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
+      shift 1
+    elif [[ $1 == --tpu-use-quic ]]; then
+      useQuic=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
