@@ -342,10 +342,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         "Only show stake accounts delegated to the provided vote accounts. "),
                 )
                 .arg(
-                    pubkey!(Arg::with_name("withdrawer_pubkey")
+                    pubkey!(Arg::with_name("withdraw_authority")
                     .value_name("PUBKEY")
-                    .long("withdraw-autority"),
-                    "Filter stakes with the given withdraw authority. "),
+                    .long("withdraw-authority"),
+                    "Only show stake accounts with the provided withdraw authority. "),
                 ),
         )
         .subcommand(
@@ -630,12 +630,12 @@ pub fn parse_show_stakes(
     let use_lamports_unit = matches.is_present("lamports");
     let vote_account_pubkeys =
         pubkeys_of_multiple_signers(matches, "vote_account_pubkeys", wallet_manager)?;
-    let withdrawer_pubkey = pubkey_of(matches, "withdrawer_pubkey");
+    let withdraw_authority = pubkey_of(matches, "withdraw_authority");
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
-            withdrawer_pubkey,
+            withdraw_authority,
         },
         signers: vec![],
     })
