@@ -36,7 +36,7 @@ use {
 
 async fn upload(
     blockstore: Blockstore,
-    starting_slot: Slot,
+    mut starting_slot: Slot,
     ending_slot: Option<Slot>,
     force_reupload: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
@@ -49,19 +49,27 @@ async fn upload(
         force_reupload,
         ..ConfirmedBlockUploadConfig::default()
     };
+    let blockstore = Arc::new(blockstore);
+    let mut last_slot_uploaded = 0;
 
-    solana_ledger::bigtable_upload::upload_confirmed_blocks(
-        Arc::new(blockstore),
-        bigtable,
-        starting_slot,
-        ending_slot,
-        config,
-        Arc::new(AtomicBool::new(false)),
-    )
-    .await
-    .map(|last_slot_uploaded| {
+    loop {
+        if starting_slot > 0 && starting_slot == last_slot_uploaded {
+            break;
+        }
+        starting_slot = last_slot_uploaded;
+        last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
+            blockstore.clone(),
+            bigtable.clone(),
+            starting_slot,
+            ending_slot,
+            config.clone(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await?;
         info!("last slot uploaded: {}", last_slot_uploaded);
-    })
+    }
+    info!("No more blocks to upload.");
+    Ok(())
 }
 
 async fn delete_slots(
