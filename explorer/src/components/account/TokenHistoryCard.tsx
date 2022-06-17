@@ -353,6 +353,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
             <Link
               key={filterOption}
               href={buildLocation(filterOption)}
+              scroll={false}
             >
               <span className={`dropdown-item${
                 filterOption === filter ? " active" : ""

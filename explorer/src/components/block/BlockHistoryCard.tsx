@@ -215,7 +215,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                   className="text-muted c-pointer"
                   onClick={() => {
                     query.delete("sort");
-                    router.push(clusterPath(location.pathname, router.asPath, query));
+                    router.push(clusterPath(location.pathname, router.asPath, query,), undefined, { scroll: false });
                   }}
                 >
                   #
@@ -226,7 +226,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                   className="text-muted text-end c-pointer"
                   onClick={() => {
                     query.set("sort", "fee");
-                    router.push(clusterPath(location.pathname, router.asPath, query));
+                    router.push(clusterPath(location.pathname, router.asPath, query), undefined, { scroll: false });
                   }}
                 >
                   Fee
@@ -236,7 +236,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
                     className="text-muted text-end c-pointer"
                     onClick={() => {
                       query.set("sort", "compute");
-                      router.push(clusterPath(location.pathname, router.asPath, query));
+                      router.push(clusterPath(location.pathname, router.asPath, query), undefined, { scroll: false });
                     }}
                   >
                     Compute
@@ -445,6 +445,7 @@ const FilterDropdown = ({
             <Link
               key={programId}
               href={buildLocation(programId)}
+              scroll={false}
             >
               <span className={`dropdown-item${
                 programId === filter ? " active" : ""
