@@ -71,7 +71,7 @@ impl SnapshotMinimizer {
         F: Fn(&SnapshotMinimizer),
     {
         let initial_accounts_len = self.minimized_account_set.len();
-        let (_, measure) = measure!(|| add_accounts_fn(self), name);
+        let (_, measure) = measure!(add_accounts_fn(self), name);
         let total_accounts_len = self.minimized_account_set.len();
         let added_accounts = total_accounts_len - initial_accounts_len;
 
