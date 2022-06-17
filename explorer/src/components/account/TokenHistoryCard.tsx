@@ -355,7 +355,7 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
               href={buildLocation(filterOption)}
               scroll={false}
             >
-              <span className={`dropdown-item${
+              <span className={`dropdown-item c-pointer${
                 filterOption === filter ? " active" : ""
               }`} onClick={toggle}>
                 {filterOption === ALL_TOKENS
