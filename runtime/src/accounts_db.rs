@@ -1145,7 +1145,7 @@ pub struct AccountsDb {
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
 
-    pub(crate) log_dead_slots: AtomicBool,
+    log_dead_slots: AtomicBool,
 }
 
 #[derive(Debug, Default)]
