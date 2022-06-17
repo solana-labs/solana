@@ -20,8 +20,7 @@ pub struct UdpTpuConnection {
 impl UdpTpuConnection {
     pub fn new_from_addr(tpu_addr: SocketAddr) -> Self {
         let socket =
-            solana_net_utils::bind_in_validator_port_range(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                .unwrap();
+            solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
         Self {
             socket,
             addr: tpu_addr,
