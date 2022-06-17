@@ -98,6 +98,11 @@ struct TransactionBatchWithIndexes<'a, 'b> {
     pub transaction_indexes: Vec<usize>,
 }
 
+struct ReplayEntry {
+    entry: EntryType,
+    starting_index: usize,
+}
+
 // get_max_thread_count to match number of threads in the old code.
 // see: https://github.com/solana-labs/solana/pull/24853
 lazy_static! {
@@ -436,17 +441,6 @@ pub fn process_entries_for_tests(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
-    let mut entry_indexes: Vec<_> = entries
-        .iter()
-        .map(|e| {
-            let num_txs = e.transactions.len();
-            let next_starting_index = entry_starting_index.saturating_add(num_txs);
-            let indexes = (entry_starting_index..next_starting_index).collect::<Vec<_>>();
-            entry_starting_index = next_starting_index;
-            indexes
-        })
-        .collect();
     let verify_transaction = {
         let bank = bank.clone();
         move |versioned_tx: VersionedTransaction| -> Result<SanitizedTransaction> {
@@ -455,10 +449,24 @@ pub fn process_entries_for_tests(
     };
 
     let mut timings = ExecuteTimings::default();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
+    let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
+    let mut replay_entries: Vec<_> =
+        entry::verify_transactions(entries, Arc::new(verify_transaction))?
+            .into_iter()
+            .map(|entry| {
+                let starting_index = entry_starting_index;
+                if let EntryType::Transactions(ref transactions) = entry {
+                    entry_starting_index = entry_starting_index.saturating_add(transactions.len());
+                }
+                ReplayEntry {
+                    entry,
+                    starting_index,
+                }
+            })
+            .collect();
     let result = process_entries_with_callback(
         bank,
-        &mut entries,
+        &mut replay_entries,
         randomize,
         None,
         transaction_status_sender,
@@ -466,7 +474,6 @@ pub fn process_entries_for_tests(
         None,
         &mut timings,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
-        &mut entry_indexes,
     );
 
     debug!("process_entries: {:?}", timings);
@@ -489,7 +496,7 @@ fn shuffle_slice<T>(indices: &[usize], slice: &mut [T]) {
 #[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
-    entries: &mut [EntryType],
+    entries: &mut [ReplayEntry],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -497,14 +504,17 @@ fn process_entries_with_callback(
     transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    entry_indexes: &mut [Vec<usize>],
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let cost_model = CostModel::new();
 
-    for (entry, transaction_indexes) in entries.iter_mut().zip(entry_indexes) {
+    for ReplayEntry {
+        entry,
+        starting_index,
+    } in entries
+    {
         match entry {
             EntryType::Tick(hash) => {
                 // If it's a tick, save it for later
@@ -535,10 +545,13 @@ fn process_entries_with_callback(
                         .send_cost_details(bank.clone(), transactions.iter());
                 }
 
+                let starting_index = *starting_index;
+                let mut transaction_indexes: Vec<_> =
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
                 if randomize {
                     let indices = get_random_indices(transactions.len());
                     shuffle_slice(&indices, transactions);
-                    shuffle_slice(&indices, transaction_indexes);
+                    shuffle_slice(&indices, &mut transaction_indexes);
                 }
 
                 loop {
@@ -1019,14 +1032,14 @@ fn confirm_slot_entries(
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
     let num_entries = entries.len();
-    let mut entry_indexes = Vec::with_capacity(num_entries);
+    let mut entry_starting_indexes = Vec::with_capacity(num_entries);
     let mut entry_starting_index = progress.num_txs;
     let num_txs = entries
         .iter()
         .map(|e| {
             let num_txs = e.transactions.len();
             let next_starting_index = entry_starting_index.saturating_add(num_txs);
-            entry_indexes.push((entry_starting_index..next_starting_index).collect::<Vec<_>>());
+            entry_starting_indexes.push(entry_starting_index);
             entry_starting_index = next_starting_index;
             num_txs
         })
@@ -1097,10 +1110,19 @@ fn confirm_slot_entries(
             let mut replay_elapsed = Measure::start("replay_elapsed");
             let mut execute_timings = ExecuteTimings::default();
             let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+            let mut replay_entries: Vec<_> = entries
+                .unwrap()
+                .into_iter()
+                .zip(entry_starting_indexes)
+                .map(|(entry, starting_index)| ReplayEntry {
+                    entry,
+                    starting_index,
+                })
+                .collect();
             // Note: This will shuffle entries' transactions in-place.
             let process_result = process_entries_with_callback(
                 bank,
-                &mut entries.unwrap(),
+                &mut replay_entries,
                 true, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
@@ -1108,7 +1130,6 @@ fn confirm_slot_entries(
                 transaction_cost_metrics_sender,
                 &mut execute_timings,
                 cost_capacity_meter,
-                &mut entry_indexes,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
