@@ -3147,7 +3147,7 @@ impl Bank {
                             stake_reward_info: RewardInfo {
                                 reward_type: RewardType::Staking,
                                 lamports: stakers_reward as i64,
-                                post_balance: post_balance,
+                                post_balance,
                                 commission: Some(vote_state.commission),
                             },
                             stake_reward: stakers_reward,
