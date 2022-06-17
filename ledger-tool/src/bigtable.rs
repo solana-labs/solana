@@ -25,6 +25,7 @@ use {
         UiTransactionEncoding,
     },
     std::{
+        cmp::min,
         collections::HashSet,
         path::Path,
         process::exit,
@@ -36,7 +37,7 @@ use {
 
 async fn upload(
     blockstore: Blockstore,
-    starting_slot: Slot,
+    mut starting_slot: Slot,
     ending_slot: Option<Slot>,
     force_reupload: bool,
     config: solana_storage_bigtable::LedgerStorageConfig,
@@ -49,19 +50,29 @@ async fn upload(
         force_reupload,
         ..ConfirmedBlockUploadConfig::default()
     };
+    let blockstore = Arc::new(blockstore);
 
-    solana_ledger::bigtable_upload::upload_confirmed_blocks(
-        Arc::new(blockstore),
-        bigtable,
-        starting_slot,
-        ending_slot,
-        config,
-        Arc::new(AtomicBool::new(false)),
-    )
-    .await
-    .map(|last_slot_uploaded| {
+    let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
+
+    while starting_slot <= ending_slot {
+        let current_ending_slot = min(
+            ending_slot,
+            starting_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
+        );
+        let last_slot_uploaded = solana_ledger::bigtable_upload::upload_confirmed_blocks(
+            blockstore.clone(),
+            bigtable.clone(),
+            starting_slot,
+            current_ending_slot,
+            config.clone(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await?;
         info!("last slot uploaded: {}", last_slot_uploaded);
-    })
+        starting_slot = last_slot_uploaded.saturating_add(1);
+    }
+    info!("No more blocks to upload.");
+    Ok(())
 }
 
 async fn delete_slots(
