@@ -125,8 +125,13 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                 let start_vote_slot =
                                     vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
                                 match validator_gossip_votes {
-                                    FullVote((slot, hash), (packet, tx_signature)) => self
-                                        .filter_vote(slot, hash, packet, tx_signature)
+                                    FullTowerVote(GossipVote {
+                                        slot,
+                                        hash,
+                                        packet_batch,
+                                        signature,
+                                    }) => self
+                                        .filter_vote(slot, hash, packet_batch, signature)
                                         .map(|packet| vec![packet])
                                         .unwrap_or_default(),
                                     IncrementalVotes(validator_gossip_votes) => {
@@ -151,25 +156,32 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct GossipVote {
+    slot: Slot,
+    hash: Hash,
+    packet_batch: PacketBatch,
+    signature: Signature,
+}
+
 pub enum SingleValidatorVotes {
-    FullVote((Slot, Hash), (PacketBatch, Signature)),
+    FullTowerVote(GossipVote),
     IncrementalVotes(BTreeMap<(Slot, Hash), (PacketBatch, Signature)>),
 }
 
 impl SingleValidatorVotes {
+    fn get_latest_slot_sent_to_bank(&self) -> Slot {
+        match self {
+            Self::FullTowerVote(vote) => vote.slot,
+            _ => 0,
+        }
+    }
+
     #[cfg(test)]
     fn len(&self) -> usize {
         match self {
             Self::IncrementalVotes(votes) => votes.len(),
             _ => 1,
-        }
-    }
-
-    #[cfg(test)]
-    fn get_slot_from_full_vote(&self) -> Option<Slot> {
-        match self {
-            &Self::FullVote((slot, _), _) => Some(slot),
-            _ => None,
         }
     }
 }
@@ -188,9 +200,10 @@ impl VerifiedVotePackets {
         const RECV_TIMEOUT: Duration = Duration::from_millis(200);
         let vote_packets = vote_packets_receiver.recv_timeout(RECV_TIMEOUT)?;
         let vote_packets = std::iter::once(vote_packets).chain(vote_packets_receiver.try_iter());
-        let mut new_style = false;
+        let mut is_full_tower_vote_enabled = false;
         if let Some(feature_set) = feature_set {
-            new_style = feature_set.is_active(&allow_votes_to_directly_update_vote_state::id());
+            is_full_tower_vote_enabled =
+                feature_set.is_active(&allow_votes_to_directly_update_vote_state::id());
         }
 
         for gossip_votes in vote_packets {
@@ -209,16 +222,21 @@ impl VerifiedVotePackets {
                     let slot = vote.last_voted_slot().unwrap();
                     let hash = vote.hash();
 
-                    if new_style {
+                    if is_full_tower_vote_enabled {
                         let latest_slot_sent_to_bank = match self.0.get(&vote_account_key) {
-                            Some(&FullVote((slot, _), _)) => slot,
+                            Some(vote) => vote.get_latest_slot_sent_to_bank(),
                             _ => 0,
                         };
                         // Since votes are not incremental, we keep only the latest vote
                         if slot > latest_slot_sent_to_bank {
                             self.0.insert(
                                 vote_account_key,
-                                FullVote((slot, hash), (packet_batch, signature)),
+                                FullTowerVote(GossipVote {
+                                    slot,
+                                    hash,
+                                    packet_batch,
+                                    signature,
+                                }),
                             );
                         }
                     } else {
@@ -589,8 +607,7 @@ mod tests {
             .0
             .get(&vote_account_key)
             .unwrap()
-            .get_slot_from_full_vote()
-            .unwrap();
+            .get_latest_slot_sent_to_bank();
         assert_eq!(11, slot);
 
         // Now send the third_vote, it should overwrite second_vote
@@ -609,8 +626,7 @@ mod tests {
             .0
             .get(&vote_account_key)
             .unwrap()
-            .get_slot_from_full_vote()
-            .unwrap();
+            .get_latest_slot_sent_to_bank();
         assert_eq!(13, slot);
 
         // Now send all three, but keep the feature off
@@ -700,10 +716,8 @@ mod tests {
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
             .unwrap();
-        if let &FullVote((slot, _), (_, _)) =
-            verified_vote_packets.0.get(&vote_account_key).unwrap()
-        {
-            assert_eq!(200, slot);
+        if let FullTowerVote(vote) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
+            assert_eq!(200, vote.slot);
         } else {
             panic!("Feature active but incremental votes are present");
         }
