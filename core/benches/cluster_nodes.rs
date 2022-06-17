@@ -37,23 +37,8 @@ fn get_retransmit_peers_deterministic(
     num_simulated_shreds: usize,
 ) {
     for i in 0..num_simulated_shreds {
-<<<<<<< HEAD
         shred.common_header.index = i as u32;
-        let (_neighbors, _children) = cluster_nodes.get_retransmit_peers(
-=======
-        let index = i as u32;
-        let shred = Shred::new_from_data(
-            slot,
-            index,
-            parent_offset,
-            &[],
-            ShredFlags::empty(),
-            0,
-            0,
-            0,
-        );
         let (_root_distance, _neighbors, _children) = cluster_nodes.get_retransmit_peers(
->>>>>>> b3d1f8d1a (tracks number of shreds sent and received at different distances from the root (#25989))
             *slot_leader,
             shred,
             root_bank,
