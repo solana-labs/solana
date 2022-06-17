@@ -21,7 +21,7 @@ use {
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-            Arc, RwLock, RwLockWriteGuard,
+            Arc, Mutex, RwLock, RwLockWriteGuard,
         },
     },
 };
@@ -49,6 +49,9 @@ pub struct InMemAccountsIndex<T: IndexValue> {
     stop_evictions: AtomicU64,
     // set to true while this bin is being actively flushed
     flushing_active: AtomicBool,
+
+    /// info to streamline initial index generation
+    startup_info: Mutex<StartupInfo<T>>,
 }
 
 impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
@@ -61,6 +64,14 @@ pub enum InsertNewEntryResults {
     DidNotExist,
     ExistedNewEntryZeroLamports,
     ExistedNewEntryNonZeroLamports,
+}
+
+#[derive(Default, Debug)]
+struct StartupInfo<T: IndexValue> {
+    /// entries to add next time we are flushing to disk
+    insert: Vec<(Slot, Pubkey, T)>,
+    /// pubkeys that were found to have duplicate index entries
+    duplicates: Vec<(Slot, Pubkey)>,
 }
 
 /// result from scanning in-mem index during flush
@@ -88,6 +99,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             flushing_active: AtomicBool::default(),
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
             last_age_flushed: AtomicU8::new(Age::MAX),
+            startup_info: Mutex::default(),
         }
     }
 
@@ -577,6 +589,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.stats().count_in_bucket(self.bin)
     }
 
+    /// Queue up these insertions for when the flush thread is dealing with this bin.
+    /// This is very fast and requires no lookups or disk access.
+    pub fn startup_insert_only(&self, slot: Slot, items: impl Iterator<Item = (Pubkey, T)>) {
+        assert!(self.storage.get_startup());
+        assert!(self.bucket.is_some());
+
+        let insert = &mut self.startup_info.lock().unwrap().insert;
+        items
+            .into_iter()
+            .for_each(|(k, v)| insert.push((slot, k, v)));
+    }
+
     pub fn insert_new_entry_if_missing_with_lock(
         &self,
         pubkey: Pubkey,
@@ -982,6 +1006,77 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    fn write_startup_info_to_disk(&self) {
+        let mut insert = vec![];
+        {
+            let mut lock = self.startup_info.lock().unwrap();
+            std::mem::swap(&mut insert, &mut lock.insert);
+        }
+        if insert.is_empty() {
+            // nothing to insert for this bin
+            return;
+        }
+
+        // during startup, nothing should be in the in-mem map
+        assert!(
+            self.map_internal.read().unwrap().is_empty(),
+            "len: {}, first: {:?}",
+            self.map_internal.read().unwrap().len(),
+            self.map_internal
+                .read()
+                .unwrap()
+                .iter()
+                .take(1)
+                .collect::<Vec<_>>()
+        );
+
+        let mut duplicates = vec![];
+
+        // merge all items into the disk index now
+        let disk = self.bucket.as_ref().unwrap();
+        let mut duplicate = vec![];
+        insert.into_iter().for_each(|(slot, k, v)| {
+            let entry = (slot, v);
+            let new_ref_count = if v.is_cached() { 0 } else { 1 };
+            disk.update(&k, |current| {
+                match current {
+                    Some((current_slot_list, mut ref_count)) => {
+                        // merge this in, mark as conflict
+                        let mut slot_list = Vec::with_capacity(current_slot_list.len() + 1);
+                        slot_list.extend_from_slice(current_slot_list);
+                        slot_list.push(entry); // will never be from the same slot that already exists in the list
+                        ref_count += new_ref_count;
+                        duplicate.push((slot, k));
+                        Some((slot_list, ref_count))
+                    }
+                    None => {
+                        // not on disk, insert it
+                        Some((vec![entry], new_ref_count))
+                    }
+                }
+            });
+        });
+        self.startup_info
+            .lock()
+            .unwrap()
+            .duplicates
+            .append(&mut duplicates);
+    }
+
+    /// pull out all duplicate pubkeys from 'startup_info'
+    /// duplicate pubkeys have a slot list with len > 1
+    /// These were collected for this bin when we did batch inserts in the bg flush threads.
+    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<(Slot, Pubkey)> {
+        let mut write = self.startup_info.lock().unwrap();
+        // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
+        assert!(write.insert.is_empty());
+
+        let write = &mut write.duplicates;
+        let mut duplicates = vec![];
+        std::mem::swap(&mut duplicates, write);
+        duplicates
+    }
+
     /// synchronize the in-mem index with the disk index
     fn flush_internal(&self, flush_guard: &FlushGuard, can_advance_age: bool) {
         let current_age = self.storage.current_age();
@@ -998,6 +1093,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             mut evictions_age_possible,
             mut evictions_random,
         } = self.flush_scan(current_age, startup, flush_guard);
+
+        if startup {
+            self.write_startup_info_to_disk();
+        }
 
         // write to disk outside in-mem map read lock
         {

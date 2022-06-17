@@ -1771,14 +1771,14 @@ fn main() {
                         .long("before")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("First good root after the range to repair")
+                        .help("Recent root after the range to repair")
                 )
                 .arg(
                     Arg::with_name("end_root")
                         .long("until")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("Last slot to check for root repair")
+                        .help("Earliest slot to check for root repair")
                 )
                 .arg(
                     Arg::with_name("max_slots")

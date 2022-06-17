@@ -395,6 +395,7 @@ impl JsonRpcService {
             if let Some(RpcBigtableConfig {
                 enable_bigtable_ledger_upload,
                 ref bigtable_instance_name,
+                ref bigtable_app_profile_id,
                 timeout,
             }) = config.rpc_bigtable_config
             {
@@ -403,6 +404,7 @@ impl JsonRpcService {
                     timeout,
                     credential_type: CredentialType::Filepath(None),
                     instance_name: bigtable_instance_name.clone(),
+                    app_profile_id: bigtable_app_profile_id.clone(),
                 };
                 runtime
                     .block_on(solana_storage_bigtable::LedgerStorage::new_with_config(

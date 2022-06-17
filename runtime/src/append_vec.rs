@@ -263,26 +263,6 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    pub fn new_empty_map(current_len: usize) -> Self {
-        let map = MmapMut::map_anon(1).unwrap_or_else(|e| {
-            error!(
-                "Failed to create VM map for snapshot. {:?}\n
-                        Please increase sysctl vm.max_map_count or equivalent for your platform.",
-                e
-            );
-            std::process::exit(1);
-        });
-
-        AppendVec {
-            path: PathBuf::from(String::default()),
-            map,
-            append_lock: Mutex::new(()),
-            current_len: AtomicUsize::new(current_len),
-            file_size: 0, // will be filled by set_file()
-            remove_on_drop: true,
-        }
-    }
-
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
         if file_size == 0 {
             Err(std::io::Error::new(

@@ -330,22 +330,27 @@ impl BankClient {
 mod tests {
     use {
         super::*,
-        solana_sdk::{genesis_config::create_genesis_config, instruction::AccountMeta},
+        solana_sdk::{
+            genesis_config::create_genesis_config, instruction::AccountMeta,
+            native_token::sol_to_lamports,
+        },
     };
 
     #[test]
     fn test_bank_client_new_with_keypairs() {
-        let (genesis_config, john_doe_keypair) = create_genesis_config(10_000);
+        let (genesis_config, john_doe_keypair) = create_genesis_config(sol_to_lamports(1.0));
         let john_pubkey = john_doe_keypair.pubkey();
         let jane_doe_keypair = Keypair::new();
         let jane_pubkey = jane_doe_keypair.pubkey();
         let doe_keypairs = vec![&john_doe_keypair, &jane_doe_keypair];
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
+        let amount = genesis_config.rent.minimum_balance(0);
 
         // Create 2-2 Multisig Transfer instruction.
         let bob_pubkey = solana_sdk::pubkey::new_rand();
-        let mut transfer_instruction = system_instruction::transfer(&john_pubkey, &bob_pubkey, 42);
+        let mut transfer_instruction =
+            system_instruction::transfer(&john_pubkey, &bob_pubkey, amount);
         transfer_instruction
             .accounts
             .push(AccountMeta::new(jane_pubkey, true));
@@ -354,6 +359,6 @@ mod tests {
         bank_client
             .send_and_confirm_message(&doe_keypairs, message)
             .unwrap();
-        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), 42);
+        assert_eq!(bank_client.get_balance(&bob_pubkey).unwrap(), amount);
     }
 }

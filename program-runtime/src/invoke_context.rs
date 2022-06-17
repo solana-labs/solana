@@ -368,10 +368,10 @@ impl<'a> InvokeContext<'a> {
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
 
-            for (index_in_instruction, instruction_account) in
+            for (instruction_account_index, instruction_account) in
                 instruction_accounts.iter().enumerate()
             {
-                if index_in_instruction != instruction_account.index_in_callee {
+                if instruction_account_index != instruction_account.index_in_callee {
                     continue; // Skip duplicate account
                 }
                 if instruction_account.index_in_transaction
@@ -398,7 +398,8 @@ impl<'a> InvokeContext<'a> {
                     self.transaction_context
                         .get_instruction_context_at(level)
                         .and_then(|instruction_context| {
-                            instruction_context.try_borrow_program_account(self.transaction_context)
+                            instruction_context
+                                .try_borrow_last_program_account(self.transaction_context)
                         })
                         .map(|program_account| program_account.get_key() == program_id)
                         .unwrap_or(false)
@@ -407,7 +408,7 @@ impl<'a> InvokeContext<'a> {
                 .transaction_context
                 .get_current_instruction_context()
                 .and_then(|instruction_context| {
-                    instruction_context.try_borrow_program_account(self.transaction_context)
+                    instruction_context.try_borrow_last_program_account(self.transaction_context)
                 })
                 .map(|program_account| program_account.get_key() == program_id)
                 .unwrap_or(false);
@@ -490,7 +491,7 @@ impl<'a> InvokeContext<'a> {
             .get_current_instruction_context()
             .map_err(|_| InstructionError::CallDepth)?;
         let program_id = instruction_context
-            .get_program_key(self.transaction_context)
+            .get_last_program_key(self.transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify all executable accounts have zero outstanding refs
@@ -504,8 +505,10 @@ impl<'a> InvokeContext<'a> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut pre_account_index = 0;
-        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
-            if index_in_instruction != instruction_account.index_in_callee {
+        for (instruction_account_index, instruction_account) in
+            instruction_accounts.iter().enumerate()
+        {
+            if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
             {
@@ -581,13 +584,15 @@ impl<'a> InvokeContext<'a> {
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
-            if index_in_instruction != instruction_account.index_in_callee {
+        for (instruction_account_index, instruction_account) in
+            instruction_accounts.iter().enumerate()
+        {
+            if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
             if instruction_account.index_in_transaction
@@ -599,11 +604,7 @@ impl<'a> InvokeContext<'a> {
                     .get_account_at_index(instruction_account.index_in_transaction)?;
                 let is_writable = if before_instruction_context_push {
                     instruction_context
-                        .try_borrow_instruction_account(
-                            self.transaction_context,
-                            instruction_account.index_in_caller,
-                        )?
-                        .is_writable()
+                        .is_instruction_account_writable(instruction_account.index_in_caller)?
                 } else {
                     instruction_account.is_writable
                 };
@@ -713,7 +714,7 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
-        for (index_in_instruction, account_meta) in instruction.accounts.iter().enumerate() {
+        for (instruction_account_index, account_meta) in instruction.accounts.iter().enumerate() {
             let index_in_transaction = self
                 .transaction_context
                 .find_index_of_account(&account_meta.pubkey)
@@ -740,10 +741,10 @@ impl<'a> InvokeContext<'a> {
                 instruction_account.is_writable |= account_meta.is_writable;
             } else {
                 let index_in_caller = instruction_context
-                    .find_index_of_account(self.transaction_context, &account_meta.pubkey)
-                    .map(|index| {
-                        index.saturating_sub(instruction_context.get_number_of_program_accounts())
-                    })
+                    .find_index_of_instruction_account(
+                        self.transaction_context,
+                        &account_meta.pubkey,
+                    )
                     .ok_or_else(|| {
                         ic_msg!(
                             self,
@@ -756,7 +757,7 @@ impl<'a> InvokeContext<'a> {
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
                     index_in_caller,
-                    index_in_callee: index_in_instruction,
+                    index_in_callee: instruction_account_index,
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
@@ -804,13 +805,13 @@ impl<'a> InvokeContext<'a> {
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
         let program_account_index = instruction_context
-            .find_index_of_account(self.transaction_context, &callee_program_id)
+            .find_index_of_instruction_account(self.transaction_context, &callee_program_id)
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
             })?;
         let borrowed_program_account = instruction_context
-            .try_borrow_account(self.transaction_context, program_account_index)?;
+            .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
         if !borrowed_program_account.is_executable() {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
@@ -952,7 +953,7 @@ impl<'a> InvokeContext<'a> {
 
         let (first_instruction_account, builtin_id) = {
             let borrowed_root_account = instruction_context
-                .try_borrow_account(self.transaction_context, 0)
+                .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
             if solana_sdk::native_loader::check_id(owner_id) {
@@ -964,7 +965,8 @@ impl<'a> InvokeContext<'a> {
 
         for entry in self.builtin_programs {
             if entry.program_id == builtin_id {
-                let program_id = instruction_context.get_program_id(self.transaction_context);
+                let program_id =
+                    *instruction_context.get_last_program_key(self.transaction_context)?;
                 if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
@@ -1123,19 +1125,19 @@ pub fn prepare_mock_invoke_context(
 ) -> MockInvokeContextPreparation {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
-    for (index_in_instruction, account_meta) in instruction_account_metas.iter().enumerate() {
+    for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
         let index_in_transaction = transaction_accounts
             .iter()
             .position(|(key, _account)| *key == account_meta.pubkey)
             .unwrap_or(transaction_accounts.len());
         let index_in_callee = instruction_accounts
-            .get(0..index_in_instruction)
+            .get(0..instruction_account_index)
             .unwrap()
             .iter()
             .position(|instruction_account| {
                 instruction_account.index_in_transaction == index_in_transaction
             })
-            .unwrap_or(index_in_instruction);
+            .unwrap_or(instruction_account_index);
         instruction_accounts.push(InstructionAccount {
             index_in_transaction,
             index_in_caller: index_in_transaction,
@@ -1295,7 +1297,7 @@ mod tests {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
-        let program_id = instruction_context.get_program_key(transaction_context)?;
+        let program_id = instruction_context.get_last_program_key(transaction_context)?;
         assert_eq!(
             program_id,
             instruction_context
@@ -1528,12 +1530,12 @@ mod tests {
             AccountMeta::new_readonly(accounts.get(2).unwrap().0, false),
         ];
         let instruction_accounts = (0..4)
-            .map(|index_in_instruction| InstructionAccount {
-                index_in_transaction: index_in_instruction,
-                index_in_caller: index_in_instruction,
-                index_in_callee: index_in_instruction,
+            .map(|instruction_account_index| InstructionAccount {
+                index_in_transaction: instruction_account_index,
+                index_in_caller: instruction_account_index,
+                index_in_callee: instruction_account_index,
                 is_signer: false,
-                is_writable: index_in_instruction < 2,
+                is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
         let mut transaction_context = TransactionContext::new(accounts, 2, 8);
