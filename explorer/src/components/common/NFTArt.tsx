@@ -47,6 +47,8 @@ const CachedImageContent = ({ uri }: { uri?: string }) => {
   const [showError, setShowError] = useState<boolean>(false);
   const [timeout, setTimeout] = useState<NodeJS.Timeout | undefined>(undefined);
 
+  useEffect(() => setIsLoading(true), []);
+
   useEffect(() => {
     // Set the timeout if we don't have a valid uri
     if (!uri && !timeout) {
@@ -78,12 +80,12 @@ const CachedImageContent = ({ uri }: { uri?: string }) => {
         <>
           {isLoading && <LoadingPlaceholder />}
           <div className={`${isLoading ? "d-none" : "d-block"}`}>
-            <div className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}>
+            <div className={`position-relative mx-auto ${isLoading ? "d-none" : "d-block"}`} style={{ width: 150, minHeight: 150, maxHeight: 200 }}>
               <Image
-                src={cachedBlob ?? ""}
+                src={cachedBlob ?? `/api/image-proxy?imageUrl=${uri}`}
                 alt={"nft"}
-                width={150}
-                height={200}
+                layout="fill"
+                className="rounded"
                 onLoad={() => {
                   setIsLoading(false);
                 }}

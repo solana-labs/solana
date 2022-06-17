@@ -362,5 +362,6 @@ export default withImageProxy({
 		/^https?:\/\/megacy.io/,
 		/^https?:\/\/static.134.226.99.88.clients.your-server.de:8092/,
 		/^https?:\/\/s3.ap-southeast-1.amazonaws.com/,
+		/^https:\/\/(.+).ipfs\.nftstorage\.link/,
 	],
 })
