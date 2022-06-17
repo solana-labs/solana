@@ -169,13 +169,6 @@ use {
     },
 };
 
-struct StakeReward {
-    pubkey: Pubkey,
-    reward: RewardInfo,
-    balance: u64,
-    account: AccountSharedData,
-}
-
 #[derive(Debug, Default)]
 struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
@@ -3019,6 +3012,13 @@ impl Bank {
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
     ) -> f64 {
+        struct StakeReward {
+            stake_pubkey: Pubkey,
+            stake_reward_info: RewardInfo,
+            stake_reward: u64,
+            stake_account: AccountSharedData,
+        }
+
         let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = {
             let mut m = Measure::start("load_vote_and_stake_accounts_us");
@@ -3141,17 +3141,17 @@ impl Bank {
                             *vote_rewards_sum = vote_rewards_sum.saturating_add(voters_reward);
                         }
 
-                        let balance = stake_account.lamports();
+                        let post_balance = stake_account.lamports();
                         return Some(StakeReward {
-                            pubkey: stake_pubkey,
-                            reward: RewardInfo {
+                            stake_pubkey,
+                            stake_reward_info: RewardInfo {
                                 reward_type: RewardType::Staking,
                                 lamports: stakers_reward as i64,
-                                post_balance: balance,
+                                post_balance: post_balance,
                                 commission: Some(vote_state.commission),
                             },
-                            balance: stakers_reward,
-                            account: stake_account,
+                            stake_reward: stakers_reward,
+                            stake_account,
                         });
                     } else {
                         debug!(
@@ -3166,10 +3166,11 @@ impl Bank {
         m.stop();
         metrics.redeem_rewards_us.fetch_add(m.as_us(), Relaxed);
 
+        // store stake account before filtering out 0 stake_reward below
         let mut m = Measure::start("store_stake_account");
         let accounts_to_store = stake_rewards
             .iter()
-            .map(|x| (&x.pubkey, &x.account))
+            .map(|x| (&x.stake_pubkey, &x.stake_account))
             .collect::<Vec<_>>();
         self.store_accounts(&accounts_to_store);
         m.stop();
@@ -3179,14 +3180,9 @@ impl Bank {
 
         // filter out zero rewards stake accounts
         let mut stake_rewards = stake_rewards
-            .iter()
-            .filter_map(|x| {
-                if x.balance > 0 {
-                    Some((x.pubkey, x.reward))
-                } else {
-                    None
-                }
-            })
+            .into_iter()
+            .filter(|x| x.stake_reward > 0)
+            .map(|x| (x.stake_pubkey, x.stake_reward_info))
             .collect();
 
         let mut m = Measure::start("store_vote_accounts");
