@@ -95,6 +95,7 @@ impl SlotsStats {
         &self,
         slot: Slot,
         index: u32,
+        is_data_shred: bool,
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
@@ -105,7 +106,10 @@ impl SlotsStats {
         match source {
             ShredSource::Recovered => slot_stats.num_recovered += 1,
             ShredSource::Repaired => {
-                slot_stats.repaired_indexes.insert(index);
+                // Should always be true, but double check
+                if is_data_shred {
+                    slot_stats.repaired_indexes.insert(index);
+                }
                 slot_stats.num_repaired += 1;
             }
             ShredSource::Turbine => {
