@@ -566,7 +566,7 @@ impl LedgerStorage {
             .await?;
 
         // Collect by slot
-        let mut slots: HashMap<Slot, HashMap<u32, String>> = Default::default();
+        let mut slots: HashMap<Slot, HashMap<u32, String>> = HashMap::new();
         for cell in cells {
             if let (signature, Ok(TransactionInfo { slot, index, .. })) = cell {
                 slots.entry(slot).or_default().insert(index, signature);
