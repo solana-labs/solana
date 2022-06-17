@@ -1284,17 +1284,16 @@ fn load_frozen_forks(
                                 if new_root_bank.slot() == root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > root);
 
-                                rooted_slots.push((new_root_bank.slot(), new_root_bank.hash()));
+                                rooted_slots.push((new_root_bank.slot(), Some(new_root_bank.hash())));
                                 // As noted, the cluster confirmed root should be descended from
                                 // our last root; therefore parent should be set
                                 new_root_bank = new_root_bank.parent().unwrap();
                             }
                             inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
                             if blockstore.is_primary_access() {
-                                blockstore.set_roots(rooted_slots.iter().map(|(slot, _hash)| slot))
-                                    .expect("Blockstore::set_roots should succeed");
-                                blockstore.set_duplicate_confirmed_slots_and_hashes(rooted_slots.into_iter())
-                                    .expect("Blockstore::set_duplicate_confirmed should succeed");
+                                blockstore
+                                    .mark_slots_as_if_rooted_normally(rooted_slots, true)
+                                    .expect("Blockstore::mark_slots_as_if_rooted_normally() should succeed");
                             }
                             Some(cluster_root_bank)
                         } else {

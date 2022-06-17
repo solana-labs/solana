@@ -2261,10 +2261,16 @@ fn test_hard_fork_with_gap_in_roots() {
         }
     }
 
+    // stop all nodes of the cluster
     let mut validator_a_info = cluster.lock().unwrap().exit_node(&validator_a_pubkey);
     let mut validator_b_info = cluster.lock().unwrap().exit_node(&validator_b_pubkey);
 
+    // hard fork slot is effectively a (possibly skipping) new root.
+    // assert that the precondition of validator a to test gap between
+    // blockstore and hard fork...
     let hard_fork_slot = min_last_vote - 5;
+    assert!(hard_fork_slot > root_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap());
+
     let hard_fork_slots = Some(vec![hard_fork_slot]);
     let mut hard_forks = HardForks::default();
     hard_forks.register(hard_fork_slot);
@@ -2342,7 +2348,7 @@ fn test_hard_fork_with_gap_in_roots() {
         .unwrap()
         .collect::<Vec<_>>();
     // artifically restore the forcibly purged genesis only for the validator A just for the sake of
-    // following the final assertion.
+    // the final assertions.
     slots_a.push(genesis_slot);
     roots_a.push(genesis_slot);
 
@@ -2353,7 +2359,9 @@ fn test_hard_fork_with_gap_in_roots() {
         .collect::<Vec<_>>();
 
     // compare them all!
-    assert_eq!((slots_a, roots_a), (slots_b, roots_b));
+    assert_eq!((&slots_a, &roots_a), (&slots_b, &roots_b));
+    assert_eq!(&slots_a[slots_a.len() - roots_a.len()..].to_vec(), &roots_a);
+    assert_eq!(&slots_b[slots_b.len() - roots_b.len()..].to_vec(), &roots_b);
 }
 
 #[test]

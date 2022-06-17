@@ -3019,6 +3019,22 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn mark_slots_as_if_rooted_normally(
+        &self,
+        slots: Vec<(Slot, Option<Hash>)>,
+        with_hash: bool,
+    ) -> Result<()> {
+        self.set_roots(slots.iter().map(|(slot, _hash)| slot))?;
+        if with_hash {
+            self.set_duplicate_confirmed_slots_and_hashes(
+                slots
+                    .into_iter()
+                    .map(|(slot, maybe_hash)| (slot, maybe_hash.unwrap())),
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn is_dead(&self, slot: Slot) -> bool {
         matches!(
             self.db

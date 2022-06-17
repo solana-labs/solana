@@ -1354,19 +1354,29 @@ pub fn reconcile_blockstore_roots_with_external_source(
                 Ordering::Greater => true,
                 Ordering::Equal => false,
                 Ordering::Less => panic!(
-                    "last_blockstore_root({}) is skipped while traversing blockstore (currently at {}) from external root ({})!?",
-                    last_blockstore_root,
-                    current,
-                    external_root
+                    "last_blockstore_root({}) is skipped while traversing \
+                     blockstore (currently at {}) from external root ({:?})!?",
+                    last_blockstore_root, current, external_source,
                 ),
             })
+            .map(|root| (root, None))
             .collect();
         if !new_roots.is_empty() {
             info!(
                 "Reconciling slots as root based on external root: {:?} (external: {:?}, blockstore: {})",
                 new_roots, external_source, last_blockstore_root
             );
-            blockstore.set_roots(new_roots.iter())?;
+
+            // Unfortunately, we can't supply duplicate-confirmed hashes,
+            // because it can't be guaranteed to be able to replay these slots
+            // under this code-path's limited condition (i.e.  those shreds
+            // might not be available, etc...) also correctly overcoming this
+            // limitation is hard...
+            blockstore.mark_slots_as_if_rooted_normally(new_roots, false)?;
+
+            // Update the caller-managed state of last root in blockstore.
+            // Repeated calls of this function should result in a no-op for
+            // the range of `new_roots`.
             *last_blockstore_root = blockstore.last_root();
         } else {
             // This indicates we're in bad state; but still don't panic here.
@@ -2848,9 +2858,9 @@ pub mod test {
     }
 
     #[test]
-    #[should_panic(
-        expected = "last_blockstore_root(3) is skipped while traversing blockstore (currently at 1) from external root (4)!?"
-    )]
+    #[should_panic(expected = "last_blockstore_root(3) is skipped while \
+                               traversing blockstore (currently at 1) from \
+                               external root (Tower(4))!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
