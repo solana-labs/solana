@@ -1797,21 +1797,14 @@ pub fn process_show_stakes(
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
         // withdrawer filter
-        let withdrawer_filter = vec![rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+        let withdrawer_filter = rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
             offset: 44,
             bytes: rpc_filter::MemcmpEncodedBytes::Base58(withdraw_authority_pubkey.to_string()),
             encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-        })];
+        });
 
-        match program_accounts_config.filters {
-            Some(filters) => {
-                // filter by withdrawer
-                program_accounts_config.filters = Some([filters, withdrawer_filter].concat())
-            }
-            None => {
-                program_accounts_config.filters = Some(withdrawer_filter);
-            }
-        }
+        let filters = program_accounts_config.filters.get_or_insert(vec![]);
+        filters.push(withdrawer_filter);
     }
 
     let all_stake_accounts = rpc_client
