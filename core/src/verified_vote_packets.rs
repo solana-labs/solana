@@ -1,7 +1,10 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
     solana_perf::packet::PacketBatch,
-    solana_runtime::{bank::Bank, vote_transaction::VoteTransaction},
+    solana_runtime::{
+        bank::Bank,
+        vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
+    },
     solana_sdk::{
         account::from_account,
         clock::Slot,
@@ -222,26 +225,30 @@ impl VerifiedVotePackets {
                     let slot = vote.last_voted_slot().unwrap();
                     let hash = vote.hash();
 
-                    if is_full_tower_vote_enabled {
-                        let latest_slot_sent_to_bank = match self.0.get(&vote_account_key) {
-                            Some(vote) => vote.get_latest_slot_sent_to_bank(),
-                            _ => 0,
-                        };
-                        // Since votes are not incremental, we keep only the latest vote
-                        if slot > latest_slot_sent_to_bank {
-                            self.0.insert(
-                                vote_account_key,
-                                FullTowerVote(GossipVote {
-                                    slot,
-                                    hash,
-                                    packet_batch,
-                                    signature,
-                                }),
-                            );
+                    match (vote, is_full_tower_vote_enabled) {
+                        (VoteStateUpdate(_), true) => {
+                            let latest_slot_sent_to_bank = match self.0.get(&vote_account_key) {
+                                Some(vote) => vote.get_latest_slot_sent_to_bank(),
+                                _ => 0,
+                            };
+                            // Since votes are not incremental, we keep only the latest vote
+                            if slot > latest_slot_sent_to_bank {
+                                self.0.insert(
+                                    vote_account_key,
+                                    FullTowerVote(GossipVote {
+                                        slot,
+                                        hash,
+                                        packet_batch,
+                                        signature,
+                                    }),
+                                );
+                            }
                         }
-                    } else {
-                        let validator_votes: &mut BTreeMap<(Slot, Hash), (PacketBatch, Signature)> =
-                            match self
+                        _ => {
+                            let validator_votes: &mut BTreeMap<
+                                (Slot, Hash),
+                                (PacketBatch, Signature),
+                            > = match self
                                 .0
                                 .entry(vote_account_key)
                                 .or_insert(IncrementalVotes(BTreeMap::new()))
@@ -249,16 +256,17 @@ impl VerifiedVotePackets {
                                 IncrementalVotes(votes) => votes,
                                 _ => {
                                     error!(
-                                        "Full votes are present without feature active for {}",
+                                        "Originally {} submitted full tower votes, but now has reverted to incremental votes",
                                         vote_account_key
                                     );
                                     continue;
                                 }
                             };
-                        validator_votes.insert((slot, hash), (packet_batch, signature));
-                        if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
-                            let smallest_key = validator_votes.keys().next().cloned().unwrap();
-                            validator_votes.remove(&smallest_key).unwrap();
+                            validator_votes.insert((slot, hash), (packet_batch, signature));
+                            if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
+                                let smallest_key = validator_votes.keys().next().cloned().unwrap();
+                                validator_votes.remove(&smallest_key).unwrap();
+                            }
                         }
                     }
                 }
@@ -721,5 +729,91 @@ mod tests {
         } else {
             panic!("Feature active but incremental votes are present");
         }
+    }
+
+    #[test]
+    fn test_incremental_votes_with_feature_active() {
+        let (s, r) = unbounded();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+
+        let hash = Hash::new_unique();
+        let vote = VoteTransaction::from(Vote::new(vec![42], hash));
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote,
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+
+        // Receive incremental votes with the feature active
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+
+        // Should still store as incremental votes
+        if let IncrementalVotes(votes) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
+            assert!(votes.contains_key(&(42, hash)));
+        } else {
+            panic!("Although feature is active, incremental votes should not be stored as full tower votes");
+        }
+    }
+
+    #[test]
+    fn test_latest_votes_downgrade_full_to_incremental() {
+        let (s, r) = unbounded();
+        let vote_account_key = solana_sdk::pubkey::new_rand();
+        let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
+
+        let vote = VoteTransaction::from(VoteStateUpdate::from(vec![(42, 1)]));
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote,
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+
+        // Receive full votes
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+        assert_eq!(
+            42,
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .get_latest_slot_sent_to_bank()
+        );
+
+        // Now try to send an incremental vote
+        let vote = VoteTransaction::from(Vote::new(vec![43], Hash::new_unique()));
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote,
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+
+        // Try to receive but vote gets ignored
+        let feature_set = FeatureSet::default();
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+        assert_eq!(
+            42,
+            verified_vote_packets
+                .0
+                .get(&vote_account_key)
+                .unwrap()
+                .get_latest_slot_sent_to_bank()
+        );
     }
 }
