@@ -533,6 +533,7 @@ function getTabs(pubkey: PublicKey, account: Account, routerPath: string): TabCo
           <NavLink
             activeClassName="active"
             href={clusterPath(`/address/${address}${tab.path}`, routerPath)}
+            scroll={false}
           >
             <span className="nav-link">
               {tab.title}

@@ -268,6 +268,7 @@ const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
             <Link
               key={displayOption || "null"}
               href={buildLocation(displayOption)}
+              scroll={false}
             >
               <span className={`dropdown-item${
                 displayOption === display ? " active" : ""

@@ -228,6 +228,7 @@ function MoreSection({
                   <NavLink
                     activeClassName="active"
                     href={clusterPath(`/block/${slot}${path}`, router.asPath)}
+                    scroll={false}
                   >
                     <span className="nav-link">
                       {title}
