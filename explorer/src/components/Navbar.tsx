@@ -17,7 +17,9 @@ export function Navbar() {
       <div className="container">
         <Link href={clusterPath("/", router.asPath)} passHref>
           <a>
-            <Image src="/img/logos-solana/dark-explorer-logo.svg" width={250} height={21.48} alt="Solana Explorer" />
+            <div className="d-flex">
+              <Image src="/img/logos-solana/dark-explorer-logo.svg" width={250} height={21.48} alt="Solana Explorer" />
+            </div>
           </a>
         </Link>
 
