@@ -94,8 +94,12 @@ export function BlockAccountsCard({
                             `accountFilter=${address}&filter=all`
                           )
                         )}
+                        scroll={false}
+                        passHref
                       >
-                        <Address pubkey={new PublicKey(address)} />
+                        <a>
+                          <Address pubkey={new PublicKey(address)} />
+                        </a>
                       </Link>
                     </td>
                     <td>{writes}</td>

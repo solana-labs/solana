@@ -64,10 +64,10 @@ export function Address({
     <Copyable text={address} replaceText={!alignRight}>
       <span className="font-monospace">
         {link ? (
-          <Link href={clusterPath(`/address/${address}`, router.asPath)}>
-            <span className={truncate ? "text-truncate address-truncate" : ""}>
+          <Link href={clusterPath(`/address/${address}`, router.asPath)} passHref>
+            <a className={truncate ? "text-truncate address-truncate" : ""}>
               {addressLabel}
-            </span>
+            </a>
           </Link>
         ) : (
           <span className={truncate ? "text-truncate address-truncate" : ""}>
