@@ -2,7 +2,6 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
-use rayon::iter::IntoParallelIterator;
 use {
     crate::{
         ancestor_iterator::AncestorIterator,
@@ -27,7 +26,7 @@ use {
     dashmap::DashSet,
     log::*,
     rayon::{
-        iter::{IntoParallelRefIterator, ParallelIterator},
+        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
     rocksdb::DBRawIterator,
