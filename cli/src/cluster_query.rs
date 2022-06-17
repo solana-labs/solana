@@ -329,6 +329,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("stakes")
                 .about("Show stake account information")
                 .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                )
+                .arg(
                     pubkey!(Arg::with_name("vote_account_pubkeys")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_PUBKEYS")
@@ -336,10 +342,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         "Only show stake accounts delegated to the provided vote accounts. "),
                 )
                 .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                    pubkey!(Arg::with_name("withdraw_authority")
+                    .value_name("PUBKEY")
+                    .long("withdraw-authority"),
+                    "Only show stake accounts with the provided withdraw authority. "),
                 ),
         )
         .subcommand(
@@ -624,11 +630,12 @@ pub fn parse_show_stakes(
     let use_lamports_unit = matches.is_present("lamports");
     let vote_account_pubkeys =
         pubkeys_of_multiple_signers(matches, "vote_account_pubkeys", wallet_manager)?;
-
+    let withdraw_authority = pubkey_of(matches, "withdraw_authority");
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdraw_authority,
         },
         signers: vec![],
     })
@@ -1749,6 +1756,7 @@ pub fn process_show_stakes(
     config: &CliConfig,
     use_lamports_unit: bool,
     vote_account_pubkeys: Option<&[Pubkey]>,
+    withdraw_authority_pubkey: Option<&Pubkey>,
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
 
@@ -1786,6 +1794,26 @@ pub fn process_show_stakes(
             ]);
         }
     }
+
+    if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
+        // withdrawer filter
+        let withdrawer_filter = vec![rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
+            offset: 44,
+            bytes: rpc_filter::MemcmpEncodedBytes::Base58(withdraw_authority_pubkey.to_string()),
+            encoding: Some(rpc_filter::MemcmpEncoding::Binary),
+        })];
+
+        match program_accounts_config.filters {
+            Some(filters) => {
+                // filter by withdrawer
+                program_accounts_config.filters = Some([filters, withdrawer_filter].concat())
+            }
+            None => {
+                program_accounts_config.filters = Some(withdrawer_filter);
+            }
+        }
+    }
+
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
