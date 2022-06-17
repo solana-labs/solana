@@ -232,7 +232,7 @@ export function AccountHeader({
             {token?.logoURI ? (
               <div className="position-relative avatar-img rounded-circle border border-4 border-body">
                 <Image
-                  src={token.logoURI}
+                  src={`/api/image-proxy?imageUrl=${token.logoURI}`}
                   alt="token logo"
                   layout="fill"  
                 />

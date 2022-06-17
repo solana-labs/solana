@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@blazity/next-image-proxy": "^1.0.2",
     "@blockworks-foundation/mango-client": "^3.6.0",
     "@bonfida/bot": "^0.5.3",
     "@bonfida/spl-name-service": "^0.1.36",

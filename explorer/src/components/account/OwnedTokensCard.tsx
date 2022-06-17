@@ -110,7 +110,7 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
             {tokenDetails?.logoURI ? (
               <div className="position-relative token-icon rounded-circle border border-4 border-gray-dark">
                 <Image
-                  src={tokenDetails.logoURI}
+                  src={`/api/image-proxy?imageUrl=${tokenDetails.logoURI}`}
                   alt="token icon"
                   layout="fill"
                 />
@@ -187,7 +187,7 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
             {tokenDetails?.logoURI ? (
               <div className="position-relative token-icon rounded-circle border border-4 border-gray-dark">
                 <Image
-                  src={tokenDetails.logoURI}
+                  src={`/api/image-proxy?imageUrl=${tokenDetails.logoURI}`}
                   alt="token icon"
                   layout="fill"
                 />
