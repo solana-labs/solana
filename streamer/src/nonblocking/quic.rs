@@ -5,7 +5,9 @@ use {
     },
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
-    quinn::{Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection, VarInt},
+    quinn::{
+        Connecting, Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection, VarInt,
+    },
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
@@ -60,6 +62,93 @@ pub fn spawn_server(
     Ok(handle)
 }
 
+async fn connection_handshake(
+    connection: Connecting,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    staked_connection_table: Arc<Mutex<ConnectionTable>>,
+    packet_sender: Sender<PacketBatch>,
+    max_connections_per_ip: usize,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
+    max_staked_connections: usize,
+    max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
+) {
+    if let Ok(new_connection) = connection.await {
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
+        let NewConnection {
+            connection,
+            uni_streams,
+            ..
+        } = new_connection;
+
+        let remote_addr = connection.remote_address();
+
+        let (mut connection_table_l, stake) = {
+            let staked_nodes = staked_nodes.read().unwrap();
+            if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
+                let stake = *stake;
+                let total_stake = staked_nodes.total_stake;
+                drop(staked_nodes);
+                let mut connection_table_l = staked_connection_table.lock().unwrap();
+                let num_pruned = connection_table_l.prune_oldest(max_staked_connections);
+                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                connection.set_max_concurrent_uni_streams(
+                    VarInt::from_u64(
+                        ((stake as f64 / total_stake as f64) * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
+                            as u64,
+                    )
+                    .unwrap(),
+                );
+                (connection_table_l, stake)
+            } else {
+                drop(staked_nodes);
+                let mut connection_table_l = connection_table.lock().unwrap();
+                let num_pruned = connection_table_l.prune_oldest(max_unstaked_connections);
+                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                connection.set_max_concurrent_uni_streams(
+                    VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
+                );
+                (connection_table_l, 0)
+            }
+        };
+
+        if stake != 0 || max_unstaked_connections > 0 {
+            if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
+                &remote_addr,
+                timing::timestamp(),
+                max_connections_per_ip,
+            ) {
+                drop(connection_table_l);
+                let packet_sender = packet_sender.clone();
+                let stats = stats.clone();
+                let connection_table1 = connection_table.clone();
+                tokio::spawn(handle_connection(
+                    uni_streams,
+                    packet_sender,
+                    remote_addr,
+                    last_update,
+                    connection_table1,
+                    stream_exit,
+                    stats,
+                    stake,
+                ));
+            } else {
+                stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+            }
+        } else {
+            connection.close(0u32.into(), &[0u8]);
+            stats
+                .connection_add_failed_unstaked_node
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    } else {
+        stats
+            .connection_setup_timeout
+            .fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 pub async fn run_server(
     mut incoming: Incoming,
     packet_sender: Sender<PacketBatch>,
@@ -90,81 +179,17 @@ pub async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
-            if let Ok(new_connection) = connection.await {
-                stats.total_connections.fetch_add(1, Ordering::Relaxed);
-                stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
-                let NewConnection {
-                    connection,
-                    uni_streams,
-                    ..
-                } = new_connection;
-
-                let remote_addr = connection.remote_address();
-
-                let (mut connection_table_l, stake) = {
-                    let staked_nodes = staked_nodes.read().unwrap();
-                    if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
-                        let stake = *stake;
-                        let total_stake = staked_nodes.total_stake;
-                        drop(staked_nodes);
-                        let mut connection_table_l = staked_connection_table.lock().unwrap();
-                        let num_pruned = connection_table_l.prune_oldest(max_staked_connections);
-                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                        connection.set_max_concurrent_uni_streams(
-                            VarInt::from_u64(
-                                ((stake as f64 / total_stake as f64)
-                                    * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
-                                    as u64,
-                            )
-                            .unwrap(),
-                        );
-                        (connection_table_l, stake)
-                    } else {
-                        drop(staked_nodes);
-                        let mut connection_table_l = connection_table.lock().unwrap();
-                        let num_pruned = connection_table_l.prune_oldest(max_unstaked_connections);
-                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                        connection.set_max_concurrent_uni_streams(
-                            VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
-                        );
-                        (connection_table_l, 0)
-                    }
-                };
-
-                if stake != 0 || max_unstaked_connections > 0 {
-                    if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
-                        &remote_addr,
-                        timing::timestamp(),
-                        max_connections_per_ip,
-                    ) {
-                        drop(connection_table_l);
-                        let packet_sender = packet_sender.clone();
-                        let stats = stats.clone();
-                        let connection_table1 = connection_table.clone();
-                        tokio::spawn(handle_connection(
-                            uni_streams,
-                            packet_sender,
-                            remote_addr,
-                            last_update,
-                            connection_table1,
-                            stream_exit,
-                            stats,
-                            stake,
-                        ));
-                    } else {
-                        stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
-                    }
-                } else {
-                    connection.close(0u32.into(), &[0u8]);
-                    stats
-                        .connection_add_failed_unstaked_node
-                        .fetch_add(1, Ordering::Relaxed);
-                }
-            } else {
-                stats
-                    .connection_setup_timeout
-                    .fetch_add(1, Ordering::Relaxed);
-            }
+            tokio::spawn(connection_handshake(
+                connection,
+                connection_table.clone(),
+                staked_connection_table.clone(),
+                packet_sender.clone(),
+                max_connections_per_ip,
+                staked_nodes.clone(),
+                max_staked_connections,
+                max_unstaked_connections,
+                stats.clone(),
+            ));
         }
     }
 }
