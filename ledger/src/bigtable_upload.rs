@@ -136,7 +136,6 @@ pub async fn upload_confirmed_blocks(
             .cloned()
             .collect::<Vec<_>>();
         blocks_to_upload.sort_unstable();
-        blocks_to_upload.truncate(config.max_num_slots_to_check);
         blocks_to_upload
     };
 
