@@ -88,6 +88,7 @@ pub struct RepairStats {
     pub orphan: RepairStatsGroup,
     pub get_best_orphans_us: u64,
     pub get_best_shreds_us: u64,
+    pub shred_indexes: HashMap<Slot, HashSet<u64>>,
 }
 
 #[derive(Default, Debug)]
@@ -333,6 +334,13 @@ impl RepairService {
                                 &mut outstanding_requests,
                             )
                             .ok()?;
+                        if let ShredRepairType::Shred(slot, index) = repair_request {
+                            repair_stats
+                                .shred_indexes
+                                .entry(*slot)
+                                .or_default()
+                                .insert(*index);
+                        }
                         Some((req, to))
                     })
                     .collect()
@@ -385,6 +393,10 @@ impl RepairService {
                     })
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
+                info!(
+                    "all shred repairs requested: {:?}",
+                    repair_stats.shred_indexes
+                );
                 if repair_total > 0 {
                     datapoint_info!(
                         "serve_repair-repair",
