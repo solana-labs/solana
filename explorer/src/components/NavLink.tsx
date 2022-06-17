@@ -29,7 +29,7 @@ export const NavLink = ({
     isActive = pathWithCluster === props.href || pathWithCluster === props.as;
   }
 
-  const className = cx(childClassName, { [activeClassName]: isActive });
+  const className = cx(childClassName, { [activeClassName]: isActive }, 'c-pointer');
 
   return (
     <Link {...props}>

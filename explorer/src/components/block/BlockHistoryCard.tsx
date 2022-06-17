@@ -447,7 +447,7 @@ const FilterDropdown = ({
               href={buildLocation(programId)}
               scroll={false}
             >
-              <span className={`dropdown-item${
+              <span className={`dropdown-item c-pointer${
                 programId === filter ? " active" : ""
               }`} onClick={toggle}>
                 {`${name} (${transactionCount})`}

@@ -272,7 +272,7 @@ const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
               href={buildLocation(displayOption)}
               scroll={false}
             >
-              <span className={`dropdown-item${
+              <span className={`dropdown-item c-pointer${
                 displayOption === display ? " active" : ""
               }`} onClick={toggle}>
                 {displayOption === "detail" ? "Detailed" : "Summary"}
