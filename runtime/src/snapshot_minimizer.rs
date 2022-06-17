@@ -168,52 +168,32 @@ impl SnapshotMinimizer {
 
     /// Remove accounts from accounts_db
     fn minimize_accounts_db(&self) {
-        let minimized_slot_set = self.get_minimized_slot_set();
+        let (minimized_slot_set, minimized_slot_set_measure) =
+            measure!(self.get_minimized_slot_set(), "generate minimized slot set");
+        info!("{minimized_slot_set_measure}");
 
-        let dead_slots = Mutex::new(Vec::new());
-        let dead_storages = Mutex::new(Vec::new());
-
-        let (_, total_filter_storages_measure) = measure!(
-            {
-                let snapshot_storages = self
-                    .accounts_db()
-                    .get_snapshot_storages(self.starting_slot, None, None)
-                    .0;
-                snapshot_storages.into_par_iter().for_each(|storages| {
-                    let slot = storages.first().unwrap().slot();
-                    if slot != self.starting_slot {
-                        if minimized_slot_set.contains(&slot) {
-                            self.filter_storages(storages, &dead_storages);
-                        } else {
-                            dead_slots.lock().unwrap().push(slot);
-                        }
-                    }
-                })
-            },
-            "filter storages total"
+        let ((dead_slots, dead_storages), process_snapshot_storages_measure) = measure!(
+            self.process_snapshot_storages(minimized_slot_set),
+            "process snapshot storages"
         );
-        info!("{total_filter_storages_measure}");
+        info!("{process_snapshot_storages_measure}");
 
-        let purge_stats = PurgeStats::default();
+        // Avoid excessive logging
         self.accounts_db()
             .log_dead_slots
             .store(false, Ordering::Relaxed);
-        let (_, purge_slots_measure) = measure!(
-            self.accounts_db().purge_slots_from_cache_and_store(
-                dead_slots.into_inner().unwrap().iter(),
-                &purge_stats,
-                false, // prevent excessive logging - accounts
-            ),
-            "purge slots"
-        );
-        info!("{purge_slots_measure}");
+
+        let (_, purge_dead_slots_measure) =
+            measure!(self.purge_dead_slots(dead_slots), "purge dead slots");
+        info!("{purge_dead_slots_measure}");
 
         let (_, drop_or_recycle_stores_measure) = measure!(
-            self.accounts_db()
-                .drop_or_recycle_stores(dead_storages.into_inner().unwrap()),
+            self.accounts_db().drop_or_recycle_stores(dead_storages),
             "drop or recycle stores"
         );
         info!("{drop_or_recycle_stores_measure}");
+
+        // Turn logging back on after minimization
         self.accounts_db()
             .log_dead_slots
             .store(true, Ordering::Relaxed);
@@ -244,6 +224,35 @@ impl SnapshotMinimizer {
         info!("{measure}");
 
         minimized_slot_set
+    }
+
+    /// Process all snapshot storages to during `minimize`
+    fn process_snapshot_storages(
+        &self,
+        minimized_slot_set: DashSet<Slot>,
+    ) -> (Vec<Slot>, Vec<Arc<AccountStorageEntry>>) {
+        let snapshot_storages = self
+            .accounts_db()
+            .get_snapshot_storages(self.starting_slot, None, None)
+            .0;
+
+        let dead_slots = Mutex::new(Vec::new());
+        let dead_storages = Mutex::new(Vec::new());
+
+        snapshot_storages.into_par_iter().for_each(|storages| {
+            let slot = storages.first().unwrap().slot();
+            if slot != self.starting_slot {
+                if minimized_slot_set.contains(&slot) {
+                    self.filter_storages(storages, &dead_storages);
+                } else {
+                    dead_slots.lock().unwrap().push(slot);
+                }
+            }
+        });
+
+        let dead_slots = dead_slots.into_inner().unwrap();
+        let dead_storages = dead_storages.into_inner().unwrap();
+        (dead_slots, dead_storages)
     }
 
     /// Creates new storage replacing `storages` that contains only accounts in `minimized_account_set`.
@@ -335,6 +344,13 @@ impl SnapshotMinimizer {
             &mut dead_storages.lock().unwrap(),
             |store| !append_vec_set.contains(&store.append_vec_id()),
         );
+    }
+
+    /// Purge dead slots from storage and cache
+    fn purge_dead_slots(&self, dead_slots: Vec<Slot>) {
+        let stats = PurgeStats::default();
+        self.accounts_db()
+            .purge_slots_from_cache_and_store(dead_slots.iter(), &stats, false);
     }
 
     /// Convenience function for getting accounts_db
