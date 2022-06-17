@@ -3035,7 +3035,7 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
+    fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
     ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
