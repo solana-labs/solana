@@ -272,6 +272,35 @@ impl ClusterNodes<RetransmitStage> {
                 2
             };
             let peers = get_retransmit_peers(fanout, self_index, &nodes);
+            if shred.is_data() {
+                if let Some(shred_sender_addr) = shred_sender_addr {
+                    if rand::thread_rng().gen_ratio(1, 10_000) {
+                        let sender_pubkey = self.find_node_id_by_addr(&shred_sender_addr);
+                        // ~ once every 10_000 shreds
+                        // log leader's pubkey
+                        // log slot, shred index
+                        // log nodes pubkeys, self_index, peers
+                        info!(
+                            "turbine shred verifier,
+                        leader: {},
+                        slot: {}, shred_index: {},
+                        sender_addr: {:?},
+                        sender_pubkey: {:?},
+                        all cluster pubkeys: {:?},
+                        self neighborhood index: {},
+                        retransmit peers: {:?}",
+                            slot_leader,
+                            shred.slot(),
+                            shred.index(),
+                            shred_sender_addr,
+                            sender_pubkey,
+                            nodes.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
+                            self_index,
+                            peers.clone().map(|n| n.id()).collect::<Vec<Pubkey>>(),
+                        );
+                    }
+                }
+            }
             return (root_distance, Vec::default(), peers.collect());
         }
         let root_distance = if self_index == 0 {
@@ -285,35 +314,6 @@ impl ClusterNodes<RetransmitStage> {
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
-        if shred.is_data() {
-            if let Some(shred_sender_addr) = shred_sender_addr {
-                if rand::thread_rng().gen_ratio(1, 10_000) {
-                    let sender_pubkey = self.find_node_id_by_addr(&shred_sender_addr);
-                    // ~ once every 10_000 shreds
-                    // log leader's pubkey
-                    // log slot, shred index
-                    // log nodes pubkeys, self_index, peers
-                    info!(
-                        "turbine shred verifier,
-                    leader: {},
-                    slot: {}, shred_index: {},
-                    sender_addr: {:?},
-                    sender_pubkey: {:?},
-                    all cluster pubkeys: {:?}, self_index: {},
-                    neighbors: {:?}, children: {:?}",
-                        slot_leader,
-                        shred.slot(),
-                        shred.index(),
-                        shred_sender_addr,
-                        sender_pubkey,
-                        nodes.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
-                        self_index,
-                        neighbors.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
-                        children.iter().map(|n| n.id()).collect::<Vec<Pubkey>>(),
-                    );
-                }
-            }
-        }
         (root_distance, neighbors, children)
     }
 }
@@ -394,7 +394,7 @@ fn get_retransmit_peers<T: Copy>(
     fanout: usize,
     index: usize, // Local node's index withing the nodes slice.
     nodes: &[T],
-) -> impl Iterator<Item = T> + '_ {
+) -> impl Iterator<Item = T> + '_ + Clone {
     // Node's index within its neighborhood.
     let offset = index.saturating_sub(1) % fanout;
     // First node in the neighborhood.
