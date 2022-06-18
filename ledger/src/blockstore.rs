@@ -8583,6 +8583,49 @@ pub mod tests {
     }
 
     #[test]
+    fn test_clear_unconfirmed_slot_readd_slot() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let confirmed_slot = 7;
+        let unconfirmed_slot = 8;
+        let slots = vec![confirmed_slot, unconfirmed_slot];
+
+        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1)
+            .into_iter()
+            .flat_map(|x| x.0)
+            .collect();
+        assert_eq!(shreds.len(), 2);
+
+        // Save off unconfirmed_slot for later, just one shred at shreds[1]
+        let unconfirmed_slot_shreds = vec![shreds[1].clone()];
+        assert_eq!(unconfirmed_slot_shreds[0].slot(), unconfirmed_slot);
+
+        // Insert into slot 9, mark it as dead
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Purge the slot
+        blockstore.clear_unconfirmed_slot(unconfirmed_slot);
+        assert!(!blockstore.is_dead(unconfirmed_slot));
+        assert!(blockstore
+            .get_data_shred(unconfirmed_slot, 0)
+            .unwrap()
+            .is_none());
+
+        // Re-add unconfirmed_slot and confirm that confirmed_slot only has
+        // unconfirmed_slot in next_slots once
+        blockstore.insert_shreds(unconfirmed_slot_shreds, None, false).unwrap();
+        assert_eq!(
+            blockstore
+                .meta(confirmed_slot)
+                .unwrap()
+                .unwrap()
+                .next_slots,
+            vec![unconfirmed_slot]
+        );
+    }
+
+    #[test]
     fn test_update_completed_data_indexes() {
         let mut completed_data_indexes = BTreeSet::default();
         let mut shred_index = ShredIndex::default();
