@@ -187,6 +187,7 @@ async fn handle_connection(
                             break;
                         }
                     }
+                    stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                 }
                 Err(e) => {
                     debug!("stream error: {:?}", e);
