@@ -277,7 +277,7 @@ fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
     }).collect();
  
     to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
-        Base::with_capacity(chunk.len()).create_accounts(
+        NonceContainer::with_capacity(chunk.len()).create_accounts(
                 &client,
                 chunk,
                 nonce_rent,
