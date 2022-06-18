@@ -376,63 +376,14 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
-        let tower = if let Some(process_blockstore) = maybe_process_blockstore {
-            process_blockstore.process_to_create_tower()
+        let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
+            let tower = process_blockstore.process_to_create_tower();
+            info!("Tower state: {:?}", tower);
+            tower
         } else {
             warn!("creating default tower....");
             Tower::default()
         };
-
-        Self::new_with_tower(
-            config,
-            blockstore,
-            bank_forks,
-            cluster_info,
-            ledger_signal_receiver,
-            duplicate_slots_receiver,
-            poh_recorder,
-            tower,
-            vote_tracker,
-            cluster_slots,
-            retransmit_slots_sender,
-            epoch_slots_frozen_receiver,
-            replay_vote_sender,
-            gossip_duplicate_confirmed_slots_receiver,
-            gossip_verified_vote_hash_receiver,
-            cluster_slots_update_sender,
-            cost_update_sender,
-            voting_sender,
-            drop_bank_sender,
-            block_metadata_notifier,
-            transaction_cost_metrics_sender,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_tower(
-        config: ReplayStageConfig,
-        blockstore: Arc<Blockstore>,
-        bank_forks: Arc<RwLock<BankForks>>,
-        cluster_info: Arc<ClusterInfo>,
-        ledger_signal_receiver: Receiver<bool>,
-        duplicate_slots_receiver: DuplicateSlotReceiver,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
-        mut tower: Tower,
-        vote_tracker: Arc<VoteTracker>,
-        cluster_slots: Arc<ClusterSlots>,
-        retransmit_slots_sender: RetransmitSlotsSender,
-        epoch_slots_frozen_receiver: DuplicateSlotsResetReceiver,
-        replay_vote_sender: ReplayVoteSender,
-        gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
-        gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
-        cluster_slots_update_sender: ClusterSlotsUpdateSender,
-        cost_update_sender: Sender<CostUpdate>,
-        voting_sender: Sender<VoteOp>,
-        drop_bank_sender: Sender<Vec<Arc<Bank>>>,
-        block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
-    ) -> Self {
-        info!("Tower state: {:?}", tower);
 
         let ReplayStageConfig {
             vote_account,

@@ -3019,7 +3019,7 @@ impl Blockstore {
         Ok(())
     }
 
-    pub fn mark_slots_as_if_rooted_normally(
+    pub fn mark_slots_as_if_rooted_normally_at_startup(
         &self,
         slots: Vec<(Slot, Option<Hash>)>,
         with_hash: bool,

@@ -689,7 +689,10 @@ pub fn process_blockstore_from_root(
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
-            .mark_slots_as_if_rooted_normally(vec![(start_slot, None)], false)
+            .mark_slots_as_if_rooted_normally_at_startup(
+                vec![(bank.slot(), Some(bank.hash()))],
+                true,
+            )
             .expect("Couldn't mark start_slot as root on startup");
     } else {
         info!(
@@ -1292,8 +1295,8 @@ fn load_frozen_forks(
                             inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
                             if blockstore.is_primary_access() {
                                 blockstore
-                                    .mark_slots_as_if_rooted_normally(rooted_slots, true)
-                                    .expect("Blockstore::mark_slots_as_if_rooted_normally() should succeed");
+                                    .mark_slots_as_if_rooted_normally_at_startup(rooted_slots, true)
+                                    .expect("Blockstore::mark_slots_as_if_rooted_normally_at_startup() should succeed");
                             }
                             Some(cluster_root_bank)
                         } else {
