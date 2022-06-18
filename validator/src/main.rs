@@ -1822,9 +1822,11 @@ pub fn main() {
                     Arg::with_name("authorized_voter_keypair")
                         .index(1)
                         .value_name("KEYPAIR")
+                        .required(false)
                         .takes_value(true)
                         .validator(is_keypair)
-                        .help("Keypair of the authorized voter to add"),
+                        .help("Path to keypair of the authorized voter to add \
+                               [default: read JSON keypair from stdin]"),
                 )
                 .after_help("Note: the new authorized voter only applies to the \
                              currently running validator instance")
@@ -1940,36 +1942,64 @@ pub fn main() {
         ("authorized-voter", Some(authorized_voter_subcommand_matches)) => {
             match authorized_voter_subcommand_matches.subcommand() {
                 ("add", Some(subcommand_matches)) => {
-                    let authorized_voter_keypair =
-                        value_t_or_exit!(subcommand_matches, "authorized_voter_keypair", String);
+                    if let Some(authorized_voter_keypair) =
+                        value_t!(subcommand_matches, "authorized_voter_keypair", String).ok()
+                    {
+                        let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
+                            .unwrap_or_else(|err| {
+                                println!(
+                                    "Unable to access path: {}: {:?}",
+                                    authorized_voter_keypair, err
+                                );
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter path: {}",
+                            authorized_voter_keypair.display()
+                        );
 
-                    let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
-                        .unwrap_or_else(|err| {
-                            println!(
-                                "Unable to access path: {}: {:?}",
-                                authorized_voter_keypair, err
-                            );
-                            exit(1);
-                        });
-                    println!(
-                        "Adding authorized voter: {}",
-                        authorized_voter_keypair.display()
-                    );
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter(
+                                        authorized_voter_keypair.display().to_string(),
+                                    )
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoter request failed: {}", err);
+                                exit(1);
+                            });
+                    } else {
+                        let mut stdin = std::io::stdin();
+                        let authorized_voter_keypair =
+                            read_keypair(&mut stdin).unwrap_or_else(|err| {
+                                println!("Unable to read JSON keypair from stdin: {:?}", err);
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter: {}",
+                            authorized_voter_keypair.pubkey()
+                        );
 
-                    let admin_client = admin_rpc_service::connect(&ledger_path);
-                    admin_rpc_service::runtime()
-                        .block_on(async move {
-                            admin_client
-                                .await?
-                                .add_authorized_voter(
-                                    authorized_voter_keypair.display().to_string(),
-                                )
-                                .await
-                        })
-                        .unwrap_or_else(|err| {
-                            println!("addAuthorizedVoter request failed: {}", err);
-                            exit(1);
-                        });
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter_from_bytes(Vec::from(
+                                        authorized_voter_keypair.to_bytes(),
+                                    ))
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoterFromBytes request failed: {}", err);
+                                exit(1);
+                            });
+                    }
+
                     return;
                 }
                 ("remove-all", _) => {

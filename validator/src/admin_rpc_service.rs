@@ -152,6 +152,10 @@ pub trait AdminRpc {
     #[rpc(meta, name = "addAuthorizedVoter")]
     fn add_authorized_voter(&self, meta: Self::Metadata, keypair_file: String) -> Result<()>;
 
+    #[rpc(meta, name = "addAuthorizedVoterFromBytes")]
+    fn add_authorized_voter_from_bytes(&self, meta: Self::Metadata, keypair: Vec<u8>)
+        -> Result<()>;
+
     #[rpc(meta, name = "removeAllAuthorizedVoters")]
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
 
@@ -228,19 +232,24 @@ impl AdminRpc for AdminRpcImpl {
         let authorized_voter = read_keypair_file(keypair_file)
             .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
 
-        let mut authorized_voter_keypairs = meta.authorized_voter_keypairs.write().unwrap();
+        AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
+    }
 
-        if authorized_voter_keypairs
-            .iter()
-            .any(|x| x.pubkey() == authorized_voter.pubkey())
-        {
-            Err(jsonrpc_core::error::Error::invalid_params(
-                "Authorized voter already present",
+    fn add_authorized_voter_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        keypair: Vec<u8>,
+    ) -> Result<()> {
+        debug!("add_authorized_voter_from_bytes request received");
+
+        let authorized_voter = Keypair::from_bytes(&keypair).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Failed to read authorized voter keypair from provided byte array: {}",
+                err
             ))
-        } else {
-            authorized_voter_keypairs.push(Arc::new(authorized_voter));
-            Ok(())
-        }
+        })?;
+
+        AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
     }
 
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()> {
@@ -291,6 +300,25 @@ impl AdminRpc for AdminRpcImpl {
 }
 
 impl AdminRpcImpl {
+    fn add_authorized_voter_keypair(
+        meta: AdminRpcRequestMetadata,
+        authorized_voter: Keypair,
+    ) -> Result<()> {
+        let mut authorized_voter_keypairs = meta.authorized_voter_keypairs.write().unwrap();
+
+        if authorized_voter_keypairs
+            .iter()
+            .any(|x| x.pubkey() == authorized_voter.pubkey())
+        {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Authorized voter already present",
+            ))
+        } else {
+            authorized_voter_keypairs.push(Arc::new(authorized_voter));
+            Ok(())
+        }
+    }
+
     fn set_identity_keypair(
         meta: AdminRpcRequestMetadata,
         identity_keypair: Keypair,
