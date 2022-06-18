@@ -163,6 +163,14 @@ pub trait AdminRpc {
         require_tower: bool,
     ) -> Result<()>;
 
+    #[rpc(meta, name = "setIdentityFromBytes")]
+    fn set_identity_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        identity_keypair: Vec<u8>,
+        require_tower: bool,
+    ) -> Result<()>;
+
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
 }
@@ -256,6 +264,38 @@ impl AdminRpc for AdminRpcImpl {
             ))
         })?;
 
+        AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
+    }
+
+    fn set_identity_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        identity_keypair: Vec<u8>,
+        require_tower: bool,
+    ) -> Result<()> {
+        debug!("set_identity_from_bytes request received");
+
+        let identity_keypair = Keypair::from_bytes(&identity_keypair).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Failed to read identity keypair from provided byte array: {}",
+                err
+            ))
+        })?;
+
+        AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
+    }
+
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
+        meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+}
+
+impl AdminRpcImpl {
+    fn set_identity_keypair(
+        meta: AdminRpcRequestMetadata,
+        identity_keypair: Keypair,
+        require_tower: bool,
+    ) -> Result<()> {
         meta.with_post_init(|post_init| {
             if require_tower {
                 let _ = Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey())
@@ -275,10 +315,6 @@ impl AdminRpc for AdminRpcImpl {
             warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
         })
-    }
-
-    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
-        meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
     }
 }
 
