@@ -384,7 +384,7 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.SOLANART_GO,
     deployments: [Cluster.MainnetBeta],
   },
-  "Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j": {
+  Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
     deployments: [Cluster.MainnetBeta],
   },
