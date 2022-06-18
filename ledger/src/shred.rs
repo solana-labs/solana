@@ -215,12 +215,16 @@ pub enum Shred {
 }
 
 /// Tuple which uniquely identifies a shred should it exists.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Debug, Hash, PartialEq)]
 pub struct ShredId(Slot, /*shred index:*/ u32, ShredType);
 
 impl ShredId {
     pub(crate) fn new(slot: Slot, index: u32, shred_type: ShredType) -> ShredId {
         ShredId(slot, index, shred_type)
+    }
+
+    pub fn slot(&self) -> Slot {
+        self.0
     }
 
     pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
@@ -549,17 +553,20 @@ pub mod layout {
         ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
     }
 
+    #[inline]
     pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
         let shred_variant = get_shred_variant(shred)?;
         Ok(ShredType::from(shred_variant))
     }
 
+    #[inline]
     pub fn get_slot(shred: &[u8]) -> Option<Slot> {
         <[u8; 8]>::try_from(shred.get(OFFSET_OF_SHRED_SLOT..)?.get(..8)?)
             .map(Slot::from_le_bytes)
             .ok()
     }
 
+    #[inline]
     pub(super) fn get_index(shred: &[u8]) -> Option<u32> {
         <[u8; 4]>::try_from(shred.get(OFFSET_OF_SHRED_INDEX..)?.get(..4)?)
             .map(u32::from_le_bytes)
@@ -580,6 +587,15 @@ pub mod layout {
         <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_PARENT..)?.get(..2)?)
             .map(u16::from_le_bytes)
             .ok()
+    }
+
+    #[inline]
+    pub fn get_shred_id(shred: &[u8]) -> Option<ShredId> {
+        Some(ShredId(
+            get_slot(shred)?,
+            get_index(shred)?,
+            get_shred_type(shred).ok()?,
+        ))
     }
 
     // Returns slice range of the shred payload which is signed.
@@ -1219,9 +1235,13 @@ mod tests {
 
     fn verify_shred_layout(shred: &Shred, packet: &Packet) {
         let data = layout::get_shred(packet).unwrap();
+        assert_eq!(data, packet.data(..).unwrap());
         assert_eq!(layout::get_slot(data), Some(shred.slot()));
         assert_eq!(layout::get_index(data), Some(shred.index()));
         assert_eq!(layout::get_version(data), Some(shred.version()));
+        assert_eq!(layout::get_shred_id(data), Some(shred.id()));
+        assert_eq!(layout::get_signature(data), Some(shred.signature()));
+        assert_eq!(layout::get_shred_type(data).unwrap(), shred.shred_type());
         match shred.shred_type() {
             ShredType::Code => {
                 assert_matches!(
