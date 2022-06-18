@@ -22,20 +22,26 @@ pub fn parse_bpf_loader(
         ));
     }
     match bpf_loader_instruction {
-        LoaderInstruction::Write { offset, bytes } => Ok(ParsedInstructionEnum {
-            instruction_type: "write".to_string(),
-            info: json!({
-                "offset": offset,
-                "bytes": base64::encode(bytes),
-                "account": account_keys[instruction.accounts[0] as usize].to_string(),
-            }),
-        }),
-        LoaderInstruction::Finalize => Ok(ParsedInstructionEnum {
-            instruction_type: "finalize".to_string(),
-            info: json!({
-                "account": account_keys[instruction.accounts[0] as usize].to_string(),
-            }),
-        }),
+        LoaderInstruction::Write { offset, bytes } => {
+            check_num_bpf_loader_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "write".to_string(),
+                info: json!({
+                    "offset": offset,
+                    "bytes": base64::encode(bytes),
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
+        LoaderInstruction::Finalize => {
+            check_num_bpf_loader_accounts(&instruction.accounts, 2)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "finalize".to_string(),
+                info: json!({
+                    "account": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 
@@ -147,6 +153,10 @@ pub fn parse_bpf_upgradeable_loader(
     }
 }
 
+fn check_num_bpf_loader_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstructionError> {
+    check_num_accounts(accounts, num, ParsableProgram::BpfLoader)
+}
+
 fn check_num_bpf_upgradeable_loader_accounts(
     accounts: &[u8],
     num: usize,
@@ -159,7 +169,7 @@ mod test {
     use {
         super::*,
         serde_json::Value,
-        solana_sdk::{message::Message, pubkey},
+        solana_sdk::{bpf_loader_upgradeable, message::Message, pubkey, system_program, sysvar},
     };
 
     #[test]
@@ -178,7 +188,7 @@ mod test {
             offset,
             bytes.clone(),
         );
-        let message = Message::new(&[instruction], Some(&fee_payer));
+        let mut message = Message::new(&[instruction], Some(&fee_payer));
         assert_eq!(
             parse_bpf_loader(&message.instructions[0], &account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -191,9 +201,11 @@ mod test {
             }
         );
         assert!(parse_bpf_loader(&message.instructions[0], &missing_account_keys).is_err());
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_loader(&message.instructions[0], &account_keys,).is_err());
 
         let instruction = solana_sdk::loader_instruction::finalize(&account_pubkey, &program_id);
-        let message = Message::new(&[instruction], Some(&fee_payer));
+        let mut message = Message::new(&[instruction], Some(&fee_payer));
         assert_eq!(
             parse_bpf_loader(&message.instructions[0], &account_keys).unwrap(),
             ParsedInstructionEnum {
@@ -204,6 +216,8 @@ mod test {
             }
         );
         assert!(parse_bpf_loader(&message.instructions[0], &missing_account_keys).is_err());
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_loader(&message.instructions[0], &account_keys).is_err());
 
         let bad_compiled_instruction = CompiledInstruction {
             program_id_index: 3,
@@ -221,166 +235,293 @@ mod test {
     }
 
     #[test]
-    fn test_parse_bpf_upgradeable_loader_instructions() {
-        let mut keys: Vec<Pubkey> = vec![];
-        for _ in 0..8 {
-            keys.push(Pubkey::new_unique());
-        }
-        let offset = 4242;
-        let bytes = vec![8; 99];
+    fn test_parse_bpf_upgradeable_loader_create_buffer_ix() {
         let max_data_len = 54321;
 
-        let instructions = solana_sdk::bpf_loader_upgradeable::create_buffer(
-            &keys[0],
-            &keys[1],
-            &keys[2],
+        let payer_address = Pubkey::new_unique();
+        let buffer_address = Pubkey::new_unique();
+        let authority_address = Pubkey::new_unique();
+        let instructions = bpf_loader_upgradeable::create_buffer(
+            &payer_address,
+            &buffer_address,
+            &authority_address,
             55,
             max_data_len,
         )
         .unwrap();
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[1], &keys[0..3]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "initializeBuffer".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "authority": keys[2].to_string(),
+                    "account": buffer_address.to_string(),
+                    "authority": authority_address.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[1], &keys[0..2]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[1],
+            &message.account_keys[0..2]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[1].accounts.pop();
+        message.instructions[1].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[1], &keys,).is_err());
+    }
 
-        let instruction =
-            solana_sdk::bpf_loader_upgradeable::write(&keys[1], &keys[0], offset, bytes.clone());
-        let message = Message::new(&[instruction], None);
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_write_ix() {
+        let offset = 4242;
+        let bytes = vec![8; 99];
+
+        let buffer_address = Pubkey::new_unique();
+        let authority_address = Pubkey::new_unique();
+        let instruction = bpf_loader_upgradeable::write(
+            &buffer_address,
+            &authority_address,
+            offset,
+            bytes.clone(),
+        );
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..2]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "write".to_string(),
                 info: json!({
                     "offset": offset,
                     "bytes": base64::encode(&bytes),
-                    "account": keys[1].to_string(),
-                    "authority": keys[0].to_string(),
+                    "account": buffer_address.to_string(),
+                    "authority": authority_address.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..1]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
+    }
 
-        let instructions = solana_sdk::bpf_loader_upgradeable::deploy_with_max_program_len(
-            &keys[0],
-            &keys[1],
-            &keys[4],
-            &keys[2],
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_deploy_ix() {
+        let max_data_len = 54321;
+
+        let payer_address = Pubkey::new_unique();
+        let program_address = Pubkey::new_unique();
+        let buffer_address = Pubkey::new_unique();
+        let upgrade_authority_address = Pubkey::new_unique();
+        let programdata_address = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        )
+        .0;
+        let instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &payer_address,
+            &program_address,
+            &buffer_address,
+            &upgrade_authority_address,
             55,
             max_data_len,
         )
         .unwrap();
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[1], &keys[0..8]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[1], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "deployWithMaxDataLen".to_string(),
                 info: json!({
                     "maxDataLen": max_data_len,
-                    "payerAccount": keys[0].to_string(),
-                    "programAccount": keys[1].to_string(),
-                    "authority": keys[2].to_string(),
-                    "programDataAccount": keys[3].to_string(),
-                    "bufferAccount": keys[4].to_string(),
-                    "rentSysvar": keys[5].to_string(),
-                    "clockSysvar": keys[6].to_string(),
-                    "systemProgram": keys[7].to_string(),
+                    "payerAccount": payer_address.to_string(),
+                    "programAccount": program_address.to_string(),
+                    "authority": upgrade_authority_address.to_string(),
+                    "programDataAccount": programdata_address.to_string(),
+                    "bufferAccount": buffer_address.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "systemProgram": system_program::ID.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[1], &keys[0..7]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[1],
+            &message.account_keys[0..7]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[1].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[1], &keys,).is_err());
+    }
 
-        let instruction =
-            solana_sdk::bpf_loader_upgradeable::upgrade(&keys[2], &keys[3], &keys[0], &keys[4]);
-        let message = Message::new(&[instruction], None);
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_upgrade_ix() {
+        let program_address = Pubkey::new_unique();
+        let buffer_address = Pubkey::new_unique();
+        let authority_address = Pubkey::new_unique();
+        let spill_address = Pubkey::new_unique();
+        let programdata_address = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        )
+        .0;
+        let instruction = bpf_loader_upgradeable::upgrade(
+            &program_address,
+            &buffer_address,
+            &authority_address,
+            &spill_address,
+        );
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..7]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "upgrade".to_string(),
                 info: json!({
-                    "authority": keys[0].to_string(),
-                    "programDataAccount": keys[1].to_string(),
-                    "programAccount": keys[2].to_string(),
-                    "bufferAccount": keys[3].to_string(),
-                    "spillAccount": keys[4].to_string(),
-                    "rentSysvar": keys[5].to_string(),
-                    "clockSysvar": keys[6].to_string(),
+                    "authority": authority_address.to_string(),
+                    "programDataAccount": programdata_address.to_string(),
+                    "programAccount": program_address.to_string(),
+                    "bufferAccount": buffer_address.to_string(),
+                    "spillAccount": spill_address.to_string(),
+                    "rentSysvar": sysvar::rent::ID.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..6]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..6]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
+    }
 
-        let instruction =
-            solana_sdk::bpf_loader_upgradeable::set_buffer_authority(&keys[1], &keys[0], &keys[2]);
-        let message = Message::new(&[instruction], None);
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_set_buffer_authority_ix() {
+        let buffer_address = Pubkey::new_unique();
+        let current_authority_address = Pubkey::new_unique();
+        let new_authority_address = Pubkey::new_unique();
+        let instruction = bpf_loader_upgradeable::set_buffer_authority(
+            &buffer_address,
+            &current_authority_address,
+            &new_authority_address,
+        );
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..3]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[2].to_string(),
+                    "account": buffer_address.to_string(),
+                    "authority": current_authority_address.to_string(),
+                    "newAuthority": new_authority_address.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..1]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
+    }
 
-        let instruction = solana_sdk::bpf_loader_upgradeable::set_upgrade_authority(
-            &keys[1],
-            &keys[0],
-            Some(&keys[2]),
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_set_upgrade_authority_ix() {
+        let program_address = Pubkey::new_unique();
+        let current_authority_address = Pubkey::new_unique();
+        let new_authority_address = Pubkey::new_unique();
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
         );
-        let message = Message::new(&[instruction], None);
+        let instruction = bpf_loader_upgradeable::set_upgrade_authority(
+            &program_address,
+            &current_authority_address,
+            Some(&new_authority_address),
+        );
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..3]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "authority": keys[0].to_string(),
-                    "newAuthority": keys[2].to_string(),
+                    "account": programdata_address.to_string(),
+                    "authority": current_authority_address.to_string(),
+                    "newAuthority": new_authority_address.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..1]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
 
-        let instruction =
-            solana_sdk::bpf_loader_upgradeable::set_upgrade_authority(&keys[1], &keys[0], None);
-        let message = Message::new(&[instruction], None);
+        let instruction = bpf_loader_upgradeable::set_upgrade_authority(
+            &program_address,
+            &current_authority_address,
+            None,
+        );
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..2]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "authority": keys[0].to_string(),
+                    "account": programdata_address.to_string(),
+                    "authority": current_authority_address.to_string(),
                     "newAuthority": Value::Null,
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..1]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
+    }
 
-        let instruction = solana_sdk::bpf_loader_upgradeable::close(&keys[0], &keys[1], &keys[2]);
-        let message = Message::new(&[instruction], None);
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_close_ix() {
+        let close_address = Pubkey::new_unique();
+        let recipient_address = Pubkey::new_unique();
+        let authority_address = Pubkey::new_unique();
+        let instruction =
+            bpf_loader_upgradeable::close(&close_address, &recipient_address, &authority_address);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
-            parse_bpf_upgradeable_loader(&message.instructions[0], &keys[..3]).unwrap(),
+            parse_bpf_upgradeable_loader(&message.instructions[0], &message.account_keys).unwrap(),
             ParsedInstructionEnum {
                 instruction_type: "close".to_string(),
                 info: json!({
-                    "account": keys[1].to_string(),
-                    "recipient": keys[2].to_string(),
-                    "authority": keys[0].to_string(),
+                    "account": close_address.to_string(),
+                    "recipient": recipient_address.to_string(),
+                    "authority": authority_address.to_string(),
                 }),
             }
         );
-        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys[0..1]).is_err());
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &message.account_keys[0..1]
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_bpf_upgradeable_loader(&message.instructions[0], &keys,).is_err());
     }
 }
