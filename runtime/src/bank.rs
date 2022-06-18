@@ -3166,7 +3166,8 @@ impl Bank {
         m.stop();
         metrics.redeem_rewards_us.fetch_add(m.as_us(), Relaxed);
 
-        // store stake account before filtering out 0 stake_reward below
+        // store stake account even if stakers_reward is 0
+        // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
         let accounts_to_store = stake_rewards
             .iter()
@@ -3178,7 +3179,6 @@ impl Bank {
             .store_stake_accounts_us
             .fetch_add(m.as_us(), Relaxed);
 
-        // filter out zero rewards stake accounts
         let mut stake_rewards = stake_rewards
             .into_iter()
             .filter(|x| x.stake_reward > 0)
