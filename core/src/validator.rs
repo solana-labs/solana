@@ -949,7 +949,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            process_blockstore,
+            Some(process_blockstore),
             config.tower_storage.clone(),
             &leader_schedule_cache,
             &exit,
@@ -1533,7 +1533,7 @@ fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
     highest_slot
 }
 
-struct ProcessBlockStore<'a> {
+pub struct ProcessBlockStore<'a> {
     id: &'a Pubkey,
     vote_account: &'a Pubkey,
     start_progress: &'a Arc<RwLock<ValidatorStartProgress>>,
@@ -1585,7 +1585,7 @@ impl<'a> ProcessBlockStore<'a> {
         }
     }
 
-    fn process(&mut self) {
+    pub(crate) fn process(&mut self) {
         if self.tower.is_none() {
             let previous_start_process = *self.start_progress.read().unwrap();
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1680,12 +1680,10 @@ impl<'a> ProcessBlockStore<'a> {
             *self.start_progress.write().unwrap() = previous_start_process;
         }
     }
-}
 
-impl<'a> From<ProcessBlockStore<'a>> for Tower {
-    fn from(mut process_blockstore: ProcessBlockStore<'a>) -> Self {
-        process_blockstore.process();
-        process_blockstore.tower.expect("valid tower")
+    pub(crate) fn process_to_create_tower(mut self) -> Tower {
+        self.process();
+        self.tower.unwrap()
     }
 }
 

@@ -689,8 +689,8 @@ pub fn process_blockstore_from_root(
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
-            .set_roots(std::iter::once(&start_slot))
-            .expect("Couldn't set root slot on startup");
+            .mark_slots_as_if_rooted_normally(vec![(start_slot, None)], false)
+            .expect("Couldn't mark start_slot as root on startup");
     } else {
         info!(
             "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
