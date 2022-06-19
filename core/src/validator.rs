@@ -1642,6 +1642,7 @@ impl<'a> ProcessBlockStore<'a> {
             self.tower = Some({
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
+                    // reconciliation attempt 1 of 2 with tower
                     reconcile_blockstore_roots_with_external_source(
                         ExternalRootSource::Tower(tower.root()),
                         self.blockstore,
@@ -1649,21 +1650,6 @@ impl<'a> ProcessBlockStore<'a> {
                     )
                     .unwrap_or_else(|err| {
                         error!("Failed to reconcile blockstore with tower: {:?}", err);
-                        abort()
-                    });
-                }
-
-                if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
-                    self.config,
-                    self.bank_forks.read().unwrap().root_bank().slot(),
-                ) {
-                    reconcile_blockstore_roots_with_external_source(
-                        ExternalRootSource::HardFork(hard_fork_restart_slot),
-                        self.blockstore,
-                        &mut self.original_blockstore_root,
-                    )
-                    .unwrap_or_else(|err| {
-                        error!("Failed to reconcile blockstore with hard fork: {:?}", err);
                         abort()
                     });
                 }
@@ -1676,6 +1662,23 @@ impl<'a> ProcessBlockStore<'a> {
                     &self.bank_forks.read().unwrap(),
                 )
             });
+
+            if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
+                self.config,
+                self.bank_forks.read().unwrap().root_bank().slot(),
+            ) {
+                // reconciliation attempt 2 of 2 with hard fork
+                // this should be #2 because hard fork root > tower root in almost all cases
+                reconcile_blockstore_roots_with_external_source(
+                    ExternalRootSource::HardFork(hard_fork_restart_slot),
+                    self.blockstore,
+                    &mut self.original_blockstore_root,
+                )
+                .unwrap_or_else(|err| {
+                    error!("Failed to reconcile blockstore with hard fork: {:?}", err);
+                    abort()
+                });
+            }
 
             *self.start_progress.write().unwrap() = previous_start_process;
         }
