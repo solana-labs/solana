@@ -214,6 +214,7 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    /// Dangerous. Currently only needed for a local-cluster test
     pub fn unset_parent(&mut self) {
         self.parent_slot = None;
     }
