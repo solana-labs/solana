@@ -4,7 +4,7 @@ use {
         common::dispatch,
         legacy, merkle,
         traits::{Shred as _, ShredData as ShredDataTrait},
-        DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredVariant,
+        DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredType, ShredVariant,
         MAX_DATA_SHREDS_PER_SLOT,
     },
     solana_sdk::{clock::Slot, signature::Signature},
@@ -132,18 +132,21 @@ pub(super) fn sanitize<T: ShredDataTrait>(shred: &T) -> Result<(), Error> {
     }
     let common_header = shred.common_header();
     let data_header = shred.data_header();
-    let _shard_index = shred.erasure_shard_index()?;
-    let _erasure_shard = shred.erasure_shard_as_slice()?;
     if common_header.index as usize >= MAX_DATA_SHREDS_PER_SLOT {
-        return Err(Error::InvalidDataShredIndex(common_header.index));
+        return Err(Error::InvalidShredIndex(
+            ShredType::Data,
+            common_header.index,
+        ));
     }
-    let _data = shred.data()?;
-    let _parent = shred.parent()?;
     let flags = data_header.flags;
     if flags.intersects(ShredFlags::LAST_SHRED_IN_SLOT)
         && !flags.contains(ShredFlags::DATA_COMPLETE_SHRED)
     {
         return Err(Error::InvalidShredFlags(data_header.flags.bits()));
     }
+    let _data = shred.data()?;
+    let _parent = shred.parent()?;
+    let _shard_index = shred.erasure_shard_index()?;
+    let _erasure_shard = shred.erasure_shard_as_slice()?;
     Ok(())
 }

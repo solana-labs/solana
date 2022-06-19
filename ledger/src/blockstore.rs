@@ -3350,10 +3350,6 @@ fn get_last_hash<'a>(iterator: impl Iterator<Item = &'a Entry> + 'a) -> Option<H
     iterator.last().map(|entry| entry.hash)
 }
 
-fn is_valid_write_to_slot_0(slot_to_write: u64, parent_slot: Slot, last_root: u64) -> bool {
-    slot_to_write == 0 && last_root == 0 && parent_slot == 0
-}
-
 fn send_signals(
     new_shreds_signals: &[Sender<bool>],
     completed_slots_senders: &[Sender<Vec<u64>>],
@@ -3963,22 +3959,13 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
     };
 }
 
-pub fn verify_shred_slots(slot: Slot, parent_slot: Slot, last_root: Slot) -> bool {
-    if !is_valid_write_to_slot_0(slot, parent_slot, last_root) {
-        // Check that the parent_slot < slot
-        if parent_slot >= slot {
-            return false;
-        }
-
-        // Ignore shreds that chain to slots before the last root
-        if parent_slot < last_root {
-            return false;
-        }
-
-        // Above two checks guarantee that by this point, slot > last_root
+pub fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
+    if slot == 0 && parent == 0 && root == 0 {
+        return true; // valid write to slot zero.
     }
-
-    true
+    // Ignore shreds that chain to slots before the root,
+    // or have invalid parent >= slot.
+    root <= parent && parent < slot
 }
 
 // Same as `create_new_ledger()` but use a temporary ledger name based on the provided `name`
