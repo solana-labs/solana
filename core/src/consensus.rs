@@ -1343,6 +1343,8 @@ impl ExternalRootSource {
 pub fn reconcile_blockstore_roots_with_external_source(
     external_source: ExternalRootSource,
     blockstore: &Blockstore,
+    // blockstore.last_root() might have been updated already.
+    // so take a &mut param both to input (and output iff we update root)
     last_blockstore_root: &mut Slot,
 ) -> blockstore_db::Result<()> {
     let external_root = external_source.root();
@@ -1359,7 +1361,6 @@ pub fn reconcile_blockstore_roots_with_external_source(
                     last_blockstore_root, current, external_source,
                 ),
             })
-            .map(|root| (root, None))
             .collect();
         if !new_roots.is_empty() {
             info!(
@@ -1372,7 +1373,10 @@ pub fn reconcile_blockstore_roots_with_external_source(
             // under this code-path's limited condition (i.e.  those shreds
             // might not be available, etc...) also correctly overcoming this
             // limitation is hard...
-            blockstore.mark_slots_as_if_rooted_normally_at_startup(new_roots, false)?;
+            blockstore.mark_slots_as_if_rooted_normally_at_startup(
+                new_roots.into_iter().map(|root| (root, None)).collect(),
+                false,
+            )?;
 
             // Update the caller-managed state of last root in blockstore.
             // Repeated calls of this function should result in a no-op for
