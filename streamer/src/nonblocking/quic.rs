@@ -1,3 +1,4 @@
+use quinn::ReadChunk;
 use {
     crate::quic::{configure_server, QuicServerError, StreamStats},
     crossbeam_channel::Sender,
@@ -176,7 +177,7 @@ async fn handle_connection(
                     let mut maybe_batch = None;
                     while !stream_exit.load(Ordering::Relaxed) {
                         if handle_chunk(
-                            &stream.read_chunk(PACKET_DATA_SIZE, false).await,
+                            &stream.read_chunk(PACKET_DATA_SIZE, false),
                             &mut maybe_batch,
                             &remote_addr,
                             &packet_sender,
@@ -210,7 +211,7 @@ async fn handle_connection(
 
 // Return true if the server should drop the stream
 fn handle_chunk(
-    chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
+    chunk: &ReadChunk,
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
