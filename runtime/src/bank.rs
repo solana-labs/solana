@@ -1880,9 +1880,8 @@ impl Bank {
         let (_, update_epoch_time) = measure!(
             {
                 if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = Measure::this(
-                        |_| ThreadPoolBuilder::new().build().unwrap(),
-                        (),
+                    let (thread_pool, thread_pool_time) = measure!(
+                        ThreadPoolBuilder::new().build().unwrap(),
                         "thread_pool_creation",
                     );
 
