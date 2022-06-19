@@ -375,7 +375,6 @@ impl RetransmitStage {
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
         turbine_disabled: Option<Arc<AtomicBool>>,
-        shred_version: u16,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -436,7 +435,6 @@ impl RetransmitStage {
                     &leader_schedule_cache_clone,
                     id,
                     last_root,
-                    shred_version,
                 );
                 rv && !turbine_disabled
             },

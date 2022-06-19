@@ -154,8 +154,9 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            &fetch_sender,
-            Some(bank_forks.clone()),
+            fetch_sender,
+            tvu_config.shred_version,
+            bank_forks.clone(),
             exit,
         );
 
@@ -189,7 +190,6 @@ impl Tvu {
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             turbine_disabled,
-            tvu_config.shred_version,
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
             verified_vote_receiver,

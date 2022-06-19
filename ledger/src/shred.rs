@@ -61,7 +61,7 @@ use {
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::{deserialize_from_with_limit, Packet},
+    solana_perf::packet::Packet,
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
@@ -122,8 +122,6 @@ pub enum Error {
     BincodeError(#[from] bincode::Error),
     #[error(transparent)]
     ErasureError(#[from] reed_solomon_erasure::Error),
-    #[error("Invalid data shred index: {0}")]
-    InvalidDataShredIndex(/*shred index:*/ u32),
     #[error("Invalid data size: {size}, payload: {payload}")]
     InvalidDataSize { size: u16, payload: usize },
     #[error("Invalid erasure shard index: {0:?}")]
@@ -142,6 +140,8 @@ pub enum Error {
     InvalidProofSize(/*proof_size:*/ u8),
     #[error("Invalid shred flags: {0}")]
     InvalidShredFlags(u8),
+    #[error("Invalid {0:?} shred index: {1}")]
+    InvalidShredIndex(ShredType, /*shred index:*/ u32),
     #[error("Invalid shred type")]
     InvalidShredType,
     #[error("Invalid shred variant")]
@@ -554,11 +554,22 @@ pub mod layout {
     }
 
     pub fn get_slot(shred: &[u8]) -> Option<Slot> {
-        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_SLOT..)?).ok()
+        <[u8; 8]>::try_from(shred.get(OFFSET_OF_SHRED_SLOT..)?.get(..8)?)
+            .map(Slot::from_le_bytes)
+            .ok()
     }
 
     pub(super) fn get_index(shred: &[u8]) -> Option<u32> {
-        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_INDEX..)?).ok()
+        <[u8; 4]>::try_from(shred.get(OFFSET_OF_SHRED_INDEX..)?.get(..4)?)
+            .map(u32::from_le_bytes)
+            .ok()
+    }
+
+    pub fn get_version(shred: &[u8]) -> Option<u16> {
+        const OFFSET_OF_SHRED_VERSION: usize = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX;
+        <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_VERSION..)?.get(..2)?)
+            .map(u16::from_le_bytes)
+            .ok()
     }
 
     // Returns slice range of the shred payload which is signed.
@@ -1065,6 +1076,31 @@ mod tests {
         }
     }
 
+    fn verify_shred_layout(shred: &Shred, packet: &Packet) {
+        let data = layout::get_shred(packet).unwrap();
+        assert_eq!(layout::get_slot(data), Some(shred.slot()));
+        assert_eq!(layout::get_index(data), Some(shred.index()));
+        assert_eq!(layout::get_version(data), Some(shred.version()));
+        assert_eq!(
+            get_shred_slot_index_type(packet, &mut ShredFetchStats::default()),
+            Some((shred.slot(), shred.index(), shred.shred_type()))
+        );
+        match shred.shred_type() {
+            ShredType::Code => {
+                assert_matches!(
+                    layout::get_reference_tick(data),
+                    Err(Error::InvalidShredType)
+                );
+            }
+            ShredType::Data => {
+                assert_eq!(
+                    layout::get_reference_tick(data).unwrap(),
+                    shred.reference_tick()
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_serde_compat_shred_data() {
         const SEED: &str = "6qG9NGWEtoTugS4Zgs46u8zTccEJuRHtrNMiUayLHCxt";
@@ -1102,18 +1138,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            shred.reference_tick(),
-            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
-        );
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]
@@ -1146,18 +1171,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            shred.reference_tick(),
-            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
-        );
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]
@@ -1197,14 +1211,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]
