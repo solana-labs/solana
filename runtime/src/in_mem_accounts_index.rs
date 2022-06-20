@@ -1018,17 +1018,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         // during startup, nothing should be in the in-mem map
+        let map_internal = self.map_internal.read().unwrap();
         assert!(
-            self.map_internal.read().unwrap().is_empty(),
+            map_internal.is_empty(),
             "len: {}, first: {:?}",
-            self.map_internal.read().unwrap().len(),
-            self.map_internal
-                .read()
-                .unwrap()
-                .iter()
-                .take(1)
-                .collect::<Vec<_>>()
+            map_internal.len(),
+            map_internal.iter().take(1).collect::<Vec<_>>()
         );
+        drop(map_internal);
 
         let mut duplicates = vec![];
 
