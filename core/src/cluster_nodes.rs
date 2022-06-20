@@ -122,7 +122,7 @@ impl ClusterNodes<BroadcastStage> {
         socket_addr_space: &SocketAddrSpace,
     ) -> Vec<SocketAddr> {
         const MAX_CONTACT_INFO_AGE: Duration = Duration::from_secs(2 * 60);
-        let shred_seed = shred.seed(self.pubkey, root_bank);
+        let shred_seed = shred.seed(self.pubkey);
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let index = match self.weighted_shuffle.first(&mut rng) {
             None => return Vec::default(),
@@ -221,7 +221,7 @@ impl ClusterNodes<RetransmitStage> {
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
     ) {
-        let shred_seed = shred.seed(slot_leader, root_bank);
+        let shred_seed = shred.seed(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == self.pubkey {
