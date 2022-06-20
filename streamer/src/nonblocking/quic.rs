@@ -377,11 +377,13 @@ impl ConnectionTable {
     fn remove_connection(&mut self, addr: &SocketAddr) {
         if let Entry::Occupied(mut e) = self.table.entry(addr.ip()) {
             let e_ref = e.get_mut();
+            let old_size = e_ref.len();
             e_ref.retain(|connection| connection.port != addr.port());
+            let new_size = e_ref.len();
             if e_ref.is_empty() {
                 e.remove_entry();
             }
-            self.total_size -= 1;
+            self.total_size -= old_size - new_size;
         }
     }
 }
