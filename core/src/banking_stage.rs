@@ -4168,6 +4168,7 @@ mod tests {
             ];
 
             let connection_cache = ConnectionCache::default();
+            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             for (name, data_budget, expected_num_forwarded) in test_cases {
                 let mut unprocessed_packet_batches: UnprocessedPacketBatches =
                     UnprocessedPacketBatches::from_iter(
@@ -4180,6 +4181,7 @@ mod tests {
                     &cluster_info,
                     &mut unprocessed_packet_batches,
                     &poh_recorder,
+                    &socket,
                     true,
                     &data_budget,
                     &mut LeaderSlotMetricsTracker::new(0),
@@ -4285,6 +4287,7 @@ mod tests {
                 ),
             ];
 
+            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             for (name, forward_option, hold, expected_ids, expected_num_unprocessed) in test_cases {
                 let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
@@ -4292,6 +4295,7 @@ mod tests {
                     &cluster_info,
                     &mut unprocessed_packet_batches,
                     &poh_recorder,
+                    &socket,
                     hold,
                     &DataBudget::default(),
                     &mut LeaderSlotMetricsTracker::new(0),
