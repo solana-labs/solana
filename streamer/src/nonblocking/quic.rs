@@ -84,7 +84,7 @@ pub async fn run_server(
         Arc::new(Mutex::new(ConnectionTable::default()));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
-        const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 100;
+        const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
         let timeout_connection = timeout(
             Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
             incoming.next(),
