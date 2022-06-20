@@ -3,7 +3,7 @@
 use {
     log::*,
     clap::{
-        crate_description, crate_name, value_t, values_t, value_t_or_exit, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, values_t, App, Arg, ArgMatches,
     },
     solana_core::{
         validator::{ValidatorConfig},
@@ -23,11 +23,8 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{
-            create_genesis_config_with_leader, 
-            create_genesis_config_with_vote_accounts, 
             create_genesis_config_with_vote_accounts_and_cluster_type,
             ValidatorVoteKeypairs,
-            GenesisConfigInfo,
         },
     },
     crossbeam_channel::unbounded,
@@ -43,7 +40,7 @@ use {
         iter,
     },
     solana_local_cluster::{
-        local_cluster::{ClusterConfig, LocalCluster},
+        local_cluster::ClusterConfig,
         validator_configs::make_identical_validator_configs,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -213,7 +210,7 @@ pub fn main() {
         }
     };
 
-    // generate vote keys for a node/validator? Not why we nede diff vote keys
+    // generate vote keys for a node/validator? Not why we need diff vote keys
     let vote_keys = {
         if let Some(ref node_vote_keys) = config.node_vote_keys {
             assert_eq!(config.validator_configs.len(), node_vote_keys.len());
@@ -258,7 +255,6 @@ pub fn main() {
             .unzip();
 
     let leader_keypair = &keys_in_genesis[0].node_keypair;
-    let leader_vote_keypair = &keys_in_genesis[0].vote_keypair;
     let leader_pubkey = leader_keypair.pubkey();
 
     let leader_node = Node::new_with_external_ip(
@@ -270,9 +266,6 @@ pub fn main() {
     );
     let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
 
-    // let leader_keypair = Arc::new(leader_keypair);
-
-
     let mut genesis_config_info = &mut create_genesis_config_with_vote_accounts_and_cluster_type(
         config.cluster_lamports,
         &keys_in_genesis,
@@ -281,7 +274,6 @@ pub fn main() {
     );
 
     let mut genesis_config = &mut genesis_config_info.genesis_config;
-    let mint_keypair = &genesis_config_info.mint_keypair;
 
     genesis_config.accounts.extend(
         config
@@ -289,21 +281,6 @@ pub fn main() {
             .drain(..)
             .map(|(key, account)| (key, Account::from(account))),
     );
-
-    let accounts_dir = TempDir::new().unwrap();
-    let bank0 = Bank::new_with_paths_for_tests(
-        &genesis_config_info.genesis_config,
-        vec![accounts_dir.path().to_path_buf()],
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        false,
-        accounts_db::AccountShrinkThreshold::default(),
-        false,
-    );
-    bank0.freeze();
-    let bank_forks = BankForks::new(bank0);
-    let bank_forks = Arc::new(RwLock::new(bank_forks));
 
     let cluster_info = ClusterInfo::new(
         leader_node.info.clone(),
@@ -318,6 +295,23 @@ pub fn main() {
 
     cluster_info.set_entrypoints(cluster_entrypoints);
     let cluster_info = Arc::new(cluster_info);
+
+    let accounts_dir = TempDir::new().unwrap();
+    let bank0 = Bank::new_with_paths_for_tests(
+        genesis_config,
+        vec![accounts_dir.path().to_path_buf()],
+        None,
+        None,
+        AccountSecondaryIndexes::default(),
+        false,
+        accounts_db::AccountShrinkThreshold::default(),
+        false,
+    );
+    bank0.freeze();
+    let bank_forks = BankForks::new(bank0);
+    let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+    
 
     let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
