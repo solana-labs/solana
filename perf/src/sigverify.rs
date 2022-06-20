@@ -320,7 +320,7 @@ pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
     // Check for tracer pubkey
     if let Some(first_pubkey_end) = maybe_first_pubkey_end {
         let is_tracer_packet =
-            &packet.data[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
+            &packet.data()[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
         if is_tracer_packet {
             packet.meta.set_tracer(true);
         }
@@ -757,7 +757,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
     let tx_bytes = serialize(&tx).unwrap();
     let mut packet = Packet::default();
     packet.meta.size = tx_bytes.len();
-    packet.data[..packet.meta.size].copy_from_slice(&tx_bytes);
+    packet.buffer_mut()[..tx_bytes.len()].copy_from_slice(&tx_bytes);
     packet
 }
 

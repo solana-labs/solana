@@ -120,15 +120,9 @@ pub mod tests {
             .collect();
 
         let keypair = Keypair::new();
-<<<<<<< HEAD
         Shredder::sign_shred(&keypair, &mut shred);
-        batches[0][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][0].meta.size = shred.payload.len();
-=======
-        shred.sign(&keypair);
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let mut shred = Shred::new_from_data(
             0xc0de_dead,
@@ -141,15 +135,9 @@ pub mod tests {
             0,
             0xc0de,
         );
-<<<<<<< HEAD
         Shredder::sign_shred(&keypair, &mut shred);
-        batches[1][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[1][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[1][0].meta.size = shred.payload.len();
-=======
-        shred.sign(&keypair);
-        batches[1][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[1][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let expected: HashSet<u64> = [0xc0de_dead, 0xdead_c0de].iter().cloned().collect();
         assert_eq!(ShredSigVerifier::read_slots(&batches), expected);
@@ -183,15 +171,9 @@ pub mod tests {
             0,
             0xc0de,
         );
-<<<<<<< HEAD
         Shredder::sign_shred(&leader_keypair, &mut shred);
-        batches[0][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][0].meta.size = shred.payload.len();
-=======
-        shred.sign(&leader_keypair);
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let mut shred = Shred::new_from_data(
             0,
@@ -205,15 +187,9 @@ pub mod tests {
             0xc0de,
         );
         let wrong_keypair = Keypair::new();
-<<<<<<< HEAD
         Shredder::sign_shred(&wrong_keypair, &mut shred);
-        batches[0][1].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][1].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][1].meta.size = shred.payload.len();
-=======
-        shred.sign(&wrong_keypair);
-        batches[0][1].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][1].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let num_packets = solana_perf::sigverify::count_packets_in_batches(&batches);
         let rv = verifier.verify_batches(batches, num_packets);

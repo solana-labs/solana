@@ -467,17 +467,10 @@ pub mod tests {
         );
         assert_eq!(shred.slot(), slot);
         let keypair = Keypair::new();
-<<<<<<< HEAD
         Shredder::sign_shred(&keypair, &mut shred);
         trace!("signature {}", shred.common_header.signature);
-        packet.data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        packet.buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         packet.meta.size = shred.payload.len();
-=======
-        shred.sign(&keypair);
-        trace!("signature {}", shred.signature());
-        packet.buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        packet.meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -521,13 +514,8 @@ pub mod tests {
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batches[0].resize(1, Packet::default());
-<<<<<<< HEAD
-        batches[0][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][0].meta.size = shred.payload.len();
-=======
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -581,13 +569,8 @@ pub mod tests {
         let keypair = Keypair::new();
         Shredder::sign_shred(&keypair, &mut shred);
         batches[0].resize(1, Packet::default());
-<<<<<<< HEAD
-        batches[0][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][0].meta.size = shred.payload.len();
-=======
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
@@ -699,13 +682,8 @@ pub mod tests {
             0xc0de,
         );
         batches[0].resize(1, Packet::default());
-<<<<<<< HEAD
-        batches[0][0].data[0..shred.payload.len()].copy_from_slice(&shred.payload);
+        batches[0][0].buffer_mut()[0..shred.payload.len()].copy_from_slice(&shred.payload);
         batches[0][0].meta.size = shred.payload.len();
-=======
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
->>>>>>> 880684565 (limits read access into Packet data to Packet.meta.size (#25484))
 
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),
