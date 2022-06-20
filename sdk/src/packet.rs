@@ -53,12 +53,21 @@ impl Packet {
     /// Returns an immutable reference to the underlying buffer up to
     /// packet.meta.size. The rest of the buffer is not valid to read from.
     /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
+    /// Returns None if the index is invalid or if the packet is already marked
+    /// as discard.
     #[inline]
     pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
     where
         I: SliceIndex<[u8]>,
     {
-        self.buffer.get(..self.meta.size)?.get(index)
+        // If the packet is marked as discard, it is either invalid or
+        // otherwise should be ignored, and so the payload should not be read
+        // from.
+        if self.meta.discard() {
+            None
+        } else {
+            self.buffer.get(..self.meta.size)?.get(index)
+        }
     }
 
     /// Returns a mutable reference to the entirety of the underlying buffer to
@@ -66,6 +75,7 @@ impl Packet {
     /// after writing to the buffer.
     #[inline]
     pub fn buffer_mut(&mut self) -> &mut [u8] {
+        debug_assert!(!self.meta.discard());
         &mut self.buffer[..]
     }
 
@@ -76,16 +86,16 @@ impl Packet {
     }
 
     pub fn populate_packet<T: Serialize>(
-        packet: &mut Packet,
+        &mut self,
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()> {
-        let mut wr = io::Cursor::new(packet.buffer_mut());
+        debug_assert!(!self.meta.discard());
+        let mut wr = io::Cursor::new(self.buffer_mut());
         bincode::serialize_into(&mut wr, data)?;
-        let len = wr.position() as usize;
-        packet.meta.size = len;
+        self.meta.size = wr.position() as usize;
         if let Some(dest) = dest {
-            packet.meta.set_socket_addr(dest);
+            self.meta.set_socket_addr(dest);
         }
         Ok(())
     }
