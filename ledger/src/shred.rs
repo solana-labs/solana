@@ -57,14 +57,9 @@ use {
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-<<<<<<< HEAD
     solana_measure::measure::Measure,
     solana_perf::packet::Packet,
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::bank::Bank,
-=======
-    solana_perf::packet::{deserialize_from_with_limit, Packet},
->>>>>>> 47e62add5 (removes feature gate code adding shred-type to shred seed (#25963))
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
