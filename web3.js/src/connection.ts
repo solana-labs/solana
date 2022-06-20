@@ -940,7 +940,7 @@ const BlockProductionResponseStruct = jsonRpcResultAndContext(
 /**
  * Configuration object for changing `isBlockhashValid` query behavior
  */
-export type isBlockhashValidConfig = {
+export type IsBlockhashValidConfig = {
   /** The level of commitment desired */
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
@@ -3374,26 +3374,16 @@ export class Connection {
    */
   async isBlockhashValid(
     blockhash: string,
-    configOrCommitment?: isBlockhashValidConfig | Commitment
+    config?: IsBlockhashValidConfig
   ): Promise<RpcResponseAndContext<boolean>> {
-    const extra: Pick<isBlockhashValidConfig, 'minContextSlot'> = {};
+    const extra: Pick<IsBlockhashValidConfig, 'minContextSlot'> = {};
 
-    let commitment;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-
-        if (configOrCommitment.minContextSlot) {
-          extra.minContextSlot = configOrCommitment.minContextSlot;
-        }
-      }
-    }
-
+    const commitment = config
+      ? config.commitment
+      : this._commitment || 'finalized';
     const args = this._buildArgs(
       [blockhash],
-      commitment || this._commitment || 'finalized',
+      commitment,
       'jsonParsed',
       extra,
     );
