@@ -701,10 +701,12 @@ impl Validator {
             };
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
+        let bank_forks_guard = bank_forks.read().unwrap();
         block_commitment_cache.initialize_slots(
-            bank_forks.read().unwrap().working_bank().slot(),
-            bank_forks.read().unwrap().root(),
+            bank_forks_guard.working_bank().slot(),
+            bank_forks_guard.root(),
         );
+        drop(bank_forks_guard);
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
