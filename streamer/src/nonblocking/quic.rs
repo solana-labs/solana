@@ -383,7 +383,9 @@ impl ConnectionTable {
             if e_ref.is_empty() {
                 e.remove_entry();
             }
-            self.total_size -= old_size - new_size;
+            self.total_size = self
+                .total_size
+                .saturating_sub(old_size.saturating_sub(new_size));
         }
     }
 }
