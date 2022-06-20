@@ -191,12 +191,10 @@ async fn handle_connection(
                 }
                 Err(e) => {
                     debug!("stream error: {:?}", e);
-                    stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     break;
                 }
             },
             None => {
-                stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                 break;
             }
         }
