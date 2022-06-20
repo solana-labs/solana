@@ -67,6 +67,11 @@ impl StakesCache {
         stakes.vote_accounts.num_vote_accounts()
     }
 
+    pub fn num_staked_nodes(&self) -> usize {
+        let stakes = self.0.read().unwrap();
+        stakes.vote_accounts.num_staked_nodes()
+    }
+
     pub fn check_and_store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
         // TODO: If the account is already cached as a vote or stake account
         // but the owner changes, then this needs to evict the account from
