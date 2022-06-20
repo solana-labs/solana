@@ -1951,11 +1951,6 @@ impl Bank {
                         ),
                         ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
                         (
-                            "redeem_rewards_us",
-                            metrics.redeem_rewards_us.load(Relaxed),
-                            i64
-                        ),
-                        (
                             "store_stake_accounts_us",
                             metrics.store_stake_accounts_us.load(Relaxed),
                             i64
@@ -6240,7 +6235,9 @@ impl Bank {
             .accounts
             .store_accounts_cached((self.slot(), accounts));
         let mut m = Measure::start("stakes_cache.check_and_store");
-        self.stakes_cache.check_and_store_batch(accounts);
+        for (pubkey, account) in accounts {
+            self.stakes_cache.check_and_store(pubkey, account);
+        }
         m.stop();
         self.rc
             .accounts
