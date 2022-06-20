@@ -85,14 +85,12 @@ impl BenchTpsClient for BankClient {
     }
 
     fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
-        let account = SyncClient::get_account(self, pubkey).map_err(|err| err.into());
-        if let Ok(account) = account {
-            if account.is_none() {
-                return Err(BenchTpsError::Custom("Account was not found".to_string()));
-            }
-            Ok(account.unwrap())
-        } else {
-            Err(account.err().unwrap())
-        }
+        SyncClient::get_account(self, pubkey)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
     }
 }
