@@ -47,6 +47,7 @@ use {
     solana_client::{
         connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         rpc_client::RpcClient,
+        tpu_connection::TpuConnection,
     },
     solana_core::serve_repair::RepairProtocol,
     solana_dos::cli::*,
@@ -388,6 +389,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     iterations: usize,
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
+    tpu_use_quic: bool,
 ) {
     // Number of payers is the number of generating threads, for now it is 1
     // Later, we will create a new payer for each thread since Keypair is not clonable
@@ -418,18 +420,20 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
 
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
 
-    let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-    let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
+    //let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
+    //let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
+
+    let connection_cache = ConnectionCache::new(tpu_use_quic, DEFAULT_TPU_CONNECTION_POOL_SIZE);
+    let connection = connection_cache.get_connection(&target);
 
     let mut count = 0;
     let mut total_count = 0;
     let mut error_count = 0;
     let mut last_log = Instant::now();
 
-    let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
     loop {
         let send_batch_size = min(iterations - total_count, SEND_BATCH_MAX_SIZE);
-        data.clear();
+        let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
         for _ in 0..send_batch_size {
             let chunk_keypairs = if generate_keypairs {
                 let mut permutation = it.next();
@@ -448,7 +452,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
             data.push(bincode::serialize(&tx).unwrap());
         }
 
-        let res = udp_client.send_wire_transaction_batch(&data);
+        let res = connection.send_wire_transaction_batch_async(data);
 
         if res.is_err() {
             error_count += send_batch_size;
@@ -495,7 +499,13 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     {
         let target = target.expect("should have target");
         info!("Targeting {}", target);
-        run_dos_transactions(target, iterations, client, params.transaction_params);
+        run_dos_transactions(
+            target,
+            iterations,
+            client,
+            params.transaction_params,
+            params.tpu_use_quic,
+        );
     } else {
         let target = target.expect("should have target");
         info!("Targeting {}", target);
