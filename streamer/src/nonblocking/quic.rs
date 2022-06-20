@@ -387,6 +387,7 @@ impl ConnectionTable {
 
 #[cfg(test)]
 pub mod test {
+    use std::sync::atomic::Ordering::Relaxed;
     use {
         super::*,
         crate::quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -689,13 +690,19 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
+            stats.clone(),
         )
         .unwrap();
 
         check_multiple_streams(receiver, server_address).await;
+        assert_eq!(stats.total_streams.load(Relaxed), 0);
+        assert_eq!(stats.total_new_streams.load(Relaxed), 20);
+        assert_eq!(stats.total_connections.load(Relaxed), 2);
+        assert_eq!(stats.total_new_connections.load(Relaxed), 2);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+        assert_eq!(stats.total_connections.load(Relaxed), 0);
+        assert_eq!(stats.total_new_connections.load(Relaxed), 2);
     }
 
     #[test]
