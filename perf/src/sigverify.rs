@@ -332,18 +332,10 @@ pub fn check_for_tracer_packet(packet: &mut Packet) -> bool {
         None => return false,
     };
     // Check for tracer pubkey
-<<<<<<< HEAD
-    if let Some(first_pubkey_end) = maybe_first_pubkey_end {
-        let is_tracer_packet =
-            &packet.data()[first_pubkey_start..first_pubkey_end] == TRACER_KEY.as_ref();
-        if is_tracer_packet {
-            packet.meta.set_tracer(true);
-=======
     match packet.data(first_pubkey_start..first_pubkey_end) {
         Some(pubkey) if pubkey == TRACER_KEY.as_ref() => {
-            packet.meta.flags |= PacketFlags::TRACER_PACKET;
+            packet.meta.set_tracer(true);
             true
->>>>>>> 5dbf7d8f9 (removes raw indexing into packet data (#25554))
         }
         _ => false,
     }
@@ -532,19 +524,6 @@ impl Deduper {
         }
     }
 
-<<<<<<< HEAD
-=======
-    /// Compute hash from packet data, returns (hash, bin_pos).
-    fn compute_hash(&self, packet: &Packet) -> (u64, usize) {
-        let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(packet.data(..).unwrap_or_default());
-        let h = hasher.finish();
-        let len = self.filter.len();
-        let pos = (usize::try_from(h).unwrap()).wrapping_rem(len);
-        (h, pos)
-    }
-
->>>>>>> 5dbf7d8f9 (removes raw indexing into packet data (#25554))
     // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
     fn dedup_packet(&self, packet: &mut Packet) -> u64 {
         // If this packet was already marked as discard, drop it
@@ -552,7 +531,7 @@ impl Deduper {
             return 1;
         }
         let mut hasher = AHasher::new_with_keys(self.seed.0, self.seed.1);
-        hasher.write(packet.data());
+        hasher.write(packet.data(..).unwrap_or_default());
         let hash = hasher.finish();
         let len = self.filter.len();
         let pos = (usize::try_from(hash).unwrap()).wrapping_rem(len);
