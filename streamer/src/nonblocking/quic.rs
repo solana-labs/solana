@@ -5,6 +5,7 @@ use {
     },
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
+    percentage::Percentage,
     quinn::{
         Connecting, Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection, VarInt,
     },
@@ -24,7 +25,10 @@ use {
         },
         time::{Duration, Instant},
     },
-    tokio::{task::JoinHandle, time::timeout},
+    tokio::{
+        task::JoinHandle,
+        time::{sleep, timeout},
+    },
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
@@ -62,7 +66,54 @@ pub fn spawn_server(
     Ok(handle)
 }
 
-async fn connection_handshake(
+pub async fn run_server(
+    mut incoming: Incoming,
+    packet_sender: Sender<PacketBatch>,
+    exit: Arc<AtomicBool>,
+    max_connections_per_ip: usize,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
+    max_staked_connections: usize,
+    max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
+) {
+    debug!("spawn quic server");
+    let mut last_datapoint = Instant::now();
+    let connection_table: Arc<Mutex<ConnectionTable>> =
+        Arc::new(Mutex::new(ConnectionTable::default()));
+    let staked_connection_table: Arc<Mutex<ConnectionTable>> =
+        Arc::new(Mutex::new(ConnectionTable::default()));
+    while !exit.load(Ordering::Relaxed) {
+        const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
+        const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 100;
+        let timeout_connection = timeout(
+            Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
+            incoming.next(),
+        )
+        .await;
+
+        if last_datapoint.elapsed().as_secs() >= 5 {
+            stats.report();
+            last_datapoint = Instant::now();
+        }
+
+        if let Ok(Some(connection)) = timeout_connection {
+            tokio::spawn(setup_connection(
+                connection,
+                connection_table.clone(),
+                staked_connection_table.clone(),
+                packet_sender.clone(),
+                max_connections_per_ip,
+                staked_nodes.clone(),
+                max_staked_connections,
+                max_unstaked_connections,
+                stats.clone(),
+            ));
+            sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+        }
+    }
+}
+
+async fn setup_connection(
     connection: Connecting,
     connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -85,14 +136,20 @@ async fn connection_handshake(
         let remote_addr = connection.remote_address();
 
         let (mut connection_table_l, stake) = {
+            const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
+            let max_percentage_full = Percentage::from(PRUNE_TABLE_TO_PERCENTAGE);
+
             let staked_nodes = staked_nodes.read().unwrap();
             if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
                 let stake = *stake;
                 let total_stake = staked_nodes.total_stake;
                 drop(staked_nodes);
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
-                let num_pruned = connection_table_l.prune_oldest(max_staked_connections);
-                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                if connection_table_l.total_size >= max_staked_connections {
+                    let max_connections = max_percentage_full.apply_to(max_staked_connections);
+                    let num_pruned = connection_table_l.prune_oldest(max_connections);
+                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                }
                 connection.set_max_concurrent_uni_streams(
                     VarInt::from_u64(
                         ((stake as f64 / total_stake as f64) * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
@@ -104,8 +161,11 @@ async fn connection_handshake(
             } else {
                 drop(staked_nodes);
                 let mut connection_table_l = connection_table.lock().unwrap();
-                let num_pruned = connection_table_l.prune_oldest(max_unstaked_connections);
-                stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                if connection_table_l.total_size >= max_unstaked_connections {
+                    let max_connections = max_percentage_full.apply_to(max_unstaked_connections);
+                    let num_pruned = connection_table_l.prune_oldest(max_connections);
+                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                }
                 connection.set_max_concurrent_uni_streams(
                     VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
                 );
@@ -120,7 +180,6 @@ async fn connection_handshake(
                 max_connections_per_ip,
             ) {
                 drop(connection_table_l);
-                let packet_sender = packet_sender.clone();
                 let stats = stats.clone();
                 let connection_table1 = connection_table.clone();
                 tokio::spawn(handle_connection(
@@ -146,51 +205,6 @@ async fn connection_handshake(
         stats
             .connection_setup_timeout
             .fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-pub async fn run_server(
-    mut incoming: Incoming,
-    packet_sender: Sender<PacketBatch>,
-    exit: Arc<AtomicBool>,
-    max_connections_per_ip: usize,
-    staked_nodes: Arc<RwLock<StakedNodes>>,
-    max_staked_connections: usize,
-    max_unstaked_connections: usize,
-    stats: Arc<StreamStats>,
-) {
-    debug!("spawn quic server");
-    let mut last_datapoint = Instant::now();
-    let connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::default()));
-    let staked_connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::default()));
-    while !exit.load(Ordering::Relaxed) {
-        const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
-        let timeout_connection = timeout(
-            Duration::from_millis(WAIT_FOR_CONNECTION_TIMEOUT_MS),
-            incoming.next(),
-        )
-        .await;
-
-        if last_datapoint.elapsed().as_secs() >= 5 {
-            stats.report();
-            last_datapoint = Instant::now();
-        }
-
-        if let Ok(Some(connection)) = timeout_connection {
-            tokio::spawn(connection_handshake(
-                connection,
-                connection_table.clone(),
-                staked_connection_table.clone(),
-                packet_sender.clone(),
-                max_connections_per_ip,
-                staked_nodes.clone(),
-                max_staked_connections,
-                max_unstaked_connections,
-                stats.clone(),
-            ));
-        }
     }
 }
 

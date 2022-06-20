@@ -18,6 +18,7 @@ libc = "0.2.126"
 log = "0.4.17"
 nix = "0.24.0"
 pem = "1.0.2"
+percentage = "0.1.0"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
 quinn = "0.8.3"
 rand = "0.7.0"
