@@ -62,9 +62,9 @@ pub fn verify_shred_cpu(packet: &Packet, slot_leaders: &HashMap<u64, [u8; 32]>) 
     };
     trace!("slot {}", slot);
     let pubkey = slot_leaders.get(&slot)?;
-    let signature = Signature::new(packet.data().get(sig_start..sig_end)?);
+    let signature = Signature::new(packet.data(sig_start..sig_end)?);
     trace!("signature {}", signature);
-    if !signature.verify(pubkey, packet.data().get(msg_start..msg_end)?) {
+    if !signature.verify(pubkey, packet.data(msg_start..msg_end)?) {
         return Some(0);
     }
     Some(1)
@@ -304,7 +304,7 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
     let sig_start = 0;
     let sig_end = sig_start + size_of::<Signature>();
     let msg_start = sig_end;
-    let signature = keypair.sign_message(&packet.data()[msg_start..]);
+    let signature = keypair.sign_message(packet.data(msg_start..).unwrap());
     trace!("signature {:?}", signature);
     packet.buffer_mut()[..sig_end].copy_from_slice(signature.as_ref());
 }

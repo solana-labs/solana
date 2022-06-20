@@ -1102,7 +1102,7 @@ pub fn get_shred_slot_index_type(
         }
     };
 
-    let shred_type = match ShredType::try_from(p.data()[OFFSET_OF_SHRED_TYPE]) {
+    let shred_type = match ShredType::try_from(*p.data(OFFSET_OF_SHRED_TYPE)?) {
         Err(_) => {
             stats.bad_shred_type += 1;
             return None;
@@ -1919,7 +1919,7 @@ pub mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data().to_vec());
+        let shred_res = Shred::new_from_serialized_shred(packet.data(..).unwrap().to_vec());
         assert_matches!(
             shred.parent(),
             Err(ShredError::InvalidParentOffset {
