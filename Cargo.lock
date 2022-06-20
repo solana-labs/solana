@@ -1727,6 +1727,7 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
+ "solana-local-cluster",
  "solana-logger 1.11.0",
  "solana-metrics",
  "solana-net-utils",

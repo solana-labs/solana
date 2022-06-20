@@ -54,6 +54,8 @@ solana-version = { path = "../version", version = "=1.11.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
 symlink = "0.1.0"
 tempfile = "3.3.0"
+solana-local-cluster = { path = "../local-cluster", version = "=1.11.0" }
+
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
