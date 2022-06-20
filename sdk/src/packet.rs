@@ -38,13 +38,30 @@ pub struct Meta {
 #[derive(Clone, Eq)]
 #[repr(C)]
 pub struct Packet {
-    pub data: [u8; PACKET_DATA_SIZE],
+    // Bytes past Packet.meta.size are not valid to read from.
+    // Use Packet.data() to read from the buffer.
+    buffer: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
 }
 
 impl Packet {
-    pub fn new(data: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self { data, meta }
+    pub fn new(buffer: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
+        Self { buffer, meta }
+    }
+
+    /// Returns an immutable reference to the underlying buffer up to
+    /// Packet.meta.size. The rest of the buffer is not valid to read from.
+    #[inline]
+    pub fn data(&self) -> &[u8] {
+        &self.buffer[..self.meta.size]
+    }
+
+    /// Returns a mutable reference to the entirety of the underlying buffer to
+    /// write into. The caller is responsible for updating Packet.meta.size
+    /// after writing to the buffer.
+    #[inline]
+    pub fn buffer_mut(&mut self) -> &mut [u8] {
+        &mut self.buffer[..]
     }
 
     pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
@@ -58,7 +75,7 @@ impl Packet {
         dest: Option<&SocketAddr>,
         data: &T,
     ) -> Result<()> {
-        let mut wr = io::Cursor::new(&mut packet.data[..]);
+        let mut wr = io::Cursor::new(packet.buffer_mut());
         bincode::serialize_into(&mut wr, data)?;
         let len = wr.position() as usize;
         packet.meta.size = len;
@@ -73,7 +90,7 @@ impl Packet {
         T: serde::de::DeserializeOwned,
         I: std::slice::SliceIndex<[u8], Output = [u8]>,
     {
-        let data = &self.data[0..self.meta.size];
+        let data = self.data();
         let bytes = data.get(index).ok_or(bincode::ErrorKind::SizeLimit)?;
         bincode::options()
             .with_limit(PACKET_DATA_SIZE as u64)
@@ -98,7 +115,7 @@ impl fmt::Debug for Packet {
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
-            data: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
+            buffer: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
             meta: Meta::default(),
         }
     }
@@ -106,9 +123,7 @@ impl Default for Packet {
 
 impl PartialEq for Packet {
     fn eq(&self, other: &Packet) -> bool {
-        let self_data: &[u8] = self.data.as_ref();
-        let other_data: &[u8] = other.data.as_ref();
-        self.meta == other.meta && self_data[..self.meta.size] == other_data[..self.meta.size]
+        self.meta == other.meta && self.data() == other.data()
     }
 }
 

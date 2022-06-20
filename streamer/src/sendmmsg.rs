@@ -239,12 +239,7 @@ mod tests {
 
         let packet = Packet::default();
 
-        let sent = multi_target_send(
-            &sender,
-            &packet.data[..packet.meta.size],
-            &[&addr, &addr2, &addr3, &addr4],
-        )
-        .ok();
+        let sent = multi_target_send(&sender, packet.data(), &[&addr, &addr2, &addr3, &addr4]).ok();
         assert_eq!(sent, Some(()));
 
         let mut packets = vec![Packet::default(); 32];

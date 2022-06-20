@@ -257,9 +257,9 @@ impl Shred {
     }
 
     pub fn copy_to_packet(&self, packet: &mut Packet) {
-        let len = self.payload.len();
-        packet.data[..len].copy_from_slice(&self.payload[..]);
-        packet.meta.size = len;
+        let size = self.payload.len();
+        packet.buffer_mut()[..size].copy_from_slice(&self.payload[..]);
+        packet.meta.size = size;
     }
 
     pub fn new_from_data(
@@ -1112,7 +1112,7 @@ pub fn get_shred_slot_index_type(
         }
     };
 
-    let shred_type = match ShredType::try_from(p.data[OFFSET_OF_SHRED_TYPE]) {
+    let shred_type = match ShredType::try_from(p.data()[OFFSET_OF_SHRED_TYPE]) {
         Err(_) => {
             stats.bad_shred_type += 1;
             return None;
@@ -1944,7 +1944,7 @@ pub mod tests {
         let shred = Shred::new_from_data(10, 0, 1000, Some(&[1, 2, 3]), false, false, 0, 1, 0);
         let mut packet = Packet::default();
         shred.copy_to_packet(&mut packet);
-        let shred_res = Shred::new_from_serialized_shred(packet.data.to_vec());
+        let shred_res = Shred::new_from_serialized_shred(packet.data().to_vec());
         assert_matches!(
             shred.parent(),
             Err(ShredError::InvalidParentOffset {
@@ -2020,7 +2020,7 @@ pub mod tests {
         );
         let shred = Shred::new_empty_from_header(header, DataShredHeader::default(), coding_header);
         shred.copy_to_packet(&mut packet);
-        packet.data[OFFSET_OF_SHRED_TYPE] = u8::MAX;
+        packet.buffer_mut()[OFFSET_OF_SHRED_TYPE] = u8::MAX;
 
         assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
         assert_eq!(1, stats.bad_shred_type);
