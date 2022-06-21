@@ -64,6 +64,8 @@ pub struct Config {
     /// `solana_sdk::commitment_config::CommitmentLevel::Confirmed`.
     #[serde(default)]
     pub commitment: String,
+    // TAO TODO - add compute_unit_print here??
+    //
 }
 
 impl Default for Config {

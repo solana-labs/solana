@@ -1,6 +1,7 @@
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        compute_unit_price::WithComputeUnitPrice,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -40,7 +41,6 @@ use {
         account_utils::StateMut,
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
-        compute_budget::ComputeBudgetInstruction,
         epoch_schedule::Epoch,
         hash::Hash,
         message::Message,
@@ -1436,16 +1436,12 @@ pub fn process_ping(
         lamports += 1;
 
         let build_message = |lamports| {
-            let mut ixs = vec![system_instruction::transfer(
+            let ixs = vec![system_instruction::transfer(
                 &config.signers[0].pubkey(),
                 &to,
                 lamports,
-            )];
-            if let Some(compute_unit_price) = compute_unit_price {
-                ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
-                    *compute_unit_price,
-                ));
-            }
+            )]
+            .with_compute_unit_price(*compute_unit_price);
             Message::new(&ixs, Some(&config.signers[0].pubkey()))
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
@@ -1468,6 +1464,8 @@ pub fn process_ping(
             format!("[{}.{:06}] ", micros / 1_000_000, micros % 1_000_000)
         };
 
+        // TAO TODO - find all command that send_transactions, match them to cli.rs CliCommand enum
+        // maybe that helps to decide where to add comput-unit-price
         match rpc_client.send_transaction(&tx) {
             Ok(signature) => {
                 let transaction_sent = Instant::now();

@@ -143,6 +143,7 @@ pub fn parse_args<'a>(
     matches: &ArgMatches<'_>,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<(CliConfig<'a>, CliSigners), Box<dyn error::Error>> {
+    // TAO TODO - config file
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {
@@ -167,6 +168,8 @@ pub fn parse_args<'a>(
         matches.value_of("json_rpc_url").unwrap_or(""),
         &config.json_rpc_url,
     );
+
+    // TAO TODO - this is keypair is matched up
     let default_signer_arg_name = "keypair".to_string();
     let (_, default_signer_path) = ConfigInput::compute_keypair_path_setting(
         matches.value_of(&default_signer_arg_name).unwrap_or(""),
