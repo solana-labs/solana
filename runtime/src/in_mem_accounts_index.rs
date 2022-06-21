@@ -294,6 +294,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     //  the arc, but someone may already have retrieved a clone of it.
                     // account index in_mem flushing is one such possibility
                     self.delete_disk_key(occupied.key());
+                    self.stats().dec_mem_count(self.bin);
                     occupied.remove();
                 }
                 result
