@@ -101,14 +101,14 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-<<<<<<< HEAD
             let nodes = discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
                 .unwrap_or_else(|err| {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
+            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
             let connection_cache =
-                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
             let client = if *multi_client {
                 let (client, num_clients) =
                     get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
@@ -117,15 +117,6 @@ fn main() {
                         "Error: Insufficient nodes discovered.  Expecting {} or more",
                         num_nodes
                     );
-=======
-            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
-            let connection_cache =
-                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
-
-            let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
-                let rpc = rpc_addr.parse().unwrap_or_else(|e| {
-                    eprintln!("RPC address should parse as socketaddr {:?}", e);
->>>>>>> 43ff65ece (Use single send socket in UdpTpuConnection (#26105))
                     exit(1);
                 }
                 Arc::new(client)
