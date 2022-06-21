@@ -67,12 +67,12 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn inc_insert(&self, _bin: usize) {
+    pub fn inc_insert(&self) {
         self.inserts.fetch_add(1, Ordering::Relaxed);
         self.count.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn inc_delete(&self, _bin: usize) {
+    pub fn inc_delete(&self) {
         self.deletes.fetch_add(1, Ordering::Relaxed);
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
