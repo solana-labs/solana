@@ -2599,7 +2599,7 @@ impl Bank {
             .filter_map(|id| self.feature_set.activated_slot(id))
             .collect::<Vec<_>>();
         slots.sort_unstable();
-        slots.get(0).cloned().unwrap_or_else(|| {
+        slots.first().cloned().unwrap_or_else(|| {
             self.feature_set
                 .activated_slot(&feature_set::pico_inflation::id())
                 .unwrap_or(0)
@@ -4715,7 +4715,7 @@ impl Bank {
         // operations being done and treating them like a signature
         for (program_id, instruction) in message.program_instructions_iter() {
             if secp256k1_program::check_id(program_id) || ed25519_program::check_id(program_id) {
-                if let Some(num_verifies) = instruction.data.get(0) {
+                if let Some(num_verifies) = instruction.data.first() {
                     num_signatures = num_signatures.saturating_add(u64::from(*num_verifies));
                 }
             }
