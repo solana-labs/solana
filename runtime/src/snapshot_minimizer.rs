@@ -1,3 +1,5 @@
+//! Used to create minimal snapshots - separated here to keep accounts_db simpler
+
 use {
     crate::{
         accounts_db::{AccountStorageEntry, AccountsDb, PurgeStats},
@@ -26,22 +28,30 @@ use {
     },
 };
 
-pub struct SnapshotMinimizer {
-    bank: Arc<Bank>,
+/// Used to modify bank and accounts_db to create a minimized snapshot
+pub struct SnapshotMinimizer<'a> {
+    bank: &'a Bank,
     starting_slot: Slot,
     ending_slot: Slot,
     minimized_account_set: DashSet<Pubkey>,
 }
 
-impl SnapshotMinimizer {
+impl<'a> SnapshotMinimizer<'a> {
     /// Removes all accounts not necessary for replaying slots in the range [starting_slot, ending_slot].
+    /// Will modify accounts_db by removing accounts not needed to replay [starting_slot, ending_slot],
+    /// and update the bank's capitalization.
     pub fn minimize(
-        bank: Arc<Bank>,
+        bank: &'a Bank,
         starting_slot: Slot,
         ending_slot: Slot,
         minimized_account_set: DashSet<Pubkey>,
     ) {
-        let minimizer = Self::new(bank, starting_slot, ending_slot, minimized_account_set);
+        let minimizer = SnapshotMinimizer {
+            bank,
+            starting_slot,
+            ending_slot,
+            minimized_account_set,
+        };
 
         minimizer.add_accounts(
             Self::get_rent_collection_accounts,
@@ -59,25 +69,10 @@ impl SnapshotMinimizer {
         minimizer.bank.set_capitalization();
     }
 
-    /// Create a minimizer - used in tests
-    fn new(
-        bank: Arc<Bank>,
-        starting_slot: Slot,
-        ending_slot: Slot,
-        minimized_account_set: DashSet<Pubkey>,
-    ) -> Self {
-        Self {
-            bank,
-            starting_slot,
-            ending_slot,
-            minimized_account_set,
-        }
-    }
-
     /// Helper function to measure time and number of accounts added
     fn add_accounts<F>(&self, add_accounts_fn: F, name: &'static str)
     where
-        F: Fn(&SnapshotMinimizer),
+        F: Fn(&SnapshotMinimizer<'a>),
     {
         let initial_accounts_len = self.minimized_account_set.len();
         let (_, measure) = measure!(add_accounts_fn(self), name);
@@ -90,6 +85,8 @@ impl SnapshotMinimizer {
     }
 
     /// Used to get rent collection accounts in `minimize`
+    /// Add all pubkeys we would collect rent from or rewrite to `minimized_account_set`.
+    /// related to Bank::rent_collection_partitions
     fn get_rent_collection_accounts(&self) {
         let partitions = if !self.bank.use_fixed_collection_cycle() {
             self.bank
@@ -389,7 +386,12 @@ mod tests {
         // Slots correspond to subrange: A52Kf8KJNVhs1y61uhkzkSF82TXCLxZekqmFwiFXLnHu..=ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9NE
         // Initially, there are no existing keys in this range
         {
-            let minimizer = SnapshotMinimizer::new(bank.clone(), 100_000, 110_000, DashSet::new());
+            let minimizer = SnapshotMinimizer {
+                bank: &bank,
+                starting_slot: 100_000,
+                ending_slot: 110_000,
+                minimized_account_set: DashSet::new(),
+            };
             minimizer.get_rent_collection_accounts();
             assert!(
                 minimizer.minimized_account_set.is_empty(),
@@ -405,7 +407,12 @@ mod tests {
         bank.store_account(&pubkey, &AccountSharedData::new(1, 0, &Pubkey::default()));
 
         {
-            let minimizer = SnapshotMinimizer::new(bank.clone(), 100_000, 110_000, DashSet::new());
+            let minimizer = SnapshotMinimizer {
+                bank: &bank,
+                starting_slot: 100_000,
+                ending_slot: 110_000,
+                minimized_account_set: DashSet::new(),
+            };
             minimizer.get_rent_collection_accounts();
             assert_eq!(
                 1,
@@ -419,7 +426,12 @@ mod tests {
         // Slots correspond to subrange: ChXFtoKuDvQum4HvtgiqGWrgUYbtP1ZzGFGMnT8FuGaB..=FKzRYCFeCC8e48jP9kSW4xM77quv1BPrdEMktpceXWSa
         // The previous key is not contained in this range, so is not added
         {
-            let minimizer = SnapshotMinimizer::new(bank, 110_001, 120_000, DashSet::new());
+            let minimizer = SnapshotMinimizer {
+                bank: &bank,
+                starting_slot: 110_001,
+                ending_slot: 120_000,
+                minimized_account_set: DashSet::new(),
+            };
             assert!(
                 minimizer.minimized_account_set.is_empty(),
                 "rent collection accounts should be empty: len={}",
@@ -442,7 +454,12 @@ mod tests {
 
         let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
 
-        let minimizer = SnapshotMinimizer::new(bank, 0, 0, DashSet::new());
+        let minimizer = SnapshotMinimizer {
+            bank: &bank,
+            starting_slot: 0,
+            ending_slot: 0,
+            minimized_account_set: DashSet::new(),
+        };
         minimizer.get_vote_accounts();
 
         assert!(minimizer
@@ -466,7 +483,12 @@ mod tests {
         );
 
         let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
-        let minimizer = SnapshotMinimizer::new(bank, 0, 0, DashSet::new());
+        let minimizer = SnapshotMinimizer {
+            bank: &bank,
+            starting_slot: 0,
+            ending_slot: 0,
+            minimized_account_set: DashSet::new(),
+        };
         minimizer.get_stake_accounts();
 
         let mut expected_stake_accounts: Vec<_> = genesis_config_info
@@ -501,7 +523,12 @@ mod tests {
 
         let owner_accounts = DashSet::new();
         owner_accounts.insert(pubkey);
-        let minimizer = SnapshotMinimizer::new(bank, 0, 0, owner_accounts);
+        let minimizer = SnapshotMinimizer {
+            bank: &bank,
+            starting_slot: 0,
+            ending_slot: 0,
+            minimized_account_set: owner_accounts,
+        };
 
         minimizer.get_owner_accounts();
         assert!(minimizer.minimized_account_set.contains(&pubkey));
@@ -534,7 +561,12 @@ mod tests {
         // Non-program account does not add any additional keys
         let programdata_accounts = DashSet::new();
         programdata_accounts.insert(non_program_id);
-        let minimizer = SnapshotMinimizer::new(bank, 0, 0, programdata_accounts);
+        let minimizer = SnapshotMinimizer {
+            bank: &bank,
+            starting_slot: 0,
+            ending_slot: 0,
+            minimized_account_set: programdata_accounts,
+        };
         minimizer.get_programdata_accounts();
         assert_eq!(minimizer.minimized_account_set.len(), 1);
         assert!(minimizer.minimized_account_set.contains(&non_program_id));
@@ -587,8 +619,12 @@ mod tests {
         }
 
         assert_eq!(minimized_account_set.len(), 6);
-        let minimizer =
-            SnapshotMinimizer::new(bank, current_slot, current_slot, minimized_account_set);
+        let minimizer = SnapshotMinimizer {
+            bank: &bank,
+            starting_slot: current_slot,
+            ending_slot: current_slot,
+            minimized_account_set,
+        };
         minimizer.minimize_accounts_db();
 
         let snapshot_storages = accounts.get_snapshot_storages(current_slot, None, None).0;

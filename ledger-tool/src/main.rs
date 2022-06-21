@@ -926,7 +926,7 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
 /// and capitalization. This is used by the --minimize option in create-snapshot
 fn minimize_bank_for_snapshot(
     blockstore: &Blockstore,
-    bank: Arc<Bank>,
+    bank: &Bank,
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) {
@@ -2713,7 +2713,7 @@ fn main() {
                         if is_minimized {
                             minimize_bank_for_snapshot(
                                 &blockstore,
-                                bank.clone(),
+                                &bank,
                                 snapshot_slot,
                                 ending_slot.unwrap(),
                             );
