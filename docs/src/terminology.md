@@ -221,8 +221,11 @@ A stack of proofs, each of which proves that some data existed before the proof 
 
 ## prioritization fee
 
-An additional fee user can specify in compute budget [instruction](#instruction) to prioritize their [transactions](#transaction). Note that a transaction's prioritization fee is calculated from multiplying the
-number of compute units requested by the compute unit price (measured in micro-lamports) set by the transaction. So transactions should request the minimum amount of compute units required for execution to minimize fees.
+An additional fee user can specify in compute budget [instruction](#instruction) to prioritize their [transactions](#transaction).
+
+The prioritization fee is calculated from multiplying the number of compute units requested by the compute unit price (0.000001 lamports per compute unit) rounded up to the nearest lamport.
+
+Transactions should request the minimum amount of compute units required for execution to minimize fees.
 
 ## public key (pubkey)
 
