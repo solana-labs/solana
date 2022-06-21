@@ -1146,6 +1146,7 @@ pub struct AccountsDb {
     pub num_hash_scan_passes: Option<usize>,
 
     /// Used to disable logging dead slots during removal.
+    /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
 }
 
