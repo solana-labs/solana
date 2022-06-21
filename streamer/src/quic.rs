@@ -334,31 +334,7 @@ mod test {
     #[test]
     fn test_quic_timeout() {
         solana_logger::setup();
-<<<<<<< HEAD
-        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let exit = Arc::new(AtomicBool::new(false));
-        let (sender, receiver) = unbounded();
-        let keypair = Keypair::new();
-        let ip = "127.0.0.1".parse().unwrap();
-        let server_address = s.local_addr().unwrap();
-        let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
-            s,
-            &keypair,
-            ip,
-            sender,
-            exit.clone(),
-            1,                                              // max_connections_per_ip
-            Arc::<RwLock<HashMap<IpAddr, u64>>>::default(), // staked_nodes
-            MAX_STAKED_CONNECTIONS,
-            MAX_UNSTAKED_CONNECTIONS,
-            stats,
-        )
-        .unwrap();
-
-=======
         let (t, exit, receiver, server_address) = setup_quic_server();
->>>>>>> 061dc5322 (streamer: Add nonblocking quic server (#25806))
         let runtime = rt();
         runtime.block_on(check_timeout(receiver, server_address));
         exit.store(true, Ordering::Relaxed);
