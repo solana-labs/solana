@@ -7,7 +7,7 @@ use {
     crossbeam_channel::Sender,
     itertools::Itertools,
     log::*,
-    rand::{thread_rng, Rng},
+    rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
@@ -480,18 +480,6 @@ pub fn process_entries_for_tests(
     result
 }
 
-fn get_random_indices(len: usize) -> Vec<usize> {
-    let mut rng = thread_rng();
-    (1..len).rev().map(|i| rng.gen_range(0, i + 1)).collect()
-}
-
-fn shuffle_slice<T>(indices: &[usize], slice: &mut [T]) {
-    assert_eq!(slice.len(), indices.len() + 1);
-    for (i, &rnd_ind) in (1..slice.len()).rev().zip(indices.iter()) {
-        slice.swap(i, rnd_ind);
-    }
-}
-
 // Note: If randomize is true this will shuffle entries' transactions in-place.
 #[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
@@ -508,6 +496,7 @@ fn process_entries_with_callback(
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
+    let mut rng = thread_rng();
     let cost_model = CostModel::new();
 
     for ReplayEntry {
@@ -545,14 +534,14 @@ fn process_entries_with_callback(
                         .send_cost_details(bank.clone(), transactions.iter());
                 }
 
-                let starting_index = *starting_index;
-                let mut transaction_indexes: Vec<_> =
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
+                let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                    transactions.drain(..).zip(*starting_index..).collect();
                 if randomize {
-                    let indices = get_random_indices(transactions.len());
-                    shuffle_slice(&indices, transactions);
-                    shuffle_slice(&indices, &mut transaction_indexes);
+                    transactions_and_indexes.shuffle(&mut rng);
                 }
+                let (_transactions, transaction_indexes): (Vec<_>, Vec<_>) =
+                    transactions_and_indexes.into_iter().unzip();
+                *transactions = _transactions;
 
                 loop {
                     // try to lock the accounts
