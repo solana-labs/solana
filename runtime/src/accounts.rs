@@ -7,7 +7,9 @@ use {
             BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult},
+        accounts_index::{
+            AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
+        },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         bank::{
@@ -16,6 +18,7 @@ use {
         },
         blockhash_queue::BlockhashQueue,
         rent_collector::RentCollector,
+        storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
     },
@@ -1206,8 +1209,11 @@ impl Accounts {
             .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
     }
 
-    pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.accounts_db.store_cached((slot, accounts), None)
+    pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport>(
+        &self,
+        accounts: impl StorableAccounts<'a, T>,
+    ) {
+        self.accounts_db.store_cached(accounts, None)
     }
 
     /// Add a slot to root.  Root slots cannot be purged
