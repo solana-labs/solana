@@ -377,11 +377,15 @@ impl ConnectionTable {
     fn remove_connection(&mut self, addr: &SocketAddr) {
         if let Entry::Occupied(mut e) = self.table.entry(addr.ip()) {
             let e_ref = e.get_mut();
+            let old_size = e_ref.len();
             e_ref.retain(|connection| connection.port != addr.port());
+            let new_size = e_ref.len();
             if e_ref.is_empty() {
                 e.remove_entry();
             }
-            self.total_size -= 1;
+            self.total_size = self
+                .total_size
+                .saturating_sub(old_size.saturating_sub(new_size));
         }
     }
 }
@@ -731,6 +735,49 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for socket in sockets.iter().take(num_entries as usize).skip(new_size - 1) {
+            table.remove_connection(socket);
+        }
+        assert_eq!(table.total_size, 0);
+    }
+
+    #[test]
+    fn test_remove_connections() {
+        use std::net::Ipv4Addr;
+        solana_logger::setup();
+        let mut table = ConnectionTable::default();
+        let num_ips = 5;
+        let max_connections_per_ip = 10;
+        let mut sockets: Vec<_> = (0..num_ips)
+            .into_iter()
+            .map(|i| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(i, 0, 0, 0)), 0))
+            .collect();
+        for (i, socket) in sockets.iter().enumerate() {
+            table
+                .try_add_connection(socket, (i * 2) as u64, max_connections_per_ip)
+                .unwrap();
+
+            table
+                .try_add_connection(socket, (i * 2 + 1) as u64, max_connections_per_ip)
+                .unwrap();
+        }
+
+        let single_connection_addr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(num_ips, 0, 0, 0)), 0);
+        table
+            .try_add_connection(
+                &single_connection_addr,
+                (num_ips * 2) as u64,
+                max_connections_per_ip,
+            )
+            .unwrap();
+
+        let zero_connection_addr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(num_ips + 1, 0, 0, 0)), 0);
+
+        sockets.push(single_connection_addr);
+        sockets.push(zero_connection_addr);
+
+        for socket in sockets.iter() {
             table.remove_connection(socket);
         }
         assert_eq!(table.total_size, 0);
