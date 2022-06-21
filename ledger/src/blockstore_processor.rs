@@ -4087,6 +4087,121 @@ pub mod tests {
     }
 
     #[test]
+    fn test_confirm_slot_entries_progress_num_txs_indexes() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100 * LAMPORTS_PER_SOL);
+        let genesis_hash = genesis_config.hash();
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut timing = ConfirmationTiming::default();
+        let mut progress = ConfirmationProgress::new(genesis_hash);
+        let amount = genesis_config.rent.minimum_balance(0);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        let keypair4 = Keypair::new();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair1.pubkey())
+            .unwrap();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
+
+        let (transaction_status_sender, transaction_status_receiver) =
+            crossbeam_channel::unbounded();
+        let transaction_status_sender = TransactionStatusSender {
+            sender: transaction_status_sender,
+        };
+
+        let blockhash = bank.last_blockhash();
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&blockhash, 1, vec![tx1, tx2]);
+        let new_hash = entry.hash;
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            None,
+            &VerifyRecyclers::default(),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 2);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 2);
+            assert_eq!(batch.transaction_indexes.len(), 2);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&0));
+            assert!(batch.transaction_indexes.contains(&1));
+        } else {
+            panic!("batch should have been sent");
+        }
+
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx3 = system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&new_hash, 1, vec![tx1, tx2, tx3]);
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            None,
+            &VerifyRecyclers::default(),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 5);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 3);
+            assert_eq!(batch.transaction_indexes.len(), 3);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&2));
+            assert!(batch.transaction_indexes.contains(&3));
+            assert!(batch.transaction_indexes.contains(&4));
+        } else {
+            panic!("batch should have been sent");
+        }
+    }
+
+    #[test]
     fn test_rebatch_transactions() {
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
