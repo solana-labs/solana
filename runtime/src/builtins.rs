@@ -1,8 +1,5 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-#[cfg(debug_assertions)]
-#[allow(deprecated)]
-use solana_sdk::AutoTraitBreakSendSync;
 use {
     crate::system_instruction_processor,
     solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
@@ -69,7 +66,7 @@ pub enum BuiltinAction {
 /// State transition enum used for adding and removing builtin programs through
 /// feature activations.
 #[derive(Debug, Clone, AbiExample)]
-enum InnerBuiltinFeatureTransition {
+pub enum BuiltinFeatureTransition {
     /// Add a builtin program if a feature is activated.
     Add {
         builtin: Builtin,
@@ -84,22 +81,15 @@ enum InnerBuiltinFeatureTransition {
     },
 }
 
-#[allow(deprecated)]
-#[cfg(debug_assertions)]
-impl AutoTraitBreakSendSync for InnerBuiltinFeatureTransition {}
-
-#[derive(AbiExample, Clone, Debug)]
-pub struct BuiltinFeatureTransition(InnerBuiltinFeatureTransition);
-
 impl BuiltinFeatureTransition {
     pub fn to_action(
         &self,
         should_apply_action_for_feature: &impl Fn(&Pubkey) -> bool,
     ) -> Option<BuiltinAction> {
-        match &self.0 {
-            InnerBuiltinFeatureTransition::Add {
+        match self {
+            Self::Add {
                 builtin,
-                ref feature_id,
+                feature_id,
             } => {
                 if should_apply_action_for_feature(feature_id) {
                     Some(BuiltinAction::Add(builtin.clone()))
@@ -107,10 +97,10 @@ impl BuiltinFeatureTransition {
                     None
                 }
             }
-            InnerBuiltinFeatureTransition::RemoveOrRetain {
+            Self::RemoveOrRetain {
                 previously_added_builtin,
-                ref addition_feature_id,
-                ref removal_feature_id,
+                addition_feature_id,
+                removal_feature_id,
             } => {
                 if should_apply_action_for_feature(removal_feature_id) {
                     Some(BuiltinAction::Remove(previously_added_builtin.id))
@@ -162,15 +152,15 @@ fn dummy_process_instruction(
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "compute_budget_program",
                 solana_sdk::compute_budget::id(),
                 solana_compute_budget_program::process_instruction,
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
+        },
+        BuiltinFeatureTransition::RemoveOrRetain {
             previously_added_builtin: Builtin::new(
                 "secp256k1_program",
                 solana_sdk::secp256k1_program::id(),
@@ -178,8 +168,8 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             addition_feature_id: feature_set::secp256k1_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
+        },
+        BuiltinFeatureTransition::RemoveOrRetain {
             previously_added_builtin: Builtin::new(
                 "ed25519_program",
                 solana_sdk::ed25519_program::id(),
@@ -187,23 +177,23 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             addition_feature_id: feature_set::ed25519_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "address_lookup_table_program",
                 solana_address_lookup_table_program::id(),
                 solana_address_lookup_table_program::processor::process_instruction,
             ),
             feature_id: feature_set::versioned_tx_message_enabled::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
                 solana_zk_token_proof_program::process_instruction,
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
-        }),
+        },
     ]
 }
 
