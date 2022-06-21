@@ -930,20 +930,14 @@ fn minimize_bank_for_snapshot(
     snapshot_slot: Slot,
     ending_slot: Slot,
 ) {
-    let (mut minimized_account_set, transaction_accounts_measure) = measure!(
+    let (mut transaction_account_set, transaction_accounts_measure) = measure!(
         blockstore.get_accounts_used_in_range(snapshot_slot, ending_slot),
         "get transaction accounts"
     );
-    let total_accounts_len = minimized_account_set.len();
+    let total_accounts_len = transaction_account_set.len();
     info!("Added {total_accounts_len} accounts from transactions. {transaction_accounts_measure}");
 
-    minimized_account_set.extend(bank.feature_set.active.iter().map(|(pubkey, _)| *pubkey));
-    minimized_account_set.extend(bank.feature_set.inactive.iter().cloned());
-    minimized_account_set.extend(solana_runtime::builtins::get_pubkeys());
-    minimized_account_set.extend(solana_runtime::static_ids::STATIC_IDS.iter().cloned());
-    minimized_account_set.extend(solana_sdk::sdk_ids::SDK_IDS.iter().cloned());
-
-    SnapshotMinimizer::minimize(bank, snapshot_slot, ending_slot, minimized_account_set);
+    SnapshotMinimizer::minimize(bank, snapshot_slot, ending_slot, transaction_account_set);
 }
 
 fn assert_capitalization(bank: &Bank) {

@@ -4,6 +4,7 @@ use {
     crate::{
         accounts_db::{AccountStorageEntry, AccountsDb, PurgeStats},
         bank::Bank,
+        builtins, static_ids,
     },
     dashmap::DashSet,
     log::info,
@@ -18,6 +19,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
         pubkey::Pubkey,
+        sdk_ids,
     },
     std::{
         collections::HashSet,
@@ -38,20 +40,29 @@ pub struct SnapshotMinimizer<'a> {
 
 impl<'a> SnapshotMinimizer<'a> {
     /// Removes all accounts not necessary for replaying slots in the range [starting_slot, ending_slot].
-    /// Will modify accounts_db by removing accounts not needed to replay [starting_slot, ending_slot],
+    /// `transaction_account_set` should contain accounts used in transactions in the slot range [starting_slot, ending_slot].
+    /// This function will accumulate other accounts (rent colleciton, builtins, etc) necessary to replay transactions.
+    ///
+    /// This function will modify accounts_db by removing accounts not needed to replay [starting_slot, ending_slot],
     /// and update the bank's capitalization.
     pub fn minimize(
         bank: &'a Bank,
         starting_slot: Slot,
         ending_slot: Slot,
-        minimized_account_set: DashSet<Pubkey>,
+        transaction_account_set: DashSet<Pubkey>,
     ) {
         let minimizer = SnapshotMinimizer {
             bank,
             starting_slot,
             ending_slot,
-            minimized_account_set,
+            minimized_account_set: transaction_account_set,
         };
+
+        minimizer.add_accounts(Self::get_active_bank_features, "active bank features");
+        minimizer.add_accounts(Self::get_inactive_bank_features, "inactive bank features");
+        minimizer.add_accounts(Self::get_builtins, "builtin accounts");
+        minimizer.add_accounts(Self::get_static_runtime_accounts, "static runtime accounts");
+        minimizer.add_accounts(Self::get_sdk_accounts, "sdk accounts");
 
         minimizer.add_accounts(
             Self::get_rent_collection_accounts,
@@ -82,6 +93,41 @@ impl<'a> SnapshotMinimizer<'a> {
         info!(
             "Added {added_accounts} {name} for total of {total_accounts_len} accounts. get {measure}"
         );
+    }
+
+    /// Used to get active bank feature accounts in `minimize`.
+    fn get_active_bank_features(&self) {
+        self.bank.feature_set.active.iter().for_each(|(pubkey, _)| {
+            self.minimized_account_set.insert(*pubkey);
+        });
+    }
+
+    /// Used to get inactive bank feature accounts in `minimize`
+    fn get_inactive_bank_features(&self) {
+        self.bank.feature_set.inactive.iter().for_each(|pubkey| {
+            self.minimized_account_set.insert(*pubkey);
+        });
+    }
+
+    /// Used to get builtin accounts in `minimize`
+    fn get_builtins(&self) {
+        builtins::get_pubkeys().iter().for_each(|pubkey| {
+            self.minimized_account_set.insert(*pubkey);
+        });
+    }
+
+    /// Used to get static runtime accounts in `minimize`
+    fn get_static_runtime_accounts(&self) {
+        static_ids::STATIC_IDS.iter().for_each(|pubkey| {
+            self.minimized_account_set.insert(*pubkey);
+        });
+    }
+
+    /// Used to get sdk accounts in `minimize`
+    fn get_sdk_accounts(&self) {
+        sdk_ids::SDK_IDS.iter().for_each(|pubkey| {
+            self.minimized_account_set.insert(*pubkey);
+        });
     }
 
     /// Used to get rent collection accounts in `minimize`
