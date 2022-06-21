@@ -2011,7 +2011,6 @@ describe('Connection', function () {
     const result = await connection.getTransaction(transaction);
 
     if (!result) {
-      console.error('ANOTHER ERORR HERE');
       expect(result).to.be.ok;
       return;
     }
