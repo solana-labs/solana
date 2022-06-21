@@ -3552,7 +3552,7 @@ export class Connection {
     signatures: TransactionSignature[],
     commitment?: Finality,
   ): Promise<(TransactionResponse | null)[]> {
-    const batch = signatures.map(signature => {
+    const batch: RpcParams[] = signatures.map(signature => {
       const args = this._buildArgsAtLeastConfirmed([signature], commitment);
       return {
         methodName: 'getTransaction',
@@ -3566,7 +3566,16 @@ export class Connection {
       if ('error' in res) {
         throw new Error('failed to get transactions: ' + res.error.message);
       }
-      return res.result;
+      const result = res.result;
+      if (!result) return result;
+
+      return {
+        ...result,
+        transaction: {
+          ...result.transaction,
+          message: new Message(result.transaction.message),
+        },
+      };
     });
 
     return res;
