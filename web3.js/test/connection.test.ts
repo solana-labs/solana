@@ -2197,7 +2197,7 @@ describe('Connection', function () {
     expect(nullResponse).to.be.null;
   });
 
-  it('get transactions', async () => {
+  it('get transactions', async function () {
     await mockRpcResponse({
       method: 'getSlot',
       params: [],
@@ -2325,8 +2325,11 @@ describe('Connection', function () {
         },
       ],
     });
-    const result = await connection.getTransactions([transaction]);
-    expect(result[0]?.transaction.message.isAccountSigner(0)).to.be.true;
+    const [firstResult] = await connection.getTransactions([transaction]);
+    if (firstResult == null) {
+      expect.fail('Expected `getTransactions()` to return one result');
+    }
+    expect(firstResult.transaction.message.isAccountSigner(0)).to.be.true;
   });
 
   if (mockServer) {
