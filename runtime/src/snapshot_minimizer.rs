@@ -109,6 +109,7 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Used to get vote and node pubkeys in `minimize`
+    /// Add all pubkeys from vote accounts and nodes to `minimized_account_set`
     fn get_vote_accounts(&self) {
         self.bank
             .vote_accounts()
@@ -122,11 +123,13 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Used to get stake accounts in `minimize`
+    /// Add all pubkeys from stake accounts to `minimized_account_set`
     fn get_stake_accounts(&self) {
         self.bank.get_stake_accounts(&self.minimized_account_set);
     }
 
     /// Used to get owner accounts in `minimize`
+    /// For each account in `minimized_account_set` adds the owner account's pubkey to `minimized_account_set`.
     fn get_owner_accounts(&self) {
         let owner_accounts: HashSet<_> = self
             .minimized_account_set
@@ -140,6 +143,7 @@ impl<'a> SnapshotMinimizer<'a> {
     }
 
     /// Used to get program data accounts in `minimize`
+    /// For each upgradable bpf program, adds the programdata account pubkey to `minimized_account_set`
     fn get_programdata_accounts(&self) {
         let programdata_accounts: HashSet<_> = self
             .minimized_account_set
@@ -163,7 +167,7 @@ impl<'a> SnapshotMinimizer<'a> {
         });
     }
 
-    /// Remove accounts from accounts_db
+    /// Remove accounts not in `minimized_accoun_set` from accounts_db
     fn minimize_accounts_db(&self) {
         let (minimized_slot_set, minimized_slot_set_measure) =
             measure!(self.get_minimized_slot_set(), "generate minimized slot set");

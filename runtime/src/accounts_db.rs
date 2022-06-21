@@ -1145,6 +1145,7 @@ pub struct AccountsDb {
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
 
+    /// Used to disable logging dead slots during removal.
     pub(crate) log_dead_slots: AtomicBool,
 }
 
