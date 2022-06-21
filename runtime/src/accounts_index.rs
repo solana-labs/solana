@@ -333,7 +333,7 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
-        &*self.borrow_slot_list_guard()
+        self.borrow_slot_list_guard()
     }
 
     pub fn ref_count(&self) -> RefCount {

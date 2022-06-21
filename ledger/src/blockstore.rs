@@ -3532,7 +3532,7 @@ fn handle_chaining(
 
     // Write all the newly changed slots in new_chained_slots to the write_batch
     for (slot, meta) in new_chained_slots.iter() {
-        let meta: &SlotMeta = &RefCell::borrow(&*meta);
+        let meta: &SlotMeta = &RefCell::borrow(meta);
         write_batch.put::<cf::SlotMeta>(*slot, meta)?;
     }
     Ok(())
@@ -3621,8 +3621,8 @@ fn handle_chaining_for_slot(
     // update all child slots with `is_connected` = true because these children are also now newly
     // connected to trunk of the ledger
     let should_propagate_is_connected =
-        is_newly_completed_slot(&RefCell::borrow(&*meta), meta_backup)
-            && RefCell::borrow(&*meta).is_connected;
+        is_newly_completed_slot(&RefCell::borrow(meta), meta_backup)
+            && RefCell::borrow(meta).is_connected;
 
     if should_propagate_is_connected {
         // slot_function returns a boolean indicating whether to explore the children

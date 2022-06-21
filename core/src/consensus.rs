@@ -439,8 +439,8 @@ impl Tower {
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
-        let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
-        slot
+        let vote_state = vote_account.vote_state();
+        vote_state.as_ref().ok()?.last_voted_slot()
     }
 
     pub fn record_bank_vote(&mut self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {

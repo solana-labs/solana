@@ -132,7 +132,7 @@ impl TransactionContext {
     ) -> Result<&InstructionContext, InstructionError> {
         let top_level_index = *self
             .instruction_stack
-            .get(0)
+            .first()
             .ok_or(InstructionError::CallDepth)?;
         let cpi_index = if level == 0 {
             0

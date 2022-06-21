@@ -257,7 +257,7 @@ impl SanitizedMessage {
                 )
             })
             .and_then(|ix| {
-                ix.accounts.get(0).and_then(|idx| {
+                ix.accounts.first().and_then(|idx| {
                     let idx = *idx as usize;
                     if nonce_must_be_writable && !self.is_writable(idx) {
                         None
