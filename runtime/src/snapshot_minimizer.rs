@@ -251,28 +251,18 @@ impl<'a> SnapshotMinimizer<'a> {
 
     /// Determines minimum set of slots that accounts in `minimized_account_set` are in
     fn get_minimized_slot_set(&self) -> DashSet<Slot> {
-        let (minimized_slot_set, measure) = measure!(
+        let minimized_slot_set = DashSet::new();
+        self.minimized_account_set.par_iter().for_each(|pubkey| {
+            if let Some(read_entry) = self
+                .accounts_db()
+                .accounts_index
+                .get_account_read_entry(&pubkey)
             {
-                let minimized_slot_set = DashSet::new();
-                self.minimized_account_set.par_iter().for_each(|pubkey| {
-                    if let Some(read_entry) = self
-                        .accounts_db()
-                        .accounts_index
-                        .get_account_read_entry(&pubkey)
-                    {
-                        if let Some(max_slot) =
-                            read_entry.slot_list().iter().map(|(slot, _)| *slot).max()
-                        {
-                            minimized_slot_set.insert(max_slot);
-                        }
-                    }
-                });
-                minimized_slot_set
-            },
-            "generate minimized slot set"
-        );
-        info!("{measure}");
-
+                if let Some(max_slot) = read_entry.slot_list().iter().map(|(slot, _)| *slot).max() {
+                    minimized_slot_set.insert(max_slot);
+                }
+            }
+        });
         minimized_slot_set
     }
 
