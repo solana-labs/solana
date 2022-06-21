@@ -1,6 +1,6 @@
 [package]
 name = "solana-net-utils"
-version = "1.11.0"
+version = "1.11.1"
 description = "Solana Network Utilities"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -19,9 +19,9 @@ rand = "0.7.0"
 serde = "1.0.137"
 serde_derive = "1.0.103"
 socket2 = "0.4.4"
-solana-logger = { path = "../logger", version = "=1.11.0" }
-solana-sdk = { path = "../sdk", version = "=1.11.0" }
-solana-version = { path = "../version", version = "=1.11.0" }
+solana-logger = { path = "../logger", version = "=1.11.1" }
+solana-sdk = { path = "../sdk", version = "=1.11.1" }
+solana-version = { path = "../version", version = "=1.11.1" }
 tokio = { version = "~1.14.1", features = ["full"] }
 url = "2.2.2"
 
