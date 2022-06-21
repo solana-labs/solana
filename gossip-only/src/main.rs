@@ -38,6 +38,7 @@ use {
         process::exit,
         collections::HashSet,
         iter,
+
     },
     solana_local_cluster::{
         local_cluster::ClusterConfig,
@@ -99,6 +100,14 @@ fn parse_matches() -> ArgMatches<'static> {
                 .default_value("1")
                 .help("Number of gossip nodes in cluster"),
         )
+        .arg(
+            Arg::with_name("node_stake")
+                .short("stake")
+                .long("node-stake")
+                .value_name("STAKE")
+                .takes_value(true)
+                .help("Stake of node. unit: lamports"),
+        )
         .get_matches()
 }
 
@@ -107,7 +116,6 @@ pub fn main() {
     let matches = parse_matches();
     let socket_addr_space = SocketAddrSpace::Unspecified;
     let exit_gossip = Arc::new(AtomicBool::new(false));
-    let lamports_per_node = DEFAULT_NODE_STAKE;
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let default_dynamic_port_range =
@@ -116,6 +124,11 @@ pub fn main() {
     let dynamic_port_range =
         solana_net_utils::parse_port_range(default_dynamic_port_range)
             .expect("invalid dynamic_port_range");
+
+    // Get node stake from command line. Default node stake if not passed in
+    let node_stake = value_t!(matches, "node_stake", u64).unwrap_or_else(|_| {
+        DEFAULT_NODE_STAKE
+    });
 
     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
         .unwrap_or_default()
@@ -181,11 +194,10 @@ pub fn main() {
             )
         }),
     );
-
    
     let num_nodes = 1;
     //create nodes with equal stakes
-    let stakes: Vec<_> = (0..num_nodes).map(|_| lamports_per_node).collect();
+    let stakes: Vec<_> = (0..num_nodes).map(|_| node_stake).collect();
     let mut config = ClusterConfig {
         node_stakes: stakes,
         cluster_lamports,
@@ -199,6 +211,7 @@ pub fn main() {
     assert_eq!(config.validator_configs.len(), config.node_stakes.len());
     
     //generate keys for validators
+    // let mut validator_keys = 
     let mut validator_keys = {
         if let Some(ref keys) = config.validator_keys {
             assert_eq!(config.validator_configs.len(), keys.len());
@@ -266,14 +279,14 @@ pub fn main() {
     );
     let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
 
-    let mut genesis_config_info = &mut create_genesis_config_with_vote_accounts_and_cluster_type(
+    let genesis_config_info = &mut create_genesis_config_with_vote_accounts_and_cluster_type(
         config.cluster_lamports,
         &keys_in_genesis,
         stakes_in_genesis,
         config.cluster_type,
     );
 
-    let mut genesis_config = &mut genesis_config_info.genesis_config;
+    let genesis_config = &mut genesis_config_info.genesis_config;
 
     genesis_config.accounts.extend(
         config
