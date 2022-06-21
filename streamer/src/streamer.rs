@@ -24,6 +24,13 @@ use {
     thiserror::Error,
 };
 
+// Total stake and nodes => stake map
+#[derive(Default)]
+pub struct StakedNodes {
+    pub total_stake: f64,
+    pub stake_map: HashMap<IpAddr, u64>,
+}
+
 pub type PacketBatchReceiver = Receiver<PacketBatch>;
 pub type PacketBatchSender = Sender<PacketBatch>;
 
