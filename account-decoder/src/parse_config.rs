@@ -82,7 +82,7 @@ impl From<StakeConfig> for UiStakeConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfig<T> {
     pub keys: Vec<UiConfigKey>,

@@ -1439,7 +1439,7 @@ mod tests {
                     .get(owned_index)
                     .unwrap()
                     .data()
-                    .get(0)
+                    .first()
                     .unwrap(),
                 (MAX_DEPTH + owned_index) as u8
             );
@@ -1451,7 +1451,7 @@ mod tests {
                 .unwrap()
                 .borrow_mut()
                 .data()
-                .get(0)
+                .first()
                 .unwrap();
             *invoke_context
                 .transaction_context
@@ -1471,7 +1471,7 @@ mod tests {
                     .get(not_owned_index)
                     .unwrap()
                     .data()
-                    .get(0)
+                    .first()
                     .unwrap(),
                 data
             );

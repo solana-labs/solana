@@ -2881,7 +2881,7 @@ impl ReplayStage {
             let exists = leader_propagated_stats
                 .propagated_node_ids
                 .contains(node_pubkey);
-            leader_propagated_stats.add_node_pubkey(&*node_pubkey, leader_bank);
+            leader_propagated_stats.add_node_pubkey(node_pubkey, leader_bank);
             !exists
         });
 

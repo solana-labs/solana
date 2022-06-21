@@ -215,7 +215,7 @@ pub struct RpcSignaturesForAddressConfig {
     pub min_context_slot: Option<Slot>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcEncodingConfigWrapper<T> {
     Deprecated(Option<UiTransactionEncoding>),

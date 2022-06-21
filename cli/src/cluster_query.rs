@@ -1125,7 +1125,7 @@ pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> Pro
             let first_block_in_epoch = rpc_client
                 .get_blocks_with_limit(epoch_expected_start_slot, 1)
                 .ok()
-                .and_then(|slot_vec| slot_vec.get(0).cloned())
+                .and_then(|slot_vec| slot_vec.first().cloned())
                 .unwrap_or(epoch_expected_start_slot);
             let start_block_time =
                 rpc_client

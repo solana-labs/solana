@@ -183,6 +183,7 @@ impl ShredDataTrait for ShredData {
 
     fn data(&self) -> Result<&[u8], Error> {
         let size = usize::from(self.data_header.size);
+        #[allow(clippy::manual_range_contains)]
         if size > self.payload.len()
             || size < SIZE_OF_DATA_SHRED_HEADERS
             || size > SIZE_OF_DATA_SHRED_HEADERS + Self::CAPACITY
