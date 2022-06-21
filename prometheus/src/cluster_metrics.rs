@@ -8,80 +8,29 @@ use crate::{
     utils::{write_metric, Metric, MetricFamily},
     Lamports,
 };
-use std::{io, sync::Arc};
+use std::{collections::HashSet, io, sync::Arc};
 
 struct ValidatorVoteInfo {
-    vote_address: Pubkey,
     balance: Lamports,
     last_vote: Slot,
 }
 
-impl ValidatorVoteInfo {
-    fn new_from_bank(bank: &Arc<Bank>, identity_pubkey: &Pubkey) -> Option<Self> {
-        let vote_accounts = bank.vote_accounts();
-        let vote_state_default = VoteState::default();
-        vote_accounts
-            .iter()
-            .filter_map(|(&vote_pubkey, (_activated_stake, account))| {
-                let vote_state = account.vote_state();
-                let vote_state = vote_state.as_ref().unwrap_or(&vote_state_default);
-                if identity_pubkey != &vote_state.node_pubkey {
-                    return None;
-                }
-                let last_vote = vote_state.votes.back()?.slot;
-                let vote_balance = Lamports(bank.get_balance(&vote_pubkey));
-                Some(ValidatorVoteInfo {
-                    vote_address: vote_pubkey,
-                    balance: vote_balance,
-                    last_vote,
-                })
-            })
-            .next()
-    }
+fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo> {
+    let default_vote_state = VoteState::default();
+    let vote_accounts = bank.vote_accounts();
+    let (_activated_stake, vote_account) = vote_accounts.get(vote_pubkey)?;
+    let vote_state = vote_account.vote_state();
+    let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
 
-    fn write_prometheus<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
-        write_metric(
-            out,
-            &MetricFamily {
-                name: "solana_node_vote_public_key_info",
-                help: "The current Solana node's vote public key",
-                type_: "count",
-                metrics: vec![
-                    Metric::new(1).with_label("vote_account", self.vote_address.to_string())
-                ],
-            },
-        )?;
-        // We can use this metric to track if the validator is making progress
-        // by voting on the last slots.
-        write_metric(
-            out,
-            &MetricFamily {
-                name: "solana_node_last_vote_slot",
-                help:
-                    "The voted-on slot of the validator's last vote that got included in the chain",
-                type_: "gauge",
-                metrics: vec![Metric::new(self.last_vote)
-                    .with_label("vote_account", self.vote_address.to_string())],
-            },
-        )?;
-        // Validator rewards go to vote account, we use this to track our own
-        // rewards.
-        write_metric(
-            out,
-            &MetricFamily {
-                name: "solana_node_vote_balance_sol",
-                help: "The current node's vote account balance",
-                type_: "gauge",
-                metrics: vec![Metric::new_sol(self.balance.clone())
-                    .with_label("vote_account", self.vote_address.to_string())],
-            },
-        )
-    }
+    let last_vote = vote_state.votes.back()?.slot;
+    let balance = Lamports(bank.get_balance(&vote_pubkey));
+    Some(ValidatorVoteInfo { balance, last_vote })
 }
 
 pub fn write_cluster_metrics<W: io::Write>(
     banks_with_commitments: &BanksWithCommitments,
     cluster_info: &Arc<ClusterInfo>,
+    vote_accounts: &Arc<HashSet<Pubkey>>,
     out: &mut W,
 ) -> io::Result<()> {
     let identity_pubkey = cluster_info.id();
