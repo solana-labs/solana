@@ -4037,7 +4037,7 @@ impl Bank {
     fn is_transaction_already_processed(
         &self,
         sanitized_tx: &SanitizedTransaction,
-        status_cache: &StatusCache<Result<()>>,
+        status_cache: &BankStatusCache,
     ) -> bool {
         let key = sanitized_tx.message_hash();
         let transaction_blockhash = sanitized_tx.message().recent_blockhash();
