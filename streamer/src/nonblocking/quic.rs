@@ -1,11 +1,15 @@
 use {
-    crate::quic::{configure_server, QuicServerError, StreamStats},
+    crate::{
+        quic::{configure_server, QuicServerError, StreamStats},
+        streamer::StakedNodes,
+    },
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
-    quinn::{Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection},
+    quinn::{Endpoint, EndpointConfig, Incoming, IncomingUniStreams, NewConnection, VarInt},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
+        quic::QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
         signature::Keypair,
         timing,
     },
@@ -21,6 +25,8 @@ use {
     tokio::{task::JoinHandle, time::timeout},
 };
 
+const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -29,7 +35,7 @@ pub fn spawn_server(
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
-    staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
@@ -59,7 +65,7 @@ pub async fn run_server(
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
-    staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
@@ -97,18 +103,30 @@ pub async fn run_server(
 
                 let (mut connection_table_l, stake) = {
                     let staked_nodes = staked_nodes.read().unwrap();
-                    if let Some(stake) = staked_nodes.get(&remote_addr.ip()) {
+                    if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
                         let stake = *stake;
+                        let total_stake = staked_nodes.total_stake;
                         drop(staked_nodes);
                         let mut connection_table_l = staked_connection_table.lock().unwrap();
                         let num_pruned = connection_table_l.prune_oldest(max_staked_connections);
                         stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                        connection.set_max_concurrent_uni_streams(
+                            VarInt::from_u64(
+                                ((stake as f64 / total_stake as f64)
+                                    * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
+                                    as u64,
+                            )
+                            .unwrap(),
+                        );
                         (connection_table_l, stake)
                     } else {
                         drop(staked_nodes);
                         let mut connection_table_l = connection_table.lock().unwrap();
                         let num_pruned = connection_table_l.prune_oldest(max_unstaked_connections);
                         stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                        connection.set_max_concurrent_uni_streams(
+                            VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
+                        );
                         (connection_table_l, 0)
                     }
                 };
@@ -453,7 +471,7 @@ pub mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -652,7 +670,7 @@ pub mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -682,7 +700,7 @@ pub mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,

@@ -8,9 +8,11 @@ mod tests {
             tpu_connection::TpuConnection,
         },
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
-        solana_streamer::quic::{spawn_server, StreamStats},
+        solana_streamer::{
+            quic::{spawn_server, StreamStats},
+            streamer::StakedNodes,
+        },
         std::{
-            collections::HashMap,
             net::{SocketAddr, UdpSocket},
             sync::{
                 atomic::{AtomicBool, Ordering},
@@ -28,7 +30,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s.try_clone().unwrap(),
