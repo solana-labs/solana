@@ -8,7 +8,7 @@ use {
     log::*,
     solana_client::{
         connection_cache::{
-            ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+            ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
         },
         thin_client::ThinClient,
     },
@@ -277,13 +277,15 @@ impl LocalCluster {
 
         validators.insert(leader_pubkey, cluster_leader);
 
+        let tpu_use_quic =
+            UseQUIC::new(config.tpu_use_quic).expect("Failed to initialize QUIC flags");
         let mut cluster = Self {
             funding_keypair: mint_keypair,
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
             connection_cache: Arc::new(ConnectionCache::new(
-                config.tpu_use_quic,
+                tpu_use_quic,
                 config.tpu_connection_pool_size,
             )),
         };

@@ -10,12 +10,13 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{quic::QUIC_PORT_OFFSET, timing::AtomicInterval},
     std::{
-        net::SocketAddr,
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
         },
     },
+    tokio::io,
 };
 
 // Should be non-zero
@@ -217,11 +218,28 @@ impl ConnectionCacheStats {
     }
 }
 
+pub enum UseQUIC {
+    Yes,
+    No(Arc<UdpSocket>),
+}
+
+impl UseQUIC {
+    pub fn new(use_quic: bool) -> io::Result<Self> {
+        if use_quic {
+            Ok(UseQUIC::Yes)
+        } else {
+            let socket =
+                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))?;
+            Ok(UseQUIC::No(Arc::new(socket)))
+        }
+    }
+}
+
 pub struct ConnectionCache {
     map: RwLock<IndexMap<SocketAddr, ConnectionPool>>,
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
-    use_quic: bool,
+    use_quic: UseQUIC,
     connection_pool_size: usize,
 }
 
@@ -251,7 +269,7 @@ impl ConnectionPool {
 }
 
 impl ConnectionCache {
-    pub fn new(use_quic: bool, connection_pool_size: usize) -> Self {
+    pub fn new(use_quic: UseQUIC, connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
@@ -262,11 +280,14 @@ impl ConnectionCache {
     }
 
     pub fn get_use_quic(&self) -> bool {
-        self.use_quic
+        match self.use_quic {
+            UseQUIC::Yes => true,
+            UseQUIC::No(_) => false,
+        }
     }
 
     fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic {
+        if self.get_use_quic() {
             Some(Arc::new(QuicLazyInitializedEndpoint::new()))
         } else {
             None
@@ -299,15 +320,16 @@ impl ConnectionCache {
 
         let (cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
             if to_create_connection {
-                let connection: Connection = if self.use_quic {
-                    QuicTpuConnection::new(
+                let connection: Connection = match &self.use_quic {
+                    UseQUIC::Yes => QuicTpuConnection::new(
                         endpoint.as_ref().unwrap().clone(),
                         *addr,
                         self.stats.clone(),
                     )
-                    .into()
-                } else {
-                    UdpTpuConnection::new(*addr, self.stats.clone()).into()
+                    .into(),
+                    UseQUIC::No(socket) => {
+                        UdpTpuConnection::new(socket.clone(), *addr, self.stats.clone()).into()
+                    }
                 };
 
                 let connection = Arc::new(connection);
@@ -363,7 +385,11 @@ impl ConnectionCache {
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
 
-        let port_offset = if self.use_quic { QUIC_PORT_OFFSET } else { 0 };
+        let port_offset = if self.get_use_quic() {
+            QUIC_PORT_OFFSET
+        } else {
+            0
+        };
 
         let addr = SocketAddr::new(addr.ip(), addr.port() + port_offset);
 
@@ -470,11 +496,12 @@ impl ConnectionCache {
 
 impl Default for ConnectionCache {
     fn default() -> Self {
+        let use_quic = UseQUIC::new(DEFAULT_TPU_USE_QUIC).expect("Failed to initialize QUIC flags");
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
-            use_quic: DEFAULT_TPU_USE_QUIC,
+            use_quic,
             connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
         }
     }
