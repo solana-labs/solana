@@ -1114,7 +1114,7 @@ fn process_bank_0(
         None,
         &mut ExecuteTimings::default(),
     )
-    .expect("processing for bank 0 must succeed");
+    .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
