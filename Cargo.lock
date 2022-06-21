@@ -1698,18 +1698,13 @@ dependencies = [
 name = "gossip-only"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "clap 2.33.3",
- "console",
- "core_affinity",
  "crossbeam-channel",
- "fd-lock",
  "indicatif",
  "libc",
  "log",
  "rand 0.7.3",
  "signal-hook",
- "solana-client",
  "solana-core",
  "solana-genesis-utils",
  "solana-gossip",

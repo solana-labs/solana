@@ -11,16 +11,11 @@ documentation = "https://docs.solana.com/validator/gossip"
 default-run = "gossip-only"
 
 [dependencies]
-chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
-console = "0.15.0"
-core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-fd-lock = "3.0.5"
 indicatif = "0.16.2"
 log = "0.4.17"
 rand = "0.7.0"
-solana-client = { path = "../client", version = "=1.11.0" }
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.11.0" }
 solana-gossip = { path = "../gossip", version = "=1.11.0" }

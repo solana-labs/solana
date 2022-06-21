@@ -13,23 +13,25 @@
 #### Updated 6/16/22 @5:45pm MDT
 1) Run first node that launches the cluster entry point:
 ```
-cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --gossip-port=<available-port-to-run-gossip>
+cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --gossip-port=<available-port-to-run-gossip> --node-stake=<node stake in lamports>
 ```
-Note: the `--gossip-port` is optional and the module will find an available port if not provided
+Notes: 
+1) The `--gossip-port` is optional and the module will find an available port if not provided
+2) If `--node-stake` not speicifed, stake defaults to `DEFAULT_NODE_STAKE` or `10000000000` lamports
 
 Example:
 ```
-cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --gossip-port=8001
+cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --gossip-port=8001 --node-stake=20000000000
 ```
 
 2) Run any number of other nodes that connect to the cluster entry point as a full gossip node
 ```
-cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --entrypoint=<IP and Port of cluster to join>
+cargo run --bin gossip-only -- --gossip-host=<localhost or public IP> --entrypoint=<IP and Port of cluster to join> --node-stake=<node stake in lamports>
 
 ```
 Example:
 ```
-cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --entrypoint="127.0.0.1:8001" 
+cargo run --bin gossip-only -- --gossip-host=127.0.0.1 --entrypoint="127.0.0.1:8001" --node-stake=30000000000
 ```
 
 # Building
