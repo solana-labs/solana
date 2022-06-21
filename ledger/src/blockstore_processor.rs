@@ -534,14 +534,19 @@ fn process_entries_with_callback(
                         .send_cost_details(bank.clone(), transactions.iter());
                 }
 
-                let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                    transactions.drain(..).zip(*starting_index..).collect();
+                let starting_index = *starting_index;
+                let mut transaction_indexes: Vec<_> =
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
+
                 if randomize {
+                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                        transactions.drain(..).zip(transaction_indexes).collect();
                     transactions_and_indexes.shuffle(&mut rng);
+                    let (txs, indexes): (Vec<_>, Vec<_>) =
+                        transactions_and_indexes.into_iter().unzip();
+                    *transactions = txs;
+                    transaction_indexes = indexes;
                 }
-                let (_transactions, transaction_indexes): (Vec<_>, Vec<_>) =
-                    transactions_and_indexes.into_iter().unzip();
-                *transactions = _transactions;
 
                 loop {
                     // try to lock the accounts
