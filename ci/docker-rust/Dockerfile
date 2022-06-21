@@ -35,6 +35,7 @@ RUN set -x \
  && rustup component add clippy \
  && rustup target add wasm32-unknown-unknown \
  && cargo install cargo-audit \
+ && cargo install cargo-sort \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
  && cargo install svgbob_cli \
