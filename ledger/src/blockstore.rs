@@ -2735,6 +2735,8 @@ impl Blockstore {
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
 
+    /// Gets accounts used in transactions in the slot range [starting_slot, ending_slot].
+    /// Used by ledger-tool to create a minimized snapshot
     pub fn get_accounts_used_in_range(
         &self,
         starting_slot: Slot,
