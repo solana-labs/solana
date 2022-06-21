@@ -990,7 +990,6 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
             BufferedPacketsDecision::Forward => {
-<<<<<<< HEAD
                 let (_, forward_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -998,6 +997,7 @@ impl BankingStage {
                             cluster_info,
                             buffered_packet_batches,
                             poh_recorder,
+                            socket,
                             false,
                             data_budget,
                             slot_metrics_tracker,
@@ -1007,28 +1007,11 @@ impl BankingStage {
                         )
                     },
                     (),
-=======
-                let (_, forward_time) = measure!(
-                    Self::handle_forwarding(
-                        forward_option,
-                        cluster_info,
-                        buffered_packet_batches,
-                        poh_recorder,
-                        socket,
-                        false,
-                        data_budget,
-                        slot_metrics_tracker,
-                        banking_stage_stats,
-                        connection_cache,
-                        tracer_packet_stats,
-                    ),
->>>>>>> e344c8476 (Do not use UdpTpuConnection to forward votes (#26082))
                     "forward",
                 );
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
             }
             BufferedPacketsDecision::ForwardAndHold => {
-<<<<<<< HEAD
                 let (_, forward_and_hold_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -1036,6 +1019,7 @@ impl BankingStage {
                             cluster_info,
                             buffered_packet_batches,
                             poh_recorder,
+                            socket,
                             true,
                             data_budget,
                             slot_metrics_tracker,
@@ -1045,22 +1029,6 @@ impl BankingStage {
                         )
                     },
                     (),
-=======
-                let (_, forward_and_hold_time) = measure!(
-                    Self::handle_forwarding(
-                        forward_option,
-                        cluster_info,
-                        buffered_packet_batches,
-                        poh_recorder,
-                        socket,
-                        true,
-                        data_budget,
-                        slot_metrics_tracker,
-                        banking_stage_stats,
-                        connection_cache,
-                        tracer_packet_stats,
-                    ),
->>>>>>> e344c8476 (Do not use UdpTpuConnection to forward votes (#26082))
                     "forward_and_hold",
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
@@ -1161,12 +1129,12 @@ impl BankingStage {
 
         loop {
             let my_pubkey = cluster_info.id();
-<<<<<<< HEAD
             if !buffered_packet_batches.is_empty() {
                 let (_, process_buffered_packets_time) = Measure::this(
                     |_| {
                         Self::process_buffered_packets(
                             &my_pubkey,
+                            &socket,
                             poh_recorder,
                             cluster_info,
                             &mut buffered_packet_batches,
@@ -1183,29 +1151,6 @@ impl BankingStage {
                         )
                     },
                     (),
-=======
-            if !buffered_packet_batches.is_empty()
-                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
-            {
-                let (_, process_buffered_packets_time) = measure!(
-                    Self::process_buffered_packets(
-                        &my_pubkey,
-                        &socket,
-                        poh_recorder,
-                        cluster_info,
-                        &mut buffered_packet_batches,
-                        &forward_option,
-                        transaction_status_sender.clone(),
-                        &gossip_vote_sender,
-                        &banking_stage_stats,
-                        &recorder,
-                        data_budget,
-                        &qos_service,
-                        &mut slot_metrics_tracker,
-                        &connection_cache,
-                        &mut tracer_packet_stats,
-                    ),
->>>>>>> e344c8476 (Do not use UdpTpuConnection to forward votes (#26082))
                     "process_buffered_packets",
                 );
                 slot_metrics_tracker
