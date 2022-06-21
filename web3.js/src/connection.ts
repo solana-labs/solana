@@ -3552,7 +3552,7 @@ export class Connection {
     signatures: TransactionSignature[],
     commitment?: Finality,
   ): Promise<(TransactionResponse | null)[]> {
-    const batch: RpcParams[] = signatures.map(signature => {
+    const batch = signatures.map(signature => {
       const args = this._buildArgsAtLeastConfirmed([signature], commitment);
       return {
         methodName: 'getTransaction',
