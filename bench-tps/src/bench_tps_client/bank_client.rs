@@ -2,6 +2,7 @@ use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_runtime::bank_client::BankClient,
     solana_sdk::{
+        account::Account,
         client::{AsyncClient, SyncClient},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
@@ -81,5 +82,15 @@ impl BenchTpsClient for BankClient {
     ) -> Result<Signature> {
         // BankClient doesn't support airdrops
         Err(BenchTpsError::AirdropFailure)
+    }
+
+    fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
+        SyncClient::get_account(self, pubkey)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
     }
 }

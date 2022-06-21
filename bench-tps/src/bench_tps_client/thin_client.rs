@@ -2,6 +2,7 @@ use {
     crate::bench_tps_client::{BenchTpsClient, Result},
     solana_client::thin_client::ThinClient,
     solana_sdk::{
+        account::Account,
         client::{AsyncClient, Client, SyncClient},
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
@@ -81,6 +82,12 @@ impl BenchTpsClient for ThinClient {
     ) -> Result<Signature> {
         self.rpc_client()
             .request_airdrop_with_blockhash(pubkey, lamports, recent_blockhash)
+            .map_err(|err| err.into())
+    }
+
+    fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
+        self.rpc_client()
+            .get_account(pubkey)
             .map_err(|err| err.into())
     }
 }
