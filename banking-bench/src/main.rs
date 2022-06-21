@@ -5,7 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+    solana_client::connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -341,7 +341,8 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
-        let tpu_use_quic = matches.is_present("tpu_use_quic");
+        let tpu_use_quic = UseQUIC::new(matches.is_present("tpu_use_quic"))
+            .expect("Failed to initialize QUIC flags");
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,

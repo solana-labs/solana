@@ -8,7 +8,7 @@ use {
     solana_account_decoder::UiAccount,
     solana_client::{
         client_error::{ClientErrorKind, Result as ClientResult},
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         nonblocking::pubsub_client::PubsubClient,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
@@ -420,6 +420,7 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
     ));
+    let tpu_use_quic = UseQUIC::new(tpu_use_quic).expect("Failed to initialize QUIC flags");
     let connection_cache = Arc::new(ConnectionCache::new(
         tpu_use_quic,
         DEFAULT_TPU_CONNECTION_POOL_SIZE,
