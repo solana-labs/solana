@@ -26,7 +26,7 @@ use {
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
-const WAIT_FOR_CHUNKS_TIMEOUT_MS: u64 = 1000;
+const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1000;
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
@@ -187,48 +187,55 @@ async fn handle_connection(
         stats.total_connections.load(Ordering::Relaxed),
     );
     while !stream_exit.load(Ordering::Relaxed) {
-        match uni_streams.next().await {
-            Some(stream_result) => match stream_result {
-                Ok(mut stream) => {
-                    stats.total_streams.fetch_add(1, Ordering::Relaxed);
-                    stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
-                    let mut maybe_batch = None;
-                    while !stream_exit.load(Ordering::Relaxed) {
-                        if let Ok(chunk) = tokio::time::timeout(
-                            Duration::from_millis(WAIT_FOR_CHUNKS_TIMEOUT_MS),
-                            stream.read_chunk(PACKET_DATA_SIZE, false),
-                        )
-                        .await
-                        {
-                            if handle_chunk(
-                                &chunk,
-                                &mut maybe_batch,
-                                &remote_addr,
-                                &packet_sender,
-                                stats.clone(),
-                                stake,
-                            ) {
-                                last_update.store(timing::timestamp(), Ordering::Relaxed);
+        if let Ok(stream) = tokio::time::timeout(
+            Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
+            uni_streams.next(),
+        )
+        .await
+        {
+            match stream {
+                Some(stream_result) => match stream_result {
+                    Ok(mut stream) => {
+                        stats.total_streams.fetch_add(1, Ordering::Relaxed);
+                        stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
+                        let mut maybe_batch = None;
+                        while !stream_exit.load(Ordering::Relaxed) {
+                            if let Ok(chunk) = tokio::time::timeout(
+                                Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
+                                stream.read_chunk(PACKET_DATA_SIZE, false),
+                            )
+                            .await
+                            {
+                                if handle_chunk(
+                                    &chunk,
+                                    &mut maybe_batch,
+                                    &remote_addr,
+                                    &packet_sender,
+                                    stats.clone(),
+                                    stake,
+                                ) {
+                                    last_update.store(timing::timestamp(), Ordering::Relaxed);
+                                    break;
+                                }
+                            } else {
+                                debug!("Timeout in receiving on stream");
+                                stats
+                                    .total_stream_read_timeouts
+                                    .fetch_add(1, Ordering::Relaxed);
                                 break;
                             }
-                        } else {
-                            debug!("Timeout in receiving on stream");
-                            stats
-                                .total_stream_read_timeouts
-                                .fetch_add(1, Ordering::Relaxed);
-                            break;
                         }
                     }
-                }
-                Err(e) => {
-                    debug!("stream error: {:?}", e);
+                    Err(e) => {
+                        debug!("stream error: {:?}", e);
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
+                        break;
+                    }
+                },
+                None => {
                     stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     break;
                 }
-            },
-            None => {
-                stats.total_streams.fetch_sub(1, Ordering::Relaxed);
-                break;
             }
         }
     }
@@ -672,7 +679,7 @@ pub mod test {
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
-        sleep(Duration::from_millis(WAIT_FOR_CHUNKS_TIMEOUT_MS * 2)).await;
+        sleep(Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS * 2)).await;
 
         // Test that the stream was created, but timed out in read
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 1);
