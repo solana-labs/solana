@@ -281,11 +281,17 @@ mod tests {
         let last_bank_snapshot_info =
             snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
                 .expect("no bank snapshots found in path");
+        let slot_deltas = last_bank
+            .src
+            .status_cache
+            .read()
+            .unwrap()
+            .root_slot_deltas();
         let accounts_package = AccountsPackage::new(
             &last_bank,
             &last_bank_snapshot_info,
             bank_snapshots_dir,
-            last_bank.src.slot_deltas(&last_bank.src.roots()),
+            slot_deltas,
             &snapshot_config.full_snapshot_archives_dir,
             &snapshot_config.incremental_snapshot_archives_dir,
             last_bank.get_snapshot_storages(None),
@@ -626,7 +632,13 @@ mod tests {
                 .get(snapshot_test_config.bank_forks.root())
                 .unwrap()
                 .src
-                .roots();
+                .status_cache
+                .read()
+                .unwrap()
+                .roots()
+                .iter()
+                .cloned()
+                .sorted();
             assert!(slots_to_snapshot.into_iter().eq(expected_slots_to_snapshot));
         }
     }

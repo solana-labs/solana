@@ -278,13 +278,18 @@ impl BankForks {
                 {
                     let snapshot_root_bank = self.root_bank();
                     let root_slot = snapshot_root_bank.slot();
+                    // Save off the status cache because these may get pruned if another
+                    // `set_root()` is called before the snapshots package can be generated
+                    let status_cache_slot_deltas = snapshot_root_bank
+                        .src
+                        .status_cache
+                        .read()
+                        .unwrap()
+                        .root_slot_deltas();
                     if let Err(e) =
                         accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
                             snapshot_root_bank,
-                            // Save off the status cache because these may get pruned
-                            // if another `set_root()` is called before the snapshots package
-                            // can be generated
-                            status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
+                            status_cache_slot_deltas,
                         })
                     {
                         warn!(
