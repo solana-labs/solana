@@ -268,7 +268,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
         if slot_list.is_empty() {
-            self.stats().inc_delete(self.bin);
+            self.stats().inc_delete();
             true
         } else {
             false
@@ -417,7 +417,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 previous_slot_entry_was_cached,
                             );
                             if !already_existed {
-                                self.stats().inc_insert(self.bin);
+                                self.stats().inc_insert();
                             }
                         } else {
                             // go to in-mem cache first
@@ -434,7 +434,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 disk_entry
                             } else {
                                 // not on disk, so insert new thing
-                                self.stats().inc_insert(self.bin);
+                                self.stats().inc_insert();
                                 new_value.into_account_map_entry(&self.storage)
                             };
                             assert!(new_value.dirty());
@@ -676,7 +676,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.update_entry_stats(m, found_in_mem);
         let stats = self.stats();
         if !already_existed {
-            stats.inc_insert(self.bin);
+            stats.inc_insert();
         } else {
             Self::update_stat(&stats.updates_in_mem, 1);
         }
