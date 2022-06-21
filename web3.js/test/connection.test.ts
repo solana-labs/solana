@@ -2197,6 +2197,141 @@ describe('Connection', function () {
     expect(nullResponse).to.be.null;
   });
 
+  it('get transactions', async function () {
+    await mockRpcResponse({
+      method: 'getSlot',
+      params: [],
+      value: 1,
+    });
+
+    while ((await connection.getSlot()) <= 0) {
+      continue;
+    }
+
+    await mockRpcResponse({
+      method: 'getBlock',
+      params: [1],
+      value: {
+        blockHeight: 0,
+        blockTime: 1614281964,
+        blockhash: '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        previousBlockhash: 'H5nJ91eGag3B5ZSRHZ7zG5ZwXJ6ywCt2hyR8xCsV7xMo',
+        parentSlot: 0,
+        transactions: [
+          {
+            meta: {
+              fee: 10000,
+              postBalances: [499260347380, 15298080, 1, 1, 1],
+              preBalances: [499260357380, 15298080, 1, 1, 1],
+              status: {Ok: null},
+              err: null,
+            },
+            transaction: {
+              message: {
+                accountKeys: [
+                  'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                  '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                  'SysvarS1otHashes111111111111111111111111111',
+                  'SysvarC1ock11111111111111111111111111111111',
+                  'Vote111111111111111111111111111111111111111',
+                ],
+                header: {
+                  numReadonlySignedAccounts: 0,
+                  numReadonlyUnsignedAccounts: 3,
+                  numRequiredSignatures: 2,
+                },
+                instructions: [
+                  {
+                    accounts: [1, 2, 3],
+                    data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                    programIdIndex: 4,
+                  },
+                ],
+                recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+              },
+              signatures: [
+                'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+                '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    // Find a block that has a transaction.
+    await mockRpcResponse({
+      method: 'getFirstAvailableBlock',
+      params: [],
+      value: 1,
+    });
+    let slot = await connection.getFirstAvailableBlock();
+
+    let transaction: string | undefined;
+    while (!transaction) {
+      const block = await connection.getBlock(slot);
+      if (block && block.transactions.length > 0) {
+        transaction = block.transactions[0].transaction.signatures[0];
+        continue;
+      }
+      slot++;
+    }
+
+    await mockRpcBatchResponse({
+      batch: [
+        {
+          methodName: 'getTransaction',
+          args: [transaction],
+        },
+      ],
+      result: [
+        {
+          slot,
+          transaction: {
+            message: {
+              accountKeys: [
+                'va12u4o9DipLEB2z4fuoHszroq1U9NcAB9aooFDPJSf',
+                '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+                'SysvarS1otHashes111111111111111111111111111',
+                'SysvarC1ock11111111111111111111111111111111',
+                'Vote111111111111111111111111111111111111111',
+              ],
+              header: {
+                numReadonlySignedAccounts: 0,
+                numReadonlyUnsignedAccounts: 3,
+                numRequiredSignatures: 2,
+              },
+              instructions: [
+                {
+                  accounts: [1, 2, 3],
+                  data: '37u9WtQpcm6ULa3VtWDFAWoQc1hUvybPrA3dtx99tgHvvcE7pKRZjuGmn7VX2tC3JmYDYGG7',
+                  programIdIndex: 4,
+                },
+              ],
+              recentBlockhash: 'GeyAFFRY3WGpmam2hbgrKw4rbU2RKzfVLm5QLSeZwTZE',
+            },
+            signatures: [
+              'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt',
+              '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG',
+            ],
+          },
+          meta: {
+            fee: 10000,
+            postBalances: [499260347380, 15298080, 1, 1, 1],
+            preBalances: [499260357380, 15298080, 1, 1, 1],
+            status: {Ok: null},
+            err: null,
+          },
+        },
+      ],
+    });
+    const [firstResult] = await connection.getTransactions([transaction]);
+    if (firstResult == null) {
+      expect.fail('Expected `getTransactions()` to return one result');
+    }
+    expect(firstResult.transaction.message.isAccountSigner(0)).to.be.true;
+  });
+
   if (mockServer) {
     it('get parsed confirmed transaction coerces public keys of inner instructions', async () => {
       const confirmedTransaction: TransactionSignature =
