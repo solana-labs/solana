@@ -191,9 +191,9 @@ type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
 
-type RpcRequest = (methodName: string, args: Array<any>) => any;
+type RpcRequest = (methodName: string, args: Array<any>) => Promise<any>;
 
-type RpcBatchRequest = (requests: RpcParams[]) => any;
+type RpcBatchRequest = (requests: RpcParams[]) => Promise<any[]>;
 
 /**
  * @internal
