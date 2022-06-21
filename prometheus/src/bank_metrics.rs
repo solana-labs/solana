@@ -15,7 +15,8 @@ pub fn write_bank_metrics<W: io::Write>(
             help: "Block Slot",
             type_: "gauge",
             metrics: banks_with_commitments
-                .for_each_commitment(|bank| Metric::new(bank.clock().slot)),
+                .for_each_commitment(|bank| Some(Metric::new(bank.clock().slot)))
+                .unwrap(),
         },
     )?;
     write_metric(
@@ -25,7 +26,8 @@ pub fn write_bank_metrics<W: io::Write>(
             help: "Block Epoch",
             type_: "gauge",
             metrics: banks_with_commitments
-                .for_each_commitment(|bank| Metric::new(bank.clock().epoch)),
+                .for_each_commitment(|bank| Some(Metric::new(bank.clock().epoch)))
+                .unwrap(),
         },
     )?;
     write_metric(
@@ -35,7 +37,8 @@ pub fn write_bank_metrics<W: io::Write>(
             help: "The block's UNIX timestamp, in seconds since epoch, UTC",
             type_: "gauge",
             metrics: banks_with_commitments
-                .for_each_commitment(|bank| Metric::new(bank.clock().unix_timestamp as u64)),
+                .for_each_commitment(|bank| Some(Metric::new(bank.clock().unix_timestamp as u64)))
+                .unwrap(),
         },
     )?;
 

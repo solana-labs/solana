@@ -56,10 +56,14 @@ pub fn write_cluster_metrics<W: io::Write>(
             name: "solana_node_identity_balance_sol",
             help: "The node's finalized identity balance",
             type_: "gauge",
-            metrics: banks_with_commitments.for_each_commitment(|bank| {
-                Metric::new_sol(Lamports(bank.get_balance(&identity_pubkey)))
-                    .with_label("identity_account", identity_pubkey.to_string())
-            }),
+            metrics: banks_with_commitments
+                .for_each_commitment(|bank| {
+                    Some(
+                        Metric::new_sol(Lamports(bank.get_balance(&identity_pubkey)))
+                            .with_label("identity_account", identity_pubkey.to_string()),
+                    )
+                })
+                .unwrap(),
         },
     )?;
 
@@ -73,9 +77,49 @@ pub fn write_cluster_metrics<W: io::Write>(
         },
     )?;
 
-    let validator_vote_info = ValidatorVoteInfo::new_from_bank(bank, &identity_pubkey);
-    if let Some(vote_info) = validator_vote_info {
-        vote_info.write_prometheus(out)?;
+    // Vote accounts information
+    for vote_account in vote_accounts.iter() {
+        // We use this metric to track if the validator is making progress by
+        // voting on the last slots.
+        let metrics = banks_with_commitments.for_each_commitment(|bank| {
+            let vote_info = get_vote_state(bank, vote_account)?;
+            Some(
+                Metric::new(vote_info.last_vote)
+                    .with_label("identity_account", identity_pubkey.to_string())
+                    .with_label("vote_account", vote_account.to_string()),
+            )
+        });
+        if let Some(last_voted_slot_metrics) = metrics {
+            write_metric(
+                out,
+                &MetricFamily {
+                    name: "solana_node_last_vote_slot",
+                    help:
+                        "The voted-on slot of the validator's last vote that got included in the chain",
+                    type_: "gauge",
+                    metrics: last_voted_slot_metrics,
+                },
+            )?;
+
+            write_metric(
+                out,
+                &MetricFamily {
+                    name: "solana_node_vote_balance_sol",
+                    help: "The current node's vote account balance",
+                    type_: "gauge",
+                    metrics: banks_with_commitments
+                        .for_each_commitment(|bank| {
+                            let vote_info = get_vote_state(bank, vote_account)?;
+                            Some(
+                                Metric::new_sol(vote_info.balance)
+                                    .with_label("identity_account", identity_pubkey.to_string())
+                                    .with_label("vote_account", vote_account.to_string()),
+                            )
+                        })
+                        .unwrap(),
+                },
+            )?;
+        }
     }
 
     Ok(())
