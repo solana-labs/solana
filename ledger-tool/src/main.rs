@@ -1446,6 +1446,9 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&skip_rewrites_arg)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&snapshot_version_arg)
@@ -1785,14 +1788,14 @@ fn main() {
                         .long("before")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("First good root after the range to repair")
+                        .help("Recent root after the range to repair")
                 )
                 .arg(
                     Arg::with_name("end_root")
                         .long("until")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("Last slot to check for root repair")
+                        .help("Earliest slot to check for root repair")
                 )
                 .arg(
                     Arg::with_name("max_slots")
@@ -2438,6 +2441,14 @@ fn main() {
                     output_directory.display()
                 );
 
+                let accounts_db_config = Some(AccountsDbConfig {
+                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    skip_initial_hash_calc: arg_matches
+                        .is_present("accounts_db_skip_initial_hash_calculation"),
+                    ..AccountsDbConfig::default()
+                });
+
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2446,6 +2457,7 @@ fn main() {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
+                        accounts_db_config,
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,

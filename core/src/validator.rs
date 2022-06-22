@@ -25,7 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, UseQUIC},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -90,7 +90,7 @@ use {
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         exit::Exit,
-        genesis_config::GenesisConfig,
+        genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
@@ -176,6 +176,7 @@ pub struct ValidatorConfig {
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
+    pub enable_quic_servers: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -237,6 +238,7 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
+            enable_quic_servers: false,
         }
     }
 }
@@ -699,10 +701,12 @@ impl Validator {
             };
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
+        let bank_forks_guard = bank_forks.read().unwrap();
         block_commitment_cache.initialize_slots(
-            bank_forks.read().unwrap().working_bank().slot(),
-            bank_forks.read().unwrap().root(),
+            bank_forks_guard.working_bank().slot(),
+            bank_forks_guard.root(),
         );
+        drop(bank_forks_guard);
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
@@ -749,6 +753,7 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+        let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
         let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
@@ -980,6 +985,18 @@ impl Validator {
             &connection_cache,
         );
 
+        let enable_quic_servers = if genesis_config.cluster_type == ClusterType::MainnetBeta {
+            config.enable_quic_servers
+        } else {
+            if config.enable_quic_servers {
+                warn!(
+                    "ignoring --enable-quic-servers. QUIC is always enabled for cluster type: {:?}",
+                    genesis_config.cluster_type
+                );
+            }
+            true
+        };
+
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1011,6 +1028,7 @@ impl Validator {
             &cost_model,
             &connection_cache,
             &identity_keypair,
+            enable_quic_servers,
         );
 
         datapoint_info!(

@@ -24,7 +24,6 @@ fn process_authorize_with_seed_instruction(
     invoke_context: &InvokeContext,
     instruction_context: &InstructionContext,
     transaction_context: &TransactionContext,
-    first_instruction_account: usize,
     vote_account: &mut BorrowedAccount,
     new_authority: &Pubkey,
     authorization_type: VoteAuthorize,
@@ -39,10 +38,9 @@ fn process_authorize_with_seed_instruction(
     }
     let clock = get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
     let mut expected_authority_keys: HashSet<Pubkey> = HashSet::default();
-    let authority_base_key_index = first_instruction_account + 2;
-    if instruction_context.is_signer(authority_base_key_index)? {
+    if instruction_context.is_instruction_account_signer(2)? {
         let base_pubkey = transaction_context.get_key_of_account_at_index(
-            instruction_context.get_index_in_transaction(authority_base_key_index)?,
+            instruction_context.get_index_of_instruction_account_in_transaction(2)?,
         )?;
         expected_authority_keys.insert(Pubkey::create_with_seed(
             base_pubkey,
@@ -61,7 +59,7 @@ fn process_authorize_with_seed_instruction(
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -70,8 +68,7 @@ pub fn process_instruction(
 
     trace!("process_instruction: {:?}", data);
 
-    let mut me =
-        instruction_context.try_borrow_account(transaction_context, first_instruction_account)?;
+    let mut me = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if *me.get_owner() != id() {
         return Err(InstructionError::InvalidAccountOwner);
     }
@@ -105,7 +102,6 @@ pub fn process_instruction(
                 invoke_context,
                 instruction_context,
                 transaction_context,
-                first_instruction_account,
                 &mut me,
                 &args.new_authority,
                 args.authorization_type,
@@ -115,18 +111,16 @@ pub fn process_instruction(
         }
         VoteInstruction::AuthorizeCheckedWithSeed(args) => {
             instruction_context.check_number_of_instruction_accounts(4)?;
-            let new_authority_index = first_instruction_account + 3;
             let new_authority = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(new_authority_index)?,
+                instruction_context.get_index_of_instruction_account_in_transaction(3)?,
             )?;
-            if !instruction_context.is_signer(new_authority_index)? {
+            if !instruction_context.is_instruction_account_signer(3)? {
                 return Err(InstructionError::MissingRequiredSignature);
             }
             process_authorize_with_seed_instruction(
                 invoke_context,
                 instruction_context,
                 transaction_context,
-                first_instruction_account,
                 &mut me,
                 new_authority,
                 args.authorization_type,
@@ -137,7 +131,7 @@ pub fn process_instruction(
         VoteInstruction::UpdateValidatorIdentity => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let node_pubkey = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+                instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
             vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
         }
@@ -203,9 +197,9 @@ pub fn process_instruction(
             vote_state::withdraw(
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &signers,
                 rent_sysvar.as_deref(),
                 clock_if_feature_active.as_deref(),
@@ -218,9 +212,9 @@ pub fn process_instruction(
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let voter_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
                 let clock =

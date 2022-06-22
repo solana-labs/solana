@@ -8217,6 +8217,30 @@ impl AccountsDb {
                 })
                 .sum();
 
+            let mut index_flush_us = 0;
+            if pass == 0 {
+                // tell accounts index we are done adding the initial accounts at startup
+                let mut m = Measure::start("accounts_index_idle_us");
+                self.accounts_index.set_startup(Startup::Normal);
+                m.stop();
+                index_flush_us = m.as_us();
+
+                // this has to happen before pubkeys_to_duplicate_accounts_data_len below
+                // get duplicate keys from acct idx. We have to wait until we've finished flushing.
+                for (slot, key) in self
+                    .accounts_index
+                    .retrieve_duplicate_keys_from_startup()
+                    .into_iter()
+                    .flatten()
+                {
+                    match self.uncleaned_pubkeys.entry(slot) {
+                        Occupied(mut occupied) => occupied.get_mut().push(key),
+                        Vacant(vacant) => {
+                            vacant.insert(vec![key]);
+                        }
+                    }
+                }
+            }
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
@@ -8242,15 +8266,6 @@ impl AccountsDb {
             accounts_data_len_dedup_timer.stop();
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
-
-            let mut index_flush_us = 0;
-            if pass == 0 {
-                // tell accounts index we are done adding the initial accounts at startup
-                let mut m = Measure::start("accounts_index_idle_us");
-                self.accounts_index.set_startup(Startup::Normal);
-                m.stop();
-                index_flush_us = m.as_us();
-            }
 
             let mut timings = GenerateIndexTimings {
                 index_flush_us,

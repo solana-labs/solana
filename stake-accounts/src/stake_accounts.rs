@@ -294,11 +294,12 @@ mod tests {
         solana_stake_program::stake_state,
     };
 
-    fn create_bank(lamports: u64) -> (Bank, Keypair, u64) {
+    fn create_bank(lamports: u64) -> (Bank, Keypair, u64, u64) {
         let (genesis_config, mint_keypair) = create_genesis_config(lamports);
         let bank = Bank::new_for_tests(&genesis_config);
-        let rent = bank.get_minimum_balance_for_rent_exemption(StakeState::size_of());
-        (bank, mint_keypair, rent)
+        let stake_rent = bank.get_minimum_balance_for_rent_exemption(StakeState::size_of());
+        let system_rent = bank.get_minimum_balance_for_rent_exemption(0);
+        (bank, mint_keypair, stake_rent, system_rent)
     }
 
     fn create_account<C: SyncClient>(
@@ -352,15 +353,15 @@ mod tests {
 
     #[test]
     fn test_new_derived_stake_account() {
-        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
-        let lamports = rent + 1;
+        let lamports = stake_rent + 1;
         let stake_authority_pubkey = solana_sdk::pubkey::new_rand();
         let withdraw_authority_pubkey = solana_sdk::pubkey::new_rand();
 
@@ -389,15 +390,15 @@ mod tests {
 
     #[test]
     fn test_authorize_stake_accounts() {
-        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
-        let lamports = rent + 1;
+        let lamports = stake_rent + 1;
 
         let stake_authority_keypair = Keypair::new();
         let stake_authority_pubkey = stake_authority_keypair.pubkey();
@@ -451,15 +452,15 @@ mod tests {
 
     #[test]
     fn test_lockup_stake_accounts() {
-        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
-        let lamports = rent + 1;
+        let lamports = stake_rent + 1;
 
         let custodian_keypair = Keypair::new();
         let custodian_pubkey = custodian_keypair.pubkey();
@@ -542,15 +543,15 @@ mod tests {
 
     #[test]
     fn test_rebase_stake_accounts() {
-        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
-        let lamports = rent + 1;
+        let lamports = stake_rent + 1;
 
         let stake_authority_keypair = Keypair::new();
         let stake_authority_pubkey = stake_authority_keypair.pubkey();
@@ -605,15 +606,15 @@ mod tests {
 
     #[test]
     fn test_move_stake_accounts() {
-        let (bank, funding_keypair, rent) = create_bank(10_000_000);
+        let (bank, funding_keypair, stake_rent, system_rent) = create_bank(10_000_000);
         let funding_pubkey = funding_keypair.pubkey();
         let bank_client = BankClient::new(bank);
-        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, 1);
+        let fee_payer_keypair = create_account(&bank_client, &funding_keypair, system_rent);
         let fee_payer_pubkey = fee_payer_keypair.pubkey();
 
         let base_keypair = Keypair::new();
         let base_pubkey = base_keypair.pubkey();
-        let lamports = rent + 1;
+        let lamports = stake_rent + 1;
 
         let stake_authority_keypair = Keypair::new();
         let stake_authority_pubkey = stake_authority_keypair.pubkey();

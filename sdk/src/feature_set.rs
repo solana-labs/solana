@@ -408,10 +408,6 @@ pub mod include_account_index_in_rent_error {
     solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
 }
 
-pub mod add_shred_type_to_shred_seed {
-    solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
-}
-
 pub mod warp_timestamp_with_a_vengeance {
     solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
 }
@@ -442,6 +438,10 @@ pub mod nonce_must_be_advanceable {
 
 pub mod vote_authorize_with_seed {
     solana_sdk::declare_id!("6tRxEYKuy2L5nnv5bgn7iT28MxUbYxp5h7F3Ncf1exrT");
+}
+
+pub mod cap_accounts_data_size_per_block {
+    solana_sdk::declare_id!("qywiJyZmqTKspFg2LeuUHqcA5nNvBgobqb9UprywS9N");
 }
 
 lazy_static! {
@@ -540,7 +540,6 @@ lazy_static! {
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
-        (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),
@@ -549,6 +548,7 @@ lazy_static! {
         (nonce_must_be_authorized::id(), "nonce must be authorized"),
         (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
         (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
+        (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

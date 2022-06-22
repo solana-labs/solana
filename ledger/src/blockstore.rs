@@ -413,8 +413,8 @@ impl Blockstore {
         }
     }
 
-    /// Whether to disable compaction in [`compact_storage`], which is used
-    /// by the ledger cleanup service and [`backup_and_clear_blockstore`].
+    /// Whether to disable compaction in [`Blockstore::compact_storage`], which is used
+    /// by the ledger cleanup service and `solana_core::validator::backup_and_clear_blockstore`.
     ///
     /// Note that this setting is not related to the RocksDB's background
     /// compaction.
@@ -654,6 +654,8 @@ impl Blockstore {
 
     /// Collects and reports [`BlockstoreRocksDbColumnFamilyMetrics`] for the
     /// all the column families.
+    ///
+    /// [`BlockstoreRocksDbColumnFamilyMetrics`]: crate::blockstore_metrics::BlockstoreRocksDbColumnFamilyMetrics
     pub fn submit_rocksdb_cf_metrics_for_all_cfs(&self) {
         self.meta_cf.submit_rocksdb_cf_metrics();
         self.dead_slots_cf.submit_rocksdb_cf_metrics();

@@ -246,7 +246,7 @@ fn run_program(name: &str) -> u64 {
                 .get_current_instruction_context()
                 .unwrap();
             let caller = *instruction_context
-                .get_program_key(transaction_context)
+                .get_last_program_key(transaction_context)
                 .unwrap();
             transaction_context
                 .set_return_data(caller, Vec::new())

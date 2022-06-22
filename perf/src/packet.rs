@@ -154,7 +154,7 @@ impl PacketBatch {
     ///
     /// # Safety
     ///
-    /// - `new_len` must be less than or equal to [`capacity()`].
+    /// - `new_len` must be less than or equal to [`self.capacity`].
     /// - The elements at `old_len..new_len` must be initialized. Packet data
     ///   will likely be overwritten when populating the packet, but the meta
     ///   should specifically be initialized to known values.

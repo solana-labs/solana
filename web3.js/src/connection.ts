@@ -191,9 +191,9 @@ type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
 
-type RpcRequest = (methodName: string, args: Array<any>) => any;
+type RpcRequest = (methodName: string, args: Array<any>) => Promise<any>;
 
-type RpcBatchRequest = (requests: RpcParams[]) => any;
+type RpcBatchRequest = (requests: RpcParams[]) => Promise<any[]>;
 
 /**
  * @internal
@@ -3566,7 +3566,16 @@ export class Connection {
       if ('error' in res) {
         throw new Error('failed to get transactions: ' + res.error.message);
       }
-      return res.result;
+      const result = res.result;
+      if (!result) return result;
+
+      return {
+        ...result,
+        transaction: {
+          ...result.transaction,
+          message: new Message(result.transaction.message),
+        },
+      };
     });
 
     return res;

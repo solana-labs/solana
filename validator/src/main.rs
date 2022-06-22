@@ -1211,6 +1211,11 @@ pub fn main() {
                 .help("Use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("enable_quic_servers")
+                .hidden(true)
+                .long("enable-quic-servers")
+        )
+        .arg(
             Arg::with_name("tpu_connection_pool_size")
                 .long("tpu-connection-pool-size")
                 .takes_value(true)
@@ -1277,6 +1282,14 @@ pub fn main() {
                 .value_name("INSTANCE_NAME")
                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
                 .help("Name of the Bigtable instance to upload to")
+        )
+        .arg(
+            Arg::with_name("rpc_bigtable_app_profile_id")
+                .long("rpc-bigtable-app-profile-id")
+                .takes_value(true)
+                .value_name("APP_PROFILE_ID")
+                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
+                .help("Bigtable application profile id to use in requests")
         )
         .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
@@ -2223,6 +2236,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let enable_quic_servers = matches.is_present("enable_quic_servers");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -2395,6 +2409,11 @@ pub fn main() {
         Some(RpcBigtableConfig {
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
+            bigtable_app_profile_id: value_t_or_exit!(
+                matches,
+                "rpc_bigtable_app_profile_id",
+                String
+            ),
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
@@ -2560,6 +2579,7 @@ pub fn main() {
             bpf_jit: !matches.is_present("no_bpf_jit"),
             ..RuntimeConfig::default()
         },
+        enable_quic_servers,
         ..ValidatorConfig::default()
     };
 
