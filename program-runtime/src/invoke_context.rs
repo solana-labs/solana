@@ -16,8 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, neon_evm_compute_budget,
-            record_instruction_in_transaction_context_push, requestable_heap_size,
+            cap_accounts_data_len, record_instruction_in_transaction_context_push,
             tx_wide_compute_cap, FeatureSet,
         },
         hash::Hash,
@@ -344,22 +343,7 @@ impl<'a> InvokeContext<'a> {
             .get_instruction_context_stack_height()
             == 0
         {
-            let mut compute_budget = self.compute_budget;
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == &crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
-            }
-            if !self.feature_set.is_active(&requestable_heap_size::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == &crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
-            }
-            self.current_compute_budget = compute_budget;
+            self.current_compute_budget = self.compute_budget;
 
             if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
                 self.compute_meter =
@@ -1668,38 +1652,12 @@ mod tests {
 
     #[test]
     fn test_invoke_context_compute_budget() {
-        let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), AccountSharedData::default()),
-            (crate::neon_evm_program::id(), AccountSharedData::default()),
-        ];
+        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        feature_set.deactivate(&requestable_heap_size::id());
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.feature_set = Arc::new(feature_set);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
-
-        invoke_context.push(&[], &[0], &[]).unwrap();
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        );
-        invoke_context.pop().unwrap();
-
-        invoke_context.push(&[], &[1], &[]).unwrap();
-        let expected_compute_budget = ComputeBudget {
-            compute_unit_limit: 500_000,
-            heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        };
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            expected_compute_budget
-        );
-        invoke_context.pop().unwrap();
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
