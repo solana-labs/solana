@@ -47,7 +47,6 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_sdk::{
         signature::{Keypair, Signer},
-        account::Account,
         native_token::LAMPORTS_PER_SOL,
     },
     tempfile::TempDir,
@@ -118,9 +117,10 @@ pub fn main() {
     let exit_gossip = Arc::new(AtomicBool::new(false));
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
+
+    //Set dynamic port range for node ports
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    
     let dynamic_port_range =
         solana_net_utils::parse_port_range(default_dynamic_port_range)
             .expect("invalid dynamic_port_range");
@@ -144,6 +144,7 @@ pub fn main() {
         .into_iter()
         .collect::<Vec<_>>();
 
+    //set gossip IP. will find public IP if one not specified
     let gossip_host: IpAddr = matches
         .value_of("gossip_host")
         .map(|gossip_host| {
@@ -184,6 +185,7 @@ pub fn main() {
             }
         });
     
+    //set gossip addr (IP:port). Gets gossip port from commandline or finds available port
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
@@ -196,10 +198,11 @@ pub fn main() {
         }),
     );
    
+    //Setup cluster with Node stakes. 
+    //Note we're only creating one node here since we're not creating a local cluster
     let num_nodes = 1;
-    //create nodes with equal stakes
     let stakes: Vec<_> = (0..num_nodes).map(|_| node_stake).collect();
-    let mut config = ClusterConfig {
+    let config = ClusterConfig {
         node_stakes: stakes,
         cluster_lamports,
         validator_configs: make_identical_validator_configs(
@@ -208,15 +211,15 @@ pub fn main() {
         ),
         ..ClusterConfig::default()
     };
-
     assert_eq!(config.validator_configs.len(), config.node_stakes.len());
     
-    //generate keys for validators
+    //generate keys for validators (aka just one validator)
     let mut validator_keys: Vec<(Arc<Keypair>, bool)> = iter::repeat_with(|| (Arc::new(Keypair::new()), false))
         .take(config.validator_configs.len())
         .collect();
 
-    // generate vote keys for a node/validator? Not why we need diff vote keys
+    // generate vote keys for a node/validator? (Just one)
+    // Not sure why we need diff vote keys
     let vote_keys: Vec<Arc<Keypair>> = iter::repeat_with(|| Arc::new(Keypair::new()))
         .take(config.validator_configs.len())
         .collect();
@@ -256,6 +259,7 @@ pub fn main() {
     let leader_keypair = &keys_in_genesis[0].node_keypair;
     let leader_pubkey = leader_keypair.pubkey();
 
+    //create new node with external ip
     let leader_node = Node::new_with_external_ip(
         &leader_pubkey,
         &gossip_addr,
@@ -265,6 +269,7 @@ pub fn main() {
     );
     let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
 
+    //Setup genesis config.
     let genesis_config_info = &mut create_genesis_config_with_vote_accounts_and_cluster_type(
         config.cluster_lamports,
         &keys_in_genesis,
@@ -273,13 +278,6 @@ pub fn main() {
     );
 
     let genesis_config = &mut genesis_config_info.genesis_config;
-
-    genesis_config.accounts.extend(
-        config
-            .additional_accounts
-            .drain(..)
-            .map(|(key, account)| (key, Account::from(account))),
-    );
 
     let cluster_info = ClusterInfo::new(
         leader_node.info.clone(),
