@@ -3010,7 +3010,6 @@ impl Bank {
         struct StakeReward {
             stake_pubkey: Pubkey,
             stake_reward_info: RewardInfo,
-            stake_reward: u64,
             stake_account: AccountSharedData,
         }
 
@@ -3141,11 +3140,10 @@ impl Bank {
                             stake_pubkey,
                             stake_reward_info: RewardInfo {
                                 reward_type: RewardType::Staking,
-                                lamports: stakers_reward as i64,
+                                lamports: i64::try_from(stakers_reward).unwrap(),
                                 post_balance,
                                 commission: Some(vote_state.commission),
                             },
-                            stake_reward: stakers_reward,
                             stake_account,
                         });
                     } else {
@@ -3176,7 +3174,7 @@ impl Bank {
 
         let mut stake_rewards = stake_rewards
             .into_iter()
-            .filter(|x| x.stake_reward > 0)
+            .filter(|x| x.stake_reward_info.lamports > 0)
             .map(|x| (x.stake_pubkey, x.stake_reward_info))
             .collect();
 
