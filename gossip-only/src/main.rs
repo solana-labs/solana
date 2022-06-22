@@ -285,6 +285,7 @@ pub fn main() {
         socket_addr_space,
     );
 
+    //set entrypoints for gossip
     let cluster_entrypoints = entrypoint_addrs
         .iter()
         .map(ContactInfo::new_gossip_entry_point)
@@ -293,6 +294,7 @@ pub fn main() {
     cluster_info.set_entrypoints(cluster_entrypoints);
     let cluster_info = Arc::new(cluster_info);
 
+    //Generate new bank and bank forks
     let accounts_dir = TempDir::new().unwrap();
     let bank0 = Bank::new_with_paths_for_tests(
         genesis_config,
