@@ -6187,7 +6187,7 @@ impl Bank {
         assert!(!self.freeze_started());
         self.rc
             .accounts
-            .store_accounts_cached(self.slot(), accounts);
+            .store_accounts_cached((self.slot(), accounts));
         let mut m = Measure::start("stakes_cache.check_and_store");
         for (pubkey, account) in accounts {
             self.stakes_cache.check_and_store(pubkey, account);
