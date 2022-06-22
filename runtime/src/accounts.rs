@@ -1203,11 +1203,11 @@ impl Accounts {
             leave_nonce_on_success,
         );
         self.accounts_db
-            .store_cached(slot, &accounts_to_store, Some(&txn_signatures));
+            .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
     }
 
     pub fn store_accounts_cached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.accounts_db.store_cached(slot, accounts, None)
+        self.accounts_db.store_cached((slot, accounts), None)
     }
 
     /// Add a slot to root.  Root slots cannot be purged
