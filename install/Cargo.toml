@@ -23,7 +23,7 @@ indicatif = "0.16.2"
 lazy_static = "1.4.0"
 nix = "0.24.0"
 reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-semver = "1.0.9"
+semver = "1.0.10"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_yaml = "0.8.24"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.1" }
