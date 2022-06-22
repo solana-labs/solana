@@ -264,6 +264,7 @@ async fn handle_connection(
                                 break;
                             }
                         }
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     }
                     stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                 }
@@ -469,7 +470,6 @@ impl ConnectionTable {
 
 #[cfg(test)]
 pub mod test {
-    use std::sync::atomic::Ordering::Relaxed;
     use {
         super::*,
         crate::quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -809,14 +809,14 @@ pub mod test {
         .unwrap();
 
         check_multiple_streams(receiver, server_address).await;
-        assert_eq!(stats.total_streams.load(Relaxed), 0);
-        assert_eq!(stats.total_new_streams.load(Relaxed), 20);
-        assert_eq!(stats.total_connections.load(Relaxed), 2);
-        assert_eq!(stats.total_new_connections.load(Relaxed), 2);
+        assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.total_new_streams.load(Ordering::Relaxed), 20);
+        assert_eq!(stats.total_connections.load(Ordering::Relaxed), 2);
+        assert_eq!(stats.total_new_connections.load(Ordering::Relaxed), 2);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
-        assert_eq!(stats.total_connections.load(Relaxed), 0);
-        assert_eq!(stats.total_new_connections.load(Relaxed), 2);
+        assert_eq!(stats.total_connections.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.total_new_connections.load(Ordering::Relaxed), 2);
     }
 
     #[test]
