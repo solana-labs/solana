@@ -2710,6 +2710,10 @@ impl Bank {
             validator_rewards_paid, validator_rewards
         );
 
+        let num_stake_accounts = self.stakes_cache.num_stake_accounts();
+        let num_vote_accounts = self.stakes_cache.num_vote_accounts();
+        let num_staked_nodes = self.stakes_cache.num_staked_nodes();
+
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
 
@@ -2731,7 +2735,10 @@ impl Bank {
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
-            ("post_capitalization", self.capitalization(), i64)
+            ("post_capitalization", self.capitalization(), i64),
+            ("num_stake_accounts", num_stake_accounts as i64, i64),
+            ("num_vote_accounts", num_vote_accounts as i64, i64),
+            ("num_staked_nodes", num_staked_nodes as i64, i64)
         );
     }
 

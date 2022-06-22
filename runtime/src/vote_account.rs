@@ -60,6 +60,16 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
+impl VoteAccounts {
+    pub fn num_vote_accounts(&self) -> usize {
+        self.vote_accounts.len()
+    }
+
+    pub fn num_staked_nodes(&self) -> usize {
+        self.staked_nodes.read().unwrap().len()
+    }
+}
+
 impl VoteAccount {
     pub(crate) fn lamports(&self) -> u64 {
         self.0.account.lamports()
