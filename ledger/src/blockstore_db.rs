@@ -963,9 +963,6 @@ impl TypedColumn for columns::ErasureMeta {
     type Type = blockstore_meta::ErasureMeta;
 }
 
-<<<<<<< HEAD
-#[derive(Debug, Clone)]
-=======
 impl SlotColumn for columns::OptimisticSlots {}
 impl ColumnName for columns::OptimisticSlots {
     const NAME: &'static str = OPTIMISTIC_SLOTS_CF;
@@ -974,8 +971,7 @@ impl TypedColumn for columns::OptimisticSlots {
     type Type = blockstore_meta::OptimisticSlotMetaVersioned;
 }
 
-#[derive(Debug)]
->>>>>>> 8caf0aabd (framework to preserve optimistic_slot in blockstore (#25362))
+#[derive(Debug, Clone)]
 pub struct Database {
     backend: Arc<Rocks>,
     path: Arc<Path>,
