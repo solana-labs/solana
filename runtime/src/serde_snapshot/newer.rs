@@ -188,6 +188,29 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
+        // ONLY FOR THE BACKPORT, extra field is serialized on master
+        let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
+        let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
+        (
+            SerializableVersionedBank::from(fields),
+            SerializableAccountsDb::<'a, Self> {
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
+                slot: serializable_bank.bank.rc.slot,
+                account_storage_entries: serializable_bank.snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+        )
+            .serialize(serializer)
+    }
+
+    #[cfg(test)]
+    fn serialize_bank_and_storage_without_extra_fields<S: serde::ser::Serializer>(
+        serializer: S,
+        serializable_bank: &SerializableBankAndStorageNoExtra<'a, Self>,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where
+        Self: std::marker::Sized,
+    {
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
         (
@@ -255,8 +278,18 @@ impl<'a> TypeContext<'a> for Context {
     where
         R: Read,
     {
-        let bank_fields = deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
+        let mut bank_fields: BankFieldsToDeserialize =
+            deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
         let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
+        // Process extra fields
+        let lamports_per_signature: u64 = match deserialize_from(stream) {
+            Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(0),
+            Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(0),
+            result => result,
+        }?;
+        bank_fields.fee_rate_governor = bank_fields
+            .fee_rate_governor
+            .clone_with_lamports_per_signature(lamports_per_signature);
         Ok((bank_fields, accounts_db_fields))
     }
 
