@@ -247,7 +247,7 @@ pub struct ConnectionCache {
 /// Models the pool of connections
 struct ConnectionPool {
     /// The connections in the pool
-    connections: Vec<Arc<Connection>>,
+    connections: Vec<Arc<BaseTpuConnection>>,
 
     /// Connections in this pool share the same endpoint
     endpoint: Option<Arc<QuicLazyInitializedEndpoint>>,
@@ -256,7 +256,7 @@ struct ConnectionPool {
 impl ConnectionPool {
     /// Get a connection from the pool. It must have at least one connection in the pool.
     /// This randomly picks a connection in the pool.
-    fn borrow_connection(&self) -> Arc<Connection> {
+    fn borrow_connection(&self) -> Arc<BaseTpuConnection> {
         let mut rng = thread_rng();
         let n = rng.gen_range(0, self.connections.len());
         self.connections[n].clone()
@@ -321,11 +321,11 @@ impl ConnectionCache {
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
             let connection = match &self.use_quic {
-                UseQUIC::Yes => Connection::Quic(Arc::new(QuicClient::new(
+                UseQUIC::Yes => BaseTpuConnection::Quic(Arc::new(QuicClient::new(
                     endpoint.as_ref().unwrap().clone(),
                     *addr,
                 ))),
-                UseQUIC::No(socket) => Connection::Udp(socket.clone()),
+                UseQUIC::No(socket) => BaseTpuConnection::Udp(socket.clone()),
             };
 
             let connection = Arc::new(connection);
@@ -441,7 +441,7 @@ impl ConnectionCache {
     fn get_connection_and_log_stats(
         &self,
         addr: &SocketAddr,
-    ) -> (Arc<Connection>, Arc<ConnectionCacheStats>) {
+    ) -> (Arc<BaseTpuConnection>, Arc<ConnectionCacheStats>) {
         let mut get_connection_measure = Measure::start("get_connection_measure");
         let GetConnectionResult {
             connection,
@@ -493,12 +493,12 @@ impl ConnectionCache {
 
     pub fn get_connection(&self, addr: &SocketAddr) -> BlockingConnection {
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
-        connection.new_tpu_connection(*addr, connection_cache_stats)
+        connection.new_blocking_connection(*addr, connection_cache_stats)
     }
 
     pub fn get_nonblocking_connection(&self, addr: &SocketAddr) -> NonblockingConnection {
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
-        connection.new_nonblocking_tpu_connection(*addr, connection_cache_stats)
+        connection.new_nonblocking_connection(*addr, connection_cache_stats)
     }
 }
 
@@ -515,38 +515,38 @@ impl Default for ConnectionCache {
     }
 }
 
-enum Connection {
+enum BaseTpuConnection {
     Udp(Arc<UdpSocket>),
     Quic(Arc<QuicClient>),
 }
-impl Connection {
-    fn new_tpu_connection(
+impl BaseTpuConnection {
+    fn new_blocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
     ) -> BlockingConnection {
         use crate::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection};
         match self {
-            Connection::Udp(udp_socket) => {
+            BaseTpuConnection::Udp(udp_socket) => {
                 UdpTpuConnection::new_from_addr(udp_socket.clone(), addr).into()
             }
-            Connection::Quic(quic_client) => {
+            BaseTpuConnection::Quic(quic_client) => {
                 QuicTpuConnection::new_with_client(quic_client.clone(), stats).into()
             }
         }
     }
 
-    fn new_nonblocking_tpu_connection(
+    fn new_nonblocking_connection(
         &self,
         addr: SocketAddr,
         stats: Arc<ConnectionCacheStats>,
     ) -> NonblockingConnection {
         use crate::nonblocking::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection};
         match self {
-            Connection::Udp(udp_socket) => {
+            BaseTpuConnection::Udp(udp_socket) => {
                 UdpTpuConnection::new_from_addr(udp_socket.try_clone().unwrap(), addr).into()
             }
-            Connection::Quic(quic_client) => {
+            BaseTpuConnection::Quic(quic_client) => {
                 QuicTpuConnection::new_with_client(quic_client.clone(), stats).into()
             }
         }
@@ -554,7 +554,7 @@ impl Connection {
 }
 
 struct GetConnectionResult {
-    connection: Arc<Connection>,
+    connection: Arc<BaseTpuConnection>,
     cache_hit: bool,
     report_stats: bool,
     map_timing_ms: u64,
@@ -565,7 +565,7 @@ struct GetConnectionResult {
 }
 
 struct CreateConnectionResult {
-    connection: Arc<Connection>,
+    connection: Arc<BaseTpuConnection>,
     cache_hit: bool,
     connection_cache_stats: Arc<ConnectionCacheStats>,
     num_evictions: u64,
@@ -624,7 +624,7 @@ mod tests {
             assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
                 let conn = &map.get(a).expect("Address not found").connections[0];
-                let conn = conn.new_tpu_connection(*a, connection_cache.stats.clone());
+                let conn = conn.new_blocking_connection(*a, connection_cache.stats.clone());
                 assert!(a.ip() == conn.tpu_addr().ip());
             });
         }
