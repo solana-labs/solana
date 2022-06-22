@@ -7,7 +7,7 @@ use {
         keypairs::get_keypairs,
     },
     solana_client::{
-        connection_cache::ConnectionCache,
+        connection_cache::{ConnectionCache, UseQUIC},
         rpc_client::RpcClient,
         tpu_client::{TpuClient, TpuClientConfig},
     },
@@ -106,8 +106,9 @@ fn main() {
                     eprintln!("Failed to discover {} nodes: {:?}", num_nodes, err);
                     exit(1);
                 });
+            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
             let connection_cache =
-                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
             let client = if *multi_client {
                 let (client, num_clients) =
                     get_multi_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache);
@@ -158,8 +159,9 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
+            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
             let connection_cache =
-                Arc::new(ConnectionCache::new(*use_quic, *tpu_connection_pool_size));
+                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
 
             let client = Arc::new(
                 TpuClient::new_with_connection_cache(

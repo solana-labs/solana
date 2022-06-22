@@ -2,12 +2,9 @@
 //! an interface for sending transactions
 
 use {
-    crate::nonblocking::tpu_connection::TpuConnection,
-    async_trait::async_trait,
-    core::iter::repeat,
-    solana_sdk::transport::Result as TransportResult,
-    solana_streamer::nonblocking::sendmmsg::batch_send,
-    std::net::{IpAddr, Ipv4Addr, SocketAddr},
+    crate::nonblocking::tpu_connection::TpuConnection, async_trait::async_trait,
+    core::iter::repeat, solana_sdk::transport::Result as TransportResult,
+    solana_streamer::nonblocking::sendmmsg::batch_send, std::net::SocketAddr,
     tokio::net::UdpSocket,
 };
 
@@ -17,14 +14,8 @@ pub struct UdpTpuConnection {
 }
 
 impl UdpTpuConnection {
-    pub fn new(tpu_addr: SocketAddr) -> Self {
-        let socket =
-            solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
+    pub fn new(tpu_addr: SocketAddr, socket: std::net::UdpSocket) -> Self {
         socket.set_nonblocking(true).unwrap();
-        Self::new_with_std_socket(tpu_addr, socket)
-    }
-
-    pub fn new_with_std_socket(tpu_addr: SocketAddr, socket: std::net::UdpSocket) -> Self {
         let socket = UdpSocket::from_std(socket).unwrap();
         Self {
             socket,
@@ -92,20 +83,9 @@ mod tests {
     async fn test_send_from_addr() {
         let addr_str = "0.0.0.0:50100";
         let addr = addr_str.parse().unwrap();
-        let connection = UdpTpuConnection::new(addr);
-        let reader = UdpSocket::bind(addr_str).await.expect("bind");
-        check_send_one(&connection, &reader).await;
-        check_send_batch(&connection, &reader).await;
-    }
-
-    #[tokio::test]
-    async fn test_send_from_socket() {
-        let addr_str = "0.0.0.0:50101";
-        let addr = addr_str.parse().unwrap();
         let socket =
             solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
-        socket.set_nonblocking(true).unwrap();
-        let connection = UdpTpuConnection::new_with_std_socket(addr, socket);
+        let connection = UdpTpuConnection::new(addr, socket);
         let reader = UdpSocket::bind(addr_str).await.expect("bind");
         check_send_one(&connection, &reader).await;
         check_send_batch(&connection, &reader).await;
