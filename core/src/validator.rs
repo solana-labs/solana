@@ -2109,20 +2109,7 @@ mod tests {
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-
-        // spawn a new thread to wait for validator close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            validator.close();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(30);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            panic!("timeout for closing validator");
-        }
-
+        validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
