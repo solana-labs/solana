@@ -219,6 +219,14 @@ The public key of the [account](#account) containing a [program](#program).
 
 A stack of proofs, each of which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
 
+## prioritization fee
+
+An additional fee user can specify in compute budget [instruction](#instruction) to prioritize their [transactions](#transaction).
+
+The prioritization fee is calculated from multiplying the number of compute units requested by the compute unit price (0.000001 lamports per compute unit) rounded up to the nearest lamport.
+
+Transactions should request the minimum amount of compute units required for execution to minimize fees.
+
 ## public key (pubkey)
 
 The public key of a [keypair](#keypair).
