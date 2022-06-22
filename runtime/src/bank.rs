@@ -2794,7 +2794,27 @@ impl Bank {
                         }
                     };
                     if cached_stake_account != &stake_account {
-                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
+                        let mut cached_account = cached_stake_account.account().clone();
+                        // We could have collected rent on the loaded account already in this new epoch (we could be at partition_index 12, for example).
+                        // So, we may need to adjust the rent_epoch of the cached account. So, update rent_epoch and compare just the accounts.
+                        ExpectedRentCollection::maybe_update_rent_epoch_on_load(
+                            &mut cached_account,
+                            &SlotInfoInEpoch::new_small(self.slot()),
+                            &SlotInfoInEpoch::new_small(self.slot()),
+                            self.epoch_schedule(),
+                            self.rent_collector(),
+                            stake_pubkey,
+                            &self.rewrites_skipped_this_slot,
+                        );
+                        if &cached_account != stake_account.account() {
+                            info!(
+                                "cached stake account mismatch: {}: {:?}, {:?}",
+                                stake_pubkey,
+                                cached_account,
+                                stake_account.account()
+                            );
+                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
+                        }
                     }
                     let stake_delegation = (*stake_pubkey, stake_account);
                     let mut vote_delegations = if let Some(vote_delegations) =
