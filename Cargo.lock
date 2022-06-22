@@ -1286,7 +1286,7 @@ version = "3.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
 dependencies = [
- "num-bigint 0.4.3",
+ "num-bigint 0.4.2",
  "num-traits",
  "proc-macro2 1.0.32",
  "quote 1.0.10",
