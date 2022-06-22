@@ -7,6 +7,11 @@ steps:
     agents:
       - "queue=release-build"
     timeout_in_minutes: 60
+  - name: "publish installer"
+    command: "ci/publish-installer.sh"
+    agents:
+      - "queue=release-build"
+    timeout_in_minutes: 5
   - wait
   - name: "publish docker"
     command: "sdk/docker-solana/build.sh"
