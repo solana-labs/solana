@@ -16,6 +16,7 @@ byteorder = "1.4.3"
 chrono = { version = "0.4.11", features = ["serde"] }
 chrono-humanize = "0.2.1"
 crossbeam-channel = "0.5"
+dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 fs_extra = "1.2.0"
 futures = "0.3.21"
 itertools = "0.10.3"

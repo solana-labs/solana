@@ -1,6 +1,7 @@
 //! The `blockstore` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
+
 use {
     crate::{
         ancestor_iterator::AncestorIterator,
@@ -22,9 +23,10 @@ use {
     },
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
+    dashmap::DashSet,
     log::*,
     rayon::{
-        iter::{IntoParallelRefIterator, ParallelIterator},
+        iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
     rocksdb::DBRawIterator,
@@ -2747,6 +2749,32 @@ impl Blockstore {
         });
         let entries: Vec<Entry> = entries?.into_iter().flatten().collect();
         Ok((entries, num_shreds, slot_meta.is_full()))
+    }
+
+    /// Gets accounts used in transactions in the slot range [starting_slot, ending_slot].
+    /// Used by ledger-tool to create a minimized snapshot
+    pub fn get_accounts_used_in_range(
+        &self,
+        starting_slot: Slot,
+        ending_slot: Slot,
+    ) -> DashSet<Pubkey> {
+        let result = DashSet::new();
+
+        (starting_slot..=ending_slot)
+            .into_par_iter()
+            .for_each(|slot| {
+                if let Ok(entries) = self.get_slot_entries(slot, 0) {
+                    entries.par_iter().for_each(|entry| {
+                        entry.transactions.iter().for_each(|tx| {
+                            tx.message.static_account_keys().iter().for_each(|pubkey| {
+                                result.insert(*pubkey);
+                            });
+                        });
+                    });
+                }
+            });
+
+        result
     }
 
     fn get_completed_ranges(

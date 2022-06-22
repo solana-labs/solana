@@ -71,7 +71,7 @@ use {
         vote_parser,
     },
     byteorder::{ByteOrder, LittleEndian},
-    dashmap::DashMap,
+    dashmap::{DashMap, DashSet},
     itertools::Itertools,
     log::*,
     rand::Rng,
@@ -5169,6 +5169,25 @@ impl Bank {
         self.collect_rent_eagerly(true);
     }
 
+    /// Get stake and stake node accounts
+    pub(crate) fn get_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
+        self.stakes_cache
+            .stakes()
+            .stake_delegations()
+            .iter()
+            .for_each(|(pubkey, _)| {
+                minimized_account_set.insert(*pubkey);
+            });
+
+        self.stakes_cache
+            .stakes()
+            .staked_nodes()
+            .par_iter()
+            .for_each(|(pubkey, _)| {
+                minimized_account_set.insert(*pubkey);
+            });
+    }
+
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
@@ -5707,7 +5726,7 @@ impl Bank {
         partitions
     }
 
-    fn fixed_cycle_partitions_between_slots(
+    pub(crate) fn fixed_cycle_partitions_between_slots(
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
@@ -5748,7 +5767,7 @@ impl Bank {
         )
     }
 
-    fn variable_cycle_partitions_between_slots(
+    pub(crate) fn variable_cycle_partitions_between_slots(
         &self,
         starting_slot: Slot,
         ending_slot: Slot,
@@ -5957,7 +5976,7 @@ impl Bank {
             && self.slot_count_per_normal_epoch() < self.slot_count_in_two_day()
     }
 
-    fn use_fixed_collection_cycle(&self) -> bool {
+    pub(crate) fn use_fixed_collection_cycle(&self) -> bool {
         // Force normal behavior, disabling fixed collection cycle for manual local testing
         #[cfg(not(test))]
         if self.slot_count_per_normal_epoch() == solana_sdk::epoch_schedule::MINIMUM_SLOTS_PER_EPOCH

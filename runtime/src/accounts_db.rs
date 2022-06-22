@@ -1144,6 +1144,10 @@ pub struct AccountsDb {
     // lower passes = faster total time, higher dynamic memory usage
     // passes=2 cuts dynamic memory usage in approximately half.
     pub num_hash_scan_passes: Option<usize>,
+
+    /// Used to disable logging dead slots during removal.
+    /// allow disabling noisy log
+    pub(crate) log_dead_slots: AtomicBool,
 }
 
 #[derive(Debug, Default)]
@@ -1172,7 +1176,7 @@ pub struct AccountsStats {
 }
 
 #[derive(Debug, Default)]
-struct PurgeStats {
+pub(crate) struct PurgeStats {
     last_report: AtomicInterval,
     safety_checks_elapsed: AtomicU64,
     remove_cache_elapsed: AtomicU64,
@@ -1948,6 +1952,7 @@ impl AccountsDb {
             filler_accounts_config: FillerAccountsConfig::default(),
             filler_account_suffix: None,
             num_hash_scan_passes,
+            log_dead_slots: AtomicBool::new(true),
         }
     }
 
@@ -2270,7 +2275,7 @@ impl AccountsDb {
         self.sender_bg_hasher = Some(sender);
     }
 
-    fn purge_keys_exact<'a, C: 'a>(
+    pub(crate) fn purge_keys_exact<'a, C: 'a>(
         &'a self,
         pubkey_to_slot_set: impl Iterator<Item = &'a (Pubkey, C)>,
     ) -> Vec<(u64, AccountInfo)>
@@ -3032,7 +3037,7 @@ impl AccountsDb {
 
     /// get all accounts in all the storages passed in
     /// for duplicate pubkeys, the account with the highest write_value is returned
-    fn get_unique_accounts_from_storages<'a, I>(
+    pub(crate) fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
     ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
@@ -3252,7 +3257,7 @@ impl AccountsDb {
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
     /// for stores not retained, insert in 'dirty_stores' and 'dead_storages'
-    fn mark_dirty_dead_stores(
+    pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
         dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
@@ -3272,7 +3277,7 @@ impl AccountsDb {
         }
     }
 
-    fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+    pub(crate) fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         recycle_stores_write_elapsed.stop();
@@ -3298,7 +3303,7 @@ impl AccountsDb {
     }
 
     /// return a store that can contain 'aligned_total' bytes and the time it took to execute
-    fn get_store_for_shrink(
+    pub(crate) fn get_store_for_shrink(
         &self,
         slot: Slot,
         aligned_total: u64,
@@ -4742,7 +4747,7 @@ impl AccountsDb {
         store
     }
 
-    fn page_align(size: u64) -> u64 {
+    pub(crate) fn page_align(size: u64) -> u64 {
         (size + (PAGE_SIZE - 1)) & !(PAGE_SIZE - 1)
     }
 
@@ -4898,7 +4903,7 @@ impl AccountsDb {
 
     /// Purges every slot in `removed_slots` from both the cache and storage. This includes
     /// entries in the accounts index, cache entries, and any backing storage entries.
-    fn purge_slots_from_cache_and_store<'a>(
+    pub(crate) fn purge_slots_from_cache_and_store<'a>(
         &self,
         removed_slots: impl Iterator<Item = &'a Slot> + Clone,
         purge_stats: &PurgeStats,
@@ -7320,7 +7325,9 @@ impl AccountsDb {
             .collect();
         measure.stop();
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
-        info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+        if self.log_dead_slots.load(Ordering::Relaxed) {
+            info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+        }
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
@@ -7570,7 +7577,7 @@ impl AccountsDb {
         );
     }
 
-    fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
+    pub(crate) fn store_accounts_frozen<'a, T: ReadableAccount + Sync + ZeroLamport>(
         &'a self,
         accounts: impl StorableAccounts<'a, T>,
         hashes: Option<&[impl Borrow<Hash>]>,
