@@ -4,7 +4,7 @@ use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::inc_new_counter_debug,
+    solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -855,11 +855,12 @@ impl LedgerStorage {
             .connection
             .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
-        info!(
-            "uploaded block for slot {}: {} transactions, {} bytes",
-            slot, num_transactions, bytes_written
+        datapoint_info!(
+            "storage-bigtable-upload-block",
+            ("slot", slot, i64),
+            ("transactions", num_transactions, i64),
+            ("bytes", bytes_written, i64),
         );
-
         Ok(())
     }
 
