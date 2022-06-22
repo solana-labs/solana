@@ -80,18 +80,22 @@ impl BankStart {
     }
 }
 
+// Sends the Result of the record operation, including the index in the slot of the first
+// transaction, if being tracked by WorkingBank
+type RecordResultSender = Sender<Result<Option<usize>>>;
+
 pub struct Record {
     pub mixin: Hash,
     pub transactions: Vec<VersionedTransaction>,
     pub slot: Slot,
-    pub sender: Sender<Result<Option<usize>>>, // Sends the index of `transactions.first()` in the slot, if being tracked by WorkingBank
+    pub sender: RecordResultSender,
 }
 impl Record {
     pub fn new(
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
         slot: Slot,
-        sender: Sender<Result<Option<usize>>>,
+        sender: RecordResultSender,
     ) -> Self {
         Self {
             mixin,
