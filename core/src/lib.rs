@@ -54,7 +54,7 @@ pub mod rewards_recorder_service;
 pub mod sample_performance_service;
 pub mod serve_repair;
 pub mod serve_repair_service;
-pub mod shred_fetch_stage;
+mod shred_fetch_stage;
 pub mod sigverify;
 pub mod sigverify_shreds;
 pub mod sigverify_stage;

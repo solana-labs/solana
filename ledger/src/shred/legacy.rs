@@ -322,7 +322,11 @@ impl ShredCode {
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::shred::MAX_DATA_SHREDS_PER_SLOT, matches::assert_matches};
+    use {
+        super::*,
+        crate::shred::{ShredType, MAX_DATA_SHREDS_PER_SLOT},
+        matches::assert_matches,
+    };
 
     #[test]
     fn test_sanitize_data_shred() {
@@ -369,7 +373,10 @@ mod test {
         {
             let mut shred = shred.clone();
             shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
-            assert_matches!(shred.sanitize(), Err(Error::InvalidDataShredIndex(32768)));
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidShredIndex(ShredType::Data, 32768))
+            );
         }
         {
             let mut shred = shred.clone();
@@ -423,6 +430,14 @@ mod test {
                 Err(Error::InvalidErasureShardIndex { .. })
             );
         }
+        {
+            let mut shred = shred.clone();
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32;
+            assert_matches!(
+                shred.sanitize(),
+                Err(Error::InvalidShredIndex(ShredType::Code, 32768))
+            );
+        }
         // pos >= num_coding is invalid.
         {
             let mut shred = shred.clone();
@@ -437,21 +452,18 @@ mod test {
         // shred has index > u32::MAX should fail.
         {
             let mut shred = shred.clone();
-            shred.common_header.fec_set_index = std::u32::MAX - 1;
+            shred.common_header.fec_set_index = MAX_DATA_SHREDS_PER_SLOT as u32 - 2;
             shred.coding_header.num_data_shreds = 2;
             shred.coding_header.num_coding_shreds = 4;
             shred.coding_header.position = 1;
-            shred.common_header.index = std::u32::MAX - 1;
+            shred.common_header.index = MAX_DATA_SHREDS_PER_SLOT as u32 - 2;
             assert_matches!(
                 shred.sanitize(),
                 Err(Error::InvalidErasureShardIndex { .. })
             );
 
             shred.coding_header.num_coding_shreds = 2000;
-            assert_matches!(
-                shred.sanitize(),
-                Err(Error::InvalidErasureShardIndex { .. })
-            );
+            assert_matches!(shred.sanitize(), Err(Error::InvalidNumCodingShreds(2000)));
 
             // Decreasing the number of num_coding_shreds will put it within
             // the allowed limit.

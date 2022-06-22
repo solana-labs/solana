@@ -250,7 +250,7 @@ impl RentDebits {
     }
 }
 
-type BankStatusCache = StatusCache<Result<()>>;
+pub type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "2YZk2K45HmmAafmxPJnYVXyQ7uA7WuBrRkpwrCawdK31")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
@@ -610,11 +610,6 @@ impl StatusCacheRc {
             .cloned()
             .sorted()
             .collect()
-    }
-
-    pub fn append(&self, slot_deltas: &[BankSlotDelta]) {
-        let mut sc = self.status_cache.write().unwrap();
-        sc.append(slot_deltas);
     }
 }
 

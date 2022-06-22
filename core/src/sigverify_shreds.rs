@@ -11,6 +11,7 @@ use {
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::clock::Slot,
     std::{
         collections::{HashMap, HashSet},
         sync::{Arc, RwLock},
@@ -39,10 +40,11 @@ impl ShredSigVerifier {
             packet_sender,
         }
     }
-    fn read_slots(batches: &[PacketBatch]) -> HashSet<u64> {
+    fn read_slots(batches: &[PacketBatch]) -> HashSet<Slot> {
         batches
             .iter()
             .flat_map(PacketBatch::iter)
+            .filter(|packet| !packet.meta.discard())
             .filter_map(shred::layout::get_shred)
             .filter_map(shred::layout::get_slot)
             .collect()
