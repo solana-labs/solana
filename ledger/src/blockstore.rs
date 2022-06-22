@@ -8617,7 +8617,7 @@ pub mod tests {
         let unconfirmed_slot_shreds = vec![shreds[1].clone()];
         assert_eq!(unconfirmed_slot_shreds[0].slot(), unconfirmed_slot);
 
-        // Insert into slot 9, mark it as dead
+        // Insert into slot 9
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         // Purge the slot
