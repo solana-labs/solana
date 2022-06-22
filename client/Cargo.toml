@@ -39,7 +39,6 @@ semver = "1.0.6"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 serde_json = "1.0.79"
-<<<<<<< HEAD
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.28" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.28" }
 solana-faucet = { path = "../faucet", version = "=1.10.28" }
@@ -51,20 +50,7 @@ solana-streamer = { path = "../streamer", version = "=1.10.28" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.28" }
 solana-version = { path = "../version", version = "=1.10.28" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.28" }
-=======
-solana-account-decoder = { path = "../account-decoder", version = "=1.11.0" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.0" }
-solana-faucet = { path = "../faucet", version = "=1.11.0" }
-solana-measure = { path = "../measure", version = "=1.11.0" }
-solana-metrics = { path = "../metrics", version = "=1.11.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
-solana-sdk = { path = "../sdk", version = "=1.11.0" }
-solana-streamer = { path = "../streamer", version = "=1.11.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
-solana-version = { path = "../version", version = "=1.11.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
 spl-token-2022 = { version = "=0.2.0", features = ["no-entrypoint"] }
->>>>>>> b42f34a7b (Update Rpc filters to support token-2022 (#24541))
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 tokio-stream = "0.1.8"
