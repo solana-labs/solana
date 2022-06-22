@@ -611,11 +611,6 @@ impl StatusCacheRc {
             .sorted()
             .collect()
     }
-
-    pub fn append(&self, slot_deltas: &[BankSlotDelta]) {
-        let mut sc = self.status_cache.write().unwrap();
-        sc.append(slot_deltas);
-    }
 }
 
 pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);

@@ -1663,7 +1663,7 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
-    bank.src.append(&slot_deltas);
+    bank.src.status_cache.write().unwrap().append(&slot_deltas);
 
     bank.prepare_rewrites_for_hash();
 
