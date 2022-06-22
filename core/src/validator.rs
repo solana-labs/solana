@@ -177,7 +177,7 @@ pub struct ValidatorConfig {
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
-    pub observable_vote_acounts: Arc<HashSet<Pubkey>>,
+    pub vote_accounts_to_monitor: Arc<HashSet<Pubkey>>,
 }
 
 impl Default for ValidatorConfig {
@@ -242,7 +242,7 @@ impl Default for ValidatorConfig {
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
-            observable_vote_acounts: Arc::new(HashSet::new()),
+            vote_accounts_to_monitor: Arc::new(HashSet::new()),
         }
     }
 }
@@ -808,57 +808,11 @@ impl Validator {
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
                 prioritization_fee_cache.clone(),
+                config.vote_accounts_to_monitor.clone(),
             )?;
 
             (
-<<<<<<< HEAD
                 Some(json_rpc_service),
-||||||| parent of 437ca7eafb (Add parameter to observe vote accounts.)
-                Some(JsonRpcService::new(
-                    rpc_addr,
-                    config.rpc_config.clone(),
-                    config.snapshot_config.clone(),
-                    bank_forks.clone(),
-                    block_commitment_cache.clone(),
-                    blockstore.clone(),
-                    cluster_info.clone(),
-                    Some(poh_recorder.clone()),
-                    genesis_config.hash(),
-                    ledger_path,
-                    config.validator_exit.clone(),
-                    config.known_validators.clone(),
-                    rpc_override_health_check.clone(),
-                    optimistically_confirmed_bank.clone(),
-                    config.send_transaction_service_config.clone(),
-                    max_slots.clone(),
-                    leader_schedule_cache.clone(),
-                    connection_cache.clone(),
-                    max_complete_transaction_status_slot,
-                )),
-=======
-                Some(JsonRpcService::new(
-                    rpc_addr,
-                    config.rpc_config.clone(),
-                    config.snapshot_config.clone(),
-                    bank_forks.clone(),
-                    block_commitment_cache.clone(),
-                    blockstore.clone(),
-                    cluster_info.clone(),
-                    Some(poh_recorder.clone()),
-                    genesis_config.hash(),
-                    ledger_path,
-                    config.validator_exit.clone(),
-                    config.known_validators.clone(),
-                    rpc_override_health_check.clone(),
-                    optimistically_confirmed_bank.clone(),
-                    config.send_transaction_service_config.clone(),
-                    max_slots.clone(),
-                    leader_schedule_cache.clone(),
-                    connection_cache.clone(),
-                    max_complete_transaction_status_slot,
-                    config.observable_vote_acounts.clone(),
-                )),
->>>>>>> 437ca7eafb (Add parameter to observe vote accounts.)
                 if !config.rpc_config.full_api {
                     None
                 } else {

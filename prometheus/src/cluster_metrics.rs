@@ -13,6 +13,7 @@ use std::{collections::HashSet, io, sync::Arc};
 struct ValidatorVoteInfo {
     balance: Lamports,
     last_vote: Slot,
+    vote_credits: u64,
 }
 
 fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo> {
@@ -24,7 +25,12 @@ fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo
 
     let last_vote = vote_state.votes.back()?.slot;
     let balance = Lamports(bank.get_balance(&vote_pubkey));
-    Some(ValidatorVoteInfo { balance, last_vote })
+    let vote_credits = vote_state.credits();
+    Some(ValidatorVoteInfo {
+        balance,
+        last_vote,
+        vote_credits,
+    })
 }
 
 pub fn write_cluster_metrics<W: io::Write>(
@@ -54,7 +60,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         out,
         &MetricFamily {
             name: "solana_node_identity_balance_sol",
-            help: "The node's finalized identity balance",
+            help: "The balance of the node's identity account",
             type_: "gauge",
             metrics: banks_with_commitments
                 .for_each_commitment(|bank| {

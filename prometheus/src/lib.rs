@@ -8,7 +8,7 @@ use solana_gossip::cluster_info::ClusterInfo;
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Lamports(pub u64);
 
 pub fn render_prometheus(
