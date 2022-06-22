@@ -590,6 +590,7 @@ The JSON structure of token balances is defined as a list of objects in the foll
 - `accountIndex: <number>` - Index of the account in which the token balance is provided for.
 - `mint: <string>` - Pubkey of the token's mint.
 - `owner: <string | undefined>` - Pubkey of token balance's owner.
+- `programId: <string | undefined>` - Pubkey of the Token program that owns the account.
 - `uiTokenAmount: <object>` -
   - `amount: <string>` - Raw amount of tokens as a string, ignoring decimals.
   - `decimals: <number>` - Number of decimals configured for token's mint.
@@ -3775,7 +3776,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3786,7 +3788,8 @@ The notification will be an object with the following fields:
                       "amount": "11513067900",
                       "uiAmountString": "11513.0679"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3797,7 +3800,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3808,7 +3812,8 @@ The notification will be an object with the following fields:
                       "amount": "15138514093",
                       "uiAmountString": "15138.514093"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "postTokenBalances": [
@@ -3821,7 +3826,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op"
+                    "owner": "LieKvPRE8XeX3Y2xVNHjKlpAScD12lYySBVQ4HqoJ5op",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 5,
@@ -3832,7 +3838,8 @@ The notification will be an object with the following fields:
                       "amount": "11513103028",
                       "uiAmountString": "11513.103028"
                     },
-                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk"
+                    "owner": "rXhAofQCT7NN9TUqigyEAUzV1uLL4boeD8CRkNBSkYk",
+                    "programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
                   },
                   {
                     "accountIndex": 10,
@@ -3843,7 +3850,8 @@ The notification will be an object with the following fields:
                       "amount": "0",
                       "uiAmountString": "0"
                     },
-                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU"
+                    "owner": "CL9wkGFT3SZRRNa9dgaovuRV7jrVVigBUZ6DjcgySsCU",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   },
                   {
                     "accountIndex": 11,
@@ -3854,7 +3862,8 @@ The notification will be an object with the following fields:
                       "amount": "15489767829",
                       "uiAmountString": "15489.767829"
                     },
-                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at"
+                    "owner": "BeiHVPRE8XeX3Y2xVNrSsTpAScH94nYySBVQ4HqgN9at",
+                    "programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
                   }
                 ],
                 "rewards": []
