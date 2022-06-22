@@ -257,6 +257,7 @@ fn create_sender_thread(
     target: &SocketAddr,
     tpu_use_quic: bool,
 ) -> thread::JoinHandle<()> {
+    // ConnectionCache is used instead of client because it gives ~6% higher pps
     let connection_cache = match tpu_use_quic {
         true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
         false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
@@ -279,8 +280,7 @@ fn create_sender_thread(
                         Ok(TransactionMsg::Transaction(data, time)) => {
                             let len = data.len();
                             let mut measure_send_txs = Measure::start("measure_send_txs");
-                            //let res = client.send_wire_transaction_batch(&data, &client_stats);
-                            let res = connection.send_wire_transaction_batch_async(data); 
+                            let res = connection.send_wire_transaction_batch_async(data);
 
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();
@@ -319,9 +319,10 @@ fn create_sender_thread(
         }
     }).unwrap()
 }
+
 fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> usize {
     if max_iterations_per_thread == 0 {
-        return SEND_BATCH_MAX_SIZE
+        return SEND_BATCH_MAX_SIZE;
     }
     min(max_iterations_per_thread - total_count, SEND_BATCH_MAX_SIZE)
 }
@@ -337,7 +338,6 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
 
     let mut transaction_generator = transaction_generator.clone();
     let transaction_params: &TransactionParams = &transaction_generator.transaction_params;
-    let client = client.clone();
 
     // Generate n=1000 unique keypairs
     // The number of chunks is described by binomial coefficient
@@ -357,44 +357,53 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
         keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
     }
 
-    thread::Builder::new().name("Generator".to_string()).spawn(move || {
-        let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-        let mut it = indexes.iter().permutations(permutation_size);
+    thread::Builder::new()
+        .name("Generator".to_string())
+        .spawn(move || {
+            let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+            let mut it = indexes.iter().permutations(permutation_size);
 
-        let mut total_count = 0;
-        loop {
-            let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
-            let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
-            let mut measure_generate_txs = Measure::start("measure_generate_txs");
-            for _ in 0..send_batch_size {
-                let chunk_keypairs = if generate_keypairs {
-                    let mut permutation = it.next();
-                    if permutation.is_none() {
-                        // if ran out of permutations, regenerate keys
-                        keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                        info!("Regenerate keypairs");
-                        permutation = it.next();
-                    }
-                    let permutation = permutation.unwrap();
-                    Some(apply_permutation(permutation, &keypairs_flat))
-                } else {
-                    None
-                };
-                let tx =
-                    transaction_generator.generate(payer.as_ref(), chunk_keypairs, client.as_ref());
-                data.push(bincode::serialize(&tx).unwrap());
+            let mut total_count = 0;
+            loop {
+                let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
+                let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+                let mut measure_generate_txs = Measure::start("measure_generate_txs");
+                for _ in 0..send_batch_size {
+                    let chunk_keypairs = if generate_keypairs {
+                        let mut permutation = it.next();
+                        if permutation.is_none() {
+                            // if ran out of permutations, regenerate keys
+                            keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                            info!("Regenerate keypairs");
+                            permutation = it.next();
+                        }
+                        let permutation = permutation.unwrap();
+                        Some(apply_permutation(permutation, &keypairs_flat))
+                    } else {
+                        None
+                    };
+                    let tx = transaction_generator.generate(
+                        payer.as_ref(),
+                        chunk_keypairs,
+                        client.as_ref(),
+                    );
+                    data.push(bincode::serialize(&tx).unwrap());
+                }
+                measure_generate_txs.stop();
+
+                let _ = tx_sender.send(TransactionMsg::Transaction(
+                    data,
+                    measure_generate_txs.as_ns(),
+                ));
+
+                total_count += send_batch_size;
+                if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
+                    let _ = tx_sender.send(TransactionMsg::Exit);
+                    break;
+                }
             }
-            measure_generate_txs.stop();
-
-            let _ = tx_sender.send(TransactionMsg::Transaction(data, measure_generate_txs.as_ns()));
-
-            total_count += send_batch_size;
-            if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
-                let _ = tx_sender.send(TransactionMsg::Exit);
-                break;
-            }
-        }
-    }).unwrap()
+        })
+        .unwrap()
 }
 
 fn get_target(
@@ -571,8 +580,8 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         .map(|payer| {
             let mut num_iterations = max_iterations_per_thread;
             // last thread will handle remaining iterations
-            if thread_id+1 == num_gen_threads {
-                num_iterations += iterations%num_gen_threads;
+            if thread_id + 1 == num_gen_threads {
+                num_iterations += iterations % num_gen_threads;
             }
             thread_id += 1;
 
