@@ -10,6 +10,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
+        signer::signers::Signers,
         system_instruction,
         transaction::Transaction,
     },
@@ -115,28 +116,152 @@ fn verify_funding_transfer<T: BenchTpsClient>(
     false
 }
 
-trait FundingTransactions<'a> {
-    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
-        to_lamports: u64,
-    );
-    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]);
+trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
     fn sign(&mut self, blockhash: Hash);
-    fn send<T: BenchTpsClient>(&self, client: &Arc<T>);
-    fn verify<T: 'static + BenchTpsClient + Send + Sync>(
+    fn send<C: BenchTpsClient>(&self, client: &Arc<C>);
+    fn verify<C: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
-        client: &Arc<T>,
+        client: &Arc<C>,
         to_lamports: u64,
     );
 }
 
-impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
+/// This trait allows reuse SendBatchTransactions to send
+/// transactions which require more than one signature
+trait Sliceable {
+    type Slice;
+    fn as_slice(&self) -> Self::Slice;
+    // Pubkey used as unique id to identify verified transactions
+    fn get_pubkey(&self) -> Pubkey;
+}
+
+impl<'a, T: Sliceable + Send + Sync> SendBatchTransactions<'a, T> for Vec<(T, Transaction)>
+where
+    <T as Sliceable>::Slice: Signers,
+{
+    fn sign(&mut self, blockhash: Hash) {
+        let mut sign_txs = Measure::start("sign_txs");
+        self.par_iter_mut().for_each(|(k, tx)| {
+            tx.sign(&k.as_slice(), blockhash);
+        });
+        sign_txs.stop();
+        debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
+    }
+
+    fn send<C: BenchTpsClient>(&self, client: &Arc<C>) {
+        let mut send_txs = Measure::start("send_and_clone_txs");
+        let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
+        client.send_batch(batch).expect("transfer");
+        send_txs.stop();
+        debug!("send {} {}", self.len(), send_txs);
+    }
+
+    fn verify<C: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<C>,
+        to_lamports: u64,
+    ) {
+        let starting_txs = self.len();
+        let verified_txs = Arc::new(AtomicUsize::new(0));
+        let too_many_failures = Arc::new(AtomicBool::new(false));
+        let loops = if starting_txs < 1000 { 3 } else { 1 };
+        // Only loop multiple times for small (quick) transaction batches
+        let time = Arc::new(Mutex::new(Instant::now()));
+        for _ in 0..loops {
+            let time = time.clone();
+            let failed_verify = Arc::new(AtomicUsize::new(0));
+            let client = client.clone();
+            let verified_txs = &verified_txs;
+            let failed_verify = &failed_verify;
+            let too_many_failures = &too_many_failures;
+            let verified_set: HashSet<Pubkey> = self
+                .par_iter()
+                .filter_map(move |(k, tx)| {
+                    let pubkey = k.get_pubkey();
+                    if too_many_failures.load(Ordering::Relaxed) {
+                        return None;
+                    }
+
+                    let verified = if verify_funding_transfer(&client, tx, to_lamports) {
+                        verified_txs.fetch_add(1, Ordering::Relaxed);
+                        Some(pubkey)
+                    } else {
+                        failed_verify.fetch_add(1, Ordering::Relaxed);
+                        None
+                    };
+
+                    let verified_txs = verified_txs.load(Ordering::Relaxed);
+                    let failed_verify = failed_verify.load(Ordering::Relaxed);
+                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+                    if failed_verify > 100 && failed_verify > verified_txs {
+                        too_many_failures.store(true, Ordering::Relaxed);
+                        warn!(
+                            "Too many failed transfers... {} remaining, {} verified, {} failures",
+                            remaining_count, verified_txs, failed_verify
+                        );
+                    }
+                    if remaining_count > 0 {
+                        let mut time_l = time.lock().unwrap();
+                        if time_l.elapsed().as_secs() > 2 {
+                            info!(
+                                "Verifying transfers... {} remaining, {} verified, {} failures",
+                                remaining_count, verified_txs, failed_verify
+                            );
+                            *time_l = Instant::now();
+                        }
+                    }
+
+                    verified
+                })
+                .collect();
+
+            self.retain(|(k, _)| !verified_set.contains(&k.get_pubkey()));
+            if self.is_empty() {
+                break;
+            }
+            info!("Looping verifications");
+
+            let verified_txs = verified_txs.load(Ordering::Relaxed);
+            let failed_verify = failed_verify.load(Ordering::Relaxed);
+            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
+            info!(
+                "Verifying transfers... {} remaining, {} verified, {} failures",
+                remaining_count, verified_txs, failed_verify
+            );
+            sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+type FundingSigners<'a> = &'a Keypair;
+type FundingChunk<'a> = [(FundingSigners<'a>, Vec<(Pubkey, u64)>)];
+type FundingContainer<'a> = Vec<(FundingSigners<'a>, Transaction)>;
+
+impl<'a> Sliceable for FundingSigners<'a> {
+    type Slice = [FundingSigners<'a>; 1];
+    fn as_slice(&self) -> Self::Slice {
+        [self]
+    }
+    fn get_pubkey(&self) -> Pubkey {
+        self.pubkey()
+    }
+}
+
+trait FundingTransactions<'a>: SendBatchTransactions<'a, FundingSigners<'a>> {
     fn fund<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
         client: &Arc<T>,
-        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
+        to_fund: &FundingChunk<'a>,
+        to_lamports: u64,
+    );
+    fn make(&mut self, to_fund: &FundingChunk<'a>);
+}
+
+impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
+    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &FundingChunk<'a>,
         to_lamports: u64,
     ) {
         self.make(to_fund);
@@ -174,9 +299,9 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
         info!("transferred");
     }
 
-    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]) {
+    fn make(&mut self, to_fund: &FundingChunk<'a>) {
         let mut make_txs = Measure::start("make_txs");
-        let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
+        let to_fund_txs: FundingContainer<'a> = to_fund
             .par_iter()
             .map(|(k, t)| {
                 let instructions = system_instruction::transfer_many(&k.pubkey(), t);
@@ -191,97 +316,5 @@ impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
             make_txs.as_us()
         );
         self.extend(to_fund_txs);
-    }
-
-    fn sign(&mut self, blockhash: Hash) {
-        let mut sign_txs = Measure::start("sign_txs");
-        self.par_iter_mut().for_each(|(k, tx)| {
-            tx.sign(&[*k], blockhash);
-        });
-        sign_txs.stop();
-        debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
-    }
-
-    fn send<T: BenchTpsClient>(&self, client: &Arc<T>) {
-        let mut send_txs = Measure::start("send_and_clone_txs");
-        let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
-        client.send_batch(batch).expect("transfer");
-        send_txs.stop();
-        debug!("send {} {}", self.len(), send_txs);
-    }
-
-    fn verify<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_lamports: u64,
-    ) {
-        let starting_txs = self.len();
-        let verified_txs = Arc::new(AtomicUsize::new(0));
-        let too_many_failures = Arc::new(AtomicBool::new(false));
-        let loops = if starting_txs < 1000 { 3 } else { 1 };
-        // Only loop multiple times for small (quick) transaction batches
-        let time = Arc::new(Mutex::new(Instant::now()));
-        for _ in 0..loops {
-            let time = time.clone();
-            let failed_verify = Arc::new(AtomicUsize::new(0));
-            let client = client.clone();
-            let verified_txs = &verified_txs;
-            let failed_verify = &failed_verify;
-            let too_many_failures = &too_many_failures;
-            let verified_set: HashSet<Pubkey> = self
-                .par_iter()
-                .filter_map(move |(k, tx)| {
-                    if too_many_failures.load(Ordering::Relaxed) {
-                        return None;
-                    }
-
-                    let verified = if verify_funding_transfer(&client, tx, to_lamports) {
-                        verified_txs.fetch_add(1, Ordering::Relaxed);
-                        Some(k.pubkey())
-                    } else {
-                        failed_verify.fetch_add(1, Ordering::Relaxed);
-                        None
-                    };
-
-                    let verified_txs = verified_txs.load(Ordering::Relaxed);
-                    let failed_verify = failed_verify.load(Ordering::Relaxed);
-                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-                    if failed_verify > 100 && failed_verify > verified_txs {
-                        too_many_failures.store(true, Ordering::Relaxed);
-                        warn!(
-                            "Too many failed transfers... {} remaining, {} verified, {} failures",
-                            remaining_count, verified_txs, failed_verify
-                        );
-                    }
-                    if remaining_count > 0 {
-                        let mut time_l = time.lock().unwrap();
-                        if time_l.elapsed().as_secs() > 2 {
-                            info!(
-                                "Verifying transfers... {} remaining, {} verified, {} failures",
-                                remaining_count, verified_txs, failed_verify
-                            );
-                            *time_l = Instant::now();
-                        }
-                    }
-
-                    verified
-                })
-                .collect();
-
-            self.retain(|(k, _)| !verified_set.contains(&k.pubkey()));
-            if self.is_empty() {
-                break;
-            }
-            info!("Looping verifications");
-
-            let verified_txs = verified_txs.load(Ordering::Relaxed);
-            let failed_verify = failed_verify.load(Ordering::Relaxed);
-            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-            info!(
-                "Verifying transfers... {} remaining, {} verified, {} failures",
-                remaining_count, verified_txs, failed_verify
-            );
-            sleep(Duration::from_millis(100));
-        }
     }
 }
