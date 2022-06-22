@@ -717,7 +717,8 @@ pub mod test {
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
-        sleep(Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS * 10)).await;
+        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(2000);
+        sleep(Duration::from_millis(sleep_time)).await;
 
         // Test that the stream was created, but timed out in read
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 1);
