@@ -800,6 +800,7 @@ impl Validator {
                     config.send_transaction_service_config.clone(),
                     max_slots.clone(),
                     leader_schedule_cache.clone(),
+                    connection_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
                 if !config.rpc_config.full_api {
