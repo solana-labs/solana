@@ -1989,10 +1989,9 @@ impl JsonRpcRequestProcessor {
     ) -> RpcCustomResult<Vec<(Pubkey, AccountSharedData)>> {
         optimize_filters(&mut filters);
         let filter_closure = |account: &AccountSharedData| {
-            filters.iter().all(|filter_type| match filter_type {
-                RpcFilterType::DataSize(size) => account.data().len() as u64 == *size,
-                RpcFilterType::Memcmp(compare) => compare.bytes_match(account.data()),
-            })
+            filters
+                .iter()
+                .all(|filter_type| filter_type.allows(account))
         };
         if self
             .config
@@ -2045,9 +2044,7 @@ impl JsonRpcRequestProcessor {
         // later updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
-        filters.push(RpcFilterType::DataSize(
-            TokenAccount::get_packed_len() as u64
-        ));
+        filters.push(RpcFilterType::TokenAccountState);
         // Filter on Owner address
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
@@ -2070,14 +2067,9 @@ impl JsonRpcRequestProcessor {
                     &IndexKey::SplTokenOwner(*owner_key),
                     |account| {
                         account.owner() == program_id
-                            && filters.iter().all(|filter_type| match filter_type {
-                                RpcFilterType::DataSize(size) => {
-                                    account.data().len() as u64 == *size
-                                }
-                                RpcFilterType::Memcmp(compare) => {
-                                    compare.bytes_match(account.data())
-                                }
-                            })
+                            && filters
+                                .iter()
+                                .all(|filter_type| filter_type.allows(account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
@@ -2104,9 +2096,7 @@ impl JsonRpcRequestProcessor {
         // updates. We include the redundant filters here to avoid returning these accounts.
         //
         // Filter on Token Account state
-        filters.push(RpcFilterType::DataSize(
-            TokenAccount::get_packed_len() as u64
-        ));
+        filters.push(RpcFilterType::TokenAccountState);
         // Filter on Mint address
         filters.push(RpcFilterType::Memcmp(Memcmp {
             offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
@@ -2128,14 +2118,9 @@ impl JsonRpcRequestProcessor {
                     &IndexKey::SplTokenMint(*mint_key),
                     |account| {
                         account.owner() == program_id
-                            && filters.iter().all(|filter_type| match filter_type {
-                                RpcFilterType::DataSize(size) => {
-                                    account.data().len() as u64 == *size
-                                }
-                                RpcFilterType::Memcmp(compare) => {
-                                    compare.bytes_match(account.data())
-                                }
-                            })
+                            && filters
+                                .iter()
+                                .all(|filter_type| filter_type.allows(account))
                     },
                     &ScanConfig::default(),
                     bank.byte_limit_for_scans(),
