@@ -155,6 +155,7 @@ pub struct StreamStats {
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
+    pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
     pub(crate) connection_add_failed: AtomicUsize,
     pub(crate) connection_add_failed_unstaked_node: AtomicUsize,
@@ -244,6 +245,11 @@ impl StreamStats {
             (
                 "stream_read_errors",
                 self.total_stream_read_errors.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "stream_read_timeouts",
+                self.total_stream_read_timeouts.swap(0, Ordering::Relaxed),
                 i64
             ),
         );
