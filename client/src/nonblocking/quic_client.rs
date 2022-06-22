@@ -427,7 +427,6 @@ impl QuicClient {
     }
 }
 
-#[derive(Clone)]
 pub struct QuicTpuConnection {
     client: Arc<QuicClient>,
     connection_stats: Arc<ConnectionCacheStats>,

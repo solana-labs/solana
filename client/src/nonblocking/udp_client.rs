@@ -85,7 +85,7 @@ mod tests {
         let addr = addr_str.parse().unwrap();
         let socket =
             solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))).unwrap();
-        let connection = UdpTpuConnection::new(addr, socket);
+        let connection = UdpTpuConnection::new_from_addr(socket, addr);
         let reader = UdpSocket::bind(addr_str).await.expect("bind");
         check_send_one(&connection, &reader).await;
         check_send_batch(&connection, &reader).await;

@@ -321,8 +321,11 @@ impl ConnectionCache {
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
             let connection = match &self.use_quic {
-                UseQUIC::Yes => Connection::Quic(Arc::new(QuicClient::new(endpoint.as_ref().unwrap().clone(), *addr))),
-                UseQUIC::No(socket) => Connection::Udp(socket.clone())
+                UseQUIC::Yes => Connection::Quic(Arc::new(QuicClient::new(
+                    endpoint.as_ref().unwrap().clone(),
+                    *addr,
+                ))),
+                UseQUIC::No(socket) => Connection::Udp(socket.clone()),
             };
 
             let connection = Arc::new(connection);
@@ -512,7 +515,6 @@ impl Default for ConnectionCache {
     }
 }
 
-#[derive(Clone)]
 enum Connection {
     Udp(Arc<UdpSocket>),
     Quic(Arc<QuicClient>),

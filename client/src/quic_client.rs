@@ -27,7 +27,7 @@ lazy_static! {
 }
 
 pub struct QuicTpuConnection {
-    inner: NonblockingQuicTpuConnection,
+    inner: Arc<NonblockingQuicTpuConnection>,
 }
 impl QuicTpuConnection {
     pub fn new(
@@ -35,7 +35,11 @@ impl QuicTpuConnection {
         tpu_addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let inner = NonblockingQuicTpuConnection::new(endpoint, tpu_addr, connection_stats);
+        let inner = Arc::new(NonblockingQuicTpuConnection::new(
+            endpoint,
+            tpu_addr,
+            connection_stats,
+        ));
         Self { inner }
     }
 
@@ -43,7 +47,10 @@ impl QuicTpuConnection {
         client: Arc<QuicClient>,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let inner = NonblockingQuicTpuConnection::new_with_client(client, connection_stats);
+        let inner = Arc::new(NonblockingQuicTpuConnection::new_with_client(
+            client,
+            connection_stats,
+        ));
         Self { inner }
     }
 }
