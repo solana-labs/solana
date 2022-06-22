@@ -250,7 +250,7 @@ impl RentDebits {
     }
 }
 
-type BankStatusCache = StatusCache<Result<()>>;
+pub type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "2YZk2K45HmmAafmxPJnYVXyQ7uA7WuBrRkpwrCawdK31")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
