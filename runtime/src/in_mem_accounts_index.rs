@@ -1033,6 +1033,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
         let mut duplicate = vec![];
+        let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
             let new_ref_count = if v.is_cached() { 0 } else { 1 };
@@ -1048,12 +1049,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         Some((slot_list, ref_count))
                     }
                     None => {
+                        count += 1;
                         // not on disk, insert it
                         Some((vec![entry], new_ref_count))
                     }
                 }
             });
         });
+        self.stats().inc_insert_count(count);
         self.startup_info
             .lock()
             .unwrap()
