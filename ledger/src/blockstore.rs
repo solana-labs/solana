@@ -994,8 +994,9 @@ impl Blockstore {
         self.completed_slots_senders.lock().unwrap().clear();
     }
 
-    /// Range-delete all entries which prefix matches the specified `slot` and
-    /// clear all the related `SlotMeta` except its next_slots.
+    /// Range-delete all entries which prefix matches the specified `slot`,
+    /// remove `slot` its' parents SlotMeta next_slots list, and
+    /// clear `slot`'s SlotMeta (except for next_slots).
     ///
     /// This function currently requires `insert_shreds_lock`, as both
     /// `clear_unconfirmed_slot()` and `insert_shreds_handle_duplicate()`
@@ -1011,6 +1012,21 @@ impl Blockstore {
             self.run_purge(slot, slot, PurgeType::PrimaryIndex)
                 .expect("Purge database operations failed");
 
+            // Clear this slot as a next slot from parent
+            if let Some(parent_slot) = slot_meta.parent_slot {
+                let mut parent_slot_meta = self
+                    .meta(parent_slot)
+                    .expect("Couldn't fetch from SlotMeta column family")
+                    .expect("Unconfirmed slot should have had parent slot set");
+                // .retain() is a linear scan; however, next_slots should
+                // only contain several elements so this isn't so bad
+                parent_slot_meta
+                    .next_slots
+                    .retain(|&next_slot| next_slot != slot);
+                self.meta_cf
+                    .put(parent_slot, &parent_slot_meta)
+                    .expect("Couldn't insert into SlotMeta column family");
+            }
             // Reinsert parts of `slot_meta` that are important to retain, like the `next_slots`
             // field.
             slot_meta.clear_unconfirmed_slot();
@@ -8580,6 +8596,47 @@ pub mod tests {
             .get_data_shred(unconfirmed_slot, 0)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn test_clear_unconfirmed_slot_and_insert_again() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        let confirmed_slot = 7;
+        let unconfirmed_slot = 8;
+        let slots = vec![confirmed_slot, unconfirmed_slot];
+
+        let shreds: Vec<_> = make_chaining_slot_entries(&slots, 1)
+            .into_iter()
+            .flat_map(|x| x.0)
+            .collect();
+        assert_eq!(shreds.len(), 2);
+
+        // Save off unconfirmed_slot for later, just one shred at shreds[1]
+        let unconfirmed_slot_shreds = vec![shreds[1].clone()];
+        assert_eq!(unconfirmed_slot_shreds[0].slot(), unconfirmed_slot);
+
+        // Insert into slot 9
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Purge the slot
+        blockstore.clear_unconfirmed_slot(unconfirmed_slot);
+        assert!(!blockstore.is_dead(unconfirmed_slot));
+        assert!(blockstore
+            .get_data_shred(unconfirmed_slot, 0)
+            .unwrap()
+            .is_none());
+
+        // Re-add unconfirmed_slot and confirm that confirmed_slot only has
+        // unconfirmed_slot in next_slots once
+        blockstore
+            .insert_shreds(unconfirmed_slot_shreds, None, false)
+            .unwrap();
+        assert_eq!(
+            blockstore.meta(confirmed_slot).unwrap().unwrap().next_slots,
+            vec![unconfirmed_slot]
+        );
     }
 
     #[test]
