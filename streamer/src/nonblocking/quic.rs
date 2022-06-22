@@ -32,7 +32,7 @@ use {
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
-const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1000;
+const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1;
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
@@ -261,7 +261,6 @@ async fn handle_connection(
                                 stats
                                     .total_stream_read_timeouts
                                     .fetch_add(1, Ordering::Relaxed);
-                                break;
                             }
                         }
                     }
@@ -718,18 +717,19 @@ pub mod test {
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
-        sleep(Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS * 2)).await;
+        let sleep_time = (WAIT_FOR_STREAM_TIMEOUT_MS * 1000).min(2000);
+        sleep(Duration::from_millis(sleep_time)).await;
 
         // Test that the stream was created, but timed out in read
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 1);
-        assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 1);
+        assert_ne!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
+        // Test that more writes are still successful to the stream (i.e. the stream was writable
+        // even after the timeouts)
         for _ in 0..PACKET_DATA_SIZE {
-            // Ignoring any errors here. s1.finish() will test the error condition
-            s1.write_all(&[0u8]).await.unwrap_or_default();
+            s1.write_all(&[0u8]).await.unwrap();
         }
-        // Test that more writes are not successful to the stream
-        s1.finish().await.unwrap_err();
+        s1.finish().await.unwrap();
 
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
