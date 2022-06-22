@@ -1421,7 +1421,7 @@ impl BankingStage {
                             .map(|result| {
                                 if result.was_executed() {
                                     let this_transaction_index = transaction_index;
-                                    transaction_index = transaction_index.saturating_add(1);
+                                    saturating_add_assign!(transaction_index, 1);
                                     this_transaction_index
                                 } else {
                                     0

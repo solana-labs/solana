@@ -84,7 +84,7 @@ pub struct Record {
     pub mixin: Hash,
     pub transactions: Vec<VersionedTransaction>,
     pub slot: Slot,
-    pub sender: Sender<Result<Option<usize>>>,
+    pub sender: Sender<Result<Option<usize>>>, // Sends the index of `transactions.first()` in the slot, if being tracked by WorkingBank
 }
 impl Record {
     pub fn new(
@@ -123,6 +123,7 @@ impl TransactionRecorder {
             is_exited,
         }
     }
+    // Returns the index of `transactions.first()` in the slot, if being tracked by WorkingBank
     pub fn record(
         &self,
         bank_slot: Slot,
@@ -739,6 +740,7 @@ impl PohRecorder {
         }
     }
 
+    // Returns the index of `transactions.first()` in the slot, if being tracked by WorkingBank
     pub fn record(
         &mut self,
         bank_slot: Slot,

@@ -535,18 +535,17 @@ fn process_entries_with_callback(
                 }
 
                 let starting_index = *starting_index;
-                let mut transaction_indexes: Vec<_> =
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
-
-                if randomize {
+                let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                        transactions.drain(..).zip(transaction_indexes).collect();
+                        transactions.drain(..).zip(starting_index..).collect();
                     transactions_and_indexes.shuffle(&mut rng);
                     let (txs, indexes): (Vec<_>, Vec<_>) =
                         transactions_and_indexes.into_iter().unzip();
                     *transactions = txs;
-                    transaction_indexes = indexes;
-                }
+                    indexes
+                } else {
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
+                };
 
                 loop {
                     // try to lock the accounts
@@ -557,7 +556,7 @@ fn process_entries_with_callback(
                     if first_lock_err.is_ok() {
                         batches.push(TransactionBatchWithIndexes {
                             batch,
-                            transaction_indexes: transaction_indexes.to_vec(),
+                            transaction_indexes,
                         });
                         // done with this entry
                         break;
