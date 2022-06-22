@@ -1,10 +1,9 @@
 #![feature(test)]
-
 extern crate test;
 
 use {
     bincode::serialize,
-    solana_runtime::status_cache::*,
+    solana_runtime::{bank::BankStatusCache, status_cache::*},
     solana_sdk::{
         hash::{hash, Hash},
         signature::Signature,
@@ -12,10 +11,8 @@ use {
     test::Bencher,
 };
 
-type BankStatusCache = StatusCache<()>;
-
 #[bench]
-fn test_statuscache_serialize(bencher: &mut Bencher) {
+fn bench_status_cache_serialize(bencher: &mut Bencher) {
     let mut status_cache = BankStatusCache::default();
     status_cache.add_root(0);
     status_cache.clear();
@@ -28,10 +25,25 @@ fn test_statuscache_serialize(bencher: &mut Bencher) {
             id = hash(id.as_ref());
             sigbytes.extend(id.as_ref());
             let sig = Signature::new(&sigbytes);
-            status_cache.insert(&blockhash, &sig, 0, ());
+            status_cache.insert(&blockhash, &sig, 0, Ok(()));
         }
     }
     bencher.iter(|| {
         let _ = serialize(&status_cache.slot_deltas(&[0])).unwrap();
     });
+}
+
+#[bench]
+fn bench_status_cache_slot_deltas(bencher: &mut Bencher) {
+    let mut status_cache = BankStatusCache::default();
+
+    // fill the status cache
+    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
+    for slot in &slots {
+        for _ in 0..5 {
+            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
+        }
+    }
+
+    bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
 }
