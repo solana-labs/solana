@@ -781,35 +781,28 @@ impl Validator {
             } else {
                 None
             };
-
-            let json_rpc_service = JsonRpcService::new(
-                rpc_addr,
-                config.rpc_config.clone(),
-                config.snapshot_config.clone(),
-                bank_forks.clone(),
-                block_commitment_cache.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                Some(poh_recorder.clone()),
-                genesis_config.hash(),
-                ledger_path,
-                config.validator_exit.clone(),
-                config.known_validators.clone(),
-                rpc_override_health_check.clone(),
-                optimistically_confirmed_bank.clone(),
-                config.send_transaction_service_config.clone(),
-                max_slots.clone(),
-                leader_schedule_cache.clone(),
-                connection_cache.clone(),
-                max_complete_transaction_status_slot,
-            )
-            .unwrap_or_else(|s| {
-                error!("Failed to create JSON RPC Service: {}", s);
-                abort();
-            });
-
             (
-                Some(json_rpc_service),
+                Some(JsonRpcService::new(
+                    rpc_addr,
+                    config.rpc_config.clone(),
+                    config.snapshot_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    Some(poh_recorder.clone()),
+                    genesis_config.hash(),
+                    ledger_path,
+                    config.validator_exit.clone(),
+                    config.known_validators.clone(),
+                    rpc_override_health_check.clone(),
+                    optimistically_confirmed_bank.clone(),
+                    config.send_transaction_service_config.clone(),
+                    max_slots.clone(),
+                    leader_schedule_cache.clone(),
+                    connection_cache.clone(),
+                    max_complete_transaction_status_slot,
+                )),
                 if !config.rpc_config.full_api {
                     None
                 } else {
