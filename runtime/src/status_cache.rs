@@ -34,13 +34,6 @@ type SlotDeltaMap<T> = HashMap<Slot, Status<T>>;
 // construct a new one. Usually derived from a status cache's `SlotDeltaMap`
 pub type SlotDelta<T> = (Slot, bool, Status<T>);
 
-#[derive(Debug, PartialEq)]
-pub struct SignatureConfirmationStatus<T> {
-    pub slot: Slot,
-    pub confirmations: usize,
-    pub status: T,
-}
-
 #[derive(Clone, Debug, AbiExample)]
 pub struct StatusCache<T: Serialize + Clone> {
     cache: KeyStatusMap<T>,
