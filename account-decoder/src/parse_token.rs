@@ -18,13 +18,13 @@ use {
 
 // A helper function to convert spl_token::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-fn spl_token_id() -> Pubkey {
+pub(crate) fn spl_token_id() -> Pubkey {
     Pubkey::new_from_array(spl_token::id().to_bytes())
 }
 
 // A helper function to convert spl_token_2022::id() as spl_sdk::pubkey::Pubkey to
 // solana_sdk::pubkey::Pubkey
-fn spl_token_2022_id() -> Pubkey {
+pub(crate) fn spl_token_2022_id() -> Pubkey {
     Pubkey::new_from_array(spl_token_2022::id().to_bytes())
 }
 
@@ -510,7 +510,7 @@ mod test {
             delegate: COption::None,
             delegated_amount: 0,
         };
-        let account_size = ExtensionType::get_account_len::<Mint>(&[
+        let account_size = ExtensionType::get_account_len::<Account>(&[
             ExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer,
         ]);
