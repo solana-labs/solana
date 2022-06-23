@@ -175,7 +175,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         self.purge_roots();
     }
 
-    pub fn roots(&self) -> &HashSet<u64> {
+    pub fn roots(&self) -> &HashSet<Slot> {
         &self.roots
     }
 
