@@ -678,14 +678,9 @@ impl PohRecorder {
             drop(poh_lock);
 
             if let Some(poh_entry) = record_mixin_res {
-<<<<<<< HEAD
+                let num_transactions = transactions.len();
                 let (send_entry_res, send_entry_time) = Measure::this(
                     |_| {
-=======
-                let num_transactions = transactions.len();
-                let (send_entry_res, send_entry_time) = measure!(
-                    {
->>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
                         let entry = Entry {
                             num_hashes: poh_entry.num_hashes,
                             hash: poh_entry.hash,
@@ -1948,14 +1943,8 @@ mod tests {
             for _ in 0..(bank.ticks_per_slot() * 2) {
                 poh_recorder.tick();
             }
-<<<<<<< HEAD
-            poh_recorder.set_bank(&bank);
-            assert_eq!(Some(false), bank.check_hash_age(&genesis_hash, 1));
-=======
             poh_recorder.set_bank(&bank, false);
-            assert!(!bank.is_hash_valid_for_age(&genesis_hash, 0));
-            assert!(bank.is_hash_valid_for_age(&genesis_hash, 1));
->>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
+            assert_eq!(Some(false), bank.check_hash_age(&genesis_hash, 1));
         }
     }
 

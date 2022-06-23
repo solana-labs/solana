@@ -96,14 +96,6 @@ impl BlockCostCapacityMeter {
     }
 }
 
-<<<<<<< HEAD
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
-=======
 struct TransactionBatchWithIndexes<'a, 'b> {
     pub batch: TransactionBatch<'a, 'b>,
     pub transaction_indexes: Vec<usize>,
@@ -114,16 +106,12 @@ struct ReplayEntry {
     starting_index: usize,
 }
 
-// get_max_thread_count to match number of threads in the old code.
-// see: https://github.com/solana-labs/solana/pull/24853
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("blockstore_processor_{}", ix))
-        .build()
-        .unwrap();
-}
->>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
+thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
+                    .num_threads(get_thread_count())
+                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
+                    .build()
+                    .unwrap())
+);
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -378,53 +366,28 @@ fn execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
-<<<<<<< HEAD
-    let mut tx_batches: Vec<TransactionBatch> = vec![];
-=======
     let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
-    let mut tx_batch_costs: Vec<u64> = vec![];
->>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
         let mut slice_start = 0;
-<<<<<<< HEAD
         tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
             let next_index = index + 1;
             batch_cost = batch_cost.saturating_add(cost);
             if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let tx_batch =
-                    rebatch_transactions(&lock_results, bank, &sanitized_txs, slice_start, index);
+                let tx_batch = rebatch_transactions(
+                    &lock_results,
+                    bank,
+                    &sanitized_txs,
+                    slice_start,
+                    index,
+                    &transaction_indexes,
+                );
                 slice_start = next_index;
                 tx_batches.push(tx_batch);
                 batch_cost = 0;
             }
         });
-=======
-        tx_costs
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, cost_pair)| {
-                let next_index = index + 1;
-                batch_cost = batch_cost.saturating_add(cost_pair.0);
-                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
-                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let tx_batch = rebatch_transactions(
-                        &lock_results,
-                        bank,
-                        &sanitized_txs,
-                        slice_start,
-                        index,
-                        &transaction_indexes,
-                    );
-                    slice_start = next_index;
-                    tx_batches.push(tx_batch);
-                    tx_batch_costs.push(batch_cost_without_bpf);
-                    batch_cost = 0;
-                    batch_cost_without_bpf = 0;
-                }
-            });
->>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
         &tx_batches[..]
     } else {
         batches
