@@ -11,7 +11,8 @@ use {
         },
         blockstore_meta::*,
         blockstore_options::{
-            AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
+            AccessType, BlockstoreOptions, BlockstoreRocksFifoOptions, LedgerColumnOptions,
+            ShredStorageType,
         },
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
@@ -83,9 +84,6 @@ pub use {
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
-pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
 // get_max_thread_count to match number of threads in the old code.
 // see: https://github.com/solana-labs/solana/pull/24853
@@ -226,14 +224,6 @@ impl Blockstore {
         &self.ledger_path
     }
 
-    /// The directory under `ledger_path` to the underlying blockstore.
-    pub fn blockstore_directory(shred_storage_type: &ShredStorageType) -> &str {
-        match shred_storage_type {
-            ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
-            ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-        }
-    }
-
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         Self::do_open(ledger_path, BlockstoreOptions::default())
@@ -245,9 +235,12 @@ impl Blockstore {
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
-        let blockstore_path = ledger_path.join(Self::blockstore_directory(
-            &options.column_options.shred_storage_type,
-        ));
+        let blockstore_path = ledger_path.join(
+            options
+                .column_options
+                .shred_storage_type
+                .blockstore_directory(),
+        );
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -434,9 +427,15 @@ impl Blockstore {
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the root directory doesn't exist
         fs::create_dir_all(ledger_path)?;
-        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)).and(
-            Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)),
+        Database::destroy(
+            &Path::new(ledger_path).join(ShredStorageType::RocksLevel.blockstore_directory()),
         )
+        .and(Database::destroy(
+            &Path::new(ledger_path).join(
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+                    .blockstore_directory(),
+            ),
+        ))
     }
 
     /// Returns the SlotMeta of the specified slot.
@@ -3825,7 +3824,7 @@ pub fn create_new_ledger(
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore_dir = Blockstore::blockstore_directory(&column_options.shred_storage_type);
+    let blockstore_dir = column_options.shred_storage_type.blockstore_directory();
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -4385,9 +4384,7 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(Blockstore::blockstore_directory(
-                &ShredStorageType::RocksLevel,
-            ))
+            .join(ShredStorageType::RocksLevel.blockstore_directory())
             .exists());
     }
 
@@ -4416,24 +4413,11 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(Blockstore::blockstore_directory(
-                &ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-            ))
+            .join(
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+                    .blockstore_directory()
+            )
             .exists());
-    }
-
-    #[test]
-    fn test_rocksdb_directory() {
-        assert_eq!(
-            Blockstore::blockstore_directory(&ShredStorageType::RocksLevel),
-            BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
-        );
-        assert_eq!(
-            Blockstore::blockstore_directory(&ShredStorageType::RocksFifo(
-                BlockstoreRocksFifoOptions::default()
-            )),
-            BLOCKSTORE_DIRECTORY_ROCKS_FIFO
-        );
     }
 
     #[test]
