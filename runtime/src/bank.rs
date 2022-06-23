@@ -46,7 +46,7 @@ use {
             AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
+        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
@@ -64,6 +64,7 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
+        storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -3188,7 +3189,7 @@ impl Bank {
             .iter()
             .map(|x| (&x.stake_pubkey, &x.stake_account))
             .collect::<Vec<_>>();
-        self.store_accounts(&accounts_to_store);
+        self.store_accounts((self.slot(), &accounts_to_store[..]));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -5382,7 +5383,7 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) = measure!(self.store_accounts(&accounts_to_store));
+            let (_, measure) = measure!(self.store_accounts((self.slot(), &accounts_to_store[..])));
             time_storing_accounts_us += measure.as_us();
         }
 
@@ -6226,18 +6227,20 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.store_accounts(&[(pubkey, account)])
+        self.store_accounts((self.slot(), &[(pubkey, account)][..]))
     }
 
-    pub fn store_accounts(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
+    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport>(
+        &self,
+        accounts: impl StorableAccounts<'a, T>,
+    ) {
         assert!(!self.freeze_started());
-        self.rc
-            .accounts
-            .store_accounts_cached((self.slot(), accounts));
         let mut m = Measure::start("stakes_cache.check_and_store");
-        for (pubkey, account) in accounts {
-            self.stakes_cache.check_and_store(pubkey, account);
-        }
+        (0..accounts.len()).into_iter().for_each(|i| {
+            self.stakes_cache
+                .check_and_store(accounts.pubkey(i), accounts.account(i))
+        });
+        self.rc.accounts.store_accounts_cached(accounts);
         m.stop();
         self.rc
             .accounts
@@ -7805,7 +7808,9 @@ pub(crate) mod tests {
                 MAX_LOCKOUT_HISTORY,
             },
         },
-        std::{result, sync::atomic::Ordering::Release, thread::Builder, time::Duration},
+        std::{
+            result, str::FromStr, sync::atomic::Ordering::Release, thread::Builder, time::Duration,
+        },
         test_utils::goto_end_of_slot,
     };
 
@@ -9383,10 +9388,11 @@ pub(crate) mod tests {
                 ])
         );
         let range = Bank::pubkey_range_from_partition((0, 1, max));
+        const ONE: u8 = 0x01;
         assert_eq!(
             range,
             Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ONE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
             ])
@@ -9397,6 +9403,7 @@ pub(crate) mod tests {
                 ])
         );
         let range = Bank::pubkey_range_from_partition((max - 3, max - 2, max));
+        const FD: u8 = 0xfd;
         assert_eq!(
             range,
             Pubkey::new_from_array([
@@ -9405,7 +9412,7 @@ pub(crate) mod tests {
                 0x00, 0x00, 0x00, 0x00,
             ])
                 ..=Pubkey::new_from_array([
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, FD, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff
                 ])
@@ -9417,12 +9424,7 @@ pub(crate) mod tests {
                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00,
-            ])
-                ..=Pubkey::new_from_array([
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                ])
+            ])..=pubkey_max_value()
         );
 
         fn should_cause_overflow(partition_count: u64) -> bool {
@@ -9442,19 +9444,7 @@ pub(crate) mod tests {
 
         for max in &[max_exact, max_inexact] {
             let range = Bank::pubkey_range_from_partition((max - 1, max - 1, *max));
-            assert_eq!(
-                range,
-                Pubkey::new_from_array([
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                ])
-                    ..=Pubkey::new_from_array([
-                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                    ])
-            );
+            assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
         }
     }
 
@@ -9490,11 +9480,7 @@ pub(crate) mod tests {
         let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
             range,
-            Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ])
+            Pubkey::new_from_array([0x00; 32])
                 ..=Pubkey::new_from_array([
                     0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -9504,36 +9490,24 @@ pub(crate) mod tests {
         let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((1, 1, 3));
-        assert_eq!(
-            range,
-            Pubkey::new_from_array([
-                0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ])
-                ..=Pubkey::new_from_array([
-                    0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-                ])
-        );
+        let same = Pubkey::new_from_array([
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+        ]);
+        assert_eq!(range, same..=same);
         let _ = test_map.range(range);
 
         let range = Bank::pubkey_range_from_partition((2, 2, 3));
-        assert_eq!(
-            range,
-            Pubkey::new_from_array([
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                0xff, 0xff, 0xff, 0xff
-            ])
-                ..=Pubkey::new_from_array([
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-                ])
-        );
+        assert_eq!(range, pubkey_max_value()..=pubkey_max_value());
         let _ = test_map.range(range);
+    }
+
+    fn pubkey_max_value() -> Pubkey {
+        let highest = Pubkey::from_str("JEKNVnkbo3jma5nREBBJCDoXFVeKkD56V3xKrvRmWxFG").unwrap();
+        let arr = Pubkey::new_from_array([0xff; 32]);
+        assert_eq!(highest, arr);
+        arr
     }
 
     #[test]
@@ -9543,11 +9517,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             range,
-            Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ])
+            Pubkey::new_from_array([0x00; 32])
                 ..=Pubkey::new_from_array([
                     0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -9581,11 +9551,7 @@ pub(crate) mod tests {
         let range = Bank::pubkey_range_from_partition((0, 0, 3));
         assert_eq!(
             range,
-            Pubkey::new_from_array([
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00
-            ])
+            Pubkey::new_from_array([0x00; 32])
                 ..=Pubkey::new_from_array([
                     0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x54, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -14712,7 +14678,6 @@ pub(crate) mod tests {
                    Maybe, inconsistent program activation is detected on snapshot restore?"
     )]
     fn test_add_builtin_account_after_frozen() {
-        use std::str::FromStr;
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         let slot = 123;
@@ -14734,7 +14699,6 @@ pub(crate) mod tests {
                     CiXgo2KHKSDmDnV1F6B69eWFgNAPiSBjjYvfB4cvRNre)."
     )]
     fn test_add_builtin_account_replace_none() {
-        use std::str::FromStr;
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         let slot = 123;
@@ -14826,7 +14790,6 @@ pub(crate) mod tests {
                    Maybe, inconsistent program activation is detected on snapshot restore?"
     )]
     fn test_add_precompiled_account_after_frozen() {
-        use std::str::FromStr;
         let (genesis_config, _mint_keypair) = create_genesis_config(100_000);
 
         let slot = 123;
