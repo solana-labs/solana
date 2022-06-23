@@ -3,7 +3,6 @@ extern crate test;
 
 use {
     bincode::serialize,
-    itertools::Itertools,
     solana_runtime::{bank::BankStatusCache, status_cache::*},
     solana_sdk::{
         hash::{hash, Hash},
@@ -63,44 +62,4 @@ fn bench_status_cache_root_slot_deltas(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| test::black_box(status_cache.root_slot_deltas()));
-}
-
-// bprumo TODO: remove this bench
-#[bench]
-fn bench_status_cache_slot_deltas_get_roots_sorted(bencher: &mut Bencher) {
-    let mut status_cache = BankStatusCache::default();
-
-    // fill the status cache
-    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
-    for slot in &slots {
-        for _ in 0..5 {
-            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
-        }
-        status_cache.add_root(*slot);
-    }
-
-    bencher.iter(|| {
-        let slots: Vec<_> = status_cache.roots().iter().cloned().sorted().collect();
-        test::black_box(status_cache.slot_deltas(&slots))
-    });
-}
-
-// bprumo TODO: remove this bench
-#[bench]
-fn bench_status_cache_slot_deltas_get_roots_unsorted(bencher: &mut Bencher) {
-    let mut status_cache = BankStatusCache::default();
-
-    // fill the status cache
-    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
-    for slot in &slots {
-        for _ in 0..5 {
-            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
-        }
-        status_cache.add_root(*slot);
-    }
-
-    bencher.iter(|| {
-        let slots: Vec<_> = status_cache.roots().iter().cloned().collect();
-        test::black_box(status_cache.slot_deltas(&slots))
-    });
 }
