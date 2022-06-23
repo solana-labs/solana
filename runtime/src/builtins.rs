@@ -210,21 +210,9 @@ pub fn get_pubkeys() -> Vec<Pubkey> {
 
     let mut pubkeys = Vec::new();
     pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.id));
-    pubkeys.extend(
-        builtins
-            .feature_transitions
-            .iter()
-            .filter_map(|f| match &f.0 {
-                InnerBuiltinFeatureTransition::Add {
-                    builtin,
-                    feature_id: _,
-                } => Some(builtin.id),
-                InnerBuiltinFeatureTransition::RemoveOrRetain {
-                    previously_added_builtin: _,
-                    addition_feature_id: _,
-                    removal_feature_id: _,
-                } => None,
-            }),
-    );
+    pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
+        BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.id),
+        BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
+    }));
     pubkeys
 }
