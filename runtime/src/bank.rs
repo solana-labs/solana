@@ -598,24 +598,6 @@ pub struct StatusCacheRc {
     pub status_cache: Arc<RwLock<BankStatusCache>>,
 }
 
-impl StatusCacheRc {
-    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<BankSlotDelta> {
-        let sc = self.status_cache.read().unwrap();
-        sc.slot_deltas(slots)
-    }
-
-    pub fn roots(&self) -> Vec<Slot> {
-        self.status_cache
-            .read()
-            .unwrap()
-            .roots()
-            .iter()
-            .cloned()
-            .sorted()
-            .collect()
-    }
-}
-
 pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
 
 pub struct TransactionResults {
