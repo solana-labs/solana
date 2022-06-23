@@ -96,12 +96,34 @@ impl BlockCostCapacityMeter {
     }
 }
 
+<<<<<<< HEAD
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
                     .thread_name(|ix| format!("blockstore_processor_{}", ix))
                     .build()
                     .unwrap())
 );
+=======
+struct TransactionBatchWithIndexes<'a, 'b> {
+    pub batch: TransactionBatch<'a, 'b>,
+    pub transaction_indexes: Vec<usize>,
+}
+
+struct ReplayEntry {
+    entry: EntryType,
+    starting_index: usize,
+}
+
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .build()
+        .unwrap();
+}
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -157,13 +179,17 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatch,
+    batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
+    let TransactionBatchWithIndexes {
+        batch,
+        transaction_indexes,
+    } = batch;
     let record_token_balances = transaction_status_sender.is_some();
 
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -241,6 +267,7 @@ fn execute_batch(
             balances,
             token_balances,
             rent_debits,
+            transaction_indexes.to_vec(),
         );
     }
 
@@ -250,7 +277,7 @@ fn execute_batch(
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -297,32 +324,39 @@ fn rebatch_transactions<'a>(
     sanitized_txs: &'a [SanitizedTransaction],
     start: usize,
     end: usize,
-) -> TransactionBatch<'a, 'a> {
+    transaction_indexes: &'a [usize],
+) -> TransactionBatchWithIndexes<'a, 'a> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
     let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
     tx_batch.set_needs_unlock(false);
 
-    tx_batch
+    let transaction_indexes = transaction_indexes[start..=end].to_vec();
+    TransactionBatchWithIndexes {
+        batch: tx_batch,
+        transaction_indexes,
+    }
 }
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
-    let (lock_results, sanitized_txs): (Vec<_>, Vec<_>) = batches
+    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
             batch
+                .batch
                 .lock_results()
                 .iter()
                 .cloned()
-                .zip(batch.sanitized_transactions().to_vec())
+                .zip(batch.batch.sanitized_transactions().to_vec())
+                .zip(batch.transaction_indexes.to_vec())
         })
         .unzip();
 
@@ -344,11 +378,17 @@ fn execute_batches(
 
     let target_batch_count = get_thread_count() as u64;
 
+<<<<<<< HEAD
     let mut tx_batches: Vec<TransactionBatch> = vec![];
+=======
+    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let mut tx_batch_costs: Vec<u64> = vec![];
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
         let mut slice_start = 0;
+<<<<<<< HEAD
         tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
             let next_index = index + 1;
             batch_cost = batch_cost.saturating_add(cost);
@@ -360,6 +400,31 @@ fn execute_batches(
                 batch_cost = 0;
             }
         });
+=======
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                        &transaction_indexes,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    tx_batch_costs.push(batch_cost_without_bpf);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
         &tx_batches[..]
     } else {
         batches
@@ -381,6 +446,9 @@ fn execute_batches(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
+///
+/// This method is for use testing against a single Bank, and assumes `Bank::transaction_count()`
+/// represents the number of transactions executed in this Bank
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
@@ -396,10 +464,24 @@ pub fn process_entries_for_tests(
     };
 
     let mut timings = ExecuteTimings::default();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
+    let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
+    let mut replay_entries: Vec<_> =
+        entry::verify_transactions(entries, Arc::new(verify_transaction))?
+            .into_iter()
+            .map(|entry| {
+                let starting_index = entry_starting_index;
+                if let EntryType::Transactions(ref transactions) = entry {
+                    entry_starting_index = entry_starting_index.saturating_add(transactions.len());
+                }
+                ReplayEntry {
+                    entry,
+                    starting_index,
+                }
+            })
+            .collect();
     let result = process_entries_with_callback(
         bank,
-        &mut entries,
+        &mut replay_entries,
         randomize,
         None,
         transaction_status_sender,
@@ -414,9 +496,10 @@ pub fn process_entries_for_tests(
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
+#[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
-    entries: &mut [EntryType],
+    entries: &mut [ReplayEntry],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -430,7 +513,11 @@ fn process_entries_with_callback(
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
 
-    for entry in entries {
+    for ReplayEntry {
+        entry,
+        starting_index,
+    } in entries
+    {
         match entry {
             EntryType::Tick(hash) => {
                 // If it's a tick, save it for later
@@ -460,9 +547,18 @@ fn process_entries_with_callback(
                         .send_cost_details(bank.clone(), transactions.iter());
                 }
 
-                if randomize {
-                    transactions.shuffle(&mut rng);
-                }
+                let starting_index = *starting_index;
+                let transaction_indexes = if randomize {
+                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                        transactions.drain(..).zip(starting_index..).collect();
+                    transactions_and_indexes.shuffle(&mut rng);
+                    let (txs, indexes): (Vec<_>, Vec<_>) =
+                        transactions_and_indexes.into_iter().unzip();
+                    *transactions = txs;
+                    indexes
+                } else {
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
+                };
 
                 loop {
                     // try to lock the accounts
@@ -471,7 +567,10 @@ fn process_entries_with_callback(
 
                     // if locking worked
                     if first_lock_err.is_ok() {
-                        batches.push(batch);
+                        batches.push(TransactionBatchWithIndexes {
+                            batch,
+                            transaction_indexes,
+                        });
                         // done with this entry
                         break;
                     }
@@ -917,7 +1016,18 @@ pub fn confirm_slot(
     }?;
 
     let num_entries = entries.len();
-    let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
+    let mut entry_starting_indexes = Vec::with_capacity(num_entries);
+    let mut entry_starting_index = progress.num_txs;
+    let num_txs = entries
+        .iter()
+        .map(|e| {
+            let num_txs = e.transactions.len();
+            let next_starting_index = entry_starting_index.saturating_add(num_txs);
+            entry_starting_indexes.push(entry_starting_index);
+            entry_starting_index = next_starting_index;
+            num_txs
+        })
+        .sum::<usize>();
     trace!(
         "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
@@ -984,10 +1094,19 @@ pub fn confirm_slot(
             let mut replay_elapsed = Measure::start("replay_elapsed");
             let mut execute_timings = ExecuteTimings::default();
             let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+            let mut replay_entries: Vec<_> = entries
+                .unwrap()
+                .into_iter()
+                .zip(entry_starting_indexes)
+                .map(|(entry, starting_index)| ReplayEntry {
+                    entry,
+                    starting_index,
+                })
+                .collect();
             // Note: This will shuffle entries' transactions in-place.
             let process_result = process_entries_with_callback(
                 bank,
-                &mut entries.unwrap(),
+                &mut replay_entries,
                 true, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
@@ -1453,6 +1572,7 @@ pub struct TransactionStatusBatch {
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub rent_debits: Vec<RentDebits>,
+    pub transaction_indexes: Vec<usize>,
 }
 
 #[derive(Clone)]
@@ -1469,6 +1589,7 @@ impl TransactionStatusSender {
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         rent_debits: Vec<RentDebits>,
+        transaction_indexes: Vec<usize>,
     ) {
         let slot = bank.slot();
 
@@ -1487,6 +1608,7 @@ impl TransactionStatusSender {
                 balances,
                 token_balances,
                 rent_debits,
+                transaction_indexes,
             }))
         {
             trace!(
@@ -3930,6 +4052,121 @@ pub mod tests {
     }
 
     #[test]
+    fn test_confirm_slot_entries_progress_num_txs_indexes() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100 * LAMPORTS_PER_SOL);
+        let genesis_hash = genesis_config.hash();
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut timing = ConfirmationTiming::default();
+        let mut progress = ConfirmationProgress::new(genesis_hash);
+        let amount = genesis_config.rent.minimum_balance(0);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        let keypair4 = Keypair::new();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair1.pubkey())
+            .unwrap();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
+
+        let (transaction_status_sender, transaction_status_receiver) =
+            crossbeam_channel::unbounded();
+        let transaction_status_sender = TransactionStatusSender {
+            sender: transaction_status_sender,
+        };
+
+        let blockhash = bank.last_blockhash();
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&blockhash, 1, vec![tx1, tx2]);
+        let new_hash = entry.hash;
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            None,
+            &VerifyRecyclers::default(),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 2);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 2);
+            assert_eq!(batch.transaction_indexes.len(), 2);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&0));
+            assert!(batch.transaction_indexes.contains(&1));
+        } else {
+            panic!("batch should have been sent");
+        }
+
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx3 = system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&new_hash, 1, vec![tx1, tx2, tx3]);
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            None,
+            &VerifyRecyclers::default(),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 5);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 3);
+            assert_eq!(batch.transaction_indexes.len(), 3);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&2));
+            assert!(batch.transaction_indexes.contains(&3));
+            assert!(batch.transaction_indexes.contains(&4));
+        } else {
+            panic!("batch should have been sent");
+        }
+    }
+
+    #[test]
     fn test_rebatch_transactions() {
         let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
@@ -3942,6 +4179,8 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let keypair2 = Keypair::new();
         let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
 
         let txs = vec![
             SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
@@ -3956,20 +4195,40 @@ pub mod tests {
                 1,
                 genesis_config.hash(),
             )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                genesis_config.hash(),
+            )),
         ];
 
         let batch = bank.prepare_sanitized_batch(&txs);
         assert!(batch.needs_unlock());
+        let transaction_indexes = vec![42, 43, 44];
 
         let batch2 = rebatch_transactions(
             batch.lock_results(),
             &bank,
             batch.sanitized_transactions(),
             0,
-            1,
+            0,
+            &transaction_indexes,
         );
         assert!(batch.needs_unlock());
-        assert!(!batch2.needs_unlock());
+        assert!(!batch2.batch.needs_unlock());
+        assert_eq!(batch2.transaction_indexes, vec![42]);
+
+        let batch3 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            1,
+            2,
+            &transaction_indexes,
+        );
+        assert!(!batch3.batch.needs_unlock());
+        assert_eq!(batch3.transaction_indexes, vec![43, 44]);
     }
 
     #[test]

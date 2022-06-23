@@ -358,7 +358,7 @@ fn main() {
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             )),
         );
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.lock().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -439,7 +439,7 @@ fn main() {
                     std::u64::MAX,
                 );
 
-                poh_recorder.lock().unwrap().set_bank(&bank);
+                poh_recorder.lock().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     leader_schedule_cache.set_root(&bank);

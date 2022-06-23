@@ -107,9 +107,15 @@ struct RecordTransactionsSummary {
     // Metrics describing how time was spent recording transactions
     record_transactions_timings: RecordTransactionsTimings,
     // Result of trying to record the transactions into the PoH stream
+<<<<<<< HEAD
     result: Result<usize, PohRecorderError>,
     // Transactions that failed record, and are retryable
     retryable_indexes: Vec<usize>,
+=======
+    result: Result<(), PohRecorderError>,
+    // Index in the slot of the first transaction recorded
+    starting_transaction_index: Option<usize>,
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
 }
 
 #[derive(Debug)]
@@ -1233,6 +1239,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
+<<<<<<< HEAD
         let (
             (processed_transactions, processed_transactions_indexes),
             execution_results_to_transactions_time,
@@ -1256,6 +1263,9 @@ impl BankingStage {
         );
         record_transactions_timings.execution_results_to_transactions_us =
             execution_results_to_transactions_time.as_us();
+=======
+        let mut starting_transaction_index = None;
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
 
         let num_to_commit = processed_transactions.len();
         debug!("num_to_commit: {} ", num_to_commit);
@@ -1280,7 +1290,9 @@ impl BankingStage {
             record_transactions_timings.poh_record_us = poh_record_time.as_us();
 
             match res {
-                Ok(()) => (),
+                Ok(starting_index) => {
+                    starting_transaction_index = starting_index;
+                }
                 Err(PohRecorderError::MaxHeightReached) => {
                     inc_new_counter_info!("banking_stage-max_height_reached", 1);
                     inc_new_counter_info!(
@@ -1292,7 +1304,11 @@ impl BankingStage {
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
+<<<<<<< HEAD
                         retryable_indexes: processed_transactions_indexes,
+=======
+                        starting_transaction_index: None,
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
                     };
                 }
                 Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
@@ -1301,8 +1317,13 @@ impl BankingStage {
 
         RecordTransactionsSummary {
             record_transactions_timings,
+<<<<<<< HEAD
             result: (Ok(num_to_commit)),
             retryable_indexes: vec![],
+=======
+            result: Ok(()),
+            starting_transaction_index,
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
         }
     }
 
@@ -1406,6 +1427,7 @@ impl BankingStage {
             result: commit_transactions_result,
             retryable_indexes: retryable_record_transaction_indexes,
             record_transactions_timings,
+            starting_transaction_index,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = record_transactions_timings;
 
@@ -1478,6 +1500,20 @@ impl BankingStage {
                         let post_balances = bank.collect_balances(batch);
                         let post_token_balances =
                             collect_token_balances(bank, batch, &mut mint_decimals);
+                        let mut transaction_index = starting_transaction_index.unwrap_or_default();
+                        let batch_transaction_indexes: Vec<_> = tx_results
+                            .execution_results
+                            .iter()
+                            .map(|result| {
+                                if result.was_executed() {
+                                    let this_transaction_index = transaction_index;
+                                    saturating_add_assign!(transaction_index, 1);
+                                    this_transaction_index
+                                } else {
+                                    0
+                                }
+                            })
+                            .collect();
                         transaction_status_sender.send_transaction_status_batch(
                             bank.clone(),
                             txs,
@@ -1488,6 +1524,7 @@ impl BankingStage {
                                 post_token_balances,
                             ),
                             tx_results.rent_debits,
+                            batch_transaction_indexes,
                         );
                     }
                 },
@@ -2784,7 +2821,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -3040,7 +3077,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3136,6 +3173,90 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn test_bank_process_and_record_transactions_all_unexecuted() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10_000);
+        let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let transactions = {
+            let mut tx =
+                system_transaction::transfer(&mint_keypair, &pubkey, 1, genesis_config.hash());
+            // Add duplicate account key
+            tx.message.account_keys.push(pubkey);
+            sanitize_transactions(vec![tx])
+        };
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let blockstore = Blockstore::open(ledger_path.path())
+                .expect("Expected to be able to open database ledger");
+            let (poh_recorder, _entry_receiver, record_receiver) = PohRecorder::new(
+                bank.tick_height(),
+                bank.last_blockhash(),
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &pubkey,
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+            let recorder = poh_recorder.recorder();
+            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+
+            let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
+
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            let process_transactions_batch_output = BankingStage::process_and_record_transactions(
+                &bank,
+                &transactions,
+                &recorder,
+                0,
+                None,
+                &gossip_vote_sender,
+                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+            );
+
+            let ExecuteAndCommitTransactionsOutput {
+                transactions_attempted_execution_count,
+                executed_transactions_count,
+                executed_with_successful_result_count,
+                commit_transactions_result,
+                retryable_transaction_indexes,
+                ..
+            } = process_transactions_batch_output.execute_and_commit_transactions_output;
+
+            assert_eq!(transactions_attempted_execution_count, 1);
+            assert_eq!(executed_transactions_count, 0);
+            assert_eq!(executed_with_successful_result_count, 0);
+            assert!(retryable_transaction_indexes.is_empty());
+            assert_eq!(
+                commit_transactions_result.ok(),
+                Some(vec![CommitTransactionDetails::NotCommitted; 1])
+            );
+
+            poh_recorder
+                .lock()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    #[test]
+>>>>>>> a6ba5a9a0 (Add transaction index in slot to geyser plugin TransactionInfo (#25688))
     fn test_bank_process_and_record_transactions_cost_tracker() {
         solana_logger::setup();
         let GenesisConfigInfo {
@@ -3167,7 +3288,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
@@ -3317,7 +3438,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3517,7 +3638,7 @@ mod tests {
         let recorder = poh_recorder.recorder();
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.lock().unwrap().set_bank(&bank, false);
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3724,7 +3845,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3885,7 +4006,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -4042,7 +4163,7 @@ mod tests {
             // Processes one packet per iteration of the loop
             let num_packets_to_process_per_iteration = num_conflicting_transactions;
             for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
-                poh_recorder.lock().unwrap().set_bank(&bank);
+                poh_recorder.lock().unwrap().set_bank(&bank, false);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
                     max_tx_processing_ns,
@@ -4091,7 +4212,7 @@ mod tests {
             // each iteration of this loop will process one element of the batch per iteration of the
             // loop.
             let interrupted_iteration = 1;
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
