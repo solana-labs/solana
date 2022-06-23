@@ -3208,12 +3208,6 @@ impl Bank {
             .store_stake_accounts_us
             .fetch_add(m.as_us(), Relaxed);
 
-        let mut stake_rewards = stake_rewards
-            .into_iter()
-            .filter(|x| x.get_stake_reward() > 0)
-            .map(|x| (x.stake_pubkey, x.stake_reward_info))
-            .collect();
-
         let mut m = Measure::start("store_vote_accounts");
         let mut vote_rewards = vote_account_rewards
             .into_iter()
@@ -3243,15 +3237,20 @@ impl Bank {
                     }
                 },
             )
-            .collect();
+            .collect::<Vec<_>>();
 
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
 
+        let additional_reserve = stake_rewards.len() + vote_rewards.len();
         {
             let mut rewards = self.rewards.write().unwrap();
+            rewards.reserve(additional_reserve);
             rewards.append(&mut vote_rewards);
-            rewards.append(&mut stake_rewards);
+            stake_rewards
+                .into_iter()
+                .filter(|x| x.get_stake_reward() > 0)
+                .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
         }
 
         point_value.rewards as f64 / point_value.points as f64
