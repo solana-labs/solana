@@ -710,7 +710,7 @@ mod test {
             blockstore::{make_many_slot_entries, Blockstore},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
-            shred::Shredder,
+            shred::{ProcessShredsStats, Shredder},
         },
         solana_sdk::{
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -729,9 +729,12 @@ mod test {
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
         let (data_shreds, _) = shredder.entries_to_shreds(
-            keypair, entries, true, // is_last_in_slot
+            keypair,
+            entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            &mut ProcessShredsStats::default(),
         );
         data_shreds
     }

@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::cluster_nodes::ClusterNodesCache,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
     std::{thread::sleep, time::Duration},
 };
@@ -92,6 +92,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         self.next_shred_index += data_shreds.len() as u32;
@@ -105,6 +106,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 true,
                 self.next_shred_index,
                 self.next_code_index,
+                &mut ProcessShredsStats::default(),
             );
             // Don't mark the last shred as last so that validators won't know
             // that they've gotten all the shreds, and will continue trying to
@@ -115,6 +117,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 false,
                 self.next_shred_index,
                 self.next_code_index,
+                &mut ProcessShredsStats::default(),
             );
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
