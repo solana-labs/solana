@@ -110,6 +110,8 @@ struct RecordTransactionsSummary {
     record_transactions_timings: RecordTransactionsTimings,
     // Result of trying to record the transactions into the PoH stream
     result: Result<(), PohRecorderError>,
+    // Index in the slot of the first transaction recorded
+    starting_transaction_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1203,6 +1205,7 @@ impl BankingStage {
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
+        let mut starting_transaction_index = None;
 
         if !transactions.is_empty() {
             let num_to_record = transactions.len();
@@ -1217,7 +1220,9 @@ impl BankingStage {
             record_transactions_timings.poh_record_us = poh_record_time.as_us();
 
             match res {
-                Ok(()) => (),
+                Ok(starting_index) => {
+                    starting_transaction_index = starting_index;
+                }
                 Err(PohRecorderError::MaxHeightReached) => {
                     inc_new_counter_info!("banking_stage-max_height_reached", 1);
                     inc_new_counter_info!(
@@ -1227,6 +1232,7 @@ impl BankingStage {
                     return RecordTransactionsSummary {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
+                        starting_transaction_index: None,
                     };
                 }
                 Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
@@ -1236,6 +1242,7 @@ impl BankingStage {
         RecordTransactionsSummary {
             record_transactions_timings,
             result: Ok(()),
+            starting_transaction_index,
         }
     }
 
@@ -1328,6 +1335,7 @@ impl BankingStage {
         let RecordTransactionsSummary {
             result: record_transactions_result,
             record_transactions_timings,
+            starting_transaction_index,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = RecordTransactionsTimings {
             execution_results_to_transactions_us: execution_results_to_transactions_time.as_us(),
@@ -1406,6 +1414,20 @@ impl BankingStage {
                         let post_balances = bank.collect_balances(batch);
                         let post_token_balances =
                             collect_token_balances(bank, batch, &mut mint_decimals);
+                        let mut transaction_index = starting_transaction_index.unwrap_or_default();
+                        let batch_transaction_indexes: Vec<_> = tx_results
+                            .execution_results
+                            .iter()
+                            .map(|result| {
+                                if result.was_executed() {
+                                    let this_transaction_index = transaction_index;
+                                    saturating_add_assign!(transaction_index, 1);
+                                    this_transaction_index
+                                } else {
+                                    0
+                                }
+                            })
+                            .collect();
                         transaction_status_sender.send_transaction_status_batch(
                             bank.clone(),
                             txs,
@@ -1416,6 +1438,7 @@ impl BankingStage {
                                 post_token_balances,
                             ),
                             tx_results.rent_debits,
+                            batch_transaction_indexes,
                         );
                     }
                 },
@@ -2692,7 +2715,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -2914,7 +2937,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3049,7 +3072,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3122,7 +3145,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
@@ -3272,7 +3295,7 @@ mod tests {
             let recorder = poh_recorder.recorder();
             let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3472,7 +3495,7 @@ mod tests {
         let recorder = poh_recorder.recorder();
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.lock().unwrap().set_bank(&bank, false);
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3679,7 +3702,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3840,7 +3863,7 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3997,7 +4020,7 @@ mod tests {
             // Processes one packet per iteration of the loop
             let num_packets_to_process_per_iteration = num_conflicting_transactions;
             for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
-                poh_recorder.lock().unwrap().set_bank(&bank);
+                poh_recorder.lock().unwrap().set_bank(&bank, false);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
                     max_tx_processing_ns,
@@ -4046,7 +4069,7 @@ mod tests {
             // each iteration of this loop will process one element of the batch per iteration of the
             // loop.
             let interrupted_iteration = 1;
-            poh_recorder.lock().unwrap().set_bank(&bank);
+            poh_recorder.lock().unwrap().set_bank(&bank, false);
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.lock().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
