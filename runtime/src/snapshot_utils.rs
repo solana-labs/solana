@@ -1663,7 +1663,7 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
-    bank.src.status_cache.write().unwrap().append(&slot_deltas);
+    bank.status_cache.write().unwrap().append(&slot_deltas);
 
     bank.prepare_rewrites_for_hash();
 
@@ -1949,7 +1949,7 @@ pub fn package_and_archive_full_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-    let slot_deltas = bank.src.status_cache.read().unwrap().root_slot_deltas();
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
@@ -1999,7 +1999,7 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    let slot_deltas = bank.src.status_cache.read().unwrap().root_slot_deltas();
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
