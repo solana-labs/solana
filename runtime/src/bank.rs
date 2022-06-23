@@ -173,7 +173,7 @@ use {
 struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
     calculate_points_us: AtomicU64,
-    redeem_rewards_us: AtomicU64,
+    redeem_rewards_us: u64,
     store_stake_accounts_us: AtomicU64,
     store_vote_accounts_us: AtomicU64,
     invalid_cached_vote_accounts: usize,
@@ -1949,11 +1949,7 @@ impl Bank {
                             metrics.calculate_points_us.load(Relaxed),
                             i64
                         ),
-                        (
-                            "redeem_rewards_us",
-                            metrics.redeem_rewards_us.load(Relaxed),
-                            i64
-                        ),
+                        ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
                         (
                             "store_stake_accounts_us",
                             metrics.store_stake_accounts_us.load(Relaxed),
@@ -3183,7 +3179,7 @@ impl Bank {
                 .collect()
         });
         m.stop();
-        metrics.redeem_rewards_us.fetch_add(m.as_us(), Relaxed);
+        metrics.redeem_rewards_us += m.as_us();
 
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
