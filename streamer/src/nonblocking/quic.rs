@@ -263,15 +263,14 @@ async fn handle_connection(
                                     .fetch_add(1, Ordering::Relaxed);
                             }
                         }
+                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     }
                     Err(e) => {
                         debug!("stream error: {:?}", e);
-                        stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                         break;
                     }
                 },
                 None => {
-                    stats.total_streams.fetch_sub(1, Ordering::Relaxed);
                     break;
                 }
             }
@@ -804,13 +803,19 @@ pub mod test {
             staked_nodes,
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
-            stats,
+            stats.clone(),
         )
         .unwrap();
 
         check_multiple_streams(receiver, server_address).await;
+        assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.total_new_streams.load(Ordering::Relaxed), 20);
+        assert_eq!(stats.total_connections.load(Ordering::Relaxed), 2);
+        assert_eq!(stats.total_new_connections.load(Ordering::Relaxed), 2);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+        assert_eq!(stats.total_connections.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.total_new_connections.load(Ordering::Relaxed), 2);
     }
 
     #[test]
