@@ -2995,7 +2995,7 @@ describe('Connection', function () {
           blockhash.value.blockhash,
           {
             commitment: 'finalized',
-            minContextSlot: blockhash.context.slot+1
+            minContextSlot: Number.MAX_SAFE_INTEGER
           });
         expect(isValid.value).to.be.false;
       });
