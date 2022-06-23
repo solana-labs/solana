@@ -182,6 +182,39 @@ impl BankSendVotesStats {
     }
 }
 
+#[derive(Default)]
+struct VoteProcessingTiming {
+    gossip_txn_processing_time_us: u64,
+    gossip_slot_confirming_time_us: u64,
+    last_report: u64,
+}
+
+impl VoteProcessingTiming {
+    fn update(&mut self, vote_txn_processing_time_us: u64, vote_slot_confirming_time_us: u64) {
+        self.gossip_txn_processing_time_us += vote_txn_processing_time_us;
+        self.gossip_slot_confirming_time_us += vote_slot_confirming_time_us;
+        let now = timestamp();
+        let elapsed_ms = now - self.last_report;
+        if elapsed_ms > 1000 {
+            datapoint_info!(
+                "vote-processing-timing",
+                (
+                    "vote_txn_processing_us",
+                    self.gossip_txn_processing_time_us as i64,
+                    i64,
+                ),
+                (
+                    "slot_confirming_time_us",
+                    self.gossip_slot_confirming_time_us as i64,
+                    i64,
+                ),
+            );
+            *self = VoteProcessintTiming::default();
+            self.last_report = now;
+        }
+    }
+}
+
 pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -450,6 +483,7 @@ impl ClusterInfoVoteListener {
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
         let cluster_confirmed_slot_sender = Some(cluster_confirmed_slot_sender);
+        let vote_processing_time = Some(VoteProcessingTiming::Default());
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -480,6 +514,7 @@ impl ClusterInfoVoteListener {
                 &replay_votes_receiver,
                 &bank_notification_sender,
                 &cluster_confirmed_slot_sender,
+                &vote_procesing_time,
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
@@ -519,6 +554,7 @@ impl ClusterInfoVoteListener {
             replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
     }
 
@@ -532,6 +568,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &Option<VoteProcessingTiming>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -560,6 +597,7 @@ impl ClusterInfoVoteListener {
                     verified_vote_sender,
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
+                    vote_processing_time,
                 ));
             }
             remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
@@ -695,11 +733,13 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &Option<VoteProcessingTiming>,
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
+        let mut gossip_vote_txn_processing_time = Measure::start("gossip_vote_processing_time");
         let votes = gossip_vote_txs
             .iter()
             .filter_map(vote_parser::parse_vote_transaction)
@@ -722,8 +762,11 @@ impl ClusterInfoVoteListener {
                 cluster_confirmed_slot_sender,
             );
         }
+        gossip_vote_txn_processing_time.stop();
+        let gossip_vote_txn_processing_time_us = gossip_vote_txn_processing_time.as_us();
 
         // Process all the slots accumulated from replay and gossip.
+        let mut gossip_vote_slot_confirm_time = Measure::start("gossip_vote_slot_confirm_time");
         for (slot, mut slot_diff) in diff {
             let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
             {
@@ -770,6 +813,14 @@ impl ClusterInfoVoteListener {
             }
 
             w_slot_tracker.gossip_only_stake += gossip_only_stake
+        }
+        gossip_vote_slot_confirming_time.stop();
+        let gossip_vote_slot_confirming_time_us = gossip_vote_slot_confirming_time.as_us();
+        if let Some(vote_processing_time) = vote_processing_time {
+            vote_processing_time.update(
+                gossip_vote_txn_processing_time_us,
+                gossip_vote_slot_confirming_time_us,
+            );
         }
         new_optimistic_confirmed_slots
     }
@@ -954,6 +1005,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -983,6 +1035,7 @@ mod tests {
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
             &None,
         )
@@ -1065,6 +1118,7 @@ mod tests {
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
             &None,
         )
@@ -1224,6 +1278,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -1324,6 +1379,7 @@ mod tests {
                     &replay_votes_receiver,
                     &None,
                     &None,
+                    &None,
                 );
             }
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
@@ -1414,6 +1470,7 @@ mod tests {
             &verified_vote_sender,
             &None,
             &None,
+            &None,
         );
 
         // Setup next epoch
@@ -1458,6 +1515,7 @@ mod tests {
             &subscriptions,
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
+            &None,
             &None,
             &None,
         );
