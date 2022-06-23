@@ -566,46 +566,47 @@ impl LedgerStorage {
             .await?;
 
         // Collect by slot
-        let mut slots: HashMap<Slot, HashMap<u32, String>> = HashMap::new();
+        let mut order: Vec<(Slot, u32, String)> = Vec::new();
+        let mut slots: HashSet<Slot> = HashSet::new();
         for cell in cells {
             if let (signature, Ok(TransactionInfo { slot, index, .. })) = cell {
-                slots.entry(slot).or_default().insert(index, signature);
+                order.push((slot, index, signature));
+                slots.insert(slot);
             }
         }
 
-        // Fetch blocks and extract transactions
-        let slots_ref = &slots;
-        let keys = slots.keys().copied().collect::<Vec<_>>();
-        let data = self
-            .get_confirmed_blocks_with_data(&keys)
+        // Fetch blocks
+        let blocks = self
+            .get_confirmed_blocks_with_data(&slots.into_iter().collect::<Vec<_>>())
             .await?
-            .filter_map(move |(slot, block)| {
-                slots_ref.get(&slot).map(move |block_txs| {
-                    let block_time = block.block_time;
-                    block.transactions.into_iter().enumerate().filter_map(
-                        move |(index, tx_with_meta)| {
-                            block_txs.get(&(index as u32)).and_then(|signature| {
-                                if tx_with_meta.transaction_signature().to_string() != *signature {
-                                    warn!(
-                                        "Transaction info or confirmed block for {} is corrupt",
-                                        signature
-                                    );
-                                    None
-                                } else {
-                                    Some(ConfirmedTransactionWithStatusMeta {
-                                        slot,
-                                        tx_with_meta,
-                                        block_time,
-                                    })
-                                }
-                            })
-                        },
-                    )
+            .collect::<HashMap<_, _>>();
+
+        // Extract transactions
+        Ok(order
+            .into_iter()
+            .filter_map(|(slot, index, signature)| {
+                blocks.get(&slot).and_then(|block| {
+                    block
+                        .transactions
+                        .get(index as usize)
+                        .and_then(|tx_with_meta| {
+                            if tx_with_meta.transaction_signature().to_string() != *signature {
+                                warn!(
+                                    "Transaction info or confirmed block for {} is corrupt",
+                                    signature
+                                );
+                                None
+                            } else {
+                                Some(ConfirmedTransactionWithStatusMeta {
+                                    slot,
+                                    tx_with_meta: tx_with_meta.clone(),
+                                    block_time: block.block_time,
+                                })
+                            }
+                        })
                 })
             })
-            .flatten()
-            .collect::<Vec<_>>();
-        Ok(data)
+            .collect::<Vec<_>>())
     }
 
     /// Fetch a confirmed transaction
