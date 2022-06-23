@@ -1408,6 +1408,35 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
+struct StakeReward {
+    stake_pubkey: Pubkey,
+    stake_reward_info: RewardInfo,
+    stake_account: AccountSharedData,
+}
+
+/// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
+impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        &self.1[index].stake_pubkey
+    }
+    fn account(&self, index: usize) -> &AccountSharedData {
+        &self.1[index].stake_account
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // per-index slot is not unique per slot when per-account slot is not included in the source data
+        self.target_slot()
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -3043,12 +3072,6 @@ impl Bank {
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
     ) -> f64 {
-        struct StakeReward {
-            stake_pubkey: Pubkey,
-            stake_reward_info: RewardInfo,
-            stake_account: AccountSharedData,
-        }
-
         let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = {
             let mut m = Measure::start("load_vote_and_stake_accounts_us");
@@ -3201,11 +3224,7 @@ impl Bank {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        let accounts_to_store = stake_rewards
-            .iter()
-            .map(|x| (&x.stake_pubkey, &x.stake_account))
-            .collect::<Vec<_>>();
-        self.store_accounts((self.slot(), &accounts_to_store[..]));
+        self.store_accounts((self.slot(), &stake_rewards[..]));
         m.stop();
         metrics
             .store_stake_accounts_us
