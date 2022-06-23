@@ -179,6 +179,7 @@ struct RewardsMetrics {
     store_vote_accounts_us: AtomicU64,
     invalid_cached_vote_accounts: usize,
     invalid_cached_stake_accounts: usize,
+    invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
 
@@ -1384,6 +1385,7 @@ struct LoadVoteAndStakeAccountsResult {
     invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
     invalid_cached_vote_accounts: usize,
     invalid_cached_stake_accounts: usize,
+    invalid_cached_stake_accounts_rent_epoch: usize,
     vote_accounts_cache_miss_count: usize,
 }
 
@@ -1969,6 +1971,11 @@ impl Bank {
                         (
                             "invalid_cached_stake_accounts",
                             metrics.invalid_cached_stake_accounts,
+                            i64
+                        ),
+                        (
+                            "invalid_cached_stake_accounts_rent_epoch",
+                            metrics.invalid_cached_stake_accounts_rent_epoch,
                             i64
                         ),
                         (
@@ -2760,6 +2767,7 @@ impl Bank {
         let invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
         let invalid_cached_stake_accounts = AtomicUsize::default();
         let invalid_cached_vote_accounts = AtomicUsize::default();
+        let invalid_cached_stake_accounts_rent_epoch = AtomicUsize::default();
 
         let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
         thread_pool.install(|| {
@@ -2822,6 +2830,8 @@ impl Bank {
                                 stake_account.account()
                             );
                             invalid_cached_stake_accounts.fetch_add(1, Relaxed);
+                        } else {
+                            invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
                         }
                     }
                     let stake_delegation = (*stake_pubkey, stake_account);
@@ -2896,6 +2906,8 @@ impl Bank {
             invalid_stake_keys,
             invalid_cached_vote_accounts: invalid_cached_vote_accounts.into_inner(),
             invalid_cached_stake_accounts: invalid_cached_stake_accounts.into_inner(),
+            invalid_cached_stake_accounts_rent_epoch: invalid_cached_stake_accounts_rent_epoch
+                .into_inner(),
             vote_accounts_cache_miss_count: 0,
         }
     }
@@ -3014,6 +3026,7 @@ impl Bank {
             invalid_stake_keys: DashMap::default(),
             invalid_cached_vote_accounts: 0,
             invalid_cached_stake_accounts: 0,
+            invalid_cached_stake_accounts_rent_epoch: 0,
             vote_accounts_cache_miss_count: vote_accounts_cache_miss_count.into_inner(),
         }
     }
@@ -3045,6 +3058,7 @@ impl Bank {
                 invalid_vote_keys,
                 invalid_cached_vote_accounts,
                 invalid_cached_stake_accounts,
+                invalid_cached_stake_accounts_rent_epoch,
                 vote_accounts_cache_miss_count,
             } = if update_rewards_from_cached_accounts {
                 self.load_vote_and_stake_accounts(thread_pool, reward_calc_tracer.as_ref())
@@ -3060,6 +3074,8 @@ impl Bank {
                 .fetch_add(m.as_us(), Relaxed);
             metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
             metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
+            metrics.invalid_cached_stake_accounts_rent_epoch +=
+                invalid_cached_stake_accounts_rent_epoch;
             metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
             self.stakes_cache.handle_invalid_keys(
                 invalid_stake_keys,
