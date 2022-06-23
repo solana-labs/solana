@@ -34,6 +34,8 @@ use {
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
 const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1;
 
+pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -504,10 +506,11 @@ pub mod test {
     }
 
     pub fn get_client_config() -> ClientConfig {
-        let crypto = rustls::ClientConfig::builder()
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
+        crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
         let mut config = ClientConfig::new(Arc::new(crypto));
 
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
