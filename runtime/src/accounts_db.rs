@@ -67,7 +67,7 @@ use {
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         clock::{BankId, Epoch, Slot, SlotCount},
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -328,6 +328,12 @@ impl GenerateIndexTimings {
 impl IndexValue for AccountInfo {}
 
 impl ZeroLamport for AccountSharedData {
+    fn is_zero_lamport(&self) -> bool {
+        self.lamports() == 0
+    }
+}
+
+impl ZeroLamport for Account {
     fn is_zero_lamport(&self) -> bool {
         self.lamports() == 0
     }
