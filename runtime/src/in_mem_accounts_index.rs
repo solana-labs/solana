@@ -120,10 +120,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.last_age_flushed.load(Ordering::Acquire)
     }
 
-    fn map(&self) -> &RwLock<HashMap<Pubkey, AccountMapEntry<T>>> {
-        &self.map_internal
-    }
-
     /// Release entire in-mem hashmap to free all memory associated with it.
     /// Idea is that during startup we needed a larger map than we need during runtime.
     /// When using disk-buckets, in-mem index grows over time with dynamic use and then shrinks, in theory back to 0.
@@ -140,7 +136,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     {
         let m = Measure::start("items");
         self.hold_range_in_memory(range, true);
-        let map = self.map().read().unwrap();
+        let map = self.map_internal.read().unwrap();
         let mut result = Vec::with_capacity(map.len());
         map.iter().for_each(|(k, v)| {
             if range.contains(k) {
@@ -160,7 +156,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // easiest implementation is to load evrything from disk into cache and return the keys
         let evictions_guard = EvictionsGuard::lock(self);
         self.put_range_in_cache(&None::<&RangeInclusive<Pubkey>>, &evictions_guard);
-        let keys = self.map().read().unwrap().keys().cloned().collect();
+        let keys = self.map_internal.read().unwrap().keys().cloned().collect();
         keys
     }
 
@@ -198,7 +194,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut found = true;
         let mut m = Measure::start("get");
         let result = {
-            let map = self.map().read().unwrap();
+            let map = self.map_internal.read().unwrap();
             let result = map.get(pubkey);
             m.stop();
 
@@ -249,7 +245,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     return callback(None).1;
                 }
                 let disk_entry = disk_entry.unwrap();
-                let mut map = self.map().write().unwrap();
+                let mut map = self.map_internal.write().unwrap();
                 let entry = map.entry(*pubkey);
                 match entry {
                     Entry::Occupied(occupied) => callback(Some(occupied.get())).1,
@@ -325,7 +321,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     // Return false otherwise.
     pub fn remove_if_slot_list_empty(&self, pubkey: Pubkey) -> bool {
         let mut m = Measure::start("entry");
-        let mut map = self.map().write().unwrap();
+        let mut map = self.map_internal.write().unwrap();
         let entry = map.entry(pubkey);
         m.stop();
         let found = matches!(entry, Entry::Occupied(_));
@@ -384,7 +380,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // age is incremented by caller
             } else {
                 let mut m = Measure::start("entry");
-                let mut map = self.map().write().unwrap();
+                let mut map = self.map_internal.write().unwrap();
                 let entry = map.entry(*pubkey);
                 m.stop();
                 let found = matches!(entry, Entry::Occupied(_));
@@ -609,7 +605,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         new_entry: PreAllocatedAccountMapEntry<T>,
     ) -> InsertNewEntryResults {
         let mut m = Measure::start("entry");
-        let mut map = self.map().write().unwrap();
+        let mut map = self.map_internal.write().unwrap();
         let entry = map.entry(pubkey);
         m.stop();
         let new_entry_zero_lamports = new_entry.is_zero_lamport();
@@ -870,7 +866,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut added_to_mem = 0;
         // load from disk
         if let Some(disk) = self.bucket.as_ref() {
-            let mut map = self.map().write().unwrap();
+            let mut map = self.map_internal.write().unwrap();
             let items = disk.items_in_range(range); // map's lock has to be held while we are getting items from disk
             let future_age = self.storage.future_age_to_flush();
             for item in items {
@@ -982,7 +978,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut evictions_random = Vec::default();
         let mut evictions_age_possible;
         {
-            let map = self.map().read().unwrap();
+            let map = self.map_internal.read().unwrap();
             evictions_age_possible = Vec::with_capacity(map.len());
             m = Measure::start("flush_scan"); // we don't care about lock time in this metric - bg threads can wait
             for (k, v) in map.iter() {
@@ -1216,7 +1212,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// for each key in 'keys', look up in map, set age to the future
     fn move_ages_to_future(&self, next_age: Age, current_age: Age, keys: &[Pubkey]) {
-        let map = self.map().read().unwrap();
+        let map = self.map_internal.read().unwrap();
         keys.iter().for_each(|key| {
             if let Some(entry) = map.get(key) {
                 entry.try_exchange_age(next_age, current_age);
@@ -1268,7 +1264,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut evicted = 0;
         // chunk these so we don't hold the write lock too long
         for evictions in evictions.chunks(50) {
-            let mut map = self.map().write().unwrap();
+            let mut map = self.map_internal.write().unwrap();
             for k in evictions {
                 if let Entry::Occupied(occupied) = map.entry(*k) {
                     let v = occupied.get();
