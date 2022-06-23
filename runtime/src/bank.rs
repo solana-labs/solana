@@ -46,7 +46,7 @@ use {
             AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
-        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult},
+        accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
         blockhash_queue::BlockhashQueue,
@@ -64,6 +64,7 @@ use {
         },
         stakes::{InvalidCacheEntryReason, Stakes, StakesCache, StakesEnum},
         status_cache::{SlotDelta, StatusCache},
+        storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
@@ -3188,7 +3189,7 @@ impl Bank {
             .iter()
             .map(|x| (&x.stake_pubkey, &x.stake_account))
             .collect::<Vec<_>>();
-        self.store_accounts(&accounts_to_store);
+        self.store_accounts((self.slot(), &accounts_to_store[..]));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -5382,7 +5383,7 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) = measure!(self.store_accounts(&accounts_to_store));
+            let (_, measure) = measure!(self.store_accounts((self.slot(), &accounts_to_store[..])));
             time_storing_accounts_us += measure.as_us();
         }
 
@@ -6226,18 +6227,20 @@ impl Bank {
     }
 
     pub fn store_account(&self, pubkey: &Pubkey, account: &AccountSharedData) {
-        self.store_accounts(&[(pubkey, account)])
+        self.store_accounts((self.slot(), &[(pubkey, account)][..]))
     }
 
-    pub fn store_accounts(&self, accounts: &[(&Pubkey, &AccountSharedData)]) {
+    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport>(
+        &self,
+        accounts: impl StorableAccounts<'a, T>,
+    ) {
         assert!(!self.freeze_started());
-        self.rc
-            .accounts
-            .store_accounts_cached((self.slot(), accounts));
         let mut m = Measure::start("stakes_cache.check_and_store");
-        for (pubkey, account) in accounts {
-            self.stakes_cache.check_and_store(pubkey, account);
-        }
+        (0..accounts.len()).into_iter().for_each(|i| {
+            self.stakes_cache
+                .check_and_store(accounts.pubkey(i), accounts.account(i))
+        });
+        self.rc.accounts.store_accounts_cached(accounts);
         m.stop();
         self.rc
             .accounts
