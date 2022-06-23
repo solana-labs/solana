@@ -1748,6 +1748,10 @@ impl ClusterInfo {
                     if GOSSIP_SLEEP_MILLIS > elapsed {
                         let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                         sleep(Duration::from_millis(time_left));
+                    } else { 
+                        // elapsed time for loop > 100ms expected loop time
+                        // report time since loop start. 
+                        self.stats.gossip_transmit_loop_time_ms.add_relaxed(elapsed);
                     }
                     generate_pull_requests = !generate_pull_requests;
                 }
@@ -2332,6 +2336,7 @@ impl ClusterInfo {
         epoch_duration: Duration,
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
+        let start = timestamp();
         let _st = ScopedTimer::from(&self.stats.process_gossip_packets_time);
         // Filter out values if the shred-versions are different.
         let self_shred_version = self.my_shred_version();
@@ -2435,6 +2440,9 @@ impl ClusterInfo {
             stakes,
             response_sender,
         );
+        self.stats
+            .gossip_process_packet_loop_time_ms
+            .add_relaxed(timestamp() - start);
         Ok(())
     }
 
@@ -2490,6 +2498,7 @@ impl ClusterInfo {
         last_print: &mut Instant,
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
+        let start = timestamp();
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
         let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
@@ -2524,6 +2533,9 @@ impl ClusterInfo {
             get_epoch_duration(bank_forks, &self.stats),
             should_check_duplicate_instance,
         )?;
+        info!("greg_run_listen_loop");
+        let elapsed = timestamp() - start;
+        self.stats.gossip_listen_loop_time_ms.add_relaxed(elapsed); //tends to be about 2000ms
         if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
             submit_gossip_stats(&self.stats, &self.gossip, &stakes);
             *last_print = Instant::now();
@@ -2578,6 +2590,7 @@ impl ClusterInfo {
             .name("solana-listen".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
+                    info!("greg_listen_loop");
                     if let Err(err) = self.run_listen(
                         &recycler,
                         bank_forks.as_deref(),

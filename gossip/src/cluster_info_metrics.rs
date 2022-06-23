@@ -13,7 +13,7 @@ use {
 };
 
 #[derive(Default)]
-pub(crate) struct Counter(AtomicU64);
+pub(crate) struct  Counter(AtomicU64);
 
 impl Counter {
     pub(crate) fn add_measure(&self, x: &mut Measure) {
@@ -113,6 +113,9 @@ pub struct GossipStats {
     pub(crate) gossip_pull_request_verify_fail: Counter,
     pub(crate) gossip_pull_response_verify_fail: Counter,
     pub(crate) gossip_push_msg_verify_fail: Counter,
+    pub(crate) gossip_transmit_loop_time_ms: Counter,
+    pub(crate) gossip_listen_loop_time_ms: Counter,
+    pub(crate) gossip_process_packet_loop_time_ms: Counter,
     pub(crate) handle_batch_ping_messages_time: Counter,
     pub(crate) handle_batch_pong_messages_time: Counter,
     pub(crate) handle_batch_prune_messages_time: Counter,
@@ -385,6 +388,22 @@ pub(crate) fn submit_gossip_stats(
             stats.gossip_pull_request_dropped_requests.clear(),
             i64
         ),
+        (
+            "gossip_transmit_loop_time_ms",
+            stats.gossip_transmit_loop_time_ms.clear(),
+            i64
+        ),
+        (
+            "gossip_listen_loop_time_ms",
+            stats.gossip_listen_loop_time_ms.clear(),
+            i64
+        ),
+        (
+            "gossip_process_packet_loop_time_ms",
+            stats.gossip_process_packet_loop_time_ms.clear(),
+            i64
+        ),
+
     );
     datapoint_info!(
         "cluster_info_stats4",
