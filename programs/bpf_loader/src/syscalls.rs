@@ -24,10 +24,9 @@ use {
         feature_set::{
             blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
             curve25519_syscall_enabled, disable_fees_sysvar, executables_incur_cpi_data_cost,
-            fixed_memcpy_nonoverlapping_check, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            quick_bail_on_panic, syscall_saturated_math, update_syscall_base_costs,
-            zk_token_sdk_enabled,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            prevent_calling_precompiles_as_programs, quick_bail_on_panic, syscall_saturated_math,
+            update_syscall_base_costs, zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1321,14 +1320,6 @@ declare_syscall!(
     }
 );
 
-/// This function is incorrect due to arithmetic overflow and only exists for
-/// backwards compatibility. Instead use program_stubs::is_nonoverlapping.
-#[allow(clippy::integer_arithmetic)]
-fn check_overlapping_do_not_use(src_addr: u64, dst_addr: u64, n: u64) -> bool {
-    (src_addr <= dst_addr && src_addr + n > dst_addr)
-        || (dst_addr <= src_addr && dst_addr + n > src_addr)
-}
-
 fn mem_op_consume<'a, 'b>(
     invoke_context: &Ref<&'a mut InvokeContext<'b>>,
     n: u64,
@@ -1378,24 +1369,13 @@ declare_syscall!(
             question_mark!(invoke_context.get_compute_meter().consume(cost), result);
         }
 
-        let use_fixed_nonoverlapping_check = invoke_context
-            .feature_set
-            .is_active(&fixed_memcpy_nonoverlapping_check::id());
         let do_check_physical_overlapping = invoke_context
             .feature_set
             .is_active(&check_physical_overlapping::id());
 
-        #[allow(clippy::collapsible_else_if)]
-        if use_fixed_nonoverlapping_check {
-            if !is_nonoverlapping(src_addr, dst_addr, n) {
-                *result = Err(SyscallError::CopyOverlapping.into());
-                return;
-            }
-        } else {
-            if check_overlapping_do_not_use(src_addr, dst_addr, n) {
-                *result = Err(SyscallError::CopyOverlapping.into());
-                return;
-            }
+        if !is_nonoverlapping(src_addr, dst_addr, n) {
+            *result = Err(SyscallError::CopyOverlapping.into());
+            return;
         }
 
         if !update_syscall_base_costs {
@@ -4793,17 +4773,6 @@ mod tests {
             clean_rent.burn_percent = src_rent.burn_percent;
             assert!(are_bytes_equal(&got_rent, &clean_rent));
         }
-    }
-
-    #[test]
-    fn test_overlapping() {
-        assert!(!check_overlapping_do_not_use(10, 7, 3));
-        assert!(check_overlapping_do_not_use(10, 8, 3));
-        assert!(check_overlapping_do_not_use(10, 9, 3));
-        assert!(check_overlapping_do_not_use(10, 10, 3));
-        assert!(check_overlapping_do_not_use(10, 11, 3));
-        assert!(check_overlapping_do_not_use(10, 12, 3));
-        assert!(!check_overlapping_do_not_use(10, 13, 3));
     }
 
     fn call_program_address_common(
