@@ -1,12 +1,12 @@
 //! Test builtin mem functions
 
-#![cfg(target_arch = "bpf")]
+#![cfg(target_os = "solana")]
 #![feature(rustc_private)]
 
 extern crate compiler_builtins;
 use {
     solana_bpf_rust_mem::{run_mem_tests, MemOps},
-    solana_program::{custom_panic_default, entrypoint::SUCCESS},
+    solana_program::{custom_heap_default, custom_panic_default, entrypoint::SUCCESS},
 };
 
 #[no_mangle]
@@ -38,4 +38,5 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     SUCCESS
 }
 
+custom_heap_default!();
 custom_panic_default!();

@@ -149,6 +149,10 @@ pub mod zk_token_sdk_enabled {
     solana_sdk::declare_id!("zk1snxsc6Fh3wsGNbbHAJNHiJoYgF29mMnTSusGx5EJ");
 }
 
+pub mod curve25519_syscall_enabled {
+    solana_sdk::declare_id!("7rcw5UtqgDTBBv2EcynNfYckgdAaH1MAsCjKgXMkN7Ri");
+}
+
 pub mod versioned_tx_message_enabled {
     solana_sdk::declare_id!("3KZZ6Ks1885aGBQ45fwRcPXVBCtzUvxhUTkwKMR41Tca");
 }
@@ -383,6 +387,63 @@ pub mod stake_allow_zero_undelegated_amount {
     solana_sdk::declare_id!("sTKz343FM8mqtyGvYWvbLpTThw3ixRM4Xk8QvZ985mw");
 }
 
+pub mod require_static_program_ids_in_transaction {
+    solana_sdk::declare_id!("8FdwgyHFEjhAdjWfV2vfqk7wA1g9X3fQpKH7SBpEv3kC");
+}
+
+pub mod stake_raise_minimum_delegation_to_1_sol {
+    // This is a feature-proposal *feature id*.  The feature keypair address is `3YHAo6wWw5rDbQxb59BmJkQ3XwVhX3m8tdBVbtxnJmma`.
+    solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
+}
+
+pub mod add_set_compute_unit_price_ix {
+    solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
+}
+
+pub mod disable_deploy_of_alloc_free_syscall {
+    solana_sdk::declare_id!("79HWsX9rpnnJBPcdNURVqygpMAfxdrAirzAGAVmf92im");
+}
+
+pub mod include_account_index_in_rent_error {
+    solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
+}
+
+pub mod warp_timestamp_with_a_vengeance {
+    solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
+}
+
+pub mod separate_nonce_from_blockhash {
+    solana_sdk::declare_id!("Gea3ZkK2N4pHuVZVxWcnAtS6UEDdyumdYt4pFcKjA3ar");
+}
+
+pub mod enable_durable_nonce {
+    solana_sdk::declare_id!("4EJQtF2pkRyawwcTVfQutzq4Sa5hRhibF6QAK1QXhtEX");
+}
+
+pub mod vote_state_update_credit_per_dequeue {
+    solana_sdk::declare_id!("CveezY6FDLVBToHDcvJRmtMouqzsmj4UXYh5ths5G5Uv");
+}
+
+pub mod quick_bail_on_panic {
+    solana_sdk::declare_id!("DpJREPyuMZ5nDfU6H3WTqSqUFSXAfw8u7xqmWtEwJDcP");
+}
+
+pub mod nonce_must_be_authorized {
+    solana_sdk::declare_id!("HxrEu1gXuH7iD3Puua1ohd5n4iUKJyFNtNxk9DVJkvgr");
+}
+
+pub mod nonce_must_be_advanceable {
+    solana_sdk::declare_id!("3u3Er5Vc2jVcwz4xr2GJeSAXT3fAj6ADHZ4BJMZiScFd");
+}
+
+pub mod vote_authorize_with_seed {
+    solana_sdk::declare_id!("6tRxEYKuy2L5nnv5bgn7iT28MxUbYxp5h7F3Ncf1exrT");
+}
+
+pub mod cap_accounts_data_size_per_block {
+    solana_sdk::declare_id!("qywiJyZmqTKspFg2LeuUHqcA5nNvBgobqb9UprywS9N");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -415,6 +476,7 @@ lazy_static! {
         (stake_merge_with_unmatched_credits_observed::id(), "allow merging active stakes with unmatched credits_observed #18985"),
         (gate_large_block::id(), "validator checks block cost against max limit in realtime, reject if exceeds."),
         (zk_token_sdk_enabled::id(), "enable Zk Token proof program and syscalls"),
+        (curve25519_syscall_enabled::id(), "enable curve25519 syscalls"),
         (versioned_tx_message_enabled::id(), "enable versioned transaction message processing"),
         (libsecp256k1_fail_on_bad_count::id(), "fail libsec256k1_verify if count appears wrong"),
         (instructions_sysvar_owned_by_sysvar::id(), "fix owner for instructions sysvar"),
@@ -472,7 +534,21 @@ lazy_static! {
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
         (spl_associated_token_account_v1_1_0::id(), "SPL Associated Token Account Program version 1.1.0 release #24741"),
         (default_units_per_instruction::id(), "Default max tx-wide compute units calculated per instruction"),
-        (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670")
+        (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
+        (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
+        (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
+        (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
+        (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
+        (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
+        (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
+        (enable_durable_nonce::id(), "enable durable nonce #25744"),
+        (vote_state_update_credit_per_dequeue::id(), "Calculate vote credits for VoteStateUpdate per vote dequeue to match credit awards for Vote instruction"),
+        (quick_bail_on_panic::id(), "quick bail on panic"),
+        (nonce_must_be_authorized::id(), "nonce must be authorized"),
+        (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
+        (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
+        (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

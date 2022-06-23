@@ -1,5 +1,6 @@
 use {
     crate::{
+        banking_stage::BankingPacketSender,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -18,7 +19,7 @@ use {
     solana_ledger::blockstore::Blockstore,
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
-    solana_perf::packet::{self, PacketBatch},
+    solana_perf::packet,
     solana_poh::poh_recorder::PohRecorder,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
@@ -198,6 +199,39 @@ impl BankSendVotesStats {
     }
 }
 
+#[derive(Default)]
+struct VoteProcessingTiming {
+    gossip_txn_processing_time_us: u64,
+    gossip_slot_confirming_time_us: u64,
+    last_report: u64,
+}
+
+impl VoteProcessingTiming {
+    fn update(&mut self, vote_txn_processing_time_us: u64, vote_slot_confirming_time_us: u64) {
+        self.gossip_txn_processing_time_us += vote_txn_processing_time_us;
+        self.gossip_slot_confirming_time_us += vote_slot_confirming_time_us;
+        let now = timestamp();
+        let elapsed_ms = now - self.last_report;
+        if elapsed_ms > 1000 {
+            datapoint_info!(
+                "vote-processing-timing",
+                (
+                    "vote_txn_processing_us",
+                    self.gossip_txn_processing_time_us as i64,
+                    i64,
+                ),
+                (
+                    "slot_confirming_time_us",
+                    self.gossip_slot_confirming_time_us as i64,
+                    i64,
+                ),
+            );
+            *self = VoteProcessintTiming::default();
+            self.last_report = now;
+        }
+    }
+}
+
 pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -207,7 +241,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: Sender<Vec<PacketBatch>>,
+        verified_packets_sender: BankingPacketSender,
         poh_recorder: Arc<Mutex<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -320,11 +354,11 @@ impl ClusterInfoVoteListener {
             .zip(packet_batches)
             .filter(|(_, packet_batch)| {
                 // to_packet_batches() above splits into 1 packet long batches
-                assert_eq!(packet_batch.packets.len(), 1);
-                !packet_batch.packets[0].meta.discard()
+                assert_eq!(packet_batch.len(), 1);
+                !packet_batch[0].meta.discard()
             })
             .filter_map(|(tx, packet_batch)| {
-                let (vote_account_key, vote, _) = vote_parser::parse_vote_transaction(&tx)?;
+                let (vote_account_key, vote, ..) = vote_parser::parse_vote_transaction(&tx)?;
                 let slot = vote.last_voted_slot()?;
                 let epoch = epoch_schedule.get_epoch(slot);
                 let authorized_voter = root_bank
@@ -350,7 +384,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        verified_packets_sender: &Sender<Vec<PacketBatch>>,
+        verified_packets_sender: &BankingPacketSender,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -399,7 +433,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &Sender<Vec<PacketBatch>>,
+        verified_packets_sender: &BankingPacketSender,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -440,7 +474,7 @@ impl ClusterInfoVoteListener {
         for single_validator_votes in gossip_votes_iterator {
             bank_send_votes_stats.num_votes_sent += single_validator_votes.len();
             bank_send_votes_stats.num_batches_sent += 1;
-            verified_packets_sender.send(single_validator_votes)?;
+            verified_packets_sender.send((single_validator_votes, None))?;
         }
         filter_gossip_votes_timing.stop();
         bank_send_votes_stats.total_elapsed += filter_gossip_votes_timing.as_us();
@@ -466,6 +500,7 @@ impl ClusterInfoVoteListener {
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
         let cluster_confirmed_slot_sender = Some(cluster_confirmed_slot_sender);
+        let vote_processing_time = Some(VoteProcessingTiming::Default());
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -496,11 +531,12 @@ impl ClusterInfoVoteListener {
                 &replay_votes_receiver,
                 &bank_notification_sender,
                 &cluster_confirmed_slot_sender,
+                &vote_procesing_time,
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
                     confirmation_verifier
-                        .add_new_optimistic_confirmed_slots(confirmed_slots.clone());
+                        .add_new_optimistic_confirmed_slots(confirmed_slots.clone(), &blockstore);
                 }
                 Err(e) => match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected) => {
@@ -535,6 +571,7 @@ impl ClusterInfoVoteListener {
             replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
     }
 
@@ -548,6 +585,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &Option<VoteProcessingTiming>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -576,6 +614,7 @@ impl ClusterInfoVoteListener {
                     verified_vote_sender,
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
+                    vote_processing_time,
                 ));
             }
             remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
@@ -587,6 +626,7 @@ impl ClusterInfoVoteListener {
     fn track_new_votes_and_notify_confirmations(
         vote: VoteTransaction,
         vote_pubkey: &Pubkey,
+        vote_transaction_signature: Signature,
         vote_tracker: &VoteTracker,
         root_bank: &Bank,
         subscriptions: &RpcSubscriptions,
@@ -699,7 +739,7 @@ impl ClusterInfoVoteListener {
         }
 
         if is_new_vote {
-            subscriptions.notify_vote(*vote_pubkey, vote);
+            subscriptions.notify_vote(*vote_pubkey, vote, vote_transaction_signature);
             let _ = verified_vote_sender.send((*vote_pubkey, vote_slots));
         }
     }
@@ -714,20 +754,23 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &Option<VoteProcessingTiming>,
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
+        let mut gossip_vote_txn_processing_time = Measure::start("gossip_vote_processing_time");
         let votes = gossip_vote_txs
             .iter()
             .filter_map(vote_parser::parse_vote_transaction)
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
-        for ((vote_pubkey, vote, _), is_gossip) in votes {
+        for ((vote_pubkey, vote, _switch_proof, signature), is_gossip) in votes {
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
+                signature,
                 vote_tracker,
                 root_bank,
                 subscriptions,
@@ -740,8 +783,11 @@ impl ClusterInfoVoteListener {
                 cluster_confirmed_slot_sender,
             );
         }
+        gossip_vote_txn_processing_time.stop();
+        let gossip_vote_txn_processing_time_us = gossip_vote_txn_processing_time.as_us();
 
         // Process all the slots accumulated from replay and gossip.
+        let mut gossip_vote_slot_confirm_time = Measure::start("gossip_vote_slot_confirm_time");
         for (slot, mut slot_diff) in diff {
             let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
             {
@@ -788,6 +834,14 @@ impl ClusterInfoVoteListener {
             }
 
             w_slot_tracker.gossip_only_stake += gossip_only_stake
+        }
+        gossip_vote_slot_confirming_time.stop();
+        let gossip_vote_slot_confirming_time_us = gossip_vote_slot_confirming_time.as_us();
+        if let Some(vote_processing_time) = vote_processing_time {
+            vote_processing_time.update(
+                gossip_vote_txn_processing_time_us,
+                gossip_vote_slot_confirming_time_us,
+            );
         }
         new_optimistic_confirmed_slots
     }
@@ -972,6 +1026,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -1001,6 +1056,7 @@ mod tests {
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
             &None,
         )
@@ -1039,6 +1095,7 @@ mod tests {
                         vote_keypair.pubkey(),
                         VoteTransaction::from(replay_vote.clone()),
                         switch_proof_hash,
+                        Signature::default(),
                     ))
                     .unwrap();
             }
@@ -1082,6 +1139,7 @@ mod tests {
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
             &replay_votes_receiver,
+            &None,
             &None,
             &None,
         )
@@ -1241,6 +1299,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &None,
         )
         .unwrap();
 
@@ -1327,6 +1386,7 @@ mod tests {
                             vote_keypair.pubkey(),
                             VoteTransaction::from(Vote::new(vec![vote_slot], Hash::default())),
                             switch_proof_hash,
+                            Signature::default(),
                         ))
                         .unwrap();
                 }
@@ -1338,6 +1398,7 @@ mod tests {
                     &gossip_verified_vote_hash_sender,
                     &verified_vote_sender,
                     &replay_votes_receiver,
+                    &None,
                     &None,
                     &None,
                 );
@@ -1422,11 +1483,13 @@ mod tests {
                 validator0_keypairs.vote_keypair.pubkey(),
                 VoteTransaction::from(Vote::new(vec![voted_slot], Hash::default())),
                 None,
+                Signature::default(),
             )],
             &bank,
             &subscriptions,
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
+            &None,
             &None,
             &None,
         );
@@ -1467,11 +1530,13 @@ mod tests {
                 validator_keypairs[1].vote_keypair.pubkey(),
                 VoteTransaction::from(Vote::new(vec![first_slot_in_new_epoch], Hash::default())),
                 None,
+                Signature::default(),
             )],
             &new_root_bank,
             &subscriptions,
             &gossip_verified_vote_hash_sender,
             &verified_vote_sender,
+            &None,
             &None,
             &None,
         );
@@ -1530,7 +1595,7 @@ mod tests {
     fn verify_packets_len(packets: &[VerifiedVoteMetadata], ref_value: usize) {
         let num_packets: usize = packets
             .iter()
-            .map(|vote_metadata| vote_metadata.packet_batch.packets.len())
+            .map(|vote_metadata| vote_metadata.packet_batch.len())
             .sum();
         assert_eq!(num_packets, ref_value);
     }

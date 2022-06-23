@@ -30,8 +30,8 @@ pub enum Error {
     InstructionError(#[from] InstructionError),
     #[error("Invalid delegation: {0:?}")]
     InvalidDelegation(StakeState),
-    #[error("Invalid stake account owner: {owner:?}")]
-    InvalidOwner { owner: Pubkey },
+    #[error("Invalid stake account owner: {0}")]
+    InvalidOwner(/*owner:*/ Pubkey),
 }
 
 impl<T> StakeAccount<T> {
@@ -59,9 +59,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<()> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if account.owner() != &solana_stake_program::id() {
-            return Err(Error::InvalidOwner {
-                owner: *account.owner(),
-            });
+            return Err(Error::InvalidOwner(*account.owner()));
         }
         let stake_state = account.state()?;
         Ok(Self {
@@ -105,6 +103,12 @@ impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
     }
 }
 
+impl<T> StakeAccount<T> {
+    pub fn account(&self) -> &AccountSharedData {
+        &self.account
+    }
+}
+
 impl<S, T> PartialEq<StakeAccount<S>> for StakeAccount<T> {
     fn eq(&self, other: &StakeAccount<S>) -> bool {
         let StakeAccount {
@@ -127,7 +131,7 @@ impl AbiExample for StakeAccount<Delegation> {
         let mut account = Account::example();
         account.data.resize(196, 0u8);
         account.owner = solana_stake_program::id();
-        let _ = account.set_state(&stake_state).unwrap();
+        account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()
     }
 }

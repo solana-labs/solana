@@ -223,7 +223,8 @@ pub(crate) mod tests {
             hash::Hash,
             instruction::CompiledInstruction,
             message::{Message, MessageHeader, SanitizedMessage},
-            nonce, nonce_account,
+            nonce::{self, state::DurableNonce},
+            nonce_account,
             pubkey::Pubkey,
             signature::{Keypair, Signature, Signer},
             system_transaction,
@@ -315,17 +316,22 @@ pub(crate) mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
+            true, // require_static_program_ids
         )
         .unwrap();
 
         let expected_transaction = transaction.clone();
         let pubkey = Pubkey::new_unique();
 
-        let mut nonce_account = nonce_account::create_account(1).into_inner();
-        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), Hash::new(&[42u8; 32]), 42);
+        let mut nonce_account =
+            nonce_account::create_account(1, /*separate_domains:*/ true).into_inner();
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
-            .set_state(&nonce::state::Versions::new_current(
+            .set_state(&nonce::state::Versions::new(
                 nonce::State::Initialized(data),
+                true, // separate_domains
             ))
             .unwrap();
 
@@ -350,7 +356,8 @@ pub(crate) mod tests {
                 .unwrap(),
             )),
             return_data: None,
-            executed_units: 0u64,
+            executed_units: 0,
+            accounts_data_len_delta: 0,
         });
 
         let balances = TransactionBalancesSet {

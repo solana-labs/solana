@@ -6,16 +6,6 @@ export CI_LOCAL_RUN=true
 
 set -e
 
-case $(uname -o) in
-  */Linux)
-    export CI_OS_NAME=linux
-    ;;
-  *)
-    echo "local CI runs are only supported on Linux" 1>&2
-    exit 1
-    ;;
-esac
-
 steps=()
 steps+=(test-sanity)
 steps+=(shellcheck)

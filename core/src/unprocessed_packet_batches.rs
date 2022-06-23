@@ -1,20 +1,20 @@
 use {
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::{limited_deserialize, Packet, PacketBatch},
-    solana_runtime::bank::Bank,
+    solana_perf::packet::{Packet, PacketBatch},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         hash::Hash,
-        message::{Message, VersionedMessage},
+        message::{Message, SanitizedVersionedMessage},
+        sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{Transaction, VersionedTransaction},
+        transaction::{SanitizedVersionedTransaction, Transaction, VersionedTransaction},
     },
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         mem::size_of,
         rc::Rc,
-        sync::Arc,
     },
     thiserror::Error,
 };
@@ -28,15 +28,25 @@ pub enum DeserializedPacketError {
     DeserializationError(#[from] bincode::Error),
     #[error("overflowed on signature size {0}")]
     SignatureOverflowed(usize),
+    #[error("packet failed sanitization {0}")]
+    SanitizeError(#[from] SanitizeError),
+    #[error("transaction failed prioritization")]
+    PrioritizationFailure,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct TransactionPriorityDetails {
+    priority: u64,
+    compute_unit_limit: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
-    versioned_transaction: VersionedTransaction,
+    transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
-    fee_per_cu: u64,
+    priority_details: TransactionPriorityDetails,
 }
 
 impl ImmutableDeserializedPacket {
@@ -44,8 +54,8 @@ impl ImmutableDeserializedPacket {
         &self.original_packet
     }
 
-    pub fn versioned_transaction(&self) -> &VersionedTransaction {
-        &self.versioned_transaction
+    pub fn transaction(&self) -> &SanitizedVersionedTransaction {
+        &self.transaction
     }
 
     pub fn sender_stake(&self) -> u64 {
@@ -60,55 +70,58 @@ impl ImmutableDeserializedPacket {
         self.is_simple_vote
     }
 
-    pub fn fee_per_cu(&self) -> u64 {
-        self.fee_per_cu
+    pub fn priority(&self) -> u64 {
+        self.priority_details.priority
+    }
+
+    pub fn compute_unit_limit(&self) -> u64 {
+        self.priority_details.compute_unit_limit
     }
 }
 
 /// Holds deserialized messages, as well as computed message_hash and other things needed to create
 /// SanitizedTransaction
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeserializedPacket {
     immutable_section: Rc<ImmutableDeserializedPacket>,
     pub forwarded: bool,
 }
 
 impl DeserializedPacket {
-    pub fn new(packet: Packet, bank: Option<&Arc<Bank>>) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, bank, None)
+    pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
+        Self::new_internal(packet, None)
     }
 
     #[cfg(test)]
-    fn new_with_fee_per_cu(
+    fn new_with_priority_details(
         packet: Packet,
-        fee_per_cu: u64,
+        priority_details: TransactionPriorityDetails,
     ) -> Result<Self, DeserializedPacketError> {
-        Self::new_internal(packet, None, Some(fee_per_cu))
+        Self::new_internal(packet, Some(priority_details))
     }
 
     pub fn new_internal(
         packet: Packet,
-        bank: Option<&Arc<Bank>>,
-        fee_per_cu: Option<u64>,
+        priority_details: Option<TransactionPriorityDetails>,
     ) -> Result<Self, DeserializedPacketError> {
-        let versioned_transaction: VersionedTransaction =
-            limited_deserialize(&packet.data[0..packet.meta.size])?;
+        let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
+        let sanitized_transaction = SanitizedVersionedTransaction::try_from(versioned_transaction)?;
         let message_bytes = packet_message(&packet)?;
         let message_hash = Message::hash_raw_message(message_bytes);
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
-        let fee_per_cu = fee_per_cu.unwrap_or_else(|| {
-            bank.as_ref()
-                .map(|bank| compute_fee_per_cu(&versioned_transaction.message, bank))
-                .unwrap_or(0)
-        });
+        // drop transaction if prioritization fails.
+        let priority_details = priority_details
+            .or_else(|| get_priority_details(sanitized_transaction.get_message()))
+            .ok_or(DeserializedPacketError::PrioritizationFailure)?;
+
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
                 original_packet: packet,
-                versioned_transaction,
+                transaction: sanitized_transaction,
                 message_hash,
                 is_simple_vote,
-                fee_per_cu,
+                priority_details,
             }),
             forwarded: false,
         })
@@ -129,8 +142,8 @@ impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
         match self
             .immutable_section()
-            .fee_per_cu()
-            .cmp(&other.immutable_section().fee_per_cu())
+            .priority()
+            .cmp(&other.immutable_section().priority())
         {
             Ordering::Equal => self
                 .immutable_section()
@@ -149,7 +162,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.fee_per_cu().cmp(&other.fee_per_cu()) {
+        match self.priority().cmp(&other.priority()) {
             Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
             ordering => ordering,
         }
@@ -189,22 +202,31 @@ impl UnprocessedPacketBatches {
         self.message_hash_to_transaction.clear();
     }
 
-    /// Insert new `deserizlized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
-    /// weighted first by the fee-per-cu, then the stake of the sender.
+    /// Insert new `deserialized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
+    /// weighted first by the tx priority, then the stake of the sender.
     /// If buffer is at the max limit, the lowest weighted packet is dropped
     ///
     /// Returns tuple of number of packets dropped
     pub fn insert_batch(
         &mut self,
         deserialized_packets: impl Iterator<Item = DeserializedPacket>,
-    ) -> usize {
+    ) -> (usize, usize) {
         let mut num_dropped_packets = 0;
+        let mut num_dropped_tracer_packets = 0;
         for deserialized_packet in deserialized_packets {
-            if self.push(deserialized_packet).is_some() {
+            if let Some(dropped_packet) = self.push(deserialized_packet) {
                 num_dropped_packets += 1;
+                if dropped_packet
+                    .immutable_section()
+                    .original_packet()
+                    .meta
+                    .is_tracer_packet()
+                {
+                    num_dropped_tracer_packets += 1;
+                }
             }
         }
-        num_dropped_packets
+        (num_dropped_packets, num_dropped_tracer_packets)
     }
 
     pub fn push(&mut self, deserialized_packet: DeserializedPacket) -> Option<DeserializedPacket> {
@@ -347,30 +369,39 @@ impl UnprocessedPacketBatches {
 pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
-    bank: Option<&'a Arc<Bank>>,
 ) -> impl Iterator<Item = DeserializedPacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedPacket::new(packet_batch.packets[*packet_index].clone(), bank).ok()
+        DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
     })
 }
 
 /// Read the transaction message from packet data
 pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
-    let (sig_len, sig_size) =
-        decode_shortu16_len(&packet.data).map_err(DeserializedPacketError::ShortVecError)?;
+    let (sig_len, sig_size) = packet
+        .data(..)
+        .and_then(|bytes| decode_shortu16_len(bytes).ok())
+        .ok_or(DeserializedPacketError::ShortVecError(()))?;
     sig_len
         .checked_mul(size_of::<Signature>())
         .and_then(|v| v.checked_add(sig_size))
-        .map(|msg_start| {
-            let msg_end = packet.meta.size;
-            &packet.data[msg_start..msg_end]
-        })
+        .and_then(|msg_start| packet.data(msg_start..))
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-/// Computes `(addition_fee + base_fee / requested_cu)` for `deserialized_packet`
-fn compute_fee_per_cu(_message: &VersionedMessage, _bank: &Bank) -> u64 {
-    1
+fn get_priority_details(message: &SanitizedVersionedMessage) -> Option<TransactionPriorityDetails> {
+    let mut compute_budget = ComputeBudget::default();
+    let prioritization_fee_details = compute_budget
+        .process_instructions(
+            message.program_instructions_iter(),
+            true, // don't reject txs that use request heap size ix
+            true, // use default units per instruction
+            true, // don't reject txs that use set compute unit price ix
+        )
+        .ok()?;
+    Some(TransactionPriorityDetails {
+        priority: prioritization_fee_details.get_priority(),
+        compute_unit_limit: compute_budget.compute_unit_limit,
+    })
 }
 
 pub fn transactions_to_deserialized_packets(
@@ -380,7 +411,7 @@ pub fn transactions_to_deserialized_packets(
         .iter()
         .map(|transaction| {
             let packet = Packet::from_data(None, transaction)?;
-            DeserializedPacket::new(packet, None)
+            DeserializedPacket::new(packet)
         })
         .collect()
 }
@@ -389,7 +420,10 @@ pub fn transactions_to_deserialized_packets(
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_sdk::{
+            compute_budget::ComputeBudgetInstruction, message::VersionedMessage, pubkey::Pubkey,
+            signature::Keypair, system_instruction, system_transaction,
+        },
         std::net::IpAddr,
     };
 
@@ -405,10 +439,10 @@ mod tests {
         if let Some(ip) = ip {
             packet.meta.addr = ip;
         }
-        DeserializedPacket::new(packet, None).unwrap()
+        DeserializedPacket::new(packet).unwrap()
     }
 
-    fn packet_with_fee_per_cu(fee_per_cu: u64) -> DeserializedPacket {
+    fn packet_with_priority_details(priority: u64, compute_unit_limit: u64) -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -416,7 +450,14 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        DeserializedPacket::new_with_fee_per_cu(packet, fee_per_cu).unwrap()
+        DeserializedPacket::new_with_priority_details(
+            packet,
+            TransactionPriorityDetails {
+                priority,
+                compute_unit_limit,
+            },
+        )
+        .unwrap()
     }
 
     #[test]
@@ -437,10 +478,10 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_minimum_packet_over_capacity() {
         let heavier_packet_weight = 2;
-        let heavier_packet = packet_with_fee_per_cu(heavier_packet_weight);
+        let heavier_packet = packet_with_priority_details(heavier_packet_weight, 200_000);
 
         let lesser_packet_weight = heavier_packet_weight - 1;
-        let lesser_packet = packet_with_fee_per_cu(lesser_packet_weight);
+        let lesser_packet = packet_with_priority_details(lesser_packet_weight, 200_000);
 
         // Test that the heavier packet is actually heavier
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
@@ -515,5 +556,71 @@ mod tests {
         );
         assert!(unprocessed_packet_batches.is_empty());
         assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_request_heap_frame_tx() {
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::request_heap_frame(32 * 1024),
+            ],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: 0,
+                compute_unit_limit:
+                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                        as u64
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_set_compute_units_limit() {
+        let requested_cu = 101u32;
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::set_compute_unit_limit(requested_cu),
+            ],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: 0,
+                compute_unit_limit: requested_cu as u64,
+            })
+        );
+    }
+
+    #[test]
+    fn test_get_priority_with_valid_set_compute_unit_price() {
+        let requested_price = 1_000;
+        let payer = Pubkey::new_unique();
+        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
+            &[
+                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
+                ComputeBudgetInstruction::set_compute_unit_price(requested_price),
+            ],
+            Some(&payer),
+        )))
+        .unwrap();
+        assert_eq!(
+            get_priority_details(&message),
+            Some(TransactionPriorityDetails {
+                priority: requested_price,
+                compute_unit_limit:
+                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
+                        as u64
+            })
+        );
     }
 }

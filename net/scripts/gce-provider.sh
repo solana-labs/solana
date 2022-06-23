@@ -130,29 +130,30 @@ cloud_Initialize() {
 }
 
 #
-# cloud_CreateInstances [networkName] [namePrefix] [numNodes] [imageName]
-#                       [machineType] [bootDiskSize] [enableGpu]
-#                       [startupScript] [address]
+# cloud_CreateInstances [networkName] [namePrefix] [numNodes]
+#                       [enableGpu] [machineType] [zone]
+#                       [bootDiskSize] [startupScript] [address]
+#                       [bootDiskType] [additionalDiskSize] [preemptible]
 #
 # Creates one more identical instances.
 #
 # networkName   - unique name of this testnet
 # namePrefix    - unique string to prefix all the instance names with
 # numNodes      - number of instances to create
-# imageName     - Disk image for the instances
+# enableGpu     - Optionally enable GPU, use the value "true" to enable
+#                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
 # machineType   - GCE machine type.  Note that this may also include an
 #                 `--accelerator=` or other |gcloud compute instances create|
 #                 options
+# zone          - cloud zone
 # bootDiskSize  - Optional size of the boot disk in GB
-# enableGpu     - Optionally enable GPU, use the value "true" to enable
-#                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
 # startupScript - Optional startup script to execute when the instance boots
 # address       - Optional name of the GCE static IP address to attach to the
 #                 instance.  Requires that |numNodes| = 1 and that addressName
 #                 has been provisioned in the GCE region that is hosting `$zone`
 # bootDiskType  - Optional specify SSD or HDD boot disk
 # additionalDiskSize - Optional specify size of additional storage volume
-# preemptible - Optionally request a preemptible instance ("true")
+# preemptible   - Optionally request a preemptible instance ("true")
 #
 # Tip: use cloud_FindInstances to locate the instances once this function
 #      returns
@@ -181,7 +182,7 @@ cloud_CreateInstances() {
     imageName="ubuntu-2004-focal-v20201211-with-cuda-10-2 --image-project principal-lane-200702"
   else
     # Upstream Ubuntu 20.04 LTS image
-    imageName="ubuntu-2004-focal-v20201201 --image-project ubuntu-os-cloud"
+    imageName="ubuntu-2004-focal-v20220419 --image-project ubuntu-os-cloud"
   fi
 
   declare -a nodes
@@ -198,7 +199,6 @@ cloud_CreateInstances() {
     --zone "$zone"
     --tags testnet
     --metadata "testnet=$networkName"
-    --image "$imageName"
     --maintenance-policy TERMINATE
     --restart-on-failure
     --scopes compute-rw

@@ -40,7 +40,7 @@ pub fn parse_sysvar(data: &[u8], pubkey: &Pubkey) -> Result<SysvarAccountType, P
                         .iter()
                         .map(|entry| UiRecentBlockhashesEntry {
                             blockhash: entry.blockhash.to_string(),
-                            fee_calculator: entry.fee_calculator.clone().into(),
+                            fee_calculator: entry.fee_calculator.into(),
                         })
                         .collect();
                     SysvarAccountType::RecentBlockhashes(recent_blockhashes)
@@ -107,7 +107,7 @@ pub enum SysvarAccountType {
     StakeHistory(Vec<UiStakeHistoryEntry>),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiClock {
     pub slot: Slot,
@@ -129,7 +129,7 @@ impl From<Clock> for UiClock {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UiFees {
     pub fee_calculator: UiFeeCalculator,
@@ -175,21 +175,21 @@ impl From<Rewards> for UiRewards {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiRecentBlockhashesEntry {
     pub blockhash: String,
     pub fee_calculator: UiFeeCalculator,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiSlotHashEntry {
     pub slot: Slot,
     pub hash: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiSlotHistory {
     pub next_slot: Slot,
@@ -211,7 +211,7 @@ impl std::fmt::Debug for SlotHistoryBits {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiStakeHistoryEntry {
     pub epoch: Epoch,

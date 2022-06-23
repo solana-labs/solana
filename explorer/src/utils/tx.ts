@@ -95,6 +95,7 @@ export enum PROGRAM_NAMES {
   WORMHOLE = "Wormhole",
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
+  STEPN_DEX = "STEPN Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -381,6 +382,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   "5ZfZAwP2m93waazg8DkrrVmsupeiPEvaEHowiUP7UAbJ": {
     name: PROGRAM_NAMES.SOLANART_GO,
+    deployments: [Cluster.MainnetBeta],
+  },
+  Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
+    name: PROGRAM_NAMES.STEPN_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };

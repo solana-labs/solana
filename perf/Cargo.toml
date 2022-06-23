@@ -1,6 +1,6 @@
 [package]
 name = "solana-perf"
-version = "1.11.0"
+version = "1.11.1"
 description = "Solana Performance APIs"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -20,16 +20,16 @@ fnv = "1.0.7"
 lazy_static = "1.4.0"
 log = "0.4.17"
 rand = "0.7.0"
-rayon = "1.5.2"
+rayon = "1.5.3"
 serde = "1.0.137"
-solana-metrics = { path = "../metrics", version = "=1.11.0" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.0" }
-solana-sdk = { path = "../sdk", version = "=1.11.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
+solana-metrics = { path = "../metrics", version = "=1.11.1" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.1" }
+solana-sdk = { path = "../sdk", version = "=1.11.1" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.1" }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = "0.5.3"
-libc = "0.2.125"
+libc = "0.2.126"
 nix = "0.24.0"
 
 [lib]
@@ -37,10 +37,13 @@ name = "solana_perf"
 
 [dev-dependencies]
 matches = "0.1.9"
-solana-logger = { path = "../logger", version = "=1.11.0" }
+solana-logger = { path = "../logger", version = "=1.11.1" }
 
 [[bench]]
 name = "sigverify"
+
+[[bench]]
+name = "discard"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

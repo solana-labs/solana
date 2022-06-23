@@ -1,6 +1,9 @@
+import alias from '@rollup/plugin-alias';
 import babel from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
+import * as fs from 'fs';
 import json from '@rollup/plugin-json';
+import path from 'path';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import replace from '@rollup/plugin-replace';
 import {terser} from 'rollup-plugin-terser';
@@ -15,6 +18,41 @@ function generateConfig(configType, format) {
   const config = {
     input: 'src/index.ts',
     plugins: [
+      alias({
+        entries: [
+          {
+            find: /^\./, // Relative paths.
+            replacement: '.',
+            async customResolver(source, importer, options) {
+              const resolved = await this.resolve(source, importer, {
+                skipSelf: true,
+                ...options,
+              });
+              if (resolved == null) {
+                return;
+              }
+              const {id: resolvedId} = resolved;
+              const directory = path.dirname(resolvedId);
+              const moduleFilename = path.basename(resolvedId);
+              const forkPath = path.join(
+                directory,
+                '__forks__',
+                configType,
+                moduleFilename,
+              );
+              const hasForkCacheKey = `has_fork:${forkPath}`;
+              let hasFork = this.cache.get(hasForkCacheKey);
+              if (hasFork === undefined) {
+                hasFork = fs.existsSync(forkPath);
+                this.cache.set(hasForkCacheKey, hasFork);
+              }
+              if (hasFork) {
+                return forkPath;
+              }
+            },
+          },
+        ],
+      }),
       commonjs(),
       nodeResolve({
         browser,
@@ -55,6 +93,7 @@ function generateConfig(configType, format) {
     config.external = [
       /@babel\/runtime/,
       '@solana/buffer-layout',
+      'bigint-buffer',
       'bn.js',
       'borsh',
       'bs58',
@@ -62,7 +101,7 @@ function generateConfig(configType, format) {
       'crypto-hash',
       'jayson/lib/client/browser',
       'js-sha3',
-      'cross-fetch',
+      'node-fetch',
       'rpc-websockets',
       'secp256k1',
       'superstruct',
@@ -74,7 +113,7 @@ function generateConfig(configType, format) {
     case 'browser':
       switch (format) {
         case 'iife': {
-          config.external = ['http', 'https'];
+          config.external = ['http', 'https', 'node-fetch'];
 
           config.output = [
             {
@@ -112,6 +151,7 @@ function generateConfig(configType, format) {
           config.external = [
             /@babel\/runtime/,
             '@solana/buffer-layout',
+            'bigint-buffer',
             'bn.js',
             'borsh',
             'bs58',
@@ -121,6 +161,7 @@ function generateConfig(configType, format) {
             'https',
             'jayson/lib/client/browser',
             'js-sha3',
+            'node-fetch',
             'rpc-websockets',
             'secp256k1',
             'superstruct',

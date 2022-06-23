@@ -4,7 +4,7 @@ use {
         ancestors::Ancestors,
         bucket_map_holder::{Age, BucketMapHolder},
         contains::Contains,
-        in_mem_accounts_index::{InMemAccountsIndex, InsertNewEntryResults},
+        in_mem_accounts_index::InMemAccountsIndex,
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
@@ -44,7 +44,7 @@ use {
 pub const ITER_BATCH_SIZE: usize = 1000;
 pub const BINS_DEFAULT: usize = 8192;
 pub const BINS_FOR_TESTING: usize = 2; // we want > 1, but each bin is a few disk files with a disk based index, so fewer is better
-pub const BINS_FOR_BENCHMARKS: usize = 2;
+pub const BINS_FOR_BENCHMARKS: usize = 8192;
 pub const FLUSH_THREADS_TESTING: usize = 1;
 pub const ACCOUNTS_INDEX_CONFIG_FOR_TESTING: AccountsIndexConfig = AccountsIndexConfig {
     bins: Some(BINS_FOR_TESTING),
@@ -124,7 +124,7 @@ pub trait IndexValue:
 {
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ScanError {
     #[error("Node detected it replayed bad version of slot {slot:?} with id {bank_id:?}, thus the scan on said slot was aborted")]
     SlotRemoved { slot: Slot, bank_id: BankId },
@@ -333,7 +333,7 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
-        &*self.borrow_slot_list_guard()
+        self.borrow_slot_list_guard()
     }
 
     pub fn ref_count(&self) -> RefCount {
@@ -369,7 +369,7 @@ impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
         match source {
-            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.write().unwrap().remove(0),
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.read().unwrap()[0],
             PreAllocatedAccountMapEntry::Raw(raw) => raw,
         }
     }
@@ -458,11 +458,11 @@ impl RootsTracker {
 
 #[derive(Debug, Default)]
 pub struct AccountsIndexRootsStats {
-    pub roots_len: usize,
-    pub uncleaned_roots_len: usize,
-    pub previous_uncleaned_roots_len: usize,
-    pub roots_range: u64,
-    pub historical_roots_len: usize,
+    pub roots_len: Option<usize>,
+    pub uncleaned_roots_len: Option<usize>,
+    pub previous_uncleaned_roots_len: Option<usize>,
+    pub roots_range: Option<u64>,
+    pub historical_roots_len: Option<usize>,
     pub rooted_cleaned_count: usize,
     pub unrooted_cleaned_count: usize,
     pub clean_unref_from_storage_us: u64,
@@ -1140,6 +1140,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors with range
+    /// Only guaranteed to be safe when called from rent collection
     pub(crate) fn range_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
@@ -1522,7 +1523,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 (pubkey_bin, Vec::with_capacity(expected_items_per_bin))
             })
             .collect::<Vec<_>>();
-        let mut dirty_pubkeys = items
+        let dirty_pubkeys = items
             .filter_map(|(pubkey, account_info)| {
                 let pubkey_bin = self.bin_calculator.bin_from_pubkey(&pubkey);
                 let binned_index = (pubkey_bin + random_offset) % bins;
@@ -1530,13 +1531,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let is_zero_lamport = account_info.is_zero_lamport();
                 let result = if is_zero_lamport { Some(pubkey) } else { None };
 
-                let info = PreAllocatedAccountMapEntry::new(
-                    slot,
-                    account_info,
-                    &self.storage.storage,
-                    use_disk,
-                );
-                binned[binned_index].1.push((pubkey, info));
+                binned[binned_index].1.push((pubkey, account_info));
                 result
             })
             .collect::<Vec<_>>();
@@ -1547,19 +1542,37 @@ impl<T: IndexValue> AccountsIndex<T> {
         binned.into_iter().for_each(|(pubkey_bin, items)| {
             let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
-            items.into_iter().for_each(|(pubkey, new_item)| {
-                if let InsertNewEntryResults::ExistedNewEntryNonZeroLamports =
-                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_item)
-                {
-                    // zero lamports were already added to dirty_pubkeys above
-                    dirty_pubkeys.push(pubkey);
-                }
-            });
+            if use_disk {
+                w_account_maps.startup_insert_only(slot, items.into_iter());
+            } else {
+                // not using disk buckets, so just write to in-mem
+                // this is no longer the default case
+                items.into_iter().for_each(|(pubkey, account_info)| {
+                    let new_entry = PreAllocatedAccountMapEntry::new(
+                        slot,
+                        account_info,
+                        &self.storage.storage,
+                        use_disk,
+                    );
+                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                });
+            }
             insert_time.stop();
             insertion_time.fetch_add(insert_time.as_us(), Ordering::Relaxed);
         });
 
         (dirty_pubkeys, insertion_time.load(Ordering::Relaxed))
+    }
+
+    /// return Vec<Vec<>> because the internal vecs are already allocated per bin
+    pub fn retrieve_duplicate_keys_from_startup(&self) -> Vec<Vec<(Slot, Pubkey)>> {
+        (0..self.bins())
+            .into_iter()
+            .map(|pubkey_bin| {
+                let r_account_maps = self.account_maps[pubkey_bin].read().unwrap();
+                r_account_maps.retrieve_duplicate_keys_from_startup()
+            })
+            .collect()
     }
 
     /// Updates the given pubkey at the given slot with the new account information.
@@ -1832,11 +1845,12 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
             false
         } else {
-            stats.roots_len = w_roots_tracker.alive_roots.len();
-            stats.uncleaned_roots_len = w_roots_tracker.uncleaned_roots.len();
-            stats.previous_uncleaned_roots_len = w_roots_tracker.previous_uncleaned_roots.len();
-            stats.roots_range = w_roots_tracker.alive_roots.range_width();
-            stats.historical_roots_len = w_roots_tracker.historical_roots.len();
+            stats.roots_len = Some(w_roots_tracker.alive_roots.len());
+            stats.uncleaned_roots_len = Some(w_roots_tracker.uncleaned_roots.len());
+            stats.previous_uncleaned_roots_len =
+                Some(w_roots_tracker.previous_uncleaned_roots.len());
+            stats.roots_range = Some(w_roots_tracker.alive_roots.range_width());
+            stats.historical_roots_len = Some(w_roots_tracker.historical_roots.len());
             true
         }
     }
@@ -2323,7 +2337,9 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let account_info = true;
         let items = vec![(*pubkey, account_info)];
+        index.set_startup(Startup::Startup);
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        index.set_startup(Startup::Normal);
 
         let mut ancestors = Ancestors::default();
         assert!(index
@@ -2356,7 +2372,9 @@ pub mod tests {
         let index = AccountsIndex::<AccountInfoTest>::default_for_tests();
         let account_info: AccountInfoTest = 0 as AccountInfoTest;
         let items = vec![(*pubkey, account_info)];
+        index.set_startup(Startup::Startup);
         index.insert_new_if_missing_into_primary_index(slot, items.len(), items.into_iter());
+        index.set_startup(Startup::Normal);
 
         let mut ancestors = Ancestors::default();
         assert!(index
@@ -2460,8 +2478,10 @@ pub mod tests {
         let index = AccountsIndex::<bool>::default_for_tests();
         let account_infos = [true, false];
 
+        index.set_startup(Startup::Startup);
         let items = vec![(key0, account_infos[0]), (key1, account_infos[1])];
         index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
+        index.set_startup(Startup::Normal);
 
         for (i, key) in [key0, key1].iter().enumerate() {
             let entry = index.get_account_read_entry(key).unwrap();
@@ -2474,12 +2494,26 @@ pub mod tests {
         account_infos: [T; 2],
         is_cached: bool,
         upsert: bool,
+        use_disk: bool,
     ) {
+        if is_cached && !upsert {
+            // This is an illegal combination when we are using queued lazy inserts.
+            // Cached items don't ever leave the in-mem cache.
+            // But the queued lazy insert code relies on there being nothing in the in-mem cache.
+            return;
+        }
+
         let slot0 = 0;
         let slot1 = 1;
         let key = Keypair::new().pubkey();
 
-        let index = AccountsIndex::<T>::default_for_tests();
+        let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
+        config.index_limit_mb = if use_disk {
+            IndexLimitMb::Limit(10_000)
+        } else {
+            IndexLimitMb::InMemOnly // in-mem only
+        };
+        let index = AccountsIndex::<T>::new(Some(config));
         let mut gc = Vec::new();
 
         if upsert {
@@ -2496,7 +2530,9 @@ pub mod tests {
             );
         } else {
             let items = vec![(key, account_infos[0])];
+            index.set_startup(Startup::Startup);
             index.insert_new_if_missing_into_primary_index(slot0, items.len(), items.into_iter());
+            index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
 
@@ -2532,8 +2568,16 @@ pub mod tests {
                 UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
             );
         } else {
+            // this has the effect of aging out everything in the in-mem cache
+            for _ in 0..5 {
+                index.set_startup(Startup::Startup);
+                index.set_startup(Startup::Normal);
+            }
+
             let items = vec![(key, account_infos[1])];
+            index.set_startup(Startup::Startup);
             index.insert_new_if_missing_into_primary_index(slot1, items.len(), items.into_iter());
+            index.set_startup(Startup::Normal);
         }
         assert!(gc.is_empty());
 
@@ -2570,12 +2614,14 @@ pub mod tests {
 
     #[test]
     fn test_new_entry_and_update_code_paths() {
-        for is_upsert in &[false, true] {
-            // account_info type that IS cached
-            test_new_entry_code_paths_helper([1.0, 2.0], true, *is_upsert);
+        for use_disk in [false, true] {
+            for is_upsert in &[false, true] {
+                // account_info type that IS cached
+                test_new_entry_code_paths_helper([1.0, 2.0], true, *is_upsert, use_disk);
 
-            // account_info type that is NOT cached
-            test_new_entry_code_paths_helper([true, false], false, *is_upsert);
+                // account_info type that is NOT cached
+                test_new_entry_code_paths_helper([true, false], false, *is_upsert, use_disk);
+            }
         }
     }
 

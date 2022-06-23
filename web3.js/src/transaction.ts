@@ -21,6 +21,12 @@ import type {CompiledInstruction} from './message';
  */
 export type TransactionSignature = string;
 
+export const enum TransactionStatus {
+  BLOCKHEIGHT_EXCEEDED,
+  PROCESSED,
+  TIMED_OUT,
+}
+
 /**
  * Default (empty) signature
  */
@@ -124,17 +130,35 @@ export type SignaturePubkeyPair = {
 
 /**
  * List of Transaction object fields that may be initialized at construction
- *
  */
-export type TransactionCtorFields = {
-  /** A recent blockhash */
-  recentBlockhash?: Blockhash | null;
+export type TransactionCtorFields_DEPRECATED = {
   /** Optional nonce information used for offline nonce'd transactions */
   nonceInfo?: NonceInformation | null;
   /** The transaction fee payer */
   feePayer?: PublicKey | null;
   /** One or more signatures */
   signatures?: Array<SignaturePubkeyPair>;
+  /** A recent blockhash */
+  recentBlockhash?: Blockhash;
+};
+
+// For backward compatibility; an unfortunate consequence of being
+// forced to over-export types by the documentation generator.
+// See https://github.com/solana-labs/solana/pull/25820
+export type TransactionCtorFields = TransactionCtorFields_DEPRECATED;
+
+/**
+ * List of Transaction object fields that may be initialized at construction
+ */
+export type TransactionBlockhashCtor = {
+  /** The transaction fee payer */
+  feePayer?: PublicKey | null;
+  /** One or more signatures */
+  signatures?: Array<SignaturePubkeyPair>;
+  /** A recent blockhash */
+  blockhash: Blockhash;
+  /** the last block chain can advance to before tx is declared expired */
+  lastValidBlockHeight: number;
 };
 
 /**
@@ -197,6 +221,11 @@ export class Transaction {
   recentBlockhash?: Blockhash;
 
   /**
+   * the last block chain can advance to before tx is declared expired
+   * */
+  lastValidBlockHeight?: number;
+
+  /**
    * Optional Nonce information. If populated, transaction will use a durable
    * Nonce hash instead of a recentBlockhash. Must be populated by the caller
    */
@@ -212,11 +241,35 @@ export class Transaction {
    */
   _json?: TransactionJSON;
 
+  // Construct a transaction with a blockhash and lastValidBlockHeight
+  constructor(opts?: TransactionBlockhashCtor);
+
+  /**
+   * @deprecated `TransactionCtorFields` has been deprecated and will be removed in a future version.
+   * Please supply a `TransactionBlockhashCtor` instead.
+   */
+  constructor(opts?: TransactionCtorFields_DEPRECATED);
+
   /**
    * Construct an empty Transaction
    */
-  constructor(opts?: TransactionCtorFields) {
-    opts && Object.assign(this, opts);
+  constructor(
+    opts?: TransactionBlockhashCtor | TransactionCtorFields_DEPRECATED,
+  ) {
+    if (!opts) {
+      return;
+    } else if (
+      Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')
+    ) {
+      const newOpts = opts as TransactionBlockhashCtor;
+      Object.assign(this, newOpts);
+      this.recentBlockhash = newOpts.blockhash;
+      this.lastValidBlockHeight = newOpts.lastValidBlockHeight;
+    } else {
+      const oldOpts = opts as TransactionCtorFields_DEPRECATED;
+      Object.assign(this, oldOpts);
+      this.recentBlockhash = oldOpts.recentBlockhash;
+    }
   }
 
   /**
@@ -267,12 +320,10 @@ export class Transaction {
    * Compile transaction data
    */
   compileMessage(): Message {
-    if (this._message) {
-      if (JSON.stringify(this.toJSON()) !== JSON.stringify(this._json)) {
-        throw new Error(
-          'Transaction message mutated after being populated from Message',
-        );
-      }
+    if (
+      this._message &&
+      JSON.stringify(this.toJSON()) === JSON.stringify(this._json)
+    ) {
       return this._message;
     }
 
@@ -330,17 +381,6 @@ export class Transaction {
       });
     });
 
-    // Sort. Prioritizing first by signer, then by writable
-    accountMetas.sort(function (x, y) {
-      const pubkeySorting = x.pubkey
-        .toBase58()
-        .localeCompare(y.pubkey.toBase58());
-      const checkSigner = x.isSigner === y.isSigner ? 0 : x.isSigner ? -1 : 1;
-      const checkWritable =
-        x.isWritable === y.isWritable ? pubkeySorting : x.isWritable ? -1 : 1;
-      return checkSigner || checkWritable;
-    });
-
     // Cull duplicate account metas
     const uniqueMetas: AccountMeta[] = [];
     accountMetas.forEach(accountMeta => {
@@ -351,9 +391,25 @@ export class Transaction {
       if (uniqueIndex > -1) {
         uniqueMetas[uniqueIndex].isWritable =
           uniqueMetas[uniqueIndex].isWritable || accountMeta.isWritable;
+        uniqueMetas[uniqueIndex].isSigner =
+          uniqueMetas[uniqueIndex].isSigner || accountMeta.isSigner;
       } else {
         uniqueMetas.push(accountMeta);
       }
+    });
+
+    // Sort. Prioritizing first by signer, then by writable
+    uniqueMetas.sort(function (x, y) {
+      if (x.isSigner !== y.isSigner) {
+        // Signers always come before non-signers
+        return x.isSigner ? -1 : 1;
+      }
+      if (x.isWritable !== y.isWritable) {
+        // Writable accounts always come before read-only accounts
+        return x.isWritable ? -1 : 1;
+      }
+      // Otherwise, sort by pubkey, stringwise.
+      return x.pubkey.toBase58().localeCompare(y.pubkey.toBase58());
     });
 
     // Move fee payer to the front
@@ -553,7 +609,6 @@ export class Transaction {
 
     const message = this._compile();
     this._partialSign(message, ...uniqueSigners);
-    this._verifySignatures(message.serialize(), true);
   }
 
   /**

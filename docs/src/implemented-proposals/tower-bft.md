@@ -20,7 +20,7 @@ Proof of History is used to create a deterministic round robin schedule for all 
 
 ## Lockouts
 
-The purpose of the lockout is to force a validator to commit opportunity cost to a specific fork. Lockouts are measured in slots, and therefor represent a real-time forced delay that a validator needs to wait before breaking the commitment to a fork.
+The purpose of the lockout is to force a validator to commit opportunity cost to a specific fork. Lockouts are measured in slots, and therefore represent a real-time forced delay that a validator needs to wait before breaking the commitment to a fork.
 
 Validators that violate the lockouts and vote for a diverging fork within the lockout should be punished. The proposed punishment is to slash the validator stake if a concurrent vote within a lockout for a non-descendant fork can be proven to the cluster.
 
@@ -32,37 +32,37 @@ When a vote is added to the stack, the lockouts of all the previous votes in the
 
 ### Rollback
 
-Before a vote is pushed to the stack, all the votes leading up to vote with a lower lock time than the new vote are popped. After rollback lockouts are not doubled until the validator catches up to the rollback height of votes.
+Before a vote is pushed to the stack, all the votes leading up to vote with a lower lock expiration slot than the new vote are popped. After rollback lockouts are not doubled until the validator catches up to the rollback height of votes.
 
 For example, a vote stack with the following state:
 
-| vote | vote time | lockout | lock expiration time |
+| vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
 |    4 |         4 |       2 |                    6 |
 |    3 |         3 |       4 |                    7 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-_Vote 5_ is at time 9, and the resulting state is
+_Vote 5_ is at slot 9, and the resulting state is
 
-| vote | vote time | lockout | lock expiration time |
+| vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
 |    5 |         9 |       2 |                   11 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-_Vote 6_ is at time 10
+_Vote 6_ is at slot 10
 
-| vote | vote time | lockout | lock expiration time |
+| vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
 |    6 |        10 |       2 |                   12 |
 |    5 |         9 |       4 |                   13 |
 |    2 |         2 |       8 |                   10 |
 |    1 |         1 |      16 |                   17 |
 
-At time 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at time 11 is applied the votes including and above _vote 2_ will be popped.
+At slot 10 the new votes caught up to the previous votes. But _vote 2_ expires at 10, so the when _vote 7_ at slot 11 is applied the votes including and above _vote 2_ will be popped.
 
-| vote | vote time | lockout | lock expiration time |
+| vote | vote slot | lockout | lock expiration slot |
 | ---: | --------: | ------: | -------------------: |
 |    7 |        11 |       2 |                   13 |
 |    1 |         1 |      16 |                   17 |
@@ -81,7 +81,7 @@ The **Economic Finality** of _fork A_ can be calculated as the loss of all the r
 
 ### Thresholds
 
-Each validator can independently set a threshold of cluster commitment to a fork before that validator commits to a fork. For example, at vote stack index 7, the lockout is 256 time units. A validator may withhold votes and let votes 0-7 expire unless the vote at index 7 has at greater than 50% commitment in the cluster. This allows each validator to independently control how much risk to commit to a fork. Committing to forks at a higher frequency would allow the validator to earn more rewards.
+Each validator can independently set a threshold of cluster commitment to a fork before that validator commits to a fork. For example, at vote stack index 7, the lockout is 256 slots. A validator may withhold votes and let votes 0-7 expire unless the vote at index 7 has at greater than 50% commitment in the cluster. This allows each validator to independently control how much risk to commit to a fork. Committing to forks at a higher frequency would allow the validator to earn more rewards.
 
 ### Algorithm parameters
 

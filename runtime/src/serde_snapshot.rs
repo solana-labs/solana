@@ -151,6 +151,14 @@ trait TypeContext<'a>: PartialEq {
     where
         Self: std::marker::Sized;
 
+    #[cfg(test)]
+    fn serialize_bank_and_storage_without_extra_fields<S: serde::ser::Serializer>(
+        serializer: S,
+        serializable_bank: &SerializableBankAndStorageNoExtra<'a, Self>,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where
+        Self: std::marker::Sized;
+
     fn serialize_accounts_db_fields<S: serde::ser::Serializer>(
         serializer: S,
         serializable_db: &SerializableAccountsDb<'a, Self>,
@@ -234,6 +242,7 @@ pub(crate) fn bank_from_streams<R>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    accounts_db_skip_shrink: bool,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -272,6 +281,7 @@ where
                 verify_index,
                 accounts_db_config,
                 accounts_update_notifier,
+                accounts_db_skip_shrink,
             )?;
             Ok(bank)
         }};
@@ -299,6 +309,37 @@ where
             bincode::serialize_into(
                 stream,
                 &SerializableBankAndStorage::<$style::Context> {
+                    bank,
+                    snapshot_storages,
+                    phantom: std::marker::PhantomData::default(),
+                },
+            )
+        };
+    }
+    match serde_style {
+        SerdeStyle::Newer => INTO!(newer),
+    }
+    .map_err(|err| {
+        warn!("bankrc_to_stream error: {:?}", err);
+        err
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn bank_to_stream_no_extra_fields<W>(
+    serde_style: SerdeStyle,
+    stream: &mut BufWriter<W>,
+    bank: &Bank,
+    snapshot_storages: &[SnapshotStorage],
+) -> Result<(), Error>
+where
+    W: Write,
+{
+    macro_rules! INTO {
+        ($style:ident) => {
+            bincode::serialize_into(
+                stream,
+                &SerializableBankAndStorageNoExtra::<$style::Context> {
                     bank,
                     snapshot_storages,
                     phantom: std::marker::PhantomData::default(),
@@ -381,6 +422,39 @@ impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorage<'a, C> {
     }
 }
 
+#[cfg(test)]
+struct SerializableBankAndStorageNoExtra<'a, C> {
+    bank: &'a Bank,
+    snapshot_storages: &'a [SnapshotStorage],
+    phantom: std::marker::PhantomData<C>,
+}
+
+#[cfg(test)]
+impl<'a, C: TypeContext<'a>> Serialize for SerializableBankAndStorageNoExtra<'a, C> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        C::serialize_bank_and_storage_without_extra_fields(serializer, self)
+    }
+}
+
+#[cfg(test)]
+impl<'a, C> From<SerializableBankAndStorageNoExtra<'a, C>> for SerializableBankAndStorage<'a, C> {
+    fn from(s: SerializableBankAndStorageNoExtra<'a, C>) -> SerializableBankAndStorage<'a, C> {
+        let SerializableBankAndStorageNoExtra {
+            bank,
+            snapshot_storages,
+            phantom,
+        } = s;
+        SerializableBankAndStorage {
+            bank,
+            snapshot_storages,
+            phantom,
+        }
+    }
+}
+
 struct SerializableAccountsDb<'a, C> {
     accounts_db: &'a AccountsDb,
     slot: Slot,
@@ -416,6 +490,7 @@ fn reconstruct_bank_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    accounts_db_skip_shrink: bool,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -432,6 +507,7 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        accounts_db_skip_shrink,
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -491,6 +567,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    accounts_db_skip_shrink: bool,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -640,9 +717,14 @@ where
         limit_load_slot_count_from_snapshot,
         verify_index,
         genesis_config,
+        accounts_db_skip_shrink,
     );
 
-    accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, &genesis_config.rent);
+    accounts_db.maybe_add_filler_accounts(
+        &genesis_config.epoch_schedule,
+        &genesis_config.rent,
+        snapshot_slot,
+    );
 
     handle.join().unwrap();
     measure_notify.stop();

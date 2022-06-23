@@ -5,7 +5,7 @@ use {
         parse_nonce::parse_nonce,
         parse_stake::parse_stake,
         parse_sysvar::parse_sysvar,
-        parse_token::{parse_token, spl_token_ids},
+        parse_token::{parse_token, spl_token_2022_id, spl_token_id},
         parse_vote::parse_vote,
     },
     inflector::Inflector,
@@ -30,9 +30,8 @@ lazy_static! {
         );
         m.insert(*CONFIG_PROGRAM_ID, ParsableAccount::Config);
         m.insert(*SYSTEM_PROGRAM_ID, ParsableAccount::Nonce);
-        for spl_token_id in spl_token_ids() {
-            m.insert(spl_token_id, ParsableAccount::SplToken);
-        }
+        m.insert(spl_token_id(), ParsableAccount::SplToken);
+        m.insert(spl_token_2022_id(), ParsableAccount::SplToken2022);
         m.insert(*STAKE_PROGRAM_ID, ParsableAccount::Stake);
         m.insert(*SYSVAR_PROGRAM_ID, ParsableAccount::Sysvar);
         m.insert(*VOTE_PROGRAM_ID, ParsableAccount::Vote);
@@ -58,7 +57,7 @@ pub enum ParseAccountError {
     SerdeJsonError(#[from] serde_json::error::Error),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedAccount {
     pub program: String,
@@ -73,6 +72,7 @@ pub enum ParsableAccount {
     Config,
     Nonce,
     SplToken,
+    SplToken2022,
     Stake,
     Sysvar,
     Vote,
@@ -99,7 +99,7 @@ pub fn parse_account_data(
         }
         ParsableAccount::Config => serde_json::to_value(parse_config(data, pubkey)?)?,
         ParsableAccount::Nonce => serde_json::to_value(parse_nonce(data)?)?,
-        ParsableAccount::SplToken => {
+        ParsableAccount::SplToken | ParsableAccount::SplToken2022 => {
             serde_json::to_value(parse_token(data, additional_data.spl_token_decimals)?)?
         }
         ParsableAccount::Stake => serde_json::to_value(parse_stake(data)?)?,
@@ -145,7 +145,10 @@ mod test {
         assert_eq!(parsed.program, "vote".to_string());
         assert_eq!(parsed.space, VoteState::size_of() as u64);
 
-        let nonce_data = Versions::new_current(State::Initialized(Data::default()));
+        let nonce_data = Versions::new(
+            State::Initialized(Data::default()),
+            true, // separate_domains
+        );
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
         let parsed = parse_account_data(
             &account_pubkey,

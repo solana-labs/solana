@@ -1,9 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::inc_new_counter_debug,
+    solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -25,6 +26,7 @@ use {
         convert::TryInto,
     },
     thiserror::Error,
+    tokio::task::JoinError,
 };
 
 #[macro_use]
@@ -54,6 +56,9 @@ pub enum Error {
 
     #[error("Signature not found")]
     SignatureNotFound,
+
+    #[error("tokio error")]
+    TokioJoinError(JoinError),
 }
 
 impl std::convert::From<bigtable::Error> for Error {
@@ -292,7 +297,7 @@ impl From<Reward> for StoredConfirmedBlockReward {
 }
 
 // A serialized `TransactionInfo` is stored in the `tx` table
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 struct TransactionInfo {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -301,7 +306,7 @@ struct TransactionInfo {
 }
 
 // Part of a serialized `TransactionInfo` which is stored in the `tx` table
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct UploadedTransaction {
     slot: Slot, // The slot that contains the block with this transaction in it
     index: u32, // Where the transaction is located in the block
@@ -335,7 +340,7 @@ impl From<TransactionInfo> for TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct LegacyTransactionByAddrInfo {
     pub signature: Signature,          // The transaction signature
     pub err: Option<TransactionError>, // None if the transaction executed successfully
@@ -363,6 +368,7 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 }
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
+pub const DEFAULT_APP_PROFILE_ID: &str = "default";
 
 #[derive(Debug)]
 pub enum CredentialType {
@@ -376,6 +382,7 @@ pub struct LedgerStorageConfig {
     pub timeout: Option<std::time::Duration>,
     pub credential_type: CredentialType,
     pub instance_name: String,
+    pub app_profile_id: String,
 }
 
 impl Default for LedgerStorageConfig {
@@ -385,6 +392,7 @@ impl Default for LedgerStorageConfig {
             timeout: None,
             credential_type: CredentialType::Filepath(None),
             instance_name: DEFAULT_INSTANCE_NAME.to_string(),
+            app_profile_id: DEFAULT_APP_PROFILE_ID.to_string(),
         }
     }
 }
@@ -414,10 +422,12 @@ impl LedgerStorage {
             read_only,
             timeout,
             instance_name,
+            app_profile_id,
             credential_type,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
+            app_profile_id.as_str(),
             read_only,
             timeout,
             credential_type,
@@ -737,8 +747,6 @@ impl LedgerStorage {
         slot: Slot,
         confirmed_block: VersionedConfirmedBlock,
     ) -> Result<()> {
-        let mut bytes_written = 0;
-
         let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
         let mut tx_cells = vec![];
@@ -790,21 +798,51 @@ impl LedgerStorage {
             })
             .collect();
 
+        let mut tasks = vec![];
+
         if !tx_cells.is_empty() {
-            bytes_written += self
-                .connection
-                .put_bincode_cells_with_retry::<TransactionInfo>("tx", &tx_cells)
-                .await?;
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_bincode_cells_with_retry::<TransactionInfo>("tx", &tx_cells)
+                    .await
+            }));
         }
 
         if !tx_by_addr_cells.is_empty() {
-            bytes_written += self
-                .connection
-                .put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
+            let conn = self.connection.clone();
+            tasks.push(tokio::spawn(async move {
+                conn.put_protobuf_cells_with_retry::<tx_by_addr::TransactionByAddr>(
                     "tx-by-addr",
                     &tx_by_addr_cells,
                 )
-                .await?;
+                .await
+            }));
+        }
+
+        let mut bytes_written = 0;
+        let mut maybe_first_err: Option<Error> = None;
+
+        let results = futures::future::join_all(tasks).await;
+        for result in results {
+            match result {
+                Err(err) => {
+                    if maybe_first_err.is_none() {
+                        maybe_first_err = Some(Error::TokioJoinError(err));
+                    }
+                }
+                Ok(Err(err)) => {
+                    if maybe_first_err.is_none() {
+                        maybe_first_err = Some(Error::BigTableError(err));
+                    }
+                }
+                Ok(Ok(bytes)) => {
+                    bytes_written += bytes;
+                }
+            }
+        }
+
+        if let Some(err) = maybe_first_err {
+            return Err(err);
         }
 
         let num_transactions = confirmed_block.transactions.len();
@@ -817,11 +855,12 @@ impl LedgerStorage {
             .connection
             .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
-        info!(
-            "uploaded block for slot {}: {} transactions, {} bytes",
-            slot, num_transactions, bytes_written
+        datapoint_info!(
+            "storage-bigtable-upload-block",
+            ("slot", slot, i64),
+            ("transactions", num_transactions, i64),
+            ("bytes", bytes_written, i64),
         );
-
         Ok(())
     }
 

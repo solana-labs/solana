@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import crossFetch from 'cross-fetch';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
 import {
@@ -28,16 +27,20 @@ import RpcClient from 'jayson/lib/client/browser';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError} from './errors';
+import fetchImpl, {Response} from './fetch-impl';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
-import {Transaction} from './transaction';
+import {Transaction, TransactionStatus} from './transaction';
 import {Message} from './message';
 import assert from './util/assert';
 import {sleep} from './util/sleep';
-import {promiseTimeout} from './util/promise-timeout';
 import {toBuffer} from './util/to-buffer';
+import {
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
+} from './util/tx-expiry-custom-errors';
 import {makeWebsocketUrl} from './util/url';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
@@ -188,9 +191,9 @@ type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
 
-type RpcRequest = (methodName: string, args: Array<any>) => any;
+type RpcRequest = (methodName: string, args: Array<any>) => Promise<any>;
 
-type RpcBatchRequest = (requests: RpcParams[]) => any;
+type RpcBatchRequest = (requests: RpcParams[]) => Promise<any[]>;
 
 /**
  * @internal
@@ -280,6 +283,19 @@ export type RpcResponseAndContext<T> = {
   /** response value */
   value: T;
 };
+
+export type BlockhashWithExpiryBlockHeight = Readonly<{
+  blockhash: Blockhash;
+  lastValidBlockHeight: number;
+}>;
+
+/**
+ * A strategy for confirming transactions that uses the last valid
+ * block height for a given blockhash to check for transaction expiration.
+ */
+export type BlockheightBasedTransactionConfirmationStrategy = {
+  signature: TransactionSignature;
+} & BlockhashWithExpiryBlockHeight;
 
 /**
  * @internal
@@ -939,27 +955,25 @@ function createRpcClient(
   url: string,
   useHttps: boolean,
   httpHeaders?: HttpHeaders,
-  customFetch?: typeof crossFetch,
+  customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
 ): RpcClient {
-  const fetch = customFetch ? customFetch : crossFetch;
+  const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
     agentManager = new AgentManager(useHttps);
   }
 
-  let fetchWithMiddleware:
-    | ((url: string, options: any) => Promise<Response>)
-    | undefined;
+  let fetchWithMiddleware: FetchFn | undefined;
 
   if (fetchMiddleware) {
-    fetchWithMiddleware = async (url: string, options: any) => {
-      const modifiedFetchArgs = await new Promise<[string, any]>(
+    fetchWithMiddleware = async (info, init) => {
+      const modifiedFetchArgs = await new Promise<Parameters<FetchFn>>(
         (resolve, reject) => {
           try {
-            fetchMiddleware(url, options, (modifiedUrl, modifiedOptions) =>
-              resolve([modifiedUrl, modifiedOptions]),
+            fetchMiddleware(info, init, (modifiedInfo, modifiedInit) =>
+              resolve([modifiedInfo, modifiedInit]),
             );
           } catch (error) {
             reject(error);
@@ -2147,12 +2161,17 @@ export type ConfirmedSignatureInfo = {
 export type HttpHeaders = {[header: string]: string};
 
 /**
+ * The type of the JavaScript `fetch()` API
+ */
+export type FetchFn = typeof fetchImpl;
+
+/**
  * A callback used to augment the outgoing HTTP request
  */
 export type FetchMiddleware = (
-  url: string,
-  options: any,
-  fetch: (modifiedUrl: string, modifiedOptions: any) => void,
+  info: Parameters<FetchFn>[0],
+  init: Parameters<FetchFn>[1],
+  fetch: (...a: Parameters<FetchFn>) => void,
 ) => void;
 
 /**
@@ -2166,7 +2185,7 @@ export type ConnectionConfig = {
   /** Optional HTTP headers object */
   httpHeaders?: HttpHeaders;
   /** Optional custom fetch function */
-  fetch?: typeof crossFetch;
+  fetch?: FetchFn;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
   /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
@@ -2205,12 +2224,12 @@ export class Connection {
   /** @internal */ _disableBlockhashCaching: boolean = false;
   /** @internal */ _pollingBlockhash: boolean = false;
   /** @internal */ _blockhashInfo: {
-    recentBlockhash: Blockhash | null;
+    latestBlockhash: BlockhashWithExpiryBlockHeight | null;
     lastFetch: number;
     simulatedSignatures: Array<string>;
     transactionSignatures: Array<string>;
   } = {
-    recentBlockhash: null,
+    latestBlockhash: null,
     lastFetch: 0,
     transactionSignatures: [],
     simulatedSignatures: [],
@@ -2825,38 +2844,65 @@ export class Connection {
     return res.result;
   }
 
-  /**
-   * Confirm the transaction identified by the specified signature.
-   */
+  confirmTransaction(
+    strategy: BlockheightBasedTransactionConfirmationStrategy,
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<SignatureResult>>;
+
+  /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
+  // eslint-disable-next-line no-dupe-class-members
+  confirmTransaction(
+    strategy: TransactionSignature,
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<SignatureResult>>;
+
+  // eslint-disable-next-line no-dupe-class-members
   async confirmTransaction(
-    signature: TransactionSignature,
+    strategy:
+      | BlockheightBasedTransactionConfirmationStrategy
+      | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
+    let rawSignature: string;
+
+    if (typeof strategy == 'string') {
+      rawSignature = strategy;
+    } else {
+      const config =
+        strategy as BlockheightBasedTransactionConfirmationStrategy;
+      rawSignature = config.signature;
+    }
+
     let decodedSignature;
+
     try {
-      decodedSignature = bs58.decode(signature);
+      decodedSignature = bs58.decode(rawSignature);
     } catch (err) {
-      throw new Error('signature must be base58 encoded: ' + signature);
+      throw new Error('signature must be base58 encoded: ' + rawSignature);
     }
 
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
-    const start = Date.now();
     const subscriptionCommitment = commitment || this.commitment;
-
+    let timeoutId;
     let subscriptionId;
-    let response: RpcResponseAndContext<SignatureResult> | null = null;
-    const confirmPromise = new Promise((resolve, reject) => {
+    let done = false;
+
+    const confirmationPromise = new Promise<{
+      __type: TransactionStatus.PROCESSED;
+      response: RpcResponseAndContext<SignatureResult>;
+    }>((resolve, reject) => {
       try {
         subscriptionId = this.onSignature(
-          signature,
+          rawSignature,
           (result: SignatureResult, context: Context) => {
             subscriptionId = undefined;
-            response = {
+            const response = {
               context,
               value: result,
             };
-            resolve(null);
+            done = true;
+            resolve({__type: TransactionStatus.PROCESSED, response});
           },
           subscriptionCommitment,
         );
@@ -2865,40 +2911,79 @@ export class Connection {
       }
     });
 
-    let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
-    switch (subscriptionCommitment) {
-      case 'processed':
-      case 'recent':
-      case 'single':
-      case 'confirmed':
-      case 'singleGossip': {
-        timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
-        break;
+    const checkBlockHeight = async () => {
+      try {
+        const blockHeight = await this.getBlockHeight(commitment);
+        return blockHeight;
+      } catch (_e) {
+        return -1;
       }
-      // exhaust enums to ensure full coverage
-      case 'finalized':
-      case 'max':
-      case 'root':
-    }
+    };
 
+    const expiryPromise = new Promise<
+      | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
+      | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
+    >(resolve => {
+      if (typeof strategy === 'string') {
+        let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
+        switch (subscriptionCommitment) {
+          case 'processed':
+          case 'recent':
+          case 'single':
+          case 'confirmed':
+          case 'singleGossip': {
+            timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
+            break;
+          }
+          // exhaust enums to ensure full coverage
+          case 'finalized':
+          case 'max':
+          case 'root':
+        }
+
+        timeoutId = setTimeout(
+          () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
+          timeoutMs,
+        );
+      } else {
+        let config =
+          strategy as BlockheightBasedTransactionConfirmationStrategy;
+        (async () => {
+          let currentBlockHeight = await checkBlockHeight();
+          if (done) return;
+          while (currentBlockHeight <= config.lastValidBlockHeight) {
+            await sleep(1000);
+            if (done) return;
+            currentBlockHeight = await checkBlockHeight();
+            if (done) return;
+          }
+          resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
+        })();
+      }
+    });
+
+    let result: RpcResponseAndContext<SignatureResult>;
     try {
-      await promiseTimeout(confirmPromise, timeoutMs);
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      switch (outcome.__type) {
+        case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
+          throw new TransactionExpiredBlockheightExceededError(rawSignature);
+        case TransactionStatus.PROCESSED:
+          result = outcome.response;
+          break;
+        case TransactionStatus.TIMED_OUT:
+          throw new TransactionExpiredTimeoutError(
+            rawSignature,
+            outcome.timeoutMs / 1000,
+          );
+      }
     } finally {
+      clearTimeout(timeoutId);
       if (subscriptionId) {
         this.removeSignatureListener(subscriptionId);
       }
     }
-
-    if (response === null) {
-      const duration = (Date.now() - start) / 1000;
-      throw new Error(
-        `Transaction was not confirmed in ${duration.toFixed(
-          2,
-        )} seconds. It is unknown if it succeeded or failed. Check signature ${signature} using the Solana Explorer or CLI tools.`,
-      );
-    }
-
-    return response;
+    return result;
   }
 
   /**
@@ -3245,11 +3330,11 @@ export class Connection {
 
   /**
    * Fetch the latest blockhash from the cluster
-   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhash(
     commitment?: Commitment,
-  ): Promise<{blockhash: Blockhash; lastValidBlockHeight: number}> {
+  ): Promise<BlockhashWithExpiryBlockHeight> {
     try {
       const res = await this.getLatestBlockhashAndContext(commitment);
       return res.value;
@@ -3260,13 +3345,11 @@ export class Connection {
 
   /**
    * Fetch the latest blockhash from the cluster
-   * @return {Promise<{blockhash: Blockhash, lastValidBlockHeight: number}>}
+   * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhashAndContext(
     commitment?: Commitment,
-  ): Promise<
-    RpcResponseAndContext<{blockhash: Blockhash; lastValidBlockHeight: number}>
-  > {
+  ): Promise<RpcResponseAndContext<BlockhashWithExpiryBlockHeight>> {
     const args = this._buildArgs([], commitment);
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
@@ -3483,7 +3566,16 @@ export class Connection {
       if ('error' in res) {
         throw new Error('failed to get transactions: ' + res.error.message);
       }
-      return res.result;
+      const result = res.result;
+      if (!result) return result;
+
+      return {
+        ...result,
+        transaction: {
+          ...result.transaction,
+          message: new Message(result.transaction.message),
+        },
+      };
     });
 
     return res;
@@ -3912,7 +4004,9 @@ export class Connection {
   /**
    * @internal
    */
-  async _recentBlockhash(disableCache: boolean): Promise<Blockhash> {
+  async _blockhashWithExpiryBlockHeight(
+    disableCache: boolean,
+  ): Promise<BlockhashWithExpiryBlockHeight> {
     if (!disableCache) {
       // Wait for polling to finish
       while (this._pollingBlockhash) {
@@ -3920,8 +4014,8 @@ export class Connection {
       }
       const timeSinceFetch = Date.now() - this._blockhashInfo.lastFetch;
       const expired = timeSinceFetch >= BLOCKHASH_CACHE_TIMEOUT_MS;
-      if (this._blockhashInfo.recentBlockhash !== null && !expired) {
-        return this._blockhashInfo.recentBlockhash;
+      if (this._blockhashInfo.latestBlockhash !== null && !expired) {
+        return this._blockhashInfo.latestBlockhash;
       }
     }
 
@@ -3931,21 +4025,25 @@ export class Connection {
   /**
    * @internal
    */
-  async _pollNewBlockhash(): Promise<Blockhash> {
+  async _pollNewBlockhash(): Promise<BlockhashWithExpiryBlockHeight> {
     this._pollingBlockhash = true;
     try {
       const startTime = Date.now();
+      const cachedLatestBlockhash = this._blockhashInfo.latestBlockhash;
+      const cachedBlockhash = cachedLatestBlockhash
+        ? cachedLatestBlockhash.blockhash
+        : null;
       for (let i = 0; i < 50; i++) {
-        const {blockhash} = await this.getRecentBlockhash('finalized');
+        const latestBlockhash = await this.getLatestBlockhash('finalized');
 
-        if (this._blockhashInfo.recentBlockhash != blockhash) {
+        if (cachedBlockhash !== latestBlockhash.blockhash) {
           this._blockhashInfo = {
-            recentBlockhash: blockhash,
+            latestBlockhash,
             lastFetch: Date.now(),
             transactionSignatures: [],
             simulatedSignatures: [],
           };
-          return blockhash;
+          return latestBlockhash;
         }
 
         // Sleep for approximately half a slot
@@ -3971,13 +4069,11 @@ export class Connection {
     let transaction;
     if (transactionOrMessage instanceof Transaction) {
       let originalTx: Transaction = transactionOrMessage;
-      transaction = new Transaction({
-        recentBlockhash: originalTx.recentBlockhash,
-        nonceInfo: originalTx.nonceInfo,
-        feePayer: originalTx.feePayer,
-        signatures: [...originalTx.signatures],
-      });
+      transaction = new Transaction();
+      transaction.feePayer = originalTx.feePayer;
       transaction.instructions = transactionOrMessage.instructions;
+      transaction.nonceInfo = originalTx.nonceInfo;
+      transaction.signatures = originalTx.signatures;
     } else {
       transaction = Transaction.populate(transactionOrMessage);
       // HACK: this function relies on mutating the populated transaction
@@ -3989,7 +4085,11 @@ export class Connection {
     } else {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(
+          disableCache,
+        );
+        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+        transaction.recentBlockhash = latestBlockhash.blockhash;
 
         if (!signers) break;
 
@@ -4077,7 +4177,11 @@ export class Connection {
     } else {
       let disableCache = this._disableBlockhashCaching;
       for (;;) {
-        transaction.recentBlockhash = await this._recentBlockhash(disableCache);
+        const latestBlockhash = await this._blockhashWithExpiryBlockHeight(
+          disableCache,
+        );
+        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+        transaction.recentBlockhash = latestBlockhash.blockhash;
         transaction.sign(...signers);
         if (!transaction.signature) {
           throw new Error('!signature'); // should never happen
@@ -4174,6 +4278,7 @@ export class Connection {
    * @internal
    */
   _wsOnError(err: Error) {
+    this._rpcWebSocketConnected = false;
     console.error('ws error:', err.message);
   }
 
@@ -4181,6 +4286,7 @@ export class Connection {
    * @internal
    */
   _wsOnClose(code: number) {
+    this._rpcWebSocketConnected = false;
     this._rpcWebSocketGeneration++;
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
@@ -4847,7 +4953,7 @@ export class Connection {
             try {
               this.removeSignatureListener(clientSubscriptionId);
               // eslint-disable-next-line no-empty
-            } catch {
+            } catch (_err) {
               // Already removed.
             }
           }
@@ -4895,7 +5001,7 @@ export class Connection {
           try {
             this.removeSignatureListener(clientSubscriptionId);
             // eslint-disable-next-line no-empty
-          } catch {
+          } catch (_err) {
             // Already removed.
           }
         },

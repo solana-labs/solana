@@ -37,7 +37,7 @@ mod tests {
 
     #[test]
     fn test_decode_custom_error_to_enum() {
-        #[derive(Debug, FromPrimitive, PartialEq)]
+        #[derive(Debug, FromPrimitive, PartialEq, Eq)]
         enum TestEnum {
             A,
             B,

@@ -19,8 +19,8 @@ use {
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     solana_client::{
-        rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
-        rpc_request::MAX_MULTIPLE_ACCOUNTS,
+        connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE, rpc_client::RpcClient,
+        rpc_config::RpcLeaderScheduleConfig, rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
@@ -30,9 +30,9 @@ use {
         validator::{is_snapshot_config_valid, Validator, ValidatorConfig, ValidatorStartProgress},
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
-    solana_ledger::blockstore_db::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    solana_ledger::blockstore_options::{
+        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -54,10 +54,11 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
         snapshot_utils::{
-            self, ArchiveFormat, SnapshotVersion, DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -92,7 +93,7 @@ use {
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum Operation {
     Initialize,
     Run,
@@ -258,7 +259,7 @@ fn wait_for_restart_window(
                         leader_schedule.pop_front();
                     }
                     while upcoming_idle_windows
-                        .get(0)
+                        .first()
                         .map(|(slot, _)| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {
@@ -275,7 +276,7 @@ fn wait_for_restart_window(
                             if idle_slots >= min_idle_slots {
                                 Ok(())
                             } else {
-                                Err(match upcoming_idle_windows.get(0) {
+                                Err(match upcoming_idle_windows.first() {
                                     Some((starting_slot, length_in_slots)) => {
                                         format!(
                                             "Next idle window in {} slots, for {} slots",
@@ -409,7 +410,7 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
     for entrypoint in entrypoints {
         match solana_net_utils::get_cluster_shred_version(entrypoint) {
             Err(err) => eprintln!("get_cluster_shred_version failed: {}, {}", entrypoint, err),
-            Ok(0) => eprintln!("zero sherd-version from entrypoint: {}", entrypoint),
+            Ok(0) => eprintln!("zero shred-version from entrypoint: {}", entrypoint),
             Ok(shred_version) => {
                 info!(
                     "obtained shred-version {} from {}",
@@ -467,6 +468,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_tpu_connection_pool_size = &DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -728,6 +730,14 @@ pub fn main() {
                 .help("Use DIR as snapshot location [default: --ledger value]"),
         )
         .arg(
+            Arg::with_name("incremental_snapshot_archive_path")
+                .long("incremental-snapshot-archive-path")
+                .conflicts_with("no-incremental-snapshots")
+                .value_name("DIR")
+                .takes_value(true)
+                .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
+        )
+        .arg(
             Arg::with_name("tower")
                 .long("tower")
                 .value_name("DIR")
@@ -955,6 +965,11 @@ pub fn main() {
             Arg::with_name("no_os_network_stats_reporting")
                 .long("no-os-network-stats-reporting")
                 .help("Disable reporting of OS network statistics.")
+        )
+        .arg(
+            Arg::with_name("no_os_cpu_stats_reporting")
+                .long("no-os-cpu-stats-reporting")
+                .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
@@ -1196,6 +1211,19 @@ pub fn main() {
                 .help("Use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("enable_quic_servers")
+                .hidden(true)
+                .long("enable-quic-servers")
+        )
+        .arg(
+            Arg::with_name("tpu_connection_pool_size")
+                .long("tpu-connection-pool-size")
+                .takes_value(true)
+                .default_value(default_tpu_connection_pool_size)
+                .validator(is_parsable::<usize>)
+                .help("Controls the TPU connection pool size per remote addresss"),
+        )
+        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -1254,6 +1282,14 @@ pub fn main() {
                 .value_name("INSTANCE_NAME")
                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
                 .help("Name of the Bigtable instance to upload to")
+        )
+        .arg(
+            Arg::with_name("rpc_bigtable_app_profile_id")
+                .long("rpc-bigtable-app-profile-id")
+                .takes_value(true)
+                .value_name("APP_PROFILE_ID")
+                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
+                .help("Bigtable application profile id to use in requests")
         )
         .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
@@ -1351,11 +1387,12 @@ pub fn main() {
         .arg(
             Arg::with_name("rpc_pubsub_notification_threads")
                 .long("rpc-pubsub-notification-threads")
+                .requires("full_rpc_api")
                 .takes_value(true)
                 .value_name("NUM_THREADS")
                 .validator(is_parsable::<usize>)
                 .help("The maximum number of threads that RPC PubSub will use \
-                       for generating notifications."),
+                       for generating notifications. 0 will disable RPC PubSub notifications"),
         )
         .arg(
             Arg::with_name("rpc_send_transaction_retry_ms")
@@ -1475,8 +1512,8 @@ pub fn main() {
             Arg::with_name("snapshot_archive_format")
                 .long("snapshot-archive-format")
                 .alias("snapshot-compression") // Legacy name used by Solana v1.5.x and older
-                .possible_values(&["bz2", "gzip", "zstd", "tar", "none"])
-                .default_value("zstd")
+                .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
+                .default_value(DEFAULT_ARCHIVE_COMPRESSION)
                 .value_name("ARCHIVE_TYPE")
                 .takes_value(true)
                 .help("Snapshot archive format to use."),
@@ -1587,6 +1624,12 @@ pub fn main() {
                 .long("accounts-db-skip-rewrites")
                 .help("Accounts that are rent exempt and have no changes are not rewritten. \
                       This produces snapshots that older versions cannot read.")
+                      .hidden(true),
+        )
+        .arg(
+            Arg::with_name("accounts_db_ancient_append_vecs")
+                .long("accounts-db-ancient-append-vecs")
+                .help("AppendVecs that are older than an epoch are squashed together.")
                       .hidden(true),
         )
         .arg(
@@ -2193,6 +2236,8 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let enable_quic_servers = matches.is_present("enable_quic_servers");
+    let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -2326,6 +2371,7 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
+        ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
         ..AccountsDbConfig::default()
     };
 
@@ -2363,6 +2409,11 @@ pub fn main() {
         Some(RpcBigtableConfig {
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
+            bigtable_app_profile_id: value_t_or_exit!(
+                matches,
+                "rpc_bigtable_app_profile_id",
+                String
+            ),
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
@@ -2401,6 +2452,7 @@ pub fn main() {
         );
         exit(1);
     }
+    let full_api = matches.is_present("full_rpc_api");
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2422,7 +2474,7 @@ pub fn main() {
             faucet_addr: matches.value_of("rpc_faucet_addr").map(|address| {
                 solana_net_utils::parse_host_port(address).expect("failed to parse faucet address")
             }),
-            full_api: matches.is_present("full_rpc_api"),
+            full_api,
             obsolete_v1_7_api: matches.is_present("obsolete_v1_7_rpc_api"),
             max_multiple_accounts: Some(value_t_or_exit!(
                 matches,
@@ -2468,7 +2520,11 @@ pub fn main() {
                 usize
             ),
             worker_threads: value_t_or_exit!(matches, "rpc_pubsub_worker_threads", usize),
-            notification_threads: value_of(&matches, "rpc_pubsub_notification_threads"),
+            notification_threads: if full_api {
+                value_of(&matches, "rpc_pubsub_notification_threads")
+            } else {
+                Some(0)
+            },
         },
         voting_disabled: matches.is_present("no_voting") || restricted_repair_only_mode,
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
@@ -2500,13 +2556,13 @@ pub fn main() {
                 "rpc_send_transaction_service_max_retries",
                 usize
             ),
-            use_quic: tpu_use_quic,
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
         },
         no_poh_speed_test: matches.is_present("no_poh_speed_test"),
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
+        no_os_cpu_stats_reporting: matches.is_present("no_os_cpu_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
@@ -2523,6 +2579,7 @@ pub fn main() {
             bpf_jit: !matches.is_present("no_bpf_jit"),
             ..RuntimeConfig::default()
         },
+        enable_quic_servers,
         ..ValidatorConfig::default()
     };
 
@@ -2602,29 +2659,44 @@ pub fn main() {
     let maximum_snapshot_download_abort =
         value_t_or_exit!(matches, "maximum_snapshot_download_abort", u64);
 
-    let snapshot_archives_dir = if matches.is_present("snapshots") {
+    let full_snapshot_archives_dir = if matches.is_present("snapshots") {
         PathBuf::from(matches.value_of("snapshots").unwrap())
     } else {
         ledger_path.clone()
     };
-    let bank_snapshots_dir = snapshot_archives_dir.join("snapshot");
+    let incremental_snapshot_archives_dir =
+        if matches.is_present("incremental_snapshot_archive_path") {
+            let incremental_snapshot_archives_dir = PathBuf::from(
+                matches
+                    .value_of("incremental_snapshot_archive_path")
+                    .unwrap(),
+            );
+            fs::create_dir_all(&incremental_snapshot_archives_dir).unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to create incremental snapshot archives directory {:?}: {}",
+                    incremental_snapshot_archives_dir.display(),
+                    err
+                );
+                exit(1);
+            });
+            incremental_snapshot_archives_dir
+        } else {
+            full_snapshot_archives_dir.clone()
+        };
+    let bank_snapshots_dir = incremental_snapshot_archives_dir.join("snapshot");
     fs::create_dir_all(&bank_snapshots_dir).unwrap_or_else(|err| {
         eprintln!(
             "Failed to create snapshots directory {:?}: {}",
-            bank_snapshots_dir, err
+            bank_snapshots_dir.display(),
+            err
         );
         exit(1);
     });
 
     let archive_format = {
         let archive_format_str = value_t_or_exit!(matches, "snapshot_archive_format", String);
-        match archive_format_str.as_str() {
-            "bz2" => ArchiveFormat::TarBzip2,
-            "gzip" => ArchiveFormat::TarGzip,
-            "zstd" => ArchiveFormat::TarZstd,
-            "tar" | "none" => ArchiveFormat::Tar,
-            _ => panic!("Archive format not recognized: {}", archive_format_str),
-        }
+        ArchiveFormat::from_cli_arg(&archive_format_str)
+            .unwrap_or_else(|| panic!("Archive format not recognized: {}", archive_format_str))
     };
 
     let snapshot_version =
@@ -2657,7 +2729,8 @@ pub fn main() {
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
-        snapshot_archives_dir: snapshot_archives_dir.clone(),
+        full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
+        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,
@@ -2727,10 +2800,7 @@ pub fn main() {
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
+                    ShredStorageType::rocks_fifo(shred_storage_size)
                 }
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
@@ -2743,7 +2813,6 @@ pub fn main() {
             "rocksdb_perf_sample_interval",
             usize
         ),
-        ..LedgerColumnOptions::default()
     };
 
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
@@ -2887,7 +2956,8 @@ pub fn main() {
         Some(version)
     });
     solana_entry::entry::init_poh();
-    snapshot_utils::remove_tmp_snapshot_archives(&snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&full_snapshot_archives_dir);
+    snapshot_utils::remove_tmp_snapshot_archives(&incremental_snapshot_archives_dir);
 
     let identity_keypair = Arc::new(identity_keypair);
 
@@ -2897,7 +2967,8 @@ pub fn main() {
             &node,
             &identity_keypair,
             &ledger_path,
-            &snapshot_archives_dir,
+            &full_snapshot_archives_dir,
+            &incremental_snapshot_archives_dir,
             &vote_account,
             authorized_voter_keypairs.clone(),
             &cluster_entrypoints,
@@ -2932,6 +3003,7 @@ pub fn main() {
         start_progress,
         socket_addr_space,
         tpu_use_quic,
+        tpu_connection_pool_size,
     );
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {

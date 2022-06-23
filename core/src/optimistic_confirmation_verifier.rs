@@ -2,7 +2,7 @@ use {
     crate::cluster_info_vote_listener::VoteTracker,
     solana_ledger::blockstore::Blockstore,
     solana_runtime::bank::Bank,
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},
     std::{collections::BTreeSet, time::Instant},
 };
 
@@ -52,7 +52,11 @@ impl OptimisticConfirmationVerifier {
             .collect()
     }
 
-    pub fn add_new_optimistic_confirmed_slots(&mut self, new_optimistic_slots: Vec<(Slot, Hash)>) {
+    pub fn add_new_optimistic_confirmed_slots(
+        &mut self,
+        new_optimistic_slots: Vec<(Slot, Hash)>,
+        blockstore: &Blockstore,
+    ) {
         if new_optimistic_slots.is_empty() {
             return;
         }
@@ -70,6 +74,16 @@ impl OptimisticConfirmationVerifier {
         // so ignore those slots
         for (new_optimistic_slot, hash) in new_optimistic_slots {
             if new_optimistic_slot > self.snapshot_start_slot {
+                if let Err(e) = blockstore.insert_optimistic_slot(
+                    new_optimistic_slot,
+                    &hash,
+                    timestamp().try_into().unwrap(),
+                ) {
+                    error!(
+                        "failed to record optimistic slot in blockstore: slot={}: {:?}",
+                        new_optimistic_slot, &e
+                    );
+                }
                 datapoint_info!("optimistic_slot", ("slot", new_optimistic_slot, i64),);
                 self.unchecked_slots.insert((new_optimistic_slot, hash));
             }
@@ -142,9 +156,9 @@ impl OptimisticConfirmationVerifier {
 #[cfg(test)]
 mod test {
     use {
-        super::*, crate::vote_simulator::VoteSimulator, solana_ledger::get_tmp_ledger_path,
-        solana_runtime::bank::Bank, solana_sdk::pubkey::Pubkey, std::collections::HashMap,
-        trees::tr,
+        super::*, crate::vote_simulator::VoteSimulator,
+        solana_ledger::get_tmp_ledger_path_auto_delete, solana_runtime::bank::Bank,
+        solana_sdk::pubkey::Pubkey, std::collections::HashMap, trees::tr,
     };
 
     #[test]
@@ -153,12 +167,23 @@ mod test {
         let bank_hash = Hash::default();
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
-        optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot - 1, bank_hash)]);
-        optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot, bank_hash)]);
-        optimistic_confirmation_verifier
-            .add_new_optimistic_confirmed_slots(vec![(snapshot_start_slot + 1, bank_hash)]);
+        let blockstore_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
+        optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(
+            vec![(snapshot_start_slot - 1, bank_hash)],
+            &blockstore,
+        );
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 0);
+        optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(
+            vec![(snapshot_start_slot, bank_hash)],
+            &blockstore,
+        );
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 0);
+        optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(
+            vec![(snapshot_start_slot + 1, bank_hash)],
+            &blockstore,
+        );
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 1);
         assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
         assert!(optimistic_confirmation_verifier
             .unchecked_slots
@@ -171,24 +196,23 @@ mod test {
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
         let bad_bank_hash = Hash::new(&[42u8; 32]);
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            let optimistic_slots = vec![(1, bad_bank_hash), (3, Hash::default())];
-            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
-            let vote_simulator = setup_forks();
-            let bank1 = vote_simulator.bank_forks.read().unwrap().get(1).unwrap();
-            assert_eq!(
-                optimistic_confirmation_verifier
-                    .verify_for_unrooted_optimistic_slots(&bank1, &blockstore),
-                vec![(1, bad_bank_hash)]
-            );
-            assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
-            assert!(optimistic_confirmation_verifier
-                .unchecked_slots
-                .contains(&(3, Hash::default())));
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        let blockstore_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
+        let optimistic_slots = vec![(1, bad_bank_hash), (3, Hash::default())];
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots, &blockstore);
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 2);
+        let vote_simulator = setup_forks();
+        let bank1 = vote_simulator.bank_forks.read().unwrap().get(1).unwrap();
+        assert_eq!(
+            optimistic_confirmation_verifier
+                .verify_for_unrooted_optimistic_slots(&bank1, &blockstore),
+            vec![(1, bad_bank_hash)]
+        );
+        assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
+        assert!(optimistic_confirmation_verifier
+            .unchecked_slots
+            .contains(&(3, Hash::default())));
     }
 
     #[test]
@@ -196,98 +220,98 @@ mod test {
         let snapshot_start_slot = 0;
         let mut optimistic_confirmation_verifier =
             OptimisticConfirmationVerifier::new(snapshot_start_slot);
-        let blockstore_path = get_tmp_ledger_path!();
-        {
-            let blockstore = Blockstore::open(&blockstore_path).unwrap();
-            let mut vote_simulator = setup_forks();
-            let optimistic_slots: Vec<_> = vec![1, 3, 5]
-                .into_iter()
-                .map(|s| {
-                    (
-                        s,
-                        vote_simulator
-                            .bank_forks
-                            .read()
-                            .unwrap()
-                            .get(s)
-                            .unwrap()
-                            .hash(),
-                    )
-                })
-                .collect();
+        let blockstore_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(blockstore_path.path()).unwrap();
+        let mut vote_simulator = setup_forks();
+        let optimistic_slots: Vec<_> = vec![1, 3, 5]
+            .into_iter()
+            .map(|s| {
+                (
+                    s,
+                    vote_simulator
+                        .bank_forks
+                        .read()
+                        .unwrap()
+                        .get(s)
+                        .unwrap()
+                        .hash(),
+                )
+            })
+            .collect();
 
-            // If root is on same fork, nothing should be returned
+        // If root is on same fork, nothing should be returned
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), &blockstore);
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 3);
+        let bank5 = vote_simulator.bank_forks.read().unwrap().get(5).unwrap();
+        assert!(optimistic_confirmation_verifier
+            .verify_for_unrooted_optimistic_slots(&bank5, &blockstore)
+            .is_empty());
+        // 5 is >= than all the unchecked slots, so should clear everything
+        assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
+
+        // If root is on same fork, nothing should be returned
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), &blockstore);
+        let bank3 = vote_simulator.bank_forks.read().unwrap().get(3).unwrap();
+        assert!(optimistic_confirmation_verifier
+            .verify_for_unrooted_optimistic_slots(&bank3, &blockstore)
+            .is_empty());
+        // 3 is bigger than only slot 1, so slot 5 should be left over
+        assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
+        assert!(optimistic_confirmation_verifier
+            .unchecked_slots
+            .contains(&optimistic_slots[2]));
+
+        // If root is on different fork, the slots < root on different fork should
+        // be returned
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), &blockstore);
+        let bank4 = vote_simulator.bank_forks.read().unwrap().get(4).unwrap();
+        assert_eq!(
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
-            let bank5 = vote_simulator.bank_forks.read().unwrap().get(5).unwrap();
-            assert!(optimistic_confirmation_verifier
-                .verify_for_unrooted_optimistic_slots(&bank5, &blockstore)
-                .is_empty());
-            // 5 is >= than all the unchecked slots, so should clear everything
-            assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
+                .verify_for_unrooted_optimistic_slots(&bank4, &blockstore),
+            vec![optimistic_slots[1]]
+        );
+        // 4 is bigger than only slots 1 and 3, so slot 5 should be left over
+        assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
+        assert!(optimistic_confirmation_verifier
+            .unchecked_slots
+            .contains(&optimistic_slots[2]));
 
-            // If root is on same fork, nothing should be returned
+        // Now set a root at slot 5, purging BankForks of slots < 5
+        vote_simulator.set_root(5);
+
+        // Add a new bank 7 that descends from 6
+        let bank6 = vote_simulator.bank_forks.read().unwrap().get(6).unwrap();
+        vote_simulator
+            .bank_forks
+            .write()
+            .unwrap()
+            .insert(Bank::new_from_parent(&bank6, &Pubkey::default(), 7));
+        let bank7 = vote_simulator.bank_forks.read().unwrap().get(7).unwrap();
+        assert!(!bank7.ancestors.contains_key(&3));
+
+        // Should return slots 1, 3 as part of the rooted fork because there's no
+        // ancestry information
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots.clone(), &blockstore);
+        assert_eq!(
             optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
-            let bank3 = vote_simulator.bank_forks.read().unwrap().get(3).unwrap();
-            assert!(optimistic_confirmation_verifier
-                .verify_for_unrooted_optimistic_slots(&bank3, &blockstore)
-                .is_empty());
-            // 3 is bigger than only slot 1, so slot 5 should be left over
-            assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
-            assert!(optimistic_confirmation_verifier
-                .unchecked_slots
-                .contains(&optimistic_slots[2]));
+                .verify_for_unrooted_optimistic_slots(&bank7, &blockstore),
+            optimistic_slots[0..=1].to_vec()
+        );
+        assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
 
-            // If root is on different fork, the slots < root on different fork should
-            // be returned
-            optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
-            let bank4 = vote_simulator.bank_forks.read().unwrap().get(4).unwrap();
-            assert_eq!(
-                optimistic_confirmation_verifier
-                    .verify_for_unrooted_optimistic_slots(&bank4, &blockstore),
-                vec![optimistic_slots[1]]
-            );
-            // 4 is bigger than only slots 1 and 3, so slot 5 should be left over
-            assert_eq!(optimistic_confirmation_verifier.unchecked_slots.len(), 1);
-            assert!(optimistic_confirmation_verifier
-                .unchecked_slots
-                .contains(&optimistic_slots[2]));
-
-            // Now set a root at slot 5, purging BankForks of slots < 5
-            vote_simulator.set_root(5);
-
-            // Add a new bank 7 that descends from 6
-            let bank6 = vote_simulator.bank_forks.read().unwrap().get(6).unwrap();
-            vote_simulator
-                .bank_forks
-                .write()
-                .unwrap()
-                .insert(Bank::new_from_parent(&bank6, &Pubkey::default(), 7));
-            let bank7 = vote_simulator.bank_forks.read().unwrap().get(7).unwrap();
-            assert!(!bank7.ancestors.contains_key(&3));
-
-            // Should return slots 1, 3 as part of the rooted fork because there's no
-            // ancestry information
-            optimistic_confirmation_verifier
-                .add_new_optimistic_confirmed_slots(optimistic_slots.clone());
-            assert_eq!(
-                optimistic_confirmation_verifier
-                    .verify_for_unrooted_optimistic_slots(&bank7, &blockstore),
-                optimistic_slots[0..=1].to_vec()
-            );
-            assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
-
-            // If we know set the root in blockstore, should return nothing
-            blockstore.set_roots(vec![1, 3].iter()).unwrap();
-            optimistic_confirmation_verifier.add_new_optimistic_confirmed_slots(optimistic_slots);
-            assert!(optimistic_confirmation_verifier
-                .verify_for_unrooted_optimistic_slots(&bank7, &blockstore)
-                .is_empty());
-            assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
-        }
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+        // If we know set the root in blockstore, should return nothing
+        blockstore.set_roots(vec![1, 3].iter()).unwrap();
+        optimistic_confirmation_verifier
+            .add_new_optimistic_confirmed_slots(optimistic_slots, &blockstore);
+        assert!(optimistic_confirmation_verifier
+            .verify_for_unrooted_optimistic_slots(&bank7, &blockstore)
+            .is_empty());
+        assert!(optimistic_confirmation_verifier.unchecked_slots.is_empty());
+        assert_eq!(blockstore.get_latest_optimistic_slots(10).unwrap().len(), 3);
     }
 
     fn setup_forks() -> VoteSimulator {

@@ -89,7 +89,7 @@ pub enum CliCommand {
         timeout: Duration,
         blockhash: Option<Hash>,
         print_timestamp: bool,
-        additional_fee: Option<u32>,
+        compute_unit_price: Option<u64>,
     },
     Rent {
         data_length: usize,
@@ -103,6 +103,7 @@ pub enum CliCommand {
     ShowStakes {
         use_lamports_unit: bool,
         vote_account_pubkeys: Option<Vec<Pubkey>>,
+        withdraw_authority: Option<Pubkey>,
     },
     ShowValidators {
         use_lamports_unit: bool,
@@ -156,6 +157,10 @@ pub enum CliCommand {
         memo: Option<String>,
         destination_account_pubkey: Pubkey,
         lamports: u64,
+    },
+    UpgradeNonceAccount {
+        nonce_account: Pubkey,
+        memo: Option<String>,
     },
     // Program Deployment
     Deploy {
@@ -633,6 +638,7 @@ pub fn parse_command(
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
+        ("upgrade-nonce-account", Some(matches)) => parse_upgrade_nonce_account(matches),
         // Program Deployment
         ("deploy", Some(matches)) => {
             let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
@@ -877,7 +883,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             print_timestamp,
-            additional_fee,
+            compute_unit_price,
         } => process_ping(
             &rpc_client,
             config,
@@ -886,7 +892,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             timeout,
             blockhash,
             *print_timestamp,
-            additional_fee,
+            compute_unit_price,
         ),
         CliCommand::Rent {
             data_length,
@@ -899,11 +905,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdraw_authority,
         } => process_show_stakes(
             &rpc_client,
             config,
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
+            withdraw_authority.as_ref(),
         ),
         CliCommand::WaitForMaxStake { max_stake_percent } => {
             process_wait_for_max_stake(&rpc_client, config, *max_stake_percent)
@@ -1019,6 +1027,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             destination_account_pubkey,
             *lamports,
         ),
+        // Upgrade nonce account out of blockhash domain.
+        CliCommand::UpgradeNonceAccount {
+            nonce_account,
+            memo,
+        } => process_upgrade_nonce_account(&rpc_client, config, *nonce_account, memo.as_ref()),
 
         // Program Deployment
 
@@ -1986,7 +1999,10 @@ mod tests {
         assert!(result.is_ok());
 
         let vote_account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!({
                 "data": ["KLUv/QBYNQIAtAIBAAAAbnoc3Smwt4/ROvTFWY/v9O8qlxZuPKby5Pv8zYBQW/EFAAEAAB8ACQD6gx92zAiAAecDP4B2XeEBSIx7MQeung==", "base64+zstd"],
                 "lamports": 42,
@@ -2272,7 +2288,10 @@ mod tests {
         // Success case
         let mut config = CliConfig::default();
         let account_info_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: Value::Null,
         });
         let mut mocks = HashMap::new();

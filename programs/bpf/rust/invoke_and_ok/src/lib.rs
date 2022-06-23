@@ -1,4 +1,4 @@
-//! Invokes an instruction and returns an error, the instruction invoked
+//! Invokes an instruction and return ok no matter what, the instruction invoked
 //! uses the instruction data provided and all the accounts
 
 use solana_program::{

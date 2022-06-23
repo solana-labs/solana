@@ -4,7 +4,7 @@ use crate::inline_spl_token::{self, GenericTokenAccount};
 solana_sdk::declare_id!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 // `spl_token_program_2022::extension::AccountType::Account` ordinal value
-const ACCOUNTTYPE_ACCOUNT: u8 = 2;
+pub const ACCOUNTTYPE_ACCOUNT: u8 = 2;
 
 pub struct Account;
 impl GenericTokenAccount for Account {

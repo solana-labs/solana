@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use solana_sdk::transaction::TransactionError;
 use thiserror::Error;
 
@@ -21,7 +21,7 @@ pub enum AddressLookupError {
     InvalidLookupIndex,
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl From<AddressLookupError> for TransactionError {
     fn from(err: AddressLookupError) -> Self {
         match err {

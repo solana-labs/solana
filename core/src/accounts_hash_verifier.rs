@@ -147,6 +147,14 @@ impl AccountsHashVerifier {
             )
             .unwrap();
 
+        accounts_package
+            .accounts
+            .accounts_db
+            .notify_accounts_hash_calculated_complete(
+                sorted_storages.max_slot_inclusive(),
+                &accounts_package.epoch_schedule,
+            );
+
         assert_eq!(accounts_package.expected_capitalization, lamports);
         if let Some(expected_hash) = accounts_package.accounts_hash_for_testing {
             assert_eq!(expected_hash, accounts_hash);
@@ -384,7 +392,8 @@ mod tests {
                 snapshot_storages: vec![],
                 archive_format: ArchiveFormat::TarBzip2,
                 snapshot_version: SnapshotVersion::default(),
-                snapshot_archives_dir: PathBuf::default(),
+                full_snapshot_archives_dir: PathBuf::default(),
+                incremental_snapshot_archives_dir: PathBuf::default(),
                 expected_capitalization: 0,
                 accounts_hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,

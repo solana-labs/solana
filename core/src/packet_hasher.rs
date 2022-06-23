@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Clone)]
-pub struct PacketHasher {
+pub(crate) struct PacketHasher {
     seed1: u128,
     seed2: u128,
 }
@@ -26,8 +26,7 @@ impl Default for PacketHasher {
 
 impl PacketHasher {
     pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
-        let size = packet.data.len().min(packet.meta.size);
-        self.hash_data(&packet.data[..size])
+        self.hash_data(packet.data(..).unwrap_or_default())
     }
 
     pub(crate) fn hash_shred(&self, shred: &Shred) -> u64 {
@@ -40,7 +39,7 @@ impl PacketHasher {
         hasher.finish()
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         *self = Self::default();
     }
 }

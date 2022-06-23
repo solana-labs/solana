@@ -6,7 +6,7 @@ use {
     log::*,
 };
 
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeCalculator {
     /// The current cost of a signature.
@@ -163,6 +163,13 @@ impl FeeRateGovernor {
             me.lamports_per_signature
         );
         me
+    }
+
+    pub fn clone_with_lamports_per_signature(&self, lamports_per_signature: u64) -> Self {
+        Self {
+            lamports_per_signature,
+            ..*self
+        }
     }
 
     /// calculate unburned fee from a fee total, returns (unburned, burned)

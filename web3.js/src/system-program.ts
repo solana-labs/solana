@@ -1,5 +1,4 @@
 import * as BufferLayout from '@solana/buffer-layout';
-import {u64} from '@solana/buffer-layout-utils';
 
 import {
   encodeData,
@@ -13,6 +12,7 @@ import {PublicKey} from './publickey';
 import {SYSVAR_RECENT_BLOCKHASHES_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
 import {Transaction, TransactionInstruction} from './transaction';
 import {toBuffer} from './util/to-buffer';
+import {u64} from './util/bigint';
 
 /**
  * Create account system transaction params
@@ -566,7 +566,8 @@ export type SystemInstructionType =
   | 'InitializeNonceAccount'
   | 'Transfer'
   | 'TransferWithSeed'
-  | 'WithdrawNonceAccount';
+  | 'WithdrawNonceAccount'
+  | 'UpgradeNonceAccount';
 
 type SystemInstructionInputData = {
   AdvanceNonceAccount: IInstructionInputData;
@@ -616,6 +617,7 @@ type SystemInstructionInputData = {
   WithdrawNonceAccount: IInstructionInputData & {
     lamports: number;
   };
+  UpgradeNonceAccount: IInstructionInputData;
 };
 
 /**
@@ -723,6 +725,12 @@ export const SYSTEM_INSTRUCTION_LAYOUTS = Object.freeze<{
         Layout.publicKey('programId'),
       ],
     ),
+  },
+  UpgradeNonceAccount: {
+    index: 12,
+    layout: BufferLayout.struct<
+      SystemInstructionInputData['UpgradeNonceAccount']
+    >([BufferLayout.u32('instruction')]),
   },
 });
 

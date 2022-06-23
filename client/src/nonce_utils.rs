@@ -16,7 +16,7 @@ use {
     },
 };
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     #[error("invalid account owner")]
     InvalidAccountOwner,
@@ -129,9 +129,8 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
     account: &T,
 ) -> Result<State, Error> {
     account_identity_ok(account)?;
-    StateMut::<Versions>::state(account)
-        .map_err(|_| Error::InvalidAccountData)
-        .map(|v| v.convert_to_current())
+    let versions = StateMut::<Versions>::state(account).map_err(|_| Error::InvalidAccountData)?;
+    Ok(State::from(versions))
 }
 
 /// Deserialize the state data of a durable transaction nonce account.
@@ -199,7 +198,7 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 ///     // network's latest blockhash.
 ///     let nonce_account = client.get_account(nonce_account_pubkey)?;
 ///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
-///     let blockhash = nonce_data.blockhash;
+///     let blockhash = nonce_data.blockhash();
 ///
 ///     tx.try_sign(&[payer], blockhash)?;
 ///

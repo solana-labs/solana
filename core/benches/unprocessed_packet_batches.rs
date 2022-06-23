@@ -74,7 +74,7 @@ fn insert_packet_batches(
         } else {
             build_packet_batch(packet_per_batch_count)
         };
-        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes, None);
+        let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
         unprocessed_packet_batches.insert_batch(deserialized_packets);
     });
     timer.stop();
@@ -100,7 +100,7 @@ fn bench_packet_clone(bencher: &mut Bencher) {
             let mut outer_packet = Packet::default();
 
             let mut timer = Measure::start("insert_batch");
-            packet_batch.packets.iter().for_each(|packet| {
+            packet_batch.iter().for_each(|packet| {
                 let mut packet = packet.clone();
                 packet.meta.sender_stake *= 2;
                 if packet.meta.sender_stake > 2 {

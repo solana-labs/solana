@@ -78,10 +78,10 @@ fn test_consistency_halt() {
         .validator_config
         .accounts_hash_fault_injection_slots = 40;
 
-    let validator_stake = 10_000;
+    let validator_stake = DEFAULT_NODE_STAKE;
     let mut config = ClusterConfig {
         node_stakes: vec![validator_stake],
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         validator_configs: vec![leader_snapshot_test_config.validator_config],
         ..ClusterConfig::default()
     };
@@ -176,8 +176,8 @@ fn test_leader_failure_4() {
     let num_nodes = 4;
     let validator_config = ValidatorConfig::default_for_test();
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
-        node_stakes: vec![100; 4],
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
+        node_stakes: vec![DEFAULT_NODE_STAKE; 4],
         validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
         ..ClusterConfig::default()
     };
@@ -192,6 +192,7 @@ fn test_leader_failure_4() {
             .config
             .validator_exit,
         &local.funding_keypair,
+        &local.connection_cache,
         num_nodes,
         config.ticks_per_slot * config.poh_config.target_tick_duration.as_millis() as u64,
         SocketAddrSpace::Unspecified,
@@ -209,9 +210,9 @@ fn test_ledger_cleanup_service() {
         ..ValidatorConfig::default_for_test()
     };
     let mut config = ClusterConfig {
-        cluster_lamports: 10_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         poh_config: PohConfig::new_sleep(Duration::from_millis(50)),
-        node_stakes: vec![100; num_nodes],
+        node_stakes: vec![DEFAULT_NODE_STAKE; num_nodes],
         validator_configs: make_identical_validator_configs(&validator_config, num_nodes),
         ..ClusterConfig::default()
     };
@@ -225,6 +226,7 @@ fn test_ledger_cleanup_service() {
         num_nodes,
         HashSet::new(),
         SocketAddrSpace::Unspecified,
+        &cluster.connection_cache,
     );
     cluster.close_preserve_ledgers();
     //check everyone's ledgers and make sure only ~100 slots are stored
@@ -270,7 +272,7 @@ fn test_slot_hash_expiry() {
     solana_sdk::slot_hashes::set_entries_for_tests_only(64);
 
     let slots_per_epoch = 2048;
-    let node_stakes = vec![60, 40];
+    let node_stakes = vec![60 * DEFAULT_NODE_STAKE, 40 * DEFAULT_NODE_STAKE];
     let validator_keys = vec![
         "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
@@ -298,7 +300,7 @@ fn test_slot_hash_expiry() {
     validator_configs[1].voting_disabled = true;
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes,
         validator_configs,
         validator_keys: Some(validator_keys),
@@ -435,6 +437,7 @@ fn test_slot_hash_expiry() {
     cluster_tests::check_for_new_roots(
         16,
         &[cluster.get_contact_info(&a_pubkey).unwrap().clone()],
+        &cluster.connection_cache,
         "test_slot_hashes_expiry",
     );
 }

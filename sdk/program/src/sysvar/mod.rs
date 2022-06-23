@@ -1,5 +1,9 @@
-//! named accounts for synthesized data accounts for bank state, etc.
+//! Access to special accounts with dynamically-updated data.
 //!
+//! For more details see the Solana [documentation on sysvars][sysvardoc].
+//!
+//! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
+
 use {
     crate::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey},
     lazy_static::lazy_static,
@@ -132,14 +136,10 @@ macro_rules! impl_sysvar_get {
             let mut var = Self::default();
             let var_addr = &mut var as *mut _ as *mut u8;
 
-            #[cfg(target_arch = "bpf")]
-            let result = unsafe {
-                extern "C" {
-                    fn $syscall_name(var_addr: *mut u8) -> u64;
-                }
-                $syscall_name(var_addr)
-            };
-            #[cfg(not(target_arch = "bpf"))]
+            #[cfg(target_os = "solana")]
+            let result = unsafe { $crate::syscalls::$syscall_name(var_addr) };
+
+            #[cfg(not(target_os = "solana"))]
             let result = $crate::program_stubs::$syscall_name(var_addr);
 
             match result {
@@ -159,7 +159,7 @@ mod tests {
     };
 
     #[repr(C)]
-    #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
     struct TestSysvar {
         something: Pubkey,
     }

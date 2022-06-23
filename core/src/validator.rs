@@ -25,6 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::{ConnectionCache, UseQUIC},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -41,7 +42,7 @@ use {
         blockstore::{
             Blockstore, BlockstoreError, BlockstoreSignals, CompletedSlotsReceiver, PurgeType,
         },
-        blockstore_db::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
+        blockstore_options::{BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions},
         blockstore_processor::{self, TransactionStatusSender},
         leader_schedule::FixedSchedule,
         leader_schedule_cache::LeaderScheduleCache,
@@ -89,7 +90,7 @@ use {
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         exit::Exit,
-        genesis_config::GenesisConfig,
+        genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
@@ -159,6 +160,7 @@ pub struct ValidatorConfig {
     pub no_poh_speed_test: bool,
     pub no_os_memory_stats_reporting: bool,
     pub no_os_network_stats_reporting: bool,
+    pub no_os_cpu_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
@@ -174,6 +176,7 @@ pub struct ValidatorConfig {
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
+    pub enable_quic_servers: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -219,6 +222,7 @@ impl Default for ValidatorConfig {
             no_poh_speed_test: true,
             no_os_memory_stats_reporting: true,
             no_os_network_stats_reporting: true,
+            no_os_cpu_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: AccountSecondaryIndexes::default(),
@@ -234,6 +238,7 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
+            enable_quic_servers: false,
         }
     }
 }
@@ -251,7 +256,7 @@ impl ValidatorConfig {
 // `ValidatorStartProgress` contains status information that is surfaced to the node operator over
 // the admin RPC channel to help them to follow the general progress of node startup without
 // having to watch log messages.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ValidatorStartProgress {
     Initializing, // Catch all, default state
     SearchingForRpcService,
@@ -378,6 +383,7 @@ impl Validator {
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
+        tpu_connection_pool_size: usize,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -497,11 +503,12 @@ impl Validator {
             Arc::clone(&exit),
             !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
+            !config.no_os_cpu_stats_reporting,
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service =
-            PohTimingReportService::new(poh_timing_point_receiver, exit.clone());
+            PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
         let (
             genesis_config,
@@ -694,10 +701,12 @@ impl Validator {
             };
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
+        let bank_forks_guard = bank_forks.read().unwrap();
         block_commitment_cache.initialize_slots(
-            bank_forks.read().unwrap().working_bank().slot(),
-            bank_forks.read().unwrap().root(),
+            bank_forks_guard.working_bank().slot(),
+            bank_forks_guard.root(),
         );
+        drop(bank_forks_guard);
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
@@ -744,6 +753,9 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
+        let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
+
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
             json_rpc_service,
@@ -788,6 +800,7 @@ impl Validator {
                     config.send_transaction_service_config.clone(),
                     max_slots.clone(),
                     leader_schedule_cache.clone(),
+                    connection_cache.clone(),
                     max_complete_transaction_status_slot,
                 )),
                 if !config.rpc_config.full_api {
@@ -962,8 +975,20 @@ impl Validator {
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
-            use_quic,
+            &connection_cache,
         );
+
+        let enable_quic_servers = if genesis_config.cluster_type == ClusterType::MainnetBeta {
+            config.enable_quic_servers
+        } else {
+            if config.enable_quic_servers {
+                warn!(
+                    "ignoring --enable-quic-servers. QUIC is always enabled for cluster type: {:?}",
+                    genesis_config.cluster_type
+                );
+            }
+            true
+        };
 
         let tpu = Tpu::new(
             &cluster_info,
@@ -976,6 +1001,7 @@ impl Validator {
                 vote: node.sockets.tpu_vote,
                 broadcast: node.sockets.broadcast,
                 transactions_quic: node.sockets.tpu_quic,
+                transactions_forwards_quic: node.sockets.tpu_forwards_quic,
             },
             &rpc_subscriptions,
             transaction_status_sender,
@@ -993,10 +1019,16 @@ impl Validator {
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
             &cost_model,
+            &connection_cache,
             &identity_keypair,
+            enable_quic_servers,
         );
 
-        datapoint_info!("validator-new", ("id", id.to_string(), String));
+        datapoint_info!(
+            "validator-new",
+            ("id", id.to_string(), String),
+            ("version", solana_version::version!(), String)
+        );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
         Self {
@@ -1479,7 +1511,7 @@ fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
         .map(|metas| {
             let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
             if slots.is_empty() {
-                println!("Ledger is empty");
+                info!("Ledger is empty");
                 None
             } else {
                 let first = slots.first().unwrap();
@@ -1676,7 +1708,8 @@ fn maybe_warp_slot(
             ledger_path,
             &bank_forks.root_bank(),
             None,
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.full_snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             snapshot_config.archive_format,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
@@ -1752,13 +1785,6 @@ fn backup_and_clear_blockstore(ledger_path: &Path, start_slot: Slot, shred_versi
         info!("Purging slots {} to {}", start_slot, end_slot);
         blockstore.purge_from_next_slots(start_slot, end_slot);
         blockstore.purge_slots(start_slot, end_slot, PurgeType::Exact);
-        info!("Purging done, compacting db..");
-        if let Err(e) = blockstore.compact_storage(start_slot, end_slot) {
-            warn!(
-                "Error from compacting storage from {} to {}: {:?}",
-                start_slot, end_slot, e
-            );
-        }
         info!("done");
     }
     drop(blockstore);
@@ -1812,7 +1838,7 @@ fn initialize_rpc_transaction_history_services(
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 enum ValidatorError {
     BadExpectedBankHash,
     NotEnoughLedgerData,
@@ -2033,6 +2059,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
+        solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -2068,26 +2095,14 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-
-        // spawn a new thread to wait for validator close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            validator.close();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(30);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            panic!("timeout for closing validator");
-        }
-
+        validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
@@ -2163,7 +2178,8 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    false, // use_quic
+                    DEFAULT_TPU_USE_QUIC,
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
                 )
             })
             .collect();

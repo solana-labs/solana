@@ -87,7 +87,7 @@ impl RpcFilterType {
     }
 }
 
-#[derive(Error, PartialEq, Debug)]
+#[derive(Error, PartialEq, Eq, Debug)]
 pub enum RpcFilterError {
     #[error("encoded binary data should be less than 129 bytes")]
     DataTooLarge,

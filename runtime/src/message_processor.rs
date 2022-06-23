@@ -6,7 +6,7 @@ use {
         invoke_context::{BuiltinProgram, Executors, InvokeContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
-        timings::ExecuteTimings,
+        timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_sdk::{
         account::WritableAccount,
@@ -119,19 +119,26 @@ impl MessageProcessor {
                 );
             }
 
-            let instruction_accounts = instruction
-                .accounts
-                .iter()
-                .map(|index_in_transaction| {
-                    let index_in_transaction = *index_in_transaction as usize;
-                    InstructionAccount {
-                        index_in_transaction,
-                        index_in_caller: program_indices.len().saturating_add(index_in_transaction),
-                        is_signer: message.is_signer(index_in_transaction),
-                        is_writable: message.is_writable(index_in_transaction),
-                    }
-                })
-                .collect::<Vec<_>>();
+            let mut instruction_accounts = Vec::with_capacity(instruction.accounts.len());
+            for (instruction_account_index, index_in_transaction) in
+                instruction.accounts.iter().enumerate()
+            {
+                let index_in_callee = instruction
+                    .accounts
+                    .get(0..instruction_account_index)
+                    .ok_or(TransactionError::InvalidAccountIndex)?
+                    .iter()
+                    .position(|account_index| account_index == index_in_transaction)
+                    .unwrap_or(instruction_account_index);
+                let index_in_transaction = *index_in_transaction as usize;
+                instruction_accounts.push(InstructionAccount {
+                    index_in_transaction,
+                    index_in_caller: index_in_transaction,
+                    index_in_callee,
+                    is_signer: message.is_signer(index_in_transaction),
+                    is_writable: message.is_writable(index_in_transaction),
+                });
+            }
 
             let result = if is_precompile
                 && invoke_context
@@ -166,7 +173,10 @@ impl MessageProcessor {
                     compute_units_consumed,
                     result.is_err(),
                 );
-                timings.details.accumulate(&invoke_context.timings);
+                invoke_context.timings = {
+                    timings.details.accumulate(&invoke_context.timings);
+                    ExecuteDetailsTimings::default()
+                };
                 saturating_add_assign!(
                     timings.execute_accessories.process_instructions.total_us,
                     time.as_us()
@@ -239,7 +249,7 @@ mod tests {
                     MockSystemInstruction::ChangeData { data } => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_data(&[data]);
+                            .set_data(&[data])?;
                         Ok(())
                     }
                 }
@@ -457,7 +467,7 @@ mod tests {
                             .try_borrow_instruction_account(transaction_context, 2)?;
                         dup_account.checked_sub_lamports(lamports)?;
                         to_account.checked_add_lamports(lamports)?;
-                        dup_account.set_data(&[data]);
+                        dup_account.set_data(&[data])?;
                         drop(dup_account);
                         let mut from_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?;

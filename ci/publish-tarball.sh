@@ -160,6 +160,7 @@ SOLANA_RELEASE=$CHANNEL_OR_TAG
 SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
 SOLANA_DOWNLOAD_ROOT=https://release.solana.com
 EOF
+  echo release.solana.com-install
   cat install/solana-install-init.sh >> release.solana.com-install
 
   echo --- AWS S3 Store: "install"

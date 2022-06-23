@@ -16,11 +16,24 @@ use {
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+/// Contains account meta data which varies between instruction.
+///
+/// It also contains indices to other structures for faster lookup.
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
+    /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: usize,
+    /// Points to the first occurrence in the parent `InstructionContext`
+    ///
+    /// This excludes the program accounts.
     pub index_in_caller: usize,
+    /// Points to the first occurrence in the current `InstructionContext`
+    ///
+    /// This excludes the program accounts.
+    pub index_in_callee: usize,
+    /// Is this account supposed to sign
     pub is_signer: bool,
+    /// Is this account allowed to become writable
     pub is_writable: bool,
 }
 
@@ -119,7 +132,7 @@ impl TransactionContext {
     ) -> Result<&InstructionContext, InstructionError> {
         let top_level_index = *self
             .instruction_stack
-            .get(0)
+            .first()
             .ok_or(InstructionError::CallDepth)?;
         let cpi_index = if level == 0 {
             0
@@ -240,7 +253,7 @@ impl TransactionContext {
 }
 
 /// Return data at the end of a transaction
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct TransactionReturnData {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
@@ -288,16 +301,6 @@ impl InstructionContext {
         self.program_accounts.len()
     }
 
-    /// Get the index of the instruction's program id
-    pub fn get_program_id_index(&self) -> usize {
-        self.program_accounts.last().cloned().unwrap_or_default()
-    }
-
-    /// Get the instruction's program id
-    pub fn get_program_id(&self, transaction_context: &TransactionContext) -> Pubkey {
-        transaction_context.account_keys[self.program_accounts.last().cloned().unwrap_or_default()]
-    }
-
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> usize {
         self.instruction_accounts.len()
@@ -313,13 +316,6 @@ impl InstructionContext {
         } else {
             Ok(())
         }
-    }
-
-    /// Number of accounts in this Instruction
-    pub fn get_number_of_accounts(&self) -> usize {
-        self.program_accounts
-            .len()
-            .saturating_add(self.instruction_accounts.len())
     }
 
     /// Data parameter for the programs `process_instruction` handler
@@ -340,8 +336,8 @@ impl InstructionContext {
             })
     }
 
-    /// Searches for an account by its key
-    pub fn find_index_of_account(
+    /// Searches for an instruction account by its key
+    pub fn find_index_of_instruction_account(
         &self,
         transaction_context: &TransactionContext,
         pubkey: &Pubkey,
@@ -352,60 +348,75 @@ impl InstructionContext {
                 &transaction_context.account_keys[instruction_account.index_in_transaction]
                     == pubkey
             })
-            .map(|index| index.saturating_add(self.program_accounts.len()))
     }
 
-    /// Translates the given instruction wide index into a transaction wide index
-    pub fn get_index_in_transaction(
+    /// Translates the given instruction wide program_account_index into a transaction wide index
+    pub fn get_index_of_program_account_in_transaction(
         &self,
-        index_in_instruction: usize,
+        program_account_index: usize,
     ) -> Result<usize, InstructionError> {
-        if index_in_instruction < self.program_accounts.len() {
-            Ok(self.program_accounts[index_in_instruction])
-        } else if index_in_instruction < self.get_number_of_accounts() {
-            Ok(self.instruction_accounts
-                [index_in_instruction.saturating_sub(self.program_accounts.len())]
+        Ok(*self
+            .program_accounts
+            .get(program_account_index)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?)
+    }
+
+    /// Translates the given instruction wide instruction_account_index into a transaction wide index
+    pub fn get_index_of_instruction_account_in_transaction(
+        &self,
+        instruction_account_index: usize,
+    ) -> Result<usize, InstructionError> {
+        Ok(self
+            .instruction_accounts
+            .get(instruction_account_index)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?
             .index_in_transaction)
+    }
+
+    /// Returns `Some(instruction_account_index)` if this is a duplicate
+    /// and `None` if it is the first account with this key
+    pub fn is_instruction_account_duplicate(
+        &self,
+        instruction_account_index: usize,
+    ) -> Result<Option<usize>, InstructionError> {
+        let index_in_callee = self
+            .instruction_accounts
+            .get(instruction_account_index)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?
+            .index_in_callee;
+        Ok(if index_in_callee == instruction_account_index {
+            None
         } else {
-            Err(InstructionError::NotEnoughAccountKeys)
-        }
+            Some(index_in_callee)
+        })
     }
 
     /// Gets the key of the last program account of this Instruction
-    pub fn get_program_key<'a, 'b: 'a>(
+    pub fn get_last_program_key<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
     ) -> Result<&'b Pubkey, InstructionError> {
-        let index_in_transaction =
-            self.get_index_in_transaction(self.program_accounts.len().saturating_sub(1))?;
-        transaction_context.get_key_of_account_at_index(index_in_transaction)
+        let result = self
+            .get_index_of_program_account_in_transaction(
+                self.program_accounts.len().saturating_sub(1),
+            )
+            .and_then(|index_in_transaction| {
+                transaction_context.get_key_of_account_at_index(index_in_transaction)
+            });
+        debug_assert!(result.is_ok());
+        result
     }
 
-    /// Gets the key of an instruction account (skipping program accounts)
-    pub fn get_instruction_account_key<'a, 'b: 'a>(
+    fn try_borrow_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
-        instruction_account_index: usize,
-    ) -> Result<&'b Pubkey, InstructionError> {
-        let index_in_transaction = self.get_index_in_transaction(
-            self.program_accounts
-                .len()
-                .saturating_add(instruction_account_index),
-        )?;
-        transaction_context.get_key_of_account_at_index(index_in_transaction)
-    }
-
-    /// Tries to borrow an account from this Instruction
-    pub fn try_borrow_account<'a, 'b: 'a>(
-        &'a self,
-        transaction_context: &'b TransactionContext,
+        index_in_transaction: usize,
         index_in_instruction: usize,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
-        let index_in_transaction = self.get_index_in_transaction(index_in_instruction)?;
-        if index_in_transaction >= transaction_context.accounts.len() {
-            return Err(InstructionError::MissingAccount);
-        }
-        let account = transaction_context.accounts[index_in_transaction]
+        let account = transaction_context
+            .accounts
+            .get(index_in_transaction)
+            .ok_or(InstructionError::MissingAccount)?
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)?;
         Ok(BorrowedAccount {
@@ -418,13 +429,30 @@ impl InstructionContext {
     }
 
     /// Gets the last program account of this Instruction
-    pub fn try_borrow_program_account<'a, 'b: 'a>(
+    pub fn try_borrow_last_program_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
-        self.try_borrow_account(
+        let result = self.try_borrow_program_account(
             transaction_context,
             self.program_accounts.len().saturating_sub(1),
+        );
+        debug_assert!(result.is_ok());
+        result
+    }
+
+    /// Tries to borrow a program account from this Instruction
+    pub fn try_borrow_program_account<'a, 'b: 'a>(
+        &'a self,
+        transaction_context: &'b TransactionContext,
+        program_account_index: usize,
+    ) -> Result<BorrowedAccount<'a>, InstructionError> {
+        let index_in_transaction =
+            self.get_index_of_program_account_in_transaction(program_account_index)?;
+        self.try_borrow_account(
+            transaction_context,
+            index_in_transaction,
+            program_account_index,
         )
     }
 
@@ -434,39 +462,42 @@ impl InstructionContext {
         transaction_context: &'b TransactionContext,
         instruction_account_index: usize,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
+        let index_in_transaction =
+            self.get_index_of_instruction_account_in_transaction(instruction_account_index)?;
         self.try_borrow_account(
             transaction_context,
+            index_in_transaction,
             self.program_accounts
                 .len()
                 .saturating_add(instruction_account_index),
         )
     }
 
-    /// Returns whether an account is a signer
-    pub fn is_signer(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
-        Ok(if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
-                .ok_or(InstructionError::MissingAccount)?
-                .is_signer
-        })
+    /// Returns whether an instruction account is a signer
+    pub fn is_instruction_account_signer(
+        &self,
+        instruction_account_index: usize,
+    ) -> Result<bool, InstructionError> {
+        Ok(self
+            .instruction_accounts
+            .get(instruction_account_index)
+            .ok_or(InstructionError::MissingAccount)?
+            .is_signer)
     }
 
-    /// Returns whether an account is writable
-    pub fn is_writable(&self, index_in_instruction: usize) -> Result<bool, InstructionError> {
-        Ok(if index_in_instruction < self.program_accounts.len() {
-            false
-        } else {
-            self.instruction_accounts
-                .get(index_in_instruction.saturating_sub(self.program_accounts.len()))
-                .ok_or(InstructionError::MissingAccount)?
-                .is_writable
-        })
+    /// Returns whether an instruction account is writable
+    pub fn is_instruction_account_writable(
+        &self,
+        instruction_account_index: usize,
+    ) -> Result<bool, InstructionError> {
+        Ok(self
+            .instruction_accounts
+            .get(instruction_account_index)
+            .ok_or(InstructionError::MissingAccount)?
+            .is_writable)
     }
 
-    /// Calculates the set of all keys of signer accounts in this Instruction
+    /// Calculates the set of all keys of signer instruction accounts in this Instruction
     pub fn get_signers(&self, transaction_context: &TransactionContext) -> HashSet<Pubkey> {
         let mut result = HashSet::new();
         for instruction_account in self.instruction_accounts.iter() {
@@ -496,11 +527,6 @@ impl<'a> BorrowedAccount<'a> {
         self.index_in_transaction
     }
 
-    /// Returns the index of this account (instruction wide)
-    pub fn get_index_in_instruction(&self) -> usize {
-        self.index_in_instruction
-    }
-
     /// Returns the public key of this account (transaction wide)
     pub fn get_key(&self) -> &Pubkey {
         &self.transaction_context.account_keys[self.index_in_transaction]
@@ -512,8 +538,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
-    pub fn set_owner(&mut self, pubkey: &[u8]) {
+    pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         self.account.copy_into_owner_from_slice(pubkey);
+        Ok(())
     }
 
     /// Returns the number of lamports of this account (transaction wide)
@@ -522,8 +549,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
-    pub fn set_lamports(&mut self, lamports: u64) {
+    pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.account.set_lamports(lamports);
+        Ok(())
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -532,8 +560,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_add(lamports)
                 .ok_or(LamportsError::ArithmeticOverflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Subtracts lamports from this account (transaction wide)
@@ -542,8 +569,7 @@ impl<'a> BorrowedAccount<'a> {
             self.get_lamports()
                 .checked_sub(lamports)
                 .ok_or(LamportsError::ArithmeticUnderflow)?,
-        );
-        Ok(())
+        )
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
@@ -552,24 +578,26 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a writable slice of the account data (transaction wide)
-    pub fn get_data_mut(&mut self) -> &mut [u8] {
-        self.account.data_as_mut_slice()
+    pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
-    pub fn set_data(&mut self, data: &[u8]) {
+    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
             self.account.set_data_from_slice(data);
         }
+        Ok(())
     }
 
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
-    pub fn set_data_length(&mut self, new_len: usize) {
+    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
         self.account.data_mut().resize(new_len, 0);
+        Ok(())
     }
 
     /// Deserializes the account data into a state
@@ -597,8 +625,9 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
-    pub fn set_executable(&mut self, is_executable: bool) {
+    pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         self.account.set_executable(is_executable);
+        Ok(())
     }
 
     /// Returns the rent epoch of this account (transaction wide)
@@ -608,15 +637,27 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is a signer (instruction wide)
     pub fn is_signer(&self) -> bool {
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            return false;
+        }
         self.instruction_context
-            .is_signer(self.index_in_instruction)
+            .is_instruction_account_signer(
+                self.index_in_instruction
+                    .saturating_sub(self.instruction_context.program_accounts.len()),
+            )
             .unwrap_or_default()
     }
 
     /// Returns whether this account is writable (instruction wide)
     pub fn is_writable(&self) -> bool {
+        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+            return false;
+        }
         self.instruction_context
-            .is_writable(self.index_in_instruction)
+            .is_instruction_account_writable(
+                self.index_in_instruction
+                    .saturating_sub(self.instruction_context.program_accounts.len()),
+            )
             .unwrap_or_default()
     }
 }

@@ -112,7 +112,7 @@
 //! and off-chain execution, the environments of which are significantly
 //! different, it extensively uses [conditional compilation][cc] to tailor its
 //! implementation to the environment. The `cfg` predicate used for identifying
-//! compilation for on-chain programs is `target_arch = "bpf"`, as in this
+//! compilation for on-chain programs is `target_os = "solana"`, as in this
 //! example from the `solana-program` codebase that logs a message via a
 //! syscall when run on-chain, and via a library call when offchain:
 //!
@@ -122,12 +122,12 @@
 //!
 //! ```
 //! pub fn sol_log(message: &str) {
-//!     #[cfg(target_arch = "bpf")]
+//!     #[cfg(target_os = "solana")]
 //!     unsafe {
 //!         sol_log_(message.as_ptr(), message.len() as u64);
 //!     }
 //!
-//!     #[cfg(not(target_arch = "bpf"))]
+//!     #[cfg(not(target_os = "solana"))]
 //!     program_stubs::sol_log(message);
 //! }
 //! # mod program_stubs {
@@ -469,7 +469,7 @@
 //!
 //! # Sysvars
 //!
-//! Sysvars are special accounts that contain dynamically-updating data about
+//! Sysvars are special accounts that contain dynamically-updated data about
 //! the network cluster, the blockchain history, and the executing transaction.
 //!
 //! The program IDs for sysvars are defined in the [`sysvar`] module, and simple
@@ -603,17 +603,19 @@ pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake;
 pub mod stake_history;
+#[cfg(target_os = "solana")]
+pub mod syscalls;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
 pub mod wasm;
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
 /// Re-export of [wasm-bindgen].
 ///
 /// [wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The [config native program][np].
@@ -631,6 +633,39 @@ pub mod config {
 pub mod vote {
     pub mod program {
         crate::declare_id!("Vote111111111111111111111111111111111111111");
+    }
+}
+
+/// A vector of Solana SDK IDs
+pub mod sdk_ids {
+    use {
+        crate::{
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
+            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
+            system_program, sysvar, vote,
+        },
+        lazy_static::lazy_static,
+    };
+
+    lazy_static! {
+        pub static ref SDK_IDS: Vec<Pubkey> = {
+            let mut sdk_ids = vec![
+                ed25519_program::id(),
+                secp256k1_program::id(),
+                system_program::id(),
+                sysvar::id(),
+                bpf_loader::id(),
+                bpf_loader_upgradeable::id(),
+                incinerator::id(),
+                config::program::id(),
+                vote::program::id(),
+                feature::id(),
+                bpf_loader_deprecated::id(),
+                stake::config::id(),
+            ];
+            sdk_ids.extend(sysvar::ALL_IDS.iter());
+            sdk_ids
+        };
     }
 }
 
@@ -798,13 +833,32 @@ macro_rules! unchecked_div_by_const {
     }};
 }
 
+use std::{mem::MaybeUninit, ptr::write_bytes};
+
+#[macro_export]
+macro_rules! copy_field {
+    ($ptr:expr, $self:ident, $field:ident) => {
+        std::ptr::addr_of_mut!((*$ptr).$field).write($self.$field)
+    };
+}
+
+pub fn clone_zeroed<T, F>(clone: F) -> T
+where
+    F: Fn(&mut MaybeUninit<T>),
+{
+    let mut value = MaybeUninit::<T>::uninit();
+    unsafe { write_bytes(&mut value, 0, 1) }
+    clone(&mut value);
+    unsafe { value.assume_init() }
+}
+
 // This module is purposefully listed after all other exports: because of an
 // interaction within rustdoc between the reexports inside this module of
 // `solana_program`'s top-level modules, and `solana_sdk`'s glob re-export of
 // `solana_program`'s top-level modules, if this module is not lexically last
 // rustdoc fails to generate documentation for the re-exports within
 // `solana_sdk`.
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub mod example_mocks;
 
 #[cfg(test)]

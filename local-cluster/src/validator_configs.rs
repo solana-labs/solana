@@ -47,6 +47,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         no_poh_speed_test: config.no_poh_speed_test,
         no_os_memory_stats_reporting: config.no_os_memory_stats_reporting,
         no_os_network_stats_reporting: config.no_os_network_stats_reporting,
+        no_os_cpu_stats_reporting: config.no_os_cpu_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
@@ -62,6 +63,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         wait_to_vote_slot: config.wait_to_vote_slot,
         ledger_column_options: config.ledger_column_options.clone(),
         runtime_config: config.runtime_config.clone(),
+        enable_quic_servers: config.enable_quic_servers,
     }
 }
 

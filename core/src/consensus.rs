@@ -39,7 +39,7 @@ use {
     thiserror::Error,
 };
 
-#[derive(PartialEq, Clone, Debug, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Debug, AbiExample)]
 pub enum SwitchForkDecision {
     SwitchProof(Hash),
     SameFork,
@@ -439,8 +439,8 @@ impl Tower {
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
-        let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
-        slot
+        let vote_state = vote_account.vote_state();
+        vote_state.as_ref().ok()?.last_voted_slot()
     }
 
     pub fn record_bank_vote(&mut self, bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
@@ -1038,7 +1038,7 @@ impl Tower {
     }
 
     pub fn is_stray_last_vote(&self) -> bool {
-        self.stray_restored_slot == self.last_voted_slot()
+        self.stray_restored_slot.is_some() && self.stray_restored_slot == self.last_voted_slot()
     }
 
     // The tower root can be older/newer if the validator booted from a newer/older snapshot, so
@@ -1404,6 +1404,7 @@ pub mod test {
                 let mut account = AccountSharedData::from(Account {
                     data: vec![0; VoteState::size_of()],
                     lamports: *lamports,
+                    owner: solana_vote_program::id(),
                     ..Account::default()
                 });
                 let mut vote_state = VoteState::default();
@@ -1417,7 +1418,7 @@ pub mod test {
                 .expect("serialize state");
                 (
                     solana_sdk::pubkey::new_rand(),
-                    (*lamports, VoteAccount::from(account)),
+                    (*lamports, VoteAccount::try_from(account).unwrap()),
                 )
             })
             .collect()
@@ -3240,5 +3241,11 @@ pub mod test {
         assert_eq!(tower.root(), 12);
         assert_eq!(tower.voted_slots(), vec![13, 14]);
         assert_eq!(tower.stray_restored_slot, Some(14));
+    }
+
+    #[test]
+    fn test_default_tower_has_no_stray_last_vote() {
+        let tower = Tower::default();
+        assert!(!tower.is_stray_last_vote());
     }
 }

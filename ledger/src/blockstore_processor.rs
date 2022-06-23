@@ -15,7 +15,7 @@ use {
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
-    solana_rayon_threadlimit::get_thread_count,
+    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -55,7 +55,6 @@ use {
     },
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
@@ -66,7 +65,7 @@ use {
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit
+// by max block cost limit.
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -94,12 +93,15 @@ impl BlockCostCapacityMeter {
     }
 }
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .build()
+        .unwrap();
+}
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -161,6 +163,7 @@ fn execute_batch(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    tx_cost: u64,
 ) -> Result<()> {
     let record_token_balances = transaction_status_sender.is_some();
 
@@ -192,13 +195,14 @@ fn execute_batch(
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units);
+            .accumulate(execution_cost_units + tx_cost);
 
         debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
+            tx_cost,
             remaining_block_cost_cap,
         );
 
@@ -220,12 +224,7 @@ fn execute_batch(
         ..
     } = tx_results;
 
-    if bank
-        .feature_set
-        .is_active(&feature_set::cap_accounts_data_len::id())
-    {
-        check_accounts_data_size(&execution_results)?;
-    }
+    check_accounts_data_size(bank, &execution_results)?;
 
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
@@ -260,32 +259,32 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    tx_costs: &[u64],
 ) -> Result<()> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .map(|batch| {
-                        let mut timings = ExecuteTimings::default();
-                        let result = execute_batch(
-                            batch,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        (result, timings)
-                    })
-                    .unzip()
-            })
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .enumerate()
+                .map(|(index, batch)| {
+                    let mut timings = ExecuteTimings::default();
+                    let result = execute_batch(
+                        batch,
+                        bank,
+                        transaction_status_sender,
+                        replay_vote_sender,
+                        &mut timings,
+                        cost_capacity_meter.clone(),
+                        tx_costs[index],
+                    );
+                    if let Some(entry_callback) = entry_callback {
+                        entry_callback(bank);
+                    }
+                    (result, timings)
+                })
+                .unzip()
         });
-
     timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
     timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
     for timing in new_timings {
@@ -293,6 +292,21 @@ fn execute_batches_internal(
     }
 
     first_err(&results)
+}
+
+fn rebatch_transactions<'a>(
+    lock_results: &'a [Result<()>],
+    bank: &'a Arc<Bank>,
+    sanitized_txs: &'a [SanitizedTransaction],
+    start: usize,
+    end: usize,
+) -> TransactionBatch<'a, 'a> {
+    let txs = &sanitized_txs[start..=end];
+    let results = &lock_results[start..=end];
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    tx_batch.set_needs_unlock(false);
+
+    tx_batch
 }
 
 fn execute_batches(
@@ -303,53 +317,77 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
 ) -> Result<()> {
-    let lock_results = batches
+    let (lock_results, sanitized_txs): (Vec<_>, Vec<_>) = batches
         .iter()
-        .flat_map(|batch| batch.lock_results().clone())
-        .collect::<Vec<_>>();
-    let sanitized_txs = batches
-        .iter()
-        .flat_map(|batch| batch.sanitized_transactions().to_vec())
-        .collect::<Vec<_>>();
+        .flat_map(|batch| {
+            batch
+                .lock_results()
+                .iter()
+                .cloned()
+                .zip(batch.sanitized_transactions().to_vec())
+        })
+        .unzip();
 
-    let cost_model = CostModel::new();
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
+    let mut total_cost_without_bpf: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
     // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
     #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let cost = cost_model.calculate_cost(tx).sum();
+            let tx_cost = cost_model.calculate_cost(tx);
+            let cost = tx_cost.sum();
+            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
+            (cost, cost_without_bpf)
         })
         .collect::<Vec<_>>();
 
     let target_batch_count = get_thread_count() as u64;
 
     let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
+        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let txs = &sanitized_txs[slice_start..=index];
-                let results = &lock_results[slice_start..=index];
-                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    tx_batch_costs.push(batch_cost_without_bpf);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
         &tx_batches[..]
     } else {
+        match batches.len() {
+            // Ensure that the total cost attributed to this batch is essentially correct
+            0 => tx_batch_costs = Vec::new(),
+            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
+        }
         batches
     };
 
@@ -361,6 +399,7 @@ fn execute_batches(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        &tx_batch_costs,
     )
 }
 
@@ -417,6 +456,7 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
+    let cost_model = CostModel::new();
 
     for entry in entries {
         match entry {
@@ -434,6 +474,7 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         timings,
                         cost_capacity_meter.clone(),
+                        &cost_model,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -491,6 +532,7 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             timings,
                             cost_capacity_meter.clone(),
+                            &cost_model,
                         )?;
                         batches.clear();
                     }
@@ -506,6 +548,7 @@ fn process_entries_with_callback(
         replay_vote_sender,
         timings,
         cost_capacity_meter,
+        &cost_model,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -546,7 +589,6 @@ pub struct ProcessOptions {
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
-    pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -635,15 +677,6 @@ pub fn process_blockstore_from_root(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_background_request_sender: &AbsRequestSender,
 ) -> result::Result<(), BlockstoreProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
-
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
     let bank = bank_forks.read().unwrap().root_bank();
@@ -1081,7 +1114,7 @@ fn process_bank_0(
         None,
         &mut ExecuteTimings::default(),
     )
-    .expect("processing for bank 0 must succeed");
+    .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
     bank0.freeze();
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
@@ -1310,7 +1343,7 @@ fn load_frozen_forks(
             if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
                 let can_cached_slot_be_unflushed = true;
-                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed);
+                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed, true);
                 break;
             }
         }
@@ -1532,11 +1565,45 @@ pub fn fill_blockstore_slot_with_ticks(
     last_entry_hash
 }
 
-/// Check the transaction execution results to see if any instruction errored by exceeding the max
-/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
+/// Check to see if the transactions exceeded the accounts data size limits
 fn check_accounts_data_size<'a>(
+    bank: &Bank,
     execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
 ) -> Result<()> {
+    check_accounts_data_block_size(bank)?;
+    check_accounts_data_total_size(bank, execution_results)
+}
+
+/// Check to see if transactions exceeded the accounts data size limit per block
+fn check_accounts_data_block_size(bank: &Bank) -> Result<()> {
+    if !bank
+        .feature_set
+        .is_active(&feature_set::cap_accounts_data_size_per_block::id())
+    {
+        return Ok(());
+    }
+
+    debug_assert!(MAX_ACCOUNT_DATA_BLOCK_LEN <= i64::MAX as u64);
+    if bank.load_accounts_data_size_delta_on_chain() > MAX_ACCOUNT_DATA_BLOCK_LEN as i64 {
+        Err(TransactionError::WouldExceedAccountDataBlockLimit)
+    } else {
+        Ok(())
+    }
+}
+
+/// Check the transaction execution results to see if any instruction errored by exceeding the max
+/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
+fn check_accounts_data_total_size<'a>(
+    bank: &Bank,
+    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
+) -> Result<()> {
+    if !bank
+        .feature_set
+        .is_active(&feature_set::cap_accounts_data_len::id())
+    {
+        return Ok(());
+    }
+
     if let Some(result) = execution_results
         .into_iter()
         .map(|execution_result| execution_result.flattened_result())
@@ -1561,7 +1628,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_db::{AccessType, BlockstoreOptions},
+            blockstore_options::{AccessType, BlockstoreOptions},
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
@@ -1569,6 +1636,9 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
+        solana_program_runtime::{
+            accounts_data_meter::MAX_ACCOUNTS_DATA_LEN, invoke_context::InvokeContext,
+        },
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -1579,9 +1649,11 @@ pub mod tests {
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
             hash::Hash,
+            instruction::InstructionError,
+            native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
-            system_instruction::SystemError,
+            system_instruction::{SystemError, MAX_PERMITTED_DATA_LENGTH},
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
@@ -2410,23 +2482,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_process_ledger_options_override_threads() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let opts = ProcessOptions {
-            override_num_threads: Some(1),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, &opts);
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
-    }
-
-    #[test]
     fn test_process_ledger_options_full_leader_cache() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
         let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
@@ -2493,7 +2548,6 @@ pub mod tests {
         };
 
         let opts = ProcessOptions {
-            override_num_threads: Some(1),
             entry_callback: Some(entry_callback),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
@@ -3518,15 +3572,13 @@ pub mod tests {
         // Create an transaction that references the new blockhash, should still
         // be able to find the blockhash if we process transactions all in the same
         // batch
-        let mut expected_successful_voter_pubkeys = BTreeSet::new();
+        let mut expected_signatures = BTreeSet::new();
         let vote_txs: Vec<_> = validator_keypairs
             .iter()
             .enumerate()
             .map(|(i, validator_keypairs)| {
-                if i % 3 == 0 {
+                let vote_tx = if i % 3 == 0 {
                     // These votes are correct
-                    expected_successful_voter_pubkeys
-                        .insert(validator_keypairs.vote_keypair.pubkey());
                     vote_transaction::new_vote_transaction(
                         vec![0],
                         bank0.hash(),
@@ -3558,18 +3610,20 @@ pub mod tests {
                         &validator_keypairs.vote_keypair,
                         None,
                     )
-                }
+                };
+                expected_signatures.insert(vote_tx.signatures[0]);
+                vote_tx
             })
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
         let _ =
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
-        let successes: BTreeSet<Pubkey> = replay_vote_receiver
+        let signatures: BTreeSet<_> = replay_vote_receiver
             .try_iter()
-            .map(|(vote_pubkey, _, _)| vote_pubkey)
+            .map(|(.., signature)| signature)
             .collect();
-        assert_eq!(successes, expected_successful_voter_pubkeys);
+        assert_eq!(signatures, expected_signatures);
     }
 
     fn make_slot_with_vote_tx(
@@ -3809,7 +3863,7 @@ pub mod tests {
                     VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                     (
                         solana_sdk::pubkey::new_rand(),
-                        (stake, VoteAccount::from(vote_account)),
+                        (stake, VoteAccount::try_from(vote_account).unwrap()),
                     )
                 })
                 .collect()
@@ -3952,6 +4006,49 @@ pub mod tests {
     }
 
     #[test]
+    fn test_rebatch_transactions() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+
+        let txs = vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+        ];
+
+        let batch = bank.prepare_sanitized_batch(&txs);
+        assert!(batch.needs_unlock());
+
+        let batch2 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            0,
+            1,
+        );
+        assert!(batch.needs_unlock());
+        assert!(!batch2.needs_unlock());
+    }
+
+    #[test]
     fn test_confirm_slot_entries_with_fix() {
         const HASHES_PER_TICK: u64 = 10;
         const TICKS_PER_SLOT: u64 = 2;
@@ -4068,6 +4165,201 @@ pub mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn test_check_accounts_data_block_size() {
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        const NUM_ACCOUNTS: u64 = MAX_ACCOUNT_DATA_BLOCK_LEN / ACCOUNT_SIZE;
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank = Arc::new(bank);
+        assert!(bank
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_size_per_block::id()));
+
+        for _ in 0..NUM_ACCOUNTS {
+            let transaction = system_transaction::create_account(
+                &mint_keypair,
+                &Keypair::new(),
+                bank.last_blockhash(),
+                LAMPORTS_PER_SOL,
+                ACCOUNT_SIZE,
+                &solana_sdk::system_program::id(),
+            );
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+        }
+
+        let transaction = system_transaction::create_account(
+            &mint_keypair,
+            &Keypair::new(),
+            bank.last_blockhash(),
+            LAMPORTS_PER_SOL,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+        assert_eq!(
+            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            Err(TransactionError::WouldExceedAccountDataBlockLimit)
+        );
+    }
+
+    #[test]
+    fn test_check_accounts_data_total_size() {
+        const REMAINING_ACCOUNTS_DATA_SIZE: u64 =
+            MAX_ACCOUNT_DATA_BLOCK_LEN - MAX_PERMITTED_DATA_LENGTH;
+        const INITIAL_ACCOUNTS_DATA_SIZE: u64 =
+            MAX_ACCOUNTS_DATA_LEN - REMAINING_ACCOUNTS_DATA_SIZE;
+        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
+        const SHRINK_SIZE: u64 = 5678;
+        const ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION: u64 = ACCOUNT_SIZE - SHRINK_SIZE;
+        const NUM_ITERATIONS: u64 =
+            REMAINING_ACCOUNTS_DATA_SIZE / ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION;
+        const ACCOUNT_BALANCE: u64 = 70 * LAMPORTS_PER_SOL; // rent exempt amount for a 10MB account is a little less than 70 SOL
+
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config((1_000_000 + NUM_ITERATIONS + 1) * ACCOUNT_BALANCE);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mock_realloc_program_id = Pubkey::new_unique();
+        bank.add_builtin(
+            "mock_realloc_program",
+            &mock_realloc_program_id,
+            mock_realloc::process_instruction,
+        );
+        bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
+        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
+        assert!(bank
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_len::id()));
+
+        for _ in 0..NUM_ITERATIONS {
+            let accounts_data_size_before = bank.load_accounts_data_size();
+
+            // Create a new account, with the full size
+            let new_account = Keypair::new();
+            let transaction = system_transaction::create_account(
+                &mint_keypair,
+                &new_account,
+                bank.last_blockhash(),
+                ACCOUNT_BALANCE,
+                ACCOUNT_SIZE,
+                &mock_realloc_program_id,
+            );
+
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after - accounts_data_size_before,
+                ACCOUNT_SIZE,
+            );
+
+            // Resize the account to be smaller
+            let new_size = ACCOUNT_SIZE - SHRINK_SIZE;
+            let transaction = mock_realloc::create_transaction(
+                &mint_keypair,
+                &new_account.pubkey(),
+                new_size as usize,
+                mock_realloc_program_id,
+                bank.last_blockhash(),
+            );
+
+            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+            assert_eq!(
+                process_entries_for_tests(&bank, vec![entry], true, None, None),
+                Ok(()),
+            );
+            let accounts_data_size_after = bank.load_accounts_data_size();
+            assert_eq!(
+                accounts_data_size_after - accounts_data_size_before,
+                new_size,
+            );
+        }
+
+        let transaction = system_transaction::create_account(
+            &mint_keypair,
+            &Keypair::new(),
+            bank.last_blockhash(),
+            ACCOUNT_BALANCE,
+            ACCOUNT_SIZE,
+            &solana_sdk::system_program::id(),
+        );
+        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
+        assert!(matches!(
+            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            Err(TransactionError::InstructionError(
+                _,
+                InstructionError::MaxAccountsDataSizeExceeded,
+            ))
+        ));
+    }
+
+    mod mock_realloc {
+        use {
+            super::*,
+            serde::{Deserialize, Serialize},
+        };
+
+        #[derive(Debug, Serialize, Deserialize)]
+        enum Instruction {
+            Realloc { new_size: usize },
+        }
+
+        pub fn process_instruction(
+            _first_instruction_account: usize,
+            invoke_context: &mut InvokeContext,
+        ) -> result::Result<(), InstructionError> {
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let instruction_data = instruction_context.get_instruction_data();
+            if let Ok(instruction) = bincode::deserialize(instruction_data) {
+                match instruction {
+                    Instruction::Realloc { new_size } => instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .set_data_length(new_size),
+                }
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
+        pub fn create_transaction(
+            payer: &Keypair,
+            reallocd: &Pubkey,
+            new_size: usize,
+            mock_realloc_program_id: Pubkey,
+            recent_blockhash: Hash,
+        ) -> Transaction {
+            let account_metas = vec![solana_sdk::instruction::AccountMeta::new(*reallocd, false)];
+            let instruction = solana_sdk::instruction::Instruction::new_with_bincode(
+                mock_realloc_program_id,
+                &Instruction::Realloc { new_size },
+                account_metas,
+            );
+            Transaction::new_signed_with_payer(
+                &[instruction],
+                Some(&payer.pubkey()),
+                &[payer],
+                recent_blockhash,
+            )
         }
     }
 }

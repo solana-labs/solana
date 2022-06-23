@@ -2,7 +2,11 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
-    solana_client::{nonblocking, rpc_client::RpcClient},
+    solana_client::{
+        connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+        nonblocking,
+        rpc_client::RpcClient,
+    },
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -13,7 +17,8 @@ use {
         socketaddr,
     },
     solana_ledger::{
-        blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions, create_new_tmp_ledger,
+        blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions,
+        create_new_tmp_ledger,
     },
     solana_net_utils::PortRange,
     solana_program_runtime::compute_budget::ComputeBudget,
@@ -113,7 +118,7 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
-    max_compute_units: Option<u64>,
+    compute_unit_limit: Option<u64>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -141,7 +146,7 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
-            max_compute_units: Option::<u64>::default(),
+            compute_unit_limit: Option::<u64>::default(),
         }
     }
 }
@@ -239,9 +244,14 @@ impl TestValidatorGenesis {
         self
     }
 
-    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
-        self.max_compute_units = Some(max_compute_units);
+    pub fn compute_unit_limit(&mut self, compute_unit_limit: u64) -> &mut Self {
+        self.compute_unit_limit = Some(compute_unit_limit);
         self
+    }
+
+    #[deprecated(note = "Please use `compute_unit_limit` instead")]
+    pub fn max_compute_units(&mut self, max_compute_units: u64) -> &mut Self {
+        self.compute_unit_limit(max_compute_units)
     }
 
     /// Add an account to the test environment
@@ -686,10 +696,12 @@ impl TestValidator {
 
         let runtime_config = RuntimeConfig {
             bpf_jit: !config.no_bpf_jit,
-            compute_budget: config.max_compute_units.map(|max_units| ComputeBudget {
-                max_units,
-                ..ComputeBudget::default()
-            }),
+            compute_budget: config
+                .compute_unit_limit
+                .map(|compute_unit_limit| ComputeBudget {
+                    compute_unit_limit,
+                    ..ComputeBudget::default()
+                }),
         };
 
         let mut validator_config = ValidatorConfig {
@@ -711,7 +723,8 @@ impl TestValidator {
                 full_snapshot_archive_interval_slots: 100,
                 incremental_snapshot_archive_interval_slots: Slot::MAX,
                 bank_snapshots_dir: ledger_path.join("snapshot"),
-                snapshot_archives_dir: ledger_path.to_path_buf(),
+                full_snapshot_archives_dir: ledger_path.to_path_buf(),
+                incremental_snapshot_archives_dir: ledger_path.to_path_buf(),
                 ..SnapshotConfig::default()
             }),
             enforce_ulimit_nofile: false,
@@ -739,7 +752,8 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
-            false, // use_quic
+            DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

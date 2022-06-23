@@ -8,6 +8,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
@@ -85,7 +86,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // This tests the performance of buffering packets.
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
-            let _ignored = BankingStage::consume_buffered_packets(
+            BankingStage::consume_buffered_packets(
                 &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
@@ -230,6 +231,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             None,
             s,
             Arc::new(RwLock::new(CostModel::default())),
+            Arc::new(ConnectionCache::default()),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -254,9 +256,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     v.len(),
                 );
                 for xv in v {
-                    sent += xv.packets.len();
+                    sent += xv.len();
                 }
-                verified_sender.send(v.to_vec()).unwrap();
+                verified_sender.send((v.to_vec(), None)).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);
 

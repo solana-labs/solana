@@ -244,7 +244,7 @@ mod tests {
 
         let sent = multi_target_send(
             &sender,
-            &packet.data[..packet.meta.size],
+            packet.data(..).unwrap(),
             &[&addr, &addr2, &addr3, &addr4],
         )
         .ok();

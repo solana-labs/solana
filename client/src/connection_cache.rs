@@ -1,38 +1,36 @@
 use {
     crate::{
+        nonblocking::quic_client::QuicLazyInitializedEndpoint,
         quic_client::QuicTpuConnection,
-        tpu_connection::{ClientStats, TpuConnection},
+        tpu_connection::{ClientStats, Connection},
         udp_client::UdpTpuConnection,
     },
-    indexmap::map::IndexMap,
-    lazy_static::lazy_static,
-    quinn_proto::ConnectionStats,
+    indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_sdk::{
-        timing::AtomicInterval, transaction::VersionedTransaction, transport::TransportError,
-    },
+    solana_sdk::{quic::QUIC_PORT_OFFSET, timing::AtomicInterval},
     std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
         },
     },
+    tokio::io,
 };
 
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
-#[derive(Clone)]
-pub enum Connection {
-    Udp(Arc<UdpTpuConnection>),
-    Quic(Arc<QuicTpuConnection>),
-}
+/// Used to decide whether the TPU and underlying connection cache should use
+/// QUIC connections.
+pub const DEFAULT_TPU_USE_QUIC: bool = false;
+
+/// Default TPU connection pool size per remote address
+pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
 #[derive(Default)]
-struct ConnectionCacheStats {
+pub struct ConnectionCacheStats {
     cache_hits: AtomicU64,
     cache_misses: AtomicU64,
     cache_evictions: AtomicU64,
@@ -48,19 +46,40 @@ struct ConnectionCacheStats {
 
     // Need to track these separately per-connection
     // because we need to track the base stat value from quinn
-    total_client_stats: ClientStats,
+    pub total_client_stats: ClientStats,
 }
 
 const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
 
 impl ConnectionCacheStats {
-    fn add_client_stats(&self, client_stats: &ClientStats, num_packets: usize, is_success: bool) {
+    pub fn add_client_stats(
+        &self,
+        client_stats: &ClientStats,
+        num_packets: usize,
+        is_success: bool,
+    ) {
         self.total_client_stats.total_connections.fetch_add(
             client_stats.total_connections.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         self.total_client_stats.connection_reuse.fetch_add(
             client_stats.connection_reuse.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.connection_errors.fetch_add(
+            client_stats.connection_errors.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.zero_rtt_accepts.fetch_add(
+            client_stats.zero_rtt_accepts.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.zero_rtt_rejects.fetch_add(
+            client_stats.zero_rtt_rejects.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.make_connection_ms.fetch_add(
+            client_stats.make_connection_ms.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
         self.sent_packets
@@ -117,6 +136,13 @@ impl ConnectionCacheStats {
                 i64
             ),
             (
+                "make_connection_ms",
+                self.total_client_stats
+                    .make_connection_ms
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "total_connections",
                 self.total_client_stats
                     .total_connections
@@ -127,6 +153,27 @@ impl ConnectionCacheStats {
                 "connection_reuse",
                 self.total_client_stats
                     .connection_reuse
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_errors",
+                self.total_client_stats
+                    .connection_errors
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_accepts",
+                self.total_client_stats
+                    .zero_rtt_accepts
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_rejects",
+                self.total_client_stats
+                    .zero_rtt_rejects
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
@@ -171,325 +218,324 @@ impl ConnectionCacheStats {
     }
 }
 
-struct ConnectionMap {
-    map: IndexMap<SocketAddr, Connection>,
-    stats: Arc<ConnectionCacheStats>,
-    last_stats: AtomicInterval,
-    use_quic: bool,
+pub enum UseQUIC {
+    Yes,
+    No(Arc<UdpSocket>),
 }
 
-impl ConnectionMap {
-    pub fn new() -> Self {
+impl UseQUIC {
+    pub fn new(use_quic: bool) -> io::Result<Self> {
+        if use_quic {
+            Ok(UseQUIC::Yes)
+        } else {
+            let socket =
+                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))?;
+            Ok(UseQUIC::No(Arc::new(socket)))
+        }
+    }
+}
+
+pub struct ConnectionCache {
+    map: RwLock<IndexMap<SocketAddr, ConnectionPool>>,
+    stats: Arc<ConnectionCacheStats>,
+    last_stats: AtomicInterval,
+    use_quic: UseQUIC,
+    connection_pool_size: usize,
+}
+
+/// Models the pool of connections
+struct ConnectionPool {
+    /// The connections in the pool
+    connections: Vec<Arc<Connection>>,
+
+    /// Connections in this pool share the same endpoint
+    endpoint: Option<Arc<QuicLazyInitializedEndpoint>>,
+}
+
+impl ConnectionPool {
+    /// Get a connection from the pool. It must have at least one connection in the pool.
+    /// This randomly picks a connection in the pool.
+    fn borrow_connection(&self) -> Arc<Connection> {
+        let mut rng = thread_rng();
+        let n = rng.gen_range(0, self.connections.len());
+        self.connections[n].clone()
+    }
+
+    /// Check if we need to create a new connection. If the count of the connections
+    /// is smaller than the pool size.
+    fn need_new_connection(&self, required_pool_size: usize) -> bool {
+        self.connections.len() < required_pool_size
+    }
+}
+
+impl ConnectionCache {
+    pub fn new(use_quic: UseQUIC, connection_pool_size: usize) -> Self {
+        // The minimum pool size is 1.
+        let connection_pool_size = 1.max(connection_pool_size);
         Self {
-            map: IndexMap::with_capacity(MAX_CONNECTIONS),
-            stats: Arc::new(ConnectionCacheStats::default()),
-            last_stats: AtomicInterval::default(),
-            use_quic: false,
+            use_quic,
+            connection_pool_size,
+            ..Self::default()
         }
     }
 
-    pub fn set_use_quic(&mut self, use_quic: bool) {
-        self.use_quic = use_quic;
+    pub fn get_use_quic(&self) -> bool {
+        match self.use_quic {
+            UseQUIC::Yes => true,
+            UseQUIC::No(_) => false,
+        }
+    }
+
+    fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
+        if self.get_use_quic() {
+            Some(Arc::new(QuicLazyInitializedEndpoint::new()))
+        } else {
+            None
+        }
+    }
+
+    /// Create a lazy connection object under the exclusive lock of the cache map if there is not
+    /// enough unsed connections in the connection pool for the specified address.
+    /// Returns CreateConnectionResult.
+    fn create_connection(
+        &self,
+        lock_timing_ms: &mut u64,
+        addr: &SocketAddr,
+    ) -> CreateConnectionResult {
+        let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
+        let mut map = self.map.write().unwrap();
+        get_connection_map_lock_measure.stop();
+        *lock_timing_ms = lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
+        // Read again, as it is possible that between read lock dropped and the write lock acquired
+        // another thread could have setup the connection.
+
+        let (to_create_connection, endpoint) =
+            map.get(addr)
+                .map_or((true, self.create_endpoint()), |pool| {
+                    (
+                        pool.need_new_connection(self.connection_pool_size),
+                        pool.endpoint.clone(),
+                    )
+                });
+
+        let (cache_hit, connection_cache_stats, num_evictions, eviction_timing_ms) =
+            if to_create_connection {
+                let connection: Connection = match &self.use_quic {
+                    UseQUIC::Yes => QuicTpuConnection::new(
+                        endpoint.as_ref().unwrap().clone(),
+                        *addr,
+                        self.stats.clone(),
+                    )
+                    .into(),
+                    UseQUIC::No(socket) => {
+                        UdpTpuConnection::new(socket.clone(), *addr, self.stats.clone()).into()
+                    }
+                };
+
+                let connection = Arc::new(connection);
+
+                // evict a connection if the cache is reaching upper bounds
+                let mut num_evictions = 0;
+                let mut get_connection_cache_eviction_measure =
+                    Measure::start("get_connection_cache_eviction_measure");
+                while map.len() >= MAX_CONNECTIONS {
+                    let mut rng = thread_rng();
+                    let n = rng.gen_range(0, MAX_CONNECTIONS);
+                    map.swap_remove_index(n);
+                    num_evictions += 1;
+                }
+                get_connection_cache_eviction_measure.stop();
+
+                match map.entry(*addr) {
+                    Entry::Occupied(mut entry) => {
+                        let pool = entry.get_mut();
+                        pool.connections.push(connection);
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(ConnectionPool {
+                            connections: vec![connection],
+                            endpoint,
+                        });
+                    }
+                }
+                (
+                    false,
+                    self.stats.clone(),
+                    num_evictions,
+                    get_connection_cache_eviction_measure.as_ms(),
+                )
+            } else {
+                (true, self.stats.clone(), 0, 0)
+            };
+
+        let pool = map.get(addr).unwrap();
+        let connection = pool.borrow_connection();
+
+        CreateConnectionResult {
+            connection,
+            cache_hit,
+            connection_cache_stats,
+            num_evictions,
+            eviction_timing_ms,
+        }
+    }
+
+    fn get_or_add_connection(&self, addr: &SocketAddr) -> GetConnectionResult {
+        let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
+        let map = self.map.read().unwrap();
+        get_connection_map_lock_measure.stop();
+
+        let port_offset = if self.get_use_quic() {
+            QUIC_PORT_OFFSET
+        } else {
+            0
+        };
+
+        let addr = SocketAddr::new(addr.ip(), addr.port() + port_offset);
+
+        let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
+
+        let report_stats = self
+            .last_stats
+            .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
+
+        let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
+        let CreateConnectionResult {
+            connection,
+            cache_hit,
+            connection_cache_stats,
+            num_evictions,
+            eviction_timing_ms,
+        } = match map.get(&addr) {
+            Some(pool) => {
+                if pool.need_new_connection(self.connection_pool_size) {
+                    // create more connection and put it in the pool
+                    drop(map);
+                    self.create_connection(&mut lock_timing_ms, &addr)
+                } else {
+                    let connection = pool.borrow_connection();
+                    CreateConnectionResult {
+                        connection,
+                        cache_hit: true,
+                        connection_cache_stats: self.stats.clone(),
+                        num_evictions: 0,
+                        eviction_timing_ms: 0,
+                    }
+                }
+            }
+            None => {
+                // Upgrade to write access by dropping read lock and acquire write lock
+                drop(map);
+                self.create_connection(&mut lock_timing_ms, &addr)
+            }
+        };
+        get_connection_map_measure.stop();
+
+        GetConnectionResult {
+            connection,
+            cache_hit,
+            report_stats,
+            map_timing_ms: get_connection_map_measure.as_ms(),
+            lock_timing_ms,
+            connection_cache_stats,
+            num_evictions,
+            eviction_timing_ms,
+        }
+    }
+
+    pub fn get_connection(&self, addr: &SocketAddr) -> Arc<Connection> {
+        let mut get_connection_measure = Measure::start("get_connection_measure");
+        let GetConnectionResult {
+            connection,
+            cache_hit,
+            report_stats,
+            map_timing_ms,
+            lock_timing_ms,
+            connection_cache_stats,
+            num_evictions,
+            eviction_timing_ms,
+        } = self.get_or_add_connection(addr);
+
+        if report_stats {
+            connection_cache_stats.report();
+        }
+
+        if cache_hit {
+            connection_cache_stats
+                .cache_hits
+                .fetch_add(1, Ordering::Relaxed);
+            connection_cache_stats
+                .get_connection_hit_ms
+                .fetch_add(map_timing_ms, Ordering::Relaxed);
+        } else {
+            connection_cache_stats
+                .cache_misses
+                .fetch_add(1, Ordering::Relaxed);
+            connection_cache_stats
+                .get_connection_miss_ms
+                .fetch_add(map_timing_ms, Ordering::Relaxed);
+            connection_cache_stats
+                .cache_evictions
+                .fetch_add(num_evictions, Ordering::Relaxed);
+            connection_cache_stats
+                .eviction_time_ms
+                .fetch_add(eviction_timing_ms, Ordering::Relaxed);
+        }
+
+        get_connection_measure.stop();
+        connection_cache_stats
+            .get_connection_lock_ms
+            .fetch_add(lock_timing_ms, Ordering::Relaxed);
+        connection_cache_stats
+            .get_connection_ms
+            .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
+
+        connection
     }
 }
 
-lazy_static! {
-    static ref CONNECTION_MAP: RwLock<ConnectionMap> = RwLock::new(ConnectionMap::new());
-}
-
-pub fn set_use_quic(use_quic: bool) {
-    let mut map = (*CONNECTION_MAP).write().unwrap();
-    map.set_use_quic(use_quic);
+impl Default for ConnectionCache {
+    fn default() -> Self {
+        let use_quic = UseQUIC::new(DEFAULT_TPU_USE_QUIC).expect("Failed to initialize QUIC flags");
+        Self {
+            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
+            stats: Arc::new(ConnectionCacheStats::default()),
+            last_stats: AtomicInterval::default(),
+            use_quic,
+            connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        }
+    }
 }
 
 struct GetConnectionResult {
-    connection: Connection,
+    connection: Arc<Connection>,
     cache_hit: bool,
     report_stats: bool,
     map_timing_ms: u64,
     lock_timing_ms: u64,
     connection_cache_stats: Arc<ConnectionCacheStats>,
-    other_stats: Option<(Arc<ClientStats>, ConnectionStats)>,
     num_evictions: u64,
     eviction_timing_ms: u64,
 }
 
-fn get_or_add_connection(addr: &SocketAddr) -> GetConnectionResult {
-    let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
-    let map = (*CONNECTION_MAP).read().unwrap();
-    get_connection_map_lock_measure.stop();
-
-    let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
-
-    let report_stats = map
-        .last_stats
-        .should_update(CONNECTION_STAT_SUBMISSION_INTERVAL);
-
-    let mut get_connection_map_measure = Measure::start("get_connection_hit_measure");
-    let (
-        connection,
-        cache_hit,
-        connection_cache_stats,
-        maybe_stats,
-        num_evictions,
-        eviction_timing_ms,
-    ) = match map.map.get(addr) {
-        Some(connection) => {
-            let mut stats = None;
-            // update connection stats
-            if let Connection::Quic(conn) = connection {
-                stats = conn.stats().map(|s| (conn.base_stats(), s));
-            }
-            (connection.clone(), true, map.stats.clone(), stats, 0, 0)
-        }
-        None => {
-            let (_, send_socket) = solana_net_utils::bind_in_range(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                VALIDATOR_PORT_RANGE,
-            )
-            .unwrap();
-
-            let connection = if map.use_quic {
-                Connection::Quic(Arc::new(QuicTpuConnection::new(send_socket, *addr)))
-            } else {
-                Connection::Udp(Arc::new(UdpTpuConnection::new(send_socket, *addr)))
-            };
-
-            // Upgrade to write access by dropping read lock and acquire write lock
-            drop(map);
-            let mut get_connection_map_lock_measure =
-                Measure::start("get_connection_map_lock_measure");
-            let mut map = (*CONNECTION_MAP).write().unwrap();
-            get_connection_map_lock_measure.stop();
-
-            lock_timing_ms = lock_timing_ms.saturating_add(get_connection_map_lock_measure.as_ms());
-
-            // evict a connection if the cache is reaching upper bounds
-            let mut num_evictions = 0;
-            let mut get_connection_cache_eviction_measure =
-                Measure::start("get_connection_cache_eviction_measure");
-            while map.map.len() >= MAX_CONNECTIONS {
-                let mut rng = thread_rng();
-                let n = rng.gen_range(0, MAX_CONNECTIONS);
-                map.map.swap_remove_index(n);
-                num_evictions += 1;
-            }
-            get_connection_cache_eviction_measure.stop();
-
-            map.map.insert(*addr, connection.clone());
-            (
-                connection,
-                false,
-                map.stats.clone(),
-                None,
-                num_evictions,
-                get_connection_cache_eviction_measure.as_ms(),
-            )
-        }
-    };
-    get_connection_map_measure.stop();
-
-    GetConnectionResult {
-        connection,
-        cache_hit,
-        report_stats,
-        map_timing_ms: get_connection_map_measure.as_ms(),
-        lock_timing_ms,
-        connection_cache_stats,
-        other_stats: maybe_stats,
-        num_evictions,
-        eviction_timing_ms,
-    }
-}
-
-// TODO: see https://github.com/solana-labs/solana/issues/23661
-// remove lazy_static and optimize and refactor this
-fn get_connection(addr: &SocketAddr) -> (Connection, Arc<ConnectionCacheStats>) {
-    let mut get_connection_measure = Measure::start("get_connection_measure");
-    let GetConnectionResult {
-        connection,
-        cache_hit,
-        report_stats,
-        map_timing_ms,
-        lock_timing_ms,
-        connection_cache_stats,
-        other_stats,
-        num_evictions,
-        eviction_timing_ms,
-    } = get_or_add_connection(addr);
-
-    if report_stats {
-        connection_cache_stats.report();
-    }
-
-    if let Some((connection_stats, new_stats)) = other_stats {
-        connection_cache_stats
-            .total_client_stats
-            .congestion_events
-            .update_stat(
-                &connection_stats.congestion_events,
-                new_stats.path.congestion_events,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_streams_blocked_uni
-            .update_stat(
-                &connection_stats.tx_streams_blocked_uni,
-                new_stats.frame_tx.streams_blocked_uni,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_data_blocked
-            .update_stat(
-                &connection_stats.tx_data_blocked,
-                new_stats.frame_tx.data_blocked,
-            );
-
-        connection_cache_stats
-            .total_client_stats
-            .tx_acks
-            .update_stat(&connection_stats.tx_acks, new_stats.frame_tx.acks);
-    }
-
-    if cache_hit {
-        connection_cache_stats
-            .cache_hits
-            .fetch_add(1, Ordering::Relaxed);
-        connection_cache_stats
-            .get_connection_hit_ms
-            .fetch_add(map_timing_ms, Ordering::Relaxed);
-    } else {
-        connection_cache_stats
-            .cache_misses
-            .fetch_add(1, Ordering::Relaxed);
-        connection_cache_stats
-            .get_connection_miss_ms
-            .fetch_add(map_timing_ms, Ordering::Relaxed);
-        connection_cache_stats
-            .cache_evictions
-            .fetch_add(num_evictions, Ordering::Relaxed);
-        connection_cache_stats
-            .eviction_time_ms
-            .fetch_add(eviction_timing_ms, Ordering::Relaxed);
-    }
-
-    get_connection_measure.stop();
-    connection_cache_stats
-        .get_connection_lock_ms
-        .fetch_add(lock_timing_ms, Ordering::Relaxed);
-    connection_cache_stats
-        .get_connection_ms
-        .fetch_add(get_connection_measure.as_ms(), Ordering::Relaxed);
-    (connection, connection_cache_stats)
-}
-
-// TODO: see https://github.com/solana-labs/solana/issues/23851
-// use enum_dispatch and get rid of this tedious code.
-// The main blocker to using enum_dispatch right now is that
-// the it doesn't work with static methods like TpuConnection::new
-// which is used by thin_client. This will be eliminated soon
-// once thin_client is moved to using this connection cache.
-// Once that is done, we will migrate to using enum_dispatch
-// This will be done in a followup to
-// https://github.com/solana-labs/solana/pull/23817
-pub fn send_wire_transaction_batch(
-    packets: &[&[u8]],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
-        Connection::Quic(conn) => conn.send_wire_transaction_batch(packets, &client_stats),
-    };
-    stats.add_client_stats(&client_stats, packets.len(), r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction_async(
-    packets: Vec<u8>,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = Arc::new(ClientStats::default());
-    let r = match conn {
-        Connection::Udp(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
-        Connection::Quic(conn) => conn.send_wire_transaction_async(packets, client_stats.clone()),
-    };
-    stats.add_client_stats(&client_stats, 1, r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction_batch_async(
-    packets: Vec<Vec<u8>>,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = Arc::new(ClientStats::default());
-    let len = packets.len();
-    let r = match conn {
-        Connection::Udp(conn) => {
-            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
-        }
-        Connection::Quic(conn) => {
-            conn.send_wire_transaction_batch_async(packets, client_stats.clone())
-        }
-    };
-    stats.add_client_stats(&client_stats, len, r.is_ok());
-    r
-}
-
-pub fn send_wire_transaction(
-    wire_transaction: &[u8],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    send_wire_transaction_batch(&[wire_transaction], addr)
-}
-
-pub fn serialize_and_send_transaction(
-    transaction: &VersionedTransaction,
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
-        Connection::Quic(conn) => conn.serialize_and_send_transaction(transaction, &client_stats),
-    };
-    stats.add_client_stats(&client_stats, 1, r.is_ok());
-    r
-}
-
-pub fn par_serialize_and_send_transaction_batch(
-    transactions: &[VersionedTransaction],
-    addr: &SocketAddr,
-) -> Result<(), TransportError> {
-    let (conn, stats) = get_connection(addr);
-    let client_stats = ClientStats::default();
-    let r = match conn {
-        Connection::Udp(conn) => {
-            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
-        }
-        Connection::Quic(conn) => {
-            conn.par_serialize_and_send_transaction_batch(transactions, &client_stats)
-        }
-    };
-    stats.add_client_stats(&client_stats, transactions.len(), r.is_ok());
-    r
+struct CreateConnectionResult {
+    connection: Arc<Connection>,
+    cache_hit: bool,
+    connection_cache_stats: Arc<ConnectionCacheStats>,
+    num_evictions: u64,
+    eviction_timing_ms: u64,
 }
 
 #[cfg(test)]
 mod tests {
     use {
         crate::{
-            connection_cache::{get_connection, Connection, CONNECTION_MAP, MAX_CONNECTIONS},
+            connection_cache::{ConnectionCache, MAX_CONNECTIONS},
             tpu_connection::TpuConnection,
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        std::net::{IpAddr, SocketAddr},
+        std::net::SocketAddr,
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -501,13 +547,6 @@ mod tests {
         let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
 
         addr_str.parse().expect("Invalid address")
-    }
-
-    fn ip(conn: Connection) -> IpAddr {
-        match conn {
-            Connection::Udp(conn) => conn.tpu_addr().ip(),
-            Connection::Quic(conn) => conn.tpu_addr().ip(),
-        }
     }
 
     #[test]
@@ -525,28 +564,29 @@ mod tests {
         // we can actually connect to those addresses - TPUConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
+        let connection_cache = ConnectionCache::default();
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
                 let addr = get_addr(&mut rng);
-                get_connection(&addr);
+                connection_cache.get_connection(&addr);
                 addr
             })
             .collect::<Vec<_>>();
         {
-            let map = (*CONNECTION_MAP).read().unwrap();
-            assert!(map.map.len() == MAX_CONNECTIONS);
+            let map = connection_cache.map.read().unwrap();
+            assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
-                let conn = map.map.get(a).expect("Address not found");
-                assert!(a.ip() == ip(conn.clone()));
+                let conn = &map.get(a).expect("Address not found").connections[0];
+                assert!(a.ip() == conn.tpu_addr().ip());
             });
         }
 
         let addr = get_addr(&mut rng);
-        get_connection(&addr);
+        connection_cache.get_connection(&addr);
 
-        let map = (*CONNECTION_MAP).read().unwrap();
-        assert!(map.map.len() == MAX_CONNECTIONS);
-        let _conn = map.map.get(&addr).expect("Address not found");
+        let map = connection_cache.map.read().unwrap();
+        assert!(map.len() == MAX_CONNECTIONS);
+        let _conn = map.get(&addr).expect("Address not found");
     }
 }

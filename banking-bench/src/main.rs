@@ -5,6 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -65,7 +66,7 @@ fn check_txs(
     no_bank
 }
 
-#[derive(ArgEnum, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, PartialEq, Eq)]
 enum WriteLockContention {
     /// No transactions lock the same accounts.
     None,
@@ -212,6 +213,12 @@ fn main() {
                 .takes_value(true)
                 .help("Number of threads to use in the banking stage"),
         )
+        .arg(
+            Arg::new("tpu_use_quic")
+                .long("tpu-use-quic")
+                .takes_value(false)
+                .help("Forward messages to TPU using QUIC"),
+        )
         .get_matches();
 
     let num_banking_threads = matches
@@ -334,6 +341,8 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
+        let tpu_use_quic = UseQUIC::new(matches.is_present("tpu_use_quic"))
+            .expect("Failed to initialize QUIC flags");
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
@@ -344,6 +353,10 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
+            Arc::new(ConnectionCache::new(
+                tpu_use_quic,
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            )),
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
@@ -367,13 +380,15 @@ fn main() {
             for (packet_batch_index, packet_batch) in
                 packets_for_this_iteration.packet_batches.iter().enumerate()
             {
-                sent += packet_batch.packets.len();
+                sent += packet_batch.len();
                 trace!(
                     "Sending PacketBatch index {}, {}",
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender.send(vec![packet_batch.clone()]).unwrap();
+                verified_sender
+                    .send((vec![packet_batch.clone()], None))
+                    .unwrap();
             }
 
             for tx in &packets_for_this_iteration.transactions {

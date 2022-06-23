@@ -1,0 +1,18 @@
+[package]
+name = "noop"
+version = "1.11.1"
+description = "Solana SBF test program written in Rust"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+edition = "2021"
+publish = false
+
+[dependencies]
+solana-program = { path = "../../../../program", version = "=1.11.1" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]

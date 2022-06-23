@@ -12,7 +12,7 @@ use {
     },
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Source {
     Cluster,
     NonceAccount(Pubkey),
@@ -37,7 +37,7 @@ impl Source {
                 #[allow(clippy::redundant_closure)]
                 let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .and_then(|ref a| nonce_utils::data_from_account(a))?;
-                Ok((data.blockhash, data.fee_calculator))
+                Ok((data.blockhash(), data.fee_calculator))
             }
         }
     }
@@ -64,7 +64,7 @@ impl Source {
                 let res = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)?;
                 let res = nonce_utils::data_from_account(&res)?;
                 Ok(Some(res)
-                    .filter(|d| d.blockhash == *blockhash)
+                    .filter(|d| d.blockhash() == *blockhash)
                     .map(|d| d.fee_calculator))
             }
         }
@@ -84,7 +84,7 @@ impl Source {
                 #[allow(clippy::redundant_closure)]
                 let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .and_then(|ref a| nonce_utils::data_from_account(a))?;
-                Ok(data.blockhash)
+                Ok(data.blockhash())
             }
         }
     }
@@ -107,7 +107,7 @@ impl Source {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BlockhashQuery {
     None(Hash),
     FeeCalculator(Source, Hash),
@@ -193,7 +193,12 @@ mod tests {
         clap::App,
         serde_json::{self, json},
         solana_account_decoder::{UiAccount, UiAccountEncoding},
-        solana_sdk::{account::Account, hash::hash, nonce, system_program},
+        solana_sdk::{
+            account::Account,
+            hash::hash,
+            nonce::{self, state::DurableNonce},
+            system_program,
+        },
         std::collections::HashMap,
     };
 
@@ -355,18 +360,24 @@ mod tests {
         let rpc_blockhash = hash(&[1u8]);
         let rpc_fee_calc = FeeCalculator::new(42);
         let get_recent_blockhash_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(RpcFees {
                 blockhash: rpc_blockhash.to_string(),
-                fee_calculator: rpc_fee_calc.clone(),
+                fee_calculator: rpc_fee_calc,
                 last_valid_slot: 42,
                 last_valid_block_height: 42,
             }),
         });
         let get_fee_calculator_for_blockhash_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(RpcFeeCalculator {
-                fee_calculator: rpc_fee_calc.clone()
+                fee_calculator: rpc_fee_calc
             }),
         });
         let mut mocks = HashMap::new();
@@ -376,7 +387,7 @@ mod tests {
             BlockhashQuery::default()
                 .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
-            (rpc_blockhash, rpc_fee_calc.clone()),
+            (rpc_blockhash, rpc_fee_calc),
         );
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetFees, get_recent_blockhash_response.clone());
@@ -405,16 +416,21 @@ mod tests {
             .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
             .is_err());
 
-        let nonce_blockhash = Hash::new(&[2u8; 32]);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&Hash::new(&[2u8; 32]), /*separate_domains:*/ true);
+        let nonce_blockhash = *durable_nonce.as_hash();
         let nonce_fee_calc = FeeCalculator::new(4242);
         let data = nonce::state::Data {
             authority: Pubkey::new(&[3u8; 32]),
-            blockhash: nonce_blockhash,
-            fee_calculator: nonce_fee_calc.clone(),
+            durable_nonce,
+            fee_calculator: nonce_fee_calc,
         };
         let nonce_account = Account::new_data_with_space(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(data)),
+            &nonce::state::Versions::new(
+                nonce::State::Initialized(data),
+                true, // separate_domains
+            ),
             nonce::State::size(),
             &system_program::id(),
         )
@@ -428,7 +444,10 @@ mod tests {
             None,
         );
         let get_account_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(Some(rpc_nonce_account)),
         });
 
@@ -439,7 +458,7 @@ mod tests {
             BlockhashQuery::All(Source::NonceAccount(nonce_pubkey))
                 .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
                 .unwrap(),
-            (nonce_blockhash, nonce_fee_calc.clone()),
+            (nonce_blockhash, nonce_fee_calc),
         );
         let mut mocks = HashMap::new();
         mocks.insert(RpcRequest::GetAccountInfo, get_account_response.clone());

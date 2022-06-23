@@ -68,6 +68,22 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
     commitment: CommitmentConfig,
 ) -> Result<(), CliError> {
     let fee = get_fee_for_messages(rpc_client, messages)?;
+    check_account_for_spend_and_fee_with_commitment(
+        rpc_client,
+        account_pubkey,
+        balance,
+        fee,
+        commitment,
+    )
+}
+
+pub fn check_account_for_spend_and_fee_with_commitment(
+    rpc_client: &RpcClient,
+    account_pubkey: &Pubkey,
+    balance: u64,
+    fee: u64,
+    commitment: CommitmentConfig,
+) -> Result<(), CliError> {
     if !check_account_for_balance_with_commitment(
         rpc_client,
         account_pubkey,
@@ -163,7 +179,10 @@ mod tests {
     fn test_check_account_for_fees() {
         let account_balance = 1;
         let account_balance_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(account_balance),
         });
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -183,7 +202,10 @@ mod tests {
         check_account_for_fee(&rpc_client, &pubkey, &message0).expect("unexpected result");
 
         let check_fee_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(2),
         });
         let mut mocks = HashMap::new();
@@ -193,7 +215,10 @@ mod tests {
         assert!(check_account_for_fee(&rpc_client, &pubkey, &message1).is_err());
 
         let check_fee_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(2),
         });
         let mut mocks = HashMap::new();
@@ -206,11 +231,17 @@ mod tests {
 
         let account_balance = 2;
         let account_balance_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(account_balance),
         });
         let check_fee_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(1),
         });
 
@@ -227,7 +258,10 @@ mod tests {
     fn test_check_account_for_balance() {
         let account_balance = 50;
         let account_balance_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(account_balance),
         });
         let pubkey = solana_sdk::pubkey::new_rand();
@@ -244,7 +278,10 @@ mod tests {
     #[test]
     fn test_get_fee_for_messages() {
         let check_fee_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(1),
         });
         let mut mocks = HashMap::new();
@@ -263,7 +300,10 @@ mod tests {
 
         // No signatures, no fee.
         let check_fee_response = json!(Response {
-            context: RpcResponseContext { slot: 1 },
+            context: RpcResponseContext {
+                slot: 1,
+                api_version: None
+            },
             value: json!(0),
         });
         let mut mocks = HashMap::new();

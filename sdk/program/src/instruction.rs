@@ -320,7 +320,7 @@ pub enum InstructionError {
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
 #[wasm_bindgen]
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Instruction {
     /// Pubkey of the program that executes this instruction.
     #[wasm_bindgen(skip)]
@@ -529,7 +529,7 @@ pub fn checked_add(a: u64, b: u64) -> Result<u64, InstructionError> {
 /// a minor hazard: use [`AccountMeta::new_readonly`] to specify that an account
 /// is not writable.
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AccountMeta {
     /// An account's public key.
     pub pubkey: Pubkey,
@@ -682,23 +682,13 @@ pub struct ProcessedSiblingInstruction {
 /// Then B's processed sibling instruction list is: `[A]`
 /// Then F's processed sibling instruction list is: `[E, C]`
 pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
-        extern "C" {
-            fn sol_get_processed_sibling_instruction(
-                index: u64,
-                meta: *mut ProcessedSiblingInstruction,
-                program_id: *mut Pubkey,
-                data: *mut u8,
-                accounts: *mut AccountMeta,
-            ) -> u64;
-        }
-
         let mut meta = ProcessedSiblingInstruction::default();
         let mut program_id = Pubkey::default();
 
         if 1 == unsafe {
-            sol_get_processed_sibling_instruction(
+            crate::syscalls::sol_get_processed_sibling_instruction(
                 index as u64,
                 &mut meta,
                 &mut program_id,
@@ -712,7 +702,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
             accounts.resize_with(meta.accounts_len, AccountMeta::default);
 
             let _ = unsafe {
-                sol_get_processed_sibling_instruction(
+                crate::syscalls::sol_get_processed_sibling_instruction(
                     index as u64,
                     &mut meta,
                     &mut program_id,
@@ -727,7 +717,7 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     crate::program_stubs::sol_get_processed_sibling_instruction(index)
 }
 
@@ -738,16 +728,12 @@ pub const TRANSACTION_LEVEL_STACK_HEIGHT: usize = 1;
 /// TRANSACTION_LEVEL_STACK_HEIGHT, fist invoked inner instruction is height
 /// TRANSACTION_LEVEL_STACK_HEIGHT + 1, etc...
 pub fn get_stack_height() -> usize {
-    #[cfg(target_arch = "bpf")]
-    {
-        extern "C" {
-            fn sol_get_stack_height() -> u64;
-        }
-
-        unsafe { sol_get_stack_height() as usize }
+    #[cfg(target_os = "solana")]
+    unsafe {
+        crate::syscalls::sol_get_stack_height() as usize
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         crate::program_stubs::sol_get_stack_height() as usize
     }
@@ -755,7 +741,7 @@ pub fn get_stack_height() -> usize {
 
 #[test]
 fn test_account_meta_layout() {
-    #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]
     struct AccountMetaRust {
         pub pubkey: Pubkey,
         pub is_signer: bool,

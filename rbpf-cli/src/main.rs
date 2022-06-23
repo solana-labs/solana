@@ -1,12 +1,5 @@
-mod coverage;
-mod gcov;
-mod logger;
-
 use {
-    crate::{coverage::Coverage, gcov::GcovIntermediate, logger::Logger},
     clap::{crate_version, Arg, Command},
-    goblin::elf::Elf,
-    log::*,
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
@@ -18,8 +11,8 @@ use {
         assembler::assemble,
         elf::Executable,
         static_analysis::Analysis,
-        verifier::check,
-        vm::{Config, DynamicAnalysis},
+        verifier::RequisiteVerifier,
+        vm::{Config, DynamicAnalysis, VerifiedExecutable},
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
@@ -51,10 +44,10 @@ struct Input {
 fn load_accounts(path: &Path) -> Result<Input> {
     let file = File::open(path).unwrap();
     let input: Input = serde_json::from_reader(file)?;
-    info!("Program input:");
-    info!("accounts {:?}", &input.accounts);
-    info!("instruction_data {:?}", &input.instruction_data);
-    info!("----------------------------------------");
+    eprintln!("Program input:");
+    eprintln!("accounts {:?}", &input.accounts);
+    eprintln!("instruction_data {:?}", &input.instruction_data);
+    eprintln!("----------------------------------------");
     Ok(input)
 }
 
@@ -154,21 +147,10 @@ native machine code before execting it in the virtual machine.",
                 .long("trace"),
         )
         .arg(
-            Arg::new("verbose")
-                .help("Show additional information")
-                .long("verbose"),
-        )
-        .arg(
             Arg::new("profile")
                 .help("Output profile to 'profile.dot' file using tracing instrumentation")
                 .short('p')
                 .long("profile"),
-        )
-        .arg(
-            Arg::new("verify")
-                .help("Run the verifier before execution or disassembly")
-                .short('v')
-                .long("verify"),
         )
         .arg(
             Arg::new("output_format")
@@ -179,19 +161,10 @@ native machine code before execting it in the virtual machine.",
                 .takes_value(true)
                 .possible_values(&["json", "json-compact"]),
         )
-        .arg(
-            Arg::new("coverage")
-                .help("Output coverage profile")
-                .short('c')
-                .long("coverage"),
-        )
         .get_matches();
 
-    log::set_boxed_logger(Box::new(Logger::new(matches.is_present("verbose")))).unwrap();
     let config = Config {
-        enable_instruction_tracing: matches.is_present("trace")
-            || matches.is_present("profile")
-            || matches.is_present("coverage"),
+        enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
         enable_symbol_and_section_labels: true,
         ..Config::default()
     };
@@ -270,31 +243,28 @@ native machine code before execting it in the virtual machine.",
     file.seek(SeekFrom::Start(0)).unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let syscall_registry = register_syscalls(&mut invoke_context).unwrap();
-    let mut executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(
-            &contents,
-            None,
-            config,
-            syscall_registry,
-        )
-        .map_err(|err| format!("Executable constructor failed: {:?}", err))
+    let syscall_registry = register_syscalls(&mut invoke_context, true).unwrap();
+    let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(&contents, config, syscall_registry)
+            .map_err(|err| format!("Executable constructor failed: {:?}", err))
     } else {
         assemble::<BpfError, ThisInstructionMeter>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
-            None,
             config,
             syscall_registry,
         )
     }
     .unwrap();
 
-    if matches.is_present("verify") {
-        let text_bytes = executable.get_text_bytes().1;
-        check(text_bytes, &config).unwrap();
-    }
-    Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable).unwrap();
-    let mut analysis = LazyAnalysis::new(&executable);
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
+            executable,
+        )
+        .map_err(|err| format!("Executable verifier failed: {:?}", err))
+        .unwrap();
+
+    verified_executable.jit_compile().unwrap();
+    let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -313,12 +283,10 @@ native machine code before execting it in the virtual machine.",
         _ => {}
     }
 
-    invoke_context
-        .set_orig_account_lengths(account_lengths)
-        .unwrap();
     let mut vm = create_vm(
-        &executable,
+        &verified_executable,
         parameter_bytes.as_slice_mut(),
+        account_lengths,
         &mut invoke_context,
     )
     .unwrap();
@@ -343,51 +311,27 @@ native machine code before execting it in the virtual machine.",
             println!("{}", serde_json::to_string(&output).unwrap());
         }
         _ => {
-            info!("Program output:");
-            info!("{:?}", output);
+            println!("Program output:");
+            println!("{:?}", output);
         }
     }
 
     if matches.is_present("trace") {
-        info!("Trace is saved in trace.out");
+        eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
         vm.get_tracer()
             .write(&mut file, analysis.analyze())
             .unwrap();
     }
     if matches.is_present("profile") {
-        info!("Profile is saved in profile.dot");
-        let tracer = vm.get_tracer();
+        eprintln!("Profile is saved in profile.dot");
+        let tracer = &vm.get_tracer();
         let analysis = analysis.analyze();
         let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
         analysis
             .visualize_graphically(&mut file, Some(&dynamic_analysis))
             .unwrap();
-    }
-    if matches.is_present("coverage") {
-        // Read ELF to buffer.
-        let elf_size = file.seek(SeekFrom::End(0)).unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
-        let mut elf_bytes = Vec::<u8>::with_capacity(elf_size as usize);
-        file.read_to_end(&mut elf_bytes)
-            .expect("failed to read ELF");
-        // Parse ELF.
-        let elf = Elf::parse(&elf_bytes).expect("invalid ELF");
-        // Get register state trace.
-        let tracer = vm.get_tracer();
-        // Create coverage profile.
-        match Coverage::from_trace(&elf_bytes, &elf, &tracer.log) {
-            Err(err) => error!("Failed to build coverage profile: {}", err),
-            Ok(cov) => {
-                info!("Code coverage is saved in coverage.json");
-                trace!("{:?}", cov);
-                let mut file = File::create("coverage.json").unwrap();
-                let gcov: GcovIntermediate = (&cov).into();
-                serde_json::to_writer_pretty(&mut file, &gcov)
-                    .expect("Failed to write coverage JSON");
-            }
-        }
     }
 }
 
