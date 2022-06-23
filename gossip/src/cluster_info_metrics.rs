@@ -13,7 +13,7 @@ use {
 };
 
 #[derive(Default)]
-pub(crate) struct  Counter(AtomicU64);
+pub(crate) struct Counter(AtomicU64);
 
 impl Counter {
     pub(crate) fn add_measure(&self, x: &mut Measure) {
