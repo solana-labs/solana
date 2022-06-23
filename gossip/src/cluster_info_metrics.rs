@@ -415,7 +415,6 @@ pub(crate) fn submit_gossip_stats(
             stats.gossip_listen_loop_itrs_since_last_report.clear(),
             i64
         ), 
-
     );
     datapoint_info!(
         "cluster_info_stats4",
