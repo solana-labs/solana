@@ -576,6 +576,7 @@ impl ClusterInfoVoteListener {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn listen_and_confirm_votes(
         gossip_vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &VoteTracker,
@@ -745,6 +746,7 @@ impl ClusterInfoVoteListener {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn filter_and_confirm_with_new_votes(
         vote_tracker: &VoteTracker,
         gossip_vote_txs: Vec<Transaction>,
