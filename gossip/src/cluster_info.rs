@@ -2528,7 +2528,6 @@ impl ClusterInfo {
             get_epoch_duration(bank_forks, &self.stats),
             should_check_duplicate_instance,
         )?;
-        // self.stats.gossip_listen_loop_time_ms.add_relaxed(timestamp() - start);
         if last_print.elapsed() > SUBMIT_GOSSIP_STATS_INTERVAL {
             submit_gossip_stats(&self.stats, &self.gossip, &stakes);
             *last_print = Instant::now();
