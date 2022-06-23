@@ -113,9 +113,10 @@ pub struct GossipStats {
     pub(crate) gossip_pull_request_verify_fail: Counter,
     pub(crate) gossip_pull_response_verify_fail: Counter,
     pub(crate) gossip_push_msg_verify_fail: Counter,
-    pub(crate) gossip_transmit_loop_time_ms: Counter,
-    pub(crate) gossip_listen_loop_time_ms: Counter,
-    pub(crate) gossip_process_packet_loop_time_ms: Counter,
+    pub(crate) gossip_transmit_loop_time: Counter,
+    pub(crate) gossip_transmit_loop_itrs_since_last_report: Counter,
+    pub(crate) gossip_listen_loop_time: Counter,
+    pub(crate) gossip_listen_loop_itrs_since_last_report: Counter,
     pub(crate) handle_batch_ping_messages_time: Counter,
     pub(crate) handle_batch_pong_messages_time: Counter,
     pub(crate) handle_batch_prune_messages_time: Counter,
@@ -141,6 +142,7 @@ pub struct GossipStats {
     pub(crate) packets_sent_pull_responses_count: Counter,
     pub(crate) packets_sent_push_messages_count: Counter,
     pub(crate) process_gossip_packets_time: Counter,
+    pub(crate) process_gossip_packets_itrs_since_last_report: Counter,
     pub(crate) process_prune: Counter,
     pub(crate) process_pull_requests: Counter,
     pub(crate) process_pull_response: Counter,
@@ -238,6 +240,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "process_gossip_packets_time",
             stats.process_gossip_packets_time.clear(),
+            i64
+        ),
+        (
+            "process_gossip_packets_itrs_since_last_report",
+            stats.process_gossip_packets_itrs_since_last_report.clear(),
             i64
         ),
         (
@@ -389,20 +396,25 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         (
-            "gossip_transmit_loop_time_ms",
-            stats.gossip_transmit_loop_time_ms.clear(),
+            "gossip_transmit_loop_time",
+            stats.gossip_transmit_loop_time.clear(),
             i64
         ),
         (
-            "gossip_listen_loop_time_ms",
-            stats.gossip_listen_loop_time_ms.clear(),
+            "gossip_transmit_loop_itrs_since_last_report",
+            stats.gossip_transmit_loop_itrs_since_last_report.clear(),
             i64
         ),
         (
-            "gossip_process_packet_loop_time_ms",
-            stats.gossip_process_packet_loop_time_ms.clear(),
+            "gossip_listen_loop_time",
+            stats.gossip_listen_loop_time.clear(),
             i64
         ),
+        (
+            "gossip_listen_loop_itrs_since_last_report",
+            stats.gossip_listen_loop_itrs_since_last_report.clear(),
+            i64
+        ), 
 
     );
     datapoint_info!(
