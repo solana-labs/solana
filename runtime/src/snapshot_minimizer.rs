@@ -411,8 +411,7 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-            genesis_config::create_genesis_config,
-            genesis_config::GenesisConfig,
+            genesis_config::{create_genesis_config, GenesisConfig},
             pubkey::Pubkey,
             signer::Signer,
             stake,
