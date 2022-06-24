@@ -1053,37 +1053,35 @@ fn download_snapshots(
         )?;
     }
 
-    if bootstrap_config.incremental_snapshot_fetch {
-        // Check and see if we've already got the incremental snapshot; if not, download it
-        if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
-            if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
-                .into_iter()
-                .any(|snapshot_archive| {
-                    snapshot_archive.slot() == incremental_snapshot_hash.0
-                        && snapshot_archive.hash() == &incremental_snapshot_hash.1
-                        && snapshot_archive.base_slot() == full_snapshot_hash.0
-                })
-            {
-                info!(
-                    "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
-                    incremental_snapshot_hash.0, incremental_snapshot_hash.1
-                );
-            } else {
-                download_snapshot(
-                    full_snapshot_archives_dir,
-                    incremental_snapshot_archives_dir,
-                    validator_config,
-                    bootstrap_config,
-                    use_progress_bar,
-                    start_progress,
-                    minimal_snapshot_download_speed,
-                    maximum_snapshot_download_abort,
-                    download_abort_count,
-                    rpc_contact_info,
-                    incremental_snapshot_hash,
-                    SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
-                )?;
-            }
+    // Check and see if we've already got the incremental snapshot; if not, download it
+    if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
+        if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
+            .into_iter()
+            .any(|snapshot_archive| {
+                snapshot_archive.slot() == incremental_snapshot_hash.0
+                    && snapshot_archive.hash() == &incremental_snapshot_hash.1
+                    && snapshot_archive.base_slot() == full_snapshot_hash.0
+            })
+        {
+            info!(
+                "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
+                incremental_snapshot_hash.0, incremental_snapshot_hash.1
+            );
+        } else {
+            download_snapshot(
+                full_snapshot_archives_dir,
+                incremental_snapshot_archives_dir,
+                validator_config,
+                bootstrap_config,
+                use_progress_bar,
+                start_progress,
+                minimal_snapshot_download_speed,
+                maximum_snapshot_download_abort,
+                download_abort_count,
+                rpc_contact_info,
+                incremental_snapshot_hash,
+                SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
+            )?;
         }
     }
 
