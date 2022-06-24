@@ -14,8 +14,8 @@ default = ["program"]
 program = []
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.11.2" }
 solana-bpf-rust-realloc = { path = "../realloc", version = "=1.11.2", default-features = false }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.2" }
 
 [lib]
 crate-type = ["lib", "cdylib"]
