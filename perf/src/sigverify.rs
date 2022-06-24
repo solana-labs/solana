@@ -3,6 +3,7 @@
 //! cores.  When perf-libs are available signature verification is offloaded
 //! to the GPU.
 //!
+
 use {
     crate::{
         cuda_runtime::PinnedVec,
@@ -598,8 +599,16 @@ impl Deduper {
         // Algorithm uses a moving average where each new data point has an initial
         // weighting of ~3% and grows smaller over time.
         const MAX_PACKET_WEIGHTING_SHIFT: usize = 5;
-        self.max_packets -= self.max_packets >> MAX_PACKET_WEIGHTING_SHIFT;
-        self.max_packets += max_dedup_batch >> MAX_PACKET_WEIGHTING_SHIFT;
+        self.max_packets = self.max_packets.saturating_sub(
+            self.max_packets
+                .checked_shr(MAX_PACKET_WEIGHTING_SHIFT as u32)
+                .unwrap_or_default(),
+        );
+        self.max_packets = self.max_packets.saturating_add(
+            max_dedup_batch
+                .checked_shr(MAX_PACKET_WEIGHTING_SHIFT as u32)
+                .unwrap_or_default(),
+        );
         // Protect from shedding way too many packets or OOM from queue growing too large.
         self.max_packets = self.max_packets.max(MIN_MAX_DEDUP_BATCH);
         self.max_packets = self.max_packets.min(MAX_MAX_DEDUP_BATCH);
