@@ -321,8 +321,8 @@ impl SigVerifyStage {
             },
         ) as usize;
         let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
-        deduper.update_max_packets(non_discarded_packets as u64, dedup_time.as_ns());
         dedup_time.stop();
+        deduper.update_max_packets(non_discarded_packets as u64, dedup_time.as_ns());
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_packets_to_verify = num_unique;
