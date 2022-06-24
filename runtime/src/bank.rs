@@ -1390,6 +1390,12 @@ struct StakeReward {
     stake_account: AccountSharedData,
 }
 
+impl StakeReward {
+    pub fn get_stake_reward(&self) -> i64 {
+        self.stake_reward_info.lamports
+    }
+}
+
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
 impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
@@ -3204,7 +3210,7 @@ impl Bank {
 
         let mut stake_rewards = stake_rewards
             .into_iter()
-            .filter(|x| x.stake_reward_info.lamports > 0)
+            .filter(|x| x.get_stake_reward() > 0)
             .map(|x| (x.stake_pubkey, x.stake_reward_info))
             .collect();
 
