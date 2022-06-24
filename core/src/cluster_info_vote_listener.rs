@@ -40,7 +40,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         slot_hashes,
-        timing::timestamp,
+        timing::AtomicInterval,
         transaction::Transaction,
     },
     std::{
@@ -187,16 +187,25 @@ impl BankSendVotesStats {
 struct VoteProcessingTiming {
     gossip_txn_processing_time_us: u64,
     gossip_slot_confirming_time_us: u64,
-    last_report: u64,
+    last_report: AtomicInterval,
 }
 
+const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
+
 impl VoteProcessingTiming {
+    fn reset(&mut self) {
+        self.gossip_slot_confirming_time_us = 0;
+        self.gossip_slot_confirming_time_us = 0;
+    }
+
     fn update(&mut self, vote_txn_processing_time_us: u64, vote_slot_confirming_time_us: u64) {
         self.gossip_txn_processing_time_us += vote_txn_processing_time_us;
         self.gossip_slot_confirming_time_us += vote_slot_confirming_time_us;
-        let now = timestamp();
-        let elapsed_ms = now - self.last_report;
-        if elapsed_ms > 1000 {
+
+        if self
+            .last_report
+            .should_update(VOTE_PROCESSING_REPORT_INTERVAL_MS)
+        {
             datapoint_info!(
                 "vote-processing-timing",
                 (
@@ -210,8 +219,7 @@ impl VoteProcessingTiming {
                     i64
                 ),
             );
-            *self = VoteProcessingTiming::default();
-            self.last_report = now;
+            self.reset();
         }
     }
 }
