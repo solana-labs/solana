@@ -1574,7 +1574,7 @@ impl ClusterInfo {
                 .add_relaxed(packet_batch.len() as u64);
             sender.send(packet_batch)?;
         }
-        self.stats.gossip_transmit_loop_itrs_since_last_report.add_relaxed(1);
+        self.stats.gossip_transmit_loop_iterations_since_last_report.add_relaxed(1);
         Ok(())
     }
 
@@ -2437,7 +2437,7 @@ impl ClusterInfo {
             stakes,
             response_sender,
         );
-        self.stats.process_gossip_packets_itrs_since_last_report.add_relaxed(1);
+        self.stats.process_gossip_packets_iterations_since_last_report.add_relaxed(1);
         Ok(())
     }
 
@@ -2532,7 +2532,7 @@ impl ClusterInfo {
             submit_gossip_stats(&self.stats, &self.gossip, &stakes);
             *last_print = Instant::now();
         }
-        self.stats.gossip_listen_loop_itrs_since_last_report.add_relaxed(1);
+        self.stats.gossip_listen_loop_iterations_since_last_report.add_relaxed(1);
         Ok(())
     }
 
