@@ -670,11 +670,9 @@ fn get_peer_snapshot_hashes(
             &mut peer_snapshot_hashes,
         );
     }
-    if incremental_snapshot_fetch {
-        retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
+    retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
             &mut peer_snapshot_hashes,
-        );
-    }
+    );
     retain_peer_snapshot_hashes_with_highest_full_snapshot_slot(&mut peer_snapshot_hashes);
 
     peer_snapshot_hashes
