@@ -6,7 +6,7 @@ title: Deterministic Transaction Fees
 
 Before sending a transaction to the cluster, a client may query the network to
 determine what the transaction's fee will be via the rpc request
-[getFeeForMessage](clients/jsonrpc-api#getfeeformessage).
+[getFeeForMessage](/developing/clients/jsonrpc-api#getfeeformessage).
 
 ## Fee Parameters
 
