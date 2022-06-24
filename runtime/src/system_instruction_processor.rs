@@ -686,12 +686,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -726,12 +726,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -768,12 +768,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: base,
@@ -862,12 +862,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -900,12 +900,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(SystemError::ResultWithNegativeLamports.into()),
@@ -923,12 +923,12 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1169,12 +1169,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -1251,7 +1251,7 @@ mod tests {
                 AccountMeta {
                     pubkey: new,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::InvalidArgument),
@@ -1275,7 +1275,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1288,7 +1288,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
             super::process_instruction,
@@ -1300,7 +1300,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1316,7 +1316,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1367,12 +1367,12 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1417,12 +1417,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
@@ -1448,7 +1448,7 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: base,
@@ -1458,7 +1458,7 @@ mod tests {
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1949,7 +1949,7 @@ mod tests {
                 AccountMeta {
                     pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: blockhash_id,

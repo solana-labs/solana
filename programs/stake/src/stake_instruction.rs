@@ -879,7 +879,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -900,7 +900,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rent_address,
@@ -919,7 +919,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -932,7 +932,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -952,7 +952,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -992,7 +992,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -1021,7 +1021,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1038,7 +1038,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rewards_address,
@@ -1073,7 +1073,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::NotEnoughAccountKeys),
         );
@@ -1085,7 +1085,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -1145,7 +1145,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: rent_address,
@@ -1216,7 +1216,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: clock_address,
@@ -1253,7 +1253,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: clock_address,
@@ -1339,7 +1339,7 @@ mod tests {
                 AccountMeta {
                     pubkey: address_with_seed,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: authorized_owner,
@@ -1380,7 +1380,7 @@ mod tests {
                 AccountMeta {
                     pubkey: address_with_seed,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: authorized_owner,
@@ -1440,7 +1440,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: withdrawer,
@@ -1485,7 +1485,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -1594,7 +1594,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1699,12 +1699,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1766,7 +1766,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1884,7 +1884,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: authority_base_address,
@@ -2018,7 +2018,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2061,7 +2061,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2086,7 +2086,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2146,7 +2146,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2222,7 +2222,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2304,7 +2304,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2458,7 +2458,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -2490,7 +2490,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -2542,12 +2542,12 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: recipient_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -2647,12 +2647,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -2785,12 +2785,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -2849,7 +2849,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -2879,7 +2879,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -2936,7 +2936,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -3068,7 +3068,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
@@ -3101,7 +3101,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3193,12 +3193,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3314,12 +3314,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3406,7 +3406,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3444,7 +3444,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3542,7 +3542,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -3583,7 +3583,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -3624,7 +3624,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: vote_address,
@@ -3745,7 +3745,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -3788,7 +3788,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -3847,7 +3847,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -3945,12 +3945,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: dest_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (source_reserve, dest_reserve, expected_result) in [
@@ -4038,12 +4038,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: dest_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (reserve, expected_result) in [
@@ -4097,12 +4097,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: destination_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (destination_starting_balance, split_amount, expected_result) in [
@@ -4196,12 +4196,12 @@ mod tests {
             AccountMeta {
                 pubkey: source_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: destination_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         for (destination_starting_balance, split_amount, expected_result) in [
@@ -4348,12 +4348,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: recipient_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -4483,7 +4483,7 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: vote_address,
@@ -4519,7 +4519,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::rent::id(),
@@ -4554,7 +4554,7 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -4581,12 +4581,12 @@ mod tests {
                 AccountMeta {
                     pubkey: stake_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: recipient_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: sysvar::clock::id(),
@@ -4646,12 +4646,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4730,12 +4730,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4803,12 +4803,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -4838,12 +4838,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
         let meta = Meta {
@@ -4953,12 +4953,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5077,12 +5077,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5205,12 +5205,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5281,12 +5281,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5376,12 +5376,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5463,12 +5463,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: split_to_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -5592,12 +5592,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5752,12 +5752,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5795,12 +5795,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5886,12 +5886,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -5992,12 +5992,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -6101,12 +6101,12 @@ mod tests {
             AccountMeta {
                 pubkey: stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: merge_from_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -6291,7 +6291,7 @@ mod tests {
         let instruction_accounts = vec![AccountMeta {
             pubkey: stake_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         }];
 
         mock_process_instruction(
@@ -6356,7 +6356,7 @@ mod tests {
             AccountMeta {
                 pubkey: good_stake_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: rent_address,

@@ -1485,7 +1485,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1500,7 +1500,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -1516,7 +1516,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::AccountDataTooSmall),
         );
@@ -1550,7 +1550,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -1564,7 +1564,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -1580,7 +1580,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: program_id,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::InvalidAccountData),
         );
@@ -1774,7 +1774,7 @@ mod tests {
             AccountMeta {
                 pubkey: buffer_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: authority_address,
@@ -1834,7 +1834,7 @@ mod tests {
             AccountMeta {
                 pubkey: buffer_address,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: buffer_address,
@@ -3268,7 +3268,7 @@ mod tests {
         let programdata_meta = AccountMeta {
             pubkey: programdata_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         };
         let upgrade_authority_meta = AccountMeta {
             pubkey: upgrade_authority_address,
@@ -3440,7 +3440,7 @@ mod tests {
         let buffer_meta = AccountMeta {
             pubkey: buffer_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         };
         let authority_meta = AccountMeta {
             pubkey: authority_address,
@@ -3642,12 +3642,12 @@ mod tests {
         let buffer_meta = AccountMeta {
             pubkey: buffer_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         };
         let recipient_meta = AccountMeta {
             pubkey: recipient_address,
             is_signer: false,
-            is_writable: false,
+            is_writable: true,
         };
         let authority_meta = AccountMeta {
             pubkey: authority_address,
@@ -3709,7 +3709,7 @@ mod tests {
                 AccountMeta {
                     pubkey: uninitialized_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 recipient_meta.clone(),
                 authority_meta.clone(),
@@ -3736,7 +3736,7 @@ mod tests {
                 AccountMeta {
                     pubkey: programdata_address,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 recipient_meta,
                 authority_meta,
