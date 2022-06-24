@@ -2829,6 +2829,8 @@ impl Bank {
                             stake_pubkey,
                             &self.rewrites_skipped_this_slot,
                         );
+                        // prior behavior was to always count any account that mismatched for any reason
+                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         if &cached_account != stake_account.account() {
                             info!(
                                 "cached stake account mismatch: {}: {:?}, {:?}",
@@ -2836,8 +2838,9 @@ impl Bank {
                                 cached_account,
                                 stake_account.account()
                             );
-                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         } else {
+                            // track how many of 'invalid_cached_stake_accounts' were due to rent_epoch changes
+                            // subtract these to find real invalid cached accounts
                             invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
                         }
                     }
