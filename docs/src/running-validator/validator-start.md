@@ -70,6 +70,9 @@ net.core.wmem_max = 134217728
 
 # Increase memory mapped files limit
 vm.max_map_count = 1000000
+
+# Increase number of allowed open file descriptors
+fs.nr_open = 1000000
 EOF"
 ```
 
