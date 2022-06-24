@@ -95,9 +95,7 @@ pub unsafe extern "C" fn sealevel_config_setopt(
             (*config).config.disable_unresolved_symbols_at_runtime = va_bool!(args)
         }
         SEALEVEL_REJECT_BROKEN_ELFS => (*config).config.reject_broken_elfs = va_bool!(args),
-        SEALEVEL_NOOP_INSTRUCTION_RATIO => {
-            (*config).config.noop_instruction_ratio = args.arg::<f64>()
-        }
+        SEALEVEL_NOOP_INSTRUCTION_RATIO => (*config).config.noop_instruction_rate = args.arg(),
         SEALEVEL_SANITIZE_USER_PROVIDED_VALUES => {
             (*config).config.sanitize_user_provided_values = va_bool!(args)
         }

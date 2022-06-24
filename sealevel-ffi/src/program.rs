@@ -1,15 +1,15 @@
 use {
-    crate::{config::sealevel_config, context::sealevel_syscall_registry, error::set_result},
+    crate::{config::sealevel_config, context::sealevel_syscall_registry, error::hoist_error},
     solana_bpf_loader_program::{BpfError, ThisInstructionMeter},
-    solana_rbpf::elf::Executable,
-    std::{os::raw::c_char, pin::Pin, ptr::null_mut},
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    std::{os::raw::c_char, ptr::null_mut},
 };
 
 /// A loaded and relocated program.
 ///
 /// To execute this program, create a VM with `sealevel_vm_create`.
 pub struct sealevel_executable {
-    pub(crate) program: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    pub(crate) program: VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
     pub(crate) is_jit_compiled: bool,
 }
 
@@ -42,12 +42,16 @@ pub unsafe extern "C" fn sealevel_load_program(
     let data_slice = std::slice::from_raw_parts(data as *const u8, data_len);
     let load_result = Executable::<BpfError, ThisInstructionMeter>::from_elf(
         data_slice,
-        None,
         (*config).config,
         *syscalls,
     );
-    match set_result(load_result) {
-        None => null_mut(),
+    let executable = match hoist_error(load_result) {
+        None => return null_mut(),
+        Some(v) => v,
+    };
+    let verify_result = VerifiedExecutable::from_executable(executable);
+    match hoist_error(verify_result) {
+        None => return null_mut(),
         Some(program) => {
             let wrapper = sealevel_executable {
                 program,
@@ -68,8 +72,8 @@ pub unsafe extern "C" fn sealevel_load_program(
 /// - Calling this function given a null pointer or an invalid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn sealevel_program_jit_compile(program: *mut sealevel_executable) {
-    let result = Executable::jit_compile(&mut (*program).program);
-    if set_result(result).is_some() {
+    let result = (*program).program.jit_compile();
+    if hoist_error(result).is_some() {
         (*program).is_jit_compiled = true;
     }
 }

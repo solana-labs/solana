@@ -39,7 +39,7 @@ pub const SEALEVEL_ERR_VERIFIER_ERROR: c_int = 19;
 
 /// Remembers the given optional error.
 /// Returns the success value if there was no error.
-pub(crate) fn set_result<T>(val: Result<T, Error>) -> Option<T> {
+pub(crate) fn hoist_error<T>(val: Result<T, Error>) -> Option<T> {
     let (ok, err) = match val {
         Ok(ok) => (Some(ok), None),
         Err(err) => (None, Some(err)),
@@ -56,7 +56,7 @@ pub extern "C" fn sealevel_errno() -> c_int {
     ERROR.with(|err_cell| match *err_cell.borrow() {
         None => SEALEVEL_OK,
         Some(EbpfError::ElfError(_)) => SEALEVEL_ERR_INVALID_ELF,
-        Some(EbpfError::SycallAlreadyRegistered(_)) // Typo: https://github.com/solana-labs/rbpf/pull/317
+        Some(EbpfError::SyscallAlreadyRegistered(_))
         | Some(EbpfError::SyscallNotRegistered(_))
         | Some(EbpfError::SyscallAlreadyBound(_)) => SEALEVEL_ERR_SYSCALL_REGISTRATION,
         Some(EbpfError::CallDepthExceeded(_, _)) => SEALEVEL_ERR_CALL_DEPTH_EXCEEDED,
