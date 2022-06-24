@@ -42,6 +42,18 @@ const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
 // Empirically derived to constrain max verify latency to ~8ms at lower packet counts
 pub const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 
+// "Thumb in the air" number to ensure reasonable latencies through sigverify.
+const MAX_DEDUP_PERIOD_NS: usize = 50_000_000;
+// Rough timing measured from mainnet machines.
+const DEFAULT_DEDUP_NS_PER_PACKET: usize = 300;
+const DEFAULT_MAX_DEDUP_BATCH: usize = MAX_DEDUP_PERIOD_NS / DEFAULT_DEDUP_NS_PER_PACKET;
+// Create a floor that minimum spec'd machines should be able to handle so as not to
+// overly constrain sigverify and drop too many packets.
+const MIN_MAX_DEDUP_BATCH: usize = 50_000;
+// Cap the absolute max packets that go into dedup to avoid runaway, which could result
+// in the packet queue growing too large and consuming too much memory.
+const MAX_MAX_DEDUP_BATCH: usize = 1_000_000;
+
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
@@ -492,6 +504,7 @@ pub struct Deduper {
     age: Instant,
     max_age: Duration,
     pub saturated: AtomicBool,
+    pub max_packets: usize,
 }
 
 impl Deduper {
@@ -505,6 +518,7 @@ impl Deduper {
             age: Instant::now(),
             max_age,
             saturated: AtomicBool::new(false),
+            max_packets: DEFAULT_MAX_DEDUP_BATCH,
         }
     }
 
@@ -571,6 +585,24 @@ impl Deduper {
             })
         });
         num_removed
+    }
+
+    pub fn update_max_packets(&mut self, packets: u64, time: u64) {
+        if packets == 0 || time == 0 {
+            // Need meaningful timing data to update max dedup packet threshold.
+            return;
+        }
+        // Compute dedup max capability based on most recent iteration.
+        let ns_per_packet = time.saturating_div(packets).max(1);
+        let max_dedup_batch = MAX_DEDUP_PERIOD_NS.saturating_div(ns_per_packet as usize);
+        // Algorithm uses a moving average where each new data point has an initial
+        // weighting of ~3% and grows smaller over time.
+        const MAX_PACKET_WEIGHTING_SHIFT: usize = 5;
+        self.max_packets -= self.max_packets >> MAX_PACKET_WEIGHTING_SHIFT;
+        self.max_packets += max_dedup_batch >> MAX_PACKET_WEIGHTING_SHIFT;
+        // Protect from shedding way too many packets or OOM from queue growing too large.
+        self.max_packets = self.max_packets.max(MIN_MAX_DEDUP_BATCH);
+        self.max_packets = self.max_packets.min(MAX_MAX_DEDUP_BATCH);
     }
 }
 

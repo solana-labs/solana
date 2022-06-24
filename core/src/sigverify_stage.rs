@@ -27,11 +27,6 @@ use {
     thiserror::Error,
 };
 
-// Try to target 50ms, rough timings from mainnet machines
-//
-// 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
-const MAX_DEDUP_BATCH: usize = 165_000;
-
 // 50ms/(25us/packet) = 2000 packets
 const MAX_SIGVERIFY_BATCH: usize = 2_000;
 
@@ -290,7 +285,7 @@ impl SigVerifyStage {
     }
 
     fn verifier<T: SigVerifier>(
-        deduper: &Deduper,
+        deduper: &mut Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
         stats: &mut SigVerifierStats,
@@ -307,7 +302,7 @@ impl SigVerifyStage {
         let mut discard_random_time = Measure::start("sigverify_discard_random_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
             &mut batches,
-            MAX_DEDUP_BATCH,
+            deduper.max_packets,
             num_packets,
         );
         let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
@@ -325,8 +320,9 @@ impl SigVerifyStage {
                 );
             },
         ) as usize;
-        dedup_time.stop();
         let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
+        deduper.update_max_packets(non_discarded_packets as u64, dedup_time.as_ns());
+        dedup_time.stop();
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_packets_to_verify = num_unique;
@@ -418,7 +414,7 @@ impl SigVerifyStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::verifier(&mut deduper, &packet_receiver, &mut verifier, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
