@@ -152,6 +152,10 @@ pub trait AdminRpc {
     #[rpc(meta, name = "addAuthorizedVoter")]
     fn add_authorized_voter(&self, meta: Self::Metadata, keypair_file: String) -> Result<()>;
 
+    #[rpc(meta, name = "addAuthorizedVoterFromBytes")]
+    fn add_authorized_voter_from_bytes(&self, meta: Self::Metadata, keypair: Vec<u8>)
+        -> Result<()>;
+
     #[rpc(meta, name = "removeAllAuthorizedVoters")]
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()>;
 
@@ -160,6 +164,14 @@ pub trait AdminRpc {
         &self,
         meta: Self::Metadata,
         keypair_file: String,
+        require_tower: bool,
+    ) -> Result<()>;
+
+    #[rpc(meta, name = "setIdentityFromBytes")]
+    fn set_identity_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        identity_keypair: Vec<u8>,
         require_tower: bool,
     ) -> Result<()>;
 
@@ -220,19 +232,24 @@ impl AdminRpc for AdminRpcImpl {
         let authorized_voter = read_keypair_file(keypair_file)
             .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
 
-        let mut authorized_voter_keypairs = meta.authorized_voter_keypairs.write().unwrap();
+        AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
+    }
 
-        if authorized_voter_keypairs
-            .iter()
-            .any(|x| x.pubkey() == authorized_voter.pubkey())
-        {
-            Err(jsonrpc_core::error::Error::invalid_params(
-                "Authorized voter already present",
+    fn add_authorized_voter_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        keypair: Vec<u8>,
+    ) -> Result<()> {
+        debug!("add_authorized_voter_from_bytes request received");
+
+        let authorized_voter = Keypair::from_bytes(&keypair).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Failed to read authorized voter keypair from provided byte array: {}",
+                err
             ))
-        } else {
-            authorized_voter_keypairs.push(Arc::new(authorized_voter));
-            Ok(())
-        }
+        })?;
+
+        AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
     }
 
     fn remove_all_authorized_voters(&self, meta: Self::Metadata) -> Result<()> {
@@ -256,6 +273,57 @@ impl AdminRpc for AdminRpcImpl {
             ))
         })?;
 
+        AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
+    }
+
+    fn set_identity_from_bytes(
+        &self,
+        meta: Self::Metadata,
+        identity_keypair: Vec<u8>,
+        require_tower: bool,
+    ) -> Result<()> {
+        debug!("set_identity_from_bytes request received");
+
+        let identity_keypair = Keypair::from_bytes(&identity_keypair).map_err(|err| {
+            jsonrpc_core::error::Error::invalid_params(format!(
+                "Failed to read identity keypair from provided byte array: {}",
+                err
+            ))
+        })?;
+
+        AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
+    }
+
+    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
+        meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
+    }
+}
+
+impl AdminRpcImpl {
+    fn add_authorized_voter_keypair(
+        meta: AdminRpcRequestMetadata,
+        authorized_voter: Keypair,
+    ) -> Result<()> {
+        let mut authorized_voter_keypairs = meta.authorized_voter_keypairs.write().unwrap();
+
+        if authorized_voter_keypairs
+            .iter()
+            .any(|x| x.pubkey() == authorized_voter.pubkey())
+        {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "Authorized voter already present",
+            ))
+        } else {
+            authorized_voter_keypairs.push(Arc::new(authorized_voter));
+            Ok(())
+        }
+    }
+
+    fn set_identity_keypair(
+        meta: AdminRpcRequestMetadata,
+        identity_keypair: Keypair,
+        require_tower: bool,
+    ) -> Result<()> {
         meta.with_post_init(|post_init| {
             if require_tower {
                 let _ = Tower::restore(meta.tower_storage.as_ref(), &identity_keypair.pubkey())
@@ -275,10 +343,6 @@ impl AdminRpc for AdminRpcImpl {
             warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
         })
-    }
-
-    fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
-        meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
     }
 }
 
