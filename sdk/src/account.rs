@@ -6,7 +6,7 @@ use {
     },
     serde::{
         ser::{Serialize, Serializer},
-        Deserialize, Deserializer,
+        Deserialize,
     },
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
@@ -97,7 +97,8 @@ impl Serialize for AccountSharedData {
 /// An Account with data that is stored on chain
 /// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Default, AbiExample, Deserialize)]
+#[serde(from = "Account")]
 pub struct AccountSharedData {
     /// lamports in the account
     lamports: u64,
@@ -470,15 +471,6 @@ fn shared_new_ref_data_with_space<T: serde::Serialize, U: WritableAccount>(
     Ok(RefCell::new(shared_new_data_with_space::<T, U>(
         lamports, state, space, owner,
     )?))
-}
-
-impl<'de> Deserialize<'de> for AccountSharedData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(AccountSharedData::from(Account::deserialize(deserializer)?))
-    }
 }
 
 fn shared_deserialize_data<T: serde::de::DeserializeOwned, U: ReadableAccount>(
