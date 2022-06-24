@@ -15,11 +15,27 @@ thread_local! {
     pub(crate) static ERROR: RefCell<Option<Error>> = RefCell::new(None);
 }
 
+pub const SEALEVEL_ERR_UNKNOWN: c_int = -1;
 pub const SEALEVEL_OK: c_int = 0;
 pub const SEALEVEL_ERR_INVALID_ELF: c_int = 1;
 pub const SEALEVEL_ERR_SYSCALL_REGISTRATION: c_int = 2;
 pub const SEALEVEL_ERR_CALL_DEPTH_EXCEEDED: c_int = 3;
-pub const SEALEVEL_ERR_UNKNOWN: c_int = -1;
+pub const SEALEVEL_ERR_EXIT_ROOT_CALL_FRAME: c_int = 4;
+pub const SEALEVEL_ERR_DIVIDE_BY_ZERO: c_int = 5;
+pub const SEALEVEL_ERR_DIVIDE_OVERFLOW: c_int = 6;
+pub const SEALEVEL_ERR_EXECUTION_OVERRUN: c_int = 7;
+pub const SEALEVEL_ERR_CALL_OUTSIDE_TEXT_SEGMENT: c_int = 8;
+pub const SEALEVEL_ERR_EXCEEDED_MAX_INSTRUCTIONS: c_int = 9;
+pub const SEALEVEL_ERR_JIT_NOT_COMPILED: c_int = 10;
+pub const SEALEVEL_ERR_INVALID_VIRTUAL_ADDRESS: c_int = 11;
+pub const SEALEVEL_ERR_INVALID_MEMORY_REGION: c_int = 12;
+pub const SEALEVEL_ERR_ACCESS_VIOLATION: c_int = 13;
+pub const SEALEVEL_ERR_STACK_ACCESS_VIOLATION: c_int = 14;
+pub const SEALEVEL_ERR_INVALID_INSTRUCTION: c_int = 15;
+pub const SEALEVEL_ERR_UNSUPPORTED_INSTRUCTION: c_int = 16;
+pub const SEALEVEL_ERR_ERR_EXHAUSTED_TEXT_SEGMENT: c_int = 17;
+pub const SEALEVEL_ERR_LIBC_INVOCATION_FAILED: c_int = 18;
+pub const SEALEVEL_ERR_VERIFIER_ERROR: c_int = 19;
 
 /// Remembers the given optional error.
 /// Returns the success value if there was no error.
@@ -44,6 +60,22 @@ pub extern "C" fn sealevel_errno() -> c_int {
         | Some(EbpfError::SyscallNotRegistered(_))
         | Some(EbpfError::SyscallAlreadyBound(_)) => SEALEVEL_ERR_SYSCALL_REGISTRATION,
         Some(EbpfError::CallDepthExceeded(_, _)) => SEALEVEL_ERR_CALL_DEPTH_EXCEEDED,
+        Some(EbpfError::ExitRootCallFrame) => SEALEVEL_ERR_EXIT_ROOT_CALL_FRAME,
+        Some(EbpfError::DivideByZero(_)) => SEALEVEL_ERR_DIVIDE_BY_ZERO,
+        Some(Error::DivideOverflow(_)) => SEALEVEL_ERR_DIVIDE_OVERFLOW,
+        Some(Error::ExecutionOverrun(_)) => SEALEVEL_ERR_EXECUTION_OVERRUN,
+        Some(Error::CallOutsideTextSegment(_, _)) => SEALEVEL_ERR_CALL_OUTSIDE_TEXT_SEGMENT,
+        Some(Error::ExceededMaxInstructions(_, _)) => SEALEVEL_ERR_EXCEEDED_MAX_INSTRUCTIONS,
+        Some(Error::JitNotCompiled) => SEALEVEL_ERR_JIT_NOT_COMPILED,
+        Some(Error::InvalidVirtualAddress(_)) => SEALEVEL_ERR_INVALID_VIRTUAL_ADDRESS,
+        Some(Error::InvalidMemoryRegion(_)) => SEALEVEL_ERR_INVALID_MEMORY_REGION,
+        Some(Error::AccessViolation(_, _, _, _, _)) => SEALEVEL_ERR_ACCESS_VIOLATION,
+        Some(Error::StackAccessViolation(_, _, _, _, _)) => SEALEVEL_ERR_STACK_ACCESS_VIOLATION,
+        Some(Error::InvalidInstruction(_)) => SEALEVEL_ERR_INVALID_INSTRUCTION,
+        Some(Error::UnsupportedInstruction(_)) => SEALEVEL_ERR_UNSUPPORTED_INSTRUCTION,
+        Some(Error::ExhausedTextSegment(_)) => SEALEVEL_ERR_ERR_EXHAUSTED_TEXT_SEGMENT,
+        Some(Error::LibcInvocationFailed(_, _, _)) => SEALEVEL_ERR_LIBC_INVOCATION_FAILED,
+        Some(Error::VerifierError(_)) => SEALEVEL_ERR_VERIFIER_ERROR,
         // TODO other errors
         Some(_) => SEALEVEL_ERR_UNKNOWN,
     })
