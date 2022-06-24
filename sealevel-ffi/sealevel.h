@@ -24,6 +24,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define SEALEVEL_ERR_UNKNOWN -1
+
 #define SEALEVEL_OK 0
 
 #define SEALEVEL_ERR_INVALID_ELF 1
@@ -32,7 +34,37 @@
 
 #define SEALEVEL_ERR_CALL_DEPTH_EXCEEDED 3
 
-#define SEALEVEL_ERR_UNKNOWN -1
+#define SEALEVEL_ERR_EXIT_ROOT_CALL_FRAME 4
+
+#define SEALEVEL_ERR_DIVIDE_BY_ZERO 5
+
+#define SEALEVEL_ERR_DIVIDE_OVERFLOW 6
+
+#define SEALEVEL_ERR_EXECUTION_OVERRUN 7
+
+#define SEALEVEL_ERR_CALL_OUTSIDE_TEXT_SEGMENT 8
+
+#define SEALEVEL_ERR_EXCEEDED_MAX_INSTRUCTIONS 9
+
+#define SEALEVEL_ERR_JIT_NOT_COMPILED 10
+
+#define SEALEVEL_ERR_INVALID_VIRTUAL_ADDRESS 11
+
+#define SEALEVEL_ERR_INVALID_MEMORY_REGION 12
+
+#define SEALEVEL_ERR_ACCESS_VIOLATION 13
+
+#define SEALEVEL_ERR_STACK_ACCESS_VIOLATION 14
+
+#define SEALEVEL_ERR_INVALID_INSTRUCTION 15
+
+#define SEALEVEL_ERR_UNSUPPORTED_INSTRUCTION 16
+
+#define SEALEVEL_ERR_ERR_EXHAUSTED_TEXT_SEGMENT 17
+
+#define SEALEVEL_ERR_LIBC_INVOCATION_FAILED 18
+
+#define SEALEVEL_ERR_VERIFIER_ERROR 19
 
 /**
  * Sealevel virtual machine config.
@@ -53,6 +85,8 @@ typedef struct sealevel_executable sealevel_executable;
  * and specifies the on-chain execution rules (precompiles, syscalls, sysvars).
  */
 typedef struct sealevel_invoke_context sealevel_invoke_context;
+
+typedef struct sealevel_region sealevel_region;
 
 typedef struct sealevel_vm sealevel_vm;
 
@@ -154,8 +188,14 @@ void sealevel_program_jit_compile(sealevel_executable *program);
  * Creates a Sealevel virtual machine and loads the given program into it.
  *
  * Sets `sealevel_errno` and returns a null pointer if loading failed.
+ *
+ * The given heap should be 16-byte aligned.
  */
-sealevel_vm *sealevel_vm_create(sealevel_executable *program, void *heap, size_t heap_len);
+sealevel_vm *sealevel_vm_create(sealevel_executable *program,
+                                uint8_t *heap_ptr,
+                                size_t heap_len,
+                                const sealevel_region *regions_ptr,
+                                int regions_count);
 
 uint64_t sealevel_vm_execute(sealevel_vm *vm);
 
