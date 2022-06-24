@@ -2,7 +2,7 @@ use {
     itertools::Itertools,
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
-        account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
+        account::{accounts_equal, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -23,7 +23,7 @@ const INVALID_VOTE_STATE: Result<VoteState, Error> = Err(Error::InstructionError
 ));
 
 #[derive(Clone, Debug, PartialEq, AbiExample, Deserialize)]
-#[serde(try_from = "Account")]
+#[serde(try_from = "AccountSharedData")]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, Error)]
@@ -36,7 +36,7 @@ pub enum Error {
 
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
-    account: Account,
+    account: AccountSharedData,
     vote_state: RwLock<Result<VoteState, Error>>,
     vote_state_once: Once,
 }
@@ -207,30 +207,23 @@ impl Serialize for VoteAccount {
     }
 }
 
+impl From<VoteAccount> for AccountSharedData {
+    fn from(account: VoteAccount) -> Self {
+        account.0.account.clone()
+    }
+}
+
 impl TryFrom<AccountSharedData> for VoteAccount {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        Self::try_from(Account::from(account))
-    }
-}
-
-impl From<VoteAccount> for AccountSharedData {
-    fn from(account: VoteAccount) -> Self {
-        Self::from(account.0.account.clone())
-    }
-}
-
-impl TryFrom<Account> for VoteAccount {
-    type Error = Error;
-    fn try_from(account: Account) -> Result<Self, Self::Error> {
         let vote_account = VoteAccountInner::try_from(account)?;
         Ok(Self(Arc::new(vote_account)))
     }
 }
 
-impl TryFrom<Account> for VoteAccountInner {
+impl TryFrom<AccountSharedData> for VoteAccountInner {
     type Error = Error;
-    fn try_from(account: Account) -> Result<Self, Self::Error> {
+    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if !solana_vote_program::check_id(account.owner()) {
             return Err(Error::InvalidOwner(*account.owner()));
         }
@@ -355,7 +348,7 @@ mod tests {
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,
         node_pubkey: Option<Pubkey>,
-    ) -> (Account, VoteState) {
+    ) -> (AccountSharedData, VoteState) {
         let vote_init = VoteInit {
             node_pubkey: node_pubkey.unwrap_or_else(Pubkey::new_unique),
             authorized_voter: Pubkey::new_unique(),
@@ -370,7 +363,7 @@ mod tests {
             unix_timestamp: rng.gen(),
         };
         let vote_state = VoteState::new(&vote_init, &clock);
-        let account = Account::new_data(
+        let account = AccountSharedData::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),
             &solana_vote_program::id(), // owner
